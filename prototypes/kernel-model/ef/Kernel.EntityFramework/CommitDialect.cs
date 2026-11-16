@@ -77,8 +77,9 @@ internal abstract class CommitDialect
     /// <summary>
     /// The fence, for k rows in ascending Id order: Position moves and the lease is renewed from database time where
     /// (Id, Epoch, Position) is what the owner believes. The result says how many rows matched (must be k) and the time.
+    /// <paramref name="ignoreCount"/> is the FenceIgnoresCount mutation: a dialect whose server checks the count skips that check too.
     /// </summary>
-    public abstract void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced);
+    public abstract void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false);
 
     /// <summary>A statement that must affect exactly <paramref name="count"/> rows, else the commit did not land.</summary>
     public abstract void Checked(OwnedCommand c, string dml, int count);
@@ -122,7 +123,7 @@ internal abstract class ReturningDialect(string now, string @true, string @false
     public override string True => @true;
     public override string False => @false;
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
         var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
         var columns = window is { } w ? FormattableString.Invariant($", \"WindowStart\" = {w.FromInclusive}, \"WindowEnd\" = {w.UntilExclusive}") : "";
@@ -197,7 +198,7 @@ internal sealed class SqlServerCommitDialect : CommitDialect
 
     private static string Throw(int number, string what) => $"THROW {number}, '{what}', 1";
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
         var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
@@ -213,9 +214,10 @@ internal sealed class SqlServerCommitDialect : CommitDialect
             c.Statement($"""IF (SELECT COUNT(*) FROM "Partitions" WITH (UPDLOCK, ROWLOCK) WHERE "Id" IN ({string.Join(", ", rows.Select(r => r.Id))})) <> {rows.Count} {Throw(FenceMissed, "kernel fence: a partition row is missing")}""");
             matched = $"""UPDATE p SET "Position" = f.np, {lease} FROM "Partitions" p JOIN (VALUES {Values(rows)}) AS f(id, epoch, pos, np) ON p."Id" = f.id WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""";
         }
-        // The fence's count is checked twice: by the server, which stops the batch, and by the client, which reads it back (the FenceIgnoresCount mutation skips the client's).
+        // The fence's count is checked twice: by the server, which stops the batch, and by the client, which reads it back. The
+        // FenceIgnoresCount mutation skips both, else the server's check alone would mask it (COMMIT-SQL.md, the pins).
         c.Statement(matched);
-        c.Statement($"DECLARE @kernel_fenced int = @@ROWCOUNT; IF @kernel_fenced <> {rows.Count} {Throw(FenceMissed, "kernel fence: the partition is no longer held by this owner at this position")}");
+        c.Statement($"DECLARE @kernel_fenced int = @@ROWCOUNT;" + (ignoreCount ? "" : $" IF @kernel_fenced <> {rows.Count} {Throw(FenceMissed, "kernel fence: the partition is no longer held by this owner at this position")}"));
         c.Statement($"""SELECT @kernel_fenced AS "Matched", {Now} AS "Now" """, Expect.Fence, rows.Count);
     }
 

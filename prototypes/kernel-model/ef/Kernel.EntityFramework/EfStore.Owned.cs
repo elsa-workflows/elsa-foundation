@@ -41,7 +41,7 @@ public sealed partial class EfStore
         var (lease, window) = ((long)batch.Lease.TotalMilliseconds, batch.Window);
         // Statement 1: the fence, before any other row is touched (E9: the partition row is locked first). Checked, it is a
         // round trip of its own and nothing else is sent until it held; in the batch, it is the first statement of the one command.
-        dialect.Fence(c, Fenced(batch), lease, window, Unfenced);
+        dialect.Fence(c, Fenced(batch), lease, window, Unfenced, FenceIgnoresCount);
         if (!FenceInBatch) { commands.Add(c); c = new OwnedCommand(dialect); }
 
         var exact = Engine is SqlServerEngine or MySqlEngine;      // keys carry IssuedWire
@@ -160,7 +160,7 @@ public sealed partial class EfStore
         await using var db = create();
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var c = new OwnedCommand(dialect) { HasFence = true };
-        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), (long)lease.TotalMilliseconds, null, Unfenced);
+        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), (long)lease.TotalMilliseconds, null, Unfenced, FenceIgnoresCount);
         var result = await RunAsync(db, dialect, c, cancellationToken);
         if (result is null) return null;
         await transaction.CommitAsync(cancellationToken);

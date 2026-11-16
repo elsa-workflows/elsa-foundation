@@ -14,7 +14,7 @@ internal sealed class MySqlCommitDialect : CommitDialect
     /// <summary>LAST_INSERT_ID() names one insert's first id, so a message is an insert of its own.</summary>
     public override int MessageRowsPerStatement => 1;
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
         var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
