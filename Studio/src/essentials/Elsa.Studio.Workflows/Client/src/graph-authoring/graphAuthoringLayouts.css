@@ -172,4 +172,7 @@ html[data-theme-layout="editorial"] .wf-edge-actions:not(.visible):not(:hover):n
   .wf-canvas-context-commands > .wf-block-command-notice {
     grid-column: 1 / -1;
   }
+
+  /* Leave the canvas room while keeping 44px commands and their focus outlines. */
+  .wf-canvas-context ~ .wf-validation.ok { min-height: 30px; }
 }
