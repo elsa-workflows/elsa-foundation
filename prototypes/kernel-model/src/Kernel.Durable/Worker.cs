@@ -532,10 +532,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
         message = message.AsOrdinary();
         if (_releasing || !LeaseUsable() || message.Target.Partition != Partition) return false;
-        Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh && !message.Target.GeneratedAddress && message.Kind != Kinds.JobFinished);
-        if (!LeaseUsable()) return false;
-        if (!message.SuppliedCreator && message.Kind != Kinds.JobFinished && _slots.TryGetValue(Canonical(message.Target.Id), out var slot)) slot.Ambient = ambient;     // lives with the instance in this memory, nowhere else
-        return true;
+        Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh && !message.Target.GeneratedAddress && message.Kind != Kinds.JobFinished,
+            starterAmbient: message.Start is not null && !message.SuppliedCreator && message.Kind != Kinds.JobFinished ? ambient : null);
+        return LeaseUsable();
     }
 
     /// <summary>
@@ -584,7 +583,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
             message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish))
@@ -618,7 +617,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // process. The process can rule out a death for trial accounting, not reconstruct its lost inbox.
         var item = new Delivery(message, seq)
         {
-            RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
+            StarterAmbient = starterAmbient, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
             Again = again, RecoveryOrdering = again, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
         };
@@ -956,7 +955,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         if (source.SelfReferences is { } references)
                             foreach (var (name, same) in references) (slot.SelfReferences ??= [])[name] = same;
                         slot.Replies.UnionWith(source.Replies);
-                        if (source.Ambient is not null) slot.Ambient = source.Ambient;
+                        if (source.Ambient is not null && source.CurrentRow is { } prior && match.Row is { Retired: false } actual &&
+                            prior.Id == actual.Id && prior.Creation == actual.Creation && prior.StartIntent == actual.StartIntent)
+                            slot.Ambient = source.Ambient;
                     }
                 }
             }
@@ -1041,6 +1042,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var creator = slot.Row is null or { Retired: true } ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
         slot.Starting = creator < 0 ? null : due[creator].Message;
+        if (creator >= 0) slot.Ambient = due[creator].StarterAmbient;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec);
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
@@ -1645,6 +1647,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ForgetInMemory(unit.Instance);
             }
         }
+        if (slot.CurrentRow is not { Status: InstanceStatus.Running }) slot.Ambient = null;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         // Committed completion can be a new stimulus without requiring singleton selection. Revisit only after its

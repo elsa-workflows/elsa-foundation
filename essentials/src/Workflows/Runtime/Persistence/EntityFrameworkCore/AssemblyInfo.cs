@@ -96,3 +96,16 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerSubscriptionEntity), nameof(TriggerSubscriptionEntity.ContentJson))]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerMutationEntity), nameof(TriggerMutationEntity.ContentJson))]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(RuntimeIngressReservationEntity), nameof(RuntimeIngressReservationEntity.ContentJson))]
+
+[assembly: EfSchemaFamily(RuntimeHistoryEfModule.SchemaFamily, "Workflows.Runtime", RuntimeHistoryEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity),
+        typeof(RuntimeHistoryBookmarkCountEntity), typeof(RuntimeHistoryActivityEntity), typeof(RuntimeHistoryOccurrenceEntity),
+        typeof(RuntimeHistoryOccurrenceMembershipEntity), typeof(RuntimeHistoryOccurrenceCounterEntity)])]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryHeadEntity), nameof(RuntimeHistoryHeadEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryEventEntity), nameof(RuntimeHistoryEventEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryBookmarkEntity), nameof(RuntimeHistoryBookmarkEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryBookmarkCountEntity), nameof(RuntimeHistoryBookmarkCountEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryActivityEntity), nameof(RuntimeHistoryActivityEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceEntity), nameof(RuntimeHistoryOccurrenceEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceMembershipEntity), nameof(RuntimeHistoryOccurrenceMembershipEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceCounterEntity), nameof(RuntimeHistoryOccurrenceCounterEntity.ContentJson))]

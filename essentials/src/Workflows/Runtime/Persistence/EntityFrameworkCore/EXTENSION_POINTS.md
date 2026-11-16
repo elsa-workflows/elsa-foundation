@@ -6,9 +6,10 @@
 [history inspection contract](../../../../../../specs/1211-run-history-timeline/contracts/history-inspection.md).
 
 `RuntimeHistoryEntityConfiguration` and the five internal history entity types define the private
-head, event receipt/content, bookmark, bookmark-count and known-parent projections. They are not
-an extension API, are not registered in `RuntimeDbContext` and do not advertise history support.
-`RuntimeHistoryProjectionSchema` carries only table names; it declares no module/schema family.
+head, event receipt/content, bookmark, bookmark-count and known-parent projections. With the three
+derived occurrence shapes they join `RuntimeDbContext` and the single declared `RuntimeHistoryEfModule`
+owner chain. They are not an extension API and do not advertise capture support.
+`RuntimeHistoryProjectionSchema` carries table names; assembly declarations own the family/content set.
 
 Indexes use bounded scope/run/resource hashes and committed positions; complete lossless identities
 and content must be checked by the following provider mapping. Head revisions are concurrency tokens.
@@ -40,9 +41,49 @@ unknown-baseline/semantics evidence and receipts through prefix content retentio
 `StageDeleteAsync` joins full run retirement; the actual native deletion adapter still needs that binding.
 All append owners, including independent observations, must stage their new events so the projection's covered
 prefix remains coherent. A lagging or unsupported projection must not be advertised as an empty playable run.
-The normal Runtime model still registers none of these history/occurrence tables.
+All eight shapes join the shared Runtime model and additive migration chain; actual selected-provider
+registration and native write/observation/deletion binding remain separate qualification steps.
 
-The isolated schema/mapping/checkpoint tests cover private projections and relational staging without changing
-normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
-observation append, occurrence projection, retention/deletion, generated migrations and production qualification
-remain open.
+`EfRuntimeHistoryObservation` is a private independent-observation staging helper. The eventual owner
+authorizes the source, owns its transaction/final save and acknowledgement reconciliation, and normalizes
+provider failures. The staged result is not a durable acknowledgement. The helper requires a retained
+captured head and matching native policy, uses the same head reservation and occurrence prefix, and preserves
+the last covered native checkpoint/time. Receipt replay is immutable; acknowledged purge can return a receipt
+without recreating content. Its purpose-separated semantic fingerprint remains64 hex characters for every
+provider. No bookmark lifecycle or occurrence is inferred from a delivery observation, and no provider port is
+registered by this helper.
+
+The isolated schema/mapping/checkpoint tests cover private projections and relational staging without enabling a selected history provider. The model/migration unit adds normal Runtime targets;
+Actual native entry-point/marker integration, selected reader/observation/retention/deletion binding and production qualification remain with their owning delivery units. This unit supplies all four initial generated migration sets; publication and resulting-main qualification follow the review.
+
+
+## Private history read adapter
+
+[EfRuntimeHistoryStore](Stores/EfRuntimeHistoryStore.cs) implements the selected bounded details/occurrence read contracts over the ordinary scoped Runtime context and declared chain. [EfRuntimeHistoryOccurrenceReader](Stores/EfRuntimeHistoryOccurrenceReader.cs) owns authenticated frozen membership and indexed ordinal/anchor reads. Reads retain caller transactions only at the supported isolation levels and check the same access snapshot before disclosure. Native writer/observation/retention pairing and public registration are supplied by the subsequent owner binding; these private implementations do not enroll capture.
+
+
+## Private history mutation staging
+
+`EfRuntimeHistoryRetention` stages explicit prefix content retirement and full run retirement in the
+caller-owned transaction. Prefix purge locks/checks the native owner, preserves admission/checkpoint
+coverage and all semantic/occurrence receipts, and reserves the monotonic head boundary before a
+set-based content update. Full deletion uses eight completely scoped set-based statements rather than
+loading a long journal. It is called only after the native owner admits/locks full deletion, never by
+inspection or prefix purge. Both reject pending history tracker changes and recheck immutable actual
+access before returning; neither commits, acknowledges, authorizes a retention policy or registers a port.
+The normal native deletion and independent retention owner still need their production binding.
+
+Prefix retention requires ReadCommitted or Serializable isolation: an earlier InnoDB repeatable-read
+view may outlive the current native write lock, and a no-op request would otherwise return an old
+boundary without a CAS. The independent owner must choose an admitted isolation explicitly. Full
+set-based deletion retains its caller's existing native deletion transaction; this read-view restriction
+belongs to prefix boundary reporting. The actual MySQL regression establishes the older read view,
+commits retirement from another context, and requires explicit refusal rather than a stale result.
+
+The schema-binding unit registers all eight shapes in `RuntimeDbContext`, the one assembly-declared
+`RuntimeHistory` family at1.0.0 and its eight whole ContentJson columns. All four provider models retain
+bounded indexed hashes/keys and map complete unbounded identities/content to their large text type.
+The initial generated `RunHistoryTimeline` migrations, designers and snapshots for all four providers accompany this model change. The saved-legacy
+upgrade control preserves every original table digest/history ID and requires empty new history storage,
+so schema installation cannot fabricate capture or activity occurrence evidence. No capture feature or
+provider capability is enabled by the schema declaration alone.
