@@ -131,7 +131,8 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         var processor = new RuntimePostCommitOutboxProcessor(selected, legacy, services.GetRequiredService<TimeProvider>());
         await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => processor.ProcessAsync(new(10)).AsTask());
         Assert.Null(legacy.Intent);
-        var retained = (await store.FindDurableAsync("source:send"))!;
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.FindDurableAsync("source:send").AsTask());
+        var retained = (await store.FindAsync("source:send"))!;
         Assert.NotEqual(RuntimePostCommitOutboxStatus.Delivered, retained.Status); Assert.Equal(0, retained.DeliveryAttemptCount);
     }
 

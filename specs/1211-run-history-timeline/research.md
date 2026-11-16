@@ -577,3 +577,6 @@ This prepared source does not advertise a new default profile. It supplies the a
 
 
 The first finite publication Runtime compile stopped before test execution because the conditional fixture inferred its target-typed `new()` as the narrower dispatcher requiring a bool. The legacy arm now names the original ContextAwareLegacyDispatcher explicitly; no production behavior or assertion changed. Corrected owning execution remains pending.
+
+
+The first executable current publication Runtime run passed4380 and failed2 at the final inspection step of deliberately unscoped legacy-source controls. Current native FindDurableAsync correctly refuses their absent committed scope witness. These controls now assert that hard refusal explicitly and inspect the same retained row through ordinary scoped FindAsync; original not-Delivered/zero-attempt/no-handler assertions remain unchanged. No production guard is weakened. Corrected whole owning qualification remains pending.
