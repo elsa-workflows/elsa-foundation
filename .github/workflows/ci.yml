@@ -10,10 +10,12 @@ name: CI
 # diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 #
 # Cost rules: a push to main runs the PR tier, not the full tier (the PR and the merge queue already ran it; the
-# nightly run below runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser and UX
-# proofs, the Weaver witness) run when it opens ready, is reopened or marked ready, in the merge queue, when it has the
+# nightly run below runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser
+# proofs and the Weaver witness) run when it opens ready, is reopened or marked ready, in the merge queue, when it has the
 # `full-tier` label or changes the tiers, or when the repository variable CI_FULL_TIER_EVERY_PUSH is 'true'
 # (tools/ci/workflow_scope.py, heavy_now). A later push runs the PR tier, and `Full tier` reports as deferred.
+# Full composed UX runs nightly, on manual suite=studio requests and on explicit full-tier opt-in.
+# Task-specific local visual acceptance remains part of each visible change's review.
 
 on:
   pull_request:
@@ -73,6 +75,7 @@ jobs:
       weaver: ${{ steps.scope.outputs.weaver }}
       studio: ${{ steps.scope.outputs.studio }}
       studio-heavy: ${{ steps.scope.outputs.studio-heavy }}
+      studio-ux: ${{ steps.scope.outputs.studio-ux }}
       heavy: ${{ steps.scope.outputs.heavy }}
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
@@ -355,6 +358,7 @@ jobs:
         env:
           STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
           STUDIO_HEAVY: ${{ needs.plan-scope.outputs.studio-heavy }}
+          STUDIO_UX_SELECTED: ${{ needs.plan-scope.outputs.studio-ux }}
           STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
           STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
           STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
@@ -1213,7 +1217,7 @@ jobs:
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio-heavy == 'true'
+    if: needs.plan-scope.outputs.studio-ux == 'true'
     runs-on: ubuntu-latest
     # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
     # Standard composed proof has an 80-minute owned envelope; subsequent qualified probes retain their own caps.
