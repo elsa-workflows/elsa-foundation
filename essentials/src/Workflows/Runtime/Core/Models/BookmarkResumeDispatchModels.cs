@@ -194,6 +194,10 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeIngressWaitOrigin? IngressWaitOrigin { get; init; }
 
+/// <summary>Optional safe source-owned event/delivery causation, separate from trigger payload and admission authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }
     public string ActivityExecutionId { get; }

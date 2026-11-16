@@ -282,6 +282,8 @@ public static class RuntimeCheckpointCommitFingerprint
             element = JsonSerializer.SerializeToElement(payload, SerializerOptions);
         if (commit.IngressWaitOrigin is not null)
             element = JsonSerializer.SerializeToElement(new { IngressWaitOriginVersion = 1, Payload = element, commit.IngressWaitOrigin }, ExactBookmarkOptions);
+        if (commit.Checkpoint.HistoryCausation is { } cause)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistoryCausationVersion = 1, Payload = element, Cause = cause }, ExactBookmarkOptions);
         if (commit.HistorySourceFacts is { Count: > 0 } facts)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
         if (commit.HistoryBatches is { Count: > 0 } history)

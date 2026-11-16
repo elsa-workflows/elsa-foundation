@@ -64,6 +64,52 @@ public sealed class ActivityFaultIncidentRecorderTests
             ValueTask.FromResult(commit with { HistorySourceFacts = facts(new("runtime-history-v3", 3, false, ["IncidentRecorded"])).ToArray() });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Supplied_fault_facts_are_snapshotted_before_caller_mutation_and_async_source_handoff(bool duringHandoff)
+    {
+        var source = new PausingSource();
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_store);
+        services.AddSingleton<IRuntimeHistorySourceExtension>(source);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var original = new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.ActivityContinuationStarted, "original", Now,
+            "actexec-1", causation: new(CommandId: "command-1", SchedulerWorkItemId: "work-1"));
+        var supplied = new List<RuntimeHistorySourceFact> { original };
+        var request = NewRequest(new InvalidOperationException("private failure")) with
+        {
+            CheckpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>(),
+            HistorySourceFacts = supplied
+        };
+        void Mutate() { supplied.Clear(); supplied.Add(new(RuntimeHistorySourceFactKind.ActivityContinuationStarted, "mutated", Now)); }
+        if (!duringHandoff) Mutate();
+        var pending = new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(request).AsTask();
+        Assert.Same(source.Entered.Task, await Task.WhenAny(source.Entered.Task, pending));
+        if (duringHandoff) Mutate();
+        source.Release.SetResult();
+        await pending;
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        Assert.Same(original, Assert.Single(commit.HistorySourceFacts!, fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationStarted));
+        Assert.Equal(original.Causation, commit.Checkpoint.HistoryCausation);
+        Assert.Equal("original", Assert.Single(request.HistorySourceFacts!).SubjectId);
+    }
+
+    private sealed class PausingSource : IRuntimeHistorySourceExtension
+    {
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<RuntimeCheckpointCommit> AddFactsAsync(RuntimeCheckpointCommit commit,
+            Func<RuntimeHistoryCapturePolicy, IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default)
+        {
+            Entered.SetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            return commit with { HistorySourceFacts = facts(new("runtime-history-v3", 3, false, ["IncidentRecorded"])).ToArray() };
+        }
+    }
+
     [Fact]
     public async Task CommitAsync_DoesNotCaptureStackTrace_ByDefault()
     {

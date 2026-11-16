@@ -10,6 +10,27 @@ public sealed class RuntimeHistoryOwnerContractTests
     private static readonly DateTimeOffset At = new(2026, 10, 26, 0, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["ActivityContinuationStarted"]);
 
+    [Fact]
+    public void Optional_checkpoint_causation_is_omitted_for_legacy_wire_and_survives_an_owned_roundtrip()
+    {
+        var commit = Legacy();
+        Assert.False(JsonSerializer.SerializeToElement(commit.Checkpoint).TryGetProperty("HistoryCausation", out _));
+        var cause = new RuntimeHistoryCausation("event", "source-run", "delivery", "command", "work");
+        var captured = commit with { Checkpoint = commit.Checkpoint with { HistoryCausation = cause } };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(commit), RuntimeCheckpointCommitFingerprint.Compute(captured));
+        var restored = JsonSerializer.Deserialize<RuntimeCheckpoint>(JsonSerializer.Serialize(captured.Checkpoint))!;
+        Assert.Equal(cause, restored.HistoryCausation);
+    }
+
+    [Fact]
+    public void Checkpoint_source_causation_identity_preserves_opaque_code_units()
+    {
+        var commit = Legacy();
+        var first = commit with { Checkpoint = commit.Checkpoint with { HistoryCausation = new(DeliveryId: "\ud800") } };
+        var second = commit with { Checkpoint = commit.Checkpoint with { HistoryCausation = new(DeliveryId: "\ud801") } };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(second));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

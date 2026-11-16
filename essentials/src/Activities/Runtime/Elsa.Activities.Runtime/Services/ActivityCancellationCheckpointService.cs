@@ -25,7 +25,8 @@ internal static class ActivityCancellationCheckpointService
         string reason,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken = default,
-        StructuralChildControlContribution? childControlContribution = null)
+        StructuralChildControlContribution? childControlContribution = null,
+        IReadOnlyList<RuntimeHistorySourceFact>? historySourceFacts = null)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -106,9 +107,11 @@ internal static class ActivityCancellationCheckpointService
                     workflowCancelWorkItem,
                     occurredAt)
             ],
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = historySourceFacts };
 
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (childControlContribution is not null)
+            commit = childControlContribution.Apply(commit);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     private static ActivityExecutionState EndOpenAttempt(ActivityExecutionState state, DateTimeOffset endedAt)
