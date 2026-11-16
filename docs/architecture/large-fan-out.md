@@ -38,7 +38,7 @@ from the prototype's rules and the measured commit shape, and are **unverified**
 | Messages it starts in one commit | N start messages in one transaction | At most C per turn | At most C per turn, per combiner |
 | Inbox depth from its children | Up to N | At most C | At most C |
 | Child notices it consumes | N | N | At most F |
-| Turns | Up to N: one per notice for a generation-tracked parent | Between N / C and N. **Measured, N = 4,096, C = 8: 1,413** | At most F. **Measured, N = 4,096, F = 64: 64 notices, 55 turns** |
+| Turns | Up to N: one per notice for a generation-tracked parent | Between N / C and N. **Measured, N = 4,096, C = 8: 1,413** | At most F + 1, counting its start turn. **Measured, N = 4,096, F = 64: 64 notices, 55 turns** |
 | Children in its row's registry | N | At most C | At most C |
 | Row bytes rewritten over the run | O(N²): N commits, each rewriting a registry of up to N entries | O(N × C) | O(F × C) |
 | Instances in all | N + 1 | N + 1 | About N × F / (F − 1). **Measured, N = 4,096: 4,161** (4,097 direct) |
@@ -56,14 +56,18 @@ depends on how notices batch into turns, and the injected recovery in the tree r
   registry that shrinks from 100,000 entries over 100,000 commits writes about 225 GB of row data before any TOAST
   amplification. WRITES.md measured an incompressible 4 kB state at about 6.9 kB of WAL per commit.
 - **One writer.** The parent takes one turn at a time, so its turns cannot share a flush: each is at least one flush of
-  its virtual partition. A flush is at least 2 round trips on PostgreSQL (the measured fence-in-batch shape), so
-  100,000 notices cost at least 200,000 round trips in sequence on one virtual partition.
+  its virtual partition. A flush is at least 2 round trips on PostgreSQL (the measured fence-in-batch shape). A
+  generation-tracked parent takes each notice in a turn of its own, so 100,000 notices cost it at least 200,000 round
+  trips in sequence on one virtual partition. A parent that is not generation-tracked batches notices into fewer turns:
+  the spike's untracked direct root took 1,413 turns for 4,096 notices.
 - **One transaction.** Starting all children at once writes 100,000 start messages in one transaction. That is a long
-  transaction holding locks, and on SQL Server's 2,000-parameter limit many statements (COMMIT-SQL.md).
+  transaction holding locks. SQL Server allows 2,100 parameters per request, and the owned commit starts a new command
+  at 2,000, so it is many commands (COMMIT-SQL.md).
 
-The tree keeps the same total number of messages and commits, about one per instance. It removes the hot spot: no
-instance takes more than F notices or holds more than C children, and the combiners' commits batch with other
-instances' commits in their own virtual partitions, in parallel over the nodes.
+The tree keeps about the same total number of messages and commits: two messages per instance (its start and its
+notice) and a commit or two each. It removes the hot spot: no instance takes more than F notices or holds more than C
+children, and the combiners' commits batch with other instances' commits in their own virtual partitions, in parallel
+over the nodes.
 
 ## The combiner tree
 
@@ -114,24 +118,28 @@ and notices are handed over in memory after each commit, with no poll, and their
 one flush. The spike spreads every level; the mixed placement is **unmeasured**.
 
 **Where it lives.** In layer 3, as a reusable combiner library on the turn contract. It uses only `Start`, the child
-notice, `SetStatus` and the kernel's terminate. Layer 2 needs no change: no new message kind, no new table and no
-partition knowledge in the model. ETL uses it for its partitions of work. Native gets it as a distributed form of
-ForEach, below.
+notice, `SetStatus` and the kernel's terminate. Layer 2 needs no change for the tree itself: no new message kind, no
+new table and no partition knowledge in the model; decision 5 below may change the workflow instance's registry. ETL
+uses it for its partitions of work. Native gets it as a distributed form of ForEach, below.
 
 **Other fan-in.** Many unrelated instances that send to one actor (counts, metrics, a shared aggregate) do not form a
 parent tree. The same idea applies as a sharded aggregator: senders address one of F shard actors by a hash of their
-own id, and each shard forwards its partial result to the aggregate after a count or a timer. The due-depth bound of
-[fairness and backpressure](fairness-and-backpressure.md) still bounds every single inbox. This variant is sketched
-here and not designed further.
+own id, and each shard forwards its partial result to the aggregate after a count or a timer. The shard count and the
+senders' credits bound each inbox. The ingress threshold of [fairness and backpressure](fairness-and-backpressure.md)
+does not: it applies to work from outside, never to sends between instances. This variant is sketched here and not
+designed further.
 
 ## Completion, cancellation, faults and retries
 
 **Completion.** A leaf finishes with its output. Its notice goes to its combiner, which removes the child from
 `Outstanding`, merges the output into `Partial` and starts the next sub-range, all in one turn and one commit. A
 notice is consumed in the commit that changes the state, so its result changes state once, though the turn's code can
-run again after a crash. A notice for a child that is not outstanding is refused: the spike throws on an unknown or
-duplicate result, and its `--mutate-count` control (every root result counted twice) fails the count check (exit 1 at
-`433c79341`; `--mutate-credit`, one child over the credit, fails the credit check, exit 1). Recovery reloads the
+run again after a crash. A notice for a child that is not outstanding is refused by the workflow instance before the
+model sees it, for a generation-tracked parent: `WorkflowInstance` refuses it as `UnknownChildCreation` when the child
+is not in the registry (built). The spike's model also throws on an unknown or duplicate result, which parks the
+coordinator; no control exercises that throw. The spike's two controls check the merge and the credit: `--mutate-count`
+counts every root result twice and fails the count check, and `--mutate-credit` starts one child over the credit and
+fails the credit check (each exit 1 at `433c79341`). Recovery reloads the
 committed `Cursor`, `Outstanding` and `Partial`; the spike injects an unknown outcome after a landed commit, takes every
 partition with new owners, and checks that the reloaded checkpoint matches (measured, `ok` at `433c79341`).
 
@@ -139,25 +147,34 @@ partition with new owners, and checks that the reloaded checkpoint matches (meas
 terminate to the children it started that have not finished, and the terminate recurses. With credits, only
 outstanding children exist; sub-ranges past the cursor were never started and need nothing. A cancel of a
 100,000-item fan-out therefore sends at most C terminates per live combiner. Each cancelled child still sends its
-Cancelled notice (built: `Terminate` adds it); its combiner has already ended, so the kernel consumes and drops the
-notice, as for any message to a finished instance.
+Cancelled notice (built: `Terminate` adds it). Its combiner has already ended: the kernel consumes the notice, through
+the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tracked combiner, without a model turn.
 
 **Faults.** A leaf that faults reports status Faulted. The combiner applies its policy:
 
 - **FailFast:** the combiner sends a terminate to each outstanding child (at most C) and faults with the first fault,
   in one turn. Its parent receives a Faulted notice and does the same, so a fault reaches the root and cancels every
-  live subtree. Whether a model may send the kernel's terminate through `ITurn.Send` is **unverified**; if not, the
-  combiner library defines its own cancel message, which its leaves and combiners handle.
+  live subtree. A model may send the kernel's terminate kind through `ITurn.Send` (`Kinds.RequireApplicationSend`
+  refuses only job and event tickets); that the receiving child accepts a terminate from its parent this way is
+  **unverified**.
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
   faults only when the faults pass a threshold, as Native `Parallel` faults when its threshold can no longer be met
   (built). The root's result carries the count and the sample.
 
 The spike implements neither policy: a child fault throws in the coordinator, and the kernel parks it.
 
+**Parked leaves.** A leaf whose turn throws is parked: it ends Faulted and sends a Faulted notice to its combiner
+(built: `WorkflowInstance.Park` sends it), and the combiner's registry drops it. Release 1 lets an operator retry parked
+work. If the leaf is retried and finishes, its later notice is refused as `UnknownChildCreation`: its effects happened
+and its result is lost. This holds for every parent in the kernel today, Native `DispatchWorkflow` included, so it is
+a decision for the owner below, for the whole kernel.
+
 **Retries.** A leaf's activity retries inside the leaf: each retry is a new generation in its iteration path, so a new
-effect key (the owner's rule of 16 November). A combiner may retry a failed sub-range by starting a new child for the
-same range. That child is a new instance with a new origin, so its effects carry new keys: a subtree retry is a new
-attempt by design. A body whose effect must happen once per item across subtree retries uses the item's business key
+effect key (the owner's rule of 16 November). A combiner may retry a failed child by starting a new child for the same
+range. That child is a new instance with a new origin, so its effects carry new keys. For a leaf this is one item's new
+attempt, as intended. For an inner sub-range it reruns every item of the range, including items whose effects already
+happened, under keys no receiver can match. How far a retry reaches is a decision for the owner below; the
+recommendation is leaves only. A body whose effect must happen once per item across retries uses the item's business key
 for its receiver as well.
 
 ## Effect keys inside the tree
@@ -191,9 +208,10 @@ degree as its credit, the inbox holds at most the degree's worth of its results,
 that bodies start stays at most the degree. Items by reference (decision 10) would remove the O(N) copy; the turns
 remain at least one commit per waiting body.
 
-**The cap's value is the owner's decision** (below). The arithmetic for 1,000 items of about 50 bytes, unverified: a
-state of about 50 kB, rewritten at up to 1,000 commits, about 50 MB of row writes per ForEach; at 10,000 items about
-5 GB. The release 1 state-size benchmark (decision 10) measures it before the cap is published. A body that starts a
+**The cap's value is the owner's decision** (below). The arithmetic for 1,000 items of about 50 bytes, unverified,
+assuming each body waits once, so one commit per item: a state of about 50 kB, rewritten at about 1,000 commits, about
+50 MB of row writes per ForEach; at 10,000 items about 5 GB. A body that waits w times multiplies both by w; there is no
+ceiling. The release 1 state-size benchmark (decision 10) measures it before the cap is published. A body that starts a
 child workflow per item stays inside the same cap.
 
 Larger work in release 1 is split by the author: a sequential ForEach over batches that each dispatch a bounded
@@ -218,9 +236,8 @@ than its inputs, and returns its output through the reducer. That is why it stay
 
 1. **The release 1 cap on a parallel ForEach.**
    - (a) 1,000 items, degree default 16 and maximum 64, confirmed or lowered by the state-size benchmark before
-     release. *Recommended:* the arithmetic stays in tens of MB per ForEach.
+     release. *Recommended:* the arithmetic stays in tens of MB per ForEach for bodies that wait once.
    - (b) 10,000 items, accepting GB-scale writes per ForEach until values by reference land.
-   - (c) No parallel ForEach in release 1.
 2. **How the distributed form is chosen after release 1.**
    - (a) An explicit option on ForEach. *Recommended:* the body's scope and output semantics change, so the author
      decides.
@@ -228,11 +245,24 @@ than its inputs, and returns its output through the reducer. That is why it stay
 3. **Fault policy default for the combiner library.**
    - (a) FailFast. *Recommended:* it matches a structured parallel block and needs no threshold.
    - (b) Collect with a threshold, which ETL batch jobs may prefer per job.
+4. **How far a combiner's retry reaches.**
+   - (a) Leaves only: a failed leaf is restarted as a new leaf for its item; a failed inner sub-range is not retried,
+     and its fault goes up. *Recommended:* no finished item runs again.
+   - (b) Unfinished items of a sub-range: the combiner records which items merged and restarts only the rest. Its
+     state grows with the items it must remember.
+   - (c) Whole sub-ranges, accepting that finished items run again under new keys.
+5. **A parked child that an operator later retries.**
+   - (a) A parked child's notice says it was parked. The parent keeps the child in its registry, and the combiner keeps
+     it in `Outstanding`, with its credit, until a later notice or a discard. *Recommended:* no result is lost, and a
+     tree with parked leaves visibly waits. It is a change to `WorkflowInstance`'s registry and the notice, for every
+     parent.
+   - (b) A parked child's fault is final for its parent. The operator tools refuse to retry a child whose parent
+     consumed its fault, and the operator retries at the parent instead.
 
 ## Contract and evidence
 
 The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md) states the question, the placement options
-and ETL's fit. [Fairness and backpressure](fairness-and-backpressure.md) covers credits and the inbox bound. The
+and ETL's fit. [Fairness and backpressure](fairness-and-backpressure.md) covers credits and the ingress threshold. The
 prototype's [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md), [NATIVE.md](../../prototypes/kernel-model/NATIVE.md),
 [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md) and [WRITES.md](../../prototypes/kernel-model/WRITES.md)
 hold the built and measured evidence cited here.
