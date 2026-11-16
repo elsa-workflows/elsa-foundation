@@ -137,7 +137,7 @@ function buildHomeStats(builder: ReturnType<typeof useExtensionBuilder>): HomeSt
       { label: "Needs attention", value: attentionTotal }
     ]
     : [
-      { label: "Extensions", value: repositories.length || workspaces.length },
+      { label: "extensions", value: repositories.length || workspaces.length },
       { label: "Projects", value: totalProjects },
       { label: "Loaded at runtime", value: loadedCount }
     ];

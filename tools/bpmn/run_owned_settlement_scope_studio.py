@@ -144,7 +144,7 @@ def run(output, skip_build=False):
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
     receipt = {"sourceSha": sha, "dirty": bool(dirty), "status": "failed", "stage": "build"}
     try:
-        backend_project = ROOT / "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        backend_project = ROOT / "apps/Elsa.Workbench/Elsa.Workbench.csproj"
         studio_project = ROOT / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"
         if not skip_build:
             command(["dotnet", "build", str(backend_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],

@@ -2,7 +2,7 @@ packages:
   - "src/essentials/Elsa.Studio.Hosting/Client"
   - "src/essentials/Elsa.Studio.Hosting/StudioSdk"
   - "src/essentials/Elsa.Studio.Hosting/StudioUi"
-  - "../Extensions/*/studio/*/Client"
+  - "../extensions/*/studio/*/Client"
   - "src/essentials/Elsa.Studio.CodeEditor/Client"
   - "src/essentials/Elsa.Studio.Workflows/Client"
   - "src/essentials/Elsa.Studio.Dashboard/Client"

@@ -25,5 +25,5 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // the version its rows use; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(ClusterMembershipEfModule.SchemaFamily, ClusterMembershipEfModule.Name, ClusterMembershipEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 [assembly: EfSchemaContent(ClusterMembershipEfModule.SchemaFamily, typeof(ClusterMemberEntity), nameof(ClusterMemberEntity.ReportJson))]

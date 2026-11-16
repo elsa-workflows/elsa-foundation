@@ -18,7 +18,7 @@ scoped model contributors remain inside the publication operation. Stateless exi
 may retain singleton lifetimes. Register contributions through DI in every operation; a mutation of
 one scoped registry does not configure other operations.
 
-The public diagnostic contribution follows the [Activities catalog](../../../../Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md):
+The public diagnostic contribution follows the [Activities catalog](../../../../essentials/src/Activities/Design/Api/EXTENSION_POINTS.md):
 it never forwards authored instructions, connection credentials, exception text or runtime metadata.
 Agent-specific copy and validation stay in this package; generic Design/Publishing/Studio code does not
 know the agent diagnostic codes. The Studio Agent contribution owns focus for its model,

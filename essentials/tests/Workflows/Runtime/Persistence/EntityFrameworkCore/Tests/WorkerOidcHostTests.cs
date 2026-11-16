@@ -15,7 +15,7 @@ public sealed class WorkerOidcHostTests
 {
     private const string ExecutePath = "/runtime/workflows/executables/{0}/execute";
     private const string ExecutePermission = WorkflowRuntimePermissions.WorkflowRuntimeExecute;
-    // Contract: Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityIamEfModule.cs, SchemaVersion.
+    // Contract: essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityIamEfModule.cs, SchemaVersion.
     // Pin the process-boundary expectation without importing the child host's persistence assembly.
     private const string ExpectedIamSchemaVersion = "1.2.0";
 

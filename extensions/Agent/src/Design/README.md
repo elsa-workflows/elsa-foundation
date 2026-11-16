@@ -10,4 +10,4 @@ for schemas, lifetimes and ownership boundaries.
 `IActivityProviderDiagnosticCatalog`, plus Publishing's compiler and dependency-discoverer contracts.
 Its registered static public diagnostic guidance lets publication, validation and Test Run explain
 configuration problems without forwarding private runtime diagnostic content. The exact contract,
-registration mechanism and consuming registries are in the [Activities catalog](../../../../Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md).
+registration mechanism and consuming registries are in the [Activities catalog](../../../../essentials/src/Activities/Design/Api/EXTENSION_POINTS.md).
