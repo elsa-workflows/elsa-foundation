@@ -13,9 +13,10 @@ evidence lives in [WRITES.md](../../prototypes/kernel-model/WRITES.md) (measurem
 [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md) (the owned commit); their tables are not repeated here.
 
 **The answer in short.** Snapshot plus journal stays the default. At small states a commit costs about 0.7 to 2.3 kB of
-WAL, bloat stays small and autovacuum clears it. Large states are the cost: an incompressible 4 kB state adds about 4.5
-to 4.8 kB of WAL to every commit and doubles its TOAST table. Values by reference (decision 10) is the fix and a
-release 1 priority; its acceptance run is still to do. Fill factor is a deployment note, the partitioned inbox stays out
+WAL; in the measured windows bloat stayed small and autovacuum cleared it. Large states are the cost: an incompressible
+4 kB state adds about 4.5 to 4.8 kB of WAL to every commit and doubles its TOAST table. Values by reference
+(decision 10) is the fix and a release 1 priority; where its values live and how it is accepted are owner decisions,
+and its acceptance run is still to do. Fill factor is a deployment note, the partitioned inbox stays out
 of release 1, and the lazy snapshot remains a sketch.
 
 ## What was measured
@@ -39,21 +40,39 @@ Rolled-back attempts add 5.5 to 12 % on top. These figures are floors: with a ch
 images added about a third to a small-state commit and a quarter to a padded one
 ([checkpoints](../../prototypes/kernel-model/WRITES.md#checkpoints)).
 
-**The owned commit changed round trips and left bytes as they were.** Round 5 B replaced EF's commit with hand-written SQL on all four
-engines. A flush of 1,000 new instances fell from 2,001 statements to 3, and bytes per commit stayed within the noise:
-711 to 711 B, 1,953 to 1,954 B, a remote balanced start 1,656 to 1,632 B (fewer commit records and padding)
+**The owned commit changed round trips and left bytes as they were, where both were measured.** Round 5 B replaced EF's
+commit with hand-written SQL on all four engines. A flush of 1,000 new instances fell from 2,001 statements to 3. With
+the **checked** fence, bytes per commit stayed within the noise: 711 to 711 B, 1,953 to 1,954 B, a remote balanced start
+1,656 to 1,632 B (fewer commit records and padding)
 ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#bytes-per-commit-writesmd-postgresql-checked-fence-ef--owned)).
-Every WAL figure above therefore holds for the current commit writer.
+COMMIT-SQL also gives owned figures with the fence in the batch, PostgreSQL's default (1,080, 969, 1,194 and 1,951 B),
+with no EF pair and no row labels, and WRITES.md says the in-batch bytes were not measured against EF. The figures above
+carry over to the owned commit with the checked fence; for the in-batch default they are expected to, unverified.
 
 ### Dead tuples and bloat
+
+These hold for the measured windows (one to three minutes of stress, a single 70-second wait); none establishes
+steady-state bloat or sustained vacuum capacity
+([POSTGRES.md](../../prototypes/kernel-model/POSTGRES.md#what-the-evidence-is-and-is-not)).
 
 - At Full under the stress, dead tuples peaked at 577 to 723 on Instances and 4,946 to 5,397 on Messages, and up to
   about 1,100 and 6,600 in the other runs. Autovacuum cleared them at its one-minute nap; heaps kept 5 to 15 % free
   space on Instances and 13 to 30 % on Messages ([bloat](../../prototypes/kernel-model/WRITES.md#bloat)).
 - 91 to 97 % of updates were HOT at the default fill factor, because page pruning makes room.
-- A 4 kB state grows the Instances TOAST table to 2.1 to 2.3 times its live data. The space is reused after vacuum and
-  never returned: in the 14 November padded run, dead TOAST bytes fell from 141,939 to zero while the relation stayed
-  12,877,824 bytes.
+- A 4 kB state grows the Instances TOAST table to 2.1 to 2.3 times its live data. Autovacuum makes the space reusable
+  and gives none of it back to the file system: in the 14 November padded run, dead TOAST bytes fell from 141,939 to
+  zero while the relation stayed 12,877,824 bytes. A table rewrite (`VACUUM FULL`, `pg_repack`) returns it, at the cost
+  of a lock or a copy.
+
+### Retained identity rows (15 November)
+
+WRITES.md's two 15 November sections measure what later identity work keeps
+([physical identity](../../prototypes/kernel-model/WRITES.md#15-november-card4-physical-identity-experiment-on-landed-park),
+[raw Delete repair](../../prototypes/kernel-model/WRITES.md#15-november-required-metadata-protocol-and-raw-delete-repair)):
+retirement markers, bindings and receipts kept without expiry; a raw delete and a retirement at 512 and 656 B of WAL
+with a 101-byte marker tuple; wide keys at 11,096 and 22,120 B of datum with 36,624 B of WAL in one window. These are
+bounded samples. They grow with retired runs and accepted operations, outside the per-commit figures above, and
+question 2 (data lifecycle) owns their retention.
 
 ## The mitigations, before and after
 
@@ -71,10 +90,9 @@ Every WAL figure above therefore holds for the current commit writer.
    log-only store. Those stay off the default; the Log profile stays a later plan.
 2. **Decision 10 is release 1's write-volume priority.** The whole state is one value, and PostgreSQL rewrites a large
    value whole through TOAST at every commit. Values by reference is the one mitigation that removes that cost for
-   values that do not change every turn. Its acceptance is a run: the existing `pad=` case
-   against a reference, on PostgreSQL, measuring WAL per commit, TOAST growth and the load path's round trips, with the
-   value changing every turn and not
-   ([POSTGRES.md](../../prototypes/kernel-model/POSTGRES.md#decision-10-values-by-reference-a-release-1-priority)).
+   values that do not change every turn. Where its values live is decision 1, and how it is accepted is decision 2. If a
+   payload codec encrypts states (#4707, later), it must compress before it encrypts, or every encrypted state above
+   about 2 kB pays the incompressible cost measured here.
 3. **Fill factor and vacuum settings are deployment notes**, written in POSTGRES.md's
    [tuning guidance](../../prototypes/kernel-model/POSTGRES.md#tuning-guidance) with each item marked measured or
    recommended. The store creates default tables.
@@ -103,7 +121,8 @@ first, as the sketch requires.
 ## What release 1 does
 
 - Snapshot plus journal, Full history by default, State and Minimal per workflow, as decided.
-- Values by reference for large values, accepted by the `pad=` run above; a size benchmark stays in the cost runs.
+- Values by reference for large values, stored as decision 1 says and accepted as decision 2 says; a size benchmark
+  stays in the cost runs.
 - The owned commit on PostgreSQL, SQL Server, SQLite and MySQL, as built.
 - Default table settings, with POSTGRES.md's guidance published as a PostgreSQL operations note.
 - No partitioned inbox, no lazy snapshot, no new tuning default.
@@ -121,16 +140,36 @@ first, as the sketch requires.
 
 ## Decisions for the owner
 
-### 1. Where release 1 stores values by reference
+### 1. Where values by reference live
 
-| Option | Write path | For | Against |
-|---|---|---|---|
-| **a. A values record in the same provider** | An immutable row per value, keyed by instance and digest, written in the same fenced batch; read with the instance on load | One store, one commit, one retention and erasure path; no orphans; MongoDB can do the same with a document | Large values still pass through the database once; its own TOAST and WAL, once per value |
-| b. An external blob store | The value is written before the commit, as the witness does through a job ticket; the commit records the reference | Keeps large bytes out of the database | A second store to run, secure and back up; orphans after a lost commit need a sweep; erasure spans two systems; extra calls (the witness: 5 to 13 and 12 to 20 engine calls) |
+This is one decision for this page and for the data-lifecycle page
+([#4707](https://github.com/elsa-workflows/elsa-foundation/pull/4707)); its retention, purge and erasure rules follow
+whichever option is chosen. #4707's current draft is written for option b.
 
-**Recommendation: a for release 1**, with b as a later value-store adapter for deployments that need it.
+**What is built.** [ValueStore.cs](../../prototypes/kernel-model/models/Values/ValueStore.cs) is a witness: `ValueRef`
+is a SHA-256 digest (upper-case hex) with a length; `DirectoryValues` keeps one file per digest in one directory,
+written to a temporary file, flushed and renamed, and verified on every read. It is content-addressed across the whole
+directory, so two instances that store the same bytes share one object, and nothing in it is scoped by instance or
+tenant. The model learns the reference from a job's result and commits it afterwards
+([VALUES.md](../../prototypes/kernel-model/models/Values/VALUES.md)). Durability, pruning, reference tracking, tenant
+scoping, encryption and erasure are unqualified there.
 
-### 2. Tuning as a note or a shipped profile
+| Option | Write path | Lifecycle | For | Against |
+|---|---|---|---|---|
+| a. A values record in the same provider | An immutable row per value, keyed by instance and digest, written in the same fenced batch as the reference; read with the instance on load | No orphans: the row commits with its reference. A changed value writes a new row; superseded rows that Full-history journal rows still reference stay until the instance is deleted, and go with it | One store, one commit, one backup; MongoDB can do the same with a document | Large values still pass through the database once, with their own TOAST and WAL per value; superseded values accumulate for the instance's lifetime |
+| b. An external content-addressed store | The value is written before the commit, as the witness does through a job ticket; the commit records the reference | Orphans after a lost commit need a sweep. For #4707's purge by instance and erasure, objects must be named per instance (or the digest keyed per instance or tenant), which differs from the witness's store-wide content addressing; shared objects would otherwise need reference counting | Keeps large bytes out of the database | A second store to run, secure and back up; erasure spans two systems; extra calls (the witness: 5 against 13 engine calls to the first value-bearing commit, 12 against 20 for a fresh owner) |
+
+**Recommendation: a for release 1**, with b as a later value-store adapter for deployments that need large bytes kept
+out of the database.
+
+### 2. How decision 10 is accepted
+
+POSTGRES.md proposes ([its owner decisions, item 2](../../prototypes/kernel-model/POSTGRES.md#owner-decisions-this-report-raises))
+that values by reference count as delivered only after a run: the existing `pad=` case against a reference, on
+PostgreSQL, measuring WAL per commit, TOAST growth and the load path's round trips, with the value changing every turn
+and not. **Recommendation: adopt it**, with the run on the option chosen in decision 1.
+
+### 3. Tuning as a note or a shipped profile
 
 POSTGRES.md raises it: whether its guidance stays an operations note or becomes a DDL profile the PostgreSQL
 initializer applies (fill factor on `Messages`, say). **Recommendation: an operations note for release 1**; a profile
