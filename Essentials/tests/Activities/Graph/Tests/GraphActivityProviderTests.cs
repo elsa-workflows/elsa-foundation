@@ -657,6 +657,41 @@ public sealed partial class GraphActivityProviderTests
         Assert.Null(compilation.ExecutableRoot);
     }
 
+    // Second local Code Review of PR #4314: publication reads a blank 'outcome' and an empty 'outcomes' list as unset,
+    // exactly as the Complete activity does when it runs, so an editor's empty default for the unused input is accepted.
+    [Theory]
+    [InlineData("\"\"", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("\"  \"", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("null", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("\"fail\"", """[]""", new[] { "fail" })]
+    [InlineData("\"fail\"", "\"[]\"", new[] { "fail" })]
+    [InlineData("\"fail\"", "null", new[] { "fail" })]
+    public async Task Complete_compilation_reads_an_empty_unused_input_as_unset(string outcomeJson, string outcomesJson, string[] expectedReferenceKeys)
+    {
+        var node = $$"""
+            {
+              "nodeId": "exit",
+              "activityVersionId": "activity-ver-complete",
+              "inputs": [
+                { "referenceKey": "outcome", "value": { "value": {{outcomeJson}}, "expressionType": "Literal" } },
+                { "referenceKey": "outcomes", "value": { "value": {{outcomesJson}}, "expressionType": "Literal" } }
+              ],
+              "outputs": [],
+              "structure": null
+            }
+            """;
+
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(node),
+            // The manifest maps 'succeed'; declare it plus exactly the outcomes the node names, so every outcome is reached.
+            OutcomeContract([("succeed", "Succeeded"), .. expectedReferenceKeys.Select(key => (key, key))])));
+
+        Assert.Empty(compilation.Diagnostics);
+        var completeOutcomes = compilation.ExecutableRoot!.Descriptor.Payload.GetProperty("completeOutcomes")
+            .Deserialize<GraphActivityCompleteOutcomeDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(expectedReferenceKeys, completeOutcomes!.Select(outcome => outcome.ReferenceKey).ToArray());
+    }
+
     [Fact]
     public async Task Draft_validation_checks_each_name_in_a_Complete_outcomes_list()
     {

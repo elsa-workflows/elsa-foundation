@@ -297,7 +297,21 @@ public sealed class GraphBoundaryCompleteTests
         var exit = run.State("node-exit");
         Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
         Assert.Equal(Complete.OutcomeRequiredFaultCode, exit.Fault!.Code);
+        // The message names the blank entry, not a missing outcome (second local Code Review of PR #4314).
+        Assert.Contains("blank boundary outcome in 'outcomes'", exit.Fault.Message, StringComparison.Ordinal);
         run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    // An empty unused input is unset when Complete runs, as it is at publication.
+    [Fact]
+    public async Task CompleteWithABlankOutcomeAndAnOutcomesList_CompletesWithTheList()
+    {
+        var run = await RunInParentAsync(Boundary(
+            Nodes.Leaf("node-exit", typeof(Complete), new Dictionary<string, object?> { ["outcome"] = "", ["outcomes"] = new[] { "fail" } }),
+            completeOutcomes: FailOrSucceed));
+
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(BoundaryNodeId, "Failed");
     }
 
     [Fact]

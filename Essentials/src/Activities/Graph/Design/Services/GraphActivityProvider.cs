@@ -606,7 +606,7 @@ public sealed class GraphActivityProvider(
         var reached = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in completeNodes)
         {
-            if (HasInput(node, CompleteOutcomeInputKey) && HasInput(node, CompleteOutcomesInputKey))
+            if (IsCompleteInputSet(node, CompleteOutcomeInputKey) && IsCompleteInputSet(node, CompleteOutcomesInputKey))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.complete.outcome-conflict",
@@ -651,14 +651,15 @@ public sealed class GraphActivityProvider(
 
     /// <summary>
     /// The literal reference keys a Complete node names: its <c>outcomes</c> list when set, else its one <c>outcome</c>;
-    /// null when neither is a literal. An outcome given by an expression stays refused.
+    /// null when neither is a literal. An outcome given by an expression stays refused. An empty <c>outcomes</c> list is
+    /// unset, as it is when the Complete activity runs, so <c>outcome</c> applies.
     /// </summary>
     private static IReadOnlyList<string>? ReadCompleteOutcomes(GraphNode node)
     {
         var list = node.Activity.Inputs
             .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, CompleteOutcomesInputKey) && x.Value.Value is not null)
             .ToArray();
-        if (list.Length == 1)
+        if (list.Length == 1 && IsCompleteInputSet(node, CompleteOutcomesInputKey))
         {
             if (!string.Equals(list[0].Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(list[0].Value.ExpressionType, "Object", StringComparison.OrdinalIgnoreCase))
@@ -690,8 +691,41 @@ public sealed class GraphActivityProvider(
         return ReadCompleteOutcome(node) is { } single ? [single] : null;
     }
 
-    private static bool HasInput(GraphNode node, string inputKey) =>
-        node.Activity.Inputs.Any(x => StringComparer.Ordinal.Equals(x.ReferenceKey, inputKey) && x.Value.Value is not null);
+    /// <summary>
+    /// Whether a Complete input is set the way the Complete activity reads it when it runs: a blank <c>outcome</c> and an
+    /// empty <c>outcomes</c> list are unset. A value given by an expression counts as set.
+    /// </summary>
+    private static bool IsCompleteInputSet(GraphNode node, string inputKey) =>
+        node.Activity.Inputs
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, inputKey))
+            .Any(x => !IsUnsetCompleteValue(x.Value.Value, isList: StringComparer.Ordinal.Equals(inputKey, CompleteOutcomesInputKey)));
+
+    private static bool IsUnsetCompleteValue(object? value, bool isList)
+    {
+        var text = value switch
+        {
+            null => null,
+            string s => s,
+            JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            JsonElement { ValueKind: JsonValueKind.Array } element => element.GetArrayLength() == 0 ? null : element.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            _ => JsonSerializer.Serialize(value)
+        };
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+        if (!isList)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement is { ValueKind: JsonValueKind.Array } array && array.GetArrayLength() == 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static string? ReadCompleteOutcome(GraphNode node)
     {

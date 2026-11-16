@@ -60,10 +60,16 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
                 $"Complete node '{runtimeContext.ExecutableNode.ExecutableNodeId}' sets both 'outcome' and 'outcomes'.")));
         }
 
-        string[] authored = Outcomes is { Count: > 0 } several ? [.. several] : string.IsNullOrWhiteSpace(Outcome) ? [] : [Outcome];
-        if (authored.Any(string.IsNullOrWhiteSpace))
-            authored = [];
-        var outcomes = authored.Distinct(StringComparer.Ordinal).ToArray();
+        if (Outcomes is { Count: > 0 } listed && listed.Any(string.IsNullOrWhiteSpace))
+        {
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                OutcomeRequiredFaultCode,
+                $"Complete node '{runtimeContext.ExecutableNode.ExecutableNodeId}' lists a blank boundary outcome in 'outcomes'; every entry must name one.")));
+        }
+
+        string[] outcomes = Outcomes is { Count: > 0 } several
+            ? several.Distinct(StringComparer.Ordinal).ToArray()
+            : string.IsNullOrWhiteSpace(Outcome) ? [] : [Outcome];
         if (outcomes.Length == 0)
         {
             return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
