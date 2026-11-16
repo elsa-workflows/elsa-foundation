@@ -117,11 +117,12 @@ it("refuses a lossy direct import before replacing the actual editor document an
   const input = view.container.querySelector<HTMLInputElement>("[aria-label='Import BPMN file']")!;
   Object.defineProperty(input, "files", { value: [source] });
   flushSync(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+  await vi.waitFor(() => expect(view.container.textContent).toContain("Unsupported event would be lost"));
+  const preview = [...view.container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Preview imported body")!;
+  flushSync(() => preview.click());
   await vi.waitFor(() => expect(view.container.textContent).toContain("current process is unchanged"));
   expect(view.container.querySelector(".react-flow__node[data-id='keep']")).not.toBeNull();
-  const menu = view.container.querySelector<HTMLButtonElement>("[aria-label='More workflow actions']")!;
-  flushSync(() => menu.click());
-  await vi.waitFor(() => expect(document.body.textContent).toContain("Download refused BPMN source"));
+  expect(view.container.textContent).toContain("Download original file");
   expect(view.calls.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
   await view.unmount();
 });

@@ -53,11 +53,60 @@ public sealed class BpmnTaskBindingInterchangeTests
         var child = Assert.Single(structure.Activities);
         Assert.Equal(child.NodeId, Assert.Single(structure.Elements, x => x.ElementId == "summarize").ChildNodeId);
         Assert.Equal(VersionId, child.ActivityVersionId);
+        Assert.Equal("child-summarize", child.NodeId);
         var input = Assert.Single(child.Inputs);
         Assert.Equal("brief", input.ReferenceKey);
         Assert.Equal("Literal", input.Value.ExpressionType);
         Assert.Equal(Brief, ((JsonElement)input.Value.Value!).GetString());
         Assert.Equal(BpmnImportCapabilityAvailability.Available, Assert.Single(confirmed.Analysis.Capabilities, x => x.ElementId == "summarize").Availability);
+    }
+
+    [Fact]
+    public async Task A_native_subprocess_keeps_its_exact_confirmed_process_pin_and_child_identity()
+    {
+        var catalog = new Catalog(Declared("brief"), withProcessPins: true);
+        var nested = Process(Literal("brief", Brief)) with {
+            NodeId = "subprocess-child", ActivityVersionId = "catalog-process-old",
+            Inputs = [new ArgumentState("CanStartWorkflow", new ArgumentValue(false, "Literal"), null, null, null, null)]
+        };
+        var structure = new BpmnAuthoredStructure([nested],
+            [new("outer-start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("outer-end", BpmnElementTypes.EndEvent)],
+            [new("entry", "outer-start", "sub"), new("exit", "sub", "outer-end")]);
+        var root = Process(Literal("brief", Brief)) with { Structure = new(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)) };
+        var exported = await new BpmnDocumentExporter(catalog).ExportAsync(root);
+        Assert.Empty(exported.Omissions);
+        var importer = new BpmnDocumentImporter(new BpmnWorkBinder(), catalog);
+        var proposal = await importer.ImportAsync(exported.Xml);
+        Assert.False(proposal.Analysis.CanExecute);
+        var processProposal = Assert.Single(proposal.Analysis.Capabilities, item => item.ElementId == "sub");
+        Assert.Equal(BpmnImportCapabilityAvailability.RequiresBinding, processProposal.Availability);
+        Assert.Equal("catalog-process-old", processProposal.RetainedBinding!.ActivityVersionId);
+        var imported = await importer.ImportAsync(exported.Xml, new BpmnImportOptions { ConfirmedBindings = ["sub", "summarize"] });
+        Assert.True(imported.Analysis.CanExecute, string.Join("; ", imported.Analysis.Capabilities.Select(item => item.Reason)));
+        var subprocess = Assert.Single(Structure(imported.ProcessNode).Activities);
+        Assert.Equal("subprocess-child", subprocess.NodeId);
+        Assert.Equal("catalog-process-old", subprocess.ActivityVersionId);
+        Assert.Equal("child-summarize", Assert.Single(Structure(subprocess).Activities).NodeId);
+        Assert.False(((JsonElement)Assert.Single(subprocess.Inputs).Value.Value!).GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Runtime_invocation_settings_cannot_silently_turn_into_an_inline_CLR_task(bool intrinsic)
+    {
+        var process = Process(Literal("brief", Brief));
+        var source = Structure(process);
+        var child = Assert.Single(source.Activities);
+        child = intrinsic
+            ? child with { Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("String"), new VariableReference("result")) }
+            : child with { ExecutionPlacement = ActivityExecutionPlacement.Background };
+        process = process with { Structure = new(process.Structure!.Kind, process.Structure.SchemaVersion,
+            JsonSerializer.SerializeToElement(new BpmnAuthoredStructure([child], source.Elements, source.SequenceFlows), Web)) };
+        var result = await new BpmnDocumentExporter(new Catalog(Declared("brief"))).ExportAsync(process);
+        var omission = Assert.Single(result.Omissions);
+        Assert.Equal("summarize", omission.ElementId);
+        Assert.Equal(intrinsic ? "unsupported-intrinsic" : "unsupported-execution-placement", omission.Code);
     }
 
     [Theory]
@@ -385,7 +434,7 @@ public sealed class BpmnTaskBindingInterchangeTests
     private static BpmnAuthoredStructure Structure(ActivityNode node) => node.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!;
 
     /// <summary>A visible catalog with the BPMN process and, when visible, <see cref="VersionId"/> declaring one input.</summary>
-    private sealed class Catalog(InputDefinition declaration, bool versionVisible = true, bool withDelay = false) : IActivityDefinitionLookup
+    private sealed class Catalog(InputDefinition declaration, bool versionVisible = true, bool withDelay = false, bool withProcessPins = false) : IActivityDefinitionLookup
     {
         private static readonly Definition ProcessDefinition = new("catalog-process", "Elsa.Activities.Bpmn.Activities.BpmnProcess");
         private static readonly Definition SummarizeDefinition = new("catalog-summarize", "Acme.Summarize");
@@ -410,6 +459,7 @@ public sealed class BpmnTaskBindingInterchangeTests
         // binding-profile rule can refuse a retained binding that names it.
         public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IActivityDefinitionVersion?>(versionId == VersionId ? new CatalogVersion(versionId, SummarizeDefinition, [declaration])
+                : withProcessPins && versionId is "catalog-process-old" or "catalog-process-v1" ? new CatalogVersion(versionId, ProcessDefinition, [Declared("CanStartWorkflow") with { Type = new TypeReference("Boolean") }])
                 : withDelay && versionId is "Elsa.Delay" or "catalog-delay-v1" ? new CatalogVersion(versionId, DelayDefinition, [declaration]) : null);
     }
 
