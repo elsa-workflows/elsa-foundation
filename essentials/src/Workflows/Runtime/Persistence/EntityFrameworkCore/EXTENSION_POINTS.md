@@ -54,9 +54,7 @@ provider. No bookmark lifecycle or occurrence is inferred from a delivery observ
 registered by this helper.
 
 The isolated schema/mapping/checkpoint tests cover private projections and relational staging without enabling a selected history provider. The model/migration unit adds normal Runtime targets;
-actual native entry-point/marker integration, scoped readers,
-observation append, occurrence projection, retention/deletion, generated migrations and production qualification
-remain open.
+Actual native entry-point/marker integration, selected reader/observation/retention/deletion binding and production qualification remain with their owning delivery units. This unit supplies all four initial generated migration sets; publication and resulting-main qualification follow the review.
 
 
 ## Private history read adapter
