@@ -143,16 +143,26 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         string executionScopeId,
         string? iterationKey,
         IReadOnlySet<string> takenConnectionIds,
-        string producingActivityExecutionId)
+        string producingActivityExecutionId) =>
+        RouteUntaken(context, state, graph, sourceNodeId,
+            connection => takenConnectionIds.Contains(connection.GetId()) ? null : (executionScopeId, iterationKey), producingActivityExecutionId);
+
+    internal FlowchartExecutionState RouteUntakenConnections(
+        FlowchartRun context, FlowchartExecutionState state, FlowchartGraph graph, string sourceNodeId,
+        string executionScopeId, string? iterationKey, FlowchartSelectedRoutes selectedRoutes, string producingActivityExecutionId) =>
+        RouteUntaken(context, state, graph, sourceNodeId,
+            connection => selectedRoutes.UntakenPartition(connection, (executionScopeId, iterationKey)), producingActivityExecutionId);
+
+    private FlowchartExecutionState RouteUntaken(
+        FlowchartRun context, FlowchartExecutionState state, FlowchartGraph graph, string sourceNodeId,
+        Func<FlowchartConnection, (string Scope, string? Iteration)?> untakenPartition, string producingActivityExecutionId)
     {
         if (!JoinPolicy.PropagatesDeadPaths || options.Flaws.HasFlag(FlowchartFlaws.NoDeadPaths))     // MUTATION: NoDeadPaths
             return state;
 
-        var untaken = graph.GetOutboundConnections(sourceNodeId)
-            .Where(connection => !takenConnectionIds.Contains(graph.GetConnectionId(connection)));
-
-        foreach (var connection in untaken)
-            state = EmitDeadArrival(context, state, graph, connection, executionScopeId, iterationKey, producingActivityExecutionId);
+        foreach (var connection in DistinctOutbound(graph, sourceNodeId))
+            if (untakenPartition(connection) is { } partition)
+                state = EmitDeadArrival(context, state, graph, connection, partition.Scope, partition.Iteration, producingActivityExecutionId);
 
         return ReleaseReadyWaitingJoins(context, state, graph);
     }
@@ -217,9 +227,8 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     /// are emitted on <b>all</b> of its outbound connections, carrying the deadness to the next join. All of
     /// them, because a node that never runs produces no outcome to select between.
     /// <para>
-    /// This terminates: the forward projection is acyclic, and a node carries deadness through at most once per
-    /// <c>(node, scope, iteration)</c> key — it takes every inbound having answered to get here, which happens
-    /// once.
+    /// The forward projection is acyclic. Each wave consumes its inbound answers and emits once per distinct
+    /// outbound answer; a later execution or loop iteration can produce its own wave.
     /// </para>
     /// </summary>
     private FlowchartExecutionState CarryDeadnessThrough(
@@ -242,11 +251,16 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
                                            ?? arrivals.Select(arrival => arrival.ProducingActivityExecutionId).FirstOrDefault()
                                            ?? context.ContainerExecutionId;
 
-        foreach (var connection in graph.GetOutboundConnections(group.TargetNodeId))
+        foreach (var connection in DistinctOutbound(graph, group.TargetNodeId))
             state = EmitDeadArrival(context, state, graph, connection, group.ExecutionScopeId, group.IterationKey, producingActivityExecutionId);
 
         return state;
     }
+
+    // Readiness consumes one answer per structural connection, so each routing event
+    // owes exactly one dead answer per such connection, including at an all-dead node.
+    private static IEnumerable<FlowchartConnection> DistinctOutbound(FlowchartGraph graph, string sourceNodeId) =>
+        graph.GetOutboundConnections(sourceNodeId).DistinctBy(connection => connection.GetAnswerKey());
 
     public bool ShouldWaitForTarget(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
     {
@@ -313,12 +327,12 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     private static string[] MissingInboundSourceIds(FlowchartExecutionState state, FlowchartGraph graph, JoinKey group)
     {
         var answered = PendingArrivals(state, group.TargetNodeId, group.ExecutionScopeId, group.IterationKey)
-            .Select(arrival => arrival.SourceNodeId)
-            .ToHashSet(StringComparer.Ordinal);
+            .Select(arrival => arrival.GetAnswerKey())
+            .ToHashSet();
 
         return graph.GetInboundConnections(group.TargetNodeId)
+            .Where(inbound => !answered.Contains(inbound.GetAnswerKey()))
             .Select(inbound => inbound.Source.NodeId)
-            .Where(sourceNodeId => !answered.Contains(sourceNodeId))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
