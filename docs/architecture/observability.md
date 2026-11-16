@@ -142,13 +142,17 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
    never restored, so none is applied twice (invariant 4). A list of kept keys in the `ParkRecord` on the instance
    row would do the same, but the parked instance's row would then grow with every arrival and be rewritten whole
    each time. Their `keep_until` follows the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's
-   time plus that window, or no expiry when it is null (the default: kept until recovered or discarded). Recover in
-   either mode sets the `keep_until` of every row this Park kept, restored or not, to the ordinary outside-command
-   window from that moment; discard and delete do the same or remove the rows in the same commit, as the data
-   lifecycle page says. A delete that keeps the rows also clears their `KeptBy` in that commit: revisions start again
-   for a new creation under the same id, so a later Park of a new run at the same revision must never find its
-   predecessor's rows. A child completion that arrives while parked is kept with the rest, and its entry stays in
-   the parent's child registry; today such a notice closes the entry without the model.
+   time plus that window, or no expiry when it is null (the default: kept until recovered or discarded).
+
+   **Invariant: `KeptBy` is non-null only while its Park is unresolved.** Every step that resolves a Park clears
+   `KeptBy` on all the rows that Park kept, restored or not, in the same commit: recover in either mode, in the same
+   update that sets their ordinary outside-command window; discard; and delete of a parked instance, which gives the
+   rows the ordinary window and clears `KeptBy`, or removes them, as the data lifecycle page says. Revisions start
+   again for a new creation under the same id, so the rule keeps a later Park of a new run at the same revision from
+   ever finding a predecessor's rows; an ordinary delete then needs nothing extra.
+
+   A child completion that arrives while parked is kept with the rest, and its entry stays in the parent's child
+   registry; today such a notice closes the entry without the model.
 2. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
    Minimal. If the data lifecycle page's format item 4 (lifecycle transitions journalled at every level) is adopted, this
    row is its "ended" entry and adds nothing.
@@ -186,9 +190,10 @@ one commit, and calls one new model hook.
 - **Deliveries are restored, never copied** (under decision 2). Both modes restore every kept arrival from while
   parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition fence,
   updates each row to be restored by its key with the predicate `Done AND KeptBy = :park` (the row is still there,
-  still done, and kept by this Park):
-  it clears `Done` and `KeptBy`, resets `Attempts` to 0 and `Trial` to none, sets `Seen` to the current epoch and `KeepUntil` to the
-  ordinary outside-command window from now. Resetting the poison counters matters: the owner parks any delivery whose
+  still done, and kept by this Park): it clears `Done` and `KeptBy`, resets `Attempts` to 0 and `Trial` to none, sets
+  `Seen` to the current epoch and `KeepUntil` to the ordinary outside-command window from now. In the same commit, the
+  rows this Park kept that recover does not restore (the Park-consumed rows under `resume`) get the ordinary window and
+  a cleared `KeptBy`, by the predicate `KeptBy = :park`, so no row keeps the marker after the Park is resolved. Resetting the poison counters matters: the owner parks any delivery whose
   attempts reached the threshold (the `MaxAttempts` check in
   [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs)), so a retried poison message or job ticket
   would otherwise park the instance again at once. Each row's update has its count checked; a row that matched nothing
@@ -203,8 +208,9 @@ one commit, and calls one new model hook.
   consumed, and the sweep removes it after its new window.
 - **A store contract change.** Clearing `Done` is a new message transition: today a row goes from pending to seen,
   trial and done, and never back. The `KeptBy` column is new too, set only by Park and by a parked instance's
-  consuming commits, and cleared by recover's restore and by a delete that keeps the rows. Both are kernel behaviour,
-  and every provider and the store conformance suite need them.
+  consuming commits, and cleared on all of a Park's rows by every step that resolves it (recover, discard, delete of
+  the parked instance), under the invariant above. Both are kernel behaviour, and every provider and the store
+  conformance suite need them.
 - **Expired kept rows.** A row whose `Parked` window has passed but that the sweep has not yet removed still matches,
   and is restored under the ordinary window set above. The sweep's delete and the restore update meet on the row: the
   one that runs second finds nothing, and the restore's count says which happened. A row the sweep removed goes on the
@@ -213,8 +219,8 @@ one commit, and calls one new model hook.
   gone is refused; `resume` stays possible.
 - **Side effects** of the retried turn may repeat, with the same effect keys.
 
-**Discard** `{operation, expected revision}` gives the kept deliveries the ordinary window, or removes them in the same
-commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
+**Discard** `{operation, expected revision}` gives the kept deliveries the ordinary window and clears their `KeptBy`,
+or removes them, in the same commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
 
 **Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
 gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
