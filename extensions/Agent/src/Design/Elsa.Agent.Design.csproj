@@ -8,9 +8,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <ProjectReference Include="../Core/Elsa.Agent.Core.csproj" />
     <ProjectReference Include="../JsonSchema/Elsa.Agent.JsonSchema.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
   </ItemGroup>
 </Project>

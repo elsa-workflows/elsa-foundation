@@ -20,16 +20,16 @@ import xml.etree.ElementTree as ET
 
 BASELINE = "b555bd8460270476e49496e519c69b65180e9505"
 REPOSITORY = Path(__file__).resolve().parents[4]
-TESTS = Path("Extensions/Etl/tests/Tests")
+TESTS = Path("extensions/Etl/tests/Tests")
 PROJECT = TESTS / "Elsa.Etl.Tests.csproj"
-HARNESS = Path("Extensions/Etl/tests/Shared/EtlV1NativeUpgradeJourneyTests.cs")
+HARNESS = Path("extensions/Etl/tests/Shared/EtlV1NativeUpgradeJourneyTests.cs")
 HARNESS_FILES = {
     str(PROJECT), str(TESTS / "EtlPublishedWorkflowFixture.cs"),
     str(TESTS / "EtlPublishedWorkflowJourneyTests.cs"),
     str(HARNESS),
 }
-ADAPTER = Path("Extensions/Etl/tests/Shared/v1-native-upgrade-harness.patch")
-SUCCESSOR_CHANGES = HARNESS_FILES | {"Extensions/Etl/tests/Shared/test-v1-native-upgrade.py", str(ADAPTER)}
+ADAPTER = Path("extensions/Etl/tests/Shared/v1-native-upgrade-harness.patch")
+SUCCESSOR_CHANGES = HARNESS_FILES | {"extensions/Etl/tests/Shared/test-v1-native-upgrade.py", str(ADAPTER)}
 
 
 def git(root, *arguments):
@@ -120,7 +120,7 @@ def run_phase(root, evidence, data, phase, test_name):
     assert len(tests) == 1 and tests[0].get("outcome") == "Passed" and test_name in tests[0].get("testName", "")
     binaries = {}
     for project in ("Tests", "WorkerHost"):
-        directory = root / "Extensions/Etl/tests" / project / "bin/Debug/net10.0"
+        directory = root / "extensions/Etl/tests" / project / "bin/Debug/net10.0"
         files = sorted(directory.glob("*.dll"))
         assert files, f"Missing {phase} {project} binaries"
         binaries.update({str(path.relative_to(root)): digest(path) for path in files})
@@ -187,7 +187,7 @@ def main():
         save_json(evidence / "consumer-integrity.json", integrity(data))
         new_migrations = runtime_migrations(data)
         expected_migrations = sorted(path.stem for path in
-            (REPOSITORY / "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/Runtime").glob("[0-9]*.cs")
+            (REPOSITORY / "extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/Runtime").glob("[0-9]*.cs")
             if not path.name.endswith(".Designer.cs"))
         assert new_migrations == expected_migrations
         assert set(old_migrations) < set(new_migrations), "The successor must apply the additive runtime migrations"

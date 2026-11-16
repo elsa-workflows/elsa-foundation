@@ -16,7 +16,7 @@ namespace Elsa.Architecture.Analyzers;
 /// <remarks>
 /// <para>
 /// Which terms a file is held to comes from <see cref="ConfigurationKey"/> in the .editorconfig sections that apply to
-/// that file, so a term is activated domain by domain: a section such as <c>[Essentials/src/Tasks/**.cs]</c> holds the
+/// that file, so a term is activated domain by domain: a section such as <c>[essentials/src/Tasks/**.cs]</c> holds the
 /// Tasks domain to its list and no other folder. A file no section configures is held to nothing.
 /// </para>
 /// <para>

@@ -24,4 +24,4 @@ and intersects all restrictions. Decisions contributes a provider, not a competi
 
 This feature publishes no event and registers no event handler. It contributes to the Workflows-owned
 `InputConstraintsCollecting` phase through the provider above; see the
-[owning catalog](../../../../../Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+[owning catalog](../../../../../essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).

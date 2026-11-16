@@ -21,7 +21,7 @@ public sealed class Elsa3MigrationBoundaryTests
     [Fact]
     public void CanonicalElsaProjects_DoNotReferenceElsa3AssembliesOrDtos()
     {
-        var canonicalRoot = Path.Combine(RepoRoot, "Essentials", "src");
+        var canonicalRoot = Path.Combine(RepoRoot, "essentials", "src");
         var projectViolations = Directory.EnumerateFiles(canonicalRoot, "*.csproj", SearchOption.AllDirectories)
             .SelectMany(project => XDocument.Load(project).Descendants()
                 .Where(element => element.Name.LocalName is "ProjectReference" or "PackageReference")
@@ -40,7 +40,7 @@ public sealed class Elsa3MigrationBoundaryTests
     [Fact]
     public void Elsa3MappingProject_DependsOnAuthoringAndDesignPersistenceButNotRuntimeOrProviderPersistence()
     {
-        var projectPath = Path.Combine(RepoRoot, "Extensions", "Elsa3", "src", "Mapping", "Elsa3.Mapping.csproj");
+        var projectPath = Path.Combine(RepoRoot, "extensions", "Elsa3", "src", "Mapping", "Elsa3.Mapping.csproj");
         var references = XDocument.Load(projectPath)
             .Descendants("ProjectReference")
             .Select(reference => reference.Attribute("Include")?.Value)

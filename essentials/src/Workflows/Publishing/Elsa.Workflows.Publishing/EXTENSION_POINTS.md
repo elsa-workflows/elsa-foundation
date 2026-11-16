@@ -240,7 +240,7 @@ The Activity Graph implementation and its feature registration are documented in
 The provider/compiler/discovery registries are scoped. Contributors that read selected persistence
 access or scoped model metadata must remain in the publication operation; stateless singleton
 contributors remain supported. The agent registrations are documented in their
-[contributing-feature catalog](../../../../../Extensions/Agent/src/Design/EXTENSION_POINTS.md).
+[contributing-feature catalog](../../../../../extensions/Agent/src/Design/EXTENSION_POINTS.md).
 
 ## Cross-domain seams consumed by the engine
 

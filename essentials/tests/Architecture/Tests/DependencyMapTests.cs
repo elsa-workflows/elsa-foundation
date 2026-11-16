@@ -33,7 +33,7 @@ public sealed class DependencyMapTests
     public void Every_tracked_file_resolves_to_the_nearest_project_on_disk()
     {
         var files = TrackedFiles(BackendFileRoots().ToArray());
-        var extensionFiles = TrackedFiles("Extensions");
+        var extensionFiles = TrackedFiles("extensions");
         var studioProjects = extensionFiles
             .Where(IsStudioPath)
             .Where(path => path.EndsWith(".csproj", StringComparison.Ordinal))
@@ -79,7 +79,7 @@ public sealed class DependencyMapTests
                 .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/"],
+        Assert.All((string[])["essentials/src/", "apps/", "essentials/tests/", "extensions/", "tools/"],
             root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
@@ -88,11 +88,11 @@ public sealed class DependencyMapTests
 
     /// <summary>Ownership on paths that need no file to exist: the deeper project owns its subtree, and nothing is guessed.</summary>
     [Theory]
-    [InlineData("Essentials/src/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
-    [InlineData("Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
-    [InlineData("Essentials/src/Workflows/Runtime/Elsa.Workflows.RuntimeExtras/Foo.cs", null)]
-    [InlineData("Essentials/src/Workflows/Foo.cs", null)]
-    [InlineData("Essentials/tests/Directory.Build.props", null)]
+    [InlineData("essentials/src/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
+    [InlineData("essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
+    [InlineData("essentials/src/Workflows/Runtime/Elsa.Workflows.RuntimeExtras/Foo.cs", null)]
+    [InlineData("essentials/src/Workflows/Foo.cs", null)]
+    [InlineData("essentials/tests/Directory.Build.props", null)]
     public void A_path_is_owned_by_the_longest_matching_project_directory(string path, string? expected) =>
         Assert.Equal(expected, OwningProject(path)?.Name);
 
@@ -173,8 +173,8 @@ public sealed class DependencyMapTests
 
     private static IReadOnlyList<string> BackendFileRoots()
     {
-        var roots = new List<string> { "Essentials/src", "Essentials/apps", "Essentials/tests" };
-        var extensionsRoot = Path.Join(RepoRoot, "Extensions");
+        var roots = new List<string> { "essentials/src", "apps", "essentials/tests" };
+        var extensionsRoot = Path.Join(RepoRoot, "extensions");
         if (Directory.Exists(extensionsRoot))
         {
             foreach (var extension in Directory.EnumerateDirectories(extensionsRoot))
@@ -182,7 +182,7 @@ public sealed class DependencyMapTests
                 var capability = Path.GetFileName(extension);
                 foreach (var segment in new[] { "src", "tests" })
                 {
-                    var root = $"Extensions/{capability}/{segment}";
+                    var root = $"extensions/{capability}/{segment}";
                     if (Directory.Exists(Path.Join(RepoRoot, root)))
                         roots.Add(root);
                 }
@@ -193,7 +193,7 @@ public sealed class DependencyMapTests
     }
 
     private static bool IsStudioPath(string relativePath) =>
-        relativePath.StartsWith("Extensions/", StringComparison.Ordinal) &&
+        relativePath.StartsWith("extensions/", StringComparison.Ordinal) &&
         relativePath.Contains("/studio/", StringComparison.Ordinal);
 
     private static IReadOnlyList<string> TrackedFiles(params string[] roots)

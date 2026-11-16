@@ -121,7 +121,7 @@ public sealed class WorkflowArtifactExportImportExecutionTests
         var repository = FindRepositoryRoot(testOutput);
         var probe = Path.Combine(
             repository.FullName,
-            "Essentials", "tests",
+            "essentials", "tests",
             "Workflows",
             "Runtime",
             "Reconciliation",
