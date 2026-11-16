@@ -31,7 +31,7 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
             var repositoryRoot = FindRepositoryRoot();
             var project = Path.Join(
                 repositoryRoot,
-                "Essentials", "src",
+                "essentials", "src",
                 "Secrets",
                 "Persistence",
                 "EntityFrameworkCore",

@@ -58,8 +58,8 @@ public sealed class DockerBuildContextGuardTests
         Assert.Contains("Directory.Build.props", Required.Files);
         Assert.Contains("Directory.Packages.props", Required.Files);
         Assert.Contains("VersionLines.props", Required.Files);
-        Assert.Contains("Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", Required.Files);
-        Assert.Contains("Essentials/build/Analyzers/packages.lock.json", Required.Files);
+        Assert.Contains("essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", Required.Files);
+        Assert.Contains("essentials/build/Analyzers/packages.lock.json", Required.Files);
         Assert.Contains(".editorconfig", Required.Files);
     }
 
@@ -133,7 +133,7 @@ public sealed class DockerBuildContextGuardTests
     [InlineData("Elsa.Foundation.Host")]
     public void The_host_publish_restores_with_every_property_it_publishes_with(string host)
     {
-        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "Essentials", "apps", host, "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "apps", host, "Dockerfile"));
 
         Assert.Contains("-p:CustomBeforeDirectoryBuildProps=", PublishInstruction(dockerfile), StringComparison.Ordinal);
         Assert.Empty(PublishPropertiesItsRestoreLacks(dockerfile));
@@ -150,8 +150,8 @@ public sealed class DockerBuildContextGuardTests
         var dockerfile = $"""
             FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
             RUN set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props \
-                && dotnet restore Essentials/apps/Fixture/Fixture.csproj {restoreArguments} \
-                && dotnet publish Essentials/apps/Fixture/Fixture.csproj -c Release --no-restore -p:PublishReadyToRun=true "$@" -o /app/publish
+                && dotnet restore apps/Fixture/Fixture.csproj {restoreArguments} \
+                && dotnet publish apps/Fixture/Fixture.csproj -c Release --no-restore -p:PublishReadyToRun=true "$@" -o /app/publish
             """;
 
         Assert.Equal(lacking is null ? [] : [lacking], PublishPropertiesItsRestoreLacks(dockerfile));
@@ -166,9 +166,9 @@ public sealed class DockerBuildContextGuardTests
     public void A_dockerfile_restoring_a_project_that_imports_an_uncopied_sibling_targets_file_is_flagged()
     {
         var root = Path.Join(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Join(root, "Essentials", "apps", "Fixture"));
-        File.WriteAllText(Path.Join(root, "Essentials", "apps", "Sibling.targets"), "<Project />");
-        File.WriteAllText(Path.Join(root, "Essentials", "apps", "Fixture", "Fixture.csproj"), """
+        Directory.CreateDirectory(Path.Join(root, "apps", "Fixture"));
+        File.WriteAllText(Path.Join(root, "apps", "Sibling.targets"), "<Project />");
+        File.WriteAllText(Path.Join(root, "apps", "Fixture", "Fixture.csproj"), """
             <Project>
               <Import Project="$(MSBuildThisFileDirectory)../Sibling.targets" />
             </Project>
@@ -178,8 +178,8 @@ public sealed class DockerBuildContextGuardTests
         {
             const string dockerfile = """
                 FROM mcr.microsoft.com/dotnet/sdk:10.0
-                COPY Essentials/apps/Fixture/Fixture.csproj Essentials/apps/Fixture/
-                RUN dotnet restore Essentials/apps/Fixture/Fixture.csproj
+                COPY apps/Fixture/Fixture.csproj apps/Fixture/
+                RUN dotnet restore apps/Fixture/Fixture.csproj
                 """;
 
             var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);
@@ -187,8 +187,8 @@ public sealed class DockerBuildContextGuardTests
 
             var (applicationFiles, unresolvable) = ResolveRequiredFilesForDockerfile(root, dockerfile);
             Assert.Empty(unresolvable);
-            Assert.Contains("Essentials/apps/Sibling.targets", applicationFiles);
-            Assert.Contains("Essentials/apps/Sibling.targets", UncoveredRequiredFiles(copies, applicationFiles));
+            Assert.Contains("apps/Sibling.targets", applicationFiles);
+            Assert.Contains("apps/Sibling.targets", UncoveredRequiredFiles(copies, applicationFiles));
         }
         finally
         {
@@ -202,7 +202,7 @@ public sealed class DockerBuildContextGuardTests
         const string dockerfile = """
             FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
             COPY Directory.Build.props Directory.Packages.props NuGet.config ./
-            RUN dotnet restore Essentials/apps/Fixture/Fixture.csproj
+            RUN dotnet restore apps/Fixture/Fixture.csproj
             """;
 
         var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);

@@ -105,8 +105,8 @@ def main() -> None:
     dotnet = shutil.which("dotnet")
     node = shutil.which("node")
     check(dotnet is not None and node is not None, "Producer/browser automation needs dotnet and node on PATH.")
-    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "Studio", "Extensions"], cwd=REPO, check=True)
-    check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "Extensions"], cwd=REPO, text=True).strip(), "Commit frontend input changes before archive qualification")
+    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "Studio", "extensions"], cwd=REPO, check=True)
+    check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "extensions"], cwd=REPO, text=True).strip(), "Commit frontend input changes before archive qualification")
     source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     inputs = {
         "Hosting": (REPO / "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot", "/"),

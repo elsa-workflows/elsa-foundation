@@ -69,7 +69,7 @@ class ProfileTests(unittest.TestCase):
         self.assertGreater(len(refs), 100)
         self.assertEqual(1, sum('Acme.Processing/Module/Acme.Processing.csproj' in item.attrib['Include'] for item in refs))
         self.assertTrue(all(not item.get('Condition') for item in refs))
-        self.assertNotIn('ElsaDashboardLiveQualification', (live.ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj').read_text())
+        self.assertNotIn('ElsaDashboardLiveQualification', (live.ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj').read_text())
 
     def test_observer_graph_paths_exist_and_native_nuget_case_is_preserved(self):
         tree = ET.fromstring((live.HERE / 'live/Observer.Tests.csproj.in').read_text())

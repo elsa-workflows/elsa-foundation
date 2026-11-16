@@ -63,13 +63,13 @@ export default defineConfig({
     alias: {
       "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"),
       "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"),
-      "@microsoft/signalr": resolve(__dirname, "../../../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/node_modules/@microsoft/signalr"),
+      "@microsoft/signalr": resolve(__dirname, "../../../extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/node_modules/@microsoft/signalr"),
       "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
   },
   server: {
     fs: {
-      allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../Extensions")]
+      allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../extensions")]
     },
     host: "127.0.0.1",
     port: 4179,

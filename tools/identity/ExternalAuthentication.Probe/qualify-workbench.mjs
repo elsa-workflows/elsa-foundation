@@ -53,7 +53,7 @@ writeFileSync(join(root, "appsettings.json"), JSON.stringify({
 const log = openSync(join(root, "workbench.log"), "w", 0o600);
 const environment = { ...process.env, ASPNETCORE_ENVIRONMENT: "Development", DOTNET_ENVIRONMENT: "Development" };
 for (const name of Object.keys(environment)) if (/^(Elsa__|CShells__|ConnectionStrings__|ASPNETCORE_URLS)/i.test(name)) delete environment[name];
-const host = spawn("dotnet", [join(repo, "Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll"),
+const host = spawn("dotnet", [join(repo, "apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll"),
   "--contentRoot", root, "--urls", origin], { cwd: root, env: environment, stdio: ["ignore", log, log] });
 let browser;
 try {

@@ -168,23 +168,23 @@ public sealed class EfModuleDescriptorTests
     // layout: it is the source, not the build output, that a guard test must hold to account.
     private static readonly (Assembly Assembly, string ProjectDirectory)[] ModuleProjectDirectories =
     [
-        (typeof(ActivitiesDesignDbContext).Assembly, "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore"),
-        (typeof(WeaverDbContext).Assembly, "Extensions/Weaver/src/Persistence/EntityFrameworkCore"),
-        (typeof(ClusterMembershipDbContext).Assembly, "Essentials/src/Cluster/EntityFrameworkCore"),
-        (typeof(ConnectionsDbContext).Assembly, "Essentials/src/Connections/Persistence/EntityFrameworkCore"),
-        (typeof(AgentDbContext).Assembly, "Extensions/Agent/src/Persistence/EntityFrameworkCore"),
-        (typeof(DataProtectionKeysDbContext).Assembly, "Essentials/src/Foundation/DataProtection/EntityFrameworkCore"),
-        (typeof(EfOpenTelemetryDbContext).Assembly, "Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
-        (typeof(StructuredLogsDbContext).Assembly, "Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
-        (typeof(IdentityIamDbContext).Assembly, "Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore"),
-        (typeof(ExternalAuthenticationDbContext).Assembly, "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore"),
-        (typeof(SecretsDbContext).Assembly, "Essentials/src/Secrets/Persistence/EntityFrameworkCore"),
-        (typeof(StudioPreferencesDbContext).Assembly, "Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore"),
-        (typeof(WorkflowsDesignDbContext).Assembly, "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
-        (typeof(PublishingSnapshotReviewDbContext).Assembly, "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),
-        (typeof(ExecutionPlacementDbContext).Assembly, "Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore"),
-        (typeof(RuntimeDbContext).Assembly, "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore"),
-        (typeof(Elsa3ImportDbContext).Assembly, "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
+        (typeof(ActivitiesDesignDbContext).Assembly, "essentials/src/Activities/Design/Persistence/EntityFrameworkCore"),
+        (typeof(WeaverDbContext).Assembly, "extensions/Weaver/src/Persistence/EntityFrameworkCore"),
+        (typeof(ClusterMembershipDbContext).Assembly, "essentials/src/Cluster/EntityFrameworkCore"),
+        (typeof(ConnectionsDbContext).Assembly, "essentials/src/Connections/Persistence/EntityFrameworkCore"),
+        (typeof(AgentDbContext).Assembly, "extensions/Agent/src/Persistence/EntityFrameworkCore"),
+        (typeof(DataProtectionKeysDbContext).Assembly, "essentials/src/Foundation/DataProtection/EntityFrameworkCore"),
+        (typeof(EfOpenTelemetryDbContext).Assembly, "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
+        (typeof(StructuredLogsDbContext).Assembly, "essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
+        (typeof(IdentityIamDbContext).Assembly, "essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore"),
+        (typeof(ExternalAuthenticationDbContext).Assembly, "essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore"),
+        (typeof(SecretsDbContext).Assembly, "essentials/src/Secrets/Persistence/EntityFrameworkCore"),
+        (typeof(StudioPreferencesDbContext).Assembly, "essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore"),
+        (typeof(WorkflowsDesignDbContext).Assembly, "essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
+        (typeof(PublishingSnapshotReviewDbContext).Assembly, "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),
+        (typeof(ExecutionPlacementDbContext).Assembly, "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore"),
+        (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore"),
+        (typeof(Elsa3ImportDbContext).Assembly, "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
     ];
 
     /// <summary>

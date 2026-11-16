@@ -4,8 +4,8 @@ using Xunit;
 namespace Elsa.Architecture.ExtensionBoundary.Tests;
 
 /// <summary>
-/// Issue #1815 splits the tree into required modules under <c>Essentials/src/</c> and optional backend
-/// modules under <c>Extensions/&lt;capability&gt;/src/</c>. Studio projects under each extension's
+/// Issue #1815 splits the tree into required modules under <c>essentials/src/</c> and optional backend
+/// modules under <c>extensions/&lt;capability&gt;/src/</c>. Studio projects under each extension's
 /// <c>studio/</c> sibling are a separate product and stay outside this backend boundary, so
 /// this guard fails when core reaches into an extension, and when one extension reaches into another
 /// without that edge having been declared.
@@ -27,8 +27,8 @@ namespace Elsa.Architecture.ExtensionBoundary.Tests;
 /// </remarks>
 public sealed class ExtensionBoundaryTests
 {
-    private const string ExtensionsRoot = "Extensions";
-    private const string CoreRoot = "Essentials/src";
+    private const string ExtensionsRoot = "extensions";
+    private const string CoreRoot = "essentials/src";
 
     /// <summary>
     /// Deployable hosts, which compose modules rather than being one.
@@ -40,14 +40,14 @@ public sealed class ExtensionBoundaryTests
     /// module roots, so they fall outside this check by construction; what still needs asserting is that
     /// nothing else hides there, which <see cref="Excluded_hosts_are_deployable_hosts_not_libraries"/> does.
     /// </remarks>
-    private const string HostRoot = "Essentials/apps";
+    private const string HostRoot = "apps";
 
     /// <summary>
     /// Extension-to-extension edges that have been reviewed and accepted, as
     /// <c>referencing project -> referenced project</c>.
     /// </summary>
     /// <remarks>
-    /// Empty because Elsa 3, the one bucket in <c>Extensions/</c>, declares no edge — not because the
+    /// Empty because Elsa 3, the one bucket in <c>extensions/</c>, declares no edge — not because the
     /// tree is empty. Every entry added later needs a comment saying why the
     /// edge is legitimate, in the same spirit as <c>EfCoreDependencyGuardTests.AllowedEfConsumers</c>:
     /// the point is that the list is short and argued, not that it is absent.
@@ -222,7 +222,7 @@ public sealed class ExtensionBoundaryTests
             .ToArray();
     }
 
-    /// <summary>The extension a path belongs to, i.e. the segment right under <c>Extensions/</c>.</summary>
+    /// <summary>The extension a path belongs to, i.e. the segment right under <c>extensions/</c>.</summary>
     /// <remarks>
     /// Taken relative to the root rather than by a fixed segment index: the root gained a segment when
     /// extensions moved under <c>src/</c>, and an index would have silently started returning
