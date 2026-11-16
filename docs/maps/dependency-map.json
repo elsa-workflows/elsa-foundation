@@ -23741,6 +23741,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+          "path": "essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Core",
           "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
         },
@@ -23761,6 +23766,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Api.Compatibility.Testing",
           "path": "essentials/tests/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj"
         },
@@ -23772,6 +23782,11 @@
         {
           "type": "external",
           "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
         },
         {
