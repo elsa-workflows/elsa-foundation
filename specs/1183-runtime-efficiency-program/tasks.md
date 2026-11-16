@@ -14,4 +14,7 @@ records each outcome.
 - [x] Remove owned fixtures, restore the existing runner state, publish results and complete program bookkeeping.
   The task fixture groups were deleted by 3 November (#2531 [cleanup record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6615399245)).
   Read on 16 November: every VM in the subscription is deallocated, including the shared Codex dev fleet that holds
-  `elsa-dev-09`. Its 21 run-command records all report Succeeded, and none is pending.
+  `elsa-dev-09`. Known leftover: 21 of this program's run commands on `elsa-dev-09` (`elsa-perf-*`, including three M5
+  launches, and `elsa-d2-bootstrap-v1`) report provisioning Succeeded and execution Pending. Deleting them was tried
+  with the owner's approval and refused by Azure (`OperationNotAllowed` while the VM is deallocated). Starting the VM
+  may run them, so delete that VM, or its run commands, before anyone starts it.

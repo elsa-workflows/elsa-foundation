@@ -64,7 +64,7 @@ remaining failures and evidence limits. The program and registry are marked comp
 
 ## Closeout (16 November 2026)
 
-On 11 November the owner stopped work on the current core, and on 12 November chose the clean-slate kernel
+On 11 November the owner stopped #2564's work on the current core, and on 12 November chose the clean-slate kernel
 ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)). The owner then decided on 16 November
 ([record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6917554545)):
 
