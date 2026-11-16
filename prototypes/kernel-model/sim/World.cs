@@ -87,6 +87,8 @@ public sealed class Actor(int id, int node, int partition)
     public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
     /// <summary>Round 5 C (N7): the outbound effects this actor's turns sent since its last commit call; they ride on the next one.</summary>
     public readonly List<(string Instance, string Key)> PendingSendings = [];
+    /// <summary>Bumped by every take: a commit call from before a take belongs to memory the take discarded, and gives nothing back to the pending list.</summary>
+    public int TakeGeneration;
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
@@ -119,7 +121,9 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        actor.PendingSendings.Clear();      // a take starts from the rows: whatever this worker had in memory, sendings included, is gone
+        // A take starts the partition from its rows: whatever this worker had in memory for it, sendings included, is gone.
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.TakeGeneration++;
         return Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
     }
 
@@ -129,33 +133,38 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         // Round 5 C (N7): the outbound effects of the turns this batch writes ride on it (a turn kept in memory folds into
-        // the commit that writes its instance later; an instance that ends without a write never lands here). When the
-        // kernel sees the commit land, their turns are committed truth: a key that leaves in two such turns is two
-        // activations, not a redelivery. A refused fence resets the worker, so everything pending is dropped with it; a
-        // failed call leaves the sendings pending for the retried batch.
+        // the commit that writes its instance later; an instance that ends without a write never lands here). The store
+        // records them the moment the commit lands (Commit below), whatever becomes of the answer: their turns are committed
+        // truth, and a key that leaves in two such turns is two activations, not a redelivery. A refused fence resets the
+        // worker, and the take that follows drops everything pending with it (the take is the one place that discards this
+        // memory: a refusal's answer may be stale, from a call that outlived a take, and must touch nothing). A failed call
+        // leaves the sendings pending for the retried batch, unless the store already landed them (an answer lost on the wire
+        // after the commit executed) or a take has happened since (the worker ignores a completion from before its take).
         var written = batch.Turns.Select(t => t.Instance).ToHashSet(StringComparer.Ordinal);
         var sendings = actor.PendingSendings.Where(s => written.Contains(s.Instance)).ToArray();
         actor.PendingSendings.RemoveAll(s => written.Contains(s.Instance));
+        var generation = actor.TakeGeneration;
+        var recorded = new System.Runtime.CompilerServices.StrongBox<bool>(false);
         Committed committed;
         try
         {
             committed = await Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
                 + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
-                () => Commit(batch));
+                () => Commit(batch, sendings, recorded));
         }
-        catch { actor.PendingSendings.AddRange(sendings); throw; }
-        if (committed.Landed) world.Landed(sendings);
-        else actor.PendingSendings.Clear();
+        catch { if (!recorded.Value && generation == actor.TakeGeneration) actor.PendingSendings.AddRange(sendings); throw; }
         return committed;
     }
 
-    private ValueTask<Committed> Commit(CommitBatch batch)
+    private ValueTask<Committed> Commit(CommitBatch batch, (string Instance, string Key)[] sendings, System.Runtime.CompilerServices.StrongBox<bool> recorded)
     {
         var partition = world.Store.Partitions[batch.Partition];
         var fenced = partition.Epoch == batch.Epoch && partition.Position == batch.Position;
         var landed = world.Store.CommitAsync(batch);
         if (landed.Result.Landed)
         {
+            world.Landed(sendings);     // the store's truth, before the answer can be lost on the wire
+            recorded.Value = true;
             if (fenced)
             {
                 world.ObserveAmbientCommit(batch);

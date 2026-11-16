@@ -40,6 +40,7 @@ public enum NativeFlaw
     PathlessEffectKey = 1 << 11,
     TurnLocalJoinOrdinal = 1 << 12, // a Flowchart join's firing ordinal counted per turn in memory instead of from the committed firings
     FlatRetryGeneration = 1 << 13,  // every retry successor is generation 1, so the second retry of one activation shares its key with the first
+    FreshTurnSwapsLoopKeys = 1 << 14, // a turn that is not a redelivery swaps a While's first two iterations in the key, so a lost first attempt sends another activation's valid key
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
@@ -475,6 +476,9 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         if (Has(NativeFlaw.NodelessEffectKey)) return EffectKey.For(turn.Instance, "node", path, frame.Attempt);
         if (Has(NativeFlaw.PathlessEffectKey)) return EffectKey.For(turn.Instance, frame.Node, EffectKey.RootPath, frame.Attempt);
+        // MUTATION: on a first attempt (no redelivery hint) iteration 1 takes iteration 2's key and 2 takes 1's; the replay
+        // after a lost first attempt derives the right keys, so the wrong ones live only in turns that never landed.
+        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !turn.Inbox.Any(turn.Redelivered)) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
         var key = EffectKey.For(turn.Instance, frame.Node, path, frame.Attempt);
         return Has(NativeFlaw.UnstableEffectKey) ? key + "." + _unstableStamp : key;
     }

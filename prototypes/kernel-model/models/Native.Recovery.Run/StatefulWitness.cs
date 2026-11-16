@@ -37,9 +37,9 @@ internal static class StatefulWitness
         }
         void Release(SubscriptionRow wait, string id, string payload)
         {
-            var release = Events.Route(new("event:go", id, Values.From(payload).ToJsonString(), world.Time + 120_000), wait);
+            var release = Events.Route(new("event:go", id, Values.From(payload)!.ToJsonString(), world.Time + 120_000), wait);
             var accepted = world.Store.AddEventAsync(release).Result;
-            Check(accepted.Added && accepted.Target == target, "Stateful release missed the registered creation.");
+            Check(accepted is { Added: true } && accepted.Target == target, "Stateful release missed the registered creation.");
             world.Oracle.Note(release.Message);
             CheckWorld();
         }

@@ -18,6 +18,12 @@ public static class NativeWorkflows
         ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1), ("n-out", 3),
     ];
 
+    /// <summary>
+    /// The outbound nodes whose content names their activation (the mix's rule: bodies name the iteration), so that N7's
+    /// lost-turn half can name an activation without the key; <c>hj</c> fires twice with one body and is left out.
+    /// </summary>
+    public static readonly HashSet<string> ContentNamesActivation = new(StringComparer.Ordinal) { "http", "mail", "h1", "h2", "m1" };
+
     /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
     public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph", "n-out" };
 

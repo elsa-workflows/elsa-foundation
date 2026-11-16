@@ -335,12 +335,12 @@ What the owned commit changes in the findings above:
 | E4 (EF's savepoints) | Not on this path: no SaveChanges. |
 | E7 (42 statements per command; 2,100 parameters) | No command count; the owned commit chunks at 2,000 parameters on SQL Server (SQL Server, 1,000 instances started at once: 6 commands where EF sent 12 with the fence in the batch, 8 where EF sent 14 checked; round trips 16 → 10 and 18 → 12) and at 1,000 rows per multi-row statement. |
 | E8 (the take's index) | Unchanged: the take is the same statement. |
-| E9 (SQL Server, fence in the batch: take deadlocks) | **Gone.** The owned in-batch fence is the first lock of the commit, as the take's partition row is the take's: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). SQL Server's default stays the checked fence until the owner moves it. |
+| E9 (SQL Server, fence in the batch: take deadlocks) | **Gone.** The owned in-batch fence is the first lock of the commit, as the take's partition row is the take's: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). On this evidence the owner moved SQL Server's default fence to the batch on 16 November (the flip is its own pull request); the EF reference path (`commit=ef`) keeps the checked fence by default on SQL Server, where its in-batch fence still deadlocks takes. |
 | E11 (Oracle's provider acknowledges a partial batch) | Not on this path: the store's own statements and counts; `MySqlCommandBatchPreparer` serves the `commit=ef` reference only. |
 
 The cost table of "What it costs" on the owned commit, round trips on the TCP stream (EF → owned; SQLite: calls into
-the engine). The PostgreSQL cells of the 1,000-instance rows vary by one or two between runs on both paths (COMMIT-SQL.md,
-FINDINGS 29 F-B6); every other cell reproduces exactly:
+the engine). The PostgreSQL cells of the 100- and 1,000-instance rows vary by one or two between runs on both paths (COMMIT-SQL.md,
+FINDINGS 29 F-B6); every other cell, and the statement and command counts, reproduce exactly:
 
 | Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

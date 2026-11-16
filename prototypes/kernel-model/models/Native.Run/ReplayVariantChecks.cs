@@ -58,7 +58,7 @@ public static class ReplayVariantChecks
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "px"), new("m", "pz"), new("px", "j"), new("pz", "j"), new("j", "h")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
-                ("x", 0), ("src", null), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: -1, expectB: -1);
+                ("x", 0), ("src", null), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: 2, expectB: 2);
 
             // V6 a join after a merge with one inbound from the merge and one from outside it.
             await Shape(mode, "V6 join after a merge (one inbound from the merge, one from outside)", Workflow("v", Sequence("root",
@@ -67,7 +67,7 @@ public static class ReplayVariantChecks
                         [new("s0", "ea"), new("s0", "eb"), new("s0", "y"), new("ea", "m"), new("eb", "m"), new("m", "px"), new("px", "j"), new("y", "j"), new("j", "h")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
-                ("x", 0), ("src", null), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: -1, expectB: -1);
+                ("x", 0), ("src", null), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: 2, expectB: 2);
 
             // V7 a loop in a branch released by a timer beside a loop released by an event (Ephemeral short waits included).
             await Shape(mode, "V7 timer loop beside event loop", Workflow("v", Sequence("root",
