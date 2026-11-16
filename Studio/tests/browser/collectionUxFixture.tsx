@@ -7,10 +7,10 @@ import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hos
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import { WorkflowExecutables } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutables";
 import { RuntimeDiagnosticsSettingsPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage";
-import { AgentsPage } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentsPage";
+import { AgentsPage } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentsPage";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
-import "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
+import "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 writeAppearancePreferences({ themeId: "classic", mode: params.get("theme") === "dark" ? "dark" : "light", navigation: "left" });

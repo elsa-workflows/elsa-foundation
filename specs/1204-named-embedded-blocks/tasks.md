@@ -2,9 +2,11 @@
 
 **Program:** [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610).
 **Board:** [Project 67](https://github.com/orgs/elsa-workflows/projects/67).
-**Status:** establishment and S001 delivered. PR #3767 merged as main `40a2cd585`; [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3767#issuecomment-6623300307) passed the 22 native cases and actual Studio graph/history checks. T001 is in progress; production extraction and promotion remain unimplemented.
+**Status:** establishment, S001, T001 and T002 delivered. T002 PR [#3837](https://github.com/elsa-workflows/elsa-foundation/pull/3837) merged as main `e7d8a5d50530d21b3476248af1f2d5835ab7bf32`; [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3837#issuecomment-6881224741) records the qualified pure native plans and retained evidence provenance. T003 is in progress; shared authoring commands, BPMN, promotion and final program qualification remain outstanding.
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
+
+Owner triage on 9 November folded duplicate T004/#3753 into Feature #3745 and T007/#3756 into Program #3610. Their closure as not planned removes duplicate tracking, not the original acceptance obligations. The T004 and T007 identifiers and serial dependencies below remain in force.
 
 ## Phase 1 — Establishment and prototype
 
@@ -19,8 +21,8 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 **Goal:** equivalent named native block authoring on both resources.
 **Independent test:** contiguous Sequence and linear Flowchart extraction, nested editing, persistence and atomic Undo/Redo/Ungroup preserve expected execution and visible data.
 
-- [ ] T001 [#3750](https://github.com/elsa-workflows/elsa-foundation/issues/3750) Extend typed node-presentation contracts/persistence/source freezing in existing Activities Design/Graph ownership and Hosting SDK; include complete lifecycle, default-empty compatibility, historical/hash and editor-history regressions. Depends on S001.
-- [ ] T002 [#3751](https://github.com/elsa-workflows/elsa-foundation/issues/3751) Add pure native creation/extraction/Ungroup plans in Studio Workflows graph-authoring with identity/layout/reference preservation and pre-mutation refusal diagnostics. Cover order, entry/exit/outcomes, control targets, child results and no-loss inverse cases. Depends on S001; executed after T001 under the serial WIP policy.
+- [x] T001 [#3750](https://github.com/elsa-workflows/elsa-foundation/issues/3750) Extend typed node-presentation contracts/persistence/source freezing in existing Activities Design/Graph ownership and Hosting SDK; include complete lifecycle, default-empty compatibility, historical/hash and editor-history regressions. Depends on S001. Delivered by PR #3798 / main `9daaa3206`, with [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/3798#issuecomment-6641358323). Task #3750 and Feature #3743 are complete; T002–T007 remain open.
+- [x] T002 [#3751](https://github.com/elsa-workflows/elsa-foundation/issues/3751) Add pure native creation/extraction/Ungroup plans in Studio Workflows graph-authoring with identity/layout/reference preservation and pre-mutation refusal diagnostics. Cover order, entry/exit/outcomes, control targets, child results and no-loss inverse cases. Depends on S001; executed after T001 under the serial WIP policy. Delivered by PR #3837 / main `e7d8a5d50530d21b3476248af1f2d5835ab7bf32`, with the resulting-main acceptance linked above.
 - [ ] T003 [#3752](https://github.com/elsa-workflows/elsa-foundation/issues/3752) Integrate shared block actions and preview into Workflow and Activity Definition graph hosts; add Sequence range selection, summary/name, breadcrumbs, keyboard/focus, dirty state and atomic history; honor source/read-only/module/permission restrictions. Depends on T001 and T002.
 
 ## Phase 3 — User Story 2
@@ -28,7 +30,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 **Goal:** real BPMN subprocess extraction with preserved supported binding/interchange semantics.
 **Independent test:** same-lane native task extraction, nested edit/save/run and separately audited XML/DI/binding round trip; unsafe selections/exports refuse without silent degradation.
 
-- [ ] T004 [#3753](https://github.com/elsa-workflows/elsa-foundation/issues/3753) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003.
+- [ ] T004 [Feature #3745](https://github.com/elsa-workflows/elsa-foundation/issues/3745) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003.
 
 ## Phase 4 — User Story 3
 
@@ -40,7 +42,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 
 ## Phase 5 — Cross-cutting qualification and delivery
 
-- [ ] T007 [#3756](https://github.com/elsa-workflows/elsa-foundation/issues/3756) Complete `quickstart.md` journeys on rebuilt composed hosts, both resource editors and supported structures; add meaningful regressions/bite proofs and safe receipts. Cover themes, narrow/keyboard, unavailable modules, permissions/source authority, exact historical names/material and two-call-site isolation. Complete affected whole suites, source e2e, architecture/maps, exact-head review/CI and resulting-main proof. Update delivered documentation/glossary and spec lifecycle in the final implementation PR; close parents only with mapped evidence. Depends on T006.
+- [ ] T007 [Program #3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610) Complete `quickstart.md` journeys on rebuilt composed hosts, both resource editors and supported structures; add meaningful regressions/bite proofs and safe receipts. Cover themes, narrow/keyboard, unavailable modules, permissions/source authority, exact historical names/material and two-call-site isolation. Complete affected whole suites, source e2e, architecture/maps, exact-head review/CI and resulting-main proof. Update delivered documentation/glossary and spec lifecycle in the final implementation PR; close parents only with mapped evidence. Depends on T006.
 
 ## Acceptance mapping
 
@@ -58,4 +60,4 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 
 T000 → S001 → T001 → T002 → T003 → T004 → T005 → T006 → T007 is the serial delivery order. T001/T002 are technically independent after S001 but are not run as competing implementation leaves. Independent read-only research/review lenses may run concurrently when the applicable skill requires them. A runtime supporting fix discovered by S001 needs a scoped task/PR linked to its existing acceptance, not an unrelated program.
 
-Program #3610 → Epics #3738/#3739/#3740/#3741 → Features #3742–#3747 → leaves above. Only M3 acceptance closes the Program. A failed prototype blocks the affected production path until the design/proof is corrected; it does not justify quietly reducing owner-approved scope.
+Current native ownership is Program #3610 → Feature #3744 → T002/#3751 and T003/#3752; Program #3610 → Feature #3745 carrying T004; and Program #3610 → Feature #3746 → T005/#3754 and T006/#3755. T007 is the Program exit qualification. The original Epic/Feature decomposition remains historical in the [delivery plan](plan.md#durable-delivery-breakdown); owner-folded #3739/#3740/#3741/#3747 and duplicate #3753/#3756 closures do not prove acceptance. Only M3 acceptance closes the Program. A failed prototype blocks the affected production path until the design/proof is corrected; it does not justify quietly reducing owner-approved scope.

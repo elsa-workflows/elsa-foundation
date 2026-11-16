@@ -1,0 +1,200 @@
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Npgsql;
+
+namespace Elsa3Cost;
+
+public sealed record Statement(string Op, string Table);
+
+public sealed record RunResult(
+    string Provider,
+    string Workflow,
+    string Config,
+    int Run,
+    int SetupCommands,
+    int WindowCommands,
+    int InFlowCommands,
+    int BackgroundCommands,
+    int SaveChanges,
+    int TransactionsStarted,
+    int TransactionsCommitted,
+    List<PhaseResult> Phases,
+    Dictionary<string, int> CommandsByPhase,
+    Dictionary<string, int> CommandsByContext,
+    Dictionary<string, int> CommandsByKind,
+    Dictionary<string, int> CommandsByCategory,
+    Dictionary<string, int> CommandsByLeadOp,
+    Dictionary<string, int> StatementsByContextOpTable,
+    Dictionary<string, int> SaveChangesByContextPhase,
+    List<string> RecurringTasksPushedOut)
+{
+    public static RunResult From(string provider, string workflow, string config, int run, Recorder recorder, List<PhaseResult> phases, int setupCommands)
+    {
+        var windowPhases = phases.Select(p => p.Phase).ToHashSet();
+        var commands = recorder.Commands.Where(c => windowPhases.Contains(c.Phase)).ToList();
+        var events = recorder.Events.Where(e => windowPhases.Contains(e.Phase)).ToList();
+
+        return new RunResult(
+            provider, workflow, config, run, setupCommands,
+            commands.Count,
+            commands.Count(c => c.InFlow),
+            commands.Count(c => !c.InFlow),
+            events.Count(e => e.Kind == "SaveChanges"),
+            events.Count(e => e.Kind == "TransactionStarted"),
+            events.Count(e => e.Kind == "TransactionCommitted"),
+            phases,
+            Count(commands, c => c.Phase),
+            Count(commands, c => c.Context),
+            Count(commands, c => c.Kind),
+            Count(commands, c => Report.Category(Report.Statements(c.Sql))),
+            Count(commands, c => Report.LeadOp(Report.Statements(c.Sql))),
+            commands.SelectMany(c => Report.Statements(c.Sql).Select(s => $"{c.Context} {s.Op} {s.Table}"))
+                .GroupBy(k => k).OrderBy(g => g.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count()),
+            events.Where(e => e.Kind == "SaveChanges").GroupBy(e => $"{e.Context} {e.Phase}")
+                .OrderBy(g => g.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count()),
+            Program.RecurringTaskTypes);
+    }
+
+    private static Dictionary<string, int> Count<T>(IEnumerable<T> items, Func<T, string> key) =>
+        items.GroupBy(key).OrderBy(g => g.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count());
+}
+
+public static class Report
+{
+    public static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+
+    private static readonly Regex Split = new(@";\s*(?:\r?\n|$)", RegexOptions.Compiled);
+    private static readonly Regex Insert = new(@"^INSERT\s+INTO\s+""?([\w\.]+)""?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Update = new(@"^UPDATE\s+""?([\w\.]+)""?(?:\.""?(\w+)""?)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Delete = new(@"^DELETE\s+FROM\s+""?([\w\.]+)""?(?:\.""?(\w+)""?)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex From = new(@"\bFROM\s+""?([\w]+)""?(?:\.""(\w+)"")?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Splits one DbCommand into its SQL statements (EF batches several into one command) and names each.</summary>
+    public static List<Statement> Statements(string sql)
+    {
+        var list = new List<Statement>();
+        foreach (var raw in Split.Split(sql))
+        {
+            var text = raw.Trim();
+            if (text.Length == 0) continue;
+            var op = text.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries)[0].ToUpperInvariant();
+            string table = "?";
+            Match m;
+            switch (op)
+            {
+                case "INSERT": m = Insert.Match(text); if (m.Success) table = m.Groups[1].Value; break;
+                case "UPDATE": m = Update.Match(text); if (m.Success) table = m.Groups[2].Success && m.Groups[2].Value.Length > 0 ? m.Groups[2].Value : m.Groups[1].Value; break;
+                case "DELETE": m = Delete.Match(text); if (m.Success) table = m.Groups[2].Success && m.Groups[2].Value.Length > 0 ? m.Groups[2].Value : m.Groups[1].Value; break;
+                case "SELECT":
+                case "WITH":
+                    m = From.Match(text);
+                    if (m.Success) table = m.Groups[2].Success && m.Groups[2].Value.Length > 0 ? m.Groups[2].Value : m.Groups[1].Value;
+                    op = "SELECT";
+                    break;
+            }
+            list.Add(new Statement(op, table.Trim('"')));
+        }
+        return list;
+    }
+
+    public static string LeadOp(List<Statement> statements) =>
+        statements.Count == 0 ? "?" : statements.Select(s => s.Op).Distinct().Count() == 1 ? statements[0].Op + (statements.Count > 1 ? $" (batch of {statements.Count})" : "") : "MIXED BATCH (" + string.Join("+", statements.Select(s => s.Op)) + ")";
+
+    /// <summary>What part of Elsa 3 a command serves, from the tables it touches.</summary>
+    public static string Category(List<Statement> statements)
+    {
+        var cats = statements.Select(s => TableCategory(s.Table)).Distinct().OrderBy(c => c).ToList();
+        return cats.Count == 1 ? cats[0] : "mixed: " + string.Join(" + ", cats);
+    }
+
+    public static string TableCategory(string table) => table switch
+    {
+        "WorkflowExecutionLogRecords" => "execution log",
+        "ActivityExecutionRecords" => "activity execution records",
+        "WorkflowInstances" => "instance state",
+        "Bookmarks" => "bookmarks",
+        "BookmarkQueueItems" => "bookmark queue",
+        "Triggers" => "triggers",
+        "WorkflowDefinitions" => "definitions",
+        "KeyValuePairs" => "key-value store",
+        _ => "other:" + table
+    };
+
+    public static string SqlLog(Recorder recorder, bool windowOnly = false)
+    {
+        var sb = new StringBuilder();
+        bool Keep(string phase) => !windowOnly || phase is not ("setup" or "after");
+        var events = recorder.Events.Where(e => Keep(e.Phase)).ToList();
+        var all = recorder.Commands.Where(c => Keep(c.Phase)).Select(c => (c.Seq, Line: $"#{c.Seq} [{c.Phase}{(c.InFlow ? "" : ",BACKGROUND")}] +{c.AtMs:F1}ms {c.Context} {c.Kind}\n{c.Sql}\n"))
+            .Concat(events.Select(e => (e.Seq, Line: $"#{e.Seq} [{e.Phase}{(e.InFlow ? "" : ",BACKGROUND")}] +{e.AtMs:F1}ms {e.Context} -- {e.Kind}\n")))
+            .OrderBy(x => x.Seq);
+        foreach (var (_, line) in all)
+            sb.AppendLine(line);
+        return sb.ToString();
+    }
+
+    /// <summary>Aggregates every result.json under the output directory into summary.json and summary.md.</summary>
+    public static void Write(string outDir, string provider)
+    {
+        var root = Path.Combine(outDir, provider);
+        if (!Directory.Exists(root)) return;
+        var results = Directory.GetFiles(root, "result.json", SearchOption.AllDirectories)
+            .Select(f => JsonSerializer.Deserialize<RunResult>(File.ReadAllText(f))!)
+            .OrderBy(r => Array.IndexOf(Program.AllWorkflows, r.Workflow)).ThenBy(r => Array.IndexOf(Program.AllConfigs, r.Config)).ThenBy(r => r.Run)
+            .ToList();
+        File.WriteAllText(Path.Combine(root, "summary.json"), JsonSerializer.Serialize(results, Json));
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"# Elsa 3 command counts ({provider})\n");
+        sb.AppendLine("| Workflow | Config | Runs | Until the call returned (Elsa 4 rule) | Settled window per run | In-flow | Background | SaveChanges | Transactions | Per phase (settled) |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
+        foreach (var g in results.GroupBy(r => (r.Workflow, r.Config)))
+        {
+            var counts = g.Select(r => r.WindowCommands).ToList();
+            sb.AppendLine($"| {g.Key.Workflow} | {g.Key.Config} | {g.Count()} | {string.Join(", ", g.Select(r => r.Phases.Sum(p => p.CommandsUntilReturn)))} | {string.Join(", ", counts)} (min {counts.Min()}, max {counts.Max()}) | {string.Join(", ", g.Select(r => r.InFlowCommands))} | {string.Join(", ", g.Select(r => r.BackgroundCommands))} | {string.Join(", ", g.Select(r => r.SaveChanges))} | {string.Join(", ", g.Select(r => r.TransactionsStarted))} | {string.Join("; ", g.First().CommandsByPhase.Select(kv => $"{kv.Key} {kv.Value}"))} |");
+        }
+
+        foreach (var g in results.GroupBy(r => (r.Workflow, r.Config)))
+        {
+            var r = g.First();
+            sb.AppendLine($"\n## {r.Workflow} / {r.Config} (run {r.Run}: {r.WindowCommands} commands)\n");
+            sb.AppendLine($"Phases: {string.Join("; ", r.Phases.Select(p => $"{p.Phase}: {p.CommandsUntilReturn} until the call returned, {p.CommandsAfterReturn} after"))}\n");
+            sb.AppendLine("By DbContext: " + string.Join(", ", r.CommandsByContext.Select(kv => $"{kv.Key} {kv.Value}")) + "  ");
+            sb.AppendLine("By command kind: " + string.Join(", ", r.CommandsByKind.Select(kv => $"{kv.Key} {kv.Value}")) + "  ");
+            sb.AppendLine("By lead operation: " + string.Join(", ", r.CommandsByLeadOp.Select(kv => $"{kv.Key} {kv.Value}")) + "  ");
+            sb.AppendLine("SaveChanges by context/phase: " + string.Join(", ", r.SaveChangesByContextPhase.Select(kv => $"{kv.Key} {kv.Value}")) + "\n");
+            sb.AppendLine("| Category (commands) | Commands |");
+            sb.AppendLine("|---|---|");
+            foreach (var kv in r.CommandsByCategory) sb.AppendLine($"| {kv.Key} | {kv.Value} |");
+            sb.AppendLine("\n| Statements: context, op, table | Statements |");
+            sb.AppendLine("|---|---|");
+            foreach (var kv in r.StatementsByContextOpTable) sb.AppendLine($"| {kv.Key} | {kv.Value} |");
+        }
+        File.WriteAllText(Path.Combine(root, "summary.md"), sb.ToString());
+        Console.WriteLine(sb.ToString());
+    }
+}
+
+public static class Postgres
+{
+    public static async Task<string> CreateDatabaseAsync(string adminConnectionString, string database)
+    {
+        await using (var connection = new NpgsqlConnection(adminConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", connection);
+            await command.ExecuteNonQueryAsync();
+        }
+        return new NpgsqlConnectionStringBuilder(adminConnectionString) { Database = database }.ConnectionString;
+    }
+
+    public static async Task DropDatabaseAsync(string adminConnectionString, string database)
+    {
+        NpgsqlConnection.ClearAllPools();
+        await using var connection = new NpgsqlConnection(adminConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)", connection);
+        await command.ExecuteNonQueryAsync();
+    }
+}

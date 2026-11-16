@@ -2,7 +2,7 @@ import { CopyableIdentifier, StudioDataGrid } from "@elsa-workflows/studio-ui";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { WeatherPage, register } from "../../../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client/src/module";
+import { WeatherPage, register } from "../../../extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client/src/module";
 // Deliberately no host stylesheet: exercise the public primitive rules with a consumer palette.
 import "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/styles.css";
 import "../../examples/react-host/src/theme.css";

@@ -28,7 +28,7 @@ The paths below describe actual inspected source, rather than acceptance evidenc
 
 | Existing seam | What can be reused | Remaining gap |
 |---|---|---|
-| [Integrations SDK](../../Extensions/Integrations/README.md), [connector base](../../Extensions/Integrations/src/Sdk/ConnectorActivity.cs) | Ordinary typed activities, HTTP transport, Connections/Secrets and faults | The SDK explicitly remains activities-only; no entity discovery, reference or external-event host |
+| [Integrations SDK](../../Extensions/Integrations/README.md), [connector base](../../Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/ConnectorActivity.cs) | Ordinary typed activities, HTTP transport, Connections/Secrets and faults | The SDK explicitly remains activities-only; no entity discovery, reference or external-event host |
 | [Activity reconciliation](../../Essentials/src/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) | Existing persisted activity catalog | Entity descriptors must not become a second activity catalog |
 | [Input options](../../Essentials/src/Workflows/Design/Core/Contracts/IActivityInputOptionsProvider.cs) | Dependent source/type/record/operation selection | Source authorization and schema-shaped arguments need entity-owned contributions |
 | [Connection resolution](../../Essentials/src/Connections/Elsa.Connections/Services/DefaultConnectionResolver.cs), [connection identity](../../Essentials/src/Connections/Core/Models/ConnectionModels.cs) | Tenant lookup, credentials, source-host rules and incarnation identity | Discovery cannot fabricate an activity context; source record/field authorization and source retargeting need explicit handling |

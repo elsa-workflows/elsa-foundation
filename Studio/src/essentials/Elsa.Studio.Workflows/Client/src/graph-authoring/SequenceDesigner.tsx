@@ -1,3 +1,4 @@
+import { graphBoundaryCompleteTypeKey } from "../workflowAdapter";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Copy, Plus, Power, Trash2 } from "lucide-react";
@@ -8,6 +9,8 @@ import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTy
 import { WorkflowNodeRuntimeBadges } from "../workflow-editor/WorkflowNodeRuntimeBadges";
 import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-editor/ExecutionMotionPulse";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
+import { isTechnicalActivityLabel } from "../technicalActivityLabel";
+import { shortTypeName as formatShortTypeName } from "../workflowFormatting";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
 import { NodeCollectionActions } from "../workflow-editor/NodeSlotBadges";
@@ -20,6 +23,7 @@ interface SequenceDesignerBaseProps {
   selectedNodeId: string | null;
   canvasRef: RefObject<HTMLDivElement | null>;
   onSelect(id: string | null): void;
+  onSelectMany?(ids: string[], primary: string): void;
   onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
   onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
@@ -56,6 +60,7 @@ export function SequenceDesigner({
   readOnly,
   canvasRef,
   onSelect,
+  onSelectMany,
   onInsert,
   onDropActivity,
   onMove,
@@ -69,6 +74,24 @@ export function SequenceDesigner({
 }: SequenceDesignerProps) {
   const [rovingNodeId, setRovingNodeId] = useState(() => selectedNodeId ?? nodes[0]?.id ?? null);
   const previousSelectedNodeId = useRef(selectedNodeId);
+  const selectionAnchor = useRef<string | null>(selectedNodeId);
+  const selectionSignature = JSON.stringify([selectedNodeId, nodes.filter(node => node.selected).map(node => node.id)]);
+  const observedSelection = useRef(selectionSignature);
+  const emittedSelection = useRef<string | null>(null);
+  if (observedSelection.current !== selectionSignature) {
+    // History and scope navigation restore selection independently of this mounted component.
+    // Reconstruct a range's opposite endpoint; keep the pointer anchor for our own gestures.
+    if (emittedSelection.current !== selectionSignature) {
+      const selected = nodes.filter(node => node.selected);
+      selectionAnchor.current = selectedNodeId === selected[0]?.id ? selected.at(-1)?.id ?? selectedNodeId : selected[0]?.id ?? selectedNodeId;
+    }
+    observedSelection.current = selectionSignature;
+    emittedSelection.current = null;
+  }
+  const selectMany = (ids: string[], primary: string) => {
+    emittedSelection.current = JSON.stringify([ids.includes(primary) ? primary : ids.at(-1) ?? null, nodes.filter(node => ids.includes(node.id)).map(node => node.id)]);
+    onSelectMany?.(ids, primary);
+  };
 
   useEffect(() => {
     const selectionChanged = previousSelectedNodeId.current !== selectedNodeId;
@@ -80,6 +103,26 @@ export function SequenceDesigner({
       : rovingExists ? rovingNodeId : selectedExists ? selectedNodeId : nodes[0]?.id ?? null;
     if (next !== rovingNodeId) setRovingNodeId(next);
   }, [nodes, rovingNodeId, selectedNodeId]);
+
+  const selectStep = (index: number, event?: MouseEvent<HTMLButtonElement> | KeyboardEvent<HTMLButtonElement>) => {
+    const node = nodes[index];
+    if (!node) return;
+
+    setRovingNodeId(node.id);
+    if (!onSelectMany) { onSelect(node.id); return; }
+    if (event?.shiftKey) {
+      const anchor = nodes.findIndex(item => item.id === selectionAnchor.current);
+      const start = anchor < 0 ? index : anchor;
+      selectMany(nodes.slice(Math.min(start, index), Math.max(start, index) + 1).map(item => item.id), node.id);
+    } else if (event?.ctrlKey || event?.metaKey) {
+      selectionAnchor.current = node.id;
+      const ids = nodes.filter(item => item.id === node.id ? !item.selected : item.selected).map(item => item.id);
+      selectMany(ids, node.id);
+    } else {
+      selectionAnchor.current = node.id;
+      selectMany([node.id], node.id);
+    }
+  };
 
   const insertAt = (index: number, event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -154,14 +197,12 @@ export function SequenceDesigner({
                 <SequenceStep
                   node={node}
                   index={index}
-                  selected={selectedNodeId === node.id}
+                  selected={onSelectMany ? !!node.selected : selectedNodeId === node.id}
                   readOnly={!!readOnly}
                   tabIndex={rovingNodeId === node.id ? 0 : -1}
                   listSize={nodes.length}
-                  onSelect={() => {
-                    setRovingNodeId(node.id);
-                    onSelect(node.id);
-                  }}
+                  onSelect={event => selectStep(index, event)}
+                  onExtendSelection={(targetIndex, event) => selectStep(targetIndex, event)}
                   onFocus={() => setRovingNodeId(node.id)}
                   onMove={boundaryIndex => onMove?.(node.id, boundaryIndex)}
                   onDelete={() => onDelete?.(node.id)}
@@ -171,7 +212,7 @@ export function SequenceDesigner({
                   onAddCollectionItem={readOnly ? undefined : onAddCollectionItem}
                   availabilityLookup={availabilityLookup}
                 />
-                {index < nodes.length - 1 ? (
+                {index < nodes.length - 1 && node.data.activityTypeKey !== graphBoundaryCompleteTypeKey ? (
                   <div className="wf-sequence-connector" aria-hidden="true"><ArrowDown size={15} /><ExecutionSequencePulse pulse={nodes[index + 1].data.incomingExecutionPulse} /></div>
                 ) : null}
               </div>
@@ -196,6 +237,7 @@ function SequenceStep({
   listSize,
   onSelect,
   onFocus,
+  onExtendSelection,
   onMove,
   onDelete,
   onDuplicate,
@@ -210,8 +252,9 @@ function SequenceStep({
   readOnly: boolean;
   tabIndex: number;
   listSize: number;
-  onSelect(): void;
+  onSelect(event?: MouseEvent<HTMLButtonElement> | KeyboardEvent<HTMLButtonElement>): void;
   onFocus(): void;
+  onExtendSelection(index: number, event: KeyboardEvent<HTMLButtonElement>): void;
   onMove(boundaryIndex: number): void;
   onDelete(): void;
   onDuplicate?: () => void;
@@ -224,7 +267,8 @@ function SequenceStep({
   const { icon, fallback, tone } = resolveNodeActivityVisual(data);
   const availability = availabilityLookup?.({ activityVersionId: data.activityVersionId, activityTypeKey: data.activityTypeKey }) ?? null;
   const availabilityLabel = data.ghost ? "Activity unavailable in this environment" : availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
-  const activityType = shortTypeName(data.activityTypeKey ?? data.activityVersionId);
+  const title = sequenceCardTitle(data);
+  const typeLabel = sequenceTypeCaption(data);
   const summary = data.summary?.trim() || data.description?.trim();
 
   const onCardDragStart = (event: DragEvent<HTMLButtonElement>) => {
@@ -241,6 +285,7 @@ function SequenceStep({
     event.preventDefault();
     const steps = event.currentTarget.closest(".wf-sequence-list")?.querySelectorAll<HTMLButtonElement>(".wf-sequence-step");
     steps?.item(targetIndex)?.focus();
+    if (event.shiftKey) onExtendSelection(targetIndex, event);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -250,7 +295,7 @@ function SequenceStep({
     if (event.key === "End") return focusRelativeStep(event, listSize - 1);
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onSelect();
+      onSelect(event);
       return;
     }
     if (!readOnly && (event.key === "Delete" || event.key === "Backspace")) {
@@ -272,7 +317,7 @@ function SequenceStep({
         data-selected={String(selected)}
         data-index={index}
         aria-pressed={selected}
-        aria-label={`${index + 1}. ${data.label}${availabilityLabel ? `, ${availabilityLabel}` : ""}`}
+        aria-label={`${index + 1}. ${title}${availabilityLabel ? `, ${availabilityLabel}` : ""}`}
         tabIndex={tabIndex}
         draggable={!readOnly}
         onClick={onSelect}
@@ -285,11 +330,11 @@ function SequenceStep({
         </span>
         <span className="wf-sequence-step-copy">
           <span className="wf-sequence-title-row">
-            <span className="wf-sequence-title">{data.label}</span>
+            <span className="wf-sequence-title">{title}</span>
             {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
           </span>
-          <span className="wf-sequence-type">{data.category || activityType}</span>
-          {summary ? <span className="wf-sequence-summary">{summary}</span> : null}
+          {typeLabel && typeLabel !== title ? <span className="wf-sequence-type">{typeLabel}</span> : null}
+          {data.activityTypeKey === graphBoundaryCompleteTypeKey ? <span className="wf-sequence-summary" title="Completes the nearest reusable activity and cancels the rest of its body. No outgoing continuation runs.">Ends reusable activity</span> : summary ? <span className="wf-sequence-summary">{summary}</span> : null}
         </span>
       </button>
 
@@ -350,6 +395,18 @@ function insertionLabel(nodes: Node<WorkflowNodeData>[], index: number) {
   return `Insert step between ${nodes[index - 1]?.data.label ?? "previous step"} and ${nodes[index]?.data.label ?? "next step"}`;
 }
 
-function shortTypeName(value: string) {
-  return value.split(".").at(-1) || value;
+function sequenceCardTitle(data: WorkflowNodeData) {
+  if (data.hasAuthoredLabel || !isTechnicalActivityLabel(data.label)) return data.label;
+  const fromType = formatShortTypeName(data.activityTypeKey);
+  return fromType && !isTechnicalActivityLabel(fromType) ? fromType : "Activity";
+}
+
+function sequenceTypeCaption(data: WorkflowNodeData) {
+  const activityType = formatShortTypeName(data.activityTypeKey)
+    ?? formatShortTypeName(data.activityVersionId)
+    ?? data.activityTypeKey;
+  return [data.category, activityType, data.executionType]
+    .map(value => value?.trim())
+    .find(value => value && !isTechnicalActivityLabel(value))
+    ?? "";
 }

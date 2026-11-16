@@ -1,5 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
+import { useCompactNavigation } from "../navigation/useCompactNavigation";
 import type { StudioNavigationContribution } from "../../sdk";
 import { settingsPathFor, type SettingsSectionGroup } from "./settingsSections";
 import "./settings.css";
@@ -15,9 +16,23 @@ export function SettingsShell({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const { compact, navigationRef, selectRef, contentRef } = useCompactNavigation();
   return (
     <div className="settings-shell">
-      <nav className="settings-nav" aria-label="Settings sections">
+      {compact ? (
+        <label className="settings-section-select">
+          <span>Settings section</span>
+          <select ref={selectRef} value={activeId ?? ""} onChange={event => {
+            const section = groups.flatMap(group => group.sections).find(item => item.id === event.target.value);
+            if (section) onNavigate(settingsPathFor(section));
+          }}>
+            <option value="" disabled>Choose a section</option>
+            {groups.map(group => <optgroup key={group.id} label={group.label}>
+              {group.sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
+            </optgroup>)}
+          </select>
+        </label>
+      ) : <nav ref={navigationRef} className="settings-nav" aria-label="Settings sections">
         {groups.map(group => (
           <div key={group.id} className="settings-nav-group">
             <p className="settings-nav-heading">{group.label}</p>
@@ -31,8 +46,8 @@ export function SettingsShell({
             ))}
           </div>
         ))}
-      </nav>
-      <div className="settings-pane">{children}</div>
+      </nav>}
+      <div ref={contentRef} className="settings-pane">{children}</div>
     </div>
   );
 }

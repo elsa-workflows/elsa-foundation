@@ -25,7 +25,7 @@ def run(output):
     try:
         if subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip():
             raise ValueError('Commit source before qualification; dirty output cannot certify a revision')
-        project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+        project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
         owned.command(['dotnet', 'build', str(project), '-p:RestoreLockedMode=true', '-m:1', '/nr:false', '-v:q', '-nologo'], output / 'build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-decisions-execution-') as temporary:
             data = Path(temporary)

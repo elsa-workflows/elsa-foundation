@@ -13,8 +13,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = "Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"
-PROBE = "Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Program.cs"
+MODULE = "essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"
+PROBE = "essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Program.cs"
 
 
 def sha(path):
@@ -66,7 +66,7 @@ def main():
             project = project.resolve()
             if project in projects:
                 return
-            if not project.is_relative_to(producer / "Essentials/src"):
+            if not project.is_relative_to(producer / "essentials/src"):
                 raise RuntimeError("candidate reference is outside the owned source graph")
             projects.add(project)
             for edge in ET.parse(project).findall(".//ProjectReference"):
