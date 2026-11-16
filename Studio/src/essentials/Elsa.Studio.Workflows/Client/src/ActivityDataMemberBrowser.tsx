@@ -85,13 +85,16 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const focusedPath = useRef("");
   useLayoutEffect(() => {
     if (pending || selection && !packet) return;
+    // Focus that moves after this view commits and before the frame runs was moved by the author.
+    const committedFocus = rootRef.current?.ownerDocument.activeElement ?? null;
     const frame = requestAnimationFrame(() => {
       const panel = rootRef.current;
       if (!panel) return;
       const pathKey = packet ? JSON.stringify([packet.source.id, packet.selection.path]) : "sources";
-      // Source rows can receive explicit focus before this deferred frame runs. Keep that choice
-      // so Enter cannot be redirected to the first source while the listing settles.
-      if (panel.contains(panel.ownerDocument.activeElement) && (pathKey === "sources" || focusedPath.current === pathKey)) {
+      // Source rows and detail-view controls can receive explicit focus before this deferred frame runs.
+      // Keep that choice so Enter cannot be redirected to another control while the view settles.
+      const active = panel.ownerDocument.activeElement;
+      if (panel.contains(active) && (pathKey === "sources" || focusedPath.current === pathKey || active !== committedFocus)) {
         focusedPath.current = pathKey;
         return;
       }

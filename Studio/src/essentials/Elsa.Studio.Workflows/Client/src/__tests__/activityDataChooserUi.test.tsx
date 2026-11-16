@@ -945,6 +945,37 @@ describe("Choose data with member capability", () => {
     expect(changes.mock.calls[0]![0].customerId.expression).toEqual({ type: memberBinding.expressionType, value: memberBinding.value });
   });
 
+  it("keeps focus the author moves to Use whole value before the deferred detail-view frame, then stores it once", async () => {
+    const flushFrames = holdFocusFrames();
+    // An unknown shape lists no members, so the detail view offers the Member name input before Use whole value.
+    const unknown = memberShape({ state: "unknown", kind: "unknown", type: { alias: "String", collectionKind: "Single" }, members: [],
+      reasonCode: "activity.shape.serialization-profile-unbound" });
+    const root = { ...sources[0]!, shape: unknown };
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, _query?: ActivityDataSourceQuery) =>
+      answer("supported", { memberReadsEnabled: true, target: { displayName: "Customer ID", constraint: null, type: { alias: "String", collectionKind: "Single" } }, sources: [root] }));
+    const changes = vi.fn();
+    const container = render({ dataHost: host({ requestSources }), onChange: changes });
+    await openChooser(container);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    flushFrames();
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    const use = () => [...document.querySelectorAll<HTMLButtonElement>(".wf-data-members button")].find(button => button.textContent === "Use whole value");
+    await vi.waitFor(() => expect(use()?.disabled).toBe(false));
+    expect(document.querySelector<HTMLInputElement>("input[aria-label='Member name']")?.disabled).toBe(false);
+    // The author focuses the action after the detail view commits and before its deferred focus frame runs.
+    use()!.focus();
+    flushFrames();
+    expect(document.activeElement).toBe(use());
+    // Enter on a focused button activates it.
+    flushSync(() => (document.activeElement as HTMLElement).click());
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledTimes(1));
+    expect(requestSources.mock.calls.map(call => call[3]).filter(query => query?.memberPath)).toEqual([
+      { source: customerBinding, memberPath: [], includeMemberShapes: true },
+      { source: customerBinding, memberPath: [], includeMemberShapes: true }
+    ]);
+    expect(changes.mock.calls[0]![0].customerId.expression).toEqual({ type: customerBinding.expressionType, value: customerBinding.value });
+  });
+
   it("browses Customer and stores the server's customerId member binding as one edit, then clears it", async () => {
     const changes = vi.fn();
     const { dataHost, memberBinding } = nestedHost();
