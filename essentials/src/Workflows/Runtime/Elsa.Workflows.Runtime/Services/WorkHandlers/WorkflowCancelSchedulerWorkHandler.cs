@@ -119,6 +119,8 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             });
 
-        return commit;
+        return await _checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            [new(RuntimeHistorySourceFactKind.ControlApplied, workItem.WorkItemId, commit.Checkpoint.OccurredAt,
+                causation: new(CommandId: workItem.CommandId, SchedulerWorkItemId: workItem.WorkItemId), reasonCode: "workflow-cancelled")], cancellationToken);
     }
 }

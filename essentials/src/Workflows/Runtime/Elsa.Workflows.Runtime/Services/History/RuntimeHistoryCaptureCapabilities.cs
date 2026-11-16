@@ -9,5 +9,6 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
 {
     internal bool SourceInputs() => services.GetService<IRuntimeHistorySourceExtension>() is { } selected &&
         ReferenceEquals(selected, services.GetService<RuntimeCheckpointCommitter>()?.HistorySourceResolver?.Invoke());
+    internal bool CleanupInputs() => services.GetService<IActivityScopeCleanupStore>()?.SupportsHistoryBookmarks == true;
     internal bool Values() => services.GetService<IRuntimeActivityExecutionInspectionAccumulator>()?.SupportsCheckpointValueCapture == true;
 }
