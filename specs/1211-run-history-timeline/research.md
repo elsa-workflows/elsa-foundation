@@ -505,3 +505,12 @@ Corrected whole Runtime EF2691PASS0skip on59b1b1d validates the coherent initial
 Complete native binding first owning run on09270e64 executed2770cases: 2730PASS/40FAIL/0skip. Every failed existing contract was rejected by history-specific physical partition validation before the retained policy's legacy-absence fast path (/tmp/1211-native-bridge-current-owning-20261116/ef.trx SHA2569a1597231a41b5c37611a05590dba377e8f04fbbd2332c49d6f1b93f18845806). Existing uncaptured test-scope/compound bookmark/standalone-source controls thereby reproduced the integration regression, including wrong exception precedence and valid legacy operations; no fixture or assertion is changed.
 
 Move only the two history-specific native/incoming scope checks after the pinned-policy legacy-absence fast path. Retained admission provenance/absence remains checked before returning, unexpected batches cannot retrofit capture, and all captured/Required missing-batch paths retain the exact scope guard before any history read/allocation. Ordinary existing native fences/source/claim/test-scope validation still runs unchanged. Complete corrected owning qualification follows.
+
+
+### Current-main native history binding qualification (16 November)
+
+The finite native bridge incorporates the original 30 native checkpoint controls from `1dfbb094d57a6a27e3c9e946697c6ce2bdd9d344`, retaining actual provider migration, native writer, transactional rollback, replay, lost ACK and first-head fencing assertions. This is controlled component coverage, not authored capture or composed Studio proof.
+
+The initial current-main whole EF run exposed 40 legacy failures: the history helper validated captured-history physical scope before its no-policy legacy absence fast path. Moving only the history-scope checks after that fast path preserves native source/fence/claim validation and captured-run exact scope, without changing legacy fixtures or assertions. Corrected committed `e50e3821fdecc99e2b15240cbf3809a4d3841c64` passed all 2770 owning EF tests, zero skips; TRX SHA256 `666c304883cda01ab4aaaaba7c64564692a9c5f4e1a8d86ad272ebacc7180f9f`. All 40 original failures remain recorded in the prior raw result.
+
+The immutable value-equivalent access-context compatibility remains intentional; two native reader controls fail with reference-identity comparison restored. The shared reader outer-finally cancellation/access-retirement checks remain intact. Native provider execution and independent current integration review remain pending at this checkpoint.
