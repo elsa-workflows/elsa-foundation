@@ -31,9 +31,19 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null,
-    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
+    IServiceScopeFactory? scopeFactory,
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
+    /// <summary>
+    /// Preserves the earlier constructor shape. Without a write-order analyzer the provider reports no unordered-write
+    /// warning; the graph design feature composes the provider with the one the workflow design validations supply.
+    /// </summary>
+    public GraphActivityProvider(
+        IActivityStructureService activityStructureService,
+        ActivityContractAuthoringValidator contractCapabilities,
+        IServiceScopeFactory? scopeFactory = null)
+        : this(activityStructureService, contractCapabilities, scopeFactory, null) { }
+
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
@@ -1462,8 +1472,7 @@ public sealed class GraphActivityProvider(
     }
 
     // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings,
-    // alongside any errors; compilation still succeeds when there are no errors. A host without the workflow design
-    // validations feature has no analyzer to run.
+    // alongside any errors; compilation still succeeds when there are no errors.
     private void ValidateWriteOrder(IReadOnlyList<GraphNode> nodes, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
     {
         if (writeOrderAnalyzer is null ||

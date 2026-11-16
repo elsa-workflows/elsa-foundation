@@ -27,9 +27,9 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 ### `IUnorderedVariableWriteAnalyzer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 
 - **Kind/signature:** one singleton replacement; `UnorderedVariableWriteAnalysis Analyze(ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default)`.
-- **Default/registration:** internal `UnorderedVariableWriteAnalyzer`, installed with `TryAddSingleton`.
+- **Default/registration:** internal `UnorderedVariableWriteAnalyzer`, installed with `TryAddSingleton`. A single-implementation replacement contract (framework §2.6.2): `DataSelectionAnalyzerCompositionCheck` fails shell Prepare unless exactly one singleton is composed. Singleton because the singleton graph provider consumes it.
 - **Behaviour (spec 266):** reports, per variable, every node whose declared write (an output capture and, with `includeIntrinsics`, a Set, Merge or Reduce intrinsic) has no order fixed by the definition, plus duplicate capture targets on one node. All ordering knowledge comes from `IActivityStructureHandler.RelateChildren` and `CompletesAfterItsChildren`; it knows no structure kind. Findings carry the author-facing message.
-- **Consumers:** `ValueFlowValidator` (`ValueFlow/ConcurrentWrite` and `ValueFlow/DuplicateCaptureTarget`, severity `Warning`) and Graph Design's `GraphActivityProvider` (draft validation and compilation warnings). A graph provider composed without this feature reports no write-order warning.
+- **Consumers:** `ValueFlowValidator` (`ValueFlow/ConcurrentWrite` and `ValueFlow/DuplicateCaptureTarget`, severity `Warning`) and Graph Design's `GraphActivityProvider` (draft validation and compilation warnings), which `GraphActivitiesDesignFeature` composes with the required analyzer.
 
 ### `ICredentialLiteralValidator` *(Core, `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (returns findings), a single-implementation **replacement contract** (framework §2.6.2), declared by `[CredentialLiteralValidatorReplacementContract]`.

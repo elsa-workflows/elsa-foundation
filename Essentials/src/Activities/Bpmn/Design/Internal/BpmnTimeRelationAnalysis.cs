@@ -31,6 +31,8 @@ internal sealed class BpmnTimeRelationAnalysis
     private readonly Dictionary<(string, string), bool> _reachable = [];
     private Dictionary<string, HashSet<string>>? _dominators;
     private HashSet<string>? _forkCycleRuns;
+    private HashSet<string>? _overlappingNodes;
+    private bool _computingOverlap;
 
     private BpmnTimeRelationAnalysis(Dictionary<string, BpmnElement> elements, Dictionary<string, string> elementOfChild)
     {
@@ -91,12 +93,31 @@ internal sealed class BpmnTimeRelationAnalysis
 
     private bool InGraph(string node) => _inbound.ContainsKey(node);
 
-    private bool OverlapsItself(string element)
+    private bool OverlapsItself(string node)
     {
-        if (_elements[element].LoopCharacteristics is { IsSequential: false } || ForkCycleRuns().Contains(element))
+        if (_elements.TryGetValue(node, out var element) && element.LoopCharacteristics is { IsSequential: false } ||
+            ForkCycleRuns().Contains(node))
             return true;
-        return InGraph(element) && _nonWaitingJoins.Any(join =>
-            (StringComparer.Ordinal.Equals(join, element) || IsReachable(join, element)) && ArrivalsCanOverlap(join));
+        return InGraph(node) && _nonWaitingJoins.Any(join =>
+            (StringComparer.Ordinal.Equals(join, node) || IsReachable(join, node)) && ArrivalsCanOverlap(join));
+    }
+
+    // Graph nodes that can run twice at once. An exclusive split among them can send its runs down different choices,
+    // so it does not make those choices exclusive. Computed with the plain exclusivity rule to avoid recursion.
+    private HashSet<string> OverlappingNodes()
+    {
+        if (_overlappingNodes is not null)
+            return _overlappingNodes;
+        _computingOverlap = true;
+        try
+        {
+            return _overlappingNodes = _inbound.Keys.Where(node => !StringComparer.Ordinal.Equals(node, Root) && OverlapsItself(node))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        finally
+        {
+            _computingOverlap = false;
+        }
     }
 
     private bool ArrivalsCanOverlap(string join)
@@ -107,7 +128,9 @@ internal sealed class BpmnTimeRelationAnalysis
         for (var left = 0; left < sources.Count; left++)
         for (var right = left + 1; right < sources.Count; right++)
         {
-            if (!IsReachable(sources[left], sources[right]) && !IsReachable(sources[right], sources[left]) &&
+            // The first arrival runs the join while the path to the second is still in flight, unless the second source
+            // is only reached through the join itself (a loop back into it) or excludes the first.
+            if (!IsReachable(join, sources[left]) && !IsReachable(join, sources[right]) &&
                 !AreExclusive(sources[left], sources[right]))
                 return true;
         }
@@ -134,6 +157,8 @@ internal sealed class BpmnTimeRelationAnalysis
         foreach (var (split, edges) in _outgoing)
         {
             if (edges.All(edge => edge.Choice is null) || !Dominates(split, left) || !Dominates(split, right))
+                continue;
+            if (!_computingOverlap && OverlappingNodes().Contains(split))
                 continue;
             if (Choices(split, edges, left) is not { Count: > 0 } leftChoices ||
                 Choices(split, edges, right) is not { Count: > 0 } rightChoices)

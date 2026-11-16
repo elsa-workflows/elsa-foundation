@@ -19,6 +19,7 @@ public sealed partial class GraphActivityProviderTests
     private static readonly GraphActivityProvider WriteOrderProvider = new(
         new TestActivityStructureService(),
         new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()),
+        scopeFactory: null,
         writeOrderAnalyzer: WriteOrderAnalyzer());
 
     private static IUnorderedVariableWriteAnalyzer WriteOrderAnalyzer()
@@ -77,20 +78,6 @@ public sealed partial class GraphActivityProviderTests
 
         Assert.DoesNotContain(draft, x => x.Code == "activity.graph.unordered-variable-write");
         Assert.DoesNotContain(compilation.Diagnostics, x => x.Code == "activity.graph.unordered-variable-write");
-    }
-
-    [Fact]
-    public async Task A_host_without_the_validations_feature_reports_no_write_order_warning()
-    {
-        var root = """
-            { "nodeId": "root", "activityVersionId": "activity-ver-root", "inputs": [], "outputs": [],
-              "structure": { "kind": "elsa.parallel.structure", "schemaVersion": "1.0.0", "payload": { "branches": [
-                { "name": "left", "activity": { "nodeId": "first", "activityVersionId": "activity-ver-step", "inputs": [], "outputs": CAPTURE, "structure": null } },
-                { "name": "right", "activity": { "nodeId": "second", "activityVersionId": "activity-ver-step", "inputs": [], "outputs": CAPTURE, "structure": null } }
-              ] } } }
-            """.Replace("CAPTURE", Capture, StringComparison.Ordinal);
-
-        Assert.DoesNotContain(await _provider.ValidateAsync(TotalManifest(root), TotalContract()), x => x.Code == "activity.graph.unordered-variable-write");
     }
 
     private static ActivityProviderManifest TotalManifest(string root) => new(

@@ -141,6 +141,21 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "loop", "branch"));
     }
 
+    // Two tokens can pass an exclusive merge at once, so the choices of a split after it are not exclusive.
+    [Fact]
+    public void An_exclusive_gateway_passed_by_overlapping_tokens_does_not_make_its_choices_exclusive()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("s1", "first"), Task("s2", "second"),
+                Element("x", BpmnElementTypes.ExclusiveGateway), Task("ta", "a"), Task("tb", "b")
+            ],
+            [Flow("start", "s1"), Flow("s1", "s2"), Flow("s1", "x"), Flow("s2", "x"), Flow("x", "ta"), Flow("x", "tb")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "a", "a"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "a", "b"));
+    }
+
     [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {

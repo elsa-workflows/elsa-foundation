@@ -137,6 +137,29 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "join", "join"));
     }
 
+    // A merge's first arrival runs it while the path to the second arrival is still in flight.
+    [Fact]
+    public void A_merge_fed_by_a_node_and_its_successor_overlaps_itself()
+    {
+        var flow = Flowchart(["a", "b", "m"], [("a", "b", null), ("a", "m", null), ("b", "m", null)], "a",
+            new Dictionary<string, FlowchartNodeMetadata> { ["m"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "m", "m"));
+    }
+
+    // Only the join where the raced branches meet is released early; joins after it see one continuation and wait.
+    [Fact]
+    public void A_fork_and_join_after_a_first_wins_race_stays_ordered()
+    {
+        var flow = Flowchart(["race", "a", "b", "j", "p", "x", "y", "k", "z"],
+            [("race", "a", null), ("race", "b", null), ("a", "j", null), ("b", "j", null), ("j", "p", null),
+             ("p", "x", null), ("p", "y", null), ("x", "k", null), ("y", "k", null), ("k", "z", null)],
+            "race", new Dictionary<string, FlowchartNodeMetadata> { ["race"] = new("firstWins") });
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "x", "z"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "j"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

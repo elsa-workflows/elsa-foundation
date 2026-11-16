@@ -135,7 +135,9 @@ internal sealed class FlowchartChildResultAnalysis(
         for (var left = 0; left < sources.Count; left++)
         for (var right = left + 1; right < sources.Count; right++)
         {
-            if (!IsReachable(sources[left], sources[right]) && !IsReachable(sources[right], sources[left]) &&
+            // The first arrival runs the join while the path to the second is still in flight, unless the second source
+            // is only reached through the join itself (a loop back into it) or excludes the first.
+            if (!IsReachable(join, sources[left]) && !IsReachable(join, sources[right]) &&
                 !AreExclusive(sources[left], sources[right]))
                 return true;
         }
@@ -276,13 +278,31 @@ internal sealed class FlowchartChildResultAnalysis(
             .Where(id => inboundSources[id].Count > 1 && StringComparer.Ordinal.Equals(PolicyOf(id), FlowchartPolicyKinds.Merge))
             .ToHashSet(StringComparer.Ordinal);
         // A first-wins race cancels its losing paths only in the Flowchart's state: their running activities still
-        // commit, while a join downstream of the race is released without them. Such a join does not order them.
-        var raceReach = new HashSet<string>(StringComparer.Ordinal);
-        var pendingReach = new Stack<string>(nodeIds.Where(id => StringComparer.Ordinal.Equals(PolicyOf(id), FlowchartPolicyKinds.FirstWins)));
-        while (pendingReach.Count > 0)
-            foreach (var next in successors[pendingReach.Pop()])
-                if (raceReach.Add(next)) pendingReach.Push(next);
-        var raceJoins = raceReach.Where(id => inboundSources[id].Count > 1).ToHashSet(StringComparer.Ordinal);
+        // commit, while the join where the raced branches meet is released without them. That join does not order
+        // them. Joins after it see only the winner's continuation and wait as usual.
+        var raceJoins = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var race in nodeIds.Where(id => StringComparer.Ordinal.Equals(PolicyOf(id), FlowchartPolicyKinds.FirstWins)))
+        {
+            var reach = successors[race].Distinct(StringComparer.Ordinal).ToDictionary(branch => branch, branch =>
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal) { branch };
+                var pending = new Stack<string>([branch]);
+                while (pending.Count > 0)
+                    foreach (var next in successors[pending.Pop()])
+                        if (!StringComparer.Ordinal.Equals(next, race) && seen.Add(next)) pending.Push(next);
+                return seen;
+            }, StringComparer.Ordinal);
+            // A node only one branch reaches still belongs to that branch's race path.
+            var owner = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var node in nodeIds)
+            {
+                var owners = reach.Where(branch => branch.Value.Contains(node)).Select(branch => branch.Key).ToArray();
+                if (owners.Length == 1) owner[node] = owners[0];
+            }
+            raceJoins.UnionWith(nodeIds.Where(id =>
+                inboundSources[id].Where(owner.ContainsKey).Select(source => owner[source]).Distinct(StringComparer.Ordinal).Count() > 1));
+        }
+
         // Definite forks: several connections leave one port, or the node's policy schedules all of them.
         var definiteForks = nodeIds
             .Where(id => ports.Where(port => StringComparer.Ordinal.Equals(port.Source, id)).GroupBy(port => port.Port, StringComparer.Ordinal).Any(group => group.Count() > 1) ||

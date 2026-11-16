@@ -15,12 +15,16 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
     IActivityDataSelectionAnalyzer sourceAnalyzer,
-    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer = null) : IDraftValidator
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer) : IDraftValidator
 {
+    /// <summary>Preserves the two-argument shape; the default write-order analyzer applies.</summary>
+    public ValueFlowValidator(IActivityStructureService activityStructureService, IActivityDataSelectionAnalyzer sourceAnalyzer)
+        : this(activityStructureService, sourceAnalyzer, null) { }
+
     private readonly IUnorderedVariableWriteAnalyzer _writeOrderAnalyzer = writeOrderAnalyzer ?? new UnorderedVariableWriteAnalyzer();
 
     /// <summary>Preserves the legacy call shape; validation fails closed until shared authority is supplied.</summary>
-    public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!) { }
+    public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!, null) { }
 
     private const string ParallelStructureKind = "elsa.parallel.structure";
 
