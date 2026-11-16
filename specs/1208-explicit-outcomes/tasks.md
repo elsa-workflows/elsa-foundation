@@ -31,37 +31,38 @@ There are no setters.
     `FlowSendHttpRequest.HandleResponseAsync`): `Done` fires with every response, next to the code or
     `Unmatched status code`; `Failed to connect` and `Timeout` complete with that outcome alone, without `Done`. So
     T015 maps `Done` onto every code and the unmatched status code, not onto `Failed` or `Timeout`. #3195 is closed;
-    **#3287 is open**, so T013, T015 and T030 are blocked by #3287 for fixtures whose script reads a variable or input.
+    #3287 was open then; it was fixed on the branch on 2026-11-13 (`402a82185`), so T013, T015 and T030 ran and are not blocked.
 - [x] T002 Check whether the general port defect issue (spec *Out of scope*, research R-8) is still open. If it is
   fixed, drop the port check in T031 and build US6 on the existing one
   - **Done 2026-11-13.** #3809 is open, so T031 adds the port check and fixes it.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T003 Add `OutcomeSelection` (`Unspecified`, `Named`, `Empty`; distinct ordered non-blank names; `ResolveNames()`)
+- [x] T003 Add `OutcomeSelection` (`Unspecified`, `Named`, `Empty`; distinct ordered non-blank names; `ResolveNames()`)
   in `Activities/Runtime/Core/Models/OutcomeSelection.cs`, with unit tests for each state and each guard in
   `Essentials/tests/Activities/Runtime/Tests/OutcomeSelectionTests.cs`
-- [ ] T004 Change `ActivityTransition.Complete` (both overloads) and `IActivityCompletionTransition` to carry an
+- [x] T004 Change `ActivityTransition.Complete` (both overloads) and `IActivityCompletionTransition` to carry an
   `OutcomeSelection`, with one-name and several-name convenience overloads, in
   `Activities/Runtime/Core/Models/ActivityTransition.cs`; update the "Exactly one" doc comment (L6) and every caller
-- [ ] T005 Replace `ActivityCompletion.OutcomeKey` with the selection, bump its document version in
+- [x] T005 Replace `ActivityCompletion.OutcomeKey` with the selection, bump its document version in
   `ActivityExecutionValueFlowDocumentVersions`, and upcast a stored `OutcomeKey` to `Named([key])`, in
   `Workflows/Runtime/Core/Models/ActivityExecutionValueFlowRecords.cs`; add an upcast test with a stored record of the
   current version
-- [ ] T006 Carry the selection in `RuntimeStructuralContinuation` (L30, L41–47), `BackgroundActivityWork` (L149, L177)
+  - Done 2026-11-16: the value-flow document version is 3; an older document is refused (no stored data exists, so no backward reader is claimed, FR-025). The EF schema family version is unchanged.
+- [x] T006 Carry the selection in `RuntimeStructuralContinuation` (L30, L41–47), `BackgroundActivityWork` (L149, L177)
   and `BackgroundActivityCompletionCodec` (L54–67), with round-trip tests for all three states
-- [ ] T007 Replace every one-name list in the runtime handlers with `selection.ResolveNames()`:
+- [x] T007 Replace every one-name list in the runtime handlers with `selection.ResolveNames()`:
   `WorkflowInvokeActivitySchedulerWorkHandler.cs` L442–447 and L462–466, `WorkflowResumeBookmarkSchedulerWorkHandler.cs`
   L553–555, `WorkflowParentActivityCompletionSchedulerWorkHandler.cs` L747, `StructuralCallbackEvaluation.cs` L434,
   `ChildControlDelivery.cs` L74, `WorkflowIntrinsicExecutor.cs` L217 and L349, `UserTaskRuntime.cs` L103, and BPMN
   `BpmnNativeWorkBoundary.cs` L304/L319 and `BpmnDirectExecutionDriver.cs` L315/L337
-- [ ] T008 Keep an empty selection empty: remove the empty → `Done` default from `SchedulerWorkHandlerHelpers.NormalizeOutcomeNames`
+- [x] T008 Keep an empty selection empty: remove the empty → `Done` default from `SchedulerWorkHandlerHelpers.NormalizeOutcomeNames`
   and `ReadCompletionOutcomeNames` for completions that carry a selection, and from `StructuralParentEvaluationSupport.cs`
   L421; keep the old default only for records without a selection (T005 upcast)
 
 ## Phase 3: User Story 1 - A script chooses its outcomes explicitly (P1) 🎯 MVP
 
-- [ ] T009 [US1] *(API)* Return `(Value, Selection)` from `IJavaScriptScriptEvaluator`
+- [x] T009 [US1] *(API)* Return `(Value, Selection)` from `IJavaScriptScriptEvaluator`
   (`Expressions/JavaScript/Core/Contracts/`). Install the built-in `complete(result, outcomes)` for script activities in
   `Expressions/JavaScript/Jint/Services/JintJavaScriptScriptEvaluator.cs`: a pure constructor returning a branded,
   frozen completion value (P-6). Recognize it on the top-level returned value only (including `return f()` where `f`
@@ -71,108 +72,126 @@ There are no setters.
   `binding-readonly-v1`. Keep `JavaScriptExecutionApi.cs` L77–80 returning the value only. Tests for each case of
   FR-007 to FR-007b, including an `undefined` result under both undefined policies, a completion value returned from a
   nested function, and `null` outcomes
-- [ ] T010 [US1] Remove `SelectOutcome`, `UnmatchedOutcome` and routing by return value from
+  - Done: the brand is the value's identity in an evaluator-held table. `complete` is reserved in scripts (draft validator) and in input-binding expressions (`JavaScript/ReservedName`). An undefined result is read exactly like `return undefined`; S-2's undefined-as-null policy will apply to both when it lands.
+- [x] T010 [US1] Remove `SelectOutcome`, `UnmatchedOutcome` and routing by return value from
   `Activities/Scripting/Activities/RunJavaScript.cs`; complete with the evaluator's selection; rewrite the doc comment
   (L22–31)
-- [ ] T011 [US1] Make `ActivityValueOutcomesAttribute.UnmatchedOutcome` optional (`Activities/Runtime/Core/Attributes/ActivityValueOutcomesAttribute.cs`)
+- [x] T011 [US1] Make `ActivityValueOutcomesAttribute.UnmatchedOutcome` optional (`Activities/Runtime/Core/Attributes/ActivityValueOutcomesAttribute.cs`)
   and declare none on RunJavaScript; update `ClrAssemblyScanner.cs` L392–406 and the activity contract surface
   baseline (`Essentials/tests/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json` L1670–1677)
-- [ ] T012 [US1] Rewrite `Essentials/tests/Activities/Scripting/Tests/RunJavaScriptExecutionTests.cs` L86–141 for US1
+- [x] T012 [US1] Rewrite `Essentials/tests/Activities/Scripting/Tests/RunJavaScriptExecutionTests.cs` L86–141 for US1
   scenarios 1–6 (one, several, none → `Done`, empty, returned string ignored, fault discards the selection) and
   `Essentials/tests/Activities/Behavioral/Tests/Drives/ScriptingDrives.cs`
 
 ## Phase 4: User Story 2 - Converted RunJavaScript keeps its routing (P1)
 
-- [ ] T013 [US2] Write first: an Elsa 3 convert-publish-run test for RunJavaScript → `Done` → WriteLine, without and
+- [x] T013 [US2] Write first: an Elsa 3 convert-publish-run test for RunJavaScript → `Done` → WriteLine, without and
   with `PossibleOutcomes`, using `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/reusable-reads-result.json`
   plus a new fixture with possible outcomes; it fails today (#3295)
-- [ ] T014 [US2] Remove `[Outcome("Done", "Unmatched")]` from `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`
+  - Done (#3287 fixed on the branch, `402a82185`): `ExplicitOutcomesRunTests.A_run_javascript_done_connection_runs_its_target`.
+- [x] T014 [US2] Remove `[Outcome("Done", "Unmatched")]` from `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`
   L295–303 and `Unmatched` from `EmittedOutcomes` in `Elsa3FlowchartGraphBuilder.cs` L278–295; update
   `Elsa3ActivityResolverTests.cs` L148/L157
-- [ ] T015 [US2] Map Elsa 3 SendHttpRequest `Done` onto every response outcome when expected codes are set
+- [x] T015 [US2] Map Elsa 3 SendHttpRequest `Done` onto every response outcome when expected codes are set
   (`Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs` L216–224, per T001), narrow
   `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` to the `Failed` difference (`Elsa3ActivityNormalizer.cs` L1041), and add a
   convert-publish-run test for US2 scenario 4
-- [ ] T016 [US2] Add a corpus assertion that no converted RunJavaScript connection is on `Unmatched` (US2 scenario 3),
+  - Done: `A_send_http_request_done_connection_runs_its_target_for_every_response`, against a loopback stub for 200, 404 and 500. Elsa 3 `Done` maps onto every code and the unmatched status code, not `Failed` or `Timeout` (T001).
+- [x] T016 [US2] Add a corpus assertion that no converted RunJavaScript connection is on `Unmatched` (US2 scenario 3),
   next to the spec 236 member-map counts
 
 ## Phase 5: User Story 3 - An unknown outcome name is caught (P1)
 
-- [ ] T017 [US3] In `Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCompletionProjector.cs` L55 (on `main` after #3801): check
+- [x] T017 [US3] In `Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCompletionProjector.cs` L55 (on `main` after #3801): check
   every selected name against the node's pinned set and the multi-outcome flag (no node-level fallback, Q6), and
   fault with the `VF-ACT-006` code on the fault record instead of a message prefix; same in
   `BackgroundActivityCompletionCodec.ValidateOutcome`. Update `ActivityCompletionContractTests.cs` L46 and
   `WorkflowParentActivityCompletionSchedulerWorkHandlerTests.cs` L30 to assert the code
-- [ ] T018 [US3] *(API)* Add `ScriptOutcomeLiteralValidator` in `Workflows/Publishing/Elsa.Workflows.Publishing/Services/`:
+  - Done: `ActivityOutcomeSelectionRules`, fault code `VF-ACT-006` through `IRuntimeFaultClassification`.
+- [x] T018 [US3] *(API)* Add `ScriptOutcomeLiteralValidator` in `Workflows/Publishing/Elsa.Workflows.Publishing/Services/`:
   parse RunJavaScript scripts with Acornima, find `complete(_, <string literal | array of string literals>)` calls, and report
   `VF-AUTH-010` for names outside the node's set; tests for literal, array literal, computed (no diagnostic),
   template-literal arguments, a call in a nested function, and an aliased `complete` (no diagnostic)
-- [ ] T019 [US3] Tests for US3 scenarios 2–4: computed unknown name, an activity-declared catch-all, several names on a
+  - Done as a draft validator, `ScriptOutcomeValidator` in Workflows.Design.Validations, so the warning `VF-AUTH-012` can be reported. Scripts are found through `[ActivityScriptOutcomes("script")]` on RunJavaScript.
+- [x] T019 [US3] Tests for US3 scenarios 2–4: computed unknown name, an activity-declared catch-all, several names on a
   single-outcome node
-- [ ] T019a [US3] Publication checks: `VF-AUTH-013` for a node without `Done` whose activity cannot guarantee a
+  - Done; US3 scenario 4 is removed by the amendment of 2026-11-16 (#4658).
+- [x] T019a [US3] Publication checks: `VF-AUTH-013` for a node without `Done` whose activity cannot guarantee a
   selection (FR-002b), with conformance tests that If, Switch and SendHttpRequest with expected codes select on every
   completion; `VF-AUTH-012` warning for a RunJavaScript that returns a string literal equal to a connected outcome
   name (FR-008a); tests for US1 scenario 7 and US3 scenario 5
 
 ## Phase 6: User Story 4 - Several outcomes run as an inclusive fork (P2)
 
-- [ ] T020 [US4] Return the outcome set with `AllowsMultiple` from `ExecutableNodeCompiler.ResolveOutcomes`
+- [x] T020 [US4] Return the outcome set with `AllowsMultiple` from `ExecutableNodeCompiler.ResolveOutcomes`
   (`Workflows/Publishing/Elsa.Workflows.Publishing/Services/ExecutableNodeCompiler.cs` L623–688), pin it in the
   executable, and add `Done` to the set of every activity that can complete unspecified (Q2); add a static declaration
   (`AllowsMultiple`) on the activity outcome attributes and a provider hook for configuration-dependent flags (Q10)
-- [ ] T021 [US4] Apply the `Done` rule (FR-002, FR-012a): drop `Done` from SendHttpRequest's pinned set when expected
+  - Done, amended (#4658): there is no multi-outcome flag; any activity may select several of its declared outcomes.
+- [x] T021 [US4] Apply the `Done` rule (FR-002, FR-012a): drop `Done` from SendHttpRequest's pinned set when expected
   codes are set (`ExecutableNodeCompiler.cs`, `SendHttpRequest.cs` L56), fault an unspecified selection on a node
   without `Done` with a message that names the activity's code (FR-002a, `ActivityCompletionProjector.cs`), and add
   an architecture test that no built-in activity declares `Done` next to an always-selected branch set
-- [ ] T022 [US4] In `Activities/Flowchart/Internal/FlowchartGraph.cs` L457–464 and
+  - Done; conformance test `OutcomeSelectionGuaranteeConformanceTests` covers every shipped activity.
+- [x] T022 [US4] In `Activities/Flowchart/Internal/FlowchartGraph.cs` L457–464 and
   `Internal/Policies/FlowchartPolicyConnectionSelector.cs` L31–32, stop mapping an empty set to `Done`; remove the
   duplicate-target fault in `FlowchartExecutionEngine.cs` L144–145 and `FlowchartGraph.cs` L151–152 so each taken
   connection is an arrival at the target's implicit join (Q4)
-- [ ] T023 [US4] Flowchart engine tests: two of three outcomes taken and joined (ADR 0064 dead path on the third); two
+- [x] T023 [US4] Flowchart engine tests: two of three outcomes taken and joined (ADR 0064 dead path on the third); two
   outcomes to one target run it once; empty selection ends the path and leaves a parallel branch running
-- [ ] T024 [US4] Expose `AllowsMultiple` to the unordered-write analysis, inspection and Studio
+- [x] T024 [US4] Expose `AllowsMultiple` to the unordered-write analysis, inspection and Studio
   (`ExecutableNodeCompiler`, `WorkflowExecutableInspection.cs`); restart-recovery test for all three states (US4
   scenario 4)
+  - Superseded by the amendment of 2026-11-16 (#4658): no flag exists to expose. Every selection state round-trips (`ActivityCompletionSelectionRoundTripTests`).
 
 ## Phase 7: User Story 5 - Elsa 3 multi-outcome constructs convert (P2)
 
-- [ ] T025 [US5] Add Switch `Mode` (`MatchFirst` default, `MatchAny`) in `Activities/ControlFlow/Switch/Activities/Switch.cs`
+- [x] T025 [US5] Add Switch `Mode` (`MatchFirst` default, `MatchAny`) in `Activities/ControlFlow/Switch/Activities/Switch.cs`
   and `Internal/SwitchNavigator.cs` L80–91, with the flag provider for `MatchAny`, and tests
-- [ ] T026 [US5] Let Graph `Complete` (`Activities/Graph/Runtime/Activities/Complete.cs` L35–56), the Finish intrinsic
+  - Done: `mode` on the Switch structure; in `MatchAny` mode case branches are refused at publication.
+- [x] T026 [US5] Let Graph `Complete` (`Activities/Graph/Runtime/Activities/Complete.cs` L35–56), the Finish intrinsic
   (`WorkflowIntrinsicExecutor.cs` L325–349) and `GraphActivity.cs` L124–131 carry several outcomes when the graph
   declares the flag; tests
-- [ ] T027 [US5] *(API)* Convert `setOutcome` / `setOutcomes` instead of refusing them: remove them from
+  - Done (amended FR-032): Graph `Complete` may name several literal outcomes in `outcomes`; the boundary passes all of them.
+- [x] T027 [US5] *(API)* Convert `setOutcome` / `setOutcomes` instead of refusing them: remove them from
   `RefusedHostFunctions` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` L510–522, rewrite to
   `return complete(<value>, <pending>)` (P-12), renaming a script's own `complete` binding or refusing with guidance, and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
   ports, plus a converter-declared catch-all with no connection that the script selects for any other name, with
   Elsa 3 `Done` mapped onto it; refuse with guidance when no faithful route exists or `PossibleOutcomes` is empty and
   the name is computed; no warning-only conversion; update
   `Elsa3JavaScriptHostFunctionTests.cs` L183–184 and `Elsa3JavaScriptConversionTests.cs` L118
-- [ ] T028 [US5] Convert Switch `MatchAny` in `Elsa3SwitchValueSynthesisRewrite.cs` L26–38 and Complete with several
+  - Done; computed names select the converter-declared catch-all "Unlisted outcome" (info `ELS3-SCRIPT-OUTCOME-CATCHALL`); refused when PossibleOutcomes is empty.
+- [x] T028 [US5] Convert Switch `MatchAny` in `Elsa3SwitchValueSynthesisRewrite.cs` L26–38 and Complete with several
   literal outcomes in `Elsa3TerminalPlacementRewrite.cs` L101–107 (an expression outcome stays refused)
-- [ ] T029 [US5] Remove `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` (`Elsa3ActivityDiagnosticCodes.cs` L128–129,
+  - Done: Switch `MatchAny` and Complete with several literal outcomes convert; an expression stays refused.
+- [x] T029 [US5] Remove `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` (`Elsa3ActivityDiagnosticCodes.cs` L128–129,
   `Elsa3ActivityNormalizer.cs` L1049, `Elsa3ConversionDiagnosticsTests.cs` L250–251)
-- [ ] T030 [US5] Convert-publish-run fixtures for each construct (US5 scenarios 1–5, FR-030), including a computed name
+- [x] T030 [US5] Convert-publish-run fixtures for each construct (US5 scenarios 1–5, FR-030), including a computed name
   outside the known set that ends the path without a fault
+  - Done: `ExplicitOutcomesRunTests` (setOutcome, setOutcomes and join, computed catch-all, refusal, MatchAny, MatchFirst, Complete with several outcomes).
 
 ## Phase 8: User Story 6 - Ports are known at design time (P3)
 
-- [ ] T031 [US6] Check every connection's source port against the source node's pinned set in
+- [x] T031 [US6] Check every connection's source port against the source node's pinned set in
   `Activities/Flowchart/Internal/FlowchartStructureHandler.cs` L71–85 and report `VF-AUTH-011`; pin value-derived names
   as written and compare connection ports exactly (research R-8); tests
-- [ ] T032 [P] [US6] Studio: in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter.ts`
+  - Done: `VF-AUTH-011` in the publish compiler; fixes #3809.
+- [x] T032 [P] [US6] Studio: in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter.ts`
   L1189–1217, show `Done` instead of the unmatched port for RunJavaScript, show Switch `MatchAny` ports, and flag
   connections on ports that are gone; update `__tests__/dynamicOutcomePorts.test.ts`
-- [ ] T033 [P] [US6] Bring `Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs` L770–790 in line with
+  - Done; the "multi" hint is removed again by the amendment (#4658).
+- [x] T033 [P] [US6] Bring `Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs` L770–790 in line with
   `ResolveOutcomes`, including value-derived outcomes and the flag
 
 ## Phase 9: Polish
 
-- [ ] T034 [P] Update the documents in research R-10, and replace spec 247 FR-019 with a pointer to FR-027 (FR-033)
-- [ ] T035 [P] Update `docs/reference/elsa3-migration-readiness.md` L24, L80 and `Extensions/Elsa3/src/Mapping/README.md`
+- [x] T034 [P] Update the documents in research R-10, and replace spec 247 FR-019 with a pointer to FR-027 (FR-033)
+- [x] T035 [P] Update `docs/reference/elsa3-migration-readiness.md` L24, L80 and `Extensions/Elsa3/src/Mapping/README.md`
   L97, L213 for the newly convertible constructs
 - [ ] T036 Run quickstart.md by hand in the Workbench and Studio
+  - Not run: needs the Workbench and Studio started by hand; left for the coordinator's verification.
 - [ ] T037 Set the spec's status per the spec lifecycle in the finishing PR
+  - Status stays Approved until T036 is checked by hand.
 
 ## Dependencies
 
