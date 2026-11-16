@@ -396,29 +396,29 @@ sensitive and redacted where the variable is.
   a larger cost is reported before the spec is marked implemented.
 - **SC-008**: The JTest corpus converts and publishes at least as many definitions as before this spec.
 
-## Spec questions
+## Spec decisions
 
-The decisions above are settled. These questions are about how this spec builds them. Each has a recommended answer;
-the requirements follow it.
+These are about how this spec builds the settled decisions above. The coordinator accepted every recommended answer
+on 2026-11-16; the requirements follow them.
 
-- **Q1 — Where does the script value bridge stop and S-7 begin?** **Recommended:** S-8 owns the JavaScript side:
+- **Q1 — Where does the script value bridge stop and S-7 begin?** **Accepted:** S-8 owns the JavaScript side:
   entering values, finding changes, the precision check and the C2 warning. S-7 owns the step write path for every
   writer (`variables.x`, `setVariable`, C# `Set`): building the intent from the base (C3), committing with the step,
   and conflicts (C5). User Story 3's end-to-end test lands with whichever of the two arrives second.
-- **Q2 — The first bridge implementation.** **Recommended: copy, compare, patch, behind a replaceable contract**, with
+- **Q2 — The first bridge implementation.** **Accepted: copy, compare, patch, behind a replaceable contract**, with
   its cost measured (FR-009, FR-010). Keep the original JSON per value read; compare after the run, JavaScript with
   JavaScript (ADR 0090 C2); report only changed paths. A later implementation, for example one built on proxies, may
   replace it if it behaves identically. Rejected for now: proxies (more complex, deferred), and reporting every read
   value as a change (breaks FR-002).
-- **Q3 — How does a type describe a dictionary of arrays?** **Recommended:** a type reference's element may itself be
+- **Q3 — How does a type describe a dictionary of arrays?** **Accepted:** a type reference's element may itself be
   a type reference, so `IDictionary<string, string[]>` is a dictionary of arrays of `String`. Rejected: describing it
   only by JSON Schema (the binding checks would not see it).
-- **Q4 — Elsa 3 result into a typed input.** **Recommended:** convert per JSON kind where Elsa 3's coercion is
+- **Q4 — Elsa 3 result into a typed input.** **Accepted:** convert per JSON kind where Elsa 3's coercion is
   reproduced exactly, refuse at import otherwise. Fix #3167 first and measure again, as it may make more bindings
   convert.
-- **Q5 — Is protection inheritance in S-8?** **Recommended: yes, P3,** on the read set ADR 0092 provides. It is a
+- **Q5 — Is protection inheritance in S-8?** **Accepted: yes, P3,** on the read set ADR 0092 provides. It is a
   value-model rule and has no other spec.
-- **Q6 — Where does an attempted write from an input expression fail?** **Recommended: both.** At publish, a static
+- **Q6 — Where does an attempted write from an input expression fail?** **Accepted: both.** At publish, a static
   check refuses a direct assignment to `variables.x` or to a member of `variables.x`, so most cases fail before the
   workflow runs. At run time, the bridge's change report catches what the static check cannot see (aliases, computed
   paths) and fails the evaluation. Rejected: run time only (fails late, maybe only on a rare branch), and freezing
