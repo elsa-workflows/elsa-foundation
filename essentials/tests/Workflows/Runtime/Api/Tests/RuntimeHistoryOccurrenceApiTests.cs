@@ -263,6 +263,76 @@ public sealed partial class RuntimeHistoryApiTests
         Assert.Equal(1, source.Reads);
     }
 
+    [Theory]
+    [InlineData(false, "none")] [InlineData(true, "none")]
+    [InlineData(false, "unsupported")] [InlineData(true, "unsupported")]
+    [InlineData(false, "workflows/runtime:read")] [InlineData(true, "workflows/runtime:read")]
+    [InlineData(false, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)]
+    [InlineData(true, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)]
+    [InlineData(false, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission)]
+    [InlineData(true, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission)]
+    [InlineData(false, HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission)]
+    [InlineData(true, HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission)]
+    public async Task A_held_integrity_failure_rechecks_current_authority_before_disclosing_invalid_coverage(bool providerThrows, string retiredPermission)
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Values", "true");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Pending = async token =>
+        {
+            entered.SetResult(); await release.Task.WaitAsync(token);
+            if (providerThrows) throw new Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryIntegrityException("run", "controlled provider failure");
+            var good = source.Occurrences;
+            return new(good.Head, good.Availability, good.Reason, good.UpperSequence, good.RetainedAfterSequence,
+                good.TotalCount, good.SelectedPosition, good.Items, "replacement-window", good.HasNewerHistory);
+        };
+        var pending = host.Client.GetAsync(Path + "/occurrences?sequenceToken=window");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        if (retiredPermission == "unsupported") current.Unsupported = true;
+        else if (retiredPermission != "none") current.DeniedPermission = retiredPermission;
+        release.SetResult();
+        using var response = await pending;
+        Assert.Equal(retiredPermission == "none" ? HttpStatusCode.OK : HttpStatusCode.NotFound, response.StatusCode);
+        if (retiredPermission == "none")
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("history-invalid", json.RootElement.GetProperty("reason").GetString());
+            Assert.Equal(0, json.RootElement.GetProperty("items").GetArrayLength());
+        }
+        else Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, source.Reads); Assert.Equal(0, source.IndependentExactReads);
+        Assert.All(current.Requests, request => { Assert.Equal("tenant-a", request.TenantId); Assert.Equal("operator", request.SubjectId); });
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task A_held_integrity_failure_rechecks_request_authority_and_profile(bool providerThrows, bool profileRetired)
+    {
+        var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source); host.Authenticate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Pending = async token =>
+        {
+            entered.SetResult(); await release.Task.WaitAsync(token);
+            if (providerThrows) throw new Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryIntegrityException("run", "controlled provider failure");
+            var good = source.Occurrences;
+            return new(good.Head, good.Availability, good.Reason, good.UpperSequence, good.RetainedAfterSequence,
+                good.TotalCount, good.SelectedPosition, good.Items, "replacement-window", good.HasNewerHistory);
+        };
+        var pending = host.Client.GetAsync(Path + "/occurrences?sequenceToken=window");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        if (profileRetired) host.Authorization.Subject = "replacement"; else host.Authorization.Allowed = false;
+        release.SetResult();
+        using var response = await pending;
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, source.Reads); Assert.Equal(0, source.IndependentExactReads);
+    }
+
     private static Task<Host> OccurrenceHost(OccurrenceProjection source, CurrentOccurrencePermissions? permissions = null,
         bool defaultAuthorization = false) => Host.StartAsync(
         services =>

@@ -149,7 +149,7 @@ export function useWorkflowCanvas({
           draft?.activityPresentation)
       : scope
         ? scope.slot.mode === "bpmn"
-          ? buildBpmnCanvas(scope, catalog, draft?.layout ?? []) as unknown as { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }
+          ? buildBpmnCanvas(scope, catalog, draft?.layout ?? [], draft?.activityPresentation) as unknown as { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }
           : buildCanvas(
               scope,
               catalog,

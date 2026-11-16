@@ -96,6 +96,57 @@ public sealed class BpmnChildResultFactsTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_ordinary_native_subprocess_preserves_the_single_run_sibling_order(bool emptyBody)
+    {
+        using var provider = Provider();
+        var structures = new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>());
+        var process = WithSubprocess(emptyBody: emptyBody);
+        var facts = structures.AssessChildResult(process, "decision", "capture");
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
+        Assert.False(facts.MayRunConcurrently);
+        Assert.Equal(["decision"], structures.ChildrenCompletedBefore(process, "capture"));
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, structures.AssessChildResult(process, "capture", "decision").Availability);
+    }
+
+    [Theory]
+    [InlineData("cycle")]
+    [InlineData("event")]
+    [InlineData("transaction")]
+    [InlineData("condition")]
+    [InlineData("wrong-schema")]
+    [InlineData("wrong-kind")]
+    public void A_subprocess_with_unproved_native_body_does_not_certify_sibling_order(string scenario)
+    {
+        using var provider = Provider();
+        var structures = new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>());
+        var process = WithSubprocess(scenario);
+        Assert.Equal(ActivityChildResultAvailability.Unknown, structures.AssessChildResult(process, "decision", "capture").Availability);
+        Assert.Null(structures.ChildrenCompletedBefore(process, "capture"));
+    }
+
+    private static ActivityNode WithSubprocess(string? scenario = null, bool emptyBody = false)
+    {
+        var body = emptyBody ? new BpmnAuthoredStructure(elements: [new("inner-start", "startEvent"), new("inner-end", "endEvent")],
+            sequenceFlows: [new("inner-empty", "inner-start", "inner-end")])
+            : new BpmnAuthoredStructure([new("inner-work", "work-version", [], [])],
+                [new("inner-start", "startEvent", eventDefinitions: scenario == "event" ? [new("message")] : []),
+                 new("inner-task", "task", childNodeId: "inner-work"), new("inner-end", "endEvent")],
+                [new("inner-entry", "inner-start", "inner-task"),
+                 new("inner-exit", "inner-task", scenario == "cycle" ? "inner-task" : "inner-end", conditionOutcome: scenario == "condition" ? "Done" : null)],
+                isTransaction: scenario == "transaction");
+        var subprocess = new ActivityNode("decision", "process-version", [], [], new(
+            scenario == "wrong-kind" ? "other" : "elsa.bpmn.structure", scenario == "wrong-schema" ? "99.0.0" : "1.0.0",
+            JsonSerializer.SerializeToElement(body, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+        var outer = new BpmnAuthoredStructure([new("capture", "capture-version", [], []), subprocess],
+            [new("start", "startEvent"), new("subprocess", "subProcess", childNodeId: "decision"), new("capture-task", "task", childNodeId: "capture"), new("end", "endEvent")],
+            [new("f1", "start", "subprocess"), new("f2", "subprocess", "capture-task"), new("f3", "capture-task", "end")]);
+        return new("process", "process-version", [], [], new("elsa.bpmn.structure", "1.0.0", JsonSerializer.SerializeToElement(outer, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+    }
+
     internal static ActivityNode Process(string? scenario = null, IReadOnlyCollection<ActivityNode>? children = null)
     {
         var activities = children?.ToList() ?? [new("capture", "capture-version", [], []), new("decision", "decision-version", [], [])];
