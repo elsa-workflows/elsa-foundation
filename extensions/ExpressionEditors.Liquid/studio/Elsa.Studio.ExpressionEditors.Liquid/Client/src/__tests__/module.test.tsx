@@ -47,7 +47,7 @@ describe("Liquid expression editor module", () => {
         isSensitive: false,
         surface: "expanded"
       }
-    }) as React.ReactElement;
+    }) as React.ReactElement<{ children: React.ReactNode }>;
 
     expect(rendered.type).toBe("code");
     expect(rendered.props.children).toBe("{{ customer.email }}");
@@ -123,6 +123,7 @@ interface StudioCodeEditorElementProps {
     uri: string;
     language: string;
     value: string;
+    version?: number;
   };
   languageAdapter: {
     language: string;
@@ -158,7 +159,7 @@ function testApi(): ElsaStudioModuleApi {
   } as ElsaStudioModuleApi;
 }
 
-function registry<T>(): StudioContributionRegistry<T> {
+function registry<T>(): Pick<StudioContributionRegistry<T>, "add" | "list"> {
   const contributions: T[] = [];
   return {
     add: contribution => contributions.push(contribution),

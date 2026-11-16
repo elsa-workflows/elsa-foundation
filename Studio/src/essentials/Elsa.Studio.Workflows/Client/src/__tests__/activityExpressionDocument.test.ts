@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createActivityExpressionDocument } from "../activityExpressionDocument";
+import { advanceActivityExpressionRevision, createActivityExpressionDocument } from "../activityExpressionDocument";
 
 describe("createActivityExpressionDocument", () => {
   it("keys identity by draft, activity, property, and Expression Type", () => {
@@ -54,4 +54,12 @@ describe("createActivityExpressionDocument", () => {
       sourceVersion: 7
     });
   });
+});
+
+it("versions bindings and evaluator options independently of source and object key order", () => {
+  const first = advanceActivityExpressionRevision(undefined, "args.customer", { parameters: { customer: { kind: "Variable", variableKey: "a" } }, options: {} });
+  expect(advanceActivityExpressionRevision(first, "args.customer", { options: {}, parameters: { customer: { variableKey: "a", kind: "Variable" } } })).toBe(first);
+  const second = advanceActivityExpressionRevision(first, "args.customer", { parameters: { customer: { kind: "Variable", variableKey: "b" } }, options: {} });
+  expect(second.version).toBe(first.version + 1);
+  expect(advanceActivityExpressionRevision(second, "args.customer", { parameters: {}, options: { strict: true } }).version).toBe(second.version + 1);
 });

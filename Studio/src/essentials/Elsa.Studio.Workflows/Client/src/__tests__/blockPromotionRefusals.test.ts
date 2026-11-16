@@ -31,7 +31,19 @@ const cases: [string, (ctx: BlockPromotionContext) => string | void][] = [
     children(block(ctx))[0] = { nodeId: "rename", activityVersionId: "set", inputs: [argument({ expressionType: "Literal", value: "x" })], outputs: [],
       intrinsic: { kind: "setname", valueType: { alias: "String", collectionKind: "Single" } } } as ActivityNode;
   }],
-  ["unknown-outcomes", ctx => { ctx.catalog = ctx.catalog.map(item => item.activityVersionId === "sequence" ? { ...item, ports: [] } : item); }]
+  ["unknown-outcomes", ctx => { ctx.catalog = ctx.catalog.map(item => item.activityVersionId === "sequence" ? { ...item, ports: [] } : item); }],
+  ["unknown-projection", ctx => {
+    // The block reads an outside producer's result through a projection that producer does not advertise.
+    const promoted = block(ctx);
+    children(ctx.document.rootActivity).unshift(node("producer", "read"));
+    children(promoted)[0].inputs = [argument(resultRead("producer", "NotAdvertised"))];
+  }],
+  ["unpreserved-result-timing", ctx => {
+    // The producer runs after the block, so its result does not exist when the call snapshots its inputs.
+    children(ctx.document.rootActivity).push(node("producer", "read"));
+    children(block(ctx))[0].inputs = [argument(resultRead("producer"))];
+  }],
+  ["unknown-producer", ctx => { children(block(ctx))[0].inputs = [argument(resultRead("missing-producer"))]; }]
 ];
 
 it.each(cases)("refuses %s before proposing anything", (code, change) => {

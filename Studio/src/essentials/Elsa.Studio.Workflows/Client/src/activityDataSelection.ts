@@ -55,6 +55,10 @@ export interface ActivityDataInputFinding {
  * the chooser ask about the current document, describe its activities and go to one.
  */
 export interface ActivityDataSelectionHost {
+  /** Ephemeral owner/backend authorization context; never serialized into a draft or request. */
+  ownerContext?: object;
+  /** Native workflow owner only; reusable-graph integration retains its separate delivery owner. */
+  expressionInsertion?: boolean;
   /** Changes with every authored edit, so facts for an older document are never shown as current. */
   documentRevision: string;
   /** The acknowledged saved revision a request is checked against; a stale answer is asked again once it moves. */
@@ -148,8 +152,9 @@ export async function collectSourcePages(
       result.snapshotHash !== combined.snapshotHash || result.resourceId !== combined.resourceId ||
       result.resourceKind !== combined.resourceKind || result.target?.target?.nodeId !== combined.target?.target?.nodeId ||
       result.target?.target?.inputKey !== combined.target?.target?.inputKey || result.contractRevision !== combined.contractRevision ||
-      (result.memberReadsEnabled === true) !== (combined.memberReadsEnabled === true))) {
-      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false, target: null, sources: [], hasMoreSources: false };
+      (result.memberReadsEnabled === true) !== (combined.memberReadsEnabled === true) ||
+      (result.expressionParametersEnabled === true) !== (combined.expressionParametersEnabled === true) || result.expressionType !== combined.expressionType)) {
+      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false, expressionParametersEnabled: false, target: null, sources: [], hasMoreSources: false };
     }
     combined = combined
       ? { ...result, contextRevision: null, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
