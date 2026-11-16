@@ -36,6 +36,7 @@ section 23: the merge of the four branches and its gates); what each database en
 | `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
+| `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
 
 ## Build
 
