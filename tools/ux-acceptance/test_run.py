@@ -41,6 +41,7 @@ class VerdictTests(unittest.TestCase):
                 continue
             if title in acceptance.COPY_JOURNEYS:
                 operations = {'copy activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
+                              'copy sequence activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
                               'copy scoped and portable activity data': ['duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'],
                               'preserve external activity references on copy': ['consumer-only-valid', 'consumer-only-invalid']}[title]
                 run = {'consumerId': 'copied-consumer', 'producerId': 'copied-producer', 'expected': 'value', 'committed': 'value',
@@ -51,9 +52,28 @@ class VerdictTests(unittest.TestCase):
                              'sha256': 'owner-hash', 'sources': ['workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts']}},
                          'servedAssets': [{'url': 'http://owned/_content/Elsa.Studio.Workflows/studio/modules/workflows/InspectorPanel-current.js', 'sha256': 'owner-hash'}],
                          'receipts': [{'operation': op, 'before': {'root': 'before'}, 'after': {'root': 'after'}, 'consumerId': 'copied-consumer'} for op in operations],
-                         'runtime': [copy.deepcopy(run) for _ in range(2 if title == 'copy activity data pairs' else 1)],
+                         'runtime': [copy.deepcopy(run) for _ in range(2 if title in {'copy activity data pairs', 'copy sequence activity data pairs'} else 1)],
                          'boundaries': [{'kind': 'resource-local'}, {'kind': 'invalid-publication-no-write', 'before': {str(i): {} for i in range(4)}, 'after': {str(i): {} for i in range(4)}}]
                          if title == 'preserve external activity references on copy' else []}
+                if title == 'copy sequence activity data pairs':
+                    proof.update(mode='sequence-pairs', receipts=[], runtime=[], navigations=[])
+                    for role, expression_type, projection, expected in [('whole', 'ActivityResult', 'Result', '00:00:01'),
+                                                                         ('member', 'ActivityResultMember', 'Customer', 'cust-1042')]:
+                        definition_id = role + '-definition'
+                        for operation in ('duplicate', 'paste'):
+                            producer, consumer = (role + '-' + operation + '-' + kind for kind in ('producer', 'consumer'))
+                            binding = {'expressionType': expression_type, 'value': {'producerNodeId': producer, 'projectionKey': projection, 'isOptional': False}}
+                            if role == 'member': binding['value']['memberPath'] = ['customerId']
+                            state = {'rootActivity': {'structure': {'kind': 'elsa.sequence.structure', 'payload': {'activities': [
+                                {'nodeId': producer, 'inputs': []}, {'nodeId': consumer, 'inputs': [{'referenceKey': 'text', 'value': binding}]}]}}}}
+                            proof['receipts'].append({'definitionId': definition_id, 'operation': operation + '-' + role,
+                                                      'before': {'rootActivity': {'nodeId': 'root'}}, 'after': state,
+                                                      'consumerId': consumer, 'producerId': producer})
+                        proof['runtime'].append({'definitionId': definition_id, 'consumerId': consumer, 'producerId': producer,
+                                                 'expected': expected, 'committed': expected, 'originalNeverRuns': False,
+                                                 'executions': [{'authoredActivityId': id, 'status': 'Completed'} for id in ('producer', producer, consumer)]})
+                        proof['navigations'] += [{'definitionId': definition_id, 'role': role, 'stage': stage, 'consumerId': consumer,
+                                                  'producerId': producer, 'selectedNodeId': producer} for stage in ('copied', 'reopened')]
                 if title == 'preserve external activity references on copy':
                     columns = {'elsa_runtime_workflow_executable': 'ContentJson',
                                'elsa_runtime_workflow_executable_source_reference': 'DefinitionId',
@@ -75,6 +95,8 @@ class VerdictTests(unittest.TestCase):
                 file = self.root / (title.replace(' ', '-') + '.json'); file.write_text(json.dumps(proof))
                 for test in row['tests']:
                     next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-copy-proof.json')['path'] = str(file)
+                    observed = self.root / (title.replace(' ', '-') + '-source.json'); observed.write_text(json.dumps({'scripts': []}))
+                    next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-proof.json')['path'] = str(observed)
                 continue
             member = {'expressionType': 'ActivityResultMember', 'value': {'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}}
             scoped = [{'expressionType': 'VariableMember', 'value': {'referenceKey': key, 'declaringScopeId': scope, 'memberPath': ['a.b', '']}}
@@ -260,6 +282,48 @@ class VerdictTests(unittest.TestCase):
                 file.write_text(json.dumps(proof))
                 try:
                     with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['copy activity data pairs'])
+                finally: file.write_text(original)
+
+    def test_sequence_pair_receipts_cover_normal_and_minimal_without_inactive_originals(self):
+        title = 'copy sequence activity data pairs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        self.assertEqual(4, acceptance.verdict(report, self.root, [title]))
+        file = self.root / 'copy-sequence-activity-data-pairs.json'; original = file.read_text()
+        proof = json.loads(original); proof['composition'] = 'minimal'; file.write_text(json.dumps(proof))
+        try:
+            self.assertEqual(4, acceptance.verdict(report, self.root, [title], 'minimal'))
+        finally: file.write_text(original)
+
+    def test_sequence_pair_proof_requires_both_roles_native_navigation_and_copied_runtime(self):
+        title = 'copy sequence activity data pairs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        file = self.root / 'copy-sequence-activity-data-pairs.json'; original = file.read_text()
+        for change in ('missing-role', 'wrong-mode', 'missing-navigation', 'duplicate-navigation', 'wrong-navigation-target',
+                       'wrong-navigation-source', 'wrong-navigation-owner', 'whole-binding', 'member-binding', 'member-path',
+                       'wrong-runtime-producer', 'wrong-runtime-owner', 'wrong-runtime-value', 'missing-runtime'):
+            with self.subTest(change=change):
+                proof = json.loads(original)
+                if change == 'missing-role': proof['receipts'] = proof['receipts'][:2]
+                elif change == 'wrong-mode': proof['mode'] = 'pairs'
+                elif change == 'missing-navigation': proof['navigations'].pop()
+                elif change == 'duplicate-navigation': proof['navigations'][-1] = proof['navigations'][0]
+                elif change == 'wrong-navigation-target': proof['navigations'][0]['selectedNodeId'] = 'producer'
+                elif change == 'wrong-navigation-source': proof['navigations'][0]['consumerId'] = 'other-consumer'
+                elif change == 'wrong-navigation-owner': proof['navigations'][0]['definitionId'] = 'other-definition'
+                elif change in ('whole-binding', 'member-binding', 'member-path'):
+                    receipt = proof['receipts'][1 if change == 'whole-binding' else 3]
+                    binding = receipt['after']['rootActivity']['structure']['payload']['activities'][1]['inputs'][0]['value']
+                    if change == 'member-path': binding['value']['memberPath'] = ['customer', 'Id']
+                    else: binding['value']['producerNodeId'] = 'producer'
+                elif change == 'wrong-runtime-producer': proof['runtime'][0]['producerId'] = 'producer'
+                elif change == 'wrong-runtime-owner': proof['runtime'][0]['definitionId'] = 'other-definition'
+                elif change == 'wrong-runtime-value': proof['runtime'][0]['expected'] = proof['runtime'][0]['committed'] = 'other-value'
+                elif change == 'missing-runtime': proof['runtime'].pop()
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [title])
                 finally: file.write_text(original)
 
     def test_missing_actual_browser_cancellation_cannot_pass(self):

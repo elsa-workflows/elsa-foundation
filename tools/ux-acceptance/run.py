@@ -65,10 +65,12 @@ CAPTURES['native dashboard questions and sharing'] += (
 )
 COPY_SOURCE_PATHS = {'workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts'}
 COPY_ASSET_PREFIX = '/_content/Elsa.Studio.Workflows/studio/modules/workflows/'
-COPY_JOURNEYS = {'copy activity data pairs', 'copy scoped and portable activity data', 'preserve external activity references on copy'}
+COPY_JOURNEYS = {'copy activity data pairs', 'copy sequence activity data pairs', 'copy scoped and portable activity data', 'preserve external activity references on copy'}
 CAPTURES.update({
     'copy activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
         ('original', 'duplicated', 'pasted', 'paste-undo', 'paste-redo', 'copied-start', 'reopened', 'runtime')], 'copy-reference-320'],
+    'copy sequence activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
+        ('original', 'duplicated', 'pasted', 'paste-undo', 'paste-redo', 'copied-source', 'reopened', 'reopened-source', 'runtime')], 'copy-reference-320'],
     'copy scoped and portable activity data': ['reference', 'scope-pasted', 'scope-paste-undo', 'scope-paste-redo', 'scope-copied-reference', 'portable-copied-preserved', 'switch-copied-condition'],
     'preserve external activity references on copy': ['reference', 'external-valid-original', 'external-valid-copy',
         'foreign-resource-clipboard-cleared', 'external-invalid-original', 'external-invalid-copy',
@@ -261,13 +263,14 @@ def activity_copy_verdict(title, attachments, composition):
                    item.get('sha256') == owner.get('sha256') for item in proof.get('servedAssets', [])):
             raise ValueError('Browser did not fetch the current copy implementation bytes at their owned URL')
     expected = {'copy activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
+                'copy sequence activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
                 'copy scoped and portable activity data': {'duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'},
                 'preserve external activity references on copy': {'consumer-only-valid', 'consumer-only-invalid'}}[title]
     if len(receipts) != len(expected) or {item.get('operation') for item in receipts} != expected:
         raise ValueError('Copy operation inventory incomplete')
     if any(not item.get('before') or not item.get('after') or not item.get('consumerId') for item in receipts):
         raise ValueError('Missing before/after copy identity')
-    expected_runs = 2 if title == 'copy activity data pairs' else 0 if composition == 'minimal' and title == 'copy scoped and portable activity data' else 1
+    expected_runs = 2 if title in {'copy activity data pairs', 'copy sequence activity data pairs'} else 0 if composition == 'minimal' and title == 'copy scoped and portable activity data' else 1
     if len(runs) != expected_runs or any(item.get('committed') != item.get('expected') for item in runs):
         raise ValueError('Committed copy runtime inventory incomplete')
     for run in runs:
@@ -276,6 +279,8 @@ def activity_copy_verdict(title, attachments, composition):
             raise ValueError('Copied producer/consumer did not complete')
         if title == 'copy activity data pairs' and (run.get('originalNeverRuns') is not True or 'producer' in ids):
             raise ValueError('Original producer ran; copied-start oracle did not prove the remap')
+    if title == 'copy sequence activity data pairs':
+        validate_sequence_pair_copy(proof)
     if title == 'preserve external activity references on copy':
         expected_boundaries = {'published-store-positive-control', 'resource-local', 'invalid-publication-no-write'}
         if len(boundaries) != 3 or {item.get('kind') for item in boundaries} != expected_boundaries:
@@ -305,6 +310,43 @@ def activity_copy_verdict(title, attachments, composition):
         observed = json.loads(Path(files['activity-data-proof.json']).read_text())
         if any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I) for url in observed.get('scripts', [])):
             raise ValueError('Optional editor script requested in minimal copy proof')
+
+
+def validate_sequence_pair_copy(proof):
+    if proof.get('mode') != 'sequence-pairs':
+        raise ValueError('Sequence pair proof came from a different designer mode')
+    receipts = {item['operation']: item for item in proof['receipts']}
+    navigations = proof.get('navigations', [])
+    if len(navigations) != 4 or {(item.get('role'), item.get('stage')) for item in navigations} != \
+            {(role, stage) for role in ('whole', 'member') for stage in ('copied', 'reopened')}:
+        raise ValueError('Sequence whole/member copied and reopened source navigation is incomplete')
+    for role, expression_type, projection, expected in [('whole', 'ActivityResult', 'Result', '00:00:01'),
+                                                       ('member', 'ActivityResultMember', 'Customer', 'cust-1042')]:
+        for operation in ('duplicate', 'paste'):
+            receipt = receipts[operation + '-' + role]
+            structure = receipt['after'].get('rootActivity', {}).get('structure', {})
+            activities = structure.get('payload', {}).get('activities', [])
+            producer = next((node for node in activities if node.get('nodeId') == receipt.get('producerId')), None)
+            consumer = next((node for node in activities if node.get('nodeId') == receipt.get('consumerId')), None)
+            if structure.get('kind') != 'elsa.sequence.structure' or not producer or not consumer:
+                raise ValueError('Sequence copy receipt lacks its actual producer/consumer pair')
+            bindings = [item.get('value', {}) for item in consumer.get('inputs', []) if item.get('referenceKey') == 'text']
+            binding = bindings[0] if len(bindings) == 1 else {}
+            source = binding.get('value', {})
+            if binding.get('expressionType') != expression_type or source.get('producerNodeId') != receipt['producerId'] \
+                    or source.get('projectionKey') != projection or source.get('isOptional') is not False \
+                    or (role == 'member' and source.get('memberPath') != ['customerId']):
+                raise ValueError('Sequence copied whole/member binding lost its intended producer or literal selection')
+        pasted = receipts['paste-' + role]
+        for navigation in (item for item in navigations if item['role'] == role):
+            if navigation.get('definitionId') != pasted.get('definitionId') or navigation.get('consumerId') != pasted['consumerId'] \
+                    or navigation.get('producerId') != pasted['producerId'] or navigation.get('selectedNodeId') != pasted['producerId']:
+                raise ValueError('Sequence source navigation did not select the copied producer')
+        runs = [item for item in proof['runtime'] if item.get('consumerId') == pasted['consumerId']]
+        if len(runs) != 1 or runs[0].get('definitionId') != pasted.get('definitionId') \
+                or runs[0].get('producerId') != pasted['producerId'] or runs[0].get('expected') != expected \
+                or runs[0].get('committed') != expected:
+            raise ValueError('Sequence committed runtime does not belong to its copied whole/member source')
 
 
 def validate_publication_stores(stores, require_published=False):

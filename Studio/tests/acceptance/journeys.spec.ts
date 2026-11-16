@@ -678,6 +678,7 @@ test("executable designer parity", async ({ page }, info) => {
 
 for (const [title, mode] of [
   ["copy activity data pairs", "pairs"],
+  ["copy sequence activity data pairs", "sequence-pairs"],
   ["copy scoped and portable activity data", "scopes"],
   ["preserve external activity references on copy", "external"]
 ] as const) test(title, async ({ page }, info) => {
