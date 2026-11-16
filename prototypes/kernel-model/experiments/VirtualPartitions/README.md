@@ -20,8 +20,9 @@ as today, fixed when the database is created.
 
 This is experiment code: it changes no default. The kernel still hosts 64 partitions with one worker each; the two
 variants exist here as EF stores (`Variants.cs`, the same entity classes, keys and concurrency tokens as `EfStore`,
-the fence in the batch or checked as its own statement, takes and splits as conditional statements with RETURNING, as
-the take is today) with a harness (`Measure.cs`) and a seeded model of the ownership protocol (`OwnershipSim.cs`).
+the fence in the batch or checked as its own statement, takes as conditional statements with RETURNING, as
+the take is today; carve, split and merge as conditional UPDATE, INSERT and DELETE statements checked by their
+affected-row counts) with a harness (`Measure.cs`) and a seeded model of the ownership protocol (`OwnershipSim.cs`).
 Nothing here is hand-tuned commit SQL: that is round 5 B. The results and the recommendation are in
 [../../PARTITIONS.md](../../PARTITIONS.md).
 
