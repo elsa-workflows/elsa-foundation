@@ -141,9 +141,13 @@ One query per behind virtual partition per sample interval. On today's indexes t
 `highWater + 1`: the EF index is `(Partition, Seq)` and MongoDB's poll index is `(partition, done, seq, _id)`, so the
 `done` and `due` filters apply to the rows scanned. The scan also reads done rows that wait for their sweep (EF) and
 future timers (both) in the partition. Proposed: an index on `(partition, done, due)`, partial on `done = false` where
-the engine supports it (PostgreSQL, SQLite, SQL Server's filtered index; MySQL and MongoDB take the full index), which
-bounds the scan to `highWater + 1` entries. It costs one more index entry written for every message insert, consume and done update, and on PostgreSQL more
-dead index tuples. Both costs are unmeasured; the release 1 cost runs measure them with WRITES.md's method.
+the engine supports it (PostgreSQL, SQLite, SQL Server's filtered index, MongoDB's `partialFilterExpression`); MySQL
+takes the full index. With it the count reads at most `highWater + 1` qualifying entries. The physical scan can still
+pass index entries of dead row versions that cleanup has not removed yet (PostgreSQL B-tree), so its cost is bounded
+only after cleanup. The index costs one more entry written for every message insert. On PostgreSQL, indexing `done`
+also means a `done = true` update is no longer HOT, so it writes an entry in every index on the message table; a
+delete writes no index entry and leaves dead tuples for vacuum. All of this is unmeasured: the release 1 cost runs
+measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
 **The pressure list (proposed).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
@@ -157,8 +161,9 @@ SELECT id, backlog FROM partition WHERE backlog >= :lowWater;
 ```
 
 Admission refuses a start or command whose target virtual partition is above the high-water mark, and admits again
-below the low-water mark. For outside work the threshold is soft: admitted arrivals can overshoot it by one refresh
-interval plus one sample interval of ingress. Internal arrivals are not limited by it at all. A provider without a
+below the low-water mark. For admitted starts and commands the threshold is soft: they can overshoot it by one refresh
+interval plus one sample interval of ingress. The fan-out of an outside publish and all internal arrivals are not
+limited by it at all. A provider without a
 relational fence row stores the field beside its fence record; MongoDB stores it in the partition document.
 
 The threshold does not see tenants. A quiet tenant whose keyed instances share a virtual partition with a burst is
@@ -183,9 +188,12 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 1. **A turn budget per pass.** A pass runs at most `PassTurnBudget` turns, flushes, and returns `TimeSpan.Zero` while
    ready work remains. Layer 1 then runs its other scopes before this one again. The flush cap stays.
 2. **Deficit round robin by tenant.** The ready instances are grouped by the tenant on their row. Each round gives every
-   tenant with ready instances a quantum of turns (its weight; equal by default). Within a tenant, the instance whose
-   oldest deliverable message was observed first goes first. A cursor carries the rounds from pass to pass; a reset
-   drops it with the rest of memory. The ordinal order of today starves high ids once a budget exists, so it goes.
+   tenant with ready instances a quantum of turns (its weight; equal by default). Within a tenant, instances rotate: a
+   newly ready instance joins the back of its tenant's queue, in the order its oldest deliverable message was
+   observed, and an instance that takes a turn and is still ready goes to the back. An instance therefore takes at
+   most one turn before every instance ahead of it in its tenant's queue has taken one. A cursor carries the rounds
+   from pass to pass; a reset drops it with the rest of memory. The ordinal order of today starves high ids once a
+   budget exists, so it goes.
 3. **An age hint for layer 1.** `RunAsync` also reports the age of its oldest waiting deliverable message. The
    built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
    the scopes go in order of their oldest waiting work, scope order breaking ties. The age orders a round and never
@@ -199,8 +207,9 @@ one target arrive in the order sent. The selection only chooses which instance t
 `RunAsync`.
 
 **What it cannot do.** The poll stays first in, first out: one query, one index. A tenant's message beyond the poll
-window is not in memory, so the in-pass selection cannot reach it. The inbox bound limits that window's depth, which is
-why the two come together. A poll per tenant needs a tenant column and index on `message` and one poll per active
+window is not in memory, so the in-pass selection cannot reach it. The ingress threshold limits how far outside starts
+and commands can deepen that window, which is why the two come together; internal arrivals and the fan-out of outside
+publishes can still deepen it. A poll per tenant needs a tenant column and index on `message` and one poll per active
 tenant: a later option, if measurements show the need.
 
 ## Virtual partitions and the Cluster profile
@@ -265,9 +274,11 @@ an outside publish for its matches, priorities, load-aware rebalancing and shuff
 **Verification planned for release 1** (none of it exists):
 
 - Simulation invariants:
-  - with deficit round robin, an instance at position k among its tenant's ready instances takes its turn within
-    ⌈k / q⌉ rounds, where q is its tenant's quantum; a round is at most the sum of the quanta of the tenants with ready
-    instances, in turns, spread over passes of at most the budget;
+  - with deficit round robin and the rotation within a tenant, an instance at position k in its tenant's queue takes
+    its turn within ⌈k / q⌉ rounds, where q is its tenant's quantum; a round is at most the sum of the quanta of the
+    tenants with ready instances, in turns, spread over passes of at most the budget. Instances that become ready later
+    join behind it and do not move it back. A reset drops the queues, and the bound starts again from the new owner's
+    first pass;
   - a refusal writes no row;
   - an internal send is never refused.
 - Mutations: ordinal selection under a budget (starvation), an unbounded pass, and a store-side refusal of a sent
@@ -278,8 +289,8 @@ an outside publish for its matches, priorities, load-aware rebalancing and shuff
 ## Decisions for the owner
 
 1. **Running-instance quotas in release 1.**
-   - (a) None: rates and the inbox bound only. *Recommended:* it costs nothing on the hot path, and the two others need
-     a projection or a hop that release 1 does not otherwise need.
+   - (a) None: rates and the ingress threshold only. *Recommended:* it costs nothing on the hot path, and the two
+     others need a projection or a hop that release 1 does not otherwise need.
    - (b) Soft quotas from a projected count per tenant.
    - (c) Hard quotas through a quota actor per tenant, at one hop and one commit per start.
 2. **Where the backlog estimate is published.**
