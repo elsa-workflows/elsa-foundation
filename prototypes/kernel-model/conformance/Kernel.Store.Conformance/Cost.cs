@@ -16,7 +16,7 @@ public static class Cost
         var counter = provided.Counter ?? throw new InvalidOperationException($"{provider.Name} does not count its round trips");
         var store = provided.Store;
         // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
-        var owner = new Worker("owner", 0, store, new WorkflowInstance(Stress.Models()), new WorkerOptions { Lease = TimeSpan.FromHours(1) });
+        var owner = new Worker("owner", 0, store, new WorkflowInstance(Stress.Models()), new WorkerOptions { Lease = TimeSpan.FromHours(1), Partitions = 2 });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
