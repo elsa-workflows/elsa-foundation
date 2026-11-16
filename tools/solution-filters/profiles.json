@@ -91,12 +91,12 @@
         "Elsa.Workflows.Runtime.Tests"
       ],
       "requiredRootPaths": [
-        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
-        "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj",
-        "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
-        "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
-        "Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
-        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
+        "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
+        "essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj",
+        "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+        "essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+        "essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
+        "essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
       ],
       "excludeRootPathContains": [
         "/Samples/"
@@ -109,15 +109,15 @@
       "outputPath": "Elsa.Server.Persistence.Integration.slnf",
       "committed": false,
       "includeProjectPathPrefixes": [
-        "Essentials/tests/",
-        "Extensions/"
+        "essentials/tests/",
+        "extensions/"
       ],
       "requiredRootPaths": [
-        "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
-        "Essentials/tests/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
-        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
-        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
-        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
+        "essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+        "essentials/tests/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+        "essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+        "essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+        "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
       ],
       "requirePackageReferencePrefixes": [
         "Testcontainers."
@@ -131,9 +131,9 @@
         "Elsa.Workbench.BackgroundActivities.Tests"
       ],
       "requiredRootPaths": [
-        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
-        "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
-        "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
+        "apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+        "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
       ]
     }
   ]

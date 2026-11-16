@@ -21,10 +21,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

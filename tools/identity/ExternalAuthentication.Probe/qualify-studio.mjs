@@ -76,7 +76,7 @@ try {
   let code;
   try {
     const entry = profile ? "tools/identity/ExternalAuthentication.Probe/ui-modes-browser.mjs"
-      : "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs";
+      : "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs";
     const child = spawn(process.execPath, [join(repo, entry)],
       { cwd: repo, env: { ...environment, ELSA_EXTERNAL_AUTH_PROBE_ROOT: root }, stdio: ["ignore", browserLog, browserLog] });
     code = await new Promise((done, reject) => { child.once("error", reject); child.once("exit", done); });

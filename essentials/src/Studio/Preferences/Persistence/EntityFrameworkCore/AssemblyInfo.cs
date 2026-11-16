@@ -24,5 +24,5 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(StudioPreferencesEfModule.SchemaFamily, "Studio.Preferences", StudioPreferencesEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 [assembly: EfSchemaContent(StudioPreferencesEfModule.SchemaFamily, typeof(StudioPreferenceRecord), nameof(StudioPreferenceRecord.ValueJson))]
