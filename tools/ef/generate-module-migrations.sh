@@ -41,8 +41,8 @@ elif [[ "$filter" == --* || $# -gt 1 ]]; then
 fi
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
-module_roots=(Essentials/src)
-for capability in Extensions/*/src; do
+module_roots=(essentials/src)
+for capability in extensions/*/src; do
   [[ -d "$capability" ]] && module_roots+=("$capability")
 done
 
@@ -89,7 +89,7 @@ while IFS= read -r snapshot; do
   [[ "$mode" == "incremental" || "$name" =~ ^(Runtime|WorkflowsDesign)(Sqlite|SqlServer|PostgreSql|MySql)DbContext$ ]] && continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
   # ETL and Rules keep internal contexts and their own generators (tools/etl, tools/rules); this tool never builds them.
-  [[ "$snapshot" == Extensions/Etl/* || "$snapshot" == Extensions/Rules/* ]] && continue
+  [[ "$snapshot" == extensions/Etl/* || "$snapshot" == extensions/Rules/* ]] && continue
   rm -rf "$(dirname "$snapshot")"
 done < <(find "${module_roots[@]}" -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
 

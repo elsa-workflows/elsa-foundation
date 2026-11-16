@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Scoped write-once frozen release archive contracts; capture does not establish owner validity or origin.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Workflows.Publishing.Releases.Core.csproj" />
+    <ProjectReference Include="../../../../../Persistence/Core/Elsa.Persistence.Core.csproj" />
+  </ItemGroup>
+</Project>

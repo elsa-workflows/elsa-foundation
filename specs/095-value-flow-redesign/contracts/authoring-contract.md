@@ -101,7 +101,7 @@ public static ActivityCall<
 `ActivityArgument<T>` is an authoring-only carrier. It supports implicit conversions from:
 
 - a literal assignable to `T`;
-- a `WorkflowRequestMember<T>`;
+- a `WorkflowRequestRead<T>`;
 - a `VariableRead<T>`;
 - an `ActivityResultProjection<T>`; and
 - an `ExpressionSource<T>`.

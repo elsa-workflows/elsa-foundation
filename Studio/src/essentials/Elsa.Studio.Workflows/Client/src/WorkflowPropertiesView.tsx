@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { getActivityAuthoringCapabilities } from "./api/activityDesign";
@@ -620,20 +620,20 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
         <dt><label htmlFor="wf-def-name">Name</label></dt>
         <dd>
           {editable ? (
-            <input
+            <StudioField label="Workflow name"><input
               id="wf-def-name"
               type="text"
               aria-label="Workflow name"
               value={name}
               onChange={event => setName(event.target.value)}
               onBlur={commitName}
-            />
+            /></StudioField>
           ) : (definition?.name ?? "—")}
         </dd>
         <dt><label htmlFor="wf-def-description">Description</label></dt>
         <dd>
           {editable ? (
-            <textarea
+            <StudioField label="Workflow description"><textarea
               id="wf-def-description"
               aria-label="Workflow description"
               rows={2}
@@ -641,7 +641,7 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
               placeholder="No description"
               onChange={event => setDescription(event.target.value)}
               onBlur={commitDescription}
-            />
+            /></StudioField>
           ) : (definition?.description?.trim() ? definition.description : <span className="wf-muted">No description</span>)}
         </dd>
         <dt>Definition ID</dt>

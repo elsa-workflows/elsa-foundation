@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The built-in runtime on a clock: the loop that layer 1 leaves to its host (balancing rounds, passes when due, the poll interval). -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Runtime.Hosting</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Kernel.Runtime/Kernel.Runtime.csproj" />
+  </ItemGroup>
+</Project>

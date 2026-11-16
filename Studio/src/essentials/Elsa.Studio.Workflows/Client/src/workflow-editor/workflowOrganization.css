@@ -193,6 +193,7 @@ html[data-workspace-style="minimal"] .wf-organization-dialog .wf-dialog-actions 
 }
 
 .wf-library-toolbar-row { justify-content: space-between; gap: 12px 24px; }
+.wf-library-control-group { align-items: flex-end; }
 .wf-library-view-group { margin-inline-start: auto; }
 .wf-library-controls .wf-library-toolbar-field {
   display: flex;

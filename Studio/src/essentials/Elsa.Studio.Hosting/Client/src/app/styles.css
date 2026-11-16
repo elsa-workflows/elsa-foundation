@@ -1800,6 +1800,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .theme-overview-editor,
 .theme-token-editor,
+.theme-mode-panel,
 .theme-assets-panel,
 .theme-preview-panel {
   display: grid;
@@ -2002,7 +2003,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   outline-offset: 2px;
 }
 
-.modules-page {
+.modules-page,
+.modules-tab-panel {
   display: grid;
   gap: 12px;
 }
@@ -3274,11 +3276,13 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .studio-dialog-body {
   display: grid;
+  min-width: 0;
   gap: 14px;
 }
 
 .studio-dialog-title {
   margin: 0;
+  overflow-wrap: anywhere;
   font-family: var(--studio-font-display);
   font-size: var(--studio-section-title-size);
   font-weight: var(--studio-title-weight, 700);
@@ -3287,6 +3291,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .studio-dialog-message {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--studio-text-muted);
   font-size: var(--studio-body-size);
   line-height: 1.5;
@@ -3712,3 +3717,28 @@ html[data-theme-material] .otel-panel .otel-traces-layout {
 /* Stat / KPI tiles. Container uses the card surface so material themes slab it. */
 
 /* Shared technical-identity row used by inspectors and diagnostics. */
+
+.modules-tab-panel,
+.theme-builder-view-panel {
+  min-width: 0;
+}
+
+.theme-builder-workbench.is-compact {
+  align-content: start;
+}
+
+.theme-builder-select {
+  display: grid;
+  align-content: start;
+  align-self: start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.theme-builder-select select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}

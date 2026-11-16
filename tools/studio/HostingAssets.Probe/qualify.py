@@ -116,7 +116,7 @@ def main(args):
                 shutil.copy2(path, feed / path.name)
             report["producer"] = "supplied production archives; source revision is external provenance"
         else:
-            check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "Extensions"], cwd=REPO, text=True).strip(), "Commit production inputs before qualification")
+            check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "extensions"], cwd=REPO, text=True).strip(), "Commit production inputs before qualification")
             version = args.version
             producer = root / "producer"
             producer.mkdir()

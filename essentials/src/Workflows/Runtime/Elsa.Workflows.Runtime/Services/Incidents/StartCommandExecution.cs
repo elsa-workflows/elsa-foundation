@@ -1,0 +1,99 @@
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Services.Incidents;
+
+/// <summary>
+/// Reads back the execution a start command would have created, for a run whose first commit never landed. The handlers
+/// that fault such a run into existence share it: a refused first commit (<see cref="CheckpointRuleViolationWorkflowFaulter"/>,
+/// #1799) and a poisoned first checkpoint (<see cref="PoisonedSchedulerWorkIncidentObserver"/>, #2537).
+/// </summary>
+internal static class StartCommandExecution
+{
+    /// <summary>
+    /// The execution <paramref name="envelope"/>'s start command carries, as <see cref="WorkflowExecutionStatus.Running"/> at
+    /// <paramref name="occurredAt"/>, or <see langword="null"/> when the envelope is not this execution's start.
+    /// </summary>
+    /// <remarks>
+    /// This runs on the way out of a failed drain, so nothing about failing to read the payload may escape: an exception
+    /// here would be reported in place of the failure it was called to handle. A payload this runtime cannot read is
+    /// handed to <paramref name="onUnreadable"/> and reads as no execution. The catch is deliberately broad, because the
+    /// payload's constructor rejects more argument names than any whitelist would track.
+    /// </remarks>
+    public static WorkflowExecutionState? Read(
+        WorkflowExecutionCommandEnvelope? envelope,
+        string workflowExecutionId,
+        DateTimeOffset occurredAt,
+        Action<Exception> onUnreadable)
+    {
+        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } payloadElement } ||
+            !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, workflowExecutionId))
+            return null;
+
+        WorkflowExecutionStartCommandPayload? payload;
+        try
+        {
+            payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            onUnreadable(exception);
+            return null;
+        }
+
+        if (payload is null)
+            return null;
+
+        var protectedStart = payload.StartAuthority?.StandaloneTrigger is not null ||
+            payload.StartAuthority?.ModelWork is not null || payload.StimulusDeliveryOrigin is not null;
+        var startedAt = protectedStart ? envelope.EnqueuedAt : occurredAt;
+
+        return new WorkflowExecutionState(
+            workflowExecutionId,
+            payload.PinnedExecutable,
+            WorkflowExecutionStatus.Running,
+            SubStatus: null,
+            CreatedAt: startedAt,
+            StartedAt: startedAt,
+            UpdatedAt: occurredAt,
+            CompletedAt: null,
+            payload.CorrelationId,
+            payload.ParentWorkflowExecutionId,
+            payload.TenantId,
+            SystemMetadataOf(envelope.Command))
+        {
+            HistoryCapturePolicy = payload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = payload.HistoryCaptureEnabledAtAdmission,
+            RunKind = payload.RunKind,
+            PinnedSource = payload.PinnedSource,
+            Partition = payload.Partition,
+            Authority = payload.Authority,
+            IngressOrigin = payload.StartAuthority?.StandaloneTrigger,
+            ModelWorkOrigin = payload.StartAuthority?.ModelWork,
+            StimulusDeliveryOrigin = payload.StimulusDeliveryOrigin,
+            DispatchNestingDepth = payload.DispatchNestingDepth,
+            TestScope = payload.TestScope
+        };
+    }
+
+    // Preserve the same bounded system facts as the first start checkpoint, even if start faults before that commit.
+    private static Dictionary<string, string> SystemMetadataOf(WorkflowExecutionCommand command)
+    {
+        var metadata = new Dictionary<string, string>();
+        foreach (var key in new[] { RuntimeMetadataKeys.PersistenceMode, RuntimeMetadataKeys.ChildControlDispatchId })
+            if (command.Metadata.TryGetValue(key, out var value))
+                metadata[key] = value;
+        return metadata;
+    }
+
+    /// <summary>
+    /// Whether a dispatched child may be faulted into existence. The ordinary enrichers project its dispatch and resume its
+    /// parent only through the dispatch store's additive query capability. Without it a synthesized child would be a
+    /// terminal execution nothing can act on, and the durable child-evidence rule would read it as a delivered start and
+    /// discard the start failure that is the parent's only other way home.
+    /// </summary>
+    public static bool CanFaultDispatchedChild(IWorkflowDispatchStore? workflowDispatchStore) =>
+        workflowDispatchStore is IWorkflowDispatchQueryStore;
+}
