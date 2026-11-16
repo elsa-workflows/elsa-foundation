@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Executables;
@@ -19,6 +20,7 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -386,8 +388,21 @@ public sealed class NativeStandaloneTriggerTargetTests
     public Task Captured_saved_cohort_observation_respects_bound_physical_scope(string tenant, bool coalescing, string nativeHeader) =>
         RunSavedCohort(tenant, coalescing, true, commitCaptured: true, batch: true, observationCheck: nativeHeader);
 
+    [Theory]
+    [InlineData("tenant", false, "none")]
+    [InlineData("tenant", true, "none")]
+    [InlineData("logical-tenant", false, "none")]
+    [InlineData("logical-tenant", true, "none")]
+    [InlineData("logical-tenant", false, "unsealed")]
+    [InlineData("logical-tenant", true, "unsealed")]
+    [InlineData("tenant", false, "foreign-partition")]
+    [InlineData("tenant", true, "foreign-partition")]
+    public Task Captured_saved_cohort_dispatch_checks_scope_before_observation(string tenant, bool coalescing, string nativeHeader) =>
+        RunSavedCohort(tenant, coalescing, true, commitCaptured: true, batch: true,
+            observationCheck: nativeHeader, dispatchObservations: true);
+
     private static async Task RunSavedCohort(string tenant, bool coalescing, bool? historyEnabled, bool commitCaptured = false, bool batch = false,
-        bool firstFault = false, string? observationCheck = null)
+        bool firstFault = false, string? observationCheck = null, bool dispatchObservations = false)
     {
         using var fixture = await Fixture.CreateAsync(tenant, coalescing);
         var parentSeal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(parentSeal);
@@ -433,7 +448,8 @@ public sealed class NativeStandaloneTriggerTargetTests
             {
                 StimulusDeliveryOrigin = savedOrigin,
                 HistoryCapturePolicy = historyEnabled == true ? new("saved-start-history", 1, !commitCaptured || batch,
-                    observationCheck is null ? ["WorkflowStarted"] : ["WorkflowStarted", "DeliveryReceived"]) : null,
+                    observationCheck is null ? ["WorkflowStarted"] : dispatchObservations
+                        ? ["WorkflowStarted", .. RuntimeHistoryDeliveryObservations.Kinds] : ["WorkflowStarted", "DeliveryReceived"]) : null,
                 HistoryCaptureEnabledAtAdmission = historyEnabled
             };
         var authority = payload.StartAuthority!.StimulusDelivery!;
@@ -568,6 +584,13 @@ public sealed class NativeStandaloneTriggerTargetTests
                             StimulusDeliveryOrigin = null,
                             Partition = observationCheck == "foreign-partition" ? new("other-scope") : owner.Partition
                         });
+                    }
+                    if (dispatchObservations)
+                    {
+                        await AssertCapturedDeliveryScopeAsync(fixture, observationExecutions, historyAccess, reader,
+                            key.WorkflowExecutionId, observationCheck);
+                        Assert.Equal(owner, await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+                        return;
                     }
                     var writer = new InMemoryRuntimeHistoryObservationWriter(fixture.Executions.CheckpointState,
                         historyAccess, observationExecutions, fixture.Clock);
@@ -749,6 +772,62 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.DoesNotContain(fixture.Executions.CheckpointState.OutboxItems.Values,
             item => item.Intent?.WorkflowExecutionId == id && item.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
         return candidate;
+    }
+
+    private static async Task AssertCapturedDeliveryScopeAsync(Fixture fixture, InMemoryWorkflowExecutionStateStore executions,
+        Access access, InMemoryRuntimeHistoryStore reader, string executionId, string nativeHeader)
+    {
+        var writer = new ScopeCountingHistoryWriter(new InMemoryRuntimeHistoryObservationWriter(
+            fixture.Executions.CheckpointState, access, executions, fixture.Clock));
+        Assert.True(writer.CanRecordHistory(reader));
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<TimeProvider>(fixture.Clock);
+        services.AddSingleton<IPersistenceAccessContextAccessor>(access);
+        services.AddWorkflowRuntime();
+        RuntimeHistoryRegistration.AddServices(services);
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = "sealed-delivery-scope-controls-signing-key-at-least-32-bytes");
+        services.AddSingleton(fixture.Executions.CheckpointState);
+        services.AddSingleton<IWorkflowExecutionStateStore>(executions);
+        services.AddSingleton<IWorkflowExecutableStore>(fixture.Executables);
+        services.AddSingleton<IWorkflowExecutionActorProvider>(fixture.Actors);
+        services.AddSingleton<IRuntimeHistoryStore>(reader);
+        services.AddSingleton<IRuntimeHistoryObservationWriter>(writer);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>();
+        var request = new BookmarkResumeDispatchRequest(executionId, "scope-control", "no-wait", idempotencyKey: "scope-delivery");
+        var before = (await reader.FindHeadAsync(executionId))!;
+        var markers = fixture.CheckpointStore.ListCommits().Count;
+        var work = (await fixture.SelectedQueue.ListAsync(new(executionId))).Items.Select(item => item.WorkItemId).ToArray();
+        if (nativeHeader == "none")
+        {
+            Assert.Equal(BookmarkResumeDispatchStatus.NotFound, (await dispatcher.DispatchAsync(request)).Status);
+            Assert.Equal(2, writer.Calls);
+            var observations = (await reader.ReadPageAsync(new(executionId))).Items
+                .Where(item => item.Category == RuntimeHistoryEventCategory.DeliveryObservation).ToArray();
+            Assert.Equal(new[] { "DeliveryReceived", "DeliveryUnmatched" }, observations.Select(item => item.Name));
+            Assert.Equal(observations[0].HistoryEventId, observations[1].Causation!.HistoryEventId);
+            Assert.Equal(before.LastSequence + 2, (await reader.FindHeadAsync(executionId))!.LastSequence);
+            Assert.Equal(before.LastPhysicalCommitId, (await reader.FindHeadAsync(executionId))!.LastPhysicalCommitId);
+        }
+        else
+        {
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(async () => await dispatcher.DispatchAsync(request));
+            Assert.Equal(0, writer.Calls);
+            Assert.Equal(before, await reader.FindHeadAsync(executionId));
+        }
+        Assert.Equal(markers, fixture.CheckpointStore.ListCommits().Count);
+        Assert.Equal(work, (await fixture.SelectedQueue.ListAsync(new(executionId))).Items.Select(item => item.WorkItemId));
+    }
+
+    private sealed class ScopeCountingHistoryWriter(IRuntimeHistoryObservationWriter inner) : IRuntimeHistoryObservationWriter
+    {
+        internal int Calls;
+        public bool CanRecordHistory(IRuntimeHistoryStore reader) => inner.CanRecordHistory(reader);
+        public ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default)
+        { Calls++; return inner.RecordAsync(observation, cancellationToken); }
     }
 
     private sealed class UnsupportedFaultStore : IRuntimeCheckpointCommitStore
