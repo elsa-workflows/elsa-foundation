@@ -263,17 +263,23 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Side effects run at least once; the kernel makes none of them exactly once** (decision 1; round 5 C). A crash
   between an effect and its commit, a lost turn result, a redelivery or a takeover runs the activity again. What the
   kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `src/Kernel.Workflows/EffectKey.cs`):
-  `{instance origin}/{node}/{frame}/{attempt}`, derived from committed facts only, so the same node, frame and attempt
-  re-derive the same key on whichever owner replays them, and a new attempt (a retry after a definite failure, a
-  successor frame) gets a new one. The activity hands it to the receiver where the receiver looks for a repeat: the native
-  `SendHttpRequest` sends it as the `Idempotency-Key` header and `SendEmail` as the local part of the `Message-ID`.
-  **Deduplication is the receiving side's job**, conditional on its keeping the keys it has seen; the kernel records no
-  key and drops no repeat. In Durable mode the attempt is committed before an External activity runs, which pins the
-  frame the key names (N4). In Balanced and Ephemeral the frame numbers are minted from the committed state, so a replay
-  over the same inbox re-derives the key, while a replay over a longer inbox (a timer that became due meanwhile) can hand
-  a frame number to another activity; **the node is in the key for that reason (the owner's decision of 16 November)**,
-  so a reused frame number never collides across activities. The simulation's N7 checks the carrying, the stability and
-  that two nodes never share a key.
+  **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November, from committed facts
+  only. The instance id is fixed at creation and the key never reads partitions or positions; the node is the activity's
+  stable id in the definition; the iteration path is the iteration numbers of the repeating scopes that enclose the
+  activation (a ForEach index, a While pass, a Flowchart round, a retry generation), each from the enclosing activity's
+  committed state, root first; the attempt is 0, or 1 for an External activity in Durable mode, and takes no other
+  value. One logical activation re-derives one key on whichever owner replays it; two activations of one node never
+  share one; a retry after a definite failure is a new generation in the path, so a new key. The frame number is not in
+  the key (the owner's reason): in Balanced and Ephemeral a replayed burst mints frame numbers from the committed state
+  in agenda order, and a replay over a longer inbox (a timer that became due meanwhile) orders the agenda differently,
+  so a frame number can land on another activity or on another iteration of the same one, and a receiver would drop a
+  genuine effect as a repeat; the iteration path does not move with the agenda, and no extra commit is paid. The
+  activity hands the key to the receiver where the receiver looks for a repeat: the native `SendHttpRequest` sends it
+  as the `Idempotency-Key` header and `SendEmail` as the local part of the `Message-ID`. **Deduplication is the
+  receiving side's job**, conditional on its keeping the keys it has seen; the kernel records no key and drops no
+  repeat. The simulation's N7 checks the carrying, the stability (one activation, one key and one content across its
+  resends) and that one key belongs to one activation; the smoke's alias check replays one committed state over a
+  shorter and a longer inbox and asserts the same.
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
   parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
@@ -380,9 +386,10 @@ public interface ITurn
   than once, its result (`job-finished`) changes state once; a result goes ahead of other messages, so a model never
   sees its own cancel first.
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
-- **Effect keys** (`EffectKey.For(turn.Instance, node, frame, attempt)`, round 5 C): the one derivation every model uses for
-  the key an activity hands a partner, so that a BPMN task and a native activity name an attempt the same way. The
-  model owns what a frame and an attempt are; the kernel owns the instance's origin and the shape of the key.
+- **Effect keys** (`EffectKey.For(turn.Instance, node, iterationPath, attempt)`, round 5 C): the one derivation every model
+  uses for the key an activity hands a partner, so that a BPMN task and a native activity name an activation the same
+  way. The model owns what a node, an iteration path and an attempt are (they must come from its committed state, never
+  from the order of a burst); the kernel owns the instance's origin and the shape of the key.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
   activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
   state, and add no database call; NATIVE.md). BPMN stores tokens, runs tasks as jobs, keeps early messages and uses
@@ -452,8 +459,8 @@ mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once 
 upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
 External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed, and N7 (round 5 C) an
-outbound effect (HTTP, email) carries its effect key where its receiver looks, the same key every time the same node, frame and
-attempt are sent, and no two activations share one. The graph invariants of the sketch (round 4):
+outbound effect (HTTP, email) carries its effect key where its receiver looks, the same key and content every time the same
+logical activation (node, iteration path, attempt) is sent, and one key belongs to one activation. The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
 arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 

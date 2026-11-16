@@ -163,12 +163,12 @@ public readonly record struct Unit;
 
 public class ActivityContext
 {
-    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation = 0, string? operationKey = null)
-        : this(instance, frame, node, attempt, cancellationToken, creation, operationKey, null) { }
+    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string iterationPath, string effectKey)
+        : this(instance, frame, node, attempt, cancellationToken, creation, null, null, iterationPath, effectKey) { }
 
-    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource, string? effectKey = null)
-        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource, EffectKey) =
-            (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource, effectKey ?? Kernel.Workflows.EffectKey.For(instance.Id, creation, node, frame, attempt));
+    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource, string iterationPath, string effectKey)
+        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource, IterationPath, EffectKey) =
+            (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource, iterationPath, effectKey);
 
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
@@ -176,13 +176,20 @@ public class ActivityContext
     public long Creation { get; }
     public string FrameId { get; }
     public string NodeId { get; }
-    /// <summary>The committed attempt of an External activity in Durable mode; 0 otherwise.</summary>
+    /// <summary>The committed attempt of an External activity in Durable mode; 0 otherwise. It takes no other value.</summary>
     public int Attempt { get; }
     /// <summary>
-    /// The stable key of this attempt's external effect (<see cref="Kernel.Workflows.EffectKey"/>: instance, node, frame,
-    /// attempt): the same string whenever this frame and attempt of this node run, on whichever owner, and a different
-    /// one for any other activation, another node under a reused frame number included. What an
-    /// activity hands a partner so that the partner can drop a repeat; the kernel itself drops nothing.
+    /// Which activation of this node this is within the instance (round 5 C): the iteration numbers of the repeating
+    /// scopes that enclose it, root first, each from the enclosing activity's committed state
+    /// (<see cref="CompositeActivity.IterationOf"/>), plus a retry generation for a retried activity;
+    /// <see cref="Kernel.Workflows.EffectKey.RootPath"/> when nothing repeats it.
+    /// </summary>
+    public string IterationPath { get; }
+    /// <summary>
+    /// The stable key of this attempt's external effect (<see cref="Kernel.Workflows.EffectKey"/>: instance, node,
+    /// iteration path, attempt): the same string whenever this logical activation runs, on whichever owner and however a
+    /// replay orders the agenda, and a different one for any other activation of this or another node. What an activity
+    /// hands a partner so that the partner can drop a repeat; the kernel itself drops nothing.
     /// </summary>
     public string EffectKey { get; }
     public CancellationToken CancellationToken { get; }
@@ -191,7 +198,7 @@ public class ActivityContext
 public sealed class StartContext<TTrigger> : ActivityContext
 {
     private readonly JsonNode? _trigger;
-    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.EffectKey)
+    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.IterationPath, c.EffectKey)
         => (IsTriggerDelivery, _trigger) = (delivery, trigger);
 
     /// <summary>This activation is the workflow's start trigger being delivered (an HTTP request, an event).</summary>
@@ -206,7 +213,7 @@ public sealed class StartContext<TTrigger> : ActivityContext
 
 public sealed class ResumeContext<TState, TTrigger> : ActivityContext
 {
-    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.EffectKey)
+    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.IterationPath, c.EffectKey)
         => (State, Trigger) = (state, trigger);
 
     public TState State { get; }
@@ -277,6 +284,14 @@ public abstract class CompositeActivity : ActivityBase
     protected internal abstract void Execute(CompositeContext context);
     protected internal abstract void OnChildCompleted(CompositeContext context, ChildCompleted child);
     protected internal virtual void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Fault(child.Fault);
+
+    /// <summary>
+    /// Which activation of a child this is, for the effect key's iteration path (round 5 C): null when this composite
+    /// runs each child once, else a number or name from this composite's committed state (a ForEach index, a While
+    /// iteration, a Flowchart round) that two activations of one child never share and that a replay cannot reorder.
+    /// Called on a bare instance (no inputs) with the parent frame's state and the child's scheduling tag and scope.
+    /// </summary>
+    protected internal virtual string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) => null;
 }
 
 // ---- values --------------------------------------------------------------------------------------------------------

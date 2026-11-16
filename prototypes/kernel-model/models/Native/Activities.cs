@@ -231,6 +231,10 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     }
     [Input] public JsonArray? Items { get; set; }
 
+    /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
+        childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+
     protected internal override void Execute(CompositeContext context)
     {
         var state = new ForEachState { Items = Items ?? [] };
@@ -266,21 +270,35 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     }
 }
 
+public sealed record WhileState
+{
+    /// <summary>The pass of the body that runs, from 1. Committed with the instance, so a replay re-derives it (round 5 C).</summary>
+    public int Iteration { get; set; }
+}
+
 /// <summary>Composite inputs are evaluated at every activation, so the condition is read again after each pass without a marker.</summary>
 public sealed class While : CompositeActivity
 {
     [Input] public bool Condition { get; set; }
 
-    protected internal override void Execute(CompositeContext context)
-    {
-        if (Condition && context.Children.Count > 0) context.Schedule(context.Children[0]);
-        else context.Complete();
-    }
+    /// <summary>The body's iteration is this loop's committed pass count (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
+        (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        if (child.Outcome != "Break" && Condition) context.Schedule(context.Children[0]);
-        else context.Complete();
+        if (child.Outcome == "Break") { context.Complete(); return; }
+        Next(context, context.GetState<WhileState>());
+    }
+
+    private void Next(CompositeContext context, WhileState state)
+    {
+        if (!Condition || context.Children.Count == 0) { context.Complete(); return; }
+        state.Iteration++;
+        context.SetState(state);
+        context.Schedule(context.Children[0]);
     }
 }
 
@@ -306,7 +324,7 @@ public sealed class Flowchart : CompositeActivity
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var (path, scope) = Decode(child.Tag);
+        var (path, scope, _) = Decode(child.Tag);
         if (!TryReadState(context, out var before)) return;
         Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
             new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
@@ -363,7 +381,7 @@ public sealed class Flowchart : CompositeActivity
             if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
                 && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)     // as the engine counts them
                 context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
-            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId));
+            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey));
         }
         switch (step.Kind)
         {
@@ -446,10 +464,23 @@ public sealed class Flowchart : CompositeActivity
         _ => throw new ArgumentOutOfRangeException(nameof(gateway), gateway, null),
     };
 
-    private static string Encode(string path, string scope) => path + "|" + scope;
+    /// <summary>
+    /// The child's iteration for the effect key (round 5 C) is the engine's iteration key of the round it was scheduled
+    /// in (<c>head:2</c>: the loop head and the round, from the engine's committed state), carried on the tag. A node
+    /// outside a loop has none. A node behind a Merge may fire once per token within a round; the round does not tell
+    /// those tokens apart (reported to the owner, NATIVE.md: an open decision, nothing is invented here).
+    /// </summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
+        Decode(childTag).Iteration is { Length: > 0 } round ? round.Replace(':', '-') : null;
 
-    private static (string? Path, string? Scope) Decode(string? tag) =>
-        tag?.Split('|') is [var path, var scope] ? (path, scope) : (null, null);
+    private static string Encode(string path, string scope, string? iteration) => iteration is null ? path + "|" + scope : path + "|" + scope + "|" + iteration;
+
+    private static (string? Path, string? Scope, string? Iteration) Decode(string? tag) => tag?.Split('|') switch
+    {
+        [var path, var scope] => (path, scope, null),
+        [var path, var scope, var iteration] => (path, scope, iteration),
+        _ => (null, null, null),
+    };
 }
 
 // ---- waiting ---------------------------------------------------------------------------------------------------------

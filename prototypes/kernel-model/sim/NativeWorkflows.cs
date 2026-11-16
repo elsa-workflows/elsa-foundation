@@ -15,7 +15,7 @@ public static class NativeWorkflows
     /// <summary>The workflows the generator starts, with the events each waits for (by the key in its input).</summary>
     public static readonly (string Workflow, int Events)[] Mix =
     [
-        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1),
+        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1), ("n-out", 1),
     ];
 
     /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
@@ -33,6 +33,19 @@ public static class NativeWorkflows
                 If("if", Expr("count == 2"), Set("then", "branch", "then"), Set("else", "branch", "else")),
                 Set("out", "output", Expr("branch + ' ' + count"))),
             ("count", 0), ("branch", null), ("output", null)));
+        // Round 5 C: outbound effects where a replay can reorder the agenda (N7). A timer branch and an event branch run
+        // in parallel; the event branch sends twice from one node in a While loop and the timer branch sends after three
+        // writes; a ForEach then sends twice from one node. When a lost turn took the event alone and its replay takes the
+        // due timer too, the frame numbers shift between branches: the keys must not. The bodies name the iteration only,
+        // so one logical activation carries one body across the replay.
+        registry.Add(Workflow("n-out", Sequence("root",
+                Parallel("par", null,
+                    Sequence("b1", Event("e1", Expr("input.key + '-1'")),
+                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
+                    Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
+                ForEach("each", Expr("[1, 2]"), Http("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
+                Set("out", "output", Expr("'out ' + i + ' ' + tag"))),
+            ("i", 0), ("tag", 0), ("output", null)));
         registry.Add(Workflow("n-join", Sequence("root", Parallel("par", null, Branch(1), Branch(2), Branch(3)), Set("out", "output", Expr("'joined ' + hits"))),
             ("hits", 0), ("hit1", false), ("hit2", false), ("hit3", false), ("output", null)));
         // Two of three: the third branch is cancelled. Which one depends on the order of events, so only the count is compared.

@@ -68,8 +68,8 @@ public static class Smoke
             Console.WriteLine($"every activity, {mode}");
             var store = new InMemoryStore(1, () => Environment.TickCount64);
             // Round 5 C: the host's transport sees each outbound effect with the key its activity put in it.
-            var outbound = new List<(InstanceInfo Instance, string Frame, string Node, int Attempt, OutboundEffect Effect)>();
-            var owner = new Owner("n1", 0, store, registry, new Network(), native: new NativeOptions { OnOutbound = (i, f, n, a, e) => outbound.Add((i, f, n, a, e)) });
+            var outbound = new List<OutboundSending>();
+            var owner = new Owner("n1", 0, store, registry, new Network(), native: new NativeOptions { OnOutbound = outbound.Add });
             await owner.StartAsync();
             var key = new JsonObject { ["key"] = "k-" + mode };
             owner.Worker.Post(new Message("m1", InstanceRef.In(0, "listener"), Kinds.Start, Start: NativeModel.Spec("smoke-listener", mode, key)), fresh: true);
@@ -85,17 +85,19 @@ public static class Smoke
             Check(state.Frames.Count == 0 && state.Agenda.Count == 0 && state.Waits.Count == 0, "no frame, work or wait left in the state");
             var http = outbound.SingleOrDefault(o => o.Effect is HttpSendEffect);
             var mail = outbound.SingleOrDefault(o => o.Effect is EmailSendEffect);
-            Check(outbound.Count == 2 && http.Effect is not null && mail.Effect is not null, $"one HTTP request and one email went out ({outbound.Count} outbound effects)");
-            if (http.Effect is null || mail.Effect is null) continue;
+            Check(outbound.Count == 2 && http is not null && mail is not null, $"one HTTP request and one email went out ({outbound.Count} outbound effects)");
+            if (http is null || mail is null) continue;
             var attempt = mode == Modes.Durable ? 1 : 0;      // Durable commits an External activity's attempt before it runs
             Check(http.Attempt == attempt && mail.Attempt == attempt, $"both ran under attempt {attempt}");
-            var httpKey = EffectKey.For(http.Instance, http.Node, http.Frame, http.Attempt);
+            var httpKey = EffectKey.For(http.Instance, http.Node, http.IterationPath, http.Attempt);
             Check(((HttpSendEffect)http.Effect).Request.Headers[SendHttpRequest.IdempotencyKeyHeader] == httpKey, $"the request's {SendHttpRequest.IdempotencyKeyHeader} is its effect key {httpKey}");
-            var mailKey = EffectKey.For(mail.Instance, mail.Node, mail.Frame, mail.Attempt);
+            var mailKey = EffectKey.For(mail.Instance, mail.Node, mail.IterationPath, mail.Attempt);
             Check(((EmailSendEffect)mail.Effect).Mail.MessageId == SendEmail.MessageId(mailKey), $"the email's Message-ID is {SendEmail.MessageId(mailKey)}");
-            Check(httpKey != mailKey && http.Frame != mail.Frame, "two activations, two keys");
-            Check(httpKey == $"{http.Instance.Ref.Id}/{http.Node}/{http.Frame}/{attempt}", "the key is instance/node/frame/attempt (the owner's shape of 16 November)");
+            Check(httpKey != mailKey, "two activations, two keys");
+            Check(httpKey == $"{http.Instance.Ref.Id}/{http.Node}/{EffectKey.RootPath}/{attempt}", "the key is instance/node/iteration path/attempt (the owner's shape of 16 November), with the root path for a node no loop encloses");
         }
+
+        await AliasChecks.RunAsync(Check);
 
         Console.WriteLine("cancel");
         {
