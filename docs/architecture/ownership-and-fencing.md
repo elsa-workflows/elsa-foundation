@@ -103,6 +103,25 @@ interval with a deferred database constraint; other physical providers refuse it
 fencing or make external effects exactly once. Its schema and check cost must be qualified separately from the
 ordinary checkpoint shapes above.
 
+## Side effects
+
+The fence decides which commit lands. It does not reach the systems an activity talks to. An HTTP request sent, an
+email handed to a mail server or a message put on a broker before the turn's commit stays sent when that commit is
+refused, and the replacement owner, the redelivery or the replayed burst sends it again. Side effects therefore run
+**at least once**, in every persistence mode. Durable mode narrows the window by committing an External activity's
+attempt before it runs; no mode closes it, and the kernel makes no exactly-once claim for anything outside its store.
+
+What the kernel gives instead is a **stable effect key** per activity attempt, derived from committed facts only: the
+instance (its creation included), the model's frame and the attempt, in the form `{instance origin}/{frame}/{attempt}`
+(`EffectKey.For` in the prototype's `src/Kernel.Workflows`). The same frame and attempt re-derive the same key on
+whichever owner replays them; a new attempt gets a new key. The activity hands the key to the receiver where the receiver
+looks for a repeat: the built-in HTTP activity sends it as the `Idempotency-Key` header, the email activity as the local
+part of the `Message-ID`. **Deduplication is the receiving side's job**, and conditional: a receiver that keeps the
+keys it has seen drops the repeat, one that does not sees the effect twice. The kernel records no key and drops no
+repeat. The prototype's simulation (NATIVE.md, N7) checks that an outbound effect carries its key, that a resend after a
+lost turn result or a takeover carries the same one, and that no two activations share one; its mutation
+`UnstableEffectKey` shows the check bites.
+
 ## Alternatives considered
 
 | Alternative | Why the kernel does not use it as the ownership fence |
