@@ -98,7 +98,7 @@ public sealed class NativeBlockLifecycleTests
         Assert.Empty(ended["incidents"]!.AsArray());
         foreach (var node in new[] { "count", "break", "after-inner", "outer-break", "expose-counter" })
             Assert.True(Count(ended, node) == 1, $"{node} ran {Count(ended, node)} times");
-        Assert.Equal("1", Preview(ended, "counter"));
+        Assert.Equal(1, ended["outputs"]!["counter"]!["value"]!["value"]!.GetValue<int>());
         Assert.Equal("inner loop ended", Preview(ended, "after"));
 
         async Task<string> Start(JsonNode root, string mode, params (string Key, string Alias, object Default)[] extra)
