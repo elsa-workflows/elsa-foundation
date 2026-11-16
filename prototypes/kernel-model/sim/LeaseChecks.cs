@@ -9,6 +9,7 @@ public static class LeaseChecks
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
+        await StarterContextChecks.Run(Check, CaseInsensitive);
         await CheckLoadAfterEviction(Check);
         await CheckLoadDuringUnrelatedEvictions(Check);
         await CheckMissingAliasDuringLoad(Check);
