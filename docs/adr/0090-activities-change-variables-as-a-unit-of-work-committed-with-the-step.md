@@ -1,15 +1,13 @@
 # Activities Change Variables As A Unit Of Work Committed With The Step
 
-Status: proposed (2026-10-24). Sipke Schoorstra, the decision holder, chose this design in a brainstorming session
-on 2026-10-24, started from the review of spec 266
-([#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286)). Acceptance needs agreement with Joey Barten
-(@j03y-nxxbz) and Frans van Ek (@FransVanEk), because it would overturn parts of an accepted ADR (0045 §4, §5 and
-§6) and changes what spec 266 analyses.
-
-Review: this text is not agreed. It is under review, with an amendment proposed below (*Amendment proposed*).
+Status: accepted (2026-11-16), as amended below (*Amendment*). Sipke Schoorstra, the decision holder, chose this
+design in a brainstorming session on 2026-10-24, started from the review of spec 266
+([#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286)). It overturns parts of an accepted ADR (0045 §4,
+§5 and §6) and changes what spec 266 analyses, so it needed agreement with Joey Barten and Frans van Ek. The three
+architects agreed the amended text; Joey Barten recorded the agreement as coordinator.
 
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
-([program-goal registry](../program-goals/README.md#registry)). If accepted, it amends
+([program-goal registry](../program-goals/README.md#registry)). It amends
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §4, §5 and §6 and
 [ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) (reads and writes in
 RunJavaScript), and partly reverses ADR 0045's supersession of ADR 0030's JavaScript write-back. Builds on
@@ -226,7 +224,7 @@ the author's own objects).
 Output captures, the Set, Merge and Reduce intrinsics, operator alterations, pure input bindings, and outputs as
 typed results.
 
-## Amendment proposed: explicit writes instead of comparing serialized forms
+## Amendment: explicit writes instead of comparing serialized forms
 
 This amendment keeps the ADR's goal and changes how a step's changes are found.
 
@@ -310,6 +308,10 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
     write never loses members silently: when C# writes back a value read as a type that dropped members of the stored
     value (ADR 0046 V6's declared loss), a warning names the dropped members. A C# step that needs a partial update
     reads the value as JSON (`JsonNode`) instead of a narrower type.
+  - **Dynamic values in C#.** `Get<T>` on a dynamic (`Any`) variable reads it as `JsonNode` by default, so it can be
+    changed and written back without losing members (ADR 0046: `Any` is plain JSON). Reading it as a narrower C#
+    class is an explicit choice whose loss is ADR 0046 V6's declared loss, with the write-back warning above.
+    Conversion into user types uses scoped serializer options, not host-wide ones.
 - **C4. A no-op assignment writes nothing.** Equality is equality of meaning in ADR 0091's canonical form, not of
   text, so notation, escaping and key order do not make a value different. **Conflict checking comes first**
   (reconciliation row 11c): a read-then-write is checked against its base version (C5) before C4 drops a no-op, so a
@@ -321,9 +323,15 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
     script is inferred from what the script did with what it read, so it is judged JavaScript against JavaScript: a
     value that looks equal to the one read (`…992` over a stored `…993`) is unchanged, and writing it as a string
     forces the write. Without this difference the same intent would be dropped in one form and written in the other.
-- **C5. Read-then-write conflicts use versions.** Decision 7 checks the variable versions the step read, which
-  ADR 0092 records in the read set, instead of comparing
-  serialized values. Its digest, for the 0 → 1 → 0 case, compares meaning, not text.
+- **C5. Read-then-write conflicts follow ADR 0092.** Decision 7 no longer compares serialized values and no longer
+  faults by default. A step write is a write under ADR 0092 like any other:
+  - its base is the variable version the step read, recorded in ADR 0092's read set;
+  - a write on a stale base is a lost update: by default it applies (last write wins) with a lost-update warning;
+  - `[VariableConflictPolicy]` becomes ADR 0092's per-node mode, with `Fault` as the opt-in for strict
+    read-modify-write;
+  - the digest, which lets 0 → 1 → 0 count as unchanged, compares meaning in ADR 0091's canonical form and is used
+    only under `Fault`;
+  - the rule is the same for inline and background steps.
 
 **A-3: writes are a general capability** (analysis A-3).
 - **Pure input expressions are the recommended path,** and input-binding expressions never write (decision 1).
@@ -345,9 +353,11 @@ This answers A-3's question: writing from scripts is a general capability, not c
 **What it changes in this ADR.**
 - Decision 2: C1 and C2 replace "A read returns a tracked instance" and the mutation rule. The comparison of serialized
   forms in its *Why* goes.
-- Decision 4: `Get<T>` returns a copy and `Set` is the write; `GetReadOnly<T>` is no longer a separate read.
-- Decision 6: intents come from explicit writes (C2), assembled by C3; C4 replaces "compared with its base".
-- Decision 7: C5.
+- Decision 4: `Get<T>` returns a copy and `Set` is the write; `GetReadOnly<T>` is no longer a separate read. A
+  dynamic value is read as `JsonNode` by default (C3).
+- Decision 6: intents come from explicit writes (C2), assembled by C3; C4 replaces "compared with its base". The
+  comparison of serialized forms goes entirely.
+- Decision 7: C5. Its default (fault) and its value comparison go; ADR 0092's version check and default apply.
 - Decision 8: host-interop mode is the separately named, host-selected profile for script activities of the ADR 0046
   amendment (V10); input-binding expressions never get it.
 - *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
@@ -363,7 +373,7 @@ This answers A-3's question: writing from scripts is a general capability, not c
 - **ADR 0089 amendment, A3:** the recorded reads are what C5 checks against.
 - **ADR 0091:** decision 3 rules out comparing stored text; its canonical form gives the equality of C4 and
   the digest of C5.
-- **ADR 0092:** replaces decision 7's comparison (C5); a step that only read a variable produces no write.
+- **ADR 0092:** replaces decision 7's comparison and default (C5); a step that only read a variable produces no write.
 - **Decision D-3** says "an output capture wins over a tracked write". Under this amendment that becomes
   a "step write"; the transaction model does not need tracking.
 
@@ -393,8 +403,8 @@ This answers A-3's question: writing from scripts is a general capability, not c
 - **Concurrent-write rule and spec 266 (#3286).** `ValueFlow/ConcurrentWrite` (a refusal today, spec 266's warning if
   it lands) must add step writers through the may-write set and treat a marked free-name activity as touching every
   visible variable. Its rationale becomes precise: static analysis sees every write except
-  those of marked free-name activities. Decision 7 uses value comparison, not the frame revision, so spec 266's
-  ADR 0048 §4 amendment does not conflict with it.
+  those of marked free-name activities. Decision 7 uses per-variable versions (C5), not the frame revision, so spec
+  266's ADR 0048 §4 amendment does not conflict with it.
 - **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
   mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused.
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
