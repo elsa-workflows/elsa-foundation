@@ -18,10 +18,12 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   0090's session is not implemented), so there is no session read or session write to instrument. The read-set model
   keeps one entry per variable (oldest read wins, the spec's oldest-in-use rule); session reads and own-write base
   advancement land with the session API.
-- **T017–T021 (US2 operator actions):** a second implementation PR. Finding for an amendment: in this code
-  `InvocationId` is the activity execution id, so a retry that "keeps the `InvocationId`" (ADR 0092 decision 8) must
-  re-run the faulted row in place instead of superseding it, which changes the `RetryFaultedActivity/1` supersession
-  lineage of ADR 0045/0049. A re-execution with fresh inputs must also re-derive the iteration frames of a loop body.
+- **T017–T021 (US2 operator actions):** a second implementation PR. The retry-identity finding is settled by the
+  ADR 0092 decision 8 amendment of 2026-11-16 (#4316): `InvocationId` is the logical invocation identity, which a
+  retry's successor row inherits and a re-execution's does not; the supersession lineage stays. US2 adds that identity
+  to the activity execution (seeded from the first row's id; `ActivityExecutionAttemptLineage` and `OperationKey`
+  already fall back to it) and moves `context.InvocationId` to it. A re-execution with fresh inputs must also re-derive
+  the iteration frames of a loop body.
 - **T010a, T029–T032 (background branches, admission refresh):** with US5 in a later implementation PR. The stale-base
   drives of T010/T011 cover the commit rule a background result meets.
 - **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`

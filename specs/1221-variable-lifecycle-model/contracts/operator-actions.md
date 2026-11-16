@@ -4,6 +4,10 @@ Splits today's conflated behavior (an operator retry gets a new id but copies th
 ADR 0092 decision 8 states. Amends ADR 0045 §3. The API and Studio name the three operator actions distinctly so "retry"
 never silently means fresh inputs.
 
+`InvocationId` below is the **logical invocation identity** (ADR 0092 decision 8, amendment 2026-11-16), not the
+activity execution row id. Retry and re-execute both create a successor row under the existing supersession lineage; a
+retry's successor inherits the `InvocationId`, a re-execution's gets a new one.
+
 ## Recovery (not an operator action)
 
 Resumes the same invocation from durable state; keeps `InvocationId` and the committed input snapshot and read set.

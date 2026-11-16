@@ -382,7 +382,10 @@ expired values from `null`.
 - **FR-014**: The engine MUST provide three distinct operator actions — **retry** (same `InvocationId`, kept input
   snapshot, new attempt), **re-execute/reschedule** (new `InvocationId`, inputs materialized from current committed
   state, new input read set), and **accept recorded completion** (apply the recorded transition atomically without
-  re-running the body) — named distinctly in the API and Studio.
+  re-running the body) — named distinctly in the API and Studio. `InvocationId` is the logical invocation identity
+  (ADR 0092 decision 8, amendment 2026-11-16): a retry is a successor row that inherits it, together with the operation
+  keys, the input snapshot and its read set; a re-execution is a successor row with a new one. The row id stays the key
+  of the row and its supersession lineage.
 - **FR-015**: Successor staging MUST be fixed so an operator retry no longer silently copies the old snapshot onto a new
   invocation id; a re-execution MUST materialize fresh inputs. This amends ADR 0045 §3 as ADR 0092 decision 8 states.
 - **FR-016**: A successor that re-enters input materialization MUST NOT activate its owned frames a second time.
