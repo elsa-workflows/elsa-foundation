@@ -12,6 +12,7 @@ import {
   preflightActivityDraftPublication,
   publishActivityDraft,
   type ActivityPublicationChange,
+  type ActivityPublicationOutcome,
   type ActivityPublicationPreflight,
   type ActivityPublicationReceipt
 } from "./api/publishing";
@@ -47,9 +48,11 @@ export function ActivityDefinitionPublicationReview({
   disabled: boolean;
   flushExactSavedRevision(): Promise<ExactDraftBinding | null>;
   onPublicationPending(pending: boolean): void;
-  onPublished(): void;
+  /** Receives the exact applied outcome; existing callers may ignore it. */
+  onPublished(outcome: ActivityPublicationOutcome): void;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
-  onOpenVersion(versionId: string): void;
+  /** Omit to hide the link, for example inside a flow that must not leave the current editor. */
+  onOpenVersion?(versionId: string): void;
   onOpenWorkflows?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   mode?: "full" | "toolbar";
@@ -140,7 +143,7 @@ export function ActivityDefinitionPublicationReview({
       }
       setPhase("success");
       setFailure(null);
-      onPublished();
+      onPublished(next.outcome);
       onPublicationPending(false);
       // Refresh the definition, drafts, and versions caches so the workbench's published-head and
       // recommendation panels reflect the new immutable version without a manual page reload.
@@ -319,7 +322,7 @@ export function ActivityDefinitionPublicationReview({
       <CheckCircle2 size={20} aria-hidden />
       <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{recommendationMessage(recommendationEvidence, mode === "toolbar")}</span></div>
       {onOpenWorkflows ? <button type="button" onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></button> : null}
-      <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button>
+      {onOpenVersion ? <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button> : null}
     </div> : null}
     {phase === "success" && mode === "toolbar" ? <details className="ad-publication-technical-details"><summary>Publication review details</summary>{reviewDetails}</details> : reviewDetails}
   </section>;
