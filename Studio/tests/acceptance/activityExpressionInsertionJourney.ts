@@ -167,8 +167,10 @@ export async function expressionModulePreservationJourney(page: Page, info: Test
   // Measure the same real source capability/menu/descriptors/graph as the existing basic native mapping control.
   const producer = { nodeId: "producer", activityVersionId: await s.version("Elsa.Workbench.ActivityDataSelectionProof.GetCustomer"), inputs: [], outputs: [] };
   const native = await s.seed("missing modules native control", s.root([producer, s.line()])); await s.open(native); await s.trigger().click();
-  await expect(s.chooser().getByRole("option").first()).toBeFocused(); await s.assertComposition("Activity output…");
-  await capture(page, info, "missing-native-control");
+  await expect(s.chooser().getByRole("option").first()).toBeFocused(); await capture(page, info, "missing-native-control");
+  // The open chooser covers the syntax menu that assertComposition opens in minimal composition. Close it first.
+  await page.keyboard.press("Escape"); await expect(s.chooser()).toHaveCount(0); await expect(s.trigger()).toBeFocused();
+  await s.assertComposition("Activity output…");
   const viewport = page.viewportSize()!; await page.setViewportSize({ width: 320, height: 900 }); await s.open(native); await s.trigger().click();
   await expect(s.chooser().getByRole("option").first()).toBeFocused(); await capture(page, info, "missing-320");
   await page.keyboard.press("Escape"); await expect(s.trigger()).toBeFocused(); await page.setViewportSize(viewport);
