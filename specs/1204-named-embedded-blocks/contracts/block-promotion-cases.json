@@ -1,0 +1,2962 @@
+{
+  "formatVersion": 1,
+  "kind": "pure-planner-golden-documents-not-runtime-evidence",
+  "versions": {
+    "sequence": "Elsa.Activities.Sequence.Activities.Sequence",
+    "flowchart": "Elsa.Activities.Flowchart.Activities.Flowchart",
+    "bpmn": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+    "write": "Elsa.Activities.Primitives.Activities.WriteLine"
+  },
+  "cases": [
+    {
+      "name": "sequence-direct",
+      "kind": "sequence",
+      "parameter": false,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "sequence",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.sequence.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "Input",
+                                "value": {
+                                  "referenceKey": "greeting"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "sequence",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Input",
+                            "value": {
+                              "referenceKey": "input-1"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ]
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "data": {
+              "x": 240,
+              "y": 180
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    },
+    {
+      "name": "sequence-parameter",
+      "kind": "sequence",
+      "parameter": true,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "sequence",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.sequence.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "JavaScript",
+                                "value": {
+                                  "language": "JavaScript",
+                                  "source": "args.message",
+                                  "resultType": {
+                                    "alias": "String",
+                                    "collectionKind": "single"
+                                  },
+                                  "options": {},
+                                  "capabilityProfile": "binding-pure-v1",
+                                  "parameters": {
+                                    "message": {
+                                      "kind": "WorkflowRequest",
+                                      "memberKey": "greeting"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "sequence",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "JavaScript",
+                            "value": {
+                              "language": "JavaScript",
+                              "source": "args.message",
+                              "resultType": {
+                                "alias": "String",
+                                "collectionKind": "single"
+                              },
+                              "options": {},
+                              "capabilityProfile": "binding-pure-v1",
+                              "parameters": {
+                                "message": {
+                                  "kind": "WorkflowRequest",
+                                  "memberKey": "input-1"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ]
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "data": {
+              "x": 240,
+              "y": 180
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    },
+    {
+      "name": "flowchart-direct",
+      "kind": "flowchart",
+      "parameter": false,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "flowchart",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.flowchart.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "Input",
+                                "value": {
+                                  "referenceKey": "greeting"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ],
+                      "startNodeId": "assign",
+                      "connections": [
+                        {
+                          "id": "assign-show",
+                          "source": {
+                            "nodeId": "assign",
+                            "port": "Done"
+                          },
+                          "target": {
+                            "nodeId": "show"
+                          },
+                          "label": "Keep this route"
+                        }
+                      ],
+                      "nodeMetadata": {},
+                      "connectionMetadata": {}
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "flowchart",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Input",
+                            "value": {
+                              "referenceKey": "input-1"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ],
+                  "startNodeId": "assign",
+                  "connections": [
+                    {
+                      "id": "assign-show",
+                      "source": {
+                        "nodeId": "assign",
+                        "port": "Done"
+                      },
+                      "target": {
+                        "nodeId": "show"
+                      },
+                      "label": "Keep this route"
+                    },
+                    {
+                      "id": "block-promotion-flow-1",
+                      "source": {
+                        "nodeId": "show",
+                        "port": "Done"
+                      },
+                      "target": {
+                        "nodeId": "block-promotion-output-1"
+                      }
+                    }
+                  ],
+                  "nodeMetadata": {},
+                  "connectionMetadata": {}
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "data": {
+              "x": 240,
+              "y": 180
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    },
+    {
+      "name": "flowchart-parameter",
+      "kind": "flowchart",
+      "parameter": true,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "flowchart",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.flowchart.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "JavaScript",
+                                "value": {
+                                  "language": "JavaScript",
+                                  "source": "args.message",
+                                  "resultType": {
+                                    "alias": "String",
+                                    "collectionKind": "single"
+                                  },
+                                  "options": {},
+                                  "capabilityProfile": "binding-pure-v1",
+                                  "parameters": {
+                                    "message": {
+                                      "kind": "WorkflowRequest",
+                                      "memberKey": "greeting"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ],
+                      "startNodeId": "assign",
+                      "connections": [
+                        {
+                          "id": "assign-show",
+                          "source": {
+                            "nodeId": "assign",
+                            "port": "Done"
+                          },
+                          "target": {
+                            "nodeId": "show"
+                          },
+                          "label": "Keep this route"
+                        }
+                      ],
+                      "nodeMetadata": {},
+                      "connectionMetadata": {}
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "flowchart",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "JavaScript",
+                            "value": {
+                              "language": "JavaScript",
+                              "source": "args.message",
+                              "resultType": {
+                                "alias": "String",
+                                "collectionKind": "single"
+                              },
+                              "options": {},
+                              "capabilityProfile": "binding-pure-v1",
+                              "parameters": {
+                                "message": {
+                                  "kind": "WorkflowRequest",
+                                  "memberKey": "input-1"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ],
+                  "startNodeId": "assign",
+                  "connections": [
+                    {
+                      "id": "assign-show",
+                      "source": {
+                        "nodeId": "assign",
+                        "port": "Done"
+                      },
+                      "target": {
+                        "nodeId": "show"
+                      },
+                      "label": "Keep this route"
+                    },
+                    {
+                      "id": "block-promotion-flow-1",
+                      "source": {
+                        "nodeId": "show",
+                        "port": "Done"
+                      },
+                      "target": {
+                        "nodeId": "block-promotion-output-1"
+                      }
+                    }
+                  ],
+                  "nodeMetadata": {},
+                  "connectionMetadata": {}
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "data": {
+              "x": 240,
+              "y": 180
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    },
+    {
+      "name": "bpmn-direct",
+      "kind": "bpmn",
+      "parameter": false,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "bpmn",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.bpmn.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "Input",
+                                "value": {
+                                  "referenceKey": "greeting"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ],
+                      "elements": [
+                        {
+                          "elementId": "start",
+                          "elementType": "startEvent"
+                        },
+                        {
+                          "elementId": "element-assign",
+                          "elementType": "task",
+                          "childNodeId": "assign"
+                        },
+                        {
+                          "elementId": "element-show",
+                          "elementType": "task",
+                          "childNodeId": "show"
+                        },
+                        {
+                          "elementId": "end",
+                          "elementType": "endEvent"
+                        }
+                      ],
+                      "sequenceFlows": [
+                        {
+                          "flowId": "start-assign",
+                          "sourceRef": "start",
+                          "targetRef": "element-assign"
+                        },
+                        {
+                          "flowId": "assign-show",
+                          "sourceRef": "element-assign",
+                          "targetRef": "element-show"
+                        },
+                        {
+                          "flowId": "show-end",
+                          "sourceRef": "element-show",
+                          "targetRef": "end"
+                        }
+                      ],
+                      "diagram": {
+                        "shapes": {
+                          "start": {
+                            "x": 0,
+                            "y": 0,
+                            "width": 36,
+                            "height": 36
+                          },
+                          "element-assign": {
+                            "x": 100,
+                            "y": 0,
+                            "width": 100,
+                            "height": 80
+                          },
+                          "element-show": {
+                            "x": 300,
+                            "y": 0,
+                            "width": 100,
+                            "height": 80
+                          },
+                          "end": {
+                            "x": 500,
+                            "y": 0,
+                            "width": 36,
+                            "height": 36
+                          }
+                        },
+                        "edges": {}
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "bpmn",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.bpmn.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Input",
+                            "value": {
+                              "referenceKey": "input-1"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ],
+                  "elements": [
+                    {
+                      "elementId": "start",
+                      "elementType": "startEvent"
+                    },
+                    {
+                      "elementId": "element-assign",
+                      "elementType": "task",
+                      "childNodeId": "assign"
+                    },
+                    {
+                      "elementId": "element-show",
+                      "elementType": "task",
+                      "childNodeId": "show"
+                    },
+                    {
+                      "elementId": "end",
+                      "elementType": "endEvent"
+                    },
+                    {
+                      "elementId": "block-promotion-element-1",
+                      "elementType": "task",
+                      "childNodeId": "block-promotion-output-1"
+                    }
+                  ],
+                  "sequenceFlows": [
+                    {
+                      "flowId": "start-assign",
+                      "sourceRef": "start",
+                      "targetRef": "element-assign"
+                    },
+                    {
+                      "flowId": "assign-show",
+                      "sourceRef": "element-assign",
+                      "targetRef": "element-show"
+                    },
+                    {
+                      "flowId": "show-end",
+                      "sourceRef": "block-promotion-element-1",
+                      "targetRef": "end"
+                    },
+                    {
+                      "flowId": "block-promotion-flow-1",
+                      "sourceRef": "element-show",
+                      "targetRef": "block-promotion-element-1"
+                    }
+                  ],
+                  "diagram": {
+                    "shapes": {
+                      "start": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 36,
+                        "height": 36
+                      },
+                      "element-assign": {
+                        "x": 100,
+                        "y": 0,
+                        "width": 100,
+                        "height": 80
+                      },
+                      "element-show": {
+                        "x": 300,
+                        "y": 0,
+                        "width": 100,
+                        "height": 80
+                      },
+                      "end": {
+                        "x": 500,
+                        "y": 0,
+                        "width": 36,
+                        "height": 36
+                      },
+                      "block-promotion-element-1": {
+                        "x": 460,
+                        "y": 120,
+                        "width": 100,
+                        "height": 80
+                      }
+                    },
+                    "edges": {
+                      "block-promotion-flow-1": {
+                        "waypoints": [
+                          {
+                            "x": 400,
+                            "y": 40
+                          },
+                          {
+                            "x": 460,
+                            "y": 160
+                          }
+                        ]
+                      },
+                      "show-end": {
+                        "waypoints": [
+                          {
+                            "x": 560,
+                            "y": 160
+                          },
+                          {
+                            "x": 500,
+                            "y": 18
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-element-1",
+            "data": {
+              "x": 460,
+              "y": 120
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    },
+    {
+      "name": "bpmn-parameter",
+      "kind": "bpmn",
+      "parameter": true,
+      "original": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "bpmn",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.bpmn.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "assign",
+                          "activityVersionId": "set",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "JavaScript",
+                                "value": {
+                                  "language": "JavaScript",
+                                  "source": "args.message",
+                                  "resultType": {
+                                    "alias": "String",
+                                    "collectionKind": "single"
+                                  },
+                                  "options": {},
+                                  "capabilityProfile": "binding-pure-v1",
+                                  "parameters": {
+                                    "message": {
+                                      "kind": "WorkflowRequest",
+                                      "memberKey": "greeting"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "String",
+                              "collectionKind": "Single"
+                            },
+                            "variable": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        },
+                        {
+                          "nodeId": "show",
+                          "activityVersionId": "write",
+                          "inputs": [
+                            {
+                              "referenceKey": "text",
+                              "value": {
+                                "expressionType": "Variable",
+                                "value": {
+                                  "referenceKey": "local",
+                                  "declaringScopeId": "block"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        }
+                      ],
+                      "variables": [
+                        {
+                          "referenceKey": "local",
+                          "name": "Shipment code",
+                          "type": {
+                            "alias": "String",
+                            "collectionKind": "Single"
+                          },
+                          "storageDriverType": null,
+                          "default": {
+                            "expressionType": "Literal",
+                            "value": ""
+                          }
+                        }
+                      ],
+                      "elements": [
+                        {
+                          "elementId": "start",
+                          "elementType": "startEvent"
+                        },
+                        {
+                          "elementId": "element-assign",
+                          "elementType": "task",
+                          "childNodeId": "assign"
+                        },
+                        {
+                          "elementId": "element-show",
+                          "elementType": "task",
+                          "childNodeId": "show"
+                        },
+                        {
+                          "elementId": "end",
+                          "elementType": "endEvent"
+                        }
+                      ],
+                      "sequenceFlows": [
+                        {
+                          "flowId": "start-assign",
+                          "sourceRef": "start",
+                          "targetRef": "element-assign"
+                        },
+                        {
+                          "flowId": "assign-show",
+                          "sourceRef": "element-assign",
+                          "targetRef": "element-show"
+                        },
+                        {
+                          "flowId": "show-end",
+                          "sourceRef": "element-show",
+                          "targetRef": "end"
+                        }
+                      ],
+                      "diagram": {
+                        "shapes": {
+                          "start": {
+                            "x": 0,
+                            "y": 0,
+                            "width": 36,
+                            "height": 36
+                          },
+                          "element-assign": {
+                            "x": 100,
+                            "y": 0,
+                            "width": 100,
+                            "height": 80
+                          },
+                          "element-show": {
+                            "x": 300,
+                            "y": 0,
+                            "width": 100,
+                            "height": 80
+                          },
+                          "end": {
+                            "x": 500,
+                            "y": 0,
+                            "width": 36,
+                            "height": 36
+                          }
+                        },
+                        "edges": {}
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "candidate": {
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [
+            {
+              "referenceKey": "input-1",
+              "name": "Input1",
+              "displayName": "Greeting",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": false,
+              "default": null,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outputs": [
+            {
+              "referenceKey": "output-1",
+              "name": "Output1",
+              "displayName": "Shipment code",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "isRequired": true,
+              "isNullable": true,
+              "storageDriverKey": "elsa.json",
+              "durability": "Required"
+            }
+          ],
+          "outcomes": [
+            {
+              "referenceKey": "Done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "rootActivity": {
+              "nodeId": "block",
+              "activityVersionId": "bpmn",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.bpmn.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "intrinsic": {
+                        "kind": "set",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        },
+                        "variable": {
+                          "referenceKey": "local",
+                          "declaringScopeId": "block"
+                        }
+                      },
+                      "nodeId": "assign",
+                      "activityVersionId": "set",
+                      "inputs": [
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "JavaScript",
+                            "value": {
+                              "language": "JavaScript",
+                              "source": "args.message",
+                              "resultType": {
+                                "alias": "String",
+                                "collectionKind": "single"
+                              },
+                              "options": {},
+                              "capabilityProfile": "binding-pure-v1",
+                              "parameters": {
+                                "message": {
+                                  "kind": "WorkflowRequest",
+                                  "memberKey": "input-1"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "show",
+                      "activityVersionId": "write",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "block-promotion-output-1",
+                      "activityVersionId": "set-output",
+                      "inputs": [
+                        {
+                          "referenceKey": "name",
+                          "value": {
+                            "expressionType": "Literal",
+                            "value": "Output1"
+                          }
+                        },
+                        {
+                          "referenceKey": "value",
+                          "value": {
+                            "expressionType": "Variable",
+                            "value": {
+                              "referenceKey": "local",
+                              "declaringScopeId": "block"
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": [],
+                      "intrinsic": {
+                        "kind": "setoutput",
+                        "valueType": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    }
+                  ],
+                  "variables": [
+                    {
+                      "referenceKey": "local",
+                      "name": "Shipment code",
+                      "default": {
+                        "expressionType": "Literal",
+                        "value": ""
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "storageDriverType": null
+                    }
+                  ],
+                  "elements": [
+                    {
+                      "elementId": "start",
+                      "elementType": "startEvent"
+                    },
+                    {
+                      "elementId": "element-assign",
+                      "elementType": "task",
+                      "childNodeId": "assign"
+                    },
+                    {
+                      "elementId": "element-show",
+                      "elementType": "task",
+                      "childNodeId": "show"
+                    },
+                    {
+                      "elementId": "end",
+                      "elementType": "endEvent"
+                    },
+                    {
+                      "elementId": "block-promotion-element-1",
+                      "elementType": "task",
+                      "childNodeId": "block-promotion-output-1"
+                    }
+                  ],
+                  "sequenceFlows": [
+                    {
+                      "flowId": "start-assign",
+                      "sourceRef": "start",
+                      "targetRef": "element-assign"
+                    },
+                    {
+                      "flowId": "assign-show",
+                      "sourceRef": "element-assign",
+                      "targetRef": "element-show"
+                    },
+                    {
+                      "flowId": "show-end",
+                      "sourceRef": "block-promotion-element-1",
+                      "targetRef": "end"
+                    },
+                    {
+                      "flowId": "block-promotion-flow-1",
+                      "sourceRef": "element-show",
+                      "targetRef": "block-promotion-element-1"
+                    }
+                  ],
+                  "diagram": {
+                    "shapes": {
+                      "start": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 36,
+                        "height": 36
+                      },
+                      "element-assign": {
+                        "x": 100,
+                        "y": 0,
+                        "width": 100,
+                        "height": 80
+                      },
+                      "element-show": {
+                        "x": 300,
+                        "y": 0,
+                        "width": 100,
+                        "height": 80
+                      },
+                      "end": {
+                        "x": 500,
+                        "y": 0,
+                        "width": 36,
+                        "height": 36
+                      },
+                      "block-promotion-element-1": {
+                        "x": 460,
+                        "y": 120,
+                        "width": 100,
+                        "height": 80
+                      }
+                    },
+                    "edges": {
+                      "block-promotion-flow-1": {
+                        "waypoints": [
+                          {
+                            "x": 400,
+                            "y": 40
+                          },
+                          {
+                            "x": 460,
+                            "y": 160
+                          }
+                        ]
+                      },
+                      "show-end": {
+                        "waypoints": [
+                          {
+                            "x": 560,
+                            "y": 160
+                          },
+                          {
+                            "x": 500,
+                            "y": 18
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "variables": [],
+            "outputMappings": [],
+            "outcomeMappings": [
+              {
+                "sourceOutcomeReferenceKey": "Done",
+                "boundaryOutcomeReferenceKey": "Done"
+              }
+            ]
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "data": {
+              "x": 100,
+              "y": 100
+            }
+          },
+          {
+            "nodeId": "block-promotion-element-1",
+            "data": {
+              "x": 460,
+              "y": 120
+            }
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          },
+          {
+            "nodeId": "block-promotion-output-1",
+            "displayName": "Expose Shipment code"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "referenceKey": "greeting",
+          "name": "Greeting",
+          "isRequired": true,
+          "isNullable": false,
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          }
+        }
+      ],
+      "callSite": {
+        "nodeId": "block",
+        "inputs": [
+          {
+            "referenceKey": "input-1",
+            "value": {
+              "expressionType": "Input",
+              "value": {
+                "referenceKey": "greeting"
+              }
+            }
+          }
+        ],
+        "outputs": [],
+        "activityVersionId": "published-version",
+        "structure": null
+      },
+      "replacement": {
+        "rootActivity": {
+          "nodeId": "outer",
+          "activityVersionId": "sequence",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "inputs": [
+                    {
+                      "referenceKey": "input-1",
+                      "value": {
+                        "expressionType": "Input",
+                        "value": {
+                          "referenceKey": "greeting"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "activityVersionId": "published-version",
+                  "structure": null
+                },
+                {
+                  "nodeId": "after",
+                  "activityVersionId": "write",
+                  "inputs": [
+                    {
+                      "referenceKey": "text",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "hello"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": null
+                }
+              ],
+              "variables": []
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 100,
+            "y": 100
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Prepare shipment"
+          }
+        ]
+      },
+      "outputReferenceKey": "output-1",
+      "expected": [
+        "one",
+        "two",
+        "one"
+      ]
+    }
+  ]
+}
