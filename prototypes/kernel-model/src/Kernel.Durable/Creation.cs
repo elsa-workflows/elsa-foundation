@@ -13,6 +13,38 @@ public static class CreationProtocol
     // Length-prefix the full physical address: neither user punctuation nor a different parent partition aliases it.
     public static string Origin(string actor, long creation) => creation > 0 ? FormattableString.Invariant($"c{actor.Length}_{actor}_{creation}") : actor;
 
+    public static bool HasTerminalNoticeId(Message message, string child, long creation) =>
+        !string.IsNullOrEmpty(child) && creation > 0 && message.InboxKey == InboxKey.Issued(message.Id) &&
+        IsCompatibleTerminalHandle(message.Id, Origin(child, creation));
+
+    internal static bool IsTerminalHandle(string id, string origin)
+    {
+        if (!id.StartsWith(origin, StringComparison.Ordinal) || !id.EndsWith(".end", StringComparison.Ordinal) ||
+            id.Length <= origin.Length + 5 || id[origin.Length] != '#') return false;
+        var revision = id.AsSpan(origin.Length + 1, id.Length - origin.Length - 5);
+        return long.TryParse(revision, System.Globalization.NumberStyles.AllowLeadingSign,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) &&
+            revision.SequenceEqual(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    // Older writers used CurrentCulture without persisting its negative sign. Keep the issued
+    // key unchanged. This is a reader compatibility grammar, never a spelling for new emission.
+    internal static bool IsCompatibleTerminalHandle(string id, string origin)
+    {
+        if (IsTerminalHandle(id, origin)) return true;
+        if (!id.StartsWith(origin + "#", StringComparison.Ordinal) || !id.EndsWith(".end", StringComparison.Ordinal)) return false;
+        var value = id.AsSpan(origin.Length + 1, id.Length - origin.Length - 5);
+        var sign = 0;
+        while (sign < value.Length && !char.IsDigit(value[sign])) sign++;
+        var magnitude = value[sign..];
+        return sign > 0 && magnitude.Length > 0 && magnitude[0] != '0' &&
+            ulong.TryParse(magnitude, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number) &&
+            number <= 9223372036854775808UL && magnitude.SequenceEqual(number.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    public static string TerminalNoticeId(string actor, long creation, long revision) => creation > 0
+        ? FormattableString.Invariant($"{Origin(actor, creation)}#{revision}.end") : $"{actor}#{revision}.end";
+
     public static string? Fingerprint(StartSpec? start, string kind = Kinds.Start, string? payload = null) => start?.Creation is null ? null
         : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(new { Start = start, Kind = kind, Payload = payload }))));
     public static void RejectUnsupported(CommitBatch batch, bool physicalRetirement = false)

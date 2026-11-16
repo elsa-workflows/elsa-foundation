@@ -336,6 +336,8 @@ public sealed class DurableTurn
     public void Add(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
+        if (_input.Creation > 0 && CreationProtocol.IsCompatibleTerminalHandle(message.Id, Origin))
+            throw new ArgumentException("A qualified actor's reserved end handle requires AddTerminalNotice.", nameof(message));
         if (message.Sender == Id) message = message with { SenderCreation = _input.Creation };
         // An actor may compose its own recallable ID. Unrelated caller-chosen IDs stay in ordinary ingress.
         if (message.Id.StartsWith(Origin + "#", StringComparison.Ordinal) && !OwnsHandle(message.Id))
@@ -349,7 +351,7 @@ public sealed class DurableTurn
     public void AddTerminalNotice(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
-        if (message.Sender != Id || message.Id != $"{Origin}#{Revision}.end")
+        if (message.Sender != Id || message.Id != CreationProtocol.TerminalNoticeId(Id, _input.Creation, Revision))
             throw new ArgumentException("A terminal notice must use its issuing actor and revision.", nameof(message));
         _sent.Add((message with { SenderCreation = _input.Creation }).AsIssued());
     }
