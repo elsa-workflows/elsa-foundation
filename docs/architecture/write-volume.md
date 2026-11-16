@@ -91,7 +91,7 @@ question 2 (data lifecycle) owns their retention.
 2. **Decision 10 is release 1's write-volume priority.** The whole state is one value, and PostgreSQL rewrites a large
    value whole through TOAST at every commit. Values by reference is the one mitigation that removes that cost for
    values that do not change every turn. Where its values live is decision 1, and how it is accepted is decision 2. If a
-   payload codec encrypts states (#4707, later), it must compress before it encrypts, or every encrypted state above
+   payload codec encrypts states ([data lifecycle](data-lifecycle.md#encryption-of-state-at-rest), later), it must compress before it encrypts, or every encrypted state above
    about 2 kB pays the incompressible cost measured here.
 3. **Fill factor and vacuum settings are deployment notes**, written in POSTGRES.md's
    [tuning guidance](../../prototypes/kernel-model/POSTGRES.md#tuning-guidance) with each item marked measured or
@@ -143,8 +143,8 @@ first, as the sketch requires.
 ### 1. Where values by reference live
 
 This is one decision for this page and for the data-lifecycle page
-([#4707](https://github.com/elsa-workflows/elsa-foundation/pull/4707)); its retention, purge and erasure rules follow
-whichever option is chosen. #4707's current draft is written for option b.
+([values held by reference](data-lifecycle.md#values-held-by-reference-under-either-storage-option)), which sets out the
+purge, erasure and costs of both options and defers the choice to this decision.
 
 **What is built.** [ValueStore.cs](../../prototypes/kernel-model/models/Values/ValueStore.cs) is a witness: `ValueRef`
 is a SHA-256 digest (upper-case hex) with a length; `DirectoryValues` keeps one file per digest in one directory,
@@ -157,7 +157,7 @@ scoping, encryption and erasure are unqualified there.
 | Option | Write path | Lifecycle | For | Against |
 |---|---|---|---|---|
 | a. A values record in the same provider | An immutable row per value, keyed by instance and digest, written in the same fenced batch as the reference; read with the instance on load | No orphans: the row commits with its reference. A changed value writes a new row; superseded rows that Full-history journal rows still reference stay until the instance is deleted, and go with it | One store, one commit, one backup; MongoDB can do the same with a document | Large values still pass through the database once, with their own TOAST and WAL per value; superseded values accumulate for the instance's lifetime |
-| b. An external content-addressed store | The value is written before the commit, as the witness does through a job ticket; the commit records the reference | Orphans after a lost commit need a sweep. For #4707's purge by instance and erasure, objects must be named per instance (or the digest keyed per instance or tenant), which differs from the witness's store-wide content addressing; shared objects would otherwise need reference counting | Keeps large bytes out of the database | A second store to run, secure and back up; erasure spans two systems; extra calls (the witness: 5 against 13 engine calls to the first value-bearing commit, 12 against 20 for a fresh owner) |
+| b. An external content-addressed store | The value is written before the commit, as the witness does through a job ticket; the commit records the reference | Orphans after a lost commit need a sweep. For the data lifecycle page's purge by instance and erasure, objects must be named per instance (or the digest keyed per instance or tenant), which differs from the witness's store-wide content addressing; shared objects would otherwise need reference counting | Keeps large bytes out of the database | A second store to run, secure and back up; erasure spans two systems; extra calls (the witness: 5 against 13 engine calls to the first value-bearing commit, 12 against 20 for a fresh owner) |
 
 **Recommendation: a for release 1**, with b as a later value-store adapter for deployments that need large bytes kept
 out of the database.
