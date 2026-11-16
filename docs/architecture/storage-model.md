@@ -15,6 +15,14 @@ The [store contract](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs) 
 The [in-memory store](../../prototypes/kernel-model/src/Kernel.Durable/InMemoryStore.cs) is the executable reference,
 not another physical schema.
 
+## Providers
+
+**Built in the standalone prototype:** EF Core (SQLite, PostgreSQL, SQL Server and MySQL) and MongoDB with replica-set transactions. Their physical records and current combined `IKernelStore` contract are described below; this is not product-provider acceptance.
+
+**Log profile: planned, not designed.** The later profile would append fenced batches to a Raft-replicated partition log, keep local state and export committed records into read models. Both `IKernelStore` and ownership in `IActorRuntime` are involved. No Log provider, adapter or contract split is implemented. The [round 5 H contract paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md) proposes committed append, ownership, delivery and read-model contracts; a relational provider can implement all four.
+
+The owner accepted recording a send atomically with sender state, with deduplicated later delivery when cross-partition transactions are unavailable. That future outbox path permits delivery lag; it does not promise exactly-once external effects. The current EF/Mongo shared-store transaction still inserts destination inbox rows atomically, as documented below. Non-owner queries, including lists and counts, belong on read models in the proposed design. The paper does not change today's tables, query paths or APIs.
+
 ## Physical records
 
 EF Core maps nine **model tables**. Initialization also creates allocator and serialization objects described below:

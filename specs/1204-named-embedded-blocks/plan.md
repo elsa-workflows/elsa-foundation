@@ -22,7 +22,9 @@ The owner approved this scope and autonomous end-to-end delivery on 3 November. 
 
 Keep #3610 as the canonical request and **Program**, preserving its original success criteria. Native parent/sub-issue relationships own the hierarchy; Project 67 schedules it. The current organization has no native Spike type: S001 uses native Task plus `type:spike`. File Bugs only for reproduced defects.
 
-| Epic | Features | Leaves, in dependency order |
+The table records the original established decomposition. Owner triage on 9 November retired duplicate wrappers #3739/#3740/#3741 and #3747, without completing their original acceptance. The current native hierarchy is Program #3610 → Features #3744 (T002/T003), #3745 (T004) and #3746 (T005/T006); the Program itself owns T007. Delivered #3738/#3742 and #3743 retain their historical evidence. See the [current program ownership](../../docs/program-goals/named-embedded-blocks.md#current-checkpoint) and unchanged serial task order below.
+
+| Established Epic (historical) | Features | Leaves, in dependency order |
 |---|---|---|
 | Design/prototype #3738 | Design/prototype #3742 | Establishment #3748 → prototype Spike #3749 |
 | Authoring/extraction #3739 | Presentation #3743; native refactoring #3744; BPMN #3745 | Presentation #3750 and native transformations #3751 → shared commands #3752 → T004 BPMN in Feature #3745 |
@@ -72,7 +74,7 @@ Run whole affected frontend/backend suites, relevant source end-to-end journeys,
 
 ## Constitution Check
 
-Loaded framework v6.1.0 and Elsa v6.3.0 Gate indexes plus the contributing review checklist. Keep activity-specific children/connections/scheduling in owning modules, Design/Runtime separation and exact-version behavior. Implementations remain internal by default; public/API changes are limited to genuine additive presentation contracts and evidence-required supporting seams. No new project/package or kernel structural primitive is planned.
+Loaded framework v6.1.0 and Elsa v6.5.0 Gate indexes for the T003 continuation plus the contributing review checklist. Keep activity-specific children/connections/scheduling in owning modules, Design/Runtime separation and exact-version behavior. Implementations remain internal by default; public/API changes are limited to genuine additive presentation contracts and evidence-required supporting seams. No new project/package or kernel structural primitive is planned.
 
 Framework §§2.1, 2.6, 2.21.1, 2.22 and 2.23.2 govern dependencies, preserved behavior, catalog updates and risk-based regressions. Existing public API tracking, architecture and map/tier gates apply when touched. Elsa §§E2.8/E2.9 and framework §2.24 remain draft/provisional; this work does not ratify them. Post-design review requests no exception.
 

@@ -26,11 +26,9 @@ internal static class FlowchartPolicyConnectionSelector
         new(
             FlowchartPolicyCommandKind.ScheduleNode,
             nodeId: connection.Target.NodeId,
-            connectionId: ConnectionId(connection));
+            connectionId: connection.GetId()) { SelectedConnection = connection };
 
     private static HashSet<string> NormalizeOutcomes(IReadOnlyCollection<string> outcomeNames) =>
         (outcomeNames.Count == 0 ? [FlowchartEndpoint.NormalizePort(null)] : outcomeNames.Select(FlowchartEndpoint.NormalizePort)).ToHashSet(StringComparer.Ordinal);
 
-    private static string ConnectionId(FlowchartConnection connection) =>
-        connection.Id ?? $"{connection.Source.NodeId}:{connection.Source.Port}->{connection.Target.NodeId}";
 }
