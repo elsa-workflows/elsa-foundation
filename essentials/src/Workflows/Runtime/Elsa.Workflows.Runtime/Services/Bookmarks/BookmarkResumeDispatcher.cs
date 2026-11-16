@@ -137,7 +137,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             ResolveHistory();
             if (_history is null || _historyReader is null || _historyAccess is null || !_history.CanRecordHistory(_historyReader))
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Delivery history requires its scoped owner provider.");
-            _historyAccess.Current.RequireScope(); _historyAccess.Current.EnsureTenantScope(owner!.TenantId);
+            NativeIngressCheckpointAuthority.EnsureHistoryScope(_historyAccess.Current, owner!);
             receiptId = Guid.NewGuid().ToString("N");
             var logicalDelivery = source?.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
                 ? RuntimeHistoryIdentity.CreateBinding([request.WorkflowExecutionId, key]) : receiptId);
