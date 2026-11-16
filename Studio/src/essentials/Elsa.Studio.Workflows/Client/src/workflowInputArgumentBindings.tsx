@@ -1,3 +1,4 @@
+import { useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId } from "react";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
@@ -21,7 +22,8 @@ export function withWorkflowInputExpressionArgument(
   value: unknown,
   expressionType: string,
   activityInput: StudioActivityInputDescriptor,
-  workflowInput: WorkflowInput
+  workflowInput: WorkflowInput,
+  inputBindingTarget: "name" | "referenceKey" = "name"
 ): PortableExpressionDefinitionValue | null {
   const portableDefinition = readPortableExpressionDefinition(value, expressionType);
   if (!portableDefinition && value != null && typeof value === "object") return null;
@@ -37,7 +39,7 @@ export function withWorkflowInputExpressionArgument(
   const existing = hasExisting ? definition.parameters[workflowInput.name] : null;
   return existing != null && !isWorkflowRequestBinding(existing)
     ? null
-    : { ...definition, parameters: { ...definition.parameters, [workflowInput.name]: { kind: "WorkflowRequest", memberKey: workflowInput.name } } };
+    : { ...definition, parameters: { ...definition.parameters, [workflowInput.name]: { kind: "WorkflowRequest", memberKey: workflowInput[inputBindingTarget] } } };
 }
 
 export function withoutPortableExpressionParameter(
@@ -175,12 +177,15 @@ export function WorkflowInputArgumentBindings({
   disabled,
   onChange
 }: WorkflowInputArgumentBindingsProps) {
+  const { inputBindingTarget = "name" } = useWorkflowReferenceAuthoring() ?? {};
+  const inputKind = inputBindingTarget === "referenceKey" ? "activity" : "workflow";
+  const inputKindLabel = inputKind === "activity" ? "Activity" : "Workflow";
   const selectId = useId();
   const arguments_ = readWorkflowInputExpressionArguments(value, syntax);
   const bindingsByArgumentName = new Map(arguments_.map(binding => [binding.argumentName, binding]));
 
   return (
-    <div className="wf-js-input-bindings"><StudioField className="wf-section-label" controlId={selectId} label="Workflow input bindings">
+    <div className="wf-js-input-bindings"><StudioField className="wf-section-label" controlId={selectId} label={`${inputKindLabel} input bindings`}>
 
       <select
         id={selectId}
@@ -189,11 +194,11 @@ export function WorkflowInputArgumentBindings({
         onChange={event => {
           const selected = inputs.find(workflowInput => workflowInput.name === event.currentTarget.value);
           if (!selected) return;
-          const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected);
+          const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected, inputBindingTarget);
           if (definition) onChange(withLiteralValue(wrapped, definition));
         }}
       >
-        <option value="">Add workflow input…</option>
+        <option value="">Add {inputKind} input…</option>
         {inputs.map(workflowInput => {
           const alreadyBound = bindingsByArgumentName.has(workflowInput.name);
           const occupied = valueHasParameter(value, syntax, workflowInput.name) && !alreadyBound;
@@ -201,13 +206,14 @@ export function WorkflowInputArgumentBindings({
         })}
       </select>
       {arguments_.length > 0 ? (
-        <ul className="wf-reference-list" aria-label="Bound workflow inputs">
+        <ul className="wf-reference-list" aria-label={`Bound ${inputKind} inputs`}>
           {arguments_.map(binding => {
-            const label = binding.memberKey || "Unknown workflow input";
-            const missing = !binding.memberKey || !inputs.some(input => input.name === binding.memberKey);
+            const declaration = inputs.find(input => input[inputBindingTarget] === binding.memberKey);
+            const label = declaration?.name || binding.memberKey || `Unknown ${inputKind} input`;
+            const missing = !binding.memberKey || !declaration;
             return (
               <li className="wf-reference-meta" key={binding.argumentName}>
-                <span>{label}{missing ? (binding.memberKey ? " (missing workflow input)" : " (invalid workflow input binding)") : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
+                <span>{label}{missing ? (binding.memberKey ? ` (missing ${inputKind} input)` : ` (invalid ${inputKind} input binding)`) : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
                 <button
                   type="button"
                   className="wf-reference-toggle"
