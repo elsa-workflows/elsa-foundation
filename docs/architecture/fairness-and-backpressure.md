@@ -11,7 +11,7 @@ same node. This page proposes four mechanisms, each at the layer that owns the r
 | Mechanism | Layer | Protects | Release 1 |
 |---|---|---|---|
 | Admission at the edge: per-tenant rates, per-node limits | 2, ingress | Every partition, from work that enters from outside | Yes |
-| A bound on due inbox depth per virtual partition | 2 | Queueing delay inside one virtual partition | Yes |
+| An ingress threshold on due inbox depth per virtual partition | 2 | Queueing delay inside one virtual partition, from outside work | Yes |
 | Fair turn selection and a turn budget per pass | 2, with a hint to 1 | The node's passes, and tenants inside one pass | Yes |
 | Credits between instances, and caps on sends per turn | 3, with a kernel guard | Inbox growth that turns cause | Caps yes; credits with ETL |
 
@@ -34,9 +34,11 @@ Built, in `prototypes/kernel-model` at main `433c79341`:
 | A node holds its fair share of partitions, by node count | `PartitionRuntime.BalanceAsync`, FINDINGS section 9 | Balances partitions, not load. |
 | A poison trial stops every other turn in the process | `TrialGate`, FINDINGS F11 | A deliberate, rare fairness cost. |
 | The ETL spike keeps at most 8 children outstanding per coordinator | `models/Etl/EtlModel.cs`, [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md) | The one credit protocol on the kernel; measured locally, below. |
+| A Native invocation inbox with a capacity: input above `Capacity` or `ReceiptCapacity` is answered `Full` or `ReceiptFull` | `models/Native/InvocationInbox.cs`, `models/Admission.Run` (its `IgnoreCapacity` control) | A bounded inbox inside one instance's state, in layer 3, that refuses by reply. M0 research, not the production contract. |
 
-Not built anywhere in the prototype: a tenant field (the prototype's `InstanceRow` and `Message` have none), admission,
-an inbox bound, a pass budget, a pressure signal or a cap on sends per turn. No fairness measurement exists. Everything
+Not built in the prototype's layers 1 and 2: a tenant field (the prototype's `InstanceRow` and `Message` have none),
+admission at ingress, a bound on a virtual partition's inbox, a pass budget, a pressure signal or a cap on sends per
+turn. The one bounded inbox is the layer 3 invocation inbox above. No fairness measurement exists. Everything
 in the sections below is **proposed and unverified** unless it cites a run.
 
 ## Where the delay comes from
@@ -45,21 +47,26 @@ in the sections below is **proposed and unverified** unless it cites a run.
    publishes a tenant inserts.
 2. **Turns.** A turn may send or start any number of messages in its commit. A parent's children report back into one
    inbox. [Large fan-out](large-fan-out.md) covers that case.
-3. **The poll window.** A virtual partition's due rows are read in `seq` order. A message behind 10,000 rows of another
+3. **Outside publishes.** One publish takes one admission, and then adds one message per matching wait, into whichever
+   virtual partitions those waits live in, whatever their depth. Admission does not cover that fan-out; the number of
+   matching waits bounds it.
+4. **The poll window.** A virtual partition's due rows are read in `seq` order. A message behind 10,000 rows of another
    tenant waits for 20 polls of 500.
-4. **The node loop.** Passes run one after another. A scope with 5,000 ready instances holds the loop for 5,000 turns.
+5. **The node loop.** Passes run one after another. A scope with 5,000 ready instances holds the loop for 5,000 turns.
 
-Virtual partitions dilute a burst: 100,000 starts spread by hash over 1,024 virtual partitions put about 98 in each
-(the placement check's spread at 1,024 was 68 to 129 per virtual partition for 100,000 names, PARTITIONS.md). The node
-still has to run all of them, so the quiet tenant's wait is the time its node needs to drain the burst. Only admission
-limits that; the other mechanisms bound the tail.
+Virtual partitions dilute a burst of keyed starts: 100,000 caller keys spread by hash over 1,024 virtual partitions put
+about 98 in each (the placement check's spread at 1,024 was 68 to 129 per virtual partition for 100,000 names,
+PARTITIONS.md). Unkeyed starts are placed inline, in virtual partitions of the node that received them, so they spread
+only as widely as the traffic spreads over nodes. Either way the node still has to run all of them, so the quiet
+tenant's wait is the time its node needs to drain the burst. Only admission limits that; the other mechanisms bound the
+tail.
 
 ## Admission at the edge
 
 **Contract (proposed).** Every message that enters from outside the kernel passes an admission decision before its row
 is written: API and HTTP starts, keyed commands, outside event publishes, and ingress adapters (brokers, webhooks,
 schedule sources). Messages that turns send, timers, job results and child completions are already owed and are never
-refused.
+refused. Control commands and operator actions have their own rule, below.
 
 ```csharp
 public interface IAdmission                                // layer 2, the ingress side of the delivery seam
@@ -70,7 +77,7 @@ public interface IAdmission                                // layer 2, the ingre
 public sealed record AdmissionRequest(string Tenant, AdmissionKind Kind, InstanceRef? Target, string? Definition);
 public enum AdmissionKind { Start, Command, Publish }
 public sealed record AdmissionDecision(bool Admitted, RefusalReason? Reason = null, TimeSpan? RetryAfter = null);
-public enum RefusalReason { RateLimited, NodeBusy, InboxFull }
+public enum RefusalReason { RateLimited, NodeBusy, InboxFull }   // HTTP 429, 503, 503
 ```
 
 `Target` is the instance a keyed start or command addresses. Its virtual partition is read from the id inside layer 2;
@@ -85,8 +92,14 @@ An inline Ephemeral start that writes no row passes the tenant rate check only.
 |---|---|---|---|
 | Tenant rate: a token bucket per tenant and `AdmissionKind` (rate, burst) | Per node | In memory | Exact per node. Cluster-wide it is the configured rate divided by the node count from membership, so approximate while nodes join or leave, and below the configured rate when ingress traffic is uneven across nodes |
 | Admissions in flight | Per node | In memory | Exact |
-| Background jobs running, per tenant | Per node (the job scheduler's slots) | In memory | Exact per node |
 | Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals |
+
+Background jobs are limited in a different way: the job scheduler gives each tenant a number of slots per node, and a
+job beyond them waits for a slot. That limit refuses nothing.
+
+**Control commands and operator actions (proposed).** `Suspend`, `Terminate`, `Delete` and an operator's discard of
+parked work shed load, so they are exempt from `InboxFull` and from the tenant rate; a separate operator rate limits
+them. `Resume` and an operator's retry of parked work add load, so they obey `InboxFull`. See "Decisions for the owner".
 
 **Cost.** An admitted request pays nothing extra: every check is in memory. A refused request writes no row, so a client
 or adapter retry is harmless; a retry with the same caller key finds the same instance, as today.
@@ -100,10 +113,13 @@ the tenant's starts. See "Decisions for the owner".
 ## A bound on inbox growth
 
 The durable inbox is the overflow: rows wait in the table. Owner memory is bounded by `PollLimit` per poll and by
-`MaxInstances`, which is unbounded by default; release 1 sets a value. What needs a bound is the due depth per virtual partition, because it sets the wait at the back of the
-poll window.
+`MaxInstances`, which is unbounded by default; release 1 sets a value. What needs a bound is the due depth per virtual
+partition, because it sets the wait at the back of the poll window.
 
-**Where the bound is enforced.** At admission, from a published estimate. The store never refuses an insert for depth:
+**What is bounded, and where.** The kernel bounds what enters from outside, at admission, from a published estimate:
+an **ingress threshold**. It gives no hard bound on total depth. Internal arrivals (sends, timers, job results, child
+completions) keep landing after ingress is refused, and only the send cap, the ForEach cap and models' credits bound
+them. The store never refuses an insert for depth:
 
 - A sent message is part of the sender's fenced commit. Refusing it would roll back the sender's whole batch, other
   instances' turns included, or split the commit into pieces, which the extensibility principle forbids.
@@ -121,8 +137,13 @@ SELECT count(*) FROM (
   LIMIT :highWater + 1) AS behind;
 ```
 
-One query per behind virtual partition per sample interval, an index range scan of at most `highWater + 1` rows on the
-existing `(partition, seq)` path. Unmeasured.
+One query per behind virtual partition per sample interval. On today's indexes the scan is not bounded by
+`highWater + 1`: the EF index is `(Partition, Seq)` and MongoDB's poll index is `(partition, done, seq, _id)`, so the
+`done` and `due` filters apply to the rows scanned. The scan also reads done rows that wait for their sweep (EF) and
+future timers (both) in the partition. Proposed: an index on `(partition, done, due)`, partial on `done = false` where
+the engine supports it (PostgreSQL, SQLite, SQL Server's filtered index; MySQL and MongoDB take the full index), which
+bounds the scan to `highWater + 1` entries. It costs one more index entry written for every message insert, consume and done update, and on PostgreSQL more
+dead index tuples. Both costs are unmeasured; the release 1 cost runs measure them with WRITES.md's method.
 
 **The pressure list (proposed).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
@@ -136,18 +157,23 @@ SELECT id, backlog FROM partition WHERE backlog >= :lowWater;
 ```
 
 Admission refuses a start or command whose target virtual partition is above the high-water mark, and admits again
-below the low-water mark. The bound is soft: it can overshoot by the arrivals of one refresh interval plus one sample
-interval. A provider without a relational fence row stores the field beside its fence record; MongoDB stores it in the
-partition document.
+below the low-water mark. For outside work the threshold is soft: admitted arrivals can overshoot it by one refresh
+interval plus one sample interval of ingress. Internal arrivals are not limited by it at all. A provider without a
+relational fence row stores the field beside its fence record; MongoDB stores it in the partition document.
+
+The threshold does not see tenants. A quiet tenant whose keyed instances share a virtual partition with a burst is
+refused with the bursting tenant: the burst's delay becomes the quiet tenant's refusals. Tenant rates make a burst
+smaller and so make this less likely. A per-tenant share of a virtual partition's depth needs a tenant column on
+`message`, and stays a later option.
 
 **What a sender sees when an inbox is full:**
 
 | Sender | What it sees |
 |---|---|
-| API or HTTP caller | A refusal before any row is written: `InboxFull` (HTTP 503) or `RateLimited` (HTTP 429), each with `Retry-After`. A retry, keyed or not, is safe. |
+| API or HTTP caller | A refusal before any row is written: `InboxFull` or `NodeBusy` (HTTP 503), or `RateLimited` (HTTP 429), each with `Retry-After`. A retry, keyed or not, is safe. |
 | Ingress adapter (broker, webhook, schedule source) | The same refusal. A broker adapter stops acknowledging and pauses consumption, so the broker keeps the backlog; a schedule source fires late. |
 | Outside publisher | Admission against its tenant's rate. The publish's fan-out into waiting instances is never refused: the waits are committed. |
-| A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn (a turn above it fails, and the kernel parks the instance as for any turn that throws), the [parallel ForEach cap](large-fan-out.md), and credits. The target's lag shows in the depth metric. |
+| A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn, the [parallel ForEach cap](large-fan-out.md), and credits. The kernel checks the cap when it seals the turn's outcome, so a model cannot catch it; a turn above it fails, and the kernel parks the instance as for any turn that throws. The target's lag shows in the depth metric. |
 | A timer, job result or child completion | Nothing: it is owed and lands. |
 
 ## Fair scheduling within a pass
@@ -161,8 +187,10 @@ partition document.
    oldest deliverable message was observed first goes first. A cursor carries the rounds from pass to pass; a reset
    drops it with the rest of memory. The ordinal order of today starves high ids once a budget exists, so it goes.
 3. **An age hint for layer 1.** `RunAsync` also reports the age of its oldest waiting deliverable message. The
-   built-in runtime runs the scope with the oldest waiting work first; scope order breaks ties. Layer 1 learns an age
-   and nothing about tenants or messages.
+   built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
+   the scopes go in order of their oldest waiting work, scope order breaking ties. The age orders a round and never
+   gives one scope a second pass before every other ready scope has had one. Layer 1 learns an age and nothing about
+   tenants or messages.
 
 The per-target order rule is unchanged: a target's messages are handled in `seq` order, and one sender's messages to
 one target arrive in the order sent. The selection only chooses which instance takes the next turn.
@@ -179,7 +207,8 @@ tenant: a later option, if measurements show the need.
 
 - **Per virtual partition.** The owner's decisions of 16 November fix 1,024 virtual partitions with a fence row each
   ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md)). The bound, the estimate and the `backlog` field are per
-  virtual partition, so the store-wide bound on due rows is 1,024 times the high-water mark.
+  virtual partition, so the store-wide ingress threshold is 1,024 times the high-water mark. Internal arrivals can take
+  the due rows above it.
 - **Range ownership (later, the Worker refactor).** A scope becomes a range of virtual partitions with one pass. The
   turn budget and the round robin then span the range; the capped count runs per behind virtual partition of the range.
   Until that refactor the kernel's Worker owns one partition and the same rules apply to it.
@@ -204,7 +233,9 @@ runs on the in-memory store, and its credit is local to each coordinator (ETL.md
 The kernel's mechanisms are the safety net for models that do not cooperate, and credits keep a cooperating model away
 from them:
 
-- A consumer's inbox holds at most C messages from one producer, so a credited pipeline never reaches the bound.
+- A consumer's inbox holds at most C messages from one producer. A credited pipeline stays under a virtual partition's
+  high-water mark only if the outstanding credits of all producers that send into that virtual partition add up to
+  less than the mark; each producer's C must then be well below it. Credits alone do not ensure that.
 - Credits travel as ordinary messages and completions, so they need only the turn contract.
 - Admission never touches them: they are messages between instances.
 - Native's parallel ForEach with a degree of parallelism is the same pattern inside one instance.
@@ -218,8 +249,8 @@ The sketch's release 1 scope names "admission control with bounded inboxes". Pro
 - `IAdmission` on every ingress path, with per-tenant token buckets per node and an in-flight limit per node.
 - A tenant column on the instance row, which the sketch's data model already lists.
 - Per-tenant job slots in the job scheduler.
-- The due-depth bound per virtual partition: the `backlog` field, the capped count and the pressure list, with 503
-  refusals.
+- The ingress threshold on due depth per virtual partition: the `backlog` field, the capped count with its index, and
+  the pressure list, with 503 refusals and the exemptions for control commands and operator actions.
 - The cap on sends per turn and the parallel ForEach cap.
 - The turn budget per pass, deficit round robin by tenant, and the age hint.
 - Metrics for due depth per virtual partition and refusals by reason and tenant, named by the observability page.
@@ -228,18 +259,21 @@ Defaults (rates, high and low water, budget, sample interval, send cap) are set 
 starting points, all unmeasured: `PassTurnBudget` 500 (equal to `MaxBatch`), high water 10,000 and low water 8,000 due
 rows per virtual partition, a 5 s sample interval, 10,000 sends per turn.
 
-**Later:** hard running-instance quotas, a poll per tenant, priorities, load-aware rebalancing and shuffle sharding.
+**Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
+an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.
 
 **Verification planned for release 1** (none of it exists):
 
 - Simulation invariants:
-  - a ready instance waits at most ⌈ready / budget⌉ passes of its scope;
+  - with deficit round robin, an instance at position k among its tenant's ready instances takes its turn within
+    ⌈k / q⌉ rounds, where q is its tenant's quantum; a round is at most the sum of the quanta of the tenants with ready
+    instances, in turns, spread over passes of at most the budget;
   - a refusal writes no row;
   - an internal send is never refused.
 - Mutations: ordinal selection under a budget (starvation), an unbounded pass, and a store-side refusal of a sent
   message (a rolled-back batch).
 - A two-tenant stress test on PostgreSQL: one tenant bursts 100,000 starts and the other trickles. It records the
-  quiet tenant's start-to-first-turn latency at the 99th percentile, with admission on and off.
+  quiet tenant's start-to-first-turn latency at the 99th percentile and its refusals, with admission on and off.
 
 ## Decisions for the owner
 
@@ -256,6 +290,12 @@ rows per virtual partition, a 5 s sample interval, 10,000 sends per turn.
    - (a) The turn fails and the instance is parked, as for any turn that throws. *Recommended:* the failure is
      deterministic and visible.
    - (b) No kernel cap; rely on models' credits and the ForEach cap.
+4. **Control commands and operator actions under `InboxFull`.**
+   - (a) Exempt the commands that shed load (`Suspend`, `Terminate`, `Delete`, discard of parked work) from
+     `InboxFull` and the tenant rate, under a separate operator rate; `Resume` and retry of parked work obey
+     `InboxFull`. *Recommended:* an operator can always shed load, and nothing that adds load skips the threshold.
+   - (b) Exempt every control command and operator action, `Resume` and retry included.
+   - (c) No exemption: every outside message obeys `InboxFull`.
 
 ## Contract and evidence
 
