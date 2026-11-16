@@ -10,6 +10,7 @@ Status: a proposed design, not approved. No product code exists for it. It super
 | [walkthrough-src/](walkthrough-src/) | The walkthrough in five parts: the files to edit |
 | [kernel-in-motion.html](kernel-in-motion.html) | The kernel in motion: one order workflow animated through every part, the three persistence modes side by side, three faults, the fence lab and a visual glossary. A single self-contained file; also published at https://crystal-pellet-h5m3.here.now/ |
 | [kernel-demo.html](kernel-demo.html) | The kernel demo: six slides for a mixed audience (arrow keys; N for notes). The three layers, one request animated, the persistence modes, and database commands for Elsa 3, Elsa 4 today and the kernel prototype on the same three workflows. Published at https://quartz-island-6myr.here.now/ |
+| [teleprompter.html](teleprompter.html) | Speaker notes for the demo in plain words, for a mixed audience, plus a Q&A on how AI was used. Click "Open the demo window" and it follows the demo; arrow keys otherwise. Published with its own demo copy at https://vast-tablet-xx4p.here.now/ |
 | [evidence/elsa3-cost/](evidence/elsa3-cost/RECEIPT.md) | The Elsa 3.10.1 command-count measurement behind the demo: receipt, harness and per-case SQL logs |
 
 The walkthrough is also published at https://vowful-mustard-pd8t.here.now/. To rebuild it after editing a part:
