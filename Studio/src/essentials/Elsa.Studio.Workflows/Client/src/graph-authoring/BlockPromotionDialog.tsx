@@ -42,6 +42,8 @@ export interface BlockPromotionDialogProps {
 type Target = "new" | "existing";
 const reusableCategory = "Reusable activities";
 const catalogWaitMs = 10_000;
+// A create that has not answered by then is treated as unknown, so the dialog never stays locked indefinitely.
+const createTimeoutMs = 30_000;
 
 export function promotionPlannerContext(context: NativeBlockContext, createPosition: { x: number; y: number }, host: BlockPromotionHost): BlockPromotionContext | null {
   if (!host.capabilities) return null;
@@ -109,7 +111,7 @@ export function BlockPromotionDialog(props: BlockPromotionDialogProps) {
         category: category.trim() || reusableCategory, displayName: ready.name, description: description.trim() || null,
         provider: ready.candidate.provider, contract: ready.candidate.contract, layout: ready.candidate.layout,
         activityPresentation: ready.candidate.activityPresentation
-      });
+      }, AbortSignal.timeout(createTimeoutMs));
       if (id !== request.current) return;
       setReviewed(ready); setCreated(response);
     } catch (error) {
@@ -188,7 +190,7 @@ export function BlockPromotionDialog(props: BlockPromotionDialogProps) {
         <label><input type="radio" name="promotion-target" checked={target === "new"} onChange={() => { setTarget("new"); setMessages([]); }} /> Create a new reusable activity</label>
         <label><input type="radio" name="promotion-target" checked={target === "existing"} onChange={() => { setTarget("existing"); setMessages([]); }} /> Use a published version</label>
       </fieldset>
-      {target === "new" ? <StudioField label="Name"><input value={name} maxLength={200} disabled={Boolean(busy) || Boolean(created)} onChange={event => { setName(event.target.value); setMessages([]); }} /></StudioField> : null}
+      <StudioField label="Name"><input value={name} maxLength={200} disabled={Boolean(busy) || Boolean(created)} onChange={event => { setName(event.target.value); setMessages([]); }} /></StudioField>
       {target === "new" && !created ? <>
         <StudioField label="Category"><input value={category} maxLength={200} disabled={Boolean(busy)} onChange={event => setCategory(event.target.value)} /></StudioField>
         <StudioField label="Summary"><textarea value={description} maxLength={2000} disabled={Boolean(busy)} onChange={event => setDescription(event.target.value)} /></StudioField>
@@ -235,6 +237,15 @@ function countSteps(node: ActivityNode, catalog: ActivityCatalogItem[]): number 
   return getChildSlots(node, catalog).reduce((sum, slot) => sum + slot.activities.reduce((inner, child) => inner + 1 + countSteps(child, catalog), 0), 0);
 }
 
+function findBlock(node: ActivityNode, nodeId: string, catalog: ActivityCatalogItem[]): ActivityNode | undefined {
+  if (node.nodeId === nodeId) return node;
+  for (const slot of getChildSlots(node, catalog)) for (const child of slot.activities) {
+    const found = findBlock(child, nodeId, catalog);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 /** Where the call takes an input's value from today, in the author's terms. */
 function describeSource(source: unknown, context: NativeBlockContext, host: BlockPromotionHost) {
   const record = source && typeof source === "object" ? source as { expressionType?: string; value?: Record<string, unknown> } : {};
@@ -253,7 +264,9 @@ function describeSource(source: unknown, context: NativeBlockContext, host: Bloc
 
 function PromotionProposal({ plan, context, host }: { plan: ReadyBlockPromotion; context: NativeBlockContext; host: BlockPromotionHost }) {
   const outcomes = plan.candidate.contract.outcomes;
-  const steps = countSteps((plan.candidate.provider.payload as { rootActivity: ActivityNode }).rootActivity, context.catalog);
+  // The author's block as it is, without the result-transfer steps the proposal adds.
+  const block = findBlock(context.document.rootActivity, plan.blockNodeId, context.catalog);
+  const steps = block ? countSteps(block, context.catalog) : 0;
   const typeLabel = (type: { alias: string; collectionKind: string }) => type.collectionKind && type.collectionKind.toLowerCase() !== "single" ? `${type.alias} (${type.collectionKind})` : type.alias;
   return <div className="wf-block-preview">
     <h3>Proposed reusable activity</h3>

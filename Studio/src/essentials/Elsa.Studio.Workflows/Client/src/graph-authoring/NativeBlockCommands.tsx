@@ -165,7 +165,7 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
       <button type="button" disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => begin("ungroup")}>Ungroup…</button>
       {isBlock && selected ? <button type="button" onClick={() => props.open(selected.nodeId)}>Open {label || "block"} ({childCount} steps)</button> : null}
       {props.promotion ? <button type="button" disabled={!props.context.canEdit || !isBlock || !selected || props.promotion.capabilitiesState !== "ready"}
-        title={promotionUnavailable} aria-describedby={promotionUnavailable && isBlock ? promotionReasonId : undefined}
+        title={promotionUnavailable} aria-describedby={promotionUnavailable && isBlock && props.context.canEdit ? promotionReasonId : undefined}
         onClick={() => { if (selected) { setPromotionStatus(null); setPromoting(selected.nodeId); } }}>Promote to reusable activity…</button> : null}
       {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
     </div>

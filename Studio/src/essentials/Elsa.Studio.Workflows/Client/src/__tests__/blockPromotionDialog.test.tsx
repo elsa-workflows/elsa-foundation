@@ -51,13 +51,13 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 function render() {
   flushSync(() => root.render(<BlockPromotionDialog endpoint={endpoint} context={nativeContext} createPosition={{ x: 0, y: 0 }} host={host} blockNodeId="block" onClose={onClose} onReplaced={onReplaced} />));
 }
-function reviewed() {
-  const plan = planBlockPromotion({ ...promotionContext(), document: nativeContext.document }, "block");
+function reviewed(name?: string) {
+  const plan = planBlockPromotion({ ...promotionContext(), document: nativeContext.document }, "block", name);
   if (plan.status !== "ready") throw new Error(JSON.stringify(plan));
   return plan;
 }
-function publishedView(change: Partial<ActivityDefinitionVersionView> = {}): ActivityDefinitionVersionView {
-  const plan = reviewed();
+function publishedView(change: Partial<ActivityDefinitionVersionView> = {}, name?: string): ActivityDefinitionVersionView {
+  const plan = reviewed(name);
   return { definition: { definitionId: "definition-1", activityTypeKey: "Reusable.Prepare", category: "Reusable activities", displayName: "Prepare shipment", contentAuthority: "Design" as never },
     versionId: "published-version", version: "1.0.0", lifecycle: "active", publishedAt: "", contract: structuredClone(plan.candidate.contract),
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "x", payload: structuredClone(plan.candidate.provider.payload) }, ...change };
@@ -178,4 +178,28 @@ it("keeps the dialog open while a create is in flight, so a late success is not 
 it("shows where each input's value comes from and how many steps the block has", () => {
   expect(container.textContent).toContain("1 step; 1 input");
   expect(container.textContent).toContain("Greeting · String · from workflow input Greeting");
+});
+
+it("bounds the create request and treats a timeout as an unknown outcome that unlocks the dialog", async () => {
+  api.createActivityDefinition.mockRejectedValueOnce(new DOMException("The operation timed out.", "TimeoutError"));
+  click("Create reusable activity draft"); await settle();
+  expect(api.createActivityDefinition.mock.calls[0][2]).toBeInstanceOf(AbortSignal);
+  expect(container.textContent).toContain("could not confirm whether the reusable activity was created");
+  expect(button("Create reusable activity draft").disabled).toBe(true);
+  expect(button("Cancel").disabled).toBe(false);
+});
+
+it("lets an unnamed block be named when replacing it with a published version", async () => {
+  nativeContext = { ...nativeContext, document: { ...nativeContext.document, activityPresentation: nativeContext.document.activityPresentation.filter(item => item.nodeId !== "block") },
+    catalog: [...nativeContext.catalog, { ...descriptor("published-version", "Reusable.Reviewed"), displayName: "Prepare shipment", activityDefinitionVersionId: "published-version" }] };
+  flushSync(() => root.unmount()); root = createRoot(container); render();
+  flushSync(() => (container.querySelectorAll<HTMLInputElement>("input[type=radio]")[1]).click());
+  expect(container.textContent).toContain("Give the reusable activity a name");
+  const input = container.querySelector<HTMLInputElement>("input:not([type=radio])")!;
+  flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Prepare shipment"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  const select = container.querySelector("select")!;
+  flushSync(() => { select.value = "published-version"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  api.getActivityDefinitionVersion.mockImplementation(async () => publishedView({}, "Prepare shipment"));
+  click("Replace block with this version"); await settle(6);
+  expect(host.apply).toHaveBeenCalledTimes(1);
 });
