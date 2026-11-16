@@ -123,12 +123,12 @@ public sealed partial class EtlRuntimeJourneyTests
             EtlV1CompatibilityFixture.DescribeFiles(
                 EtlV1CompatibilityFixture.FindRepositoryRoot(),
                 [
-                    "extensions/Etl/tests/Shared/EtlV1CompatibilityFixture.cs",
-                    "extensions/Etl/tests/Shared/capture-v1-compat-fixtures.sh",
-                    "extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
-                    "extensions/Etl/tests/Tests/EtlV1CompatibilityFixtureCaptureTests.cs",
-                    "extensions/Etl/tests/Tests/EtlPublishedWorkflowFixture.cs",
-                    "extensions/Etl/tests/Tests/NativeEtlAuthoredComposite.cs"
+                    "Extensions/Etl/tests/Shared/EtlV1CompatibilityFixture.cs",
+                    "Extensions/Etl/tests/Shared/capture-v1-compat-fixtures.sh",
+                    "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+                    "Extensions/Etl/tests/Tests/EtlV1CompatibilityFixtureCaptureTests.cs",
+                    "Extensions/Etl/tests/Tests/EtlPublishedWorkflowFixture.cs",
+                    "Extensions/Etl/tests/Tests/NativeEtlAuthoredComposite.cs"
                 ]),
             published.OriginalArtifact.DefinitionId,
             published.OriginalArtifact.DefinitionVersion,

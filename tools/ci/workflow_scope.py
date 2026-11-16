@@ -26,8 +26,8 @@ FULL_TIER_LABEL = 'full-tier'
 
 
 def heavy_now(event_name: str, event: dict, changed: list[str] | None, every_push: bool = False) -> bool:
-    """Whether this run carries the heavy proofs of a ready pull request: the full tier, the Chromium-driven Studio
-    proofs and the Weaver witness. They run when a PR opens ready, reopens or is marked ready, in the merge queue and on
+    """Whether this run carries the heavy proofs of a ready pull request: the full tier, the Studio browser shards
+    and the Weaver witness. They run when a PR opens ready, reopens or is marked ready, in the merge queue and on
     main, and on a later push to a ready PR only when it has the `full-tier` label, changes the tiers, or
     CI_FULL_TIER_EVERY_PUSH is true. Every other push to a PR runs the PR tier alone."""
     if event_name != 'pull_request':
@@ -41,17 +41,19 @@ def heavy_now(event_name: str, event: dict, changed: list[str] | None, every_pus
 def select(event_name: str, event: dict, changed: list[str] | None, patterns: dict,
            every_push: bool = False) -> dict[str, bool]:
     """None means the diff is unavailable: run every potentially affected proof."""
-    # studio-heavy is the Chromium-driven part of the studio proofs (browser shards and composed UX acceptance). It follows
-    # studio, except that a draft pull request skips it: the ready transition runs every proof on the same head.
-    result = dict.fromkeys([*patterns, 'studio-order', 'studio-heavy'], False)
+    # Studio browser shards follow the heavy scope. Full composed UX runs nightly,
+    # on a manual Studio request, or through the existing explicit full-tier opt-in.
+    result = dict.fromkeys([*patterns, 'studio-order', 'studio-heavy', 'studio-ux'], False)
     if event_name == 'workflow_dispatch':
         suite = event.get('inputs', {}).get('suite', 'ci')
         if suite in result:
             result[suite] = True
         result['studio-heavy'] = result['studio']
+        result['studio-ux'] = result['studio']
         return result
     if event_name == 'schedule':
         result['studio-order'] = True
+        result['studio-ux'] = True
         return result
     if event_name not in {'push', 'pull_request', 'merge_group'}:
         return result
@@ -68,6 +70,9 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
         else:
             result[suite] = pr_like and affected
     result['studio-heavy'] = result['studio'] and not draft and heavy
+    labels = {label.get('name') for label in event.get('pull_request', {}).get('labels', [])}
+    result['studio-ux'] = (event_name == 'pull_request' and result['studio-heavy']
+                           and (FULL_TIER_LABEL in labels or every_push))
     result['studio-order'] = pr_like and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',

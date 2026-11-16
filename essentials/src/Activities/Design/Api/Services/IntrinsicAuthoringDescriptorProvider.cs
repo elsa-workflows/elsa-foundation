@@ -92,14 +92,14 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             Version: "1",
             DisplayName: "Set Output",
             Category: PrimitivesCategory,
-            Description: "Assigns a value to a named workflow output.",
+            Description: "Assigns a value to an output of the enclosing reusable activity or workflow.",
             ExecutionType: ActivityExecutionType.Action.ToString(),
             Available: true,
             AvailabilityReason: null,
             Inputs:
             [
                 Input(NameKey, "Output Name", StringType, order: 0, required: true, nullable: false,
-                    "The name of the workflow output to assign.", uiHint: "single-line"),
+                    "The name of the output to assign.", uiHint: "single-line"),
                 Input(ValueKey, "Value", AnyType, order: 1, required: true, nullable: true,
                     "The value to assign to the output.", uiHint: "single-line")
             ],

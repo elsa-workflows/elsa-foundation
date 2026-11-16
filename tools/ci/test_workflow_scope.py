@@ -38,8 +38,8 @@ class WorkflowScopeTests(unittest.TestCase):
                                          pull_request={'draft': False, 'labels': [{'name': 'full-tier'}]})
                 forced = scope.select('pull_request', {'action': 'synchronize', 'pull_request': {'draft': False}},
                                       paths, self.patterns, every_push=True)
-                self.assertEqual(labelled, selected)
-                self.assertEqual(forced, selected)
+                self.assertEqual(labelled, dict(selected, **{'studio-ux': selected['studio']}))
+                self.assertEqual(forced, dict(selected, **{'studio-ux': selected['studio']}))
                 self.assertTrue(any(selected.values()))
 
     def test_later_push_to_a_ready_pr_skips_the_heavy_proofs_only(self):
@@ -94,7 +94,8 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertFalse(scope.matches('extensions/Example/other/studio/a.ts', 'extensions/*/studio/**'))
 
     def test_unreadable_diff_selects_all_eligible_jobs(self):
-        self.assertTrue(all(self.selected().values()))
+        self.assertTrue(all(enabled for name, enabled in self.selected().items() if name != 'studio-ux'))
+        self.assertFalse(self.selected()['studio-ux'])
         with patch.object(scope.subprocess, 'run') as run:
             run.return_value.returncode = 128
             self.assertIsNone(scope.changed_paths('pull_request', {}, 'a' * 40))
@@ -130,12 +131,29 @@ class WorkflowScopeTests(unittest.TestCase):
         for suite in [*self.patterns, 'studio-order']:
             with self.subTest(suite=suite):
                 selected = self.selected('workflow_dispatch', inputs={'suite': suite})
-                expected = [suite, 'studio-heavy'] if suite == 'studio' else [suite]
+                expected = [suite, 'studio-heavy', 'studio-ux'] if suite == 'studio' else [suite]
                 self.assertEqual(sorted(expected), sorted(name for name, enabled in selected.items() if enabled))
         self.assertFalse(any(self.selected('workflow_dispatch', inputs={'suite': 'ci'}).values()))
 
-    def test_nightly_only_adds_shuffle(self):
-        self.assertEqual(['studio-order'], [name for name, enabled in self.selected('schedule').items() if enabled])
+    def test_nightly_adds_shuffle_and_composed_ux(self):
+        self.assertEqual(['studio-order', 'studio-ux'], [name for name, enabled in self.selected('schedule').items() if enabled])
+
+    def test_composed_ux_requires_explicit_opt_in_outside_nightly(self):
+        for event in ('push', 'pull_request', 'merge_group'):
+            with self.subTest(event=event):
+                selected = self.selected(event, ['Studio/src/Feature.ts'], action='ready_for_review',
+                                         pull_request={'draft': False})
+                self.assertTrue(selected['studio'] and selected['studio-heavy'])
+                self.assertFalse(selected['studio-ux'])
+                forced = scope.select(event, {'action': 'ready_for_review', 'pull_request': {'draft': False}},
+                                      ['Studio/src/Feature.ts'], self.patterns, every_push=True)
+                self.assertEqual(event == 'pull_request', forced['studio-ux'])
+        opted_in = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize',
+                                 pull_request={'draft': False, 'labels': [{'name': 'full-tier'}]})
+        self.assertTrue(opted_in['studio-ux'])
+        draft = self.selected(paths=['Studio/src/Feature.ts'],
+                              pull_request={'draft': True, 'labels': [{'name': 'full-tier'}]})
+        self.assertFalse(draft['studio-ux'])
 
 
 if __name__ == '__main__':

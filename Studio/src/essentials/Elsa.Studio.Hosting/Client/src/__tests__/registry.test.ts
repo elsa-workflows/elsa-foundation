@@ -413,7 +413,7 @@ describe("studio registry", () => {
         items: [
           { title: "Definitions", path: "/workflows/definitions", placement: "main", order: 20 },
           { title: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-          { title: "Executables", path: "/workflows/executables", placement: "more", order: 10, requiresFeature: "executables" }
+          { title: "Executables", path: "/workflows/executables", placement: "build", order: 10, requiresFeature: "executables" }
         ]
       },
       routes: []
@@ -422,7 +422,7 @@ describe("studio registry", () => {
     expect(api.navigation.list()).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "workflows", placement: "main", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-runs", placement: "main", parentId: undefined }),
-      expect.objectContaining({ id: "workflows-executables", placement: "more", requiresFeature: "executables", parentId: undefined })
+      expect.objectContaining({ id: "workflows-executables", placement: "build", requiresFeature: "executables", parentId: undefined })
     ]));
     expect(api.navigation.list()).toHaveLength(3);
   });

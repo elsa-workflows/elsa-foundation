@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 baseline="b555bd8460270476e49496e519c69b65180e9505"
-destination="${1:-$repo_root/extensions/Etl/tests/Shared/Fixtures/V1/data}"
+destination="${1:-$repo_root/Extensions/Etl/tests/Shared/Fixtures/V1/data}"
 baseline_paths=(
     ':(glob)**/src/**'
     ':(glob)**/packages.lock.json'
@@ -26,7 +26,7 @@ fi
 mkdir -p "$(dirname "$destination")"
 ETL_V1_FIXTURE_CAPTURE_ROOT="$destination" \
 ETL_V1_FIXTURE_CAPTURE_BASE_COMMIT="$(git -C "$repo_root" rev-parse HEAD)" \
-dotnet test "$repo_root/extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" \
+dotnet test "$repo_root/Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" \
     -p:EtlV1FixtureCapture=true \
     --filter FullyQualifiedName~CaptureAuthenticPreChangeV1Fixture \
     --logger 'console;verbosity=minimal'
