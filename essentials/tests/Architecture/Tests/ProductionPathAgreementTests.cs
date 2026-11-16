@@ -30,14 +30,14 @@ public sealed partial class ProductionPathAgreementTests
     }
 
     [Theory]
-    [InlineData("Essentials/src/Tasks/Elsa.Tasks/", true)]
-    [InlineData("Essentials/apps/Elsa.Workbench/", true)]
-    [InlineData("Extensions/Weaver/src/Core/", true)]
-    [InlineData("Essentials/tests/Tasks/Tests/", false)]
-    [InlineData("Extensions/Weaver/tests/Tests/", false)]
-    [InlineData("Extensions/Attention/studio/Elsa.Studio.Attention/", false)]
-    [InlineData("Essentials/build/Analyzers/", false)]
-    [InlineData("Essentials/srcs/Elsa.Other/", false)]
+    [InlineData("essentials/src/Tasks/Elsa.Tasks/", true)]
+    [InlineData("apps/Elsa.Workbench/", true)]
+    [InlineData("extensions/Weaver/src/Core/", true)]
+    [InlineData("essentials/tests/Tasks/Tests/", false)]
+    [InlineData("extensions/Weaver/tests/Tests/", false)]
+    [InlineData("extensions/Attention/studio/Elsa.Studio.Attention/", false)]
+    [InlineData("essentials/build/Analyzers/", false)]
+    [InlineData("essentials/srcs/Elsa.Other/", false)]
     [InlineData("tools/maps/Elsa.Maps.Generator/", false)]
     [InlineData("samples/Elsa.Samples.Nuplane.Notes/", false)]
     public void Both_definitions_classify_each_kind_of_location_the_same_way(string directory, bool production)

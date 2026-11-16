@@ -27,7 +27,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(WorkflowsDesignEfModule.SchemaFamily, "Workflows.Design", WorkflowsDesignEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt holds the result it replays to a retrying caller, deserialized into that result, so it is
 // content; its fingerprint is checked over the stored bytes first (#2140).

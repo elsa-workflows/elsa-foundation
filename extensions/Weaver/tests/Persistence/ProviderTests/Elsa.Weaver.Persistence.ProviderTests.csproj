@@ -13,6 +13,6 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../../src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
   </ItemGroup>
 </Project>

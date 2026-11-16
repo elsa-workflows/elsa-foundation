@@ -12,7 +12,7 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// A target is checked against the files git tracks, not the disk: macOS resolves <c>extensions/</c> to
-/// <c>Extensions/</c> where CI's Linux does not, and an untracked local file would satisfy a link nobody else can
+/// <c>extensions/</c> where CI's Linux does not, and an untracked local file would satisfy a link nobody else can
 /// follow. <c>tools/maps/check-catalog-links.py</c> applies the same rules for a quick local report.
 /// </remarks>
 public sealed partial class CatalogLinkGuardTests
@@ -44,7 +44,7 @@ public sealed partial class CatalogLinkGuardTests
     {
         var files = Tracked
             .Where(path => Path.GetFileName(path) == Catalog ||
-                           Path.GetFileName(path) == "README.md" && (path.StartsWith("Essentials/", StringComparison.Ordinal) || path.StartsWith("Extensions/", StringComparison.Ordinal)))
+                           Path.GetFileName(path) == "README.md" && (path.StartsWith("Essentials/", StringComparison.Ordinal) || path.StartsWith("extensions/", StringComparison.Ordinal)))
             .Order(StringComparer.Ordinal)
             .ToArray();
         var links = files.SelectMany(file => RelativeLinks(file).Select(link => (File: file, link.Line, link.Target, Resolved: Resolve(file, link.Target)))).ToArray();

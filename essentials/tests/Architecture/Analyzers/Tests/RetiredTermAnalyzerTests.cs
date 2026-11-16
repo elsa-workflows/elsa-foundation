@@ -19,11 +19,11 @@ public sealed class RetiredTermAnalyzerTests
         """
         root = true
 
-        [Essentials/src/Tasks/**.cs]
+        [essentials/src/Tasks/**.cs]
         elsa_naming.retired_terms = Pump|Pumps=Worker, Stimulus|Stimuli=Signal, Stamp|Stamps=SchemaVersion
         """;
 
-    private const string TasksFile = "Essentials/src/Tasks/Elsa.Tasks/Sample.cs";
+    private const string TasksFile = "essentials/src/Tasks/Elsa.Tasks/Sample.cs";
 
     private static readonly string FakeRepoRoot = Path.Join(Path.GetTempPath(), "elsa-retired-terms-repo");
 
@@ -73,12 +73,12 @@ public sealed class RetiredTermAnalyzerTests
     public async Task A_term_is_enforced_only_in_the_domain_whose_section_activates_it()
     {
         var diagnostics = await AnalyzeAsync(TasksSection,
-            ("Essentials/src/Tasks/Schedules/Worker.cs", "namespace Elsa.Tasks.Schedules; internal sealed class PumpScheduler { }"),
-            ("Essentials/src/Events/Elsa.Events/Worker.cs", "namespace Elsa.Events; internal sealed class PumpScheduler { }"),
-            ("Essentials/tests/Tasks/Tests/WorkerTests.cs", "namespace Elsa.Tasks.Tests; public sealed class PumpSchedulerTests { }"));
+            ("essentials/src/Tasks/Schedules/Worker.cs", "namespace Elsa.Tasks.Schedules; internal sealed class PumpScheduler { }"),
+            ("essentials/src/Events/Elsa.Events/Worker.cs", "namespace Elsa.Events; internal sealed class PumpScheduler { }"),
+            ("essentials/tests/Tasks/Tests/WorkerTests.cs", "namespace Elsa.Tasks.Tests; public sealed class PumpSchedulerTests { }"));
 
         var diagnostic = Assert.Single(diagnostics);
-        Assert.Equal(Path.Join(FakeRepoRoot, "Essentials/src/Tasks/Schedules/Worker.cs"), diagnostic.Location.SourceTree!.FilePath);
+        Assert.Equal(Path.Join(FakeRepoRoot, "essentials/src/Tasks/Schedules/Worker.cs"), diagnostic.Location.SourceTree!.FilePath);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class RetiredTermAnalyzerTests
     public async Task An_unparseable_setting_is_itself_an_error_rather_than_a_silent_no_op(string value)
     {
         var diagnostic = Assert.Single(await AnalyzeAsync(
-            $"root = true\n\n[Essentials/src/Tasks/**.cs]\nelsa_naming.retired_terms = {value}",
+            $"root = true\n\n[essentials/src/Tasks/**.cs]\nelsa_naming.retired_terms = {value}",
             (TasksFile, "namespace Elsa.Tasks; internal sealed class PumpScheduler { }")));
 
         Assert.Equal(RetiredTermAnalyzer.InvalidConfigurationId, diagnostic.Id);
@@ -126,7 +126,7 @@ public sealed class RetiredTermAnalyzerTests
     /// <summary>
     /// Holds the committed configuration to the grammar: every .editorconfig in the repository, as the compiler would
     /// combine them, is resolved for a file in every production folder that holds C# source, nested ones included, so a
-    /// section scoped to a sub-folder such as <c>Essentials/src/Workflows/Runtime/**</c> is resolved too. None of them may
+    /// section scoped to a sub-folder such as <c>essentials/src/Workflows/Runtime/**</c> is resolved too. None of them may
     /// produce a setting the analyzer refuses to parse.
     /// </summary>
     [Fact]
@@ -138,9 +138,9 @@ public sealed class RetiredTermAnalyzerTests
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
             .ToImmutableArray());
-        var probes = new[] { "Essentials/src", "Essentials/apps" }
+        var probes = new[] { "essentials/src", "apps" }
             .Select(root => Path.Join(repoRoot, root))
-            .Concat(Directory.EnumerateDirectories(Path.Join(repoRoot, "Extensions"))
+            .Concat(Directory.EnumerateDirectories(Path.Join(repoRoot, "extensions"))
                 .Select(extension => Path.Join(extension, "src"))
                 .Where(Directory.Exists))
             .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))

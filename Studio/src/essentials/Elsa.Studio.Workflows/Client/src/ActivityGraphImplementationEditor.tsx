@@ -408,7 +408,10 @@ export function ActivityGraphImplementationEditor({
     restoreView(view, document) {
       const documentRoot = activityGraphDocumentAdapter.readRoot(document);
       const path = resolveScopeFrames(documentRoot, view.frames, catalogByVersion);
-      const visible = resolveScope(documentRoot, path, catalogByVersion)?.slot.activities.map(node => node.nodeId) ?? [];
+      const restoredScope = resolveScope(documentRoot, path, catalogByVersion);
+      const visible = restoredScope?.slot.mode === "bpmn"
+        ? readBpmnElements(restoredScope.owner).map(element => element.elementId)
+        : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
       const ids = view.selectedNodeIds.filter(id => visible.includes(id));
       const primary = view.primaryNodeId && ids.includes(view.primaryNodeId) ? view.primaryNodeId : ids.at(-1) ?? null;
       pendingHistoryView.current = { frames: path, selectedNodeIds: ids, primaryNodeId: primary };

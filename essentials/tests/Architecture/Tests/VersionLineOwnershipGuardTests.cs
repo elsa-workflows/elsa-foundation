@@ -40,7 +40,7 @@ public sealed class VersionLineOwnershipGuardTests
 
         Assert.True(scanned.Count > 0, "The version-line ownership guard scanned no files under backend roots; its roots are wrong.");
 
-        var expectedRoots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions" };
+        var expectedRoots = new[] { "essentials/src", "apps", "essentials/tests", "extensions" };
         var missingRoots = expectedRoots
             .Where(root => !scanned.Any(path => RelativePath(path).StartsWith($"{root}/", StringComparison.Ordinal)))
             .ToArray();
@@ -48,7 +48,7 @@ public sealed class VersionLineOwnershipGuardTests
 
         var scannedSet = scanned.Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Contains(Path.GetFullPath(Path.Join(RepoRoot, "Essentials", "tests", "Directory.Build.props")), scannedSet);
+        Assert.Contains(Path.GetFullPath(Path.Join(RepoRoot, "essentials", "tests", "Directory.Build.props")), scannedSet);
 
         var missingProjects = ProjectGraph.ElsaProjectPaths(RepoRoot)
             .Select(Path.GetFullPath)

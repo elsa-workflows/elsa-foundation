@@ -79,7 +79,7 @@ public sealed class StudioPreferencesApiDependencyTests
         {
             var candidate = Path.Join(
                 directory.FullName,
-                "Essentials", "src",
+                "essentials", "src",
                 "Studio",
                 "Preferences",
                 "Api",

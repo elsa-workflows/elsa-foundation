@@ -6,7 +6,7 @@ import { addSteps, createScopeWorkflow, expectAccessible, openScope, publish, re
 // the recovery. Every step and compensation is a Write Line, which is safe to repeat, so the publication review lists
 // the replay-safe warnings for both reservations (spec 250 FR-014, spec 261 FR-515) and still publishes. Restart
 // recovery and the participant's persisted state are proven against a real process by
-// Essentials/tests/Workbench/Tests/WorkbenchCompensationRecoveryTests.cs; this journey proves authoring and inspection.
+// essentials/tests/Workbench/Tests/WorkbenchCompensationRecoveryTests.cs; this journey proves authoring and inspection.
 
 test.skip(!process.env.ELSA_STUDIO_URL, "Set ELSA_STUDIO_URL to a running Studio connected to a Workbench.");
 
