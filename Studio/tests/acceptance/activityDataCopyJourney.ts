@@ -236,7 +236,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       default: { expressionType: "Object", value: JSON.stringify({ "a.b": { "": "scope-copy-id" }, enabled: true }) } };
     const consumer = canonicalLeaf(s.line()); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "VariableMember", value: { referenceKey: "payload", declaringScopeId: "group", memberPath: ["a.b", ""] } } }];
     const portable = canonicalLeaf(s.line()); portable.nodeId = "portable";
-    const portableValue = { language: "JavaScript", source: 'customer.customerId', resultType: { alias: "String", collectionKind: "Single" },
+    const portableValue = { language: "JavaScript", source: 'args.customer.customerId', resultType: { alias: "String", collectionKind: "Single" },
       parameters: { customer: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "Customer", isOptional: false } }, options: {}, capabilityProfile: "binding-pure-v1" };
     portable.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: portableValue } }];
     const switchVersion = await s.version("Elsa.Activities.Switch.Activities.Switch");
@@ -251,7 +251,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     const created = await s.seed("copy nested scope and portable", outer);
     await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
     const beforeDuplicate = (await s.saved(created)).state;
-    await s.select("group"); await page.getByRole("button", { name: "Duplicate Sequence", exact: true }).click();
+    await s.select("group"); await s.canvas(); await node("group").press("ControlOrMeta+d");
     await waitCount(created, 13);
     const duplicatedState = (await s.saved(created)).state;
     const duplicatedGroup = duplicatedState.rootActivity.structure!.payload.activities[1];
@@ -317,7 +317,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     const root = s.root(valid ? [echo(), consumer] : [consumer]); root.nodeId = `external-${info.project.name}-${Date.now()}`;
     const created = await s.seed(`consumer-only ${valid}`, root);
     await s.open(created); await capture(page, info, valid ? "external-valid-original" : "external-invalid-original");
-    await page.getByRole("button", { name: "Duplicate Write Line", exact: true }).click();
+    await s.canvas(); await node("consumer").press("ControlOrMeta+d");
     await waitCount(created, valid ? 4 : 3);
     const copiedConsumer = (await s.saved(created)).state.rootActivity.structure!.payload.activities.at(-1)!;
     expect(input(copiedConsumer)).toEqual(selected); await s.select(copiedConsumer.nodeId);
