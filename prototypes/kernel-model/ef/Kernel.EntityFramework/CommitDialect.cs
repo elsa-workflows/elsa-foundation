@@ -61,6 +61,12 @@ internal abstract class CommitDialect
     /// <summary>Rows one multi-row statement may carry (SQL Server's VALUES: 1,000).</summary>
     public virtual int RowsPerStatement => 1000;
 
+    /// <summary>Messages one insert may carry: as the rows, unless the engine reports one seq per insert (MySQL).</summary>
+    public virtual int MessageRowsPerStatement => RowsPerStatement;
+
+    /// <summary>The seq of row <paramref name="ordinal"/> (1-based, in send order) of a message insert, where the store assigns it (SQLite); null where the database does.</summary>
+    public virtual string? Seq(int ordinal) => null;
+
     /// <summary>Statements that open every command.</summary>
     public virtual string Prelude => "";
 
@@ -134,8 +140,9 @@ internal abstract class ReturningDialect(string now, string @true, string @false
     public override void Checked(OwnedCommand c, string dml, int count) => c.Statement(dml + " RETURNING 1", Expect.Count, count);
     public override void Free(OwnedCommand c, string dml) => c.Statement(dml + " RETURNING 1");
     public override void InsertMessages(OwnedCommand c, string insert, int count) => c.Statement(insert + " RETURNING \"Seq\"", Expect.Seq, count);
+    /// <summary>A row-value IN over a VALUES list: PostgreSQL and SQLite both take it as a subquery.</summary>
     public override void KeyedMessages(OwnedCommand c, string action, IReadOnlyList<string[]> keys, bool exact) =>
-        c.Statement($"""{action} WHERE "Done" = {False} AND "EventMatch" IS NULL AND {KeyColumns(exact)} IN ({KeyList(keys)}) RETURNING 1""", Expect.Count, keys.Count);
+        c.Statement($"""{action} WHERE "Done" = {False} AND "EventMatch" IS NULL AND {KeyColumns(exact)} IN (VALUES {KeyList(keys)}) RETURNING 1""", Expect.Count, keys.Count);
     public override string SubscribeIfAbsent(string key, string instance, string wait, int partition) =>
         FormattableString.Invariant($"""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({key}, {instance}, {wait}, {partition}) ON CONFLICT DO NOTHING""");
 
@@ -144,6 +151,7 @@ internal abstract class ReturningDialect(string now, string @true, string @false
         var (rows, values) = (0L, new List<long>());
         while (await reader.ReadAsync(cancellationToken))
             if (rows++ == 0 && kind is Expect.Fence || kind is Expect.Seq) values.Add(reader.GetInt64(0));
+        if (kind is Expect.Seq) values.Sort();     // RETURNING rows come in VALUES order in practice; seqs are assigned in it by construction
         return (rows, values);
     }
 }
@@ -151,10 +159,11 @@ internal abstract class ReturningDialect(string now, string @true, string @false
 /// <summary>PostgreSQL (Npgsql): one command of many statements is one round trip; identity assigns seq; RETURNING rows come in VALUES order.</summary>
 internal sealed class PgCommitDialect() : ReturningDialect("(extract(epoch from clock_timestamp()) * 1000)::bigint", "true", "false")
 {
-    /// <summary>The engine's dialect, or null where the store still commits through EF (SQLite: round 5 B3; MySQL B4).</summary>
+    /// <summary>The engine's dialect, or null where the store still commits through EF (MySQL: round 5 B4).</summary>
     public static CommitDialect? For(Engine? engine, bool postgres) => engine switch
     {
         null when postgres => new PgCommitDialect(),
+        null => new SqliteCommitDialect(),
         SqlServerEngine => new SqlServerCommitDialect(),
         _ => null,
     };
