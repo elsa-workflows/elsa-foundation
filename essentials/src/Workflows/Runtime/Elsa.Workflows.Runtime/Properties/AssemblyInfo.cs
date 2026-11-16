@@ -14,6 +14,3 @@ using System.Runtime.CompilerServices;
 // The same Runtime domain EF aggregate replaces only the owned volatile journal default.
 [assembly: InternalsVisibleTo("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore")]
 [assembly: InternalsVisibleTo("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests")]
-
-// Qualifies history capture against the actual native BPMN checkpoint owner.
-[assembly: InternalsVisibleTo("Elsa.Activities.Bpmn.Tests")]
