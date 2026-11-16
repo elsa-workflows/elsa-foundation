@@ -17,6 +17,14 @@
   padding: 0;
 }
 
+.wf-choose-data-trigger.wf-expression-insert-data {
+  width: auto;
+  height: auto;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
 .wf-choose-data-trigger:hover,
 .wf-choose-data-trigger:focus-visible,
 .wf-choose-data-trigger.open {

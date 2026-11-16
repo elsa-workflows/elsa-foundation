@@ -1,3 +1,4 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { captureCanvasFocusIntent, type CanvasFocusIntent } from "../graph-authoring/useGraphCanvasInteractions";
 import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
 import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
@@ -292,7 +293,7 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path, primary);
   }, [editableDoc]);
-  const { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current) });
+  const { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current), transitions: editableDoc.state.historyTransitions, onTransitionsCaptured: editableDoc.acknowledgeHistoryTransitions });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -874,7 +875,7 @@ export function WorkflowEditor({
     return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot));
   }, [enterSlotScope, isUnsupportedDesigner]);
 
-  const updateSelectedActivity = useCallback((activity: ActivityNode) => {
+  const updateSelectedActivity = useCallback((activity: ActivityNode, edit?: StudioExpressionEditorEdit) => {
     editDraft(({ draft: current }) => {
       const rootActivity = current?.state.rootActivity;
       if (!current || !rootActivity) return null;
@@ -891,7 +892,7 @@ export function WorkflowEditor({
           rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity, catalogByVersion)
         }
       };
-    });
+    }, edit && edit.origin !== "input" ? { before: edit.before, after: edit.after } : undefined);
   }, [catalogByVersion, editDraft]);
 
   const updateSelectedStructure = useCallback((activity: ActivityNode) => {

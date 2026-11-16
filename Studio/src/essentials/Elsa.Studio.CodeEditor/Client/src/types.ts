@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export interface StudioCodeDocument {
   /** A stable identity for the persisted expression or file. */
@@ -83,8 +83,51 @@ export interface StudioCodeLanguageSupport {
   readonly language: string;
 }
 
+/** A memory-only selection bookmark. It cannot restore a revoked or different document. */
+export interface StudioCodeEditorBookmark {
+  restore(): void;
+}
+
+export interface StudioCodeEditorSelection {
+  anchor: number;
+  head: number;
+}
+
+/** Captured by an engine; apply accepts only a still-current snapshot from that session. */
+export interface StudioCodeEditorSnapshot {
+  readonly source: string;
+  readonly selection: Readonly<StudioCodeEditorSelection>;
+}
+
+export interface StudioCodeEditorController {
+  capture(): StudioCodeEditorSnapshot | null;
+  apply(edit: {
+    expected: StudioCodeEditorSnapshot;
+    insert: string;
+    historyValue: unknown;
+    selection?: StudioCodeEditorSelection;
+  }): boolean;
+}
+
+export interface StudioCodeEditorEdit {
+  /** Immutable non-text owner data, restored together with source by local history. */
+  historyValue: unknown;
+  origin: "input" | "insertion" | "undo" | "redo";
+  before: StudioCodeEditorBookmark;
+  after: StudioCodeEditorBookmark;
+}
+
+/** Optional: source-only consumers retain their existing history and callbacks. */
+export interface StudioCodeDocumentEditing {
+  /** Keeps the compact surface alive while its owned action interacts with a portal. */
+  interactionActive?: boolean;
+  historyValue: unknown;
+  onController(controller: StudioCodeEditorController | null): void;
+}
+
 export interface StudioCodeEditorEngineProps {
   document: StudioCodeDocument;
+  documentEditing?: StudioCodeDocumentEditing;
   profile: StudioCodeEditorProfile;
   session: StudioCodeEditorSession;
   readOnly: boolean;
@@ -97,7 +140,7 @@ export interface StudioCodeEditorEngineProps {
   completionProvider?: StudioCodeCompletionProvider;
   hoverProvider?: StudioCodeHoverProvider;
   signatureProvider?: StudioCodeSignatureProvider;
-  onChange(document: StudioCodeDocument): void;
+  onChange(document: StudioCodeDocument, edit?: StudioCodeEditorEdit): void;
   onFocus?(): void;
   onBlur?(): void;
   onExpand?(): void;
@@ -116,7 +159,9 @@ export interface StudioCodeLanguageAdapter {
 export type StudioCodeEditorAction = "save" | "format" | string;
 
 export interface StudioCodeEditorProps {
+  actions?: ReactNode;
   document: StudioCodeDocument;
+  documentEditing?: StudioCodeDocumentEditing;
   /** Expanded is the existing full-editor behavior; compact activates on focus. */
   profile?: StudioCodeEditorProfile;
   /** A stable draft/activity/property/type identity used to restore an editor session. */
@@ -138,7 +183,7 @@ export interface StudioCodeEditorProps {
   /** Describes the compact/expanded Tab escape route to assistive technology. */
   escapeDescription?: string;
   languageAdapter?: StudioCodeLanguageAdapter;
-  onChange(document: StudioCodeDocument): void;
+  onChange(document: StudioCodeDocument, edit?: StudioCodeEditorEdit): void;
   onFocus?(): void;
   onBlur?(): void;
   onExpand?(): void;

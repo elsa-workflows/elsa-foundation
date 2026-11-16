@@ -337,6 +337,33 @@ public sealed class ExplicitExpressionParametersTests
         Assert.Equal(42, result.GetProperty("answer").GetInt32());
     }
 
+    public static TheoryData<string> LiteralMemberKeys => new()
+    { "", "a.b", """quoted"key""", "single'key", """both"'key""", """back\slash""", "class", "日本語", "\n", "__proto__", "constructor" };
+
+    [Theory]
+    [MemberData(nameof(LiteralMemberKeys))]
+    public async Task Inserted_literal_member_access_reads_the_exact_JSON_key_and_combines_parameters(string key)
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var literal = JsonSerializer.Serialize(key, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        var source = "args.data[" + literal + "] + ':' + args.other";
+        var result = await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>().EvaluateAsync(Request(source,
+            new Dictionary<string, JsonElement> { ["data"] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { [key] = "selected" }),
+                ["other"] = JsonSerializer.SerializeToElement("combined") }));
+        Assert.Equal("selected:combined", result.GetString());
+    }
+
+    [Fact]
+    public async Task Reference_looking_text_at_a_line_comment_end_is_not_a_parameter_read()
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>().EvaluateAsync(Request(
+            """1; // noteargs.data["customerId"]""", new Dictionary<string, JsonElement> { ["data"] = JsonSerializer.SerializeToElement(new { customerId = 42 }) }));
+        Assert.Equal(1, result.GetInt32());
+    }
+
     private static ServiceProvider BuildProvider(JintFeature? jintFeature = null)
     {
         var services = new ServiceCollection();
