@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
@@ -127,4 +127,41 @@ it("rejects stale, read-only, switched-target and revoked controllers without an
   flushSync(() => window.dispatchEvent(new Event("elsa:auth-session-ended")));
   expect(latest.capture()).toBeNull(); expect(latest.apply({ expected: latestSnapshot, insert: "bad", historyValue: bound })).toBe(false);
   expect(e.edits).toHaveLength(1);
+});
+// A native key event can land after React commits an unrelated render and before that render's passive effects run.
+function BetweenCommitAndEffects({ between }: { between?: () => void }) { useLayoutEffect(() => { between?.(); }); return null; }
+it("keeps its own Redo that lands between an unrelated commit and that commit's effects", () => {
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host); close = () => { flushSync(() => root.unmount()); host.remove(); };
+  let controller: StudioCodeEditorController | null = null;
+  const register = (next: StudioCodeEditorController | null) => { controller = next; };
+  const empty = { parameters: {} }, insert = '{{ data["customerId"] }}';
+  // The owner records each change and adopts it on its next render, like a designer that re-renders on its own schedule.
+  let props: StudioCodeEditorEngineProps = {
+    document: { uri: "elsa://redo-race", language: "text", value: "" },
+    documentEditing: { historyValue: empty, onController: register },
+    session: createStudioCodeEditorSession(), profile: "compact", readOnly: false, theme: "studio",
+    minHeight: "20px", ariaLabel: "Expression", diagnostics: [],
+    onChange(document, edit) { props = { ...props, document, documentEditing: { historyValue: edit!.historyValue, onController: register } }; }
+  };
+  // Each render passes a new documentEditing object, as the expression editor's data insertion wrapper does.
+  const render = (between?: () => void) => flushSync(() => root.render(<StrictMode>
+    <CodeMirrorStudioCodeEditor {...props} documentEditing={{ ...props.documentEditing! }} /><BetweenCommitAndEffects between={between} />
+  </StrictMode>));
+  render();
+  const view = () => EditorView.findFromDOM(host.querySelector(".cm-editor")!)!;
+  expect(controller!.apply({ expected: controller!.capture()!, insert, historyValue: bound })).toBe(true);
+  render();
+  const caret = view().state.selection.main.head;
+  flushSync(() => { expect(undo(view())).toBe(true); }); render();
+  expect(view().state.doc.toString()).toBe("");
+  // An unrelated render still carries the undone value when the author's Redo lands.
+  render(() => { expect(redo(view())).toBe(true); });
+  expect(props.document.value).toBe(insert);
+  expect(view().state.doc.toString()).toBe(insert);
+  render();
+  expect(view().state.doc.toString()).toBe(insert);
+  expect(view().state.selection.main.head).toBe(caret);
+  flushSync(() => { expect(undo(view())).toBe(true); });
+  expect(view().state.doc.toString()).toBe("");
 });

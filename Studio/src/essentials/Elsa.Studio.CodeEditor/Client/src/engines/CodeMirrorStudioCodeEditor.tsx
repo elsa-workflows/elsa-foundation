@@ -81,6 +81,8 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   const entry = resolveEntry(props);
   entry.runtime.props = props;
   entryRef.current = entry;
+  // These props describe the entry at this revision. A local edit after this render makes them older than the view.
+  const renderedRevision = entry.revision;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -133,6 +135,13 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     const current = entryRef.current;
     if (!view || !current) return;
     const latest = current.runtime.props;
+    // The editor changed its document or owner value after this render, for example by a keyboard Redo
+    // before this effect ran. The owner has not seen that change yet, so these props are stale; the
+    // render that follows the change carries it.
+    if (current.revision !== renderedRevision) {
+      applyDiagnostics(view, latest.diagnostics);
+      return;
+    }
 
     if (current.editingEnabled !== !!latest.documentEditing || latest.documentEditing && (ownerValueKey(latest.documentEditing.historyValue) !== ownerValueKey(view.state.field(ownerHistoryValue, false)) ||
         latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue)) {
@@ -147,7 +156,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       });
     }
     applyDiagnostics(view, latest.diagnostics);
-  }, [props.document.value, props.document.version, props.documentEditing, props.diagnostics]);
+  }, [props.document.value, props.document.version, props.documentEditing, props.diagnostics, renderedRevision]);
 
   useEffect(() => {
     const view = viewRef.current;
