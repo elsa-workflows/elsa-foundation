@@ -30,16 +30,32 @@
     downloads them from pinned release assets, and CI runs it before building. A fresh clone, a new worktree or
     `git clean -x` leaves them absent, and the copy step then fails with one MSB3030 per file. This check runs
     first and names the restore command instead.
+
+    Explicitly named files are checked directly. Spec 1184's captures are included by wildcard, which matches
+    nothing when they are absent, so a project that copies the tracked fixtures.json is also checked against
+    every member that file pins.
   -->
-  <Target Name="RequireRestoredBpmnEvidence" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+  <Target Name="ElsaRequireRestoredBpmnEvidence" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_ElsaStudioFixtureRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)../../specs/1184-direct-bpmn-studio/evidence'))</_ElsaStudioFixtureRoot>
+    </PropertyGroup>
     <ItemGroup>
       <_ElsaBpmnEvidenceCandidate Include="@(None)" Condition="'%(None.CopyToOutputDirectory)' != '' And '%(None.CopyToOutputDirectory)' != 'Never'" />
       <_ElsaBpmnEvidenceCandidate Include="@(Content)" Condition="'%(Content.CopyToOutputDirectory)' != '' And '%(Content.CopyToOutputDirectory)' != 'Never'" />
-      <_ElsaMissingBpmnEvidence Include="@(_ElsaBpmnEvidenceCandidate)"
+      <_ElsaStudioFixtureConsumer Include="@(_ElsaBpmnEvidenceCandidate)"
+        Condition="$([System.String]::Copy('%(FullPath)').Replace('\','/').EndsWith('/specs/1184-direct-bpmn-studio/evidence/fixtures.json'))" />
+    </ItemGroup>
+    <ReadLinesFromFile File="$(_ElsaStudioFixtureRoot)fixtures.json" Condition="'@(_ElsaStudioFixtureConsumer)' != '' And Exists('$(_ElsaStudioFixtureRoot)fixtures.json')">
+      <Output TaskParameter="Lines" ItemName="_ElsaStudioFixtureLine" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <_ElsaStudioFixtureMember Include="$(_ElsaStudioFixtureRoot)fixtures/$([System.Text.RegularExpressions.Regex]::Match('%(_ElsaStudioFixtureLine.Identity)', '(?&lt;=&quot;target&quot;:\s*&quot;)[^&quot;]+'))"
+        Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ElsaStudioFixtureLine.Identity)', '&quot;target&quot;:\s*&quot;[^&quot;]+&quot;'))" />
+      <_ElsaMissingBpmnEvidence Include="@(_ElsaBpmnEvidenceCandidate);@(_ElsaStudioFixtureMember)"
         Condition="!Exists('%(FullPath)') And ($([System.String]::Copy('%(FullPath)').Replace('\','/').Contains('/specs/1017-direct-bpmn-hosting/evidence/')) Or $([System.String]::Copy('%(FullPath)').Replace('\','/').Contains('/specs/1184-direct-bpmn-studio/evidence/fixtures/')))" />
     </ItemGroup>
     <Error Condition="'@(_ElsaMissingBpmnEvidence)' != ''"
-           Text="$(MSBuildProjectName) needs @(_ElsaMissingBpmnEvidence->Count()) gitignored BPMN test fixtures that this checkout does not have. Run `python3 tools/bpmn/restore_evidence.py` from the repository root once per clone or worktree; it downloads the pinned archives and verifies every file. See specs/1017-direct-bpmn-hosting/evidence/README.md." />
+           Text="$(MSBuildProjectName) needs @(_ElsaMissingBpmnEvidence->Count()) BPMN test fixtures that are missing from this checkout. Run `python3 tools/bpmn/restore_evidence.py` from the repository root once per clone or worktree; it restores the gitignored captures from pinned archives and verifies every file. See specs/1017-direct-bpmn-hosting/evidence/README.md." />
   </Target>
 
 </Project>
