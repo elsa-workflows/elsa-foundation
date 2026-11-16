@@ -29,7 +29,6 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Isolated rehearsal and qualification under #2510 from captured copies; live cutover remains gated |
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
-| [Runtime Efficiency](runtime-efficiency.md) | Active; end-to-end continuation, 1 November | Runtime database access, immutable preparation, persistence and concurrent correctness | Sipke | Program #2531; M0–M5 efficiency and recovery qualification |
 | [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October; outcome clarified 9 November | A shared durable host and its ports for native workflows, BPMN, Decisions and agent collaboration; ETL and Rules as separately owned domains with native integration | Sipke | SQLite native/BPMN milestone delivered (#3998); ETL/Rules restart witnesses, the Decisions driver and port locking next under #2892 |
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | Released-semantics adoption #2735 delivered; import safeguards #2736 remain open |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
@@ -62,6 +61,7 @@ superseded.
 | [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
 | [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; named #2892 continuation active |
+| [Runtime Efficiency](runtime-efficiency.md) | Completed; Program #2531 closed 16 November; old-core objectives superseded by the kernel, M5 handed to #4229 |
 | [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
 | [Runtime Throughput](runtime-throughput.md) | Merged into Runtime Efficiency |
 | [Runtime Execution Evidence](runtime-execution-evidence.md) | Parked |

@@ -34,6 +34,9 @@ public static class Wf
     public static Node WriteLine(string id, Binding text) => Node<WriteLine>(id, ("Text", text));
     public static Node Set(string id, string variable, Binding value) => Node<SetVariable>(id, ("Name", variable), ("Value", value));
     public static Node Notify(string id, Binding message) => Node<SendNotification>(id, ("Message", message));
+    public static Node Http(string id, Binding url, Binding? body = null, string method = "POST") =>
+        body is null ? Node<SendHttpRequest>(id, ("Url", url), ("Method", method)) : Node<SendHttpRequest>(id, ("Url", url), ("Method", method), ("Body", body));
+    public static Node Email(string id, Binding to, Binding subject, Binding body) => Node<SendEmail>(id, ("To", to), ("Subject", subject), ("Body", body));
     public static Node Call(string id, Binding service, long milliseconds = 0) => Node<CallService>(id, ("Service", service), ("Milliseconds", milliseconds));
     public static Node Delay(string id, Binding milliseconds) => Node<Delay>(id, ("Milliseconds", milliseconds));
     public static Node Event(string id, Binding name) => Node<Event>(id, ("EventName", name));
