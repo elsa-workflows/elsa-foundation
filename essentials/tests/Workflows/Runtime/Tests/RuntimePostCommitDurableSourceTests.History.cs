@@ -140,7 +140,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     public async Task Context_capable_replacement_requires_actual_recording_opt_in_before_handoff_or_acknowledgement(string support)
     {
         var registrations = HistoryServices();
-        ContextAwareLegacyDispatcher replacement = support == "legacy-context" ? new() : new QualifyingContextDispatcher(support == "qualified");
+        ContextAwareLegacyDispatcher replacement = support == "legacy-context" ? new ContextAwareLegacyDispatcher() : new QualifyingContextDispatcher(support == "qualified");
         registrations.Replace(ServiceDescriptor.Singleton<IRuntimePostCommitIntentDispatcher>(replacement));
         using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
         var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
