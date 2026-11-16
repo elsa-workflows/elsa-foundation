@@ -127,7 +127,7 @@ export default function BpmnInterchangeCommands(props: Props) {
       <h3>Bindings retained in this file</h3>
       <p>Confirm only versions and literal input keys you intend to use. The host checks their availability before applying.</p>
       {review.result.analysis.capabilities?.map((item, index) => <div key={`${item.elementId}-${index}`}>
-        {item.retainedBinding ? <label><input type="checkbox" disabled={busy || !!stale} checked={confirmed.includes(item.elementId)} onChange={event => { setPlan(null); setConfirmed(current => event.target.checked ? [...current, item.elementId] : current.filter(id => id !== item.elementId)); }} />{item.elementId} · {item.retainedBinding.activityVersionId} · inputs: {item.retainedBinding.inputKeys.join(", ") || "none"}</label> : <span>{item.elementId} · {item.capability}</span>}
+        {item.retainedBinding ? <label className="wf-block-binding"><input type="checkbox" disabled={busy || !!stale} checked={confirmed.includes(item.elementId)} onChange={event => { const checked = event.currentTarget.checked; setPlan(null); setConfirmed(current => checked ? [...current, item.elementId] : current.filter(id => id !== item.elementId)); }} /><span>{item.elementId} · {item.retainedBinding.activityVersionId} · inputs: {item.retainedBinding.inputKeys.join(", ") || "none"}</span></label> : <span>{item.elementId} · {item.capability}</span>}
         <p>{item.reason}</p>
       </div>)}
       {stale ? <p role="alert">The resource changed. Cancel and choose the file again.</p> : null}

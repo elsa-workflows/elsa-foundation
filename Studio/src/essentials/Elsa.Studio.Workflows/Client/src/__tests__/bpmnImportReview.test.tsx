@@ -56,6 +56,23 @@ it("requires explicit retained-binding choice, previews the whole document, then
   expect(apply.mock.calls[0][0].rootActivity.nodeId).toBe("owner");
   expect(apply.mock.calls[0][2]()).toBe(false);
 });
+it("keeps successive binding confirmations after React restores controlled checkbox values", async () => {
+  await loaded();
+  const capability = result.analysis.capabilities![0];
+  result.analysis.capabilities = [capability, { ...capability, elementId: "second-task" }, { ...capability, elementId: "third-task" }];
+  file = new File(["<definitions />"], "multiple-bindings.bpmn");
+  Object.defineProperty(file, "text", { value: async () => "<definitions />" });
+  render();
+  await vi.waitFor(() => expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(3));
+  const choices = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+  for (const choice of choices) {
+    choice.click();
+    await vi.waitFor(() => expect(choice.checked).toBe(true));
+  }
+  expect(choices.every(choice => choice.checked)).toBe(true);
+  choices[1].click();
+  await vi.waitFor(() => expect(choices.map(choice => choice.checked)).toEqual([true, false, true]));
+});
 it("refuses conversion loss and retains the original file without committing", async () => {
   result.analysis.issues = [{ severity: "Dropped", elementId: "new-task", message: "Unsupported event would be lost" }];
   await confirmAndPreviewRefused();
