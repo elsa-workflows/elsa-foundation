@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createEndpointContext } from "../sdk";
 import { createStudioRegistry } from "../app/registry";
 import { filterAccessibleNavigation, getTopLevelNavigationItemsByPlacement } from "../app/navigation/placement";
-import { register as registerConnections } from "../../../../../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
-import { register as registerSecrets } from "../../../../../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
-import { register as registerExternalAuthentication } from "../../../../../../../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/src/module";
-import { register as registerUserTasks } from "../../../../../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/module";
+import { register as registerConnections } from "../../../../../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
+import { register as registerSecrets } from "../../../../../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
+import { register as registerExternalAuthentication } from "../../../../../../../extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/src/module";
+import { register as registerUserTasks } from "../../../../../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/module";
 
 import { register as registerDashboard } from "../../../../Elsa.Studio.Dashboard/Client/src/module";
 
