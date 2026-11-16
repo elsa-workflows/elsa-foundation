@@ -31,6 +31,7 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
+if (args.Contains("--placement-check")) return PlacementChecks.Run();
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
