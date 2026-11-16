@@ -42,7 +42,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
     ];
 
     /// <summary>Roots that ship or build the product, including Studio as a sibling product under extensions/. History under docs/, specs/ and archives is out of scope.</summary>
-    private static readonly string[] ScannedRoots = ["essentials", "extensions", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
+    private static readonly string[] ScannedRoots = ["essentials", "apps", "extensions", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
 
     /// <summary>Scanned by name wherever they sit; repository-root files of a scanned extension are read too.</summary>
     private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx", "Dockerfile"];
