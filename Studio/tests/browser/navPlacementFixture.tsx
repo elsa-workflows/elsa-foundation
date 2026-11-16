@@ -7,7 +7,7 @@ import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hos
 import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
 import { createEndpointContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
-import { register as registerEtl } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/module";
+import { register as registerEtl } from "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/module";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const moduleNavigation: StudioNavigationContribution[] = [
