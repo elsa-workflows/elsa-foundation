@@ -33,9 +33,10 @@ internal static class RuntimeHistoryEfModule
                     binding.Name != member.Name || property.GetBeforeSaveBehavior() != required.BeforeSave ||
                     property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated ||
                     !HasOwnedMemberAccess(property, member)) return false;
-                // Configured conversions/comparers can silently change or suppress the owned scalar writes.
+                // Keep the sealed first-party content codec; unknown conversions/comparers may alter or suppress writes.
                 var declared = (IReadOnlyProperty)property;
-                if (declared.GetValueConverter() is not null ||
+                if (declared.GetValueConverter() is { } converter &&
+                    !(member.Name == "ContentJson" && converter is EfPayloadValueConverter) ||
                     declared.GetValueComparer() is { } comparer && !HasDefaultComparer(comparer)) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;

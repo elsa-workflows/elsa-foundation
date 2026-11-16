@@ -3,7 +3,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -77,13 +76,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
         IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
         var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
-        var comparers = context.Model.GetEntityTypes().Where(entity => RuntimeHistoryEfModule.Chain.ContentColumns.Any(column => column.Entity == entity.ClrType))
-            .SelectMany(entity => entity.GetProperties()).Where(property => ((Microsoft.EntityFrameworkCore.Metadata.IReadOnlyProperty)property).GetValueComparer() is { } comparer &&
-                !ReferenceEquals(comparer, property.GetTypeMapping().Comparer))
-            .Select(property => $"{property.DeclaringType.Name}.{property.Name}: {property.GetValueComparer().GetType().FullName} vs {property.GetTypeMapping().Comparer.GetType().FullName}; inner={(property.GetValueComparer() as IInfrastructure<ValueComparer>)?.Instance.GetType().FullName}; annotations={string.Join(",", property.GetAnnotations().Select(annotation => annotation.Name))}");
-        var paired = independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader);
-        if (!paired) Assert.True(RuntimeHistoryEfModule.HasProjectionModel(context), "The actual owned model must qualify before its paired ports can qualify.");
-        Assert.True(paired, string.Join("; ", comparers));
+        Assert.True(independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader));
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
