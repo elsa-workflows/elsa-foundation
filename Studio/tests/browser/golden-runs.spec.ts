@@ -106,7 +106,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Next workflow run page" }).click();
   await expect(inspectRun(page, "run-12")).toBeVisible();
   await inspectRun(page, "run-12").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(timelineHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-12");
   await expect(page.locator(".wf-instance-meta")).toContainText("Checkpoint cadence");
@@ -125,7 +125,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(inspectRun(page, "run-12")).toBeVisible();
 
   await inspectRun(page, "run-12").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(timelineHeading(page)).toBeVisible();
   const returnTo = new URL(page.url()).searchParams.get("returnTo");
   expect(returnTo).toBeTruthy();
   const returnUrl = new URL(returnTo!, "http://golden-runs.fixture");
@@ -140,7 +140,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(inspectRun(page, "run-12")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await inspectRun(page, "run-01").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(timelineHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("Durable");
   await expect(page.locator(".wf-instance-meta")).toContainText("Inspection detail");
@@ -153,7 +153,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-incident")).toContainText("Needs intervention · Active");
 
   await page.goto("/golden-runs.html?directRun=run-01");
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(timelineHeading(page)).toBeVisible();
   await expect(page.getByRole("button", { name: "Runs", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Runs", exact: true }).click();
   await expect(page).toHaveURL(/\/workflows\/instances(?:\?|$)/);
@@ -166,7 +166,7 @@ test("older hosts omit checkpoint cadence and inspection without changing the de
     localStorage.setItem("elsa-studio-theme-mode", "light");
   });
   await page.goto("/golden-runs.html?directRun=run-13");
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(timelineHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-13");
   await expect(page.locator(".wf-instance-meta")).not.toContainText("Checkpoint cadence");
@@ -227,7 +227,7 @@ for (const mode of ["light", "dark"] as const) for (const width of [1280, 1440, 
     await expect(page.locator(".wf-instance-canvas-shell")).toHaveCount(0);
     await row.focus();
     await row.press("Enter");
-    await expect(canvasHeading(page)).toBeVisible();
+    await expect(timelineHeading(page)).toBeVisible();
   });
 }
 
@@ -327,8 +327,8 @@ async function openRuns(page: Page) {
   await expect(page.getByRole("row", { name: /run-01/ })).toBeVisible();
 }
 
-function canvasHeading(page: Page) {
-  return page.locator(".wf-instance-canvas-shell > header").getByRole("heading", { level: 3 });
+function timelineHeading(page: Page) {
+  return page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("heading", { name: "Timeline", exact: true });
 }
 
 async function openMoreFilters(page: Page) {

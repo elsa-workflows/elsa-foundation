@@ -30,7 +30,7 @@ export interface PreparedAttachedExecution {
 /** Prepare one bounded destination while the confirmed view remains interactive. No cross-selection cache. */
 export async function prepareAttachedExecution(context: StudioEndpointContext, workflowExecutionId: string,
   selected: ActivityExecutionStateSummary, scope: Awaited<ReturnType<typeof loadExecutionScope>>, graph: ExecutableActivityGraph,
-  nodeId: string | null, signal: AbortSignal, canvasOwnerId?: string, visibleNodeIds?: readonly string[], catalog: readonly ActivityCatalogItem[] = []): Promise<PreparedAttachedExecution> {
+  nodeId: string | null, signal: AbortSignal, canvasOwnerId?: string, visibleNodeIds?: readonly string[], catalog: readonly ActivityCatalogItem[] = [], prepareValues = true): Promise<PreparedAttachedExecution> {
   const facts = nodeId ? graph.factsByNodeId.get(nodeId) : undefined;
   const owner = [...scope.scopes].reverse().find(item => item.execution.authoredActivityId === canvasOwnerId)?.execution;
   const ancestorId = owner?.activityExecutionId;
@@ -58,7 +58,7 @@ export async function prepareAttachedExecution(context: StudioEndpointContext, w
   }
   if (canvas?.failed) throw Object.assign(new Error("Execution overlays could not be loaded. Retry the selection."), { status: canvas.denied ? 403 : 0 });
   const values = new Map<string, PreparedRuntimeValue>();
-  if (inspection) {
+  if (inspection && prepareValues) {
     const snapshots = inspection.valueSnapshots ?? [];
     const inputFacts = findExecutableNodeFacts(graph, execution);
     const inputs = buildInputInspectionRows({

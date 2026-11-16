@@ -45,7 +45,8 @@ export async function renderRegisteredRoute(
   followNavigation = false,
   capabilities = capabilityDocument(),
   historyState: unknown = {},
-  retained = false
+  retained = false,
+  wrapRoute?: (screen: React.ReactNode) => React.ReactNode
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -92,7 +93,8 @@ export async function renderRegisteredRoute(
       window.dispatchEvent(new PopStateEvent("popstate"));
     };
     const Component = route.component;
-    return <Component navigate={navigate} />;
+    const screen = <Component navigate={navigate} />;
+    return wrapRoute ? wrapRoute(screen) : screen;
   }
 
   let visible = true;

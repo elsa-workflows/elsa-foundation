@@ -117,6 +117,7 @@ for (const style of styles) {
     await open(page, style, "drift", "dark");
     await page.goto("/workspace-appearance.html?composition=sequence&host=instance&run-canvas=unique");
     await expect(page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/workflows\/instances\/editor-execution\?/);
     await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
     const details = page.getByRole("complementary", { name: "Run details panel", exact: true });

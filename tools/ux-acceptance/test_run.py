@@ -201,10 +201,14 @@ class VerdictTests(unittest.TestCase):
         acceptance.configure_dashboard_qualification(settings, shells)
         self.assertFalse(settings['Elsa']['Readiness']['WarmDefaultShell'])
         qualification = settings['Qualification']
-        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual(2, len(qualification['Principals']))
         self.assertEqual('default', qualification['Principals'][0]['tenant'])
         profiles = qualification['GrantProfiles']
-        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source', 'history-reader', 'history-no-structure'}, set(profiles))
+        self.assertEqual({'workflows/activity-executions:inspect'},
+                         set(profiles['history-reader']) - set(profiles['history-no-structure']))
+        self.assertEqual({'api-capabilities:read', 'workflows/runtime:read'}, set(profiles['history-no-structure']))
+        self.assertEqual('history-reader', qualification['Principals'][1]['username'])
         self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
                          set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
         self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')

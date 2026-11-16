@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import json
 import os
 import re
@@ -48,7 +48,12 @@ CAPTURES = {
     'native dashboard questions and sharing': ['reference', 'dashboard-native-reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-drill-values', 'question-saved', 'question-refreshed', 'question-editor-preview-appearance-1', 'question-editor-preview-appearance-2', 'question-saved-refresh-drill', 'question-saved-refresh-drill-values', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboards-collection-appearance-1', 'dashboards-collection-appearance-2', 'dashboard-and-dependency-dialogs-appearance-1-dashboard', 'dashboard-and-dependency-dialogs-appearance-1-share-review', 'dashboard-and-dependency-dialogs-appearance-1-copy-review', 'dashboard-and-dependency-dialogs-appearance-2-dashboard', 'dashboard-and-dependency-dialogs-appearance-2-share-review', 'dashboard-and-dependency-dialogs-appearance-2-copy-review', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-drill-values', 'dashboard-copy-dependency-review', 'dashboard-copy-independent-question', 'dashboard-copy', 'question-share', 'dashboard-share-dependency-review', 'dashboard-share', 'question-shared-search', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-new-reuse-confirmation', 'questions-collection-appearance-1', 'questions-collection-appearance-2', 'question-conflict', 'question-conflict-recovered'],
     'existing home widgets and layout defaults': ['reference', 'home-widgets', 'home-module-picker-1', 'home-module-picker-2', 'home-module-run-health', 'home-module-portfolio', 'home-module-settings', 'home-module-settings-reopened', 'home-layout-edit', 'home-layout-reopened', 'home-populated-appearance-1', 'home-populated-appearance-2', 'home-widget-picker', 'home-server-default', 'home-existing-aliases'],
     'execution navigation keeps keyboard focus and exact evidence': ['reference', 'standalone-exact', 'standalone-menu', 'completed-while-observation-paused', 'attached-first-boundary', 'retained-middle-occurrence', 'restored-exact-occurrence'],
+    'production history occurrence and approval qualification': ['reference', 'history-wait', 'history-completed', 'history-fault', 'history-retained-boundary'],
     'timeline selection retains its tab and exact occurrence': ['reference', 'timeline-populated', 'timeline-click', 'timeline-keyboard', 'activity-details', 'timeline-return'],
+    'recorded activity playback transport': ['reference', 'playback-transport-next', 'playback-transport-paused', 'playback-transport-diagram', 'playback-transport-activity', 'playback-transport-return', 'playback-transport-repeat-first', 'playback-transport-repeat-second', 'playback-transport-end', 'playback-transport-scoped', 'playback-transport-retry-source', 'playback-transport-retry'],
+    'recorded activity playback ordinal seeking': ['reference', 'playback-seek-older-repeat', 'playback-seek-pending', 'playback-seek-latest', 'playback-seek-failed', 'playback-seek-retried'],
+    'recorded activity playback live bounds and waits': ['reference', 'playback-live-waiting', 'playback-live-frozen', 'playback-live-refreshed', 'playback-live-recorded-wait'],
+    'recorded activity playback coverage and access': ['reference', 'playback-access-metadata-only', 'playback-access-pending', 'playback-access-revoked', 'playback-coverage-invalidated', 'playback-coverage-retained', 'playback-coverage-pin-unavailable', 'playback-coverage-disabled', 'playback-coverage-uncaptured', 'playback-coverage-unsupported'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (
@@ -98,6 +103,11 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    'recorded activity playback transport': {'playback-transport-oracle.json'},
+    'recorded activity playback ordinal seeking': {'playback-seeking-oracle.json'},
+    'recorded activity playback live bounds and waits': {'playback-live-oracle.json'},
+    'recorded activity playback coverage and access': {'playback-coverage-oracle.json'},
+    'production history occurrence and approval qualification': {'history-production-oracle.json'},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
@@ -116,10 +126,14 @@ def configure_dashboard_qualification(settings, shells):
               'workflows/runtime:read', 'workflows/design:read']
     no_source = [grant for grant in native if grant not in
                  {'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'}]
+    history = ['api-capabilities:read', 'workflows/runtime:read', 'workflows/activity-executions:inspect']
     settings['Qualification'] = {
         'Principals': [{'subject': 'dashboard-qa-reader', 'tenant': 'default',
-                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native}],
-        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source},
+                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native},
+                       {'subject': 'history-qa-reader', 'tenant': 'default',
+                        'username': 'history-reader', 'password': 'Password123!', 'exactDirectPermissions': history}],
+        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source,
+                          'history-reader': history, 'history-no-structure': history[:-1]},
     }
     # Keep the selected adapter composed, with inference explicitly unavailable in this native-only run.
     features = shells['CShells']['Shells']['default']['Features']
@@ -419,6 +433,44 @@ def prepare_host(project, destination):
         shutil.copy2(project.parent / name, destination / name)
 
 
+def playback_profiles(stack, data, backend_project, studio_project, output, env):
+    """Separate normal compositions, never a live switch of one host's capture singleton."""
+    profiles = {}
+    for name in ('disabled', 'uncaptured', 'unsupported'):
+        directory = data / f'playback-{name}'
+        backend, studio = directory / 'workbench', directory / 'studio'
+        prepare_host(backend_project, backend)
+        prepare_host(studio_project, studio)
+        backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
+        settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
+        shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
+        settings['Cors']['AllowedOrigins'] = [studio_url]
+        features = shells['CShells']['Shells']['default']['Features']
+        features['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
+        configure_dashboard_qualification(settings, shells)
+        removed = []
+        if name == 'disabled':
+            # Object-map child properties are feature settings, not FeatureEntryState switches.
+            features['WorkflowsRuntimeHistory'] = {'Enabled': False}
+        else:
+            removed.append('WorkflowsRuntimeHistory')
+            if name == 'unsupported':
+                # Keep coherent EF native execution/design/publishing. The conditional host's fixed
+                # post-composition feature omits the optional reader and its dependent write facets.
+                features['PlaybackQualificationWithoutHistory'] = {}
+            for feature in removed:
+                features.pop(feature, None)
+        (backend / 'appsettings.json').write_text(json.dumps(settings))
+        (backend / 'shells.json').write_text(json.dumps(shells))
+        stack.enter_context(host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
+        stack.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
+                                 dict(env, Studio__BackendBaseUrl=backend_url)))
+        profiles[name] = {'backendUrl': backend_url, 'studioUrl': studio_url, 'removedFeatures': removed,
+                          'captureSetting': False if name == 'disabled' else None,
+                          'historyReaderOmission': 'PlaybackQualificationWithoutHistory' if name == 'unsupported' else None}
+    return profiles
+
+
 def source_state(root):
     sha = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     dirty = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'status', '--porcelain'], cwd=root, text=True).strip()
@@ -450,7 +502,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
     head = os.environ.get('UX_PR_HEAD_SHA', sha)
     selected = selected_journeys(journey, composition)
     fixture_built = False
-    backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
     report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
@@ -474,7 +526,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
-                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port)))
+                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port), DEBUG="vite:deps,vite:transform"))
         gallery_report = json.loads((gallery / 'playwright.json').read_text())
         gallery_url = gallery_report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
         report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(gallery_report, gallery, gallery_port),
@@ -500,6 +552,11 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
             configure_dashboard_qualification(settings, shells)
+            coverage_profiles = 'recorded activity playback coverage and access' in selected
+            if coverage_profiles:
+                # A real material READ fault must reach the provider, rather than a previously warmed cache.
+                # Only this disposable copied configuration changes; no ordinary host setting is edited.
+                shells['CShells']['Shells']['default']['Features']['WorkflowsRuntimeEntityFrameworkCore']['CacheWorkflowExecutables'] = False
             studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
             configure_activity_data(shells, studio_shells, composition, selected)
             (studio / 'shells.json').write_text(json.dumps(studio_shells))
@@ -516,14 +573,21 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                           hostProfile='ElsaDashboardQualification=true; private native principals; Copilot disabled',
                           modelEvidence='Native browser Weaver message submissions only; physical SDK calls not measured')
             with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as backend_process:
-                with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
-                          dict(env, Studio__BackendBaseUrl=backend_url)) as studio_process:
+                with ExitStack() as extra_hosts:
+                    profiles = playback_profiles(extra_hosts, data, backend_project, studio_project, output, env) if coverage_profiles else {}
+                    if profiles:
+                        report['playbackHostProfiles'] = profiles
+                        report['playbackPinReadPolicy'] = 'Owned default copy has executable cache disabled for an exact native READ fault'
+                    studio_process = extra_hosts.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
+                                                   dict(env, Studio__BackendBaseUrl=backend_url)))
                     report['ownedPids'] = {'backend': backend_process.pid, 'studio': studio_process.pid}
                     report['stage'] = 'journeys'
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
                                        UX_ACTIVITY_DATA_COMPOSITION=composition)
+                    if profiles:
+                        browser_env['UX_PLAYBACK_PROFILES'] = json.dumps(profiles)
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                     if journey is not None:
                         # Playwright greps project/file/title together; anchor the exact final title.

@@ -1,0 +1,135 @@
+.wf-activity-playback {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-family: var(--studio-font-ui);
+}
+
+.wf-playback-heading,
+.wf-playback-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wf-playback-heading {
+  margin-bottom: 10px;
+}
+
+.wf-playback-heading > span,
+.wf-playback-note {
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-playback-state {
+  margin-inline-start: auto;
+}
+
+.wf-playback-transport > .studio-field {
+  min-width: 120px;
+  max-width: 100%;
+}
+
+.wf-playback-transport button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wf-playback-position {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.wf-playback-position span {
+  color: var(--studio-text-muted);
+}
+
+.wf-playback-observation {
+  min-width: 0;
+  min-height: 1.4em;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-playback-scrubber {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.wf-playback-scrubber input {
+  min-width: 0;
+  width: 100%;
+  accent-color: var(--studio-selection-mark);
+}
+
+.wf-playback-scrubber input:focus-visible {
+  outline: 2px solid var(--studio-selection-mark);
+  outline-offset: 3px;
+}
+
+.wf-playback-note,
+.wf-playback-error {
+  margin: 8px 0 0;
+}
+
+.wf-activity-playback p,
+.wf-playback-position,
+.wf-playback-details dd {
+  overflow-wrap: anywhere;
+}
+
+.wf-playback-selected-observation {
+  margin-bottom: 12px;
+}
+
+.wf-playback-selected-observation button {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.wf-playback-details {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.wf-playback-details dl {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  gap: 6px 12px;
+}
+
+.wf-playback-details dd {
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .wf-activity-playback {
+    padding: 12px;
+  }
+
+  .wf-playback-scrubber {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}

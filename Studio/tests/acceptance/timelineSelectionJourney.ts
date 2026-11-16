@@ -1,4 +1,6 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { waitCapturedPlaybackReady } from "./waitCapturedPlaybackReady";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import type { RuntimeHistoryPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes";
 import type { WorkflowInstanceDetails } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -52,47 +54,78 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   await info.attach("execution-identities.json", { body: JSON.stringify({ definitionId: submitted.definition.id,
     versionId: submitted.version.id, ...published, workflowExecutionId: run.workflowExecutionId, first, second }, null, 2), contentType: "application/json" });
 
-  // The selected-occurrence link also opens the inspector on narrow screens using normal navigation.
-  await page.goto(`/workflows/instances/${run.workflowExecutionId}?tab=activity&selected=${first.activityExecutionId}`);
-  const panel = page.getByLabel("Run details panel", { exact: true });
-  const timelineTab = panel.getByRole("tab", { name: "Timeline", exact: true });
-  async function settledCapture(name: string) {
-    await expect(page.getByText("Resolving execution scope…", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+  const history = await api<RuntimeHistoryPage>(`${path}/history?limit=100`);
+  expect(["captured", "partial"]).toContain(history.coverage.state);
+  expect(history.coverage.capturedFromStart).toBe(true);
+  expect(history.nextContinuationToken).toBeNull();
+  const firstEvent = history.items.find(item => item.activityExecutionId === first.activityExecutionId && item.name === "ActivityCompleted")!;
+  const secondEvent = history.items.find(item => item.activityExecutionId === second.activityExecutionId && item.name === "ActivityCompleted")!;
+  expect(firstEvent?.historyEventId).toBeTruthy(); expect(secondEvent?.historyEventId).toBeTruthy();
+  await info.attach("recorded-event-identities.json", { body: JSON.stringify({ coverage: history.coverage, firstEvent, secondEvent }, null, 2), contentType: "application/json" });
+
+  if (info.project.name.startsWith("narrow")) await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(`/workflows/instances/${run.workflowExecutionId}?view=timeline`);
+  await waitCapturedPlaybackReady(page);
+  const views = page.getByRole("navigation", { name: "Run workspace views", exact: true });
+  const timeline = views.getByRole("button", { name: "Timeline", exact: true });
+  const region = page.getByRole("region", { name: "Run timeline", exact: true });
+  await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await region.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+  const entries = region.getByRole("list", { name: "Run history events", exact: true }).getByRole("button");
+  const firstRow = entries.nth(history.items.findIndex(item => item.historyEventId === firstEvent.historyEventId));
+  const secondRow = entries.nth(history.items.findIndex(item => item.historyEventId === secondEvent.historyEventId));
+  async function settledCapture(name: string, target: Locator) {
+    await expect(region).toHaveAttribute("aria-busy", "false");
     await expect(page.getByRole("button", { name: "Retry execution scope", exact: true })).toHaveCount(0);
-    await expect(page.getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Retry event", exact: true })).toHaveCount(0);
+    await target.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    await expect(target).toBeInViewport({ ratio: 1 });
     await capture(page, info, name);
   }
-  // Let the deep link establish its parent scope before navigating away from Activity.
-  await expect(page.locator(".wf-execution-scope > button")).toHaveCount(2);
-  await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
-  await timelineTab.click();
-  const entries = panel.getByRole("list", { name: "Execution timeline", exact: true }).getByRole("button");
-  await expect(entries).toHaveCount(3);
-  await settledCapture("timeline-populated");
-  await entries.nth(2).click();
-  await expect(timelineTab).toHaveAttribute("aria-selected", "true");
-  await expect(entries.nth(2)).toHaveAttribute("data-selected", "true");
-  await expect(entries.nth(2)).toBeFocused();
-  await expect(page.locator('.react-flow__node[data-id="second"]')).toHaveAttribute("aria-pressed", "true");
-  await settledCapture("timeline-click");
-  await entries.nth(1).press("Enter");
-  await expect(timelineTab).toHaveAttribute("aria-selected", "true");
-  await expect(entries.nth(1)).toHaveAttribute("data-selected", "true");
-  await expect(entries.nth(2)).toHaveAttribute("data-selected", "false");
-  await expect(entries.nth(1)).toBeFocused();
-  await expect(page.locator('.react-flow__node[data-id="first"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('.react-flow__node[data-id="second"]')).toHaveAttribute("aria-pressed", "false");
-  await settledCapture("timeline-keyboard");
+  await expect(entries).toHaveCount(history.items.length);
+  await expect(secondRow).toHaveAttribute("data-history-event-id", secondEvent.historyEventId);
+  await settledCapture("timeline-populated", secondRow);
+  await secondRow.click();
+  await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await expect(secondRow).toHaveAttribute("aria-pressed", "true");
+  await expect(secondRow).toBeFocused();
+  await settledCapture("timeline-click", secondRow);
+  const eventDetails = page.getByRole("region", { name: "History event details", exact: true });
+  await eventDetails.getByText("Technical details", { exact: true }).click();
+  await expect(eventDetails).toContainText(secondEvent.historyEventId);
+  await expect(eventDetails).toContainText(second.activityExecutionId);
+  await firstRow.press("Enter");
+  await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await expect(firstRow).toHaveAttribute("aria-pressed", "true");
+  await expect(secondRow).toHaveAttribute("aria-pressed", "false");
+  await expect(firstRow).toBeFocused();
+  await settledCapture("timeline-keyboard", firstRow);
+  await eventDetails.getByText("Technical details", { exact: true }).click();
+  await expect(eventDetails).toContainText(firstEvent.historyEventId);
+  await expect(eventDetails).toContainText(first.activityExecutionId);
+  await expect(eventDetails).not.toContainText(second.activityExecutionId);
 
-  await panel.getByRole("tab", { name: "Activity", exact: true }).click();
-  const technical = panel.locator(".wf-activity-execution-details");
+  // Execution inspection is explicit; selecting an event keeps the chronology and its focus.
+  await eventDetails.getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
+  await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tablist", { name: "Activity execution views", exact: true })
+    .getByRole("tab", { name: "Data", exact: true }).click();
+  const technical = page.locator(".wf-activity-execution-details");
   await technical.locator("summary").click();
   await expect(technical).toContainText(first.activityExecutionId);
   await expect(technical).not.toContainText(second.activityExecutionId);
-  await settledCapture("activity-details");
-  await timelineTab.click();
-  await expect(entries.nth(1)).toHaveAttribute("data-selected", "true");
-  await settledCapture("timeline-return");
+  const exactOwner = technical.getByText(first.activityExecutionId, { exact: true });
+  await expect(exactOwner).toHaveAttribute("title", first.activityExecutionId);
+  // Long technical values use ellipsis; the complete row, including its copy action, must be visible.
+  const exactOwnerRow = technical.locator(".wf-activity-meta-item").filter({ has: page.getByText(first.activityExecutionId, { exact: true }) });
+  await exactOwnerRow.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+  await expect(exactOwnerRow).toBeInViewport({ ratio: 1 });
+  await settledCapture("activity-details", exactOwnerRow);
+  await firstRow.press("Enter");
+  await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await expect(firstRow).toHaveAttribute("aria-pressed", "true");
+  await expect(firstRow).toBeFocused();
+  await expect(eventDetails).toBeVisible();
+  await settledCapture("timeline-return", firstRow);
 }

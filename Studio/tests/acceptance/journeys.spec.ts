@@ -10,7 +10,9 @@ import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
 import { executionNavigationJourney } from "./executionNavigationJourney";
+import { historyOccurrenceQualificationJourney } from "./historyOccurrenceQualificationJourney";
 import { timelineSelectionJourney } from "./timelineSelectionJourney";
+import { playbackTransportJourney, playbackSeekingJourney, playbackLiveWaitJourney, playbackCoverageJourney } from "./activityPlaybackJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -59,6 +61,11 @@ const browserErrors = new WeakMap<Page, string[]>();
 type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
+
+test("recorded activity playback transport", async ({ page }, info) => playbackTransportJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback ordinal seeking", async ({ page }, info) => playbackSeekingJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback live bounds and waits", async ({ page }, info) => playbackLiveWaitJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback coverage and access", async ({ page }, info) => playbackCoverageJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
@@ -700,6 +707,10 @@ test("execution navigation keeps keyboard focus and exact evidence", async ({ pa
 
 test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
   await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("production history occurrence and approval qualification", async ({ page }, info) => {
+  await historyOccurrenceQualificationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("explicit authored activity names survive publication and execution", async ({ page }, info) => {

@@ -11,6 +11,6 @@ export default defineConfig({
   outputDir: `${evidence}/results`,
   reporter: [["line"], ["json", { outputFile: `${evidence}/playwright.json` }], ["html", { outputFolder: `${evidence}/html`, open: "never" }]],
   use: { baseURL, viewport: { width: 1100, height: 1000 }, trace: "retain-on-failure" },
-  // HTML can respond before the fixture and its dependencies have finished cold compilation.
-  webServer: { command: `pnpm exec vite --config vite.config.ts --port ${port} --strictPort`, url: `${baseURL}/outlinedFieldsFixture.tsx`, reuseExistingServer: false }
+  // Listener or entry readiness does not prove its static dependency graph has settled.
+  webServer: { command: `pnpm exec vite --config vite.outlined-fields.config.ts --port ${port} --strictPort`, url: `${baseURL}/__outlined-ready`, reuseExistingServer: false }
 });
