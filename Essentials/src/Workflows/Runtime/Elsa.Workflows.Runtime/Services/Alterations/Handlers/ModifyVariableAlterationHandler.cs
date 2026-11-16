@@ -29,10 +29,11 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
         {
             // Spec 1221 FR-023: the change applies only if this variable is still at the version captured when it was
             // requested. A write to another variable in the frame does not conflict with it.
-            if (!capturedVersions.TryGetValue(variableKey, out var capturedVersion) ||
-                originalWorkflow.RootVariableFrame is not { } originalFrame ||
-                !originalFrame.Values.ContainsKey(variableKey) ||
-                capturedVersion != originalFrame.VersionOf(variableKey).Version)
+            // A key the capture never saw is not a root variable; the declaration check below refuses it.
+            if (capturedVersions.TryGetValue(variableKey, out var capturedVersion) &&
+                (originalWorkflow.RootVariableFrame is not { } originalFrame ||
+                 !originalFrame.Values.ContainsKey(variableKey) ||
+                 capturedVersion != originalFrame.VersionOf(variableKey).Version))
                 return WorkflowAlterationPreflightResult.Rejected("VariableVersionConflict", "The target variable changed after target capture.");
         }
         else
