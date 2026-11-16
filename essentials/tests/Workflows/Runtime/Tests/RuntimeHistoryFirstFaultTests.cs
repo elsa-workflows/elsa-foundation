@@ -129,8 +129,10 @@ public sealed class RuntimeHistoryFirstFaultTests
     private static WorkflowExecutionCommandEnvelope Envelope(RuntimeHistoryCapturePolicy? policy, bool? enabled,
         string? parent = null, string execution = "run", bool malformed = false)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId, null, null, null, null,
-            parentWorkflowExecutionId: parent) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
+        var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId,
+            variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown,
+            pinnedSource: null, parentWorkflowExecutionId: parent, correlationId: null, tenantId: null, partition: null, authority: null)
+        { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
         var command = new WorkflowExecutionCommand("command", execution, WorkflowExecutionCommandKind.Start, At,
             malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
         return new("envelope", execution, command, "idempotency", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, At);
