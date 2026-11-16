@@ -9,7 +9,8 @@
 Build the defaults of the ADR 0046 amendment. The Jint integration stops converting every value to frozen doubles up
 front: a replaceable script value bridge puts plain JavaScript values into scripts and JavaScript input expressions
 alike, records what entered, and after the run reports only what the script changed (copy, compare, patch). Script
-body changes go to S-7's step write path (ADR 0090); input expression changes stay local. The bridge's cost is
+body changes go to S-7's step write path (ADR 0090); an input expression that writes is refused at publish where
+visible and fails at run time otherwise. The bridge's cost is
 measured. One replaceable precision policy, installed by a feature, refuses a lossy
 number at a write. The dynamic kind gets one registered alias, `Any`; `Object` and `Elsa.Any` read as `Any`. Binding
 checks treat `Any`, `JsonElement` and `JsonNode` as one kind. A type reference can nest, so a dictionary of string
@@ -120,7 +121,8 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 | P-4 | Change detection | FR-003–FR-005. After the run, convert each original JSON afresh and compare it with the script's value, JavaScript with JavaScript (ADR 0090 C2): equal → unchanged; a changed member → member change; a reassigned variable → whole assignment; a changed array → whole. Unchanged members come from the original JSON. |
 | P-5 | Cost metric | FR-010. The bridge records enter and collect durations and the bytes converted per evaluation as a histogram on the JavaScript expression meter; the benchmark of SC-007 uses the same numbers. |
 | P-6 | Precision policy | FR-012–FR-015. `IJavaScriptPrecisionPolicy` is a replacement contract with one built-in `RefusingPrecisionPolicy`, installed by the JavaScript feature, with no options and no node or workflow override. Called at a write with the lossy paths it carries. Computing and host-function arguments only warn. |
-| P-7 | Hand-off to S-7 | FR-006, FR-007, Q1. A script activity passes its changes to the step write path (S-7) with the read-set base (ADR 0092); the bridge raises the C2 visibility warning. An input expression's changes are discarded. Until S-7's path is on the branch, User Story 3 is tested at the bridge level. |
+| P-7 | Hand-off to S-7 | FR-006, FR-007, Q1. A script activity passes its changes to the step write path (S-7) with the read-set base (ADR 0092); the bridge raises the C2 visibility warning. Until S-7's path is on the branch, User Story 3 is tested at the bridge level. |
+| P-7a | Input expressions never write | FR-006a, Q7. Publish: the JavaScript binding compiler (ADR 0083 grammar) refuses an assignment whose target is `variables.<name>` or a member path under it, with a new stable `VF-` code. Run time: `JintPortableJavaScriptEvaluator` fails the evaluation when the bridge reports any change, with the same code and the path. |
 | P-8 | One dynamic kind | FR-017–FR-020. `TypeAliasConvention` registers `Any` and resolves `Object`, `System.Object` and `Elsa.Any` to it; `object` is no longer a variable type. The `Elsa.Any` constants and the `Alias is "Object" or "Elsa.Any"` checks go through one `IsDynamicKind`. `DateOnly` and `TimeOnly` register as bare aliases. |
 | P-9 | Binding check | FR-021. The exact alias match in `RuntimeInputBindingCompiler` treats the dynamic kind as one. `JsonObject` keeps a run-time shape check. |
 | P-10 | Nested types | FR-022. `TypeReference` gets an optional `Element` type reference. `Decompose` recurses. Diagnostics print the full shape. |

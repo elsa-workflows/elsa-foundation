@@ -66,9 +66,9 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Decision**: S-8 owns the JavaScript side: entering values, finding changes, the precision check and the C2
   visibility warning. S-7 owns the step write path of ADR 0090 for every writer: the intent from the base (C3),
   commit with the step, conflicts (C5).
-- **Input expressions**: they get the same values through the same bridge (D-15). Their changes stay local, because
-  ADR 0090 decision 1 keeps input-binding expressions pure: they may run more than once (replay, each `While` pass,
-  preflight).
+- **Input expressions**: they get the same values through the same bridge (D-15). They never write (ADR 0090
+  decision 1, ADR 0083 `binding-readonly-v1`): they may run more than once (replay, each `While` pass, preflight).
+  An attempted write fails loudly (R-8).
 - **Dependency**: User Story 3's end-to-end test needs S-7's write path; until then it is tested at the bridge level.
 
 ## R-5 Elsa 3 coercion of an untyped result (Q5)
@@ -90,3 +90,15 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Decision**: `TypeReference` gets an optional `Element` reference, so a collection's element can be a collection.
 - **Alternatives considered**: JSON Schema only (binding checks do not read it); a special alias for
   dictionary-of-arrays (does not generalise).
+
+## R-8 An attempted write from an input expression (Q7)
+
+- **Decision**: refuse at publish where the expression shows the write; fail the evaluation at run time when the
+  bridge reports a change. One stable code, one diagnostic: node, input, variable, path, "input expressions only
+  read", and a pointer to a script activity.
+- **Rationale**: a silent drop hides a mistake; a write that applies a variable number of times corrupts data. Most
+  writes are visible at publish (`variables.x = …`, `variables.x.y = …`); the run-time check covers aliases and
+  computed paths, using the change report the bridge produces anyway.
+- **Alternatives considered**: run time only (fails late); freezing values for expressions (a bare JavaScript
+  `TypeError` without Elsa's diagnostic, and different values from a script, against D-15); dropping the change
+  silently (the earlier draft; rejected by the coordinator).

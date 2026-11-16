@@ -29,8 +29,8 @@ The same contract applies to script activities and JavaScript input expressions 
 | Set a member equal, as JavaScript, to what it read | Unchanged | Nothing (accepted gap; a string forces the write) |
 | Returned a value | Result | The result, as JSON |
 
-A script activity's changes go to the step write path (S-7). An input expression's changes are discarded (ADR 0090
-decision 1).
+A script activity's changes go to the step write path (S-7). An input expression never writes: an assignment visible
+at publish is refused there, and any change the bridge reports at run time fails the evaluation (FR-006a).
 
 Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 
@@ -42,3 +42,5 @@ Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 | A lossy element in a written array | Refused (policy) | Array path, "written as a whole", each lossy element with both values, remedy |
 | A lossy number only computed with | Warning | Path and stored value |
 | A lossy number passed to a host function | Logged warning | Function, argument path |
+| An input expression assigns a variable or a member of one | Refused at publish | Node, input, variable, path; "input expressions only read"; use a script activity |
+| An input expression changes a read value (not visible at publish) | Evaluation fails | Same as above |

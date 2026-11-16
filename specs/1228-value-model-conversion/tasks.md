@@ -36,7 +36,10 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 - [ ] T008 [P] [US1] Unit tests for the bridge (each row of the "Out of JavaScript" table in `contracts/javascript-adapter.md`, key order and casing kept, member deletion, local copy `{...x}` is no change) in `Essentials/tests/Expressions/JavaScript/Jint/Tests/CopyComparePatchValueBridgeTests.cs`
 - [ ] T008a [US1] Record enter and collect durations and bytes converted per evaluation as a histogram on the JavaScript expression meter (FR-010) in `Jint/Services/CopyComparePatchValueBridge.cs`, with a test that the measurement is emitted
 - [ ] T009 [US1] Update `ScriptValueIsolationTests` for the new contract (plain changeable values, still no CLR surface) in `Essentials/tests/Expressions/JavaScript/Jint/Tests/ScriptValueIsolationTests.cs`
-- [ ] T010 [US1] End-to-end test: a read-only script over an order with a large id leaves the stored text and version unchanged; a variable never read is untouched; a JavaScript input expression that changes a read value writes nothing (acceptance 1–4) in `Essentials/tests/Workflows/Runtime/Integration/ScriptReadsKeepValuesTests.cs`
+- [ ] T010 [US1] End-to-end test: a read-only script over an order with a large id leaves the stored text and version unchanged; a variable never read is untouched (acceptance 1–3) in `Essentials/tests/Workflows/Runtime/Integration/ScriptReadsKeepValuesTests.cs`
+- [ ] T010a [US1] Refuse at publish a JavaScript input expression that assigns `variables.<name>` or a member path under it, with a new stable `VF-` code and the FR-006a diagnostic, in the JavaScript binding compiler under `Pub/` (ADR 0083 grammar check)
+- [ ] T010b [US1] Fail the evaluation of a JavaScript input expression when the bridge reports any change, with the same code and the path, in `Jint/Services/JintPortableJavaScriptEvaluator.cs`
+- [ ] T010c [US1] Tests: direct assignment refused at publish; aliased member change fails at run time and writes nothing; a changed local copy succeeds; change-and-revert succeeds (acceptance 4–6) in `Essentials/tests/Workflows/Publishing/Integration/InputExpressionWriteRefusalTests.cs`
 - [ ] T011 [P] [US1] Test that no CLR object, type or member is reachable from scripts and JavaScript input-binding expressions (FR-008) in `Essentials/tests/Expressions/JavaScript/Jint/Tests/NoClrSurfaceTests.cs`
 
 ## Phase 4: User Story 2 — A lost digit never reaches storage silently (P1)
@@ -69,7 +72,7 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 **Goal**: a script's changes reach S-7's step write path. The end-to-end test waits on S-7.
 **Independent Test**: spec User Story 3.
 
-- [ ] T026 [US3] Make `variables` assignable in script activities and JavaScript input expressions alike (D-15); in `Jint/Services/JintJavaScriptScriptEvaluator.cs` pass a script activity's changes to S-7's step write path with their ADR 0092 base, and in `Jint/Services/JintPortableJavaScriptEvaluator.cs` discard an input expression's changes (ADR 0090 decision 1)
+- [ ] T026 [US3] Make `variables` assignable in script activities; in `Jint/Services/JintJavaScriptScriptEvaluator.cs` pass a script activity's changes to S-7's step write path with their ADR 0092 base
 - [ ] T027 [US3] Raise the ADR 0090 C2 visibility warning for a member change with no whole assignment in `Jint/Services/CopyComparePatchValueBridge.cs`, with a unit test
 - [ ] T028 [US3] End-to-end tests, once S-7's write path is on the branch: member change keeps other members' text; whole assignment replaces; array written whole; equal-value member change keeps stored value; equal-value whole assignment is a write; string forces the write; visibility warning (acceptance 1–6) in `Essentials/tests/Workflows/Runtime/Integration/ScriptVariableWritesTests.cs`
 

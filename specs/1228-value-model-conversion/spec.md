@@ -16,7 +16,7 @@ kind has several names), and the JavaScript part of
 [#3421](https://github.com/elsa-workflows/elsa-foundation/issues/3421) (numbers lose digits in scripts).
 
 **Input**: build the defaults of the ADR 0046 amendment. Scripts and JavaScript input expressions get plain
-JavaScript values; only what a script changes leaves it. A number JavaScript cannot hold exactly is refused at a write
+JavaScript values; only what a script changes leaves it, and an input expression that tries to write fails loudly. A number JavaScript cannot hold exactly is refused at a write
 by one replaceable host policy. The dynamic kind has one name, `Any`, shown as JSON. Elsa 3 values convert faithfully
 or are refused at import, never at publish. .NET objects stay out of scripts.
 
@@ -42,9 +42,10 @@ or are refused at import, never at publish. .NET objects stay out of scripts.
 - **D-15.** A JavaScript input expression takes the same input as a script in Run JavaScript. One .NET switch for
   both (built in #4103).
 - **D-16.** S-8 ships the default only. No .NET objects in scripts or input expressions.
-- **ADR 0090 decision 1.** Script and C# activity bodies may write variables. Input-binding expressions stay pure:
-  they may be evaluated more than once (replay, each `While` pass, preflight), so a write from them would apply a
-  variable number of times.
+- **ADR 0090 decision 1 and ADR 0083 (`binding-readonly-v1`).** Script and C# activity bodies may write variables.
+  Input-binding expressions never write: they may be evaluated more than once (replay, each `While` pass, preflight),
+  so a write would apply a variable number of times. An attempted write is refused loudly, never dropped silently
+  (coordinator, 2026-11-16).
 
 **Approval plan**: the coordinator approves this spec alone. An ADR change found here goes to its own small ADR PR
 with the initiative's approvers as reviewers.
@@ -73,6 +74,8 @@ value. A loss is declared or refused, never silent.
 **In scope**:
 - The script value bridge for script activities and JavaScript input expressions alike (V9, V12, D-15): plain values
   in, changes found, as a replaceable contract with its cost measured.
+- Refusing an attempted write from a JavaScript input expression, at publish where it is visible and at run time
+  otherwise.
 - The precision policy and its default, which refuses (D-17).
 - One dynamic kind; `Object` and `Elsa.Any` read as `Any`; the kinds `DateOnly` and `TimeOnly` (*Kinds*).
 - One binding rule for the dynamic kind: `Any` binds to `JsonElement`, `JsonNode` and their nullable forms (#3287).
@@ -112,8 +115,14 @@ order and returns `order.price * 2`, then compare the stored order before and af
 2. **Given** a stored value, **When** a script or a JavaScript input expression reads it, **Then** it gets plain
    JavaScript objects and real arrays it can change locally.
 3. **Given** a variable the script never reads, **When** the script runs, **Then** that variable is not touched.
-4. **Given** a JavaScript input expression that changes a value it read, **When** it is evaluated, **Then** the
-   change stays inside the expression and nothing is written (ADR 0090 decision 1).
+4. **Given** a JavaScript input expression that assigns a variable (`variables.x = 1`), **When** the workflow is
+   published, **Then** publication refuses it with a diagnostic naming the node, the input and the variable, and
+   saying input expressions only read.
+5. **Given** a JavaScript input expression that changes a member of a value it read in a way publication cannot see
+   (for example through a local alias), **When** it is evaluated, **Then** the evaluation fails with the same
+   diagnostic and the path, and nothing is written.
+6. **Given** a JavaScript input expression that copies a value (`{...variables.order}`) and changes the copy, **When**
+   it is evaluated, **Then** it succeeds: a local copy is not a write.
 
 ---
 
@@ -268,7 +277,8 @@ sensitive and redacted where the variable is.
 - Key order and key casing are kept.
 - A changed array with no lossy element is reported as a whole with no diagnostic.
 - Liquid reads JSON numbers as decimals and does not narrow; it needs no precision policy.
-- A local copy (`{...variables.order}`) changed by the script is not a change to `order`.
+- A local copy (`{...variables.order}`) changed by a script or an input expression is not a change to `order`.
+- An input expression that changes a value and changes it back reports no change and succeeds.
 
 ## Requirements *(mandatory)*
 
@@ -284,8 +294,11 @@ sensitive and redacted where the variable is.
 - **FR-004**: A changed array MUST be reported as a whole.
 - **FR-005**: A member set to a value equal, as a JavaScript value, to what was read MUST count as unchanged. A whole
   assignment MUST be reported as a write; S-7 judges it by meaning in the canonical form (ADR 0090 C2, C4).
-- **FR-006**: A script body's changes MUST go to the step write path of ADR 0090 (S-7). A JavaScript input
-  expression's changes MUST stay inside the expression (ADR 0090 decision 1).
+- **FR-006**: A script body's changes MUST go to the step write path of ADR 0090 (S-7).
+- **FR-006a**: A JavaScript input expression MUST NOT write. An assignment to `variables`, or to a member of a value
+  read from it, MUST be refused at publish where the expression shows it, and MUST fail the evaluation at run time
+  when the bridge reports any change. The diagnostic names the node, the input, the variable and the path, and says
+  input expressions only read; it suggests a script activity for writes. A change is never dropped silently (Q7).
 - **FR-007**: A member change without a whole assignment MUST produce the visibility warning of ADR 0090 C2.
 - **FR-008**: No .NET object, CLR type or CLR member MUST be reachable from a script or a JavaScript input expression
   (D-16).
@@ -403,6 +416,12 @@ the requirements follow it.
   convert.
 - **Q6 — Is protection inheritance in S-8?** **Recommended: yes, P3,** on the read set ADR 0092 provides. It is a
   value-model rule and has no other spec.
+- **Q7 — Where does an attempted write from an input expression fail?** **Recommended: both.** At publish, a static
+  check refuses a direct assignment to `variables.x` or to a member of `variables.x`, so most cases fail before the
+  workflow runs. At run time, the bridge's change report catches what the static check cannot see (aliases, computed
+  paths) and fails the evaluation. Rejected: run time only (fails late, maybe only on a rare branch), and freezing
+  the values again (gives a JavaScript `TypeError` in strict mode without Elsa's diagnostic, and breaks D-15's
+  "same values as a script").
 
 ## Assumptions
 
