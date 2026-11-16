@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using System.Text.Json;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -12,6 +14,56 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 internal static class MemberReadSelectionPinner
 {
+    internal static IReadOnlyDictionary<string, ExecutableActivityTemplateMemberRead>? CaptureOccurrence(
+        string occurrenceId, IEnumerable<ArgumentState> inputs, ImmutableArray<ActivityDataMemberReadFacts> facts)
+    {
+        var result = new Dictionary<string, ExecutableActivityTemplateMemberRead>(StringComparer.Ordinal);
+        foreach (var input in inputs)
+        {
+            var candidates = facts.Where(fact => fact.IsKnown && fact.Path == $"{occurrenceId}/inputs/{input.ReferenceKey}").ToArray();
+            if (candidates.Length == 0)
+                continue;
+            if (!StringComparer.OrdinalIgnoreCase.Equals(input.Value.ExpressionType, ActivityDataReadRoles.ActivityResultMember) ||
+                input.Value.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
+                !ActivityDataMemberPath.TryRead(payload, out var segments) ||
+                !payload.TryGetProperty("producerNodeId", out var producer) || producer.ValueKind != JsonValueKind.String ||
+                !payload.TryGetProperty("projectionKey", out var projection) || projection.ValueKind != JsonValueKind.String ||
+                candidates is not [var fact] || fact.SelectedType is null || fact.ProfileRevision is null ||
+                fact.ProducerNodeId != producer.GetString() || fact.ProjectionKey != projection.GetString() ||
+                !fact.MemberPath.SequenceEqual(segments, StringComparer.Ordinal))
+                throw Mismatch(occurrenceId, input.ReferenceKey);
+            var optional = payload.TryGetProperty("isOptional", out var flag) && flag.ValueKind == JsonValueKind.True;
+            result.Add(input.ReferenceKey, new(new RuntimeActivityResultReference(fact.ProducerNodeId, fact.ProjectionKey, null, optional),
+                KnownSelection(fact, segments)));
+        }
+        return result.Count == 0 ? null : result;
+    }
+
+    // A dependency root's AuthoredActivityId belongs to its own template. Only the parent's occurrence id
+    // identifies this consumer, and descendants belong to their own already-pinned placement frames.
+    internal static ExecutableNode PinOccurrence(ExecutableNode node, string occurrenceId,
+        IReadOnlyDictionary<string, ExecutableActivityTemplateMemberRead>? reads)
+    {
+        if (reads is null)
+            return node;
+        var bindings = node.InputBindings.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        foreach (var (key, read) in reads)
+        {
+            if (!bindings.TryGetValue(key, out var binding) || binding.Source != RuntimeInputBindingSource.ActivityResultMember ||
+                binding.Selection is not { Mode: RuntimeReadSelectionMode.DeferredFit } selection || binding.ActivityResult is not { } source ||
+                source.ProducerExecutableNodeId != read.Source.ProducerExecutableNodeId || source.ProjectionKey != read.Source.ProjectionKey ||
+                source.ProducerScopeId != read.Source.ProducerScopeId || source.IsOptional != read.Source.IsOptional ||
+                !selection.Segments.SequenceEqual(read.Selection.Segments, StringComparer.Ordinal))
+                throw Mismatch(occurrenceId, key);
+            bindings[key] = WithSelection(binding, read.Selection);
+        }
+        return Clone(node, bindings, node.ChildSlots);
+    }
+
+    private static ActivityDataSelectionRejectedException Mismatch(string occurrenceId, string key) =>
+        new([new($"{occurrenceId}/inputs/{key}", "ActivityDataSelection/MemberContractMismatch",
+            "The occurrence's pinned member contract does not match its exact authored result read.")]);
+
     public static ExecutableNode Pin(ExecutableNode root, ImmutableArray<ActivityDataMemberReadFacts> facts)
     {
         ArgumentNullException.ThrowIfNull(root);
@@ -45,7 +97,11 @@ internal static class MemberReadSelectionPinner
 
         if (!changed)
             return node;
-        return new ExecutableNode(
+        return Clone(node, inputBindings, childSlots);
+    }
+
+    private static ExecutableNode Clone(ExecutableNode node, IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyCollection<ExecutableChildSlot> childSlots) => new(
             executableNodeId: node.ExecutableNodeId,
             authoredActivityId: node.AuthoredActivityId,
             activityType: node.ActivityType,
@@ -60,7 +116,6 @@ internal static class MemberReadSelectionPinner
             activityContract: node.ActivityContract,
             intrinsicKind: node.IntrinsicKind,
             intrinsicVariable: node.IntrinsicVariable);
-    }
 
     private static RuntimeInputBinding PinBinding(ExecutableNode node, RuntimeInputBinding binding,
         IReadOnlyDictionary<string, ActivityDataMemberReadFacts[]> known)
@@ -80,23 +135,22 @@ internal static class MemberReadSelectionPinner
         if (matches is not [{ SelectedType: { } selectedType, ProfileRevision: { } profileRevision } fact])
             return binding;
 
-        return new RuntimeInputBinding(
+        return WithSelection(binding, KnownSelection(fact, selection.Segments));
+    }
+
+    private static RuntimeReadSelection KnownSelection(ActivityDataMemberReadFacts fact, IReadOnlyList<string> segments) =>
+        new(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.Known,
+            new ValueTypeDescriptor(fact.SelectedType!.Alias, fact.SelectedType.CollectionKind), fact.MayBeAbsent,
+            fact.MayBeNull, fact.Representation, fact.ProfileRevision);
+
+    private static RuntimeInputBinding WithSelection(RuntimeInputBinding binding, RuntimeReadSelection selection) => new(
             binding.InputName,
             binding.TargetType,
             binding.EffectivePolicy,
             binding.Source,
-            new RuntimeReadSelection(
-                selection.SchemaVersion,
-                selection.Segments,
-                RuntimeReadSelectionMode.Known,
-                new ValueTypeDescriptor(selectedType.Alias, selectedType.CollectionKind),
-                fact.MayBeAbsent,
-                fact.MayBeNull,
-                fact.Representation,
-                profileRevision),
-            activityResult: result,
+            selection,
+            activityResult: binding.ActivityResult,
             metadata: binding.Metadata,
             conversionPlan: binding.ConversionPlan,
             conversionRequest: binding.ConversionRequest);
-    }
 }

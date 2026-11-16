@@ -3,6 +3,9 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -29,16 +32,46 @@ internal static class RuntimeHistoryEfModule
                 var binding = property?.PropertyInfo;
                 if (property is null || binding is null || property.ClrType != member.PropertyType || binding.DeclaringType != member.DeclaringType ||
                     binding.Name != member.Name || property.GetBeforeSaveBehavior() != required.BeforeSave ||
-                    property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated) return false;
+                    property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated ||
+                    !HasOwnedMemberAccess(property, member)) return false;
+                // Keep the sealed first-party content codec; unknown conversions/comparers may alter or suppress writes.
+                var declared = (IReadOnlyProperty)property;
+                if (!HasOwnedConversion(declared.GetValueConverter(), member.Name) ||
+                    !HasOwnedConversion(property.GetTypeMapping().Converter, member.Name) ||
+                    !HasDefaultComparer(property.GetValueComparer())) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
             foreach (var required in shape.Indexes)
-                if (!indexes.Any(index => (!required.Unique || index.IsUnique) &&
+                if (!indexes.Any(index => (required.Unique == index.IsUnique) &&
                     (required.Unique ? index.Properties.Count == required.Properties.Length : index.Properties.Count >= required.Properties.Length) &&
                     index.Properties.Take(required.Properties.Length).Select(property => property.Name).SequenceEqual(required.Properties))) return false;
+            // An extra uniqueness constraint may reject valid history even when all required indexes remain.
+            // A superset of an owned unique key is redundant and adds no restriction.
+            var uniqueKeys = shape.Indexes.Where(index => index.Unique).Select(index => index.Properties).Append(shape.Key).ToArray();
+            bool IsCompatible(IEnumerable<IProperty> properties) => uniqueKeys.Any(owned =>
+                owned.All(name => properties.Any(property => property.Name == name)));
+            if (indexes.Where(index => index.IsUnique).Any(index => !IsCompatible(index.Properties)) ||
+                entity.GetKeys().Any(actual => !IsCompatible(actual.Properties))) return false;
         }
         return Shapes.Length > 0;
+    }
+
+    private static bool HasOwnedConversion(ValueConverter? converter, string member) => converter is null ||
+        member == "ContentJson" && converter is EfPayloadValueConverter;
+
+    private static bool HasDefaultComparer(ValueComparer comparer) => comparer.IsDefault() ||
+        comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
+        comparer is IInfrastructure<ValueComparer> wrapper && Nullable.GetUnderlyingType(comparer.Type) == wrapper.Instance.Type &&
+        wrapper.Instance.IsDefault();
+
+    private static bool HasOwnedMemberAccess(IProperty property, PropertyInfo owned)
+    {
+        var field = owned.DeclaringType!.GetField($"<{owned.Name}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+        bool Matches(MemberInfo actual) => actual.Equals(owned) || field is not null && actual.Equals(field);
+        return Matches(property.GetMemberInfo(forMaterialization: false, forSet: false)) &&
+            Matches(property.GetMemberInfo(forMaterialization: false, forSet: true)) &&
+            Matches(property.GetMemberInfo(forMaterialization: true, forSet: true));
     }
 
     private static RequiredShape[] RequiredShapes()
