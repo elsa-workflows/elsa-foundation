@@ -1,8 +1,7 @@
 # Activities Change Variables As A Unit Of Work Committed With The Step
 
 Status: accepted (2026-11-16), as amended below (*Amendment*). Sipke Schoorstra, the decision holder, chose this
-design in a brainstorming session on 2026-10-24, started from the review of spec 266
-([#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286)). It overturns parts of an accepted ADR (0045 §4,
+design in a brainstorming session on 2026-10-24, started from the review of spec 266. It overturns parts of an accepted ADR (0045 §4,
 §5 and §6) and changes what spec 266 analyses, so it needed agreement with Joey Barten and Frans van Ek. The three
 architects agreed the amended text; Joey Barten recorded the agreement as coordinator.
 
