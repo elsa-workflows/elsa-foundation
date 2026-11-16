@@ -35,8 +35,8 @@ internal static class RuntimeHistoryEfModule
                     !HasOwnedMemberAccess(property, member)) return false;
                 // Keep the sealed first-party content codec; unknown conversions/comparers may alter or suppress writes.
                 var declared = (IReadOnlyProperty)property;
-                if (declared.GetValueConverter() is { } converter &&
-                    !(member.Name == "ContentJson" && converter is EfPayloadValueConverter) ||
+                if ((declared.GetValueConverter() is { } converter &&
+                    !(member.Name == "ContentJson" && converter is EfPayloadValueConverter)) ||
                     declared.GetValueComparer() is { } comparer && !HasDefaultComparer(comparer)) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
@@ -58,7 +58,8 @@ internal static class RuntimeHistoryEfModule
 
     private static bool HasDefaultComparer(ValueComparer comparer) => comparer.IsDefault() ||
         comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
-        comparer is IInfrastructure<ValueComparer> wrapper && wrapper.Instance.IsDefault();
+        comparer is IInfrastructure<ValueComparer> wrapper && Nullable.GetUnderlyingType(comparer.Type) == wrapper.Instance.Type &&
+        wrapper.Instance.IsDefault();
 
     private static bool HasOwnedMemberAccess(IProperty property, PropertyInfo owned)
     {
