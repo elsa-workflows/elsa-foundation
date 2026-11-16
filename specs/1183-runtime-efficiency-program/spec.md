@@ -1,6 +1,6 @@
 # Runtime Efficiency delivery
 
-**Status**: Implemented — acceptance 1 to 4 merged (#3598, #3601 and their leaves), and 7 except the run-command cleanup that waits on an owner decision; 5 delivered where it applied, with the rest superseded by the kernel #4229; 6 handed to #4229 gate 3 on 16 November. See the [charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026).
+**Status**: Implemented — acceptance 1 to 4 merged (#3598, #3601 and their leaves), and 7, including the run-command cleanup (the VM holding them was deleted on 16 November); 5 delivered where it applied, with the rest superseded by the kernel #4229; 6 handed to #4229 gate 3 on 16 November. See the [charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026).
 **Issue**: #2531
 **Program route**: Runtime Efficiency
 
