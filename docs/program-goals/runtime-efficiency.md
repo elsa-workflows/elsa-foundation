@@ -93,6 +93,7 @@ The open children #3698, #3700, #3703 and #3939, and #4043 (filed under this pro
 closed as superseded by the kernel. Each closing comment
 names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905 and #3915, and its ready PR #3941,
 were closed unmerged, with their branches and evidence kept. The last leftover, 21 of this program's run commands still execution Pending on the deallocated
-VM `elsa-dev-09`, was closed on 16 November: the owner chose to delete the VM, which took its run commands with it.
+VM `elsa-dev-09`, was closed on 16 November: the owner chose to delete the VM, which took its run commands
+with it.
 The record is in [spec 1183's tasks](../../specs/1183-runtime-efficiency-program/tasks.md). The sections above remain the charter as it stood while the
 program ran.

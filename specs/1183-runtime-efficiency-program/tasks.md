@@ -14,9 +14,10 @@ records each outcome.
 - [x] Exact reviewed-head hosted gates; merge and qualify containing main (#3601 containing main `bd0749d86`).
 - [x] Remove owned fixtures, restore the existing runner state, publish results and complete program bookkeeping.
   **Closed 16 November:** results are published, bookkeeping is complete, the fixture groups are gone, and the owner chose
-  to delete the VM that held the pending run commands. `az vm delete` removed `elsa-dev-09` and its 21 run commands. Its OS
-  disk `elsa-dev-09-os` (unattached) and network interface `elsa-dev-09VMNic` stay in the resource group with the rest of
-  the shared Codex dev fleet. The record of the leftover as it stood before the deletion:
+  to delete the VM that held the pending run commands ([decision](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6927208849)). `az vm delete` removed `elsa-dev-09` and its
+  21 run commands. Its OS disk `elsa-dev-09-os` (unattached), network interface `elsa-dev-09VMNic` and Standard public IP
+  `elsa-dev-09-egress` (still bound to that NIC) stay in the resource group with the rest of the shared Codex dev fleet.
+  The record of the leftover as it stood before the deletion:
   The task fixture groups were deleted by 3 November (#2531 [cleanup record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6615399245)).
   Read on 16 November: every VM in the subscription is deallocated, including the shared Codex dev fleet that holds
   `elsa-dev-09`. Known leftover: 21 of this program's run commands on `elsa-dev-09` report provisioning Succeeded and
