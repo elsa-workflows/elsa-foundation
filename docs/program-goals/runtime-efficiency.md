@@ -1,6 +1,8 @@
 # Runtime Efficiency
 
-- **Status:** Active since 2026-10-10; end-to-end continuation authorized 2026-11-01.
+- **Status:** Completed 2026-11-16. Active from 2026-10-10; end-to-end continuation authorized 2026-11-01. The
+  [closeout](#closeout-16-november-2026) below records each milestone and child. Remaining qualification belongs to
+  the kernel ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)).
 - **Area:** Execution overhead, immutable preparation, persistence, admission and concurrent recovery.
 - **Steward:** Sipke. **Program:** [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531).
 - **Authorization:** [owner instruction and delivery scope](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6554699791),
@@ -59,3 +61,38 @@ Close #2531 only after M0–M5 and every still-applicable older child acceptance
 or a separately recorded owner disposition. Each delivered change carries reviewed-head checks, behavioral
 controls and affected-suite accounting; final integration verifies a containing main commit. Reports preserve
 remaining failures and evidence limits. The program and registry are marked completed only at that point.
+
+## Closeout (16 November 2026)
+
+On 11 November the owner stopped #2564's work on the current core, and on 12 November chose the clean-slate kernel
+([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)). The owner then decided on 16 November
+([record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6917554545)):
+
+- old-core-only objectives close as superseded by the kernel;
+- layer 3 work that carries over stays delivered;
+- current-core defects are fixed only where needed, and the ones the kernel makes irrelevant are closed;
+- M5 becomes part of kernel release 1 qualification.
+
+The current core has shipped only as the contributor preview `contributor-preview-2026-10-07.1`. It is deleted when the
+old core is removed (#4229 gate 5). Kernel figures below are prototype counts from `prototypes/kernel-model` at main `baed25d04`.
+They are not product budgets.
+
+| Milestone | Outcome | Evidence |
+|---|---|---|
+| M0 | Delivered: 27 objectives mapped to code, delivery or disposition | [Reconciliation](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6615399245) |
+| M1 | Closed by the owner on 1 November on two causal fixes, UUIDv7 runtime IDs and rollback-safe immediate continuation (#3601). The historical incident's cause stays unconfirmed. The kernel removes both mechanisms: its clock is monotonic and anchored to database time (the `WallClockTimers` mutation is caught), and ids inside an instance are counters in its state | [Decision](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6563805234), [report](../reports/native-runtime-performance-program-2026-11-01.md#original-incomplete-start-investigation) |
+| M2 | Delivered in #3601: literal, secret, request and closed-scope inputs read no history, and custom binding resolvers get the full context | `ActivityInputSnapshotCheckpointTests.Demand` |
+| M3 | Delivered: weak hydration metadata (#3598), prepared JavaScript and conversion metadata (#3601), with fresh values, concurrency and collectible-module controls. Hydration and JavaScript live in layer 3 libraries and carry over. Conversion lives in `Elsa.Workflows.Runtime`, so the kernel's native-model slice moves or replaces it | `ActivityInputHydrationReuseTests`, `PreparedJavaScriptReuseTests`, `RunJavaScriptPreparationTests`, `ValueConversionPreparationTests` |
+| M4 | Delivered on the current core where it applied (#1307, #2586, #2828, #2831, #2584, #3647, #3275, #2564 R1 and R2a). The rest of epic #2564 closed as superseded: a turn ends in one fenced batch with no savepoints, pumps, drains or separate queue. Ten WriteLines under Balanced: 64 SQLite commands and 48 PostgreSQL round trips on main, 3 commands and 2 or 3 round trips on the prototype | [#2564 disposition](https://github.com/elsa-workflows/elsa-foundation/issues/2564#issuecomment-6917321380), [NATIVE.md section 5](../../prototypes/kernel-model/NATIVE.md#5-what-it-costs) |
+| M5 | Handed to #4229 gate 3 with its acceptance, the 32-command and 16-round-trip budgets, the M2/M3 tests to keep, the M1 controls, graceful stop and uncertain commits | [Hand-off](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686), [additional rows](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917418143) |
+
+Fresh receipt on main `6f275e16c`, Release, run locally on 16 November: the M2 and M3 tests named above and the ID burst
+control all pass (48 passed, 0 failed, 0 skipped). It is a correctness receipt and measures no timing.
+
+The open children #3698, #3700, #3703 and #3939, and #4043 (filed under this program with "Part of #2531"), were
+closed as superseded by the kernel. Each closing comment
+names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905 and #3915, and its ready PR #3941,
+were closed unmerged, with their branches and evidence kept. One leftover waits on an owner decision: 21 of this program's run commands on the deallocated
+VM `elsa-dev-09` are still execution Pending, and Azure refuses to delete them while it is deallocated. The list and
+the risk are in [spec 1183's tasks](../../specs/1183-runtime-efficiency-program/tasks.md). The sections above remain the charter as it stood while the
+program ran.

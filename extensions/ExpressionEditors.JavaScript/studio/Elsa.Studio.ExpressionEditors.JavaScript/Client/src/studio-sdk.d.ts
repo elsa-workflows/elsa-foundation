@@ -113,6 +113,13 @@ declare module "@elsa-workflows/studio-sdk" {
     revision: string;
     allows(expression: Readonly<Record<string, unknown>>): boolean;
   };
+
+  /** Language-owned proof that all reads use explicit parameters and survive a closed reusable boundary. */
+  reusableBoundaryPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
     order?: number;
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;

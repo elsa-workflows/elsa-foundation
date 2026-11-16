@@ -420,7 +420,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
         // Every graph compiled now is a closed value scope, so placement remaps its body.
         Assert.Equal("closed", first.ExecutableRoot.Descriptor.Payload.GetProperty("scopeModel").GetString());
-        Assert.Equal("elsa.activity-graph/compiler/5.0.0", GraphActivityProvider.Fingerprint);
+        Assert.Equal("elsa.activity-graph/compiler/5.1.0", GraphActivityProvider.Fingerprint);
         Assert.Equal(2, first.ResourceMeasurements.LocalNodeCount);
         Assert.Equal(2, first.ResourceMeasurements.MaximumObservedAuthoredDepth);
         Assert.Equal(2, first.ResourceMeasurements.DependencyCount);
@@ -1239,8 +1239,13 @@ public sealed partial class GraphActivityProviderTests
 
     private sealed class TestActivityStructureService(bool hasHandlers = true) : IActivityStructureService
     {
-        private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+        private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        };
         public ActivityStructureInputProjection InputProjection { get; init; } = ActivityStructureInputProjection.Empty;
+        public IReadOnlyDictionary<string, IReadOnlyCollection<VariableDefinition>> ScopedVariables { get; init; } =
+            new Dictionary<string, IReadOnlyCollection<VariableDefinition>>();
         public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => InputProjection;
 
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
@@ -1314,7 +1319,7 @@ public sealed partial class GraphActivityProviderTests
                     [new("Outcome", item.GetProperty("referenceKey").GetString()!, "Connected")]))
                 .ToArray();
         }
-        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => ScopedVariables.GetValueOrDefault(activity.NodeId, []);
         public bool SupportsScopedVariables(ActivityNode activity) => false;
 
         private static bool IsSequence(ActivityNodeStructure structure) =>

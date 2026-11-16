@@ -22,6 +22,11 @@ export function register(api: ElsaStudioModuleApi) {
       revision: "binding-pure-v1.1",
       allows: preservesJavaScriptWithAddedVariable
     },
+    reusableBoundaryPreservation: {
+      language: javaScriptSyntax,
+      revision: "explicit-args-closed-boundary-v1",
+      allows: preservesJavaScriptWithAddedVariable
+    },
     supports: context => context.syntax === javaScriptSyntax,
     surfaces: {
       inline: JavaScriptInlineEditor,
