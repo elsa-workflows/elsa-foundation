@@ -109,7 +109,7 @@ export function applyNativeBlockPlan(context: NativeBlockContext, plan: NativeBl
   });
 }
 
-function prepare(context: NativeBlockContext) {
+function prepareDocument(context: NativeBlockContext) {
   if (!context.canEdit) refuse("read-only", "source", "This resource cannot be edited.");
   if (!context.sourceKey) refuse("missing-source", "source", "A current resource identity is required.");
   if (!Array.isArray(context.referenceContext))
@@ -158,13 +158,19 @@ function prepare(context: NativeBlockContext) {
     });
   }
   const scope = resolveScope(context.document.rootActivity, context.scope, context.catalog);
-  const kind = Object.entries(kinds).find(([, value]) => value === scope?.owner.structure?.kind)?.[0] as NativeBlockKind | undefined;
-  if (!scope || !kind || scope.slot.property !== "activities" || scope.slot.cardinality !== "many" || scope.owner.structure?.schemaVersion !== "1.0.0")
-    refuse("unsupported-scope", "scope", "Choose a current native Sequence or Flowchart activities scope.");
+  if (!scope || scope.slot.property !== "activities" || scope.slot.cardinality !== "many" || scope.owner.structure?.schemaVersion !== "1.0.0")
+    refuse("unsupported-scope", "scope", "Choose a current native activities scope.");
   const raw = scope.owner.structure!.payload.activities;
   if (!Array.isArray(raw) || raw.length !== scope.slot.activities.length)
     refuse("malformed-children", "scope.activities", "Repair the child collection before refactoring.");
-  return { ...scope, kind, identities };
+  return { ...scope, identities };
+}
+
+function prepare(context: NativeBlockContext) {
+  const scope = prepareDocument(context);
+  const kind = Object.entries(kinds).find(([, value]) => value === scope.owner.structure?.kind)?.[0] as NativeBlockKind | undefined;
+  if (!kind) refuse("unsupported-scope", "scope", "Choose a current native Sequence or Flowchart activities scope.");
+  return { ...scope, kind };
 }
 
 function nativeCatalog(context: NativeBlockContext, kind: NativeBlockKind, versionId: string) {
@@ -453,7 +459,7 @@ function assertDisposableBoundary(block: ActivityNode, context: NativeBlockConte
   }
 }
 
-function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, block: ActivityNode) {
+function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, block: ActivityNode, ownedBindings: ReadonlySet<object> = new Set()) {
   const connections = owner.structure?.kind === flowchartStructureKind && Array.isArray(owner.structure.payload.connections) ? owner.structure.payload.connections : [];
   const endpoints = new Set(connections.flatMap(value => record(value) ? [value.source, value.target] : []));
   const walk = (value: unknown, path: string, expression = false) => {
@@ -480,6 +486,7 @@ function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, bl
         // carry typed references; those and conflicting syntax markers stay conservative.
         if (key === "value" && literal && (child === null || typeof child !== "object")) continue;
         if (value === block && key === "nodeId") continue;
+        if (ownedBindings.has(value) && key === "childNodeId" && child === block.nodeId) continue;
         if (endpoints.has(value) && key === "nodeId" && child === block.nodeId) continue;
         if (owner.structure?.kind === flowchartStructureKind && value === owner.structure.payload && key === "startNodeId" && child === block.nodeId) continue;
         walk(child, `${path}.${key}`, opaque || /expression|script|code/i.test(key));
@@ -554,3 +561,6 @@ export function planUngroupNativeBlock(context: NativeBlockContext, blockId: str
     return ready(context, edited(context, withActivities(owner, activities), layout, presentation), children.map(x => x.nodeId));
   });
 }
+
+/** Shared internal proposal contract for lazily loaded native structure planners. */
+export const nativeBlockPlanning = { guarded, refuse, ready, prepareDocument, edited, assertMemberReadsRemainInScope, assertUnreferenced };

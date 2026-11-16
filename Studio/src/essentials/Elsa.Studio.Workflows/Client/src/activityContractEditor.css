@@ -518,3 +518,35 @@
 .ad-contract-workbench-empty button:disabled { opacity: .55; cursor: not-allowed; }
 .ad-contract-workbench-empty button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .ad-provider-public-interface[hidden] { display: none; }
+
+/* Output declaration and assignment share one selected member; other contract editors retain their layout. */
+.ad-output-editor .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr); gap: 20px; }
+.ad-output-editor .ad-contract-workbench-list { padding-right: 20px; }
+.ad-output-member-header > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.ad-output-member-header > div > span { color: var(--studio-text-muted); font-size: var(--studio-small-size); }
+.ad-output-primary { display: grid; min-width: 0; gap: 20px; }
+.ad-output-primary.has-value-editor { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ad-output-declaration { align-content: start; }
+.ad-output-disclosure { min-width: 0; padding-block: 12px; border-top: 1px solid var(--studio-border); }
+.ad-output-disclosure > summary { cursor: pointer; color: var(--studio-text-muted); font-weight: 600; }
+.ad-output-disclosure[open] > summary { margin-bottom: 16px; }
+.ad-output-value-source { display: grid; align-content: start; gap: 12px; min-width: 0; border-left: 1px solid var(--studio-border); padding-left: 20px; }
+.ad-output-value-source > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.ad-output-value-source h4, .ad-output-value-source p { margin: 0; }
+.ad-output-value-source h4 { font-size: var(--studio-label-size); }
+.ad-output-setters { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ad-output-setters li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ad-output-source-guidance { display: grid; gap: 12px; color: var(--studio-text-muted); }
+.ad-draft-editor .ad-output-value-source .ad-graph-output-mapping.is-embedded { display: grid; gap: 12px; padding: 0; border: 0; border-radius: 0; }
+@media (max-width: 1100px) {
+  .ad-output-primary.has-value-editor { grid-template-columns: minmax(0, 1fr); }
+  .ad-output-value-source { border-left: 0; border-top: 1px solid var(--studio-border); padding-left: 0; padding-top: 16px; }
+}
+@media (max-width: 800px) {
+  .ad-output-editor .ad-contract-workbench { grid-template-columns: minmax(0, 1fr); }
+  .ad-output-editor .ad-contract-workbench-list { padding-right: 0; }
+}
+.ad-public-interface-view .ad-output-editor .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr); }
+@media (max-width: 800px) {
+  .ad-public-interface-view .ad-output-editor .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(0, 1fr); }
+}

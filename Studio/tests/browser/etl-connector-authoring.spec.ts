@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe, { type AxeResults, type RunOptions } from "axe-core";
-import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
+import { createDefaultEtlConnectorPipeline } from "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
 async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean; sqlMain?: boolean; sqlSource?: boolean;

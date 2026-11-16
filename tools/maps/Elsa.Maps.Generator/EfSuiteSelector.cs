@@ -12,7 +12,7 @@ public static partial class EfSuiteSelector
 {
     private const string ManifestPath = "tools/ci/test-tiers.json";
     private const string IntegrationFilterPath = "Elsa.Server.Persistence.Integration.slnf";
-    private const string SeparateSecretsProject = "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
+    private const string SeparateSecretsProject = "essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>Returns every manifest suite after validating coverage of the solution's Testcontainers roots.</summary>

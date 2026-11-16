@@ -167,7 +167,13 @@ public sealed partial class World
             }
             if (row.Retired)
             {
-                if (row.Creation <= 0 || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
+                if (_creations.TryGetValue(row.Id, out var observed) && !observed.Retired &&
+                    _known.TryGetValue(row.Id, out var active) && row.Revision <= active.Revision)
+                    return $"I22 {row.Id} retired without advancing observed active revision {active.Revision}";
+                // Generation-zero markers are valid only for generated physical addresses and the exact empty marker shape.
+                var physicalMarker = row.Creation == 0 && CreationProtocol.IsPhysicalAddress(row.Id) &&
+                    row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+                if (row.Creation <= 0 && !physicalMarker || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
                     row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
                     return $"I22 {row.Id} has an invalid lifecycle tombstone";
                 _gone.Add(row.Id); _versions.Remove(row.Id);
@@ -426,6 +432,7 @@ public sealed partial class World
 
     public string? Settle()
     {
+        if (_dying.Count != 0) FinishDeaths();
         Deployed = true;
         foreach (var start in CatchingUp) Events.CatchUpAsync(Store, start, Config.Partitions).AsTask().Wait();     // a registrar retries until it has read
         CatchingUp.Clear();
@@ -443,6 +450,7 @@ public sealed partial class World
                     if (call.Executed && (call.Answered || actor.Dead)) continue;
                     if (!call.Executed) call.Execute(Wire.Describe);
                     if (!actor.Dead) call.Answer(false);
+                    if (_dying.Count != 0) FinishDeaths();
                     again = true;
                 }
         }
@@ -457,7 +465,11 @@ public sealed partial class World
             Time += round == 0 || missing ? 11_000 : 1_000;
             for (var p = 0; p < Config.Partitions; p++)
             {
-                foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
+                foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns))
+                {
+                    Watch(Of(node, p).Worker.BeatAsync());   // even this acknowledgement can start a job that kills its process
+                    if (_dying.Count != 0) FinishDeaths();
+                }
             }
             for (var n = 0; n < Config.Nodes; n++) Watch(Runtimes[(n + round) % Config.Nodes].BalanceAsync());   // every node beats and asks for its share
             foreach (var (node, reply) in Deliveries.ToList())      // the transport delivers what it still carries
@@ -482,10 +494,9 @@ public sealed partial class World
                         Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
                     }
                     _pass = null;
-                    if (Dying is { } dying)     // a turn or a background job killed the process
+                    if (_dying.Count != 0)     // a turn or a background job killed its process
                     {
-                        Dying = null;
-                        Crash(dying, zombie: false);
+                        FinishDeaths();
                         continue;
                     }
                     foreach (var key in actor.Jobs.Keys.ToList())

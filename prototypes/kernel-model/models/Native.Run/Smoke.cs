@@ -60,6 +60,7 @@ public static class Smoke
 
     public static async Task<int> RunAsync()
     {
+        await HttpOverlapChecks.Run(Check);
         var registry = Reference.Registry();
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
