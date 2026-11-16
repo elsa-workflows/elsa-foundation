@@ -145,6 +145,9 @@ class WorkflowScopeTests(unittest.TestCase):
                                          pull_request={'draft': False})
                 self.assertTrue(selected['studio'] and selected['studio-heavy'])
                 self.assertFalse(selected['studio-ux'])
+                forced = scope.select(event, {'action': 'ready_for_review', 'pull_request': {'draft': False}},
+                                      ['Studio/src/Feature.ts'], self.patterns, every_push=True)
+                self.assertEqual(event == 'pull_request', forced['studio-ux'])
         opted_in = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize',
                                  pull_request={'draft': False, 'labels': [{'name': 'full-tier'}]})
         self.assertTrue(opted_in['studio-ux'])

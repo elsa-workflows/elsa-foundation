@@ -71,7 +71,8 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
             result[suite] = pr_like and affected
     result['studio-heavy'] = result['studio'] and not draft and heavy
     labels = {label.get('name') for label in event.get('pull_request', {}).get('labels', [])}
-    result['studio-ux'] = result['studio-heavy'] and (FULL_TIER_LABEL in labels or every_push)
+    result['studio-ux'] = (event_name == 'pull_request' and result['studio-heavy']
+                           and (FULL_TIER_LABEL in labels or every_push))
     result['studio-order'] = pr_like and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',
