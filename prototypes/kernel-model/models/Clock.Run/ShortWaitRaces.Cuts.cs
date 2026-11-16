@@ -274,6 +274,7 @@ internal static partial class ShortWaitRaces
         public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken token = default) => inner.PublishedMatchesAsync(published, token);
         public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken token = default) => inner.KeptMatchesAsync(waits, token);
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+        public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
         public bool HasActorAliases => inner.HasActorAliases;
         public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadActorsAsync(ids, cancellationToken);
         public bool CommitClockAvailable => inner.CommitClockAvailable;

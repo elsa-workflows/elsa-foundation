@@ -1,3 +1,4 @@
+import { NativeBlockAuthorityProvider } from "../graph-authoring/nativeBlockAuthority";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -36,6 +37,48 @@ afterEach(() => {
 });
 
 describe("Activity Graph Sequence host", () => {
+  it("extracts an actual Shift selection as one edit and restores the set, scope and authored name through Undo/Redo", async () => {
+    catalogItems = [sequenceActivity, writeLine];
+    const validate = vi.fn(async () => ({ state: "validated", messages: [] as string[] }));
+    const rendered = renderControlledDesigner(implementationValue(sequenceNode("root", [leafNode("one"), leafNode("two"), leafNode("three")])), validate);
+    click(step(rendered.container, "one"));
+    flushSync(() => step(rendered.container, "three").dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3);
+    click(button(rendered.container, "Extract block…"));
+    const input = rendered.container.querySelector<HTMLInputElement>("[role=dialog] input")!;
+    flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Prepare shipment"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    click(button(rendered.container, "Preview change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    expect(validate).toHaveBeenCalledTimes(1);
+    expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]);
+    click(button(rendered.container, "Apply change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    expect(validate).toHaveBeenCalledTimes(2);
+    const block = stepIds(rendered.container)[0]!;
+    expect(stepIds(rendered.container)).toHaveLength(1);
+    expect(rendered.value().activityPresentation).toContainEqual({ nodeId: block, displayName: "Prepare shipment" });
+    expect(step(rendered.container, block).getAttribute("aria-pressed")).toBe("true");
+    click(button(rendered.container, "Open Prepare shipment (3 steps)"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toContain("Prepare shipment");
+    click(button(rendered.container, "Undo Activity Graph edit", "aria-label"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3));
+    expect(rendered.value().activityPresentation ?? []).toHaveLength(0);
+    click(button(rendered.container, "Redo Activity Graph edit", "aria-label"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toContain("Prepare shipment");
+  });
+
+  it("extends and toggles real list selections with keyboard and Cmd gestures", () => {
+    catalogItems = [sequenceActivity, writeLine];
+    const rendered = renderControlledDesigner(implementationValue(sequenceNode("root", [leafNode("one"), leafNode("two"), leafNode("three")])));
+    click(step(rendered.container, "one"));
+    flushSync(() => step(rendered.container, "one").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, shiftKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3);
+    flushSync(() => step(rendered.container, "two").dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(2);
+    expect(step(rendered.container, "two").getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("keeps authored list order authoritative and makes reorder undoable", () => {
     const first = leafNode("first");
     first.activityVersionId = "activity-write-line-v1";
@@ -292,7 +335,7 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
   return rendered;
 }
 
-function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"]) {
+function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"], validate?: () => Promise<{ state: string; messages: string[] }>) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -304,7 +347,8 @@ function renderControlledDesigner(initialValue: StudioActivityDefinitionImplemen
       currentValue = next;
       setValue(next);
     }, []);
-    return <ActivityGraphImplementationEditor {...props} value={value} onChange={onChange} />;
+    const editor = <ActivityGraphImplementationEditor {...props} value={value} onChange={onChange} />;
+    return validate ? <NativeBlockAuthorityProvider value={{ sourceKey: JSON.stringify(value), canEdit: true, canApply: () => true, validate }}>{editor}</NativeBlockAuthorityProvider> : editor;
   }
   flushSync(() => root.render(<Controlled />));
   const rendered = { root, container, value: () => currentValue };
