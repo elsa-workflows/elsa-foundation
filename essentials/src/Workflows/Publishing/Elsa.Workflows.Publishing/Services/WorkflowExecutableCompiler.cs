@@ -198,7 +198,7 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs);
+                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, state.Inputs.ToArray(), out var effectiveInputs);
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
@@ -363,10 +363,12 @@ public sealed class WorkflowExecutableCompiler(
         Elsa.Activities.Design.Core.Models.ActivityContract contract,
         RuntimeActivityDescriptor boundaryDescriptor,
         RuntimeInputBindingCompiler compiler,
+        IReadOnlyCollection<InputDefinition> workflowInputs,
         out ImmutableArray<ArgumentState> effectiveInputs)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        var authored = activity.Inputs.ToArray();
+        // Like any workflow node, a call reads the workflow's own inputs from its request, keyed by input name.
+        var authored = ExecutableNodeCompiler.LowerWorkflowInputReads(activity.Inputs.ToArray(), workflowInputs);
         var duplicate = authored.GroupBy(x => x.ReferenceKey, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
             throw new ArgumentException($"Activity node '{activity.NodeId}' declares input '{duplicate.Key}' more than once.");

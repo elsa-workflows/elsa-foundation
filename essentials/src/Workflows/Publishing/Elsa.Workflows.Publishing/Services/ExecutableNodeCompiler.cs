@@ -324,7 +324,7 @@ public sealed class ExecutableNodeCompiler(
     // A workflow's request is keyed by each declared input's name, so an authored Input read of a declared input's
     // reference key is the request read of that input's name. Anything else is left for the analysis to refuse.
     // The index is the data selection analysis's own, built once for the declared inputs of the one compile they belong to.
-    private static ArgumentState[] LowerWorkflowInputReads(ArgumentState[] states, IReadOnlyCollection<InputDefinition> workflowInputs)
+    internal static ArgumentState[] LowerWorkflowInputReads(ArgumentState[] states, IReadOnlyCollection<InputDefinition> workflowInputs)
     {
         if (workflowInputs.Count == 0)
             return states;
