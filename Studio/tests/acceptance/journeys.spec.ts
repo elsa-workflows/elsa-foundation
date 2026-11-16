@@ -1,3 +1,4 @@
+import { setOutputJourney } from "./setOutputJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
@@ -71,6 +72,14 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("set output assigns reusable activity output", async ({ page }, info) => {
+  const creations: CreatedWorkflow[] = [];
+  createdWorkflows.set(page, creations);
+  await setOutputJourney(page, info, capture, id => {
+    creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
+  });
+});
+
 test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
 
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));

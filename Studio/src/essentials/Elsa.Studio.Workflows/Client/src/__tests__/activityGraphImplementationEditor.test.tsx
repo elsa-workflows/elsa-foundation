@@ -20,7 +20,7 @@ import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { sequenceStructureKind } from "../workflowAdapter";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
-import { bpmnActivity, flowchartActivity, ifActivity, ifNode, whileActivity, whileNode, sequenceActivity, sequenceNode } from "./fixtures";
+import { bpmnActivity, flowchartActivity, ifActivity, ifNode, whileActivity, whileNode, sequenceActivity, sequenceNode, setOutputActivity } from "./fixtures";
 
 vi.mock("../api/activityDesign", () => ({
   useWorkflowActivities: () => ({
@@ -981,6 +981,30 @@ describe("reconcileGraphLayout", () => {
   });
 });
 
+describe("ActivityGraphImplementationEditor declared output targets", () => {
+  it("offers current public outputs and refreshes the selected output type in the graph inspector", async () => {
+    catalogItems = [sequenceCatalogItem(), setOutputActivity];
+    expressionDescriptors = [{ type: "Literal", displayName: "Literal", editingMode: "literal" }];
+    const output = { referenceKey: "sum", name: "Sum", type: { alias: "Double", collectionKind: "Single" as const } };
+    const node = { nodeId: "set-sum", activityVersionId: setOutputActivity.activityVersionId, inputs: [], outputs: [], structure: null,
+      intrinsic: { kind: "SetOutput", valueType: { alias: "Elsa.Any", collectionKind: "Single" as const } },
+      name: { typeName: "String", expression: { type: "Literal", value: "Sum" } } };
+    const props = designerProps({ value: sequenceImplementationValue([node]), contract: { contractSchemaVersion: "1", outcomes: [], outputs: [output] } });
+    const rendered = renderDesigner(props);
+    click(rendered.container.querySelector("[data-graph-node-id='set-sum']")!);
+    await vi.waitFor(() => expect(rendered.container.querySelector('.wf-intrinsic-inspector select')).not.toBeNull());
+    const picker = () => rendered.container.querySelector<HTMLSelectElement>('.wf-intrinsic-inspector select')!;
+    expect(picker().value).toBe("Sum");
+    expect(picker().disabled).toBe(false);
+    expect(rendered.container.querySelector('.wf-property-row-header-meta')?.textContent).toContain("Double");
+    flushSync(() => rendered.root.render(<ActivityGraphImplementationEditor {...props} contract={{ contractSchemaVersion: "1", outcomes: [], outputs: [{ ...output, type: { alias: "Boolean", collectionKind: "Single" } }] }} />));
+    expect(rendered.container.querySelector('.wf-property-row-header-meta')?.textContent).toContain("Boolean");
+    flushSync(() => rendered.root.render(<ActivityGraphImplementationEditor {...props} contract={{ contractSchemaVersion: "1", outcomes: [], outputs: [] }} />));
+    expect(picker().getAttribute("aria-invalid")).toBe("true");
+    expect(rendered.container.textContent).toContain("This output is no longer defined.");
+  });
+});
+
 describe("ActivityGraphImplementationEditor boundary output mappings", () => {
   it("requires a mapping for required outputs and adds one through a shared expression editor", async () => {
     expressionDescriptors = [{ type: "Input", displayName: "Public input", editingMode: "reference" }];
@@ -1007,7 +1031,7 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
       onChange
     });
 
-    expect(rendered.container.textContent).toContain("Choose a value for this required output.");
+    expect(rendered.container.textContent).toContain("Assign this required output with Set Output, or choose a value here.");
     await vi.waitFor(() => expect(buttonByText(rendered.container, "Set value").disabled).toBe(false));
     click(buttonByText(rendered.container, "Set value"));
 
@@ -1022,6 +1046,27 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
         }]
       })
     }));
+  });
+
+  it("recognizes a nested Set Output as the required output source without adding a mapping", () => {
+    const set = { nodeId: "set", activityVersionId: "elsa.intrinsic.set-output@1", inputs: [
+      { referenceKey: "name", value: { expressionType: "Literal", value: "Sum" } },
+      { referenceKey: "value", value: { expressionType: "Literal", value: 42.5 } }
+    ], outputs: [], intrinsic: { kind: "SetOutput" } };
+    const onChange = vi.fn();
+    const rendered = renderEditor({ contract: { contractSchemaVersion: "1", outcomes: [], outputs: [{ referenceKey: "sum", name: "Sum", type: { alias: "Double", collectionKind: "Single" }, isRequired: true }] }, value: sequenceImplementationValue([set]), onChange });
+    expect(rendered.container.textContent).toContain("Assigned in the designer with Set Output.");
+    expect(rendered.container.querySelector('[role="alert"]')?.textContent ?? "").not.toContain("required output");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("shows an actionable conflict and allows removing a connection when Set Output assigns the same output", () => {
+    const onChange = vi.fn();
+    const value = sequenceImplementationValue([{ nodeId: "set", activityVersionId: "elsa.intrinsic.set-output@1", inputs: [{ referenceKey: "name", value: { expressionType: "Literal", value: "Sum" } }], outputs: [], intrinsic: { kind: "SetOutput" } }]);
+    const rendered = renderEditor({ contract: { contractSchemaVersion: "1", outcomes: [], outputs: [{ referenceKey: "sum", name: "Sum", type: { alias: "Double", collectionKind: "Single" }, isRequired: true }] }, value: { ...value, payload: { ...value.payload, outputMappings: [{ outputReferenceKey: "sum", source: { syntax: "Literal", value: 42 } }] } }, onChange });
+    expect(rendered.container.textContent).toContain("Remove this connection or the assignment before publishing.");
+    click(buttonByText(rendered.container, "Remove connection"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ outputMappings: [] }) }));
   });
 
   it("allows an optional output to remain unmapped", () => {
@@ -1040,7 +1085,7 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
     });
 
     expect(rendered.container.textContent).toContain("No value is configured.");
-    expect(rendered.container.textContent).not.toContain("Choose a value for this required output.");
+    expect(rendered.container.textContent).not.toContain("Assign this required output with Set Output, or choose a value here.");
   });
 });
 

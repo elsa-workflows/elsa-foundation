@@ -1,4 +1,6 @@
 using Elsa.Tasks.Core;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +11,22 @@ namespace Elsa.Workflows.Publishing.Tests;
 
 public sealed class ActivityPublishingReplacementAdmissionTests
 {
+    [Fact]
+    public void Publication_review_sees_the_registered_intrinsic_consumer_without_an_activation_strategy()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var readiness = scope.ServiceProvider.GetRequiredService<IActivityPublicationReadiness>();
+        RuntimeRequirement[] requirements = [new("intrinsic", "1"), new("intrinsic", "2"), new("intrinsic", "unknown")];
+
+        Assert.Equal(["Available", "Available", "UnsupportedSchema"], readiness.RuntimeReadiness(requirements).Select(x => x.Status));
+        var diagnostic = Assert.Single(readiness.ReadinessDiagnostics(new("ActivityDraft", "draft"), requirements, []));
+        Assert.Equal("activity.runtime.consumer-schema-unsupported", diagnostic.Code);
+    }
+
     public static IEnumerable<object[]> Contracts() => new[]
     {
         typeof(IActivityTemplateCompiler), typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),

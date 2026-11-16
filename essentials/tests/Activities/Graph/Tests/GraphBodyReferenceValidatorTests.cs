@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
 using Xunit;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
@@ -169,6 +170,50 @@ public sealed partial class GraphActivityProviderTests
 
         Assert.Contains(draft, x => x.Code == "activity.graph.root-activity-malformed");
         Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.root-activity-malformed");
+    }
+
+    [Theory]
+    [InlineData("Sum", false, null)]
+    [InlineData("Sum", true, "activity.graph.set-output-mapping-conflict")]
+    [InlineData("Undeclared", false, "activity.graph.set-output-unknown")]
+    public async Task SetOutput_can_supply_a_required_output_but_cannot_compete_with_a_mapping(string name, bool mapped, string? error)
+    {
+        var contract = BodyContract() with { Outputs = [new("sum-key", "Sum", new("Int32"), true, false, "elsa.json")] };
+        var authored = BodyManifest([BodyArgument("name", "Literal", name), BodyArgument("value", "Literal", 7)], []);
+        var payload = JsonNode.Parse(authored.Payload.GetRawText())!;
+        payload["variables"] = new JsonArray();
+        payload["rootActivity"]!["activityVersionId"] = "elsa.intrinsic.set-output@1";
+        payload["rootActivity"]!["intrinsic"] = JsonNode.Parse("""{"kind":"setOutput","valueType":{"alias":"Elsa.Any","collectionKind":"Single"}}""");
+        if (mapped)
+        {
+            payload["outputMappings"] = JsonNode.Parse("""[{"outputReferenceKey":"sum-key","source":{"syntax":"Literal","value":1}}]""");
+            var setter = payload["rootActivity"]!.DeepClone();
+            setter["intrinsic"]!["kind"] = (int)Elsa.Workflows.Design.Core.Models.AuthoredWorkflowIntrinsicKind.SetOutput;
+            payload["rootActivity"] = JsonNode.Parse("""{"nodeId":"sequence","activityVersionId":"sequence-version","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":[]}}}""");
+            payload["rootActivity"]!["structure"]!["payload"]!["activities"]!.AsArray().Add(setter);
+        }
+        var manifest = authored with { Payload = JsonSerializer.SerializeToElement(payload) };
+        var guarded = new ActivityProviderRegistry([_provider]).Resolve(manifest.ProviderKey, manifest.SchemaVersion);
+        var diagnostics = await guarded.ValidateAsync(manifest, contract);
+        var discovery = await _provider.DiscoverDependenciesAsync(new("definition", "draft", 1, manifest));
+        Assert.Equal(mapped ? ["sequence"] : Array.Empty<string>(), discovery.Dependencies.Select(x => x.OccurrenceId));
+        if (error is null)
+            Assert.Empty(diagnostics);
+        else
+        {
+            var request = CompilationRequest(manifest) with { Contract = contract, ResolvedDirectDependencies = mapped
+                ? [CreateDependency("sequence", "sequence-version", "root-origin", OutcomeContract(("done", "Done")), declaredStructure: new("Sequence", "1"))] : [] };
+            var compiler = new ActivityTemplateProviderCompilerRegistry([_provider]).Resolve(manifest.ProviderKey, manifest.SchemaVersion);
+            var compilation = await compiler.CompileAsync(request);
+            Assert.Contains(diagnostics, x => x.Code == error);
+            var problem = Assert.Single(compilation.Diagnostics, x => x.Code == error);
+            if (mapped)
+            {
+                Assert.Contains("Designer connection", problem.Message);
+                Assert.Contains("Remove the connection", problem.Remediation);
+            }
+            Assert.Null(compilation.ExecutableRoot);
+        }
     }
 
     [Theory]

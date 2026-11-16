@@ -1,3 +1,4 @@
+import { readWrappedInput } from "./activityProperties";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
@@ -155,6 +156,7 @@ export function ActivityGraphPublicInterfaceEditor({
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const payload = normalizePayload(value.payload);
   const root = payload.rootActivity;
+  const assignedOutputNames = activityGraphAssignedOutputNames(activityGraphDocumentAdapter.readRoot(value), catalogByVersion);
   const outcomeMappingOptions = useMemo(
     () => getActivityGraphOutcomeMappingOptions(
       root,
@@ -176,8 +178,8 @@ export function ActivityGraphPublicInterfaceEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
 
   useEffect(() => {
@@ -219,10 +221,11 @@ export function ActivityGraphPublicInterfaceEditor({
       <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
       {(!contractSection || contractSection === "outputs") && <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
-        {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
+        {(contract?.outputs ?? []).length > 0 ? <p>Assign outputs in the designer with Set Output, or choose a value here.</p> : null}
         {(contract?.outputs ?? []).length === 0
           ? <p className="wf-muted">Add an output above to connect a value.</p>
           : <WorkflowReferenceAuthoringProvider
+              inputBindingTarget="referenceKey"
               workflowState={workflowState}
               workflowInputs={publicInputs}
               visibleVariables={visibleVariables}
@@ -235,6 +238,7 @@ export function ActivityGraphPublicInterfaceEditor({
                     key={output.referenceKey}
                     output={output}
                     mapping={mapping}
+                    assignedBySetOutput={assignedOutputNames.has(output.name)}
                     expressionDescriptors={expressionState.descriptors}
                     expressionDescriptorStatus={expressionState.status}
                     expressionEditors={expressionEditors}
@@ -467,8 +471,8 @@ export function ActivityGraphImplementationEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
@@ -974,7 +978,8 @@ export function ActivityGraphImplementationEditor({
     />
   ) : null;
 
-  return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
+  return <WorkflowReferenceAuthoringProvider inputBindingTarget="referenceKey" workflowState={workflowState} workflowInputs={publicInputs} visibleVariables={visibleVariables} status="ready">
+  <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
     <GraphAuthoringWorkbench
       resourceKind="activity-definition-graph"
       className="ad-graph-workspace"
@@ -1113,12 +1118,27 @@ export function ActivityGraphImplementationEditor({
         onSelect: setActiveRightPanelId
       }}
     />
-  </div>;
+  </div>
+  </WorkflowReferenceAuthoringProvider>;
+}
+
+function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<string, ActivityCatalogItem>): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: ActivityNode) => {
+    if (node.intrinsic?.kind.toLowerCase() === "setoutput") {
+      const name = readWrappedInput(node, { name: "Name", referenceKey: "name", typeName: "String" });
+      if (name.expression.type === "Literal" && typeof name.expression.value === "string") names.add(name.expression.value);
+    }
+    for (const slot of getChildSlots(node, catalog)) for (const child of slot.activities) visit(child);
+  };
+  visit(root);
+  return names;
 }
 
 function ActivityGraphOutputMappingEditor({
   output,
   mapping,
+  assignedBySetOutput,
   expressionDescriptors,
   expressionDescriptorStatus,
   expressionEditors,
@@ -1128,6 +1148,7 @@ function ActivityGraphOutputMappingEditor({
 }: {
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
+  assignedBySetOutput: boolean;
   expressionDescriptors: StudioExpressionDescriptor[];
   expressionDescriptorStatus: "loading" | "ready" | "failed";
   expressionEditors: StudioExpressionEditorContribution[];
@@ -1191,8 +1212,9 @@ function ActivityGraphOutputMappingEditor({
   return (
     <article className="ad-graph-output-mapping">
       <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header>
+      {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
       {!mapping ? <>
-        {output.isRequired ? <span role="alert">Choose a value for this required output.</span> : <span className="wf-muted">No value is configured.</span>}
+        {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
       </> : <>
         <StudioField label={<><span>Value source</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField>
