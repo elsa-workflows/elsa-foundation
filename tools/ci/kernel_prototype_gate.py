@@ -7,7 +7,9 @@ them (prototypes/kernel-model/FINDINGS.md), so a plain exit code of 2 is the exp
 wrapper runs the command, prints its output and passes only when every mutation that is not caught is on the allowed
 list, at least one mutation was caught, and the exit code equals the number of uncaught mutations. With --expect-total N
 it also passes only when the run printed exactly N verdict lines (caught plus not caught), so a mutation that is dropped
-or added is noticed. It never weakens a mutation: a new uncaught one, a missing report or a crash fails.
+or added is noticed. A verdict line may name a combination of mutations ("FenceWithoutPosition,
+NoResetAfterFailedCommit: CAUGHT"); it counts as one verdict, and the allowed list matches exact single names only. It
+never weakens a mutation: a new uncaught one, a missing report or a crash fails.
 
 Usage:
   kernel_prototype_gate.py [--allow-uncaught Name,Name] [--expect-total N] -- <command> [args...]
@@ -21,8 +23,10 @@ import re
 import subprocess
 import sys
 
-UNCAUGHT = re.compile(r"^(\w+): NOT CAUGHT\b", re.MULTILINE)
-CAUGHT = re.compile(r"^(\w+): CAUGHT\b", re.MULTILINE)
+# A verdict names one mutation, or a combination of flags as "First, Second". A combined name is one verdict and never
+# matches an allowed single name, so a combination that stops being caught fails.
+UNCAUGHT = re.compile(r"^(\w+(?:, \w+)*): NOT CAUGHT\b", re.MULTILINE)
+CAUGHT = re.compile(r"^(\w+(?:, \w+)*): CAUGHT\b", re.MULTILINE)
 
 
 def judge(output: str, exit_code: int, allowed: set[str], expect_total: int | None = None) -> list[str]:
@@ -65,6 +69,12 @@ def self_test() -> int:
     check("an added mutation fails the total", bool(judge(ok + "D: CAUGHT at seed 2\n", 2, {"B", "C"}, expect_total=3)))
     check("a total counts verdict lines, not names", bool(judge(ok + "A: CAUGHT at seed 3\n", 2, {"B", "C"}, expect_total=3)))
     check("no total given checks no total", not judge(ok + "D: CAUGHT at seed 2\n", 2, {"B", "C"}))
+    combined = ok + "B, D: CAUGHT at seed 4\n"
+    check("a combined-name line counts as one verdict", not judge(combined, 2, {"B", "C"}, expect_total=4))
+    check("removing a combined line fails the total", bool(judge(ok, 2, {"B", "C"}, expect_total=4)))
+    escaped = ok + "B, D: NOT CAUGHT in 10 seeds\n"
+    check("a combined line that becomes NOT CAUGHT fails", bool(judge(escaped, 3, {"B", "C"}, expect_total=4)))
+    check("a combined line is not mistaken for its single names", bool(judge(escaped, 3, {"B", "C", "D"}, expect_total=4)))
     for failure in failures:
         print(f"kernel_prototype_gate self-test: {failure}", file=sys.stderr)
     if failures:

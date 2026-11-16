@@ -92,10 +92,10 @@ jobs:
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 6946, a seed that has drifted before, so a smaller
       # size would sit too close to it. Every kernel mutation is caught except the two FINDINGS documents as caught only
-      # with the rule that covers them. --expect-total pins the number of mutations, so one dropped or added fails.
+      # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
       - name: Mutation checks
         run: |
-          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 41 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
@@ -154,7 +154,7 @@ jobs:
 
       - name: Mutation checks, full size
         run: |
-          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 41 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
