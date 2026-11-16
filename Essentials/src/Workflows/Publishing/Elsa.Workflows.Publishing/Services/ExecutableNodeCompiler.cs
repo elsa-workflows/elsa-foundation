@@ -575,8 +575,7 @@ public sealed class ExecutableNodeCompiler(
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomeSet = ResolveOutcomeSet(activityType, structure, inputBindings);
-        var outcomes = outcomeSet.Outcomes.ToHashSet(StringComparer.Ordinal);
+        var outcomes = ResolveOutcomes(activityType, structure, inputBindings).ToHashSet(StringComparer.Ordinal);
         if (outcomeProjection is not null && StringComparer.Ordinal.Equals(outcomeProjection.ActivityTypeKey, activityTypeKey))
         {
             outcomes.UnionWith(outcomeProjection.OutcomeNames);
@@ -702,9 +701,7 @@ public sealed class ExecutableNodeCompiler(
     /// A node's outcome set, resolved at publication from the activity's static declarations and its configuration
     /// (ADR 0045 §6; spec 1208 FR-010, FR-011). The same rules drive Studio's ports.
     /// </summary>
-    internal sealed record NodeOutcomeSet(IReadOnlyCollection<string> Outcomes);
-
-    internal static NodeOutcomeSet ResolveOutcomeSet(
+    private static IReadOnlyCollection<string> ResolveOutcomes(
         Type activityType,
         ExecutableActivityStructure? structure,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings)
@@ -730,7 +727,7 @@ public sealed class ExecutableNodeCompiler(
 
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
-        return new NodeOutcomeSet(outcomes.ToArray());
+        return outcomes.ToArray();
     }
 
     /// <summary>

@@ -606,6 +606,17 @@ public sealed class GraphActivityProvider(
         var reached = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in completeNodes)
         {
+            if (HasInput(node, CompleteOutcomeInputKey) && HasInput(node, CompleteOutcomesInputKey))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.complete.outcome-conflict",
+                    $"Complete node '{node.NodeId}' sets both '{CompleteOutcomeInputKey}' and '{CompleteOutcomesInputKey}'. Set '{CompleteOutcomeInputKey}' for one boundary outcome, or '{CompleteOutcomesInputKey}' for several, not both.",
+                    subject,
+                    $"{node.JsonPointer}/inputs",
+                    node.NodeId));
+                continue;
+            }
+
             var referenceKeys = ReadCompleteOutcomes(node);
             if (referenceKeys is null)
             {
@@ -678,6 +689,9 @@ public sealed class GraphActivityProvider(
 
         return ReadCompleteOutcome(node) is { } single ? [single] : null;
     }
+
+    private static bool HasInput(GraphNode node, string inputKey) =>
+        node.Activity.Inputs.Any(x => StringComparer.Ordinal.Equals(x.ReferenceKey, inputKey) && x.Value.Value is not null);
 
     private static string? ReadCompleteOutcome(GraphNode node)
     {

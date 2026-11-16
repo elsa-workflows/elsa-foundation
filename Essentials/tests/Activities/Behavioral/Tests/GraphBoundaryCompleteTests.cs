@@ -269,6 +269,37 @@ public sealed class GraphBoundaryCompleteTests
         run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
     }
 
+    // Local Code Review of PR #4314: a Complete node that sets both 'outcome' and 'outcomes' faults instead of
+    // silently dropping 'outcome' (publication refuses it with activity.graph.complete.outcome-conflict).
+    [Fact]
+    public async Task CompleteSettingBothOutcomeAndOutcomes_FaultsWithAStableCode()
+    {
+        var run = await RunInParentAsync(
+            Boundary(
+                Nodes.Leaf("node-exit", typeof(Complete), new Dictionary<string, object?> { ["outcome"] = "succeed", ["outcomes"] = new[] { "fail" } }),
+                completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var exit = run.State("node-exit");
+        Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
+        Assert.Equal(Complete.OutcomeConflictFaultCode, exit.Fault!.Code);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    // A blank entry in 'outcomes' is not ignored: the node names no valid outcome and faults.
+    [Fact]
+    public async Task CompleteWithABlankEntryInOutcomes_FaultsWithAStableCode()
+    {
+        var run = await RunInParentAsync(
+            Boundary(CompleteNodeWithOutcomes("node-exit", "fail", " "), completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var exit = run.State("node-exit");
+        Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
+        Assert.Equal(Complete.OutcomeRequiredFaultCode, exit.Fault!.Code);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
     [Fact]
     public async Task EntryIsComplete_TheBoundaryCompletesImmediately()
     {

@@ -52,8 +52,6 @@ public sealed class GraphActivity(
     /// </summary>
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
 
-
-    private string? _selectedOutcomeName;
     private OutcomeSelection? _completeSelection;
     private OutcomeSelection? _mappedSelection;
     private readonly IPortableExpressionEvaluator? _portableExpressionEvaluator = portableExpressionEvaluator;
@@ -65,7 +63,6 @@ public sealed class GraphActivity(
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         ArgumentNullException.ThrowIfNull(runtimeContext);
-        _selectedOutcomeName = null;
         _completeSelection = null;
         _mappedSelection = null;
         ValidatePinnedDescriptor(runtimeContext);
@@ -122,7 +119,6 @@ public sealed class GraphActivity(
 
         if (Descriptor.OutcomeMappings.Count == 0)
         {
-            _selectedOutcomeName = ActivityOutcomes.Done;
             return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
@@ -142,7 +138,6 @@ public sealed class GraphActivity(
         }
 
         _mappedSelection = OutcomeSelection.Named(boundaryOutcomeNames);
-        _selectedOutcomeName = boundaryOutcomeNames[0];
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_mappedSelection));
     }
 
@@ -162,7 +157,12 @@ public sealed class GraphActivity(
 
         var referenceKeys = ReadCompleteOutcomeReferenceKeys(notification);
         if (referenceKeys.Count == 0)
-            referenceKeys = [null!];
+        {
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                CompleteOutcomeUnknownFaultCode,
+                $"Complete node '{notification.NotifyingChildExecutableNodeId}' names no boundary outcome, so graph activity '{context.ExecutableNode.ExecutableNodeId}' cannot complete with one.")));
+        }
+
         var boundaryOutcomeNames = new List<string>(referenceKeys.Count);
         foreach (var referenceKey in referenceKeys)
         {
@@ -181,7 +181,6 @@ public sealed class GraphActivity(
 
         // A Complete exit may name several boundary outcomes; the boundary passes every one to its parent (FR-032).
         _completeSelection = OutcomeSelection.Named(boundaryOutcomeNames);
-        _selectedOutcomeName = boundaryOutcomeNames[0];
         foreach (var child in context.GetLiveChildActivities())
             context.RequestChildSubtreeCancellation(child.ActivityExecutionId, "graph-complete");
 
@@ -298,8 +297,8 @@ public sealed class GraphActivity(
             ? _completeSelection
             : Descriptor.OutcomeMappings.Count == 0
             ? OutcomeSelection.Unspecified
-            : _mappedSelection ?? OutcomeSelection.Named(_selectedOutcomeName ?? throw new InvalidOperationException(
-                "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome."));
+            : _mappedSelection ?? throw new InvalidOperationException(
+                "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome.");
         return new RuntimeActivityCompletionCheckpointPreparation(
             ToChanges(capturedOutputs),
             ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, selection));
@@ -484,14 +483,15 @@ public sealed class GraphActivity(
             $"Graph entry node '{entryNodeId}' is not a direct child of boundary node '{boundary.ExecutableNodeId}'.");
     }
 
-    private static IReadOnlyList<string> ReadCompleteOutcomeReferenceKeys(ActivityChildNotifiedContext notification)
+    // A non-string entry reads as null, which no declared boundary outcome matches, so it faults as an unknown outcome.
+    private static IReadOnlyList<string?> ReadCompleteOutcomeReferenceKeys(ActivityChildNotifiedContext notification)
     {
         if (notification.Payload is not { ValueKind: JsonValueKind.Object } payload)
             return [];
         if (payload.TryGetProperty(GraphCompleteNotification.OutcomesPayloadKey, out var outcomes) && outcomes.ValueKind == JsonValueKind.Array)
-            return outcomes.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()! : null!).ToArray();
+            return outcomes.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null).ToArray();
         return payload.TryGetProperty(GraphCompleteNotification.OutcomePayloadKey, out var outcome) && outcome.ValueKind == JsonValueKind.String
-            ? [outcome.GetString()!]
+            ? [outcome.GetString()]
             : [];
     }
 

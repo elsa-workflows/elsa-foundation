@@ -763,7 +763,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         return property.PropertyType.IsValueType ? Activator.CreateInstance(property.PropertyType) : null;
     }
 
-    // Mirrors ExecutableNodeCompiler.ResolveOutcomeSet (spec 1208): static outcomes, Switch case labels, the BPMN
+    // Mirrors ExecutableNodeCompiler.ResolveOutcomes (spec 1208): static outcomes, Switch case labels, the BPMN
     // transaction outcome and value-derived outcomes with the Done rule.
     private static IReadOnlyCollection<string> ResolveOutcomes(
         ExecutableNode node,

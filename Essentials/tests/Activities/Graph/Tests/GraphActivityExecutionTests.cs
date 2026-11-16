@@ -240,6 +240,43 @@ public sealed class GraphActivityExecutionTests : IDisposable
         Assert.Empty(context.GetChildSubtreeCancellationRequests());
     }
 
+    // Local Code Review of PR #4314: a Complete payload that names no boundary outcome, or names one by a non-string,
+    // faults as an unknown outcome instead of reading a null reference key.
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"outcomes":[]}""")]
+    [InlineData("""{"outcomes":[1]}""")]
+    [InlineData("""{"outcomes":["fail",null]}""")]
+    public async Task CompleteNotification_FaultsWhenItNamesNoValidReferenceKey(string payload)
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(context, new ActivityChildNotifiedContext(
+            "complete-execution", "complete", "elsa.graph.complete", payload: JsonDocument.Parse(payload).RootElement));
+
+        Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, continuation.Fault!.Code);
+        Assert.Empty(context.GetChildSubtreeCancellationRequests());
+    }
+
+    // The same review removed the boundary's separate "selected outcome name" field: the checkpoint after a mapped
+    // entry completion and after a Complete exit reads the selection itself.
+    [Fact]
+    public async Task CompleteNotification_WithSeveralOutcomes_CheckpointsEveryOne()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed"), new("other", "Other")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        await graph.OnChildNotifiedAsync(context, new ActivityChildNotifiedContext(
+            "complete-execution", "complete", "elsa.graph.complete",
+            payload: JsonDocument.Parse("""{"outcome":"fail","outcomes":["fail","other"]}""").RootElement));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(new[] { "Failed", "Other" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
+    }
+
     [Fact]
     public async Task OtherNotificationCodes_LeaveTheBoundaryDeferred()
     {

@@ -102,6 +102,64 @@ public sealed class FlowchartInclusiveForkTests
             diagnostic.Message.Contains("fired after 2 active arrival(s)", StringComparison.Ordinal));
     }
 
+    // Local Code Review of PR #4314: the earlier of two arrivals from one completion at one target is not waiting on
+    // another source, so no join-wait diagnostic is recorded for a node with a single inbound source.
+    [Theory]
+    [InlineData(FlowchartPolicyKinds.DeadPathJoin)]
+    [InlineData(FlowchartPolicyKinds.ReachabilityJoin)]
+    public async Task Two_selected_outcomes_connected_to_one_node_record_no_join_wait(string joinPolicy)
+    {
+        var run = await RunAsync(joinPolicy, fixture => fixture.NewExecutable(
+            children: [Leaf("node-fork", typeof(SelectsAAndB)), fixture.NewProbeNode("node-target")],
+            connections:
+            [
+                fixture.NewConnection("node-fork", "node-target", "A"),
+                fixture.NewConnection("node-fork", "node-target", "B")
+            ],
+            startNodeId: "node-fork"));
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Status);
+        Assert.Single(run.Order, node => node == "node-target");
+        Assert.NotNull(run.FlowchartState);
+        Assert.DoesNotContain(run.FlowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Waiting);
+    }
+
+    // The same review fix keeps a real join wait visible: when the target also waits on another source, the last
+    // arrival from the selecting node records the wait, once.
+    [Fact]
+    public async Task Two_selected_outcomes_at_a_join_with_another_pending_source_record_one_join_wait()
+    {
+        var run = await RunAsync(FlowchartPolicyKinds.DeadPathJoin, fixture => fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-start"),
+                Leaf("node-fork", typeof(SelectsAAndB)),
+                fixture.NewProbeNode("node-other"),
+                fixture.NewProbeNode("node-join")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-start", "node-fork"),
+                fixture.NewConnection("node-start", "node-other"),
+                fixture.NewConnection("node-fork", "node-join", "A"),
+                fixture.NewConnection("node-fork", "node-join", "B"),
+                fixture.NewConnection("node-other", "node-join")
+            ],
+            startNodeId: "node-start"));
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Status);
+        Assert.Single(run.Order, node => node == "node-join");
+        Assert.NotNull(run.FlowchartState);
+        var waits = run.FlowchartState.Diagnostics
+            .Where(diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Waiting && diagnostic.Message.Contains("'node-join'", StringComparison.Ordinal))
+            .ToArray();
+        // Whichever source arrives first records the one wait; the earlier same-source arrival adds none.
+        Assert.Single(waits);
+        var join = run.Order.ToList().IndexOf("node-join");
+        Assert.True(join > run.Order.ToList().IndexOf("node-fork") && join > run.Order.ToList().IndexOf("node-other"),
+            $"The join ran before both sources: {string.Join(", ", run.Order)}.");
+    }
+
     // Review round 1: a node that carries a routing policy schedules through the policy applier, which refused a
     // second ScheduleNode for one target. Two selected outcomes that lead to one node are two answers from one source,
     // so the node runs once there too, as it does on the default path.

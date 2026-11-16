@@ -189,8 +189,15 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
 
-            if (!ReferenceEquals(lastConnectionByTarget[connection.Target.NodeId], connection) ||
-                joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
+            // An earlier arrival from this same completion waits for the last one without a join-wait diagnostic: it is
+            // not waiting on another source, and the last arrival records the wait if there is one.
+            if (!ReferenceEquals(lastConnectionByTarget[connection.Target.NodeId], connection))
+            {
+                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
+                continue;
+            }
+
+            if (joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");

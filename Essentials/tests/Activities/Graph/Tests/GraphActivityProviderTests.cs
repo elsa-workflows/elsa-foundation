@@ -636,6 +636,28 @@ public sealed partial class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task Complete_compilation_rejects_a_node_that_sets_both_outcome_and_outcomes()
+    {
+        const string node = """
+            {
+              "nodeId": "exit",
+              "activityVersionId": "activity-ver-complete",
+              "inputs": [
+                { "referenceKey": "outcome", "value": { "value": "succeed", "expressionType": "Literal" } },
+                { "referenceKey": "outcomes", "value": { "value": ["fail"], "expressionType": "Literal" } }
+              ],
+              "outputs": [],
+              "structure": null
+            }
+            """;
+
+        var compilation = await _provider.CompileAsync(CompleteRequest(CompleteManifest(node)));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.complete.outcome-conflict");
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
     public async Task Draft_validation_checks_each_name_in_a_Complete_outcomes_list()
     {
         var catalog = new TypeKeyActivityCatalog().Add("activity-ver-complete", GraphActivityProvider.CompleteActivityTypeKey);

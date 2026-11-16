@@ -31,6 +31,9 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
     /// <summary>The fault code when <see cref="Outcome"/> is blank at run time.</summary>
     public const string OutcomeRequiredFaultCode = "activity.graph.complete.outcome-required";
 
+    /// <summary>The fault code when both <see cref="Outcome"/> and <see cref="Outcomes"/> are set at run time.</summary>
+    public const string OutcomeConflictFaultCode = "activity.graph.complete.outcome-conflict";
+
     /// <summary>
     /// The reference key of the enclosing reusable activity's boundary outcome to complete with. Leave it empty and set
     /// <see cref="Outcomes"/> to complete with several.
@@ -48,10 +51,19 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         ArgumentNullException.ThrowIfNull(runtimeContext);
-        var outcomes = (Outcomes is { Count: > 0 } several ? several : string.IsNullOrWhiteSpace(Outcome) ? [] : [Outcome])
-            .Where(outcome => !string.IsNullOrWhiteSpace(outcome))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        // Publication refuses a node that sets both inputs (activity.graph.complete.outcome-conflict); a node that
+        // reaches run time with both anyway faults rather than silently dropping one of them.
+        if (!string.IsNullOrWhiteSpace(Outcome) && Outcomes is { Count: > 0 })
+        {
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                OutcomeConflictFaultCode,
+                $"Complete node '{runtimeContext.ExecutableNode.ExecutableNodeId}' sets both 'outcome' and 'outcomes'.")));
+        }
+
+        string[] authored = Outcomes is { Count: > 0 } several ? [.. several] : string.IsNullOrWhiteSpace(Outcome) ? [] : [Outcome];
+        if (authored.Any(string.IsNullOrWhiteSpace))
+            authored = [];
+        var outcomes = authored.Distinct(StringComparer.Ordinal).ToArray();
         if (outcomes.Length == 0)
         {
             return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
