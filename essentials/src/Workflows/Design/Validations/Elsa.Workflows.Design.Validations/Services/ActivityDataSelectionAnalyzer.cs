@@ -24,7 +24,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
     ScopedVariableResolver variableResolver,
     IEnumerable<IActivitySerializedShapeSource> shapeSources,
     IInlineEventPublisher events,
-    IOptions<WorkflowDesignValidatorOptions> options) : IActivityDataSelectionAnalyzer
+    IOptions<WorkflowDesignValidatorOptions> options,
+    IActivityBindingConversionPreviewer? conversionPreviewer = null) : IActivityDataSelectionAnalyzer
 {
     public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
         ActivityDataSelectionDocument document,
@@ -63,6 +64,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 {
                     var path = Path(node, input.ReferenceKey);
                     var source = await Resolve(context, node, binding, path, findings, cancellationToken);
+                    if (document.ValidateBindingConversions && await PreviewConversion(context, input, facts, source, binding, cancellationToken) is { Rejection: { } rejection } preview)
+                        findings.Add(new(path, $"ValueConversion/{preview.ReasonCode}", rejection));
                     // Publication can honour an explicit conversion only from a member whose contract it knows, and only a
                     // typed result member is known; say so here, before publishing, rather than only when it refuses.
                     if (source is not null && binding.IsMemberRead && input.Conversion is { Mode: not AuthoredValueConversionMode.Auto } &&
@@ -91,7 +94,17 @@ internal sealed class ActivityDataSelectionAnalyzer(
         {
             if (query.Source is not null || !query.MemberPath.IsEmpty)
                 findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Target-only analysis does not select a source."));
-            return Result(document, targetFacts, [], findings);
+            ActivityBindingConversionPreview? conversion = null;
+            var input = consumer.Inputs.FirstOrDefault(state => state.ReferenceKey == target.InputKey);
+            if (query.PreviewBindingConversion && findings.Count == 0 && conversionPreviewer is not null &&
+                input?.Value?.ExpressionType?.Equals("ActivityResult", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                var binding = ActivityDataReadBinding.Direct(input.Value.ExpressionType, input.Value.Value);
+                var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
+                if (findings.Count == 0)
+                    conversion = await PreviewConversion(context, input, targetFacts, source, binding, cancellationToken);
+            }
+            return Result(document, targetFacts, [], findings) with { BindingConversion = conversion };
         }
         if (query.Source is null && !query.MemberPath.IsDefaultOrEmpty)
         {
@@ -338,13 +351,17 @@ internal sealed class ActivityDataSelectionAnalyzer(
             return null;
         }
         // Publication refuses a whole result the producer declares no type for, so a browsed one gets no binding either.
-        var noTypedResult = binding.Projection == "$result" && await HasNoTypedResult(context, version, ct);
+        var wholeShape = binding.Projection == "$result" ? await ResultShape(context, version, "$result", ct) : null;
+        var noTypedResult = wholeShape is { State: ActivitySerializedShapeState.Unavailable, ReasonCode: "activity.shape.no-typed-result" };
         if (admitOccurrence && noTypedResult)
         {
             findings.Add(new(path, "ActivityData/UnknownProjection", "The admitted producer contract declares no typed whole result."));
             return null;
         }
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
+        var knownWhole = wholeShape is { State: ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated } ? wholeShape : null;
+        var sensitive = producer.Node.Outputs.Any(state => state.IsSensitive == true &&
+            (binding.Projection == "$result" || state.ReferenceKey == binding.Projection));
         var admitted = declaresNoScope && !notDefinite && !earlierRun && !noTypedResult;
         // A member read is admitted exactly as the whole read of the same result, and then by its path; a read the
         // whole-read rules refuse is not typed, so it reports that refusal alone.
@@ -367,7 +384,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             context.MemberReads.Add(member.Facts with { Path = path, ProducerNodeId = producer.Node.NodeId, ProjectionKey = binding.Projection! });
         return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
             output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
-            direct, availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
+            direct, availability, output?.Type ?? knownWhole?.Type, version, binding.Projection, output?.IsNullable,
+            sensitive ? true : knownWhole?.IsSensitive, knownWhole?.IsCredential,
             availability switch {
                 ActivityChildResultAvailability.Conditional => "ConditionalOccurrence",
                 ActivityChildResultAvailability.Unknown => "AvailabilityUnknown",
@@ -376,7 +394,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 _ when noTypedResult => "NoTypedResult",
                 _ when member?.Refusal is { } refusal => refusal,
                 _ => null
-            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
+            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional),
+                Representation = output?.SourceRepresentation ?? knownWhole?.Representation };
     }
 
     /// <summary>
@@ -432,6 +451,22 @@ internal sealed class ActivityDataSelectionAnalyzer(
         : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }), "WorkflowRequest");
 
     // A member read is admitted wherever the whole read of its source is.
+    private async ValueTask<ActivityBindingConversionPreview?> PreviewConversion(Request context, ArgumentState input,
+        ActivityDataSelectionTargetFacts? target, Source? source, ActivityDataReadBinding binding, CancellationToken ct)
+    {
+        if (conversionPreviewer is null || binding is not { Role: "ActivityResult", IsDirect: true } ||
+            source is not { Binding: not null, Type: { } type, Version: { } version, Projection: { } projection } || source.IsSensitive == true || source.IsCredential == true ||
+            input.IsSensitive == true || target is null || target.IsSensitive == true || target.IsCredential == true ||
+            target.Constraint is not null && !target.Constraint.AllowedExpressionTypes.Contains(binding.Role, StringComparer.OrdinalIgnoreCase))
+            return null;
+        var shape = await ResultShape(context, version, projection, ct);
+        if (shape is { State: ActivitySerializedShapeState.Unavailable } or { IsSensitive: true } or { IsCredential: true } ||
+            shape?.Type is { } shapeType && shapeType != type)
+            return null;
+        var representation = source.Representation ?? shape?.Representation ?? ValueRepresentationDefaults.Infer(new(type.Alias, type.CollectionKind));
+        return conversionPreviewer.Preview(type, representation, target.Type, input.Conversion);
+    }
+
     private static string? ConstraintRole(string? expressionType) => expressionType switch
     {
         _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, ActivityDataReadRoles.ActivityResultMember) => "ActivityResult",
@@ -464,19 +499,18 @@ internal sealed class ActivityDataSelectionAnalyzer(
             IsCredential = source.IsCredential == true ? true : shape.IsCredential };
     }
 
-    private async ValueTask<bool> HasNoTypedResult(Request context, IActivityDefinitionVersion version, CancellationToken ct)
+    private async ValueTask<ActivitySerializedShape?> ResultShape(Request context, IActivityDefinitionVersion version, string projection, CancellationToken ct)
     {
-        if (context.NoTypedResults.TryGetValue(version.Id, out var cached)) return cached;
+        if (context.ResultShapes.TryGetValue((version.Id, projection), out var cached)) return cached;
         ActivitySerializedShape? owned = null;
         foreach (var provider in shapeSources)
         {
-            var candidate = await provider.DescribeResultAsync(version, "$result", [], new(0, 0), ct);
+            var candidate = await provider.DescribeResultAsync(version, projection, [], new(0, 0), ct);
             if (candidate is null) continue;
             if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
             owned = candidate;
         }
-        // Only the exact, source-bound absence result is a static refusal. Missing assets/profiles stay uncertain.
-        return context.NoTypedResults[version.Id] = owned is { State: ActivitySerializedShapeState.Unavailable, ReasonCode: "activity.shape.no-typed-result" };
+        return context.ResultShapes[(version.Id, projection)] = owned;
     }
 
     private IReadOnlyList<VisibleVariable> Visible(Request context, ActivityDataSelectionGraph.Location consumer)
@@ -533,6 +567,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
         bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
     {
+        public ValueRepresentation? Representation { get; init; }
         public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
     }
     private sealed class Request(ActivityDataSelectionDocument document, ActivityDataSelectionGraph graph, int maxDepth)
@@ -549,7 +584,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
             .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        public Dictionary<string, bool> NoTypedResults { get; } = new(StringComparer.Ordinal);
+        public Dictionary<(string VersionId, string Projection), ActivitySerializedShape?> ResultShapes { get; } = [];
         public List<ActivityDataMemberReadFacts> MemberReads { get; } = [];
     }
 
