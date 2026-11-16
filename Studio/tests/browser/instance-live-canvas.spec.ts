@@ -52,3 +52,36 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByText("Current: 10", { exact: true })).toHaveCount(0);
   });
 }
+
+test("keeps a deferred hidden Timeline out of the Diagram layout", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  let releaseHistory!: () => void;
+  const gate = new Promise<void>(resolve => { releaseHistory = resolve; });
+  let pendingModules = 0;
+  // Delay only the real lazy UI modules. Runtime evidence stays on the fixture's
+  // existing contract; a hidden view must not introduce a visible loading cell.
+  await page.route("**/run-history/RunHistory*.tsx*", async route => {
+    pendingModules++;
+    await gate;
+    await route.continue();
+  });
+  try {
+    await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=unique&theme=light");
+    const canvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
+    await expect(canvas).toBeVisible();
+    await expect.poll(() => pendingModules).toBeGreaterThan(0);
+    await expect(page.getByText("Loading run history workspace…", { exact: true })).toBeHidden();
+    const node = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    await node.click();
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
+    await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
+    const viewport = canvas.locator(".react-flow__viewport");
+    const transform = await viewport.getAttribute("style");
+    releaseHistory();
+    await expect(page.getByText("Loading run history workspace…", { exact: true })).toHaveCount(0);
+    await expect(node).toHaveAccessibleName(/Selected/);
+    expect(await viewport.getAttribute("style")).toBe(transform);
+  } finally {
+    releaseHistory();
+  }
+});

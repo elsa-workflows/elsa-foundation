@@ -7,6 +7,8 @@ import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDet
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 import "./activityInspection.css";
 import "./activityExecutionBrowser.css";
+// Primary view wrappers must be laid out before their lazy history content loads.
+import "./run-history/runHistory.css";
 import { RuntimeCapturedValue } from "./RuntimeValueEvidence";
 import { latestActivityExecution } from "../runtimeActivityOrder";
 import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
@@ -1957,7 +1959,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
               </span>
             </div>
           ) : null}
-          <Suspense fallback={<p role="status">Loading run history workspace…</p>}><div className="wf-run-history-view" hidden={historyLocation.view !== "timeline"}>
+          <div className="wf-run-history-view" hidden={historyLocation.view !== "timeline"}><Suspense fallback={<p role="status">Loading run history workspace…</p>}>
             <RunHistorySummary context={context} instance={data.details.instance} name={data.definitionName ?? data.definitionVersion?.definition.name ?? data.details.instance.definitionId}
               activities={data.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!data.details.activityNextContinuationToken} enabled={historyLocation.view === "timeline"}
               onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} />
@@ -1969,7 +1971,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
               selectedEvent={preparedHistoryEvent?.contextIdentity === runtimeValueContextId(context) && preparedHistoryEvent.workflowExecutionId === workflowExecutionId
                 ? preparedHistoryEvent.value.event : undefined}
               onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} enabled={historyLocation.view === "timeline"} />
-          </div></Suspense>
+          </Suspense></div>
           <div className="wf-run-diagram-view" hidden={historyLocation.view !== "diagram"}>
           <WorkflowInstanceCanvas
             observationIdentity={observation.identity}
