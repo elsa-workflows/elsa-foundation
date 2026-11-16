@@ -74,6 +74,12 @@ describe("activity property values", () => {
     });
   });
 
+  it("binds an activity input by stable key while retaining its JavaScript argument name", () => {
+    const definition = withWorkflowInputExpressionArgument("args.A + args.B", "JavaScript", { ...textDescriptor, typeName: "Double" },
+      { referenceKey: "a", name: "A", displayName: "A" } as WorkflowInput, "referenceKey");
+    expect(definition).toMatchObject({ source: "args.A + args.B", resultType: { alias: "Double" }, parameters: { A: { kind: "WorkflowRequest", memberKey: "a" } } });
+  });
+
   it.each([
     ["System.String", "String"],
     ["Contoso.Sales.Order, Contoso.Contracts", "Contoso.Sales.Order"],
