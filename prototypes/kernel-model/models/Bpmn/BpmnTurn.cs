@@ -57,7 +57,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 Start(m, Events.Delivered(m) ?? throw new InvalidOperationException("Malformed BPMN event-start delivery."));
                 break;
             case BpmnKinds.Timer:
-                Completed(m.Read<TimerDue>().Handle, []);
+                var timerHandle = m.Read<TimerDue>().Handle;
+                if (_s.Live.TryGetValue(timerHandle, out var timer) && timer.Kind == WorkKinds.Timer && InboxKey.Issued(timer.Key) == m.InboxKey)
+                    Completed(timerHandle, []);
                 break;
             case Kinds.Event when m.Start is null && Events.Delivered(m) is { } delivered && _s.Live.TryGetValue(delivered.Wait, out var wait) && wait.Kind == WorkKinds.Message:
                 // A kept event is given to every catch that subscribes within its window; BPMN consumes a message once,

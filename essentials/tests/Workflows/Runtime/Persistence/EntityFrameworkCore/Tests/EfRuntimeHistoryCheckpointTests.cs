@@ -393,7 +393,7 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, Scope, EfWorkflowExecutionStateStore.CreateId(Scope, Run), 1));
             await context.SaveChangesAsync(); return database;
         }
-        internal HistoryContext Open(DbCommandInterceptor? interceptor = null)
+        internal HistoryContext Open(IInterceptor? interceptor = null)
         {
             var options = new DbContextOptionsBuilder<HistoryContext>().UseSqlite(keeper);
             if (interceptor is not null) options.AddInterceptors(interceptor);
