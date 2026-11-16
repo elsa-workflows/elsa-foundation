@@ -51,15 +51,44 @@ public static partial class ActivityProviderDiagnosticSanitizer
             diagnostic.Severity,
             descriptor?.Message ?? "The activity provider reported an issue.",
             new("ActivityDefinition", safeProviderKey),
-            new(ProviderKey: safeProviderKey, JsonPointer: descriptor?.JsonPointer),
+            new(ProviderKey: safeProviderKey, JsonPointer: PublicPointer(diagnostic.Location?.JsonPointer, descriptor)),
             descriptor?.Remediation ?? "Ask an administrator to review the diagnostic details and activity provider logs.",
             descriptor?.ActionLabel is { } action
                 ? new Dictionary<string, string>(StringComparer.Ordinal) { ["actionLabel"] = action }
                 : new Dictionary<string, string>(StringComparer.Ordinal));
     }
 
+    private static string? PublicPointer(string? pointer, ActivityProviderDiagnosticDescriptor? descriptor)
+    {
+        if (descriptor?.JsonPointerPattern is not { } pattern || pointer is null || pointer.Length > 256)
+            return descriptor?.JsonPointer;
+        var segments = pointer.Split('/');
+        var declared = pattern.Split('/');
+        if (segments.Length != declared.Length) return descriptor.JsonPointer;
+        for (var index = 0; index < segments.Length; index++)
+        {
+            if (declared[index] == "{index}")
+            {
+                if (!IndexPattern().IsMatch(segments[index])) return descriptor.JsonPointer;
+            }
+            else if (!StringComparer.Ordinal.Equals(declared[index], segments[index])) return descriptor.JsonPointer;
+        }
+        return pointer;
+    }
+
+    private static bool IsValidPointerPattern(string? pattern) => pattern is null ||
+        pattern.Length <= 256 && pattern.StartsWith('/') &&
+        pattern.Split('/').Count(segment => segment == "{index}") == 1 &&
+        pattern.Split('/').Skip(1).All(segment => segment == "{index}" || PointerSegmentPattern().IsMatch(segment));
+
+    [GeneratedRegex("^(0|[1-9][0-9]{0,3})$", RegexOptions.CultureInvariant)]
+    private static partial Regex IndexPattern();
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]*$", RegexOptions.CultureInvariant)]
+    private static partial Regex PointerSegmentPattern();
+
     private static bool IsValidDescriptor(ActivityProviderDiagnosticDescriptor descriptor) =>
-        descriptor is not null && descriptor.Code is { } code && DiagnosticCodePattern().IsMatch(code) &&
+        descriptor is not null && IsValidPointerPattern(descriptor.JsonPointerPattern) && descriptor.Code is { } code && DiagnosticCodePattern().IsMatch(code) &&
         !string.IsNullOrWhiteSpace(descriptor.Message) && descriptor.Message.Length <= 512 &&
         !string.IsNullOrWhiteSpace(descriptor.Remediation) && descriptor.Remediation.Length <= 512 &&
         (descriptor.JsonPointer is null || descriptor.JsonPointer.Length <= 256 &&

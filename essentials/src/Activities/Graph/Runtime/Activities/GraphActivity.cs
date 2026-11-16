@@ -258,7 +258,7 @@ public sealed class GraphActivity(
             Descriptor.Outputs,
             Descriptor.OutputMappings,
             Descriptor.RequiredOutputReferenceKeys.ToHashSet(StringComparer.Ordinal),
-            NewEvaluator(scope),
+            NewEvaluator(scope, evaluatingOutputs: true),
             capturedAt,
             cancellationToken);
 
@@ -282,7 +282,7 @@ public sealed class GraphActivity(
             ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, outcomeName));
     }
 
-    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope) =>
+    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope, bool evaluatingOutputs = false) =>
         async (expression, expectedType, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -302,9 +302,24 @@ public sealed class GraphActivity(
                 return CoerceExpressionResult(value, expectedType);
             }
 
+            if (evaluatingOutputs && StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Variable"))
+            {
+                if (!VariableReference.TryParse(expression.Value, out var reference) || reference is null || string.IsNullOrWhiteSpace(reference.ReferenceKey))
+                    throw new InvalidOperationException("A graph Variable output mapping must name a variable by its reference key.");
+                if (!reference.IsWorkflowScope && reference.DeclaringScopeId != "activity-graph")
+                    throw new InvalidOperationException($"Variable scope '{reference.DeclaringScopeId}' is not visible at graph completion.");
+                if (!Descriptor.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, reference.ReferenceKey)))
+                    throw new InvalidOperationException($"Graph Variable output mapping references undeclared variable '{reference.ReferenceKey}'.");
+
+                var captured = await scope.ReadVariableAsync(reference.ReferenceKey, cancellationToken);
+                if (!captured.Exists)
+                    throw new InvalidOperationException($"Graph variable '{reference.ReferenceKey}' has no captured value for this invocation.");
+                return CoerceExpressionResult(captured.Value, expectedType);
+            }
+
             if (!StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "JavaScript"))
                 throw new InvalidOperationException(
-                    $"Graph expression syntax '{expression.Syntax}' is unsupported at runtime. Supported syntaxes are Literal, Object, Input, and portable JavaScript.");
+                    $"Graph expression syntax '{expression.Syntax}' is unsupported at runtime. Supported syntaxes are Literal, Object, Input, and portable JavaScript. Output mappings also support Variable.");
 
             var portableEvaluator = _portableExpressionEvaluator
                 ?? throw new InvalidOperationException(
