@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
@@ -126,8 +127,8 @@ export function OperatorActionDialog({
             </div>
           </dl>
 
-          <div className="wf-operator-reason">
-            <label htmlFor={reasonId}>Reason {model.reasonRequired ? "(required)" : "(optional)"}</label>
+          <div className="wf-operator-reason"><StudioField controlId={reasonId} label={<>Reason {model.reasonRequired ? "(required)" : "(optional)"}</>}>
+
             <textarea
               id={reasonId}
               rows={2}
@@ -147,7 +148,7 @@ export function OperatorActionDialog({
               Visible to everyone who can view this run. Do not include secrets. Up to {maxOperatorReasonLength} characters.
             </small>
             {showReasonError ? <small id={reasonErrorId} className="wf-operator-error">{reasonError}</small> : null}
-          </div>
+          </StudioField></div>
 
           {error ? (
             <p className="wf-operator-submit-error" role="alert">

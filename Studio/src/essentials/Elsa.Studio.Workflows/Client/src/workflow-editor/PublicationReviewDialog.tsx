@@ -16,7 +16,7 @@ import {
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
-import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useDialogFocus } from "./useDialogFocus";
 import "./publicationReview.css";
 
@@ -341,9 +341,7 @@ export function PublicationReviewDialog({
                 <details className="wf-publication-disclosure">
                   <summary>Publishing options</summary>
                   <div className="wf-publication-disclosure-body wf-publication-decision">
-                    <label className="wf-form-field">
-                      <span>Publication channel</span>
-                      <select
+                    <StudioField className="wf-form-field" label={<><span>Publication channel</span></>}><select
                         aria-label="Publication channel"
                         value={channelMode === "create" ? createChannelValue : existingChannel}
                         disabled={!editableReview || busy}
@@ -363,22 +361,17 @@ export function PublicationReviewDialog({
                           </option>
                         ))}
                         <option value={createChannelValue}>Create new channel…</option>
-                      </select>
-                      <small>Use a named channel for a separate publication of this workflow.</small>
-                    </label>
+                      </select><small>Use a named channel for a separate publication of this workflow.</small></StudioField>
 
                     {channelMode === "create" ? (
-                      <label className="wf-form-field">
-                        <span>New channel name</span>
-                        <input
+                      <StudioField className="wf-form-field" label={<><span>New channel name</span></>}><input
                           aria-label="New publication channel"
                           value={newChannel}
                           disabled={!editableReview || busy}
                           onChange={event => setNewChannel(event.target.value)}
                           placeholder="canary"
                           aria-invalid={!channelIsValid}
-                        />
-                      </label>
+                        /></StudioField>
                     ) : null}
 
                     {review.exactVersionSupported ? (
@@ -413,9 +406,7 @@ export function PublicationReviewDialog({
                           <span><strong>Exact version</strong><small>Must be unused and newer than the latest promoted version.</small></span>
                         </label>
                         {versionSelection.mode === "exact" ? (
-                          <label className="wf-form-field">
-                            <span>Exact semantic version</span>
-                            <input
+                          <StudioField className="wf-form-field" label={<><span>Exact semantic version</span></>}><input
                               aria-label="Exact semantic version"
                               value={versionSelection.requestedVersion}
                               disabled={!editableReview || busy}
@@ -425,8 +416,7 @@ export function PublicationReviewDialog({
                                 requestedVersion: event.target.value
                               })}
                               placeholder="2.1.0 or 2.1.0-rc.1"
-                            />
-                          </label>
+                            /></StudioField>
                         ) : null}
                       </fieldset>
                     ) : null}

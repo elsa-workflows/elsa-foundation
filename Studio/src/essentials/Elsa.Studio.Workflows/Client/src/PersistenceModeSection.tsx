@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getHostPersistenceMode } from "./api/persistenceMode";
@@ -36,8 +37,8 @@ export function PersistenceModeSection({ strategyOptions, context, onChange }: {
   return (
     <section className="wf-properties-section">
       <h3>Persistence</h3>
-      <div className="wf-properties-strategy-field">
-        <label htmlFor="wf-persistence-mode">Persistence mode</label>
+      <div className="wf-properties-strategy-field"><StudioField controlId="wf-persistence-mode" label="Persistence mode">
+
         <select
           id="wf-persistence-mode"
           aria-label="Persistence mode"
@@ -62,7 +63,7 @@ export function PersistenceModeSection({ strategyOptions, context, onChange }: {
           {unrecognized ? unrecognizedDescription : recognized ? descriptions[recognized] : hostDefault && isPersistenceMode(hostDefault) ? descriptions[hostDefault] : hostDefaultDescription}
           {" "}A change applies to runs of the next published version.
         </p>
-      </div>
+      </StudioField></div>
     </section>
   );
 }

@@ -37,13 +37,30 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: return `shell` from `StudioModuleInstance`, or call `api.shell.add(contribution)` during registration. `registerStudioModuleInstances` aggregates instance contributions into each fresh registry.
 - Known implementations: Backends switcher, connection notice and recovery page (intra-domain, optional). Backend admission applies to normal contributions; recovery uses only original-host services and is available before a selected connection exists.
 
+### Expression scope preservation (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `StudioExpressionEditorContribution.variableAdditionPreservation` on `api.expressionEditors`.
+- Signature: `{ language, revision, allows(expression: Readonly<Record<string, unknown>>): boolean }`.
+- The language owner proves whether introducing an unrelated variable preserves an authored expression. The shared native-block planner receives the verdict through the composing host; Workflows does not parse another module's source language. Missing, duplicate or faulting language support refuses the rewrite. Replacing support or its revision invalidates a preview.
+- Known implementation: JavaScript expression editor (`extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-pure-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
+
+### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `workflow.designer.canvas-editors` slot (`api.workflowDesigner.canvasEditors`), owned by the Workflows module.
+- Signature: `StudioWorkflowDesignerCanvasContribution { id, title, order?, protocol: { id, version }, supportedResourceKinds, supportedStructures: [{ kind, schemaVersions }], requiresBackend?, load() }`; the deferred loader returns a component receiving the agreed module-owned `context`.
+- Register: guard `api.workflowDesigner.canvasEditors` before calling `.add(contribution)`; older hosts omit this registry and retain their existing editor. Discovery uses ordinary SDK registry ordering and backend/host policy without invoking the loader.
+- Compatibility: Workflows' `matchingCanvasEditors` filters a governed registry list by exact protocol ID/version, resource kind, structure kind and authored schema version. The SDK defines no implicit document protocol or compatibility downgrade.
+- Preference bridge: `StudioCanvasEditorPreferenceStore { load(): Promise<string | null>, save(editorId): Promise<void> }`. Workflows' `createCanvasEditorPreferences` uses the governed `workflow-authoring` namespace and scopes device recovery to user, tenant, Studio host and backend; preferences are separate from authored documents.
+- Known implementations: **pending** optional canvas implementation/package slices S10–S11 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). No canvas is registered by this prerequisite.
+- Consumers: compatibility/preference helpers are present; actual Workflow and Activity Graph editor consumers are **pending** S13–S14. This seam does not activate either canvas or establish editor/runtime acceptance.
+
 ### Workflow run related links (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
 - Signature: `StudioWorkflowRunRelatedLinkContribution { id, order?, activityTypes, anyActivityType?, viewKind, viewVersion, requiresBackend?, getLinks(context) }` returning `StudioWorkflowRunRelatedLink { id, label, path }`. `anyActivityType` matches every activity type, for user-defined activity families whose type keys are unknown in advance, so the view kind alone decides.
 - Register: call `api.workflowRunRelatedLinks?.add(contribution)` during registration; hosts without the slot show no links.
 - Consumer: `WorkflowRunRelatedLinks` in native run details and attached Test Run inspection. It reads the authorized activity state view matching `viewKind`/`viewVersion`, and keeps only same-origin Studio paths on the selected backend. The target route reauthorizes its own reads.
-- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent`, cross-domain, `anyActivityType` over view `elsa.agent.invocation/1`).
+- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent`, cross-domain, `anyActivityType` over view `elsa.agent.invocation/1`).
 - An any-type contribution shows nothing for an activity until a matching view yields a link. Its links appear under "Related" when no listed contribution matches that activity type, and alongside a listed contribution's links under "Related runs" when one does.
 
 ### Frontend route workspace options (SDK — Elsa.Studio.Hosting)
@@ -52,6 +69,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Signature: `StudioRouteContribution.workspace?: { resourceKey?(location: URL): string | null | undefined }`, with `useStudioWorkspaceTitle(title, detail?)`, `useStudioRouteLocation()`, `useStudioWorkspaceWhenActive()` and `openStudioWorkspaceTab(path, { activate? })` for screens.
 - Register: set `workspace` on `api.routes.add(...)` or a feature-area route. Navigation guards read `StudioNavigationRequest.intent` (`navigate`, `close`, `probe`).
 - Known implementations: Workflows definitions, templates, Activity Definitions and upgrade plans (intra-domain). The workspace tab host itself is not replaceable. See spec [1188](../../../../specs/1188-studio-workspace-tabs/spec.md).
+
+### Activity implementation editor admission (SDK — Elsa.Studio.Hosting)
+
+- Kind: optional synchronous admission on `StudioActivityDefinitionImplementationEditorProps`.
+- Signature: existing `onChange(value): void` remains a notification, including async and concise callbacks. Optional `tryChange(value, expectedValue): boolean` returns literal `true` only after the parent admits the value against the exact baseline. A refusal leaves canonical state unchanged.
+- Register: the owning host supplies the optional callback through the existing activity implementation editor props. Controlled editors update their history only after `true` and do not also call `onChange`; a Promise or other return value is not a receipt.
+- Known implementation/consumer: host activation is **pending** S14 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). This prerequisite adds history/checkpoint support without activating the optional editor. Legacy hosts continue using `onChange` unchanged. Contract details: [SDK documentation](../Elsa.Studio.Hosting/Client/src/sdk/README.md#activity-implementation-admission).
 
 ## Events
 

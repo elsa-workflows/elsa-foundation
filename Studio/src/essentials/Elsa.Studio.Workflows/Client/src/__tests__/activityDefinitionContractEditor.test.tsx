@@ -39,7 +39,7 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(driver.value).toBe(stored);
     expect(driver.disabled).toBe(disabled);
     expect([...driver.options].map(option => option.value)).toEqual([...new Set([stored, ...active])]);
-    expect(driver.parentElement?.textContent).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
+    expect(driver.closest(".studio-field")?.textContent).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
     if (!active.includes(stored)) expect(driver.selectedOptions[0].disabled).toBe(true);
   });
 
@@ -284,7 +284,7 @@ function controlByLabel<T extends HTMLInputElement | HTMLTextAreaElement | HTMLS
   const label = [...container.querySelectorAll("label")].find(candidate =>
     [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
   );
-  const control = label?.querySelector("input, textarea, select");
+  const control = label?.control;
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }
