@@ -130,7 +130,7 @@ import {
 import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
 import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
-import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnElements, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { notifySuccess, useNotificationGuard } from "./notifications";
 import { exportBpmnDocument, withDiagramFromLayout } from "../api/bpmnInterchange";
@@ -273,7 +273,10 @@ export function WorkflowEditor({
     if (scope?.slot.cardinality === "single") {
       path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
     }
-    const visible = resolveScope(root, path, historyCatalog.current)?.slot.activities.map(node => node.nodeId) ?? [];
+    const restoredScope = resolveScope(root, path, historyCatalog.current);
+    const visible = restoredScope?.slot.mode === "bpmn"
+      ? readBpmnElements(restoredScope.owner).map(element => element.elementId)
+      : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
     const selected = view?.selectedNodeIds.filter(id => visible.includes(id)) ?? [];
     const primary = view?.primaryNodeId && selected.includes(view.primaryNodeId) ? view.primaryNodeId : selected.at(-1) ?? null;
     pendingHistoryView.current = view ? { frames: path, selectedNodeIds: selected, primaryNodeId: primary } : null;

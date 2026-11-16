@@ -54,3 +54,24 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await page.screenshot({ path: info.outputPath("canvas-returned.png"), fullPage: true });
   });
 }
+
+for (const appearance of ["light", "dark"]) {
+  test(`workflow BPMN history preserves element selection in ${appearance}`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/?mode=activity-duplicate-editor&host=workflow&composition=bpmn&palette-context&bpmn-decision=legacy&appearance=${appearance}`);
+    const element = page.locator('.react-flow__node[data-id="decision-element"]');
+    await element.click();
+    const routing = page.getByRole("region", { name: "BPMN routing", exact: true });
+    await routing.getByLabel("Gateway type", { exact: true }).selectOption("exclusiveGateway");
+    await expect(element.locator(".wf-bpmn-gateway-marker")).toHaveText("×");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(element.locator(".wf-bpmn-task")).toBeVisible();
+    await expect(element).toHaveAttribute("aria-pressed", "true");
+    await expect(routing.getByLabel("Gateway type", { exact: true })).toHaveValue("task");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect(element.locator(".wf-bpmn-gateway-marker")).toHaveText("×");
+    await expect(element).toHaveAttribute("aria-pressed", "true");
+    await expect(routing.getByLabel("Gateway type", { exact: true })).toHaveValue("exclusiveGateway");
+    await page.screenshot({ path: info.outputPath("bpmn-restored-selection.png"), fullPage: true });
+  });
+}

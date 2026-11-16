@@ -147,7 +147,7 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
         const id = current!.activityPresentation.find(item => item.displayName === name)!.nodeId;
         const selected = (body(current!).structure!.payload.elements as { elementId: string; childNodeId?: string }[]).find(item => item.childNodeId === id)!.elementId;
         await undoAction.click(); await expect(element(selected)).toHaveCount(0); await expect.poll(async () => (await saved()).activityPresentation.some(item => item.nodeId === id)).toBe(false);
-        await redoAction.click(); await expect(element(selected)).toBeVisible(); await element(selected).click();
+        await redoAction.click(); await expect(element(selected)).toBeVisible(); await expect(element(selected)).toHaveAttribute("aria-pressed", "true");
         await page.getByRole("button", { name: `Open ${name} (0 steps)`, exact: true }).click(); await expect(page.locator(".react-flow__node")).toHaveCount(2); await capture(page, info, `${host}-bpmn-empty-nested`);
         await details(); const renamed = `${name} renamed`; const label = page.getByRole("textbox", { name: "Display name", exact: true }); await label.fill(renamed); await label.press("Tab");
         await expect.poll(async () => (await saved()).activityPresentation.find(item => item.nodeId === id)?.displayName).toBe(renamed);
