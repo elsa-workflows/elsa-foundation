@@ -16,13 +16,14 @@ using Mapping = Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.Ef
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>Private relational staging controls; the production writer/marker/provider is not enabled.</summary>
-public sealed class EfRuntimeHistoryCheckpointTests
+public sealed partial class EfRuntimeHistoryCheckpointTests
 {
     private const string Scope = "tenant";
     private const string Run = "run";
     private static readonly DateTimeOffset Now = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
     private static readonly RuntimeHistoryCapturePolicy Policy = new("policy", 1, true,
-        ["ActivityStarted", "ActivityCompleted", "ActivityResumeClaimed", "BookmarkCreated", "BookmarkConsumed", "BookmarkRemoved"]);
+        ["ActivityStarted", "ActivityCompleted", "ActivityResumeClaimed", "BookmarkCreated", "BookmarkConsumed", "BookmarkRemoved",
+            "DeliveryReceived", "DeliveryDispatched", "DeliveryUnmatched"]);
     private static readonly EfSchemaChain Chain = EfSchemaChain.For(new EfSchemaFamilyDescriptor("RuntimeHistory", "Workflows.Runtime", "1.0.0", typeof(EfRuntimeHistoryCheckpointTests).Assembly)
     {
         ContentColumns = new[] { typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity),
@@ -337,9 +338,9 @@ public sealed class EfRuntimeHistoryCheckpointTests
     private static RuntimeCheckpointCommit Commit(string id, IReadOnlyList<RuntimeHistoryBatch>? batches, RuntimeCheckpointStateChangeSet? changes = null) =>
         new(id, new(id, "control", Run, Now, [], new Dictionary<string, string>()), changes ?? new(null, null, [], [], [], [], []), [], new Dictionary<string, string>()) { HistoryBatches = batches };
     private static ActivityExecutionBookmarkSummary Bookmark() => new(new("bookmark", Run, "activity", "resume"), "signal", "hash", Now, Now.AddHours(1));
-    private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy) => new(Run,
-        new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,
-        null, Now, Now, Now, null, null, null, Scope, new Dictionary<string, string>()) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = policy is not null };
+    private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy, WorkflowExecutionStatus status = WorkflowExecutionStatus.Running) => new(Run,
+        new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"), status,
+        null, Now, Now, Now, status.IsTerminal() ? Now : null, null, null, Scope, new Dictionary<string, string>()) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = policy is not null };
     private static Task<IReadOnlyList<RuntimeHistoryEvent>> Stage(RuntimeDbContext context, RuntimeCheckpointCommit commit, Accessor? access = null) =>
         EfRuntimeHistoryCheckpoint.StageAsync(context, access ?? new(), commit, Scope, Now.AddDays(1), Chain, CancellationToken.None).AsTask();
     private static async Task<IReadOnlyList<RuntimeHistoryEvent>> PersistAsync(Database database, RuntimeCheckpointCommit commit)
@@ -383,10 +384,11 @@ public sealed class EfRuntimeHistoryCheckpointTests
     }
     private sealed class Database(SqliteConnection keeper) : IAsyncDisposable
     {
-        internal static async Task<Database> CreateAsync(RuntimeHistoryCapturePolicy? policy = null, bool explicitLegacy = false, bool legacyMarker = false)
+        internal static async Task<Database> CreateAsync(RuntimeHistoryCapturePolicy? policy = null, bool explicitLegacy = false, bool legacyMarker = false,
+            WorkflowExecutionStatus status = WorkflowExecutionStatus.Running)
         {
             var keeper = new SqliteConnection("Data Source=:memory:"); await keeper.OpenAsync(); var database = new Database(keeper);
-            await using var context = database.Open(); await context.Database.EnsureCreatedAsync(); var state = Workflow(explicitLegacy ? null : policy ?? Policy);
+            await using var context = database.Open(); await context.Database.EnsureCreatedAsync(); var state = Workflow(explicitLegacy ? null : policy ?? Policy, status);
             if (legacyMarker) state = state with { HistoryCaptureEnabledAtAdmission = null };
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, Scope, EfWorkflowExecutionStateStore.CreateId(Scope, Run), 1));
             await context.SaveChangesAsync(); return database;
