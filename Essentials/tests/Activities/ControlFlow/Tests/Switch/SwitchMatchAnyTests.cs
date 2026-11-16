@@ -91,6 +91,20 @@ public sealed class SwitchMatchAnyTests
     }
 
     [Fact]
+    public void Remapping_the_executable_structure_keeps_MatchAny()
+    {
+        using var provider = StructureProvider();
+        var handler = provider.GetServices<Elsa.Workflows.Design.Core.Contracts.IActivityStructureHandler>()
+            .Single(item => item.Kind == SwitchActivity.StructureKind && item.SchemaVersion == SwitchActivity.StructureSchemaVersion);
+        var compiled = handler.CompileExecutableStructure(AuthoredSwitch(SwitchModes.MatchAny, new SwitchAuthoredCase("Approved") { CaseId = "a" }));
+
+        // A reusable activity body is remapped when it is placed; the mode must survive it.
+        var remapped = handler.RemapExecutableStructure(compiled, new Dictionary<string, string> { ["unused"] = "placed-unused" });
+
+        Assert.True(remapped.Payload.Deserialize<SwitchExecutableStructure>()!.MatchesAny);
+    }
+
+    [Fact]
     public void An_unknown_mode_is_refused_at_compile()
     {
         using var provider = StructureProvider();

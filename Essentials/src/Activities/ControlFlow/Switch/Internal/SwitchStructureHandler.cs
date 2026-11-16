@@ -155,7 +155,8 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
                 .Select(@case => new SwitchExecutableCase(@case.Match, Remap(@case.Activity, authoredToExecutableNodeIds))
                 { ConditionInputKey = @case.ConditionInputKey })
                 .ToArray(),
-            Remap(executable.Default, authoredToExecutableNodeIds));
+            Remap(executable.Default, authoredToExecutableNodeIds),
+            executable.Mode);
         return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
     }
 

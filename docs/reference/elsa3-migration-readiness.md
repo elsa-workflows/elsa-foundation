@@ -21,7 +21,7 @@ differently.
 |---|---|---|
 | No start trigger in the body | `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`, `ELS3-REUSABLE-UNSUPPORTED-TRIGGER` | Elsa 4 behaviour |
 | No SetVariable, SetOutput, Correlate, SetName or Finish, and no captured HTTP Endpoint headers or query string | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | Gap, [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) |
-| Outcomes: each Complete names one literal outcome, not `done` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
+| Outcomes: each Complete names one or several literal outcomes, not `done` (several become the Elsa 4 Complete's `outcomes` list, spec 1208) | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
 What this means today: a reusable workflow imports as a reusable activity when its body sets no values and signals its
@@ -77,7 +77,8 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    - Known Elsa 4 limits that apply to every converted workflow, reusable or not: a RunJavaScript result bound straight
      to a typed input (for example a Flow Decision condition) has no automatic conversion and is refused at publish, and
      a converted RunJavaScript without arguments faults when it runs (both tracked as spec 265 follow-ups).
-4. **Outcomes.** Each Complete names exactly one literal outcome; not a list, not an expression, and not `done`, which
+4. **Outcomes.** Each Complete names one or several literal outcomes (several become the Elsa 4 Complete's `outcomes`
+   list, spec 1208); not an expression, and not `done`, which
    collides with Elsa 4's natural outcome (rename it, and change the callers that route on it). Declare the outcomes on the workflow: an undeclared one is declared anyway with
    `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`, and a declared one no Complete reaches is dropped with
    `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. End is allowed only in the workflow's root flowchart.
