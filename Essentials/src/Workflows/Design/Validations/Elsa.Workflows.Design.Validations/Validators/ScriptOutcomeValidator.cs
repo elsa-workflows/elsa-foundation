@@ -1,6 +1,5 @@
 using System.Text.Json;
-using Acornima;
-using Acornima.Ast;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -23,21 +22,30 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </list>
 /// The outcome set follows the publish compiler's rule: static ports, plus literal configured items with the
 /// catch-all and the <c>Done</c> rule. A set decided by an expression is not checked here.
+/// <para>
+/// The script itself is read by the JavaScript feature's <see cref="IJavaScriptScriptOutcomeAnalyzer"/>, so this
+/// project holds no JavaScript parser. The analyzer is optional: without the JavaScript feature there are no script
+/// checks.
+/// </para>
 /// </summary>
 public sealed class ScriptOutcomeValidator(
     CatalogVersionResolver catalogResolver,
     IOptions<WorkflowDesignValidatorOptions> options,
     ActivityTreeWalker activityTreeWalker,
-    IActivityStructureService activityStructureService) : IDraftValidator
+    IActivityStructureService activityStructureService,
+    IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer = null) : IDraftValidator
 {
     public const string UnknownOutcomeType = "Scripts/UnknownOutcome";
     public const string ReturnedOutcomeNameType = "Scripts/ReturnedOutcomeName";
     public const string ReservedNameType = "Scripts/ReservedName";
-    private const string Complete = "complete";
+    private const string Complete = JavaScriptScriptBuiltIns.Complete;
     private const string Done = "Done";
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
+        if (scriptOutcomeAnalyzer is null)
+            return [];
+
         var nodes = activityTreeWalker.Walk(draft.State.RootActivity, options.Value.MaxRecursionDepth).ToArray();
         var connectedPorts = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var owner in nodes)
@@ -64,19 +72,11 @@ public sealed class ScriptOutcomeValidator(
                 LiteralText(node, scriptInput) is not { Length: > 0 } script)
                 continue;
 
-            Script parsed;
-            try
-            {
-                parsed = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(script);
-            }
-            catch (ParseErrorException)
-            {
-                continue; // The expression tooling reports syntax errors; nothing to check here.
-            }
+            // A script that does not parse is left to the expression tooling, which reports syntax errors.
+            if (scriptOutcomeAnalyzer.Analyze(script) is not { } analysis)
+                continue;
 
-            var analysis = new ScriptAnalysis();
-            analysis.Visit(parsed, insideFunction: false);
-            if (analysis.DeclaresComplete)
+            if (analysis.ReservedNameDeclarations.Count > 0)
                 errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", ReservedNameType,
                     $"The script of activity '{node.NodeId}' declares '{Complete}', a reserved built-in name: scripts select outcomes by returning {Complete}(result, outcomes). Rename it."));
 
@@ -186,50 +186,5 @@ public sealed class ScriptOutcomeValidator(
                 .Where(item => !string.IsNullOrWhiteSpace(item))
                 .Select(item => item!)
                 .ToArray();
-    }
-
-    private sealed class ScriptAnalysis
-    {
-        public List<string> LiteralOutcomes { get; } = [];
-        public List<string> ReturnedStrings { get; } = [];
-        public bool DeclaresComplete { get; private set; }
-
-        public void Visit(Node node, bool insideFunction)
-        {
-            switch (node)
-            {
-                case CallExpression { Callee: Identifier { Name: Complete } } call when call.Arguments.Count >= 2:
-                    CollectLiteralOutcomes(call.Arguments[1]);
-                    break;
-                case VariableDeclarator { Id: Identifier { Name: Complete } }:
-                case FunctionDeclaration { Id.Name: Complete }:
-                case ClassDeclaration { Id.Name: Complete }:
-                    DeclaresComplete = true;
-                    break;
-                case ReturnStatement { Argument: Literal { Value: string returned } } when !insideFunction:
-                    ReturnedStrings.Add(returned);
-                    break;
-            }
-
-            if (node is IFunction function && function.Params.Any(parameter => parameter is Identifier { Name: Complete }))
-                DeclaresComplete = true;
-
-            var nested = insideFunction || node is IFunction;
-            foreach (var child in node.ChildNodes)
-                Visit(child, nested);
-        }
-
-        private void CollectLiteralOutcomes(Node outcomes)
-        {
-            switch (outcomes)
-            {
-                case Literal { Value: string name }:
-                    LiteralOutcomes.Add(name);
-                    break;
-                case ArrayExpression array:
-                    LiteralOutcomes.AddRange(array.Elements.OfType<Literal>().Select(element => element.Value).OfType<string>());
-                    break;
-            }
-        }
     }
 }

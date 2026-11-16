@@ -25,3 +25,10 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.Sele
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.Value.get -> System.Text.Json.JsonElement?
 const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.FaultCode = "VF-ACT-006" -> string!
 const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptBuiltIns.Complete = "complete" -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer.Analyze(string! script) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.JavaScriptScriptOutcomeAnalysis(System.Collections.Generic.IReadOnlyList<string!>! literalOutcomes, System.Collections.Generic.IReadOnlyList<string!>! returnedStrings, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingRange>! reservedNameDeclarations) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.LiteralOutcomes.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReservedNameDeclarations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingRange>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReturnedStrings.get -> System.Collections.Generic.IReadOnlyList<string!>!

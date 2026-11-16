@@ -94,6 +94,16 @@ public sealed class Elsa3ExpressionRewriter
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
 
+        // Elsa 4 reserves 'complete' in a script activity, setter or not: a script that declares it would import and
+        // then fail draft validation (Scripts/ReservedName), so the import refuses it with the rename up front.
+        if (mode == Elsa3JavaScriptMode.Script && analyzer.DeclaresComplete)
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                "JavaScript declares its own 'complete', which Elsa 4 reserves in a script activity for the returned completion form 'complete(result, outcomes)' (and which 'setOutcome' converts to).",
+                "Rename the script's 'complete' in the Elsa 3 workflow before import."));
+        }
+
         var outcomes = analyzer.CallsOutcomeSetter ? PlanScriptOutcomes(analyzer, scriptOutcomes!) : null;
         if (outcomes is { Issue: { } outcomeIssue })
             return Elsa3ExpressionRewriteResult.Failure(outcomeIssue);
@@ -356,14 +366,6 @@ public sealed class Elsa3ExpressionRewriter
     /// </summary>
     private static ScriptOutcomePlan PlanScriptOutcomes(JavaScriptAnalyzer analyzer, Elsa3ScriptOutcomeContext context)
     {
-        if (analyzer.DeclaresComplete)
-        {
-            return new(null, null, null, new Elsa3ExpressionRewriteIssue(
-                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                "JavaScript declares its own 'complete', which Elsa 4 reserves for the returned completion form that 'setOutcome' converts to.",
-                "Rename the script's 'complete' in the Elsa 3 workflow before import."));
-        }
-
         var literals = analyzer.OutcomeLiterals.Distinct(StringComparer.Ordinal).ToArray();
         var known = (context.PossibleOutcomes ?? []).Concat(literals).Distinct(StringComparer.Ordinal).ToArray();
         string? catchAll = null;
@@ -398,11 +400,14 @@ public sealed class Elsa3ExpressionRewriter
         return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll), null);
     }
 
-    /// <summary>Wraps <c>source[start..end]</c> as the result of <c>complete(result, selection)</c>.</summary>
+    /// <summary>
+    /// Wraps <c>source[start..end]</c> as the result of <c>complete((result), selection)</c>. Parenthesized, so a comma
+    /// expression (<c>return a, b;</c>) stays one argument whose value is its last operand, as Elsa 3 returned it.
+    /// </summary>
     private static void AddCompletion(List<SourceEdit> edits, int start, int end, string selection)
     {
-        edits.Add(new SourceEdit(start, start, "complete("));
-        edits.Add(new SourceEdit(end, end, $", {selection})"));
+        edits.Add(new SourceEdit(start, start, "complete(("));
+        edits.Add(new SourceEdit(end, end, $"), {selection})"));
     }
 
     /// <summary>A script that ends without returning still completes with its pending selection.</summary>

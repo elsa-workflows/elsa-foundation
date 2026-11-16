@@ -112,6 +112,12 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
@@ -182,11 +188,11 @@
       "elsa.workflows.design.validations": {
         "type": "Project",
         "dependencies": {
-          "Acornima": "[1.6.1, )",
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
         }
       },
@@ -273,12 +279,6 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
-      },
-      "Acornima": {
-        "type": "CentralTransitive",
-        "requested": "[1.6.1, )",
-        "resolved": "1.6.1",
-        "contentHash": "EB2vFgpNar8DrC+KLJv8MG6YIU2xqNyrq8GpL69vectPCXoaq6XyZGb/VHbfPVYul7dscO1Mw30eblrxs05RHg=="
       },
       "Cronos": {
         "type": "CentralTransitive",

@@ -937,6 +937,23 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("Unmatched status code", dynamicOutcomes.GetProperty("unmatched").GetString());
     }
 
+    // Spec 1208: RunJavaScript's outcome facet names its script input, so draft validation can read the script, and
+    // declares that a completion need not select one of the configured outcomes (it keeps Done) with no catch-all.
+    [Fact]
+    public void RunJavaScript_OutcomeFacet_NamesTheScriptInputAndKeepsDoneWithoutACatchAll()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+
+        Assert.Equal("script", facet.Payload.GetProperty("scriptInput").GetString());
+        var dynamicOutcomes = facet.Payload.GetProperty("dynamicOutcomes");
+        Assert.Equal(Elsa.Activities.Scripting.Activities.RunJavaScript.PossibleOutcomesInputKey, dynamicOutcomes.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.False, dynamicOutcomes.GetProperty("selectsOnEveryCompletion").ValueKind);
+        Assert.False(dynamicOutcomes.TryGetProperty("unmatched", out _), "RunJavaScript declares no catch-all outcome.");
+    }
+
     [Fact]
     public void SendHttpRequest_ResponseBody_IsDiscoveredAsFormattedContent()
     {

@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -29,6 +31,7 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
 
     private readonly ServiceProvider _provider;
     private readonly IActivityStructureService _structures;
+    private readonly IJavaScriptScriptOutcomeAnalyzer _analyzer;
     private readonly StubActivityCatalog _catalog = new();
 
     public ScriptOutcomeValidatorTests()
@@ -36,8 +39,11 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
+        // The script analysis is the JavaScript feature's; the validator consumes it through its contract.
+        new JavaScriptFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         _structures = _provider.CreateScope().ServiceProvider.GetRequiredService<IActivityStructureService>();
+        _analyzer = _provider.GetRequiredService<IJavaScriptScriptOutcomeAnalyzer>();
         // Mirrors the elsa.outcomes facet the CLR scanner projects for RunJavaScript.
         _catalog.Add(ScriptVersionId, designFacets: [new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new
         {
@@ -167,6 +173,42 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         Assert.Equal(ScriptOutcomeValidator.ReservedNameType, error.Type);
     }
 
+    // Review round 1: every binding form declares the name, not only a plain variable, function, class or parameter.
+    [Theory]
+    [InlineData("const { complete } = { complete: 1 }; return 1;")]
+    [InlineData("const { a: complete } = { a: 1 }; return 1;")]
+    [InlineData("const [complete] = [1]; return 1;")]
+    [InlineData("try { throw 1; } catch (complete) { } return 1;")]
+    [InlineData("const f = function complete() { }; return 1;")]
+    [InlineData("const C = class complete { }; return 1;")]
+    [InlineData("function f(complete = 1) { } return 1;")]
+    [InlineData("function f(a, ...complete) { } return 1;")]
+    [InlineData("const f = ({ complete }) => complete; return 1;")]
+    public async Task Every_binding_form_that_declares_complete_is_an_error(string script)
+    {
+        var error = Assert.Single(await Validate(Script("js", script)));
+
+        Assert.Equal(ScriptOutcomeValidator.ReservedNameType, error.Type);
+        Assert.Equal("js/inputs/script", error.Path);
+    }
+
+    [Theory]
+    [InlineData("const { complete: done } = { complete: 1 }; return done;")]
+    [InlineData("const o = { complete: 1 }; return o.complete;")]
+    public async Task A_property_named_complete_declares_nothing(string script)
+    {
+        Assert.Empty(await Validate(Script("js", script)));
+    }
+
+    // The analyzer is the JavaScript feature's and optional: a host without it gets no script checks.
+    [Fact]
+    public async Task Without_a_script_outcome_analyzer_scripts_are_not_checked()
+    {
+        var validator = new ScriptOutcomeValidator(CatalogResolver(_catalog), Options(), new ActivityTreeWalker(_structures), _structures);
+
+        Assert.Empty(await validator.Validate(new Draft(StateWithRoot(Script("js", "function complete() { } return complete(1, 'Aproved');", "Approved"))), CancellationToken.None));
+    }
+
     [Fact]
     public async Task A_script_with_a_syntax_error_is_left_to_the_expression_tooling()
     {
@@ -174,7 +216,7 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
     }
 
     private ScriptOutcomeValidator Validator() =>
-        new(CatalogResolver(_catalog), Options(), new ActivityTreeWalker(_structures), _structures);
+        new(CatalogResolver(_catalog), Options(), new ActivityTreeWalker(_structures), _structures, _analyzer);
 
     private async Task<IReadOnlyList<ValidationError>> Validate(ActivityNode root) =>
         [.. await Validator().Validate(new Draft(StateWithRoot(root)), CancellationToken.None)];

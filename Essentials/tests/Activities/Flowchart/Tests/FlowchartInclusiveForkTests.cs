@@ -102,6 +102,71 @@ public sealed class FlowchartInclusiveForkTests
             diagnostic.Message.Contains("fired after 2 active arrival(s)", StringComparison.Ordinal));
     }
 
+    // Review round 1: a node that carries a routing policy schedules through the policy applier, which refused a
+    // second ScheduleNode for one target. Two selected outcomes that lead to one node are two answers from one source,
+    // so the node runs once there too, as it does on the default path.
+    [Theory]
+    [InlineData(FlowchartPolicyKinds.InclusiveFork)]
+    [InlineData(FlowchartPolicyKinds.Decision)]
+    [InlineData(FlowchartPolicyKinds.DirectContinuation)]
+    [InlineData(FlowchartPolicyKinds.FirstWins)]
+    public async Task Two_selected_outcomes_connected_to_one_node_run_it_once_under_a_node_policy(string nodePolicy)
+    {
+        var run = await RunAsync(FlowchartPolicyKinds.DeadPathJoin, fixture => fixture.NewExecutable(
+            children: [Leaf("node-fork", typeof(SelectsAAndB)), fixture.NewProbeNode("node-target"), fixture.NewProbeNode("node-after")],
+            connections:
+            [
+                fixture.NewConnection("node-fork", "node-target", "A"),
+                fixture.NewConnection("node-fork", "node-target", "B"),
+                fixture.NewConnection("node-target", "node-after")
+            ],
+            startNodeId: "node-fork",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-fork"] = new(nodePolicy) }));
+
+        Assert.True(run.Status == WorkflowExecutionStatus.Completed, $"Status {run.Status}; order: {string.Join(", ", run.Order)}.");
+        Assert.Single(run.Order, node => node == "node-target");
+        Assert.Single(run.Order, node => node == "node-after");
+    }
+
+    // Review round 1: S has A->T and B->T and selects only A. T is scheduled; the untaken B->T must not then read as
+    // "every inbound of T dead" and carry deadness through T while T runs, or J (behind T's successor N and a parallel
+    // W) fires early on W plus a dead N and again when N's live arrival comes.
+    [Theory]
+    [InlineData(FlowchartPolicyKinds.DeadPathJoin)]
+    [InlineData(FlowchartPolicyKinds.ReachabilityJoin)]
+    public async Task An_untaken_connection_to_a_reached_node_carries_no_deadness_through_it(string joinPolicy)
+    {
+        var run = await RunAsync(joinPolicy, fixture => fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-start"),
+                Leaf("node-if", typeof(SelectsTrue)),
+                fixture.NewProbeNode("node-t"),
+                fixture.NewProbeNode("node-n"),
+                fixture.NewProbeNode("node-w"),
+                fixture.NewProbeNode("node-j")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-start", "node-if"),
+                fixture.NewConnection("node-start", "node-w"),
+                fixture.NewConnection("node-if", "node-t", "True"),
+                fixture.NewConnection("node-if", "node-t", "False"),
+                fixture.NewConnection("node-t", "node-n"),
+                fixture.NewConnection("node-n", "node-j"),
+                fixture.NewConnection("node-w", "node-j")
+            ],
+            startNodeId: "node-start"));
+
+        Assert.True(run.Status == WorkflowExecutionStatus.Completed, $"Status {run.Status}; order: {string.Join(", ", run.Order)}.");
+        Assert.Single(run.Order, node => node == "node-t");
+        Assert.Single(run.Order, node => node == "node-n");
+        Assert.Single(run.Order, node => node == "node-j");
+        var order = run.Order.ToList();
+        Assert.True(order.IndexOf("node-j") > order.IndexOf("node-n") && order.IndexOf("node-j") > order.IndexOf("node-w"),
+            $"The join ran before both of its branches: {string.Join(", ", run.Order)}.");
+    }
+
     [Theory]
     [InlineData(FlowchartPolicyKinds.DeadPathJoin)]
     [InlineData(FlowchartPolicyKinds.ReachabilityJoin)]
@@ -245,6 +310,16 @@ public sealed class FlowchartInclusiveForkTests
     {
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, new[] { "A", "B" }));
+    }
+
+    /// <summary>Declares True and False and selects True, like an If whose condition holds.</summary>
+    [ActivityOutcome("True")]
+    [ActivityOutcome("False")]
+    [SelectsOutcomeOnEveryCompletion]
+    public sealed class SelectsTrue : Activity<ActivityUnit>
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, OutcomeSelection.Named("True")));
     }
 
     /// <summary>Declares A and Done and completes with an explicitly empty selection.</summary>

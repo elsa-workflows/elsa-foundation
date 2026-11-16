@@ -84,7 +84,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 ### `IRuntimeStructuralActivity` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Engine-only structural execution protocol.
 - **Signature:** `ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)`.
-- **Usage:** implemented by composite activities that schedule and coordinate executable children. The runtime invokes this method instead of the ordinary `IActivity.ExecuteAsync` path, then applies exactly one immutable continuation decision: `Complete(outcome)`, `Defer`, `Faulted(fault)`, or `Cancel(reason)`. A terminal decision cannot also schedule children, and the initial `Defer` decision must schedule at least one child.
+- **Usage:** implemented by composite activities that schedule and coordinate executable children. The runtime invokes this method instead of the ordinary `IActivity.ExecuteAsync` path, then applies exactly one immutable continuation decision: `Complete()`, `Complete(string outcome)`, `Complete(OutcomeSelection selection)`, `Defer`, `Faulted(fault)`, or `Cancel(reason)`. A terminal decision cannot also schedule children, and the initial `Defer` decision must schedule at least one child.
+- **Outcome selection (spec 1208):** `Complete()` carries an unspecified selection (the node's `Done`); `Complete(string)` selects one outcome; `Complete(OutcomeSelection)` carries any selection, including several outcomes (`OutcomeSelection.Named(a, b, …)`, in order) or an explicitly empty one (`OutcomeSelection.Empty`: no outgoing path). Unspecified and empty stay distinct through completion, persistence and the parent's callback. A routing parent (Flowchart, Graph boundary) routes every selected outcome; a non-routing parent and a parentless root treat an empty selection like any other successful completion, so a root that completes with one completes the workflow (FR-024).
+- **Completion checkpoint:** a structural activity that prepares its own completion returns an `ActivityTransition.Complete(result, selection)`; the engine reads the selection from `IActivityCompletionTransition.Selection` (type-erased view) and validates it against the node's pinned outcome set.
 
 ### `IRuntimeActivityChildCompletionHandler` / `IRuntimeActivityChildFaultHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Engine-only structural re-evaluation protocols.
@@ -130,6 +132,12 @@ These consumers do not yet implement the combined callback.
 - Fault callback implementations: `Parallel` *(faults once its success threshold is unreachable)* and `Flowchart` *(faults when an inbound branch of an all-inbound join faults)*.
 
 ---
+
+## Outcome declarations for activity authors (spec 1208)
+
+- **Declaration:** an activity declares its outcomes with `[ActivityOutcome]` (static) or `[ActivityValueOutcomes]` (one per configured item) and completes with `ActivityTransition.Complete(result, OutcomeSelection)`. Any activity may select several of its declared outcomes; there is no multi-outcome declaration, and a join behind them runs once (the default join).
+- **The `Done` rule (`VF-AUTH-013`):** a node whose pinned outcome set has no `Done` must belong to an activity that selects an outcome on every successful completion, or an unspecified completion would fault at run time. Mark such an activity `[SelectsOutcomeOnEveryCompletion]`; an `[ActivityValueOutcomes]` activity carries the guarantee once items are configured unless it sets `SelectsOnEveryCompletion = false`; publication refuses the node otherwise. An activity that declares `Done` must not carry the guarantee: `Done` is never selected together with a branch.
+- **Script activities:** `[ActivityScriptOutcomes("script")]` declares that an input is a JavaScript body that selects by returning `complete(result, outcomes)`. The CLR scanner projects it as the `elsa.outcomes` facet's `scriptInput`, which draft validation (`ScriptOutcomeValidator`) reads to check literal names (`VF-AUTH-010`), returned outcome names (`VF-AUTH-012`, warning) and the reserved name `complete`.
 
 ## Background leaf execution
 

@@ -10,18 +10,23 @@ internal static class FlowchartPolicyConnectionSelector
         var outcomes = NormalizeOutcomes(context.OutcomeNames);
         return Outbound(context)
             .Where(connection => outcomes.Contains(connection.Source.Port))
+            .DistinctBy(connection => connection.Target.NodeId, StringComparer.Ordinal)
             .Select(ToScheduleCommand)
             .ToArray();
     }
 
     public static IReadOnlyCollection<FlowchartPolicyCommand> ScheduleAllOutbound(IFlowchartPolicyContext context) =>
-        Outbound(context).Select(ToScheduleCommand).ToArray();
+        Outbound(context).DistinctBy(connection => connection.Target.NodeId, StringComparer.Ordinal).Select(ToScheduleCommand).ToArray();
 
     private static IEnumerable<FlowchartConnection> Outbound(IFlowchartPolicyContext context) =>
         string.IsNullOrWhiteSpace(context.CurrentNodeId)
             ? []
             : context.Connections.Where(connection => StringComparer.Ordinal.Equals(connection.Source.NodeId, context.CurrentNodeId));
 
+    // One command per distinct target: two taken connections that lead to the same node are two answers from one
+    // source, and a join answers per source node, so the node runs once (FR-022), exactly as on the default routing
+    // path. The other connections to that target are not untaken either: the join coordinator does not emit a dead
+    // arrival over a connection whose target this completion already reached.
     private static FlowchartPolicyCommand ToScheduleCommand(FlowchartConnection connection) =>
         new(
             FlowchartPolicyCommandKind.ScheduleNode,

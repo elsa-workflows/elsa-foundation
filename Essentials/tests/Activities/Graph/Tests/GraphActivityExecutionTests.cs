@@ -127,12 +127,13 @@ public sealed class GraphActivityExecutionTests : IDisposable
             Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
+    // Spec 1208: the entry may select several outcomes. Every selected name with a mapping selects its boundary
+    // outcome, in selection order; a name without one is not routed.
     [Theory]
-    [InlineData()]
-    [InlineData("Unknown")]
-    [InlineData("Approved", "Unknown")]
-    [InlineData("Approved", "Rejected")]
-    public async Task ChildCompletion_RejectsAnOutcomeWithoutExactlyOneMapping(params string[] outcomes)
+    [InlineData(new[] { "Approved", "Unknown" }, new[] { "Accepted" })]
+    [InlineData(new[] { "Approved", "Rejected" }, new[] { "Accepted", "Declined" })]
+    [InlineData(new[] { "Rejected", "Approved" }, new[] { "Declined", "Accepted" })]
+    public async Task ChildCompletion_MapsEverySelectedOutcomeThatHasAMapping(string[] outcomes, string[] expected)
     {
         var descriptor = Descriptor(outcomeMappings:
         [
@@ -142,10 +143,36 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var graph = NewGraph(descriptor);
         var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => graph.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes)).AsTask());
+        var completion = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Contains("exactly one mapped outcome", exception.Message, StringComparison.Ordinal);
+        Assert.True(completion.IsComplete);
+        Assert.Equal(expected, completion.OutcomeNames);
+        Assert.Equal(expected, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
+    }
+
+    // Spec 1208: a selection none of whose names is mapped, including an explicitly empty one, faults the boundary
+    // with a clear code rather than throwing.
+    [Theory]
+    [InlineData()]
+    [InlineData("Unknown")]
+    public async Task ChildCompletion_FaultsWhenNoSelectedOutcomeHasAMapping(params string[] outcomes)
+    {
+        var descriptor = Descriptor(outcomeMappings:
+        [
+            new("Approved", "Accepted"),
+            new("Rejected", "Declined")
+        ]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes));
+
+        Assert.NotNull(continuation.Fault);
+        Assert.Equal(GraphActivity.EntryOutcomeUnmappedFaultCode, continuation.Fault!.Code);
+        Assert.Contains("none of which has an outcome mapping", continuation.Fault.Message, StringComparison.Ordinal);
     }
 
     [Fact]

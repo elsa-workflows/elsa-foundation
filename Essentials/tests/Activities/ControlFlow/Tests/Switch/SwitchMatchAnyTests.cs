@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Activities.ControlFlow.Tests.NamedSelectionConformance;
 using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
 namespace Elsa.Activities.Switch.Tests;
@@ -114,6 +115,21 @@ public sealed class SwitchMatchAnyTests
         var error = Assert.Throws<ArgumentException>(() => handler.CompileExecutableStructure(AuthoredSwitch("MatchSome", new SwitchAuthoredCase("Approved") { CaseId = "a" })));
 
         Assert.Contains("'MatchSome'", error.Message, StringComparison.Ordinal);
+    }
+
+    // Spec 1208 FR-002b: in either mode every completion selects by name, the fallback included.
+    [Theory]
+    [InlineData(SwitchModes.MatchAny, true, false, true, new[] { "Approved", "Notify" })]
+    [InlineData(SwitchModes.MatchAny, false, false, false, new[] { ActivityOutcomes.Default })]
+    [InlineData(SwitchModes.MatchFirst, true, true, true, new[] { "Approved" })]
+    [InlineData(SwitchModes.MatchFirst, false, false, false, new[] { ActivityOutcomes.Default })]
+    public async Task Every_completion_selects_a_named_outcome(string mode, bool approved, bool audit, bool notify, string[] expected)
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(Executable(mode, approved, audit, notify));
+
+        AssertNamedSelection(run, "switch", expected);
     }
 
     private static ServiceProvider StructureProvider()

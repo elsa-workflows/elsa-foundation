@@ -52,8 +52,15 @@ public sealed class GraphActivity(
     /// </summary>
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
 
+    /// <summary>
+    /// The fault code when the entry completes with a selection none of whose names has an outcome mapping — including
+    /// an explicitly empty selection.
+    /// </summary>
+    public const string EntryOutcomeUnmappedFaultCode = "activity.graph.entry-outcome-unmapped";
+
     private string? _selectedOutcomeName;
     private OutcomeSelection? _completeSelection;
+    private OutcomeSelection? _mappedSelection;
     private readonly IPortableExpressionEvaluator? _portableExpressionEvaluator = portableExpressionEvaluator;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry = wellKnownTypeRegistry;
     private static readonly JsonSerializerOptions ExpressionJsonOptions = new(JsonSerializerDefaults.Web);
@@ -65,6 +72,7 @@ public sealed class GraphActivity(
         ArgumentNullException.ThrowIfNull(runtimeContext);
         _selectedOutcomeName = null;
         _completeSelection = null;
+        _mappedSelection = null;
         ValidatePinnedDescriptor(runtimeContext);
         EnsureEntryIsDirectChild(runtimeContext.ExecutableNode, Descriptor.EntryNodeId);
 
@@ -123,18 +131,24 @@ public sealed class GraphActivity(
             return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
-        var matches = Descriptor.OutcomeMappings
-            .Where(mapping => context.OutcomeNames.Contains(mapping.SourceOutcomeName, StringComparer.Ordinal))
+        // The entry may select several of its outcomes or none (spec 1208): every selected name that has a mapping
+        // selects its boundary outcome, in selection order. A selection with no mapped name leaves the boundary
+        // nothing to select, which is a fault of this body rather than an invented outcome.
+        var boundaryOutcomeNames = context.OutcomeNames
+            .SelectMany(outcomeName => Descriptor.OutcomeMappings.Where(mapping => StringComparer.Ordinal.Equals(mapping.SourceOutcomeName, outcomeName)))
+            .Select(mapping => mapping.BoundaryOutcomeName)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (context.OutcomeNames.Count != 1 || matches.Length != 1)
+        if (boundaryOutcomeNames.Length == 0)
         {
-            throw new InvalidOperationException(
-                $"Graph entry '{Descriptor.EntryNodeId}' must complete with exactly one mapped outcome; " +
-                $"received [{string.Join(", ", context.OutcomeNames.Order(StringComparer.Ordinal))}].");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                EntryOutcomeUnmappedFaultCode,
+                $"Graph entry '{Descriptor.EntryNodeId}' completed with outcome(s) [{string.Join(", ", context.OutcomeNames)}], none of which has an outcome mapping, so the boundary has no outcome to select.")));
         }
 
-        _selectedOutcomeName = matches[0].BoundaryOutcomeName;
-        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_selectedOutcomeName));
+        _mappedSelection = OutcomeSelection.Named(boundaryOutcomeNames);
+        _selectedOutcomeName = boundaryOutcomeNames[0];
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_mappedSelection));
     }
 
     /// <summary>
@@ -289,7 +303,7 @@ public sealed class GraphActivity(
             ? _completeSelection
             : Descriptor.OutcomeMappings.Count == 0
             ? OutcomeSelection.Unspecified
-            : OutcomeSelection.Named(_selectedOutcomeName ?? throw new InvalidOperationException(
+            : _mappedSelection ?? OutcomeSelection.Named(_selectedOutcomeName ?? throw new InvalidOperationException(
                 "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome."));
         return new RuntimeActivityCompletionCheckpointPreparation(
             ToChanges(capturedOutputs),
