@@ -7,7 +7,7 @@ A running instance keeps its state across two kinds of change:
 - **A code upgrade.** A release changes how a model or an activity serializes its state. The instance stays on its definition; its stored state must be read by the new code.
 - **A definition migration.** An operator moves the instance to another version of its definition. Its state must be mapped onto the new version's nodes.
 
-Both happen inside a turn of the instance and commit through the ordinary fenced commit. Neither adds a new kind of record, a table or a second store to the commit, and neither reads partitions, positions or SQL: the whole design sits in layer 3 on the turn contract. No store or provider changes, so EF Core and MongoDB are equally unaffected.
+Both happen inside a turn of the instance and commit through the ordinary fenced commit. Neither adds a new kind of record, a table or a second store to the commit, and no store or provider changes, so EF Core and MongoDB are equally unaffected. The design sits in layer 3 on the turn contract, with one exception: the migration command must pass withholding, which today only layer 2's closed list of control kinds can grant ([The command](#the-command)). That change is kernel behaviour.
 
 Terms used here: a **frame** is the native model's record of one live activity (its node, parent frame, private state, scope and attempt); a **container** is a composite activity whose private state names its children (structured containers, Flowchart, StateMachine); a **wait** is a frame's registered trigger (event, HTTP route, timer, child or job).
 
@@ -16,10 +16,11 @@ Terms used here: a **frame** is the native model's record of one live activity (
 | Piece | Status | Evidence |
 |---|---|---|
 | `IExecutionModel.StateVersion` and `UpgradeState(string state, int fromVersion)`; `StateVersion` on the instance row. An older row is upgraded on load and written at the model's version by the next commit | Built, simulated (rolling deploys with rollbacks in every third seed) | [Contracts.cs](../../prototypes/kernel-model/src/Kernel.Workflows/Contracts.cs), `ReadState` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs), [FINDINGS 15](../../prototypes/kernel-model/FINDINGS.md#15-state-versions-run) |
-| A node behind the deploy never turns a row written by a newer model version: the instance is withheld like a suspended one until a newer owner takes the partition (invariant 18) | Built, mutation-checked (`StepNewerState`, `SkipUpgrade`) | `Withholds` in WorkflowInstance.cs, [FINDINGS F14](../../prototypes/kernel-model/FINDINGS.md#f14-a-node-behind-the-deploy-must-not-step-a-row-written-by-a-newer-model-invariant-18-run) |
+| A node behind the deploy never turns a row written by a newer model version: the instance is withheld like a suspended one until a newer owner takes the partition (invariant 18). Delete refuses such a row too | Built, mutation-checked (`TurnNewerState`, formerly `StepNewerState`; `SkipUpgrade`) | `Withholds` and the delete branch of `Control` in WorkflowInstance.cs, [FINDINGS F14](../../prototypes/kernel-model/FINDINGS.md#f14-a-node-behind-the-deploy-must-not-step-a-row-written-by-a-newer-model-invariant-18-run) |
 | The native model at state version 13, with reader witnesses that upgrade each older shape and refuse mixed or unknown ones | Built, witnessed | `UpgradeState` in [NativeModel.cs](../../prototypes/kernel-model/models/Native/NativeModel.cs); `ReaderWitness.cs`, `RecoveryReader.cs`, `NativeInternalReaders.cs` under `models/` |
-| A container's own state version: the StateMachine's `MachineState.Version` (1 to 7), restored on read and committed by the next checkpoint | Built, witnessed | `Restore` in [StateMachine.cs](../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs) |
+| The StateMachine's `MachineState.Version`: a shape marker set when the machine begins. Versions 1 and 2 are upgraded on restore up to 3; 4 to 7 mark feature variants (input inbox, internal execution, outcomes) and are kept as they are | Built, witnessed | `Begin` and `Restore` in [StateMachine.cs](../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs) |
 | `ITurn.Rebind(definition)`: the commit writes the new definition into the row; from the next turn on the instance belongs to it (invariant 19) | Built in the kernel and the simulation's counter model, mutation-checked (`RebindForgotten`) | `Rebind` in [Turn.cs](../../prototypes/kernel-model/src/Kernel.Workflows/Turn.cs), [FINDINGS 16](../../prototypes/kernel-model/FINDINGS.md#16-rebind-run) |
+| Control kinds (suspend, resume, terminate, delete) pass a withheld actor, go alone and are never suspects; the list is closed in layer 2 | Built | `Kinds.IsControl` in [Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs), [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs) |
 | Rebind in the native model, any frame or path mapping, a per-activity state version in the frame, a migration command | **Not built** | None. Everything below the "Proposed" headings is design on paper |
 
 The Flowchart's state carries no version of its own in the prototype: the extracted graph engine dropped main's private-state envelope ([Graph README](../../prototypes/kernel-model/models/Graph/README.md), "What was adapted"), so the native model's whole-state version covers it.
@@ -45,24 +46,26 @@ public sealed partial class Frame
 ```
 
 - **When.** The native model upgrades every frame whose `V` is below its activity type's version when it loads the instance, in the same pass as the model-level upgrade. The next commit writes the upgraded frames. Doing it at load gives one place where an upgrade can refuse, before any activity runs.
-- **Containers are activities.** A Flowchart's `FlowchartExecutionState` and a StateMachine's `MachineState` are the private state of the container's frame. Their engines version them through the same interface; the StateMachine's existing `MachineState.Version` moves into `V`.
-- **Refusal.** An upgrade that throws faults the instance with an "activity state upgrade refused" incident naming the frame and node, and parks it as any failing turn does. An operator can retry after a fixed release, migrate it, or terminate it.
-- **Newer than this node.** A frame whose `V` is above what this node's activity type knows is the F14 case at activity granularity. The native model reports it and the workflow actor withholds the instance exactly as it withholds a newer model version. This stays in layer 3: `Withholds` is the workflow actor's.
-- **Removed activity type.** A frame whose activity type no longer exists faults the instance in the same way.
+- **Containers are activities.** A Flowchart's `FlowchartExecutionState` and a StateMachine's `MachineState` are the private state of the container's frame, and their engines version them through the same interface. The StateMachine's `MachineState.Version` stays as the shape marker it is; `V` sits beside it and counts upgrades of the whole `MachineState`.
+- **Refusal.** An upgrade that throws is a bug in the upgrade code. It faults and parks the instance with an "activity state upgrade refused" incident naming the frame and node, as any failing turn does. The parked-work tooling retries it after a release that fixes the upgrade, or discards it.
+- **Newer than this node, or an unknown activity type.** A frame whose `V` is above what this node's activity type knows, or whose activity type this node does not have, is the F14 case at activity granularity, caused by a rolling deploy or a rollback. The instance is withheld until a node with the newer code owns it.
+- **The signal path.** `Withholds(row)` is a row predicate that the durable layer evaluates before it loads state, and `V` lives inside opaque state, so a row cannot say it. The native model detects the case when it reads state (`UpgradeState` and the frame upgrade throw a typed `NewerStateException`). The workflow actor then leaves the taken messages in the inbox unconsumed and remembers the row's id and revision in memory. Its `Withholds` returns true for that id and revision until the row changes or the owner resets. Every path that reads state applies the same check: a turn, the terminate path's metadata, delete's `ProtectsDeletion` and a migration. This stays in layer 3 and costs one load per owner activation to find out.
 
 ## Proposed: definition migration
 
 ### The command
 
-A migration is a control message to the instance, handled by the workflow actor in its own turn, like suspend and delete:
-
 ```csharp
-public sealed record Migrate(string From, string To, string Plan);  // definition versions; plan id
+public sealed record Migrate(string From, string To, string Plan);  // definition versions; the plan's id
 ```
 
-- **Order.** The workflow actor runs the instance's earlier messages first (under the source definition) and handles `Migrate` alone in its turn. Messages behind it run under the target. One sender's messages reach one target in order, so "suspend, migrate, resume" from an operator applies in that order.
-- **Guard.** `From` must equal the row's definition. A migration aimed at another version, or repeated after it was applied, is consumed and answered "not at source" with no state change. An outside retry within `keep_until` meets the duplicate message id as for any command.
-- **Who may migrate.** A running or suspended instance. A suspended instance stays suspended. An ended instance is refused.
+- **Delivery (kernel behaviour, layer 2).** A suspended instance is withheld, and only control kinds pass withholding, go alone and are never suspects (`Kinds.IsControl`, a closed list in layer 2). `Migrate` needs all three. The proposal widens the seam: `IActorType` names its own command kinds (`bool IsCommand(string kind)`), and the durable layer treats them as it treats the four built-in controls. Layer 2 then holds no workflow-specific kind. Adding `kernel.migrate` to the closed list would be smaller and would put a layer-3 concept into layer 2. Either way it is a change to delivery, so it needs the two-review tier when built.
+- **The turn.** The built control path returns an outcome without an `ITurn`, and the hook needs one. So the workflow actor's command handling for `Migrate` loads the state and runs the hook through its ordinary turn path (a `DurableTurn` over the command's input), in place of the model's `TurnAsync`. This part is layer 3.
+- **Order.** The instance's earlier messages run first, under the source definition. `Migrate` runs alone in its turn, and the messages behind it run under the target. One sender's messages reach one target in order, so "suspend, migrate, resume" from an operator applies in that order.
+- **Guards.**
+  - `From` must equal the row's definition. A migration aimed at another version, or one repeated after it was applied, is consumed and answered "not at source", with no state change.
+  - A row written at a newer model state version than this node's, or a state whose activity versions this node cannot read, is left in the inbox for an owner with the newer code, as in F14. Built delete consumes such a message unchanged; a migration is held instead, so it is not lost.
+- **Who may migrate.** A running or suspended instance. A suspended instance stays suspended. An ended instance, including a parked one (Park faults it and removes its waits), is refused.
 - **The hook.** The workflow actor calls the model's migration hook; a model without one refuses:
 
 ```csharp
@@ -75,7 +78,7 @@ public interface IMigratingModel
 }
 ```
 
-The native model's implementation walks its frame tree and asks each container to map its own private state:
+The native model's implementation computes the live set (below), checks the rules, and asks each container on the path to a live frame to map its own private state:
 
 ```csharp
 // Layer 3, native model. Implemented by each container (composite) activity type.
@@ -86,54 +89,92 @@ public interface IContainerMigration
 
 public sealed record ContainerMigrationContext(
     Node Source, Node Target, JsonNode? State, int StateVersion,
-    IReadOnlySet<string> LiveChildNodes);                           // children with frames, scheduled work or waits
+    IReadOnlySet<string> LiveChildNodes);                           // children in the live set
 ```
 
-A container that does not implement the hook can still migrate when the target node and its whole subtree are unchanged; otherwise it refuses.
+A container that does not implement the hook can migrate only when the target node is unchanged, including its children list. Otherwise it refuses.
 
-### What migration means per model and container
+### The simple-case boundary
 
-| Model or container | What is live in its state | Release 1 simple case | Later |
+**Unchanged** means two nodes have the same id, activity type, activity type version and authored definition: inputs, output bindings, trigger settings and container options. Children lists and designer layout are compared separately, by the container rules below. Comparison is on the canonical serialized node.
+
+**The live set** of a native instance is every node that one of these names:
+
+- a frame (`Frames[].Node`), scheduled work (`Agenda[].Node`), or a wait's frame;
+- a stored result (`Results`, keyed by node id, which later expressions read);
+- the trigger node (`TriggerNode`);
+- a node or connection referenced by a Flowchart's or StateMachine's private state (table below);
+- plus every ancestor of those nodes.
+
+The simple case holds when all of these are true:
+
+1. Every node in the live set exists in the target with the same id, activity type and activity type version, the same parent chain, and an activity state version that the node's code can read.
+2. Every live node that is not a container is unchanged. This includes every waiting node, so an event name, route or timer duration that changed on a waiting node refuses the migration.
+3. Every live container is unchanged apart from its children list, and its children list satisfies its rule in the table.
+4. Every source variable exists in the target with the same type and policy (as today's validator requires). A variable added in the target is set to its declared default in scopes that already exist. This is proposed; today's core has no such rule.
+
+Nodes outside the live set may be added, removed or changed freely.
+
+| Model or container | What is live in its state | Children rule in the simple case | Later |
 |---|---|---|---|
-| **Native frames** | `Frames` (node, parent frame, private state, scope, attempt), the `Agenda` of scheduled work (node ids), `Waits` (frame, kind, key), `Variables` and lexical scopes | Every node with a frame, scheduled work or a wait exists in the target with the same activity type, a readable activity state version and the same parent chain. Added nodes anywhere else are fine; removed or changed nodes must have nothing live | An explicit node map: move a frame to another node of the same type, or cancel a frame (its waits are unregistered in the same commit) |
-| **Structured containers** (Sequence, If, ForEach, While, Parallel) | Child frames by node id; ForEach items and index | The running child keeps its node id. A Sequence keeps no cursor: it finds the next child from the completed child's node id in the bound definition ([Activities.cs](../../prototypes/kernel-model/models/Native/Activities.cs)), so after a migration it continues in the target's order. A ForEach keeps its items and index, and its single child must keep its node id | Inserting or reordering around a running child with an explicit map |
-| **Flowchart** (graph engine) | `ExecutionPaths` (current node, incoming connection, iteration key), `Arrivals` at joins (source, target, connection, port), `ActiveChildren`, `Scopes`, `LoopIterationCounters` | Every node the state references exists, every connection it references exists with the same source, target and port, and every join with pending arrivals keeps the same set of inbound connections, because the dead-path join decides when to fire from that set. Loop counters are kept | Moving a path or a pending arrival to another node; changing a join's inbound set with a rule for its pending arrivals |
-| **StateMachine** (statechart engine) | `Active` configuration (state ids), `Pending` reaction and its cursor, visits | Every active state exists with the same parent chain of regions and states, and no reaction is in progress (`Pending` null): the machine is between events | A state map (A in the source is B in the target), with entry and exit actions of a mapped change chosen explicitly |
+| **Native frames** | `Frames`, `Agenda`, `Waits`, `Results`, `TriggerNode`, `Variables` and lexical scopes | Rules 1 to 4 above | An explicit node map: move a frame to another node of the same type, or cancel a frame (its waits are unregistered in the same commit) |
+| **Sequence** | No cursor: it finds the next child from the completed child's node id in the bound definition ([Activities.cs](../../prototypes/kernel-model/models/Native/Activities.cs)) | The children up to and including the running child are the same ids in the same order. Children after it may change. Moving a completed child after the running child (it would run again) or inserting one before it (it would never run) is refused | Reordering with an explicit map |
+| **If** | The taken branch's frame | The taken branch's child keeps its id | Moving into another branch |
+| **ForEach, While** | Items and index (ForEach); the single body child | The single child keeps its id | Changing the body with a map |
+| **Parallel** | Its branch frames | The same set of branch ids: no branch added or removed while it runs | Adding or cancelling branches with a map |
+| **Flowchart** (graph engine) | `ExecutionPaths` (current node, incoming connection, iteration key), `Arrivals` at joins (source, target, connection, port), `ActiveChildren`, `Scopes`, `LoopIterationCounters` | Every connection the state references exists with the same source, target and port, and every join with pending arrivals keeps the same set of inbound connections, because the dead-path join decides when to fire from that set. Other connections may change. Loop counters are kept | Moving a path or a pending arrival to another node; changing a join's inbound set with a rule for its pending arrivals |
+| **StateMachine** (statechart engine) | `Active` configuration (state ids), `Pending` reaction and its cursor, visits | Every active state and its ancestor states exist with the same parent chain, and no reaction is in progress (`Pending` null): the machine is between events. Transitions may change | A state map (A in the source is B in the target), with entry and exit actions of a mapped change chosen explicitly |
 | **BPMN**, after release 1 | Tokens in the Bpmn.Semantics token state, per element | None: BPMN is not in release 1 | Camunda-style migration plans: mapping instructions per element id, validated against the token state |
 | Other models (ETL, agents, sample models) | Model-owned | No hook: refused | Each model's own hook |
 
-Variables follow today's core: a variable added in the target gets its default in scopes that already exist; a variable removed in the target, or changed in type or policy, refuses the migration. This mirrors the strict validator of the current core's migrate alteration ([WorkflowMigrationCompatibilityValidator.cs](../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/WorkflowMigrationCompatibilityValidator.cs), [ADR 0049](../adr/0049-runtime-alterations-use-snapshotted-atomic-jobs.md)): every node of the source must exist in the target with the same activity type, version and contract, and every resume target must still point at its node. The kernel's simple cases accept one thing more, a removed node with nothing live, and check three things today's validator does not: unchanged trigger inputs on waiting nodes, unchanged inbound sets of joins with pending arrivals, and a StateMachine between events. Most migrations that pass today's validator are simple cases here; one that changes a waiting trigger or a pending join is refused.
+**Compared with today's core.** The current core's migrate alteration ([WorkflowMigrationCompatibilityValidator.cs](../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/WorkflowMigrationCompatibilityValidator.cs), [ADR 0049](../adr/0049-runtime-alterations-use-snapshotted-atomic-jobs.md)) admits only a suspended, fully quiescent execution. It requires every source node to exist in the target with the same type, version and contract, every resume target to keep its node, every variable declaration to match, and runtime requirements, storage drivers and dependencies to match. The kernel's simple cases differ in both directions:
+
+- **More permissive.** A node outside the live set may be removed or changed, and a running instance may be migrated (decision 4).
+- **Stricter.** The children rules above, and unchanged waiting nodes.
+- **Not carried over.** The kernel prototype's definitions have no runtime-requirement, storage-driver or dependency artifacts. If the product keeps them, their checks carry over unchanged.
 
 ### In-flight messages, timers, subscriptions and jobs
 
 Nothing in flight is moved or rewritten by a simple-case migration, because nothing it refers to changes:
 
 - **Inbox messages** address the instance. They stay where they are and are handled under the target after the migration's turn.
-- **Timers** are messages with a future due; a native timer's payload names its wait (`TimerFired(wait)`), and the wait names its frame. The frame keeps its id, so the timer fires into the same frame at its original due. A target that changes a waiting timer's duration does not reschedule it; rescheduling is a later option (recall the old message and send a new one, both in the migration's commit).
-- **Subscriptions** are keyed by the event name or HTTP route the waiting activity registered. A simple case requires a waiting node's trigger inputs to be unchanged, so its subscription rows stay valid and invariant 8 (the subscriptions are exactly the waits in committed state) holds without a write. Re-registering a changed trigger (unsubscribe the old key, subscribe the new one in the same commit) is later.
-- **Background jobs in flight** keep running the activity they started: the job's arguments name the definition and node it started under and carry the inputs captured at its start (`BackgroundArgs` in NativeModel.cs). Its result returns to the frame by frame id. So the source definition version must stay loadable while any instance or job ticket refers to it.
+- **Timers** are messages with a future due; a native timer's payload names its wait (`TimerFired(wait)`), and the wait names its frame. The frame and its node are unchanged (rule 2), so the timer fires into the same frame at its original due. A changed duration on a waiting timer is refused; rescheduling (recall the old message and send a new one in the migration's commit) is later.
+- **Subscriptions** are keyed by the event name or HTTP route the waiting activity registered. Rule 2 keeps them valid, so invariant 8 (the subscriptions are exactly the waits in committed state) holds without a write. Re-registering a changed trigger is later.
+- **Background jobs in flight** keep running the activity they started: the job's arguments name the definition and node it started under and carry the inputs captured at its start (`BackgroundArgs` in NativeModel.cs). Its result returns to the frame by frame id.
 - **Effect keys** are `{instance origin}/{node}/{iteration path}/{attempt}` ([ownership and fencing](ownership-and-fencing.md#side-effects)). The simple cases keep node ids and iteration paths, so a replayed activation after the migration derives the key its first sending carried. A later explicit node map must carry the source node id into the key of every activation in flight, or the receiver sees a new key and the effect repeats.
 - **Children** keep their own definitions; a parent's child wait names the child's id and creation. A plan migrates children only when it selects them.
 - **Ephemeral instances** in memory have no committed row and are not migrated.
 
 ### How a migration commits
 
-The migration's turn ends in one fenced commit, batched with its partition's other turns. That commit holds the new definition (`Rebind`), the mapped state at the current state versions, any subscription and timer changes (none in the simple cases), the consumed `Migrate` message, an optional reply, and one journal entry recording source, target and plan. All of it lands or none of it does (invariant 2). A commit refused by the fence resets the owner as usual; the next owner finds `Migrate` in the inbox and maps the same committed state again, so the result is the same. A refusal is also a commit: the message is consumed and a journal entry and reply carry the findings, with the instance unchanged.
+The migration's turn ends in one fenced commit, batched with its partition's other turns. That commit holds:
 
-The viewer renders journal entries written before the migration against the source definition and later ones against the target; the migration's journal entry marks the boundary.
+- the new definition (`Rebind`) and the mapped state at the current state versions;
+- any subscription and timer changes (none in the simple cases);
+- the consumed `Migrate` message;
+- an outcome message to the plan (below);
+- the journal entry its history level writes.
+
+All of it lands or none of it does (invariant 2). A commit refused by the fence resets the owner as usual. The next owner finds `Migrate` in the inbox and maps the same committed state again, so the result is the same. A refusal is also a commit: the message is consumed and the outcome carries the findings, with the instance unchanged.
+
+**The journal record.** At Full history the migration's journal entry records source, target and plan, and the viewer renders earlier entries against the source definition and later ones against the target. At State history the journal row is `[]`, and at Minimal no row is written (`Journal` in WorkflowInstance.cs). Those levels have no activity entries to render, so the viewer needs no boundary there. They also keep no record that the migration happened, beyond the row's definition and the plan's outcome. The data lifecycle page (`data-lifecycle.md`, PR #4707) proposes lifecycle entries (created, ended, migrated, deleted) at every history level; that is an owner decision there.
 
 ### Plans and bulk migration
 
-A **plan** names the source and target versions (and, later, explicit maps). Creating a plan validates the two definitions against each other once, without reading any instance. It then selects instances from the instance-list read model (never by querying owner state) and adds one `Migrate` message per instance, with a message id derived from plan and instance so that a resumed bulk run adds nothing twice. The in-turn check against committed state is the only one that decides; the definition-level check only rejects plans that cannot succeed. Each instance's outcome (migrated, refused with findings, not at source) is recorded in its journal and gathered into the plan's read model.
+- **A plan** names the source and target versions (and, later, explicit maps). It is a durable actor of a layer-3 actor type. Creating it validates the two definitions against each other once, without reading any instance, and rejects plans that cannot succeed.
+- **Selecting instances.** The plan selects instances from the instance-list read model (never by querying owner state). It adds one `Migrate` per instance, with a message id derived from plan and instance.
+- **Duplicates.** That id deduplicates only while the `Migrate` row exists (until its `keep_until` window passes). A plan resumed later can add a second one. The instance then answers "not at source".
+- **Outcomes.** Each instance's turn sends the plan an outcome message in its own commit, so outcomes are durable at every history level. The plan keeps the first decisive outcome per instance: "not at source" never overwrites "migrated".
+- **The deciding check** is the in-turn check against committed state.
 
 ## What release 1 ships
 
 Release 1 is "migrating instances between definition versions for the simple cases" ([release 1 scope](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)):
 
 - model-level state versions and F14 withholding, as built;
-- activity-level state versions in the frame, for built-in and custom activities, including Flowchart and StateMachine state;
-- the `Migrate` command, the native model's hook and the container hooks for structured containers, Flowchart and StateMachine, limited to the simple cases in the table: same definition, another version, nothing live on a removed or changed node;
-- migration of one instance and bulk migration by plan through the runtime API, with per-instance outcomes;
+- activity-level state versions in the frame, with withholding for newer versions and unknown activity types, for built-in and custom activities, including Flowchart and StateMachine state;
+- the `Migrate` command, with the command-kind seam in layer 2, the native model's hook and the container hooks for structured containers, Flowchart and StateMachine, limited to the simple-case boundary above;
+- migration of one instance and bulk migration by plan through the runtime API, with durable per-instance outcomes;
 - refusal with value-free findings for everything else, leaving the instance as it was.
 
 Later: explicit node, path and state maps; frame cancellation by map; re-registering changed triggers; rescheduling timers; per-instance dry runs; BPMN token migration; migration policies applied at publish.
@@ -143,18 +184,21 @@ Later: explicit node, path and state maps; frame cancellation by map; re-registe
 | Item | Cost | Status |
 |---|---|---|
 | Model or activity state upgrade | CPU in memory at load; no extra write (the next commit writes the new version) | Model level built; activity level proposed |
-| One migration, instance in memory | One outside message add, one mark-before-run commit (it arrives by poll) and the migration's commit; both commits are batched with the partition's other turns | Proposed; derived from the measured commit path, not measured |
+| Detecting a newer activity version | One load per owner activation, then nothing while the row is unchanged | Proposed |
+| One migration, instance in memory | One outside message add, one mark-before-run commit (it arrives by poll) and the migration's commit; both commits are batched with the partition's other turns. Plus one outcome message to the plan, in the same commit | Proposed; derived from the measured commit path, not measured |
 | One migration, instance not in memory | Plus one load by key, batched with other loads | Proposed, not measured |
-| A bulk plan | One message add per instance, then per partition the flushes it takes: on the server engines 100 instance commits cost the round trips of one (2 on PostgreSQL with the fence in the batch) | Commit cost measured ([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), [ENGINES.md](../../prototypes/kernel-model/ENGINES.md)); a bulk migration run is not |
-| Bytes | One state rewrite and one journal row per instance, as for any commit at its history level | Per-commit bytes measured in [WRITES.md](../../prototypes/kernel-model/WRITES.md) |
-| Source definitions | Kept loadable while an instance or job ticket refers to them | Proposed |
+| A bulk plan | One message add per instance, then per partition the flushes it takes: on the server engines 100 instance commits cost the round trips of one (2 on PostgreSQL with the fence in the batch). The plan's own turns, which take the outcomes, are batched in the same way | Commit cost measured ([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), [ENGINES.md](../../prototypes/kernel-model/ENGINES.md)); a bulk migration run is not |
+| Bytes | One state rewrite and one journal row per instance, as for any commit at its history level, plus one outcome message | Per-commit bytes measured in [WRITES.md](../../prototypes/kernel-model/WRITES.md) |
+| Source definitions | Kept loadable while anything refers to them (decision 5) | Proposed |
 
 ## Unverified
 
-- No part of the activity-level versioning, the `Migrate` command, the model or container hooks, or native `Rebind` is built or simulated. The simulation's invariants 18 and 19 cover model-level versions and `Rebind` of a toy model only.
-- The claim that the simple cases need no subscription, timer or job change rests on reading the native model's wait and job code; no run checks it.
-- The comparison with today's migrate alteration validator is by inspection.
-- Proposed checks for when it is built: a simulated migration under takeovers (the migration lands once, a refusal changes nothing, effect keys of replayed activations are unchanged, invariant 8 holds) and mutations that forget a frame's parent chain, map a ForEach to a target with a different child, or ignore a join's inbound set.
+- **Not built or simulated:** the activity-level versioning and its withholding signal, the `Migrate` command and the command-kind seam, the plan actor, the model and container hooks, and native `Rebind`. The simulation's invariants 18 and 19 cover only model-level versions and `Rebind` of a toy model.
+- **No run checks:** the claim that the simple cases need no subscription, timer or job change rests on reading the native model's wait and job code.
+- **By inspection only:** the comparison with today's migrate alteration validator.
+- **Checks to add when it is built:**
+  - a simulated migration under takeovers: it lands once, a refusal changes nothing, effect keys of replayed activations are unchanged, invariant 8 holds, and an older owner never writes a newer state back;
+  - mutations that forget a frame's parent chain, accept a reordered Sequence prefix, map a ForEach to a target with a different child, ignore a join's inbound set, drop a `Results` node, or consume a `Migrate` on an older owner.
 
 ## Decisions for the owner
 
@@ -166,4 +210,12 @@ Later: explicit node, path and state maps; frame cancellation by map; re-registe
    - **A:** it stays running on the source version and the plan reports it.
    - **B:** it is suspended for an operator.
    - **Recommendation: A.** A refusal changes nothing, which keeps a plan safe to run on a live system.
-3. **The boundary of "the simple cases"** is the table above. **Recommendation:** confirm it as release 1's scope; release 1 refuses everything outside it.
+3. **The simple-case boundary** is the one defined above. **Recommendation:** confirm it as release 1's scope; release 1 refuses everything outside it.
+4. **ADR 0049's rule that only a suspended, fully quiescent execution may migrate.**
+   - **A: keep it.** Release 1 migrates suspended instances only.
+   - **B: widen it.** Release 1 migrates running and suspended instances. A turn boundary is the kernel's quiescent point: no activity runs during the migration's turn, and jobs in flight are pinned to their source node and inputs.
+   - **Recommendation: B.** ADR 0049 then goes on the list of ADRs the new core supersedes. A plan can still require suspension as an option.
+5. **How long a source definition version is kept.**
+   - **A:** while any running instance, job ticket or retained history refers to it. Pre-migration history at Full is rendered against the source, so this means until every instance once bound to it is deleted.
+   - **B:** while a running instance or job ticket refers to it. Older history then renders with a "definition removed" fallback.
+   - **Recommendation: A.** Retention (the data lifecycle page, PR #4707) bounds how long that is, and the instance-list read model counts the references.
