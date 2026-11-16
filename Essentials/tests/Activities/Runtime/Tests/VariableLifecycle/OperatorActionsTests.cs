@@ -124,18 +124,85 @@ public sealed class OperatorActionsTests
         Assert.Equal(sourceFrame, superseded.IterationVariableFrame);
     }
 
+    // T020 / FR-016, one iteration recovered: a ForEach over three items whose body faults on the second. Under an
+    // ancestor that waits for intervention, the operator recovers iteration 2 only: iteration 1 is not run again, the
+    // recovered body reads its own item again, and iteration 3, which never ran, runs right after it.
+    [Theory]
+    [InlineData(ReExecuteFaultedActivityAlterationHandler.Kind)]
+    [InlineData(RetryFaultedActivityAlterationHandler.Kind)]
+    public async Task Recovering_a_faulted_iteration_runs_only_that_iteration_again_and_then_the_ones_that_never_ran(string kind)
+    {
+        await using var fixture = await Fixture.StartAsync(ThreeItemLoopExecutable(underInterventionReceiver: true),
+            "actexec-receiver", "actexec-foreach", "actexec-body-1", "actexec-body-2", "actexec-body-3");
+        var run = fixture.Run;
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
+        Assert.Equal(["first", "second"], fixture.Reads.Items);
+        var faulted = Assert.Single(run.States(LoopBodyNodeId), state => state.Status == ActivityExecutionStatus.Faulted);
+        var firstIteration = Assert.Single(run.States(LoopBodyNodeId), state => state.Status == ActivityExecutionStatus.Completed);
+        var incident = Assert.Single(await fixture.ListIncidentsAsync());
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome?.ActionKind);
+
+        var job = await fixture.ApplyAsync(kind, faulted.Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        run = await fixture.ReadRunAsync();
+        run.AssertWorkflowCompleted();
+        // Iteration 1 ran once; iteration 2 ran twice, the second time on its own item; iteration 3 ran once, after it.
+        Assert.Equal(["first", "second", "second", "third"], fixture.Reads.Items);
+        var rows = run.States(LoopBodyNodeId);
+        Assert.Equal(4, rows.Count);
+        var firstAfter = Assert.Single(rows, state => state.Execution.ActivityExecutionId == firstIteration.Execution.ActivityExecutionId);
+        Assert.Equal(ActivityExecutionStatus.Completed, firstAfter.Status);
+        Assert.Equal(firstIteration.InvocationId, firstAfter.InvocationId);
+        var superseded = Assert.Single(rows, state => state.Status == ActivityExecutionStatus.Superseded);
+        Assert.Equal(faulted.Execution.ActivityExecutionId, superseded.Execution.ActivityExecutionId);
+        var recovered = Assert.Single(rows, state => state.IterationId == faulted.IterationId && state.Status == ActivityExecutionStatus.Completed);
+        Assert.Equal("second", recovered.IterationVariableFrame!.Values[ForEachCurrentItem].InlineValue!.Value.GetString());
+        Assert.Equal(kind == RetryFaultedActivityAlterationHandler.Kind, recovered.LogicalInvocationId == faulted.LogicalInvocationId);
+        var third = Assert.Single(rows, state => state.Status == ActivityExecutionStatus.Completed &&
+            state.IterationId != firstIteration.IterationId && state.IterationId != faulted.IterationId);
+        Assert.Equal("third", third.IterationVariableFrame!.Values[ForEachCurrentItem].InlineValue!.Value.GetString());
+    }
+
+    // The same loop under the workflow's Fault strategy and no intervening ancestor: the fault ends the run, iteration 3
+    // never runs, and neither recovery action can bring a terminal run back.
+    [Theory]
+    [InlineData(ReExecuteFaultedActivityAlterationHandler.Kind)]
+    [InlineData(RetryFaultedActivityAlterationHandler.Kind)]
+    public async Task Under_the_fault_strategy_a_faulted_iteration_ends_the_run_and_cannot_be_recovered(string kind)
+    {
+        await using var fixture = await Fixture.StartAsync(ThreeItemLoopExecutable(underInterventionReceiver: false),
+            "actexec-foreach", "actexec-body-1", "actexec-body-2", "actexec-body-3");
+        Assert.Equal(WorkflowExecutionStatus.Faulted, fixture.Run.WorkflowState!.Status);
+        Assert.Equal(["first", "second"], fixture.Reads.Items);
+        var faulted = Assert.Single(fixture.Run.States(LoopBodyNodeId), state => state.Status == ActivityExecutionStatus.Faulted);
+
+        var job = await fixture.ApplyAsync(kind, faulted.Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
+        Assert.Equal("WorkflowTerminal", Assert.Single(job.Outcomes).Code);
+        Assert.Equal(["first", "second"], fixture.Reads.Items);
+        Assert.Equal(2, (await fixture.ReadRunAsync()).States(LoopBodyNodeId).Count);
+    }
+
     private const string LoopBodyNodeId = "node-body";
     private const string ForEachCurrentItem = Elsa.Activities.ForEach.Activities.ForEach.CurrentItemVariableName;
     private static readonly string LoopResumeTargetId = $"resume:{LoopBodyNodeId}:{LoopItemWaitingActivity.ResumeTargetKey}";
 
-    private static WorkflowExecutable LoopExecutable()
+    private static WorkflowExecutable LoopExecutable() =>
+        LoopExecutable(typeof(LoopItemWaitingActivity), ["first", "second"], underInterventionReceiver: false);
+
+    private static WorkflowExecutable ThreeItemLoopExecutable(bool underInterventionReceiver) =>
+        LoopExecutable(typeof(LoopItemFlakyActivity), ["first", "second", "third"], underInterventionReceiver);
+
+    private static WorkflowExecutable LoopExecutable(Type bodyType, string[] items, bool underInterventionReceiver)
     {
         var itemType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
         var listType = new Elsa.Primitives.Models.ValueTypeDescriptor("String", Elsa.Primitives.Models.CollectionKind.List);
         var body = new ExecutableNode(
             executableNodeId: LoopBodyNodeId,
             authoredActivityId: $"authored-{LoopBodyNodeId}",
-            activityType: typeof(LoopItemWaitingActivity).FullName!,
+            activityType: bodyType.FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
@@ -163,7 +230,7 @@ public sealed class OperatorActionsTests
                     listType,
                     ValueProtectionPolicy.InstanceInline,
                     RuntimeInputBindingSource.Literal,
-                    literal: ValueEnvelope.Inline(listType, JsonSerializer.SerializeToElement(new[] { "first", "second" }), ValueProtectionPolicy.InstanceInline))
+                    literal: ValueEnvelope.Inline(listType, JsonSerializer.SerializeToElement(items), ValueProtectionPolicy.InstanceInline))
             },
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(Elsa.Activities.ForEach.Activities.ForEach.BodySlotName, [body])],
@@ -173,7 +240,9 @@ public sealed class OperatorActionsTests
                 JsonSerializer.SerializeToElement(new { body = LoopBodyNodeId })));
         return new WorkflowExecutable(
             identity: WorkflowExecutionHarness.Identity,
-            rootActivity: forEach,
+            rootActivity: underInterventionReceiver
+                ? StructuralExecutionTestSupport.NewStructuralNode("node-receiver", typeof(DescendantFaultExecutionTests.DescendantFaultReceiverActivity), forEach)
+                : forEach,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
             {
                 [LoopResumeTargetId] = new(LoopResumeTargetId, LoopBodyNodeId, "ResumeAsync", new Dictionary<string, string>(),
@@ -228,6 +297,8 @@ public sealed class OperatorActionsTests
                     services.AddSingleton(new OperationKeyLog());
                     services.AddSingleton(new FailureBudget(1));
                     services.AddSingleton(reads);
+                    services.AddSingleton(new DescendantFaultExecutionTests.DescendantFaultLog());
+                    services.AddSingleton(new DescendantFaultExecutionTests.ReceiverDirective(Intervene: true));
                     services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
                 })
                 .Build(activityExecutionIds);
@@ -314,6 +385,21 @@ public sealed class LoopItemWaitingActivity(CountReadLog reads) : StatefulActivi
 
     protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
         ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+}
+
+/// <summary>A loop body that reads the loop item, records it, and faults on <c>"second"</c> while its budget lasts.</summary>
+public sealed class LoopItemFlakyActivity(FailureBudget budget, CountReadLog reads) : Activity
+{
+    [ActivityInput]
+    public string Item { get; set; } = string.Empty;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        reads.AddItem(Item);
+        return ValueTask.FromResult(Item == "second" && budget.TakeFailure()
+            ? ActivityTransition.Fault<ActivityUnit>(new ActivityFault(OutcomeUnknownActivity.Code, "The response was lost.", category: OutcomeUnknownActivity.Category))
+            : ActivityTransition.Complete(ActivityUnit.Value));
+    }
 }
 
 /// <summary>An External leaf that reads <c>Count</c>, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>

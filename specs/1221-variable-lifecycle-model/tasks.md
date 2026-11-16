@@ -28,6 +28,10 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - **T020:** the re-execution successor carries no activated frames and re-requests its loop iteration; a drive
   re-executes a `ForEach` body and shows one iteration frame, activated by the successor for the same item, with the
   source's frame untouched (red when the successor keeps the source's frame).
+  A second drive runs a `ForEach` over three items whose body faults on the second: under an ancestor that waits for
+  intervention, retrying or re-executing iteration 2 runs only that iteration again (on its own item) and then
+  iteration 3, which never ran; under the `Fault` strategy the run ends, iteration 3 never runs and both actions are
+  refused (`WorkflowTerminal`).
 - **T021 (accept recorded completion):** held until S-3 (spec 1208, #4314) lands. It must record and re-apply a whole
   rejected completion (outcome, outputs and every capture), and S-3 is reshaping the completion record
   (`ActivityCompletion.OutcomeKey` → `Selection`). Today a `Fault` refusal keeps only the refused variable write.
