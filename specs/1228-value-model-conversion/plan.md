@@ -7,8 +7,10 @@
 ## Summary
 
 Build the defaults of the ADR 0046 amendment. The Jint integration stops converting every value to frozen doubles up
-front: values enter as plain JavaScript values, the engine records what entered, and after the run it writes only what
-the script changed (copy, compare, patch). One replaceable precision policy, installed by a feature, refuses a lossy
+front: a replaceable script value bridge puts plain JavaScript values into scripts and JavaScript input expressions
+alike, records what entered, and after the run reports only what the script changed (copy, compare, patch). Script
+body changes go to S-7's step write path (ADR 0090); input expression changes stay local. The bridge's cost is
+measured. One replaceable precision policy, installed by a feature, refuses a lossy
 number at a write. The dynamic kind gets one registered alias, `Any`; `Object` and `Elsa.Any` read as `Any`. Binding
 checks treat `Any`, `JsonElement` and `JsonNode` as one kind. A type reference can nest, so a dictionary of string
 arrays has a full type. The Elsa 3 converter converts an untyped result into a typed input per JSON kind, or refuses at
@@ -20,8 +22,7 @@ import. A script result inherits the protection of what it read.
 
 **Primary Dependencies**: Jint (already used), System.Text.Json; no new external dependency.
 
-**Storage**: none new. The executable records the node's precision acceptance (FR-014) and the pinned JavaScript
-adapter version (FR-027). Elsa 4 has no released definitions, so the `Object` → `Any` reading needs no data migration.
+**Storage**: none new. The executable records the pinned JavaScript adapter version (FR-028). Elsa 4 has no released definitions, so the `Object` → `Any` reading needs no data migration.
 
 **Testing**: xUnit (no FluentAssertions). A precision suite (numbers beyond 2^53, long decimals, `10.50`, `2.0`,
 `1e21`, negatives), change-detection unit tests, end-to-end publish-and-run tests, the Elsa 3 fixture
@@ -32,7 +33,7 @@ adapter version (FR-027). Elsa 4 has no released definitions, so the `Object` �
 **Project Type**: libraries.
 
 **Performance Goals**: change detection linear in the data a script reads; at most twice today's run time on a 1 MB
-input (SC-007).
+input (SC-007). The bridge time is a metric per evaluation (FR-010), so a later bridge can be compared.
 
 **Constraints**:
 - No CLR surface in scripts (D-16); the S-1 detector stays the refusal for Elsa 3 scripts that need one.
@@ -51,15 +52,16 @@ type check; the Elsa 3 lowerer and its type shapes.
 
 | Gate | Status | Notes |
 |---|---|---|
-| §2.24.2 / §2.24.3 sanctioned patterns | PASS | The precision policy is a replacement contract (one active implementation per host), a sanctioned pattern. No new pattern. |
+| §2.24.2 / §2.24.3 sanctioned patterns | PASS | The script value bridge and the precision policy are replacement contracts (one active implementation per host), a sanctioned pattern. No new pattern. |
 | §E2.2 Runtime takes no Design reference | PASS | Engine, policy and change detection are runtime-side. Studio's type list and the converter are design-side. |
 | §2.17 duplication beats dependency | PASS | The dynamic-kind check lives once, in the alias convention, replacing about ten string comparisons. |
 | §E2.6.1 executable-always-runs | PASS | Before 4.0, reset and republish (ADR 0046 V3). The new adapter version is pinned in new executables. |
-| §E5 / §4.2 versioning | ACTION | `TypeReference` gains a nested element; the executable gains the adapter version and the precision acceptance. Document and schema versions increase. |
-| Extension-point catalog | ACTION | The precision policy is a new replacement contract: `EXTENSION_POINTS.md` and the generated map change. |
+| §E5 / §4.2 versioning | ACTION | `TypeReference` gains a nested element; the executable gains the adapter version. Document and schema versions increase. |
+| Extension-point catalog | ACTION | The bridge and the precision policy are new replacement contracts: `EXTENSION_POINTS.md` and the generated map change. |
 | §2.22 docs | ACTION | The adapter contracts (FR-026) and the JavaScript value docs. |
 | §2.23 tests | PASS | One test per acceptance scenario, the precision suite, the registration test for the policy feature. |
-| ADR 0046 amendment (#3422) | WAIT | Applied at `ba99ca02d`. Q5 (`Object` → `Any`) is open: User Story 4's tasks wait on it. |
+| ADR 0046 amendment (#3422) | WAIT | Applied at `ba99ca02d`; agreed, not yet merged into the branch. Implementation starts once it is merged (D-18). |
+| ADR 0090 (accepted) | PASS | C1–C4 applied; the step write path is S-7's. |
 
 ## Project Structure
 
@@ -83,12 +85,12 @@ specs/1228-value-model-conversion/
 
 ```text
 Essentials/src/Expressions/JavaScript/Jint/Services/
-├── IsolatedJintEngine.cs              # plain values in; entry record; no freezing; lossy-number marks
-├── JintResultMaterializer.cs          # result out through the change detector and the policy
-└── (new) ScriptChangeDetector.cs      # copy, compare, patch
+├── IsolatedJintEngine.cs              # values in through the bridge; no freezing
+├── JintResultMaterializer.cs          # result out through the policy
+└── (new) CopyComparePatchValueBridge.cs  # default bridge: entry record, lossy marks, copy, compare, patch, metric
 
 Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/
-└── (new) IJavaScriptPrecisionPolicy + RefusingPrecisionPolicy + feature
+└── (new) IScriptValueBridge, IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy; registered by the feature
 
 Essentials/src/Primitives/Primitives/Models/
 ├── TypeAliasConvention.cs             # Any registered; Object/Elsa.Any read as Any; DateOnly, TimeOnly
@@ -112,21 +114,22 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Plain values in | FR-001, FR-002. `CreateObject` and `CreateArray` stop setting non-writable descriptors and `PreventExtensions`. The `args` and `variables` containers stay non-replaceable globals. `ScriptValueIsolationTests` changes with it. |
-| P-2 | Entry record | FR-003, FR-009. For each value read, keep the `JsonElement` that entered, and mark each number that is lossy (Q5) with its path. Kept per run, discarded after. |
-| P-3 | Change detection | FR-003–FR-006. After the run, walk each read value against its entry: equal by JavaScript value → unchanged; a changed member → patch that path; a replaced value → replace; a changed array → whole array. Unchanged members are copied from the entry, not from JavaScript, so their text is kept. |
-| P-4 | Precision policy | FR-010–FR-013. `IJavaScriptPrecisionPolicy` is a replacement contract with one built-in `RefusingPrecisionPolicy`, installed by the JavaScript feature. Called at a write with the list of lossy paths it carries; returns refuse or allow with diagnostics. Computing and host-function arguments only warn and never reach the policy as a write. |
-| P-5 | Acceptance | FR-014. A script activity setting `AcceptPrecisionLoss` (default off), compiled into the executable; the policy gets it in its context. |
-| P-6 | Script variable writes | FR-007, Q3. `variables.x` becomes writable for script activities only. Detected changes go to the step's variable session (ADR 0090 amendment; ADR 0092 read set as base). Input-binding expressions keep a read-only `variables`. Built on the S-10 session write path. |
-| P-7 | One dynamic kind | FR-016–FR-019. `TypeAliasConvention` registers `Any` and resolves `Object`, `System.Object` and `Elsa.Any` to it; `object` is no longer a variable type. The `Elsa.Any` constants and the `Alias is "Object" or "Elsa.Any"` checks go through one `IsDynamicKind`. `DateOnly` and `TimeOnly` register as bare aliases. |
-| P-8 | Binding check | FR-020. The exact alias match in `RuntimeInputBindingCompiler` treats the dynamic kind as one. `JsonObject` keeps a run-time shape check. |
-| P-9 | Nested types | FR-021. `TypeReference` gets an optional `Element` type reference. `Decompose` recurses. Diagnostics print the full shape. |
-| P-10 | JSON to scalar | FR-024. With #3167 fixed (S-0), the `elsa.json@1` route converts a JSON boolean, number or string to a matching scalar. Text is never parsed. |
-| P-11 | Elsa 3 conversion | FR-018, FR-022, FR-023. The converter emits `Any` for its `Object` cases. `TypesMatch` stops treating an untyped producer as compatible with a typed input; a per-kind table from Elsa 3.6.3 (research R-5) decides convert or refuse with a new `ELS3-` code. |
-| P-12 | Protection | FR-025. At result materialization, take the strongest protection policy among the read set's values (ADR 0092) and attach it to the result. |
-| P-13 | Adapter contracts | FR-026, FR-027. `docs/reference/value-adapters.md`; the JavaScript adapter gets a version that new executables pin. |
+| P-1 | Plain values in | FR-001, FR-002. `CreateObject` and `CreateArray` stop setting non-writable descriptors and `PreventExtensions`. The `args` and `variables` containers stay non-replaceable globals. `ScriptValueIsolationTests` changes with it. Script activities and input expressions use the same bridge (D-15). |
+| P-2 | Bridge contract | FR-009. `IScriptValueBridge` (replacement contract): enter values → entry record; collect changes from the engine → changes. Default `CopyComparePatchValueBridge`. The Jint engine calls only the contract. |
+| P-3 | Entry record | FR-003, FR-011. For each value read, keep the `JsonElement` that entered and mark each lossy number (Q3) with its path. Per evaluation, discarded after. |
+| P-4 | Change detection | FR-003–FR-005. After the run, convert each original JSON afresh and compare it with the script's value, JavaScript with JavaScript (ADR 0090 C2): equal → unchanged; a changed member → member change; a reassigned variable → whole assignment; a changed array → whole. Unchanged members come from the original JSON. |
+| P-5 | Cost metric | FR-010. The bridge records enter and collect durations and the bytes converted per evaluation as a histogram on the JavaScript expression meter; the benchmark of SC-007 uses the same numbers. |
+| P-6 | Precision policy | FR-012–FR-015. `IJavaScriptPrecisionPolicy` is a replacement contract with one built-in `RefusingPrecisionPolicy`, installed by the JavaScript feature, with no options and no node or workflow override. Called at a write with the lossy paths it carries. Computing and host-function arguments only warn. |
+| P-7 | Hand-off to S-7 | FR-006, FR-007, Q1. A script activity passes its changes to the step write path (S-7) with the read-set base (ADR 0092); the bridge raises the C2 visibility warning. An input expression's changes are discarded. Until S-7's path is on the branch, User Story 3 is tested at the bridge level. |
+| P-8 | One dynamic kind | FR-017–FR-020. `TypeAliasConvention` registers `Any` and resolves `Object`, `System.Object` and `Elsa.Any` to it; `object` is no longer a variable type. The `Elsa.Any` constants and the `Alias is "Object" or "Elsa.Any"` checks go through one `IsDynamicKind`. `DateOnly` and `TimeOnly` register as bare aliases. |
+| P-9 | Binding check | FR-021. The exact alias match in `RuntimeInputBindingCompiler` treats the dynamic kind as one. `JsonObject` keeps a run-time shape check. |
+| P-10 | Nested types | FR-022. `TypeReference` gets an optional `Element` type reference. `Decompose` recurses. Diagnostics print the full shape. |
+| P-11 | JSON to scalar | FR-025. With #3167 fixed (S-0), the `elsa.json@1` route converts a JSON boolean, number or string to a matching scalar. Text is never parsed. |
+| P-12 | Elsa 3 conversion | FR-019, FR-023, FR-024. The converter emits `Any` for its `Object` cases. `TypesMatch` stops treating an untyped producer as compatible with a typed input; a per-kind table from Elsa 3.6.3 (research R-5) decides convert or refuse with a new `ELS3-` code. |
+| P-13 | Protection | FR-026. At result materialization, take the strongest protection policy among the read set's values (ADR 0092) and attach it to the result. |
+| P-14 | Adapter contracts | FR-027, FR-028. `docs/reference/value-adapters.md`; the JavaScript adapter gets a version that new executables pin. |
 
 ## Complexity Tracking
 
-> No constitution violations. The ACTION gates are covered by tasks. The WAIT gate is Q1 (#3422 Q5): User Story 4's
-> tasks wait on it.
+> No constitution violations. The ACTION gates are covered by tasks. The WAIT gate is the merge of the agreed ADR 0046
+> amendment into the initiative branch.

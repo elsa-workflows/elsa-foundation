@@ -32,15 +32,19 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 ## R-1 Change detection (Q2)
 
-- **Decision**: copy, compare, patch. Keep the entered `JsonElement` per read value; compare after the run; write only
-  changed paths; copy unchanged members from the entry.
-- **Rationale**: it meets every V9 rule with no custom object per value, keeps real arrays, and makes FR-002 true by
-  construction: a value with no change is never written.
-- **Alternatives considered**: JavaScript proxies per value (needs a custom object per value; arrays are not real
-  arrays; ruled out by the ADR); writing every read value back (breaks FR-002); `BigInt` for large integers
-  (`JSON.stringify` throws on it, and mixing it with numbers throws).
+- **Decision**: copy, compare, patch, behind a replaceable contract (`IScriptValueBridge`), with its cost measured.
+  Keep the entered `JsonElement` per read value; after the run, convert it afresh and compare with the script's value,
+  JavaScript with JavaScript (ADR 0090 C2); report only changed paths; take unchanged members from the entry.
+- **Rationale**: it meets every V9 and ADR 0090 C1–C2 rule with no custom object per value, keeps real arrays, and
+  makes FR-002 true by construction: a value with no change is never written. It is the simplest correct first
+  implementation; the contract lets a faster one replace it later.
+- **Alternatives considered**: JavaScript proxies per value (possibly faster, but more complex; deferred, and a
+  candidate replacement behind the same contract if it behaves identically); writing every read value back (breaks
+  FR-002); `BigInt` for large integers (`JSON.stringify` throws on it, and mixing it with numbers throws).
+- **Cost tracking**: a per-evaluation metric (enter and collect durations, bytes converted) and the SC-007 benchmark
+  on 1 KB, 100 KB and 1 MB inputs. The same numbers judge a replacement.
 
-## R-2 When a number is lossy (Q5)
+## R-2 When a number is lossy (Q3)
 
 - **Decision**: parse the JSON number text as a decimal (or as a big integer when it has no fraction or exponent),
   convert the double back to the shortest round-trip text, and compare values. Different value → lossy.
@@ -49,37 +53,39 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Alternatives considered**: a plain magnitude check (`|n| > 2^53 − 1`) misses long decimals such as
   `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely.
 
-## R-3 The acceptance surface (Q4)
+## R-3 Precision handling (settled, D-17)
 
-- **Decision**: one node setting on script activities, `AcceptPrecisionLoss`, default off, compiled into the
-  executable.
-- **Rationale**: the ADR asks for an explicit acceptance recorded in the published contract. D-17 forbids options on
-  the policy and a per-workflow override; a node choice is neither.
-- **Alternatives considered**: no acceptance (needs an ADR wording change); a workflow-level switch (excluded by D-17).
+- **Decision**: one replaceable host policy; the default refuses; no options; no per-workflow or per-node override. A
+  host that wants other handling installs its own policy. Nothing in the executable records an acceptance.
+- **Source**: the meeting of 2026-11-12. The sentences in the ADR 0046 V9 and ADR 0090 C3 texts that speak of the
+  published conversion contract accepting a loss are read through D-17: a host accepts a loss by installing a policy
+  that allows it.
 
-## R-4 The write surface (Q3)
+## R-4 Where the bridge stops (Q1)
 
-- **Decision**: script activities get a writable `variables`. Detected changes enter the step's variable session and
-  commit with the step. Input-binding expressions keep a read-only `variables` (D-3).
-- **Rationale**: only the change detector knows what changed. The ADR 0090 amendment makes script writes a general
-  capability; ADR 0092 gives the base.
-- **Dependency**: the S-10 session write path (#4316). Tasks for User Story 3 start after it lands on the branch.
+- **Decision**: S-8 owns the JavaScript side: entering values, finding changes, the precision check and the C2
+  visibility warning. S-7 owns the step write path of ADR 0090 for every writer: the intent from the base (C3),
+  commit with the step, conflicts (C5).
+- **Input expressions**: they get the same values through the same bridge (D-15). Their changes stay local, because
+  ADR 0090 decision 1 keeps input-binding expressions pure: they may run more than once (replay, each `While` pass,
+  preflight).
+- **Dependency**: User Story 3's end-to-end test needs S-7's write path; until then it is tested at the bridge level.
 
-## R-5 Elsa 3 coercion of an untyped result (Q7)
+## R-5 Elsa 3 coercion of an untyped result (Q5)
 
 - **Decision**: record, per JSON kind and per typed target, what Elsa 3.6.3's `ObjectConverter.ConvertTo` produced.
   Convert where Elsa 4 gives the same value; refuse at import otherwise.
 - **To do in implementation**: read the Elsa 3 source (release/3.6.3, checked against 3.5.3), as spec 267 did, and
   fill the table in the plan's task. Fix #3167 first and re-measure; it may make the JSON route work for more cases.
 
-## R-6 One dynamic kind (Q1)
+## R-6 One dynamic kind (settled)
 
 - **Decision**: register `Any` in `TypeAliasConvention`; resolve `Object`, `System.Object` and `Elsa.Any` to it; one
   `IsDynamicKind` helper replaces the string comparisons. Studio shows `Any` as "JSON".
-- **Rationale**: one name for one kind. `object` as a variable type opens the door V10 keeps closed.
-- **Dependency**: #3422 Q5.
+- **Rationale**: one name for one kind. `object` as a variable type opens the door V10 keeps closed. Agreed by the
+  approvers in the initiative meetings (#3422 Q5).
 
-## R-7 Nested types (Q6)
+## R-7 Nested types (Q4)
 
 - **Decision**: `TypeReference` gets an optional `Element` reference, so a collection's element can be a collection.
 - **Alternatives considered**: JSON Schema only (binding checks do not read it); a special alias for

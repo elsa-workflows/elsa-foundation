@@ -16,16 +16,21 @@ Version: the first pinned version of the JSON profile (ADR 0046 V12). Any change
 
 No .NET object, type or member is reachable.
 
+The same contract applies to script activities and JavaScript input expressions (D-15).
+
 ## Out of JavaScript
 
-| What the script did | What is written |
-|---|---|
-| Read only | Nothing |
-| Changed a member | That member; the others keep their stored text |
-| Assigned a whole value | The whole value |
-| Changed an array | The whole array |
-| Wrote a value equal to what it read | Nothing (accepted gap) |
-| Returned a value | The result, as JSON |
+| What the script did | What the bridge reports | Then |
+|---|---|---|
+| Read only | Unchanged | Nothing is written |
+| Changed a member | Member change | Step write keeps the other members' stored text; C2 visibility warning |
+| Assigned a whole value | Whole assignment | Step write replaces (equality by meaning, ADR 0090 C4) |
+| Changed an array | Whole array | Step write replaces the array |
+| Set a member equal, as JavaScript, to what it read | Unchanged | Nothing (accepted gap; a string forces the write) |
+| Returned a value | Result | The result, as JSON |
+
+A script activity's changes go to the step write path (S-7). An input expression's changes are discarded (ADR 0090
+decision 1).
 
 Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 
@@ -37,4 +42,3 @@ Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 | A lossy element in a written array | Refused (policy) | Array path, "written as a whole", each lossy element with both values, remedy |
 | A lossy number only computed with | Warning | Path and stored value |
 | A lossy number passed to a host function | Logged warning | Function, argument path |
-| Node accepts precision loss | Allowed | Instance diagnostic per lossy path |

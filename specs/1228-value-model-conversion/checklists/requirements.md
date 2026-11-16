@@ -33,5 +33,5 @@
 
 - The spec names engine terms (Jint, .NET, `JsonElement`) because the readers are the initiative's architects and
   the ADR it applies uses them. This is accepted for engine specs in this repository.
-- Decisions are recorded as Q1–Q8 with recommended answers instead of clarification markers. Q1 waits on the ADR 0046
-  reviewers (#3422 Q5).
+- Settled decisions (one dynamic kind, D-15, D-16, D-17, ADR 0090 decision 1) are applied, not asked. The spec's
+  own build questions are Q1–Q6, each with a recommended answer.

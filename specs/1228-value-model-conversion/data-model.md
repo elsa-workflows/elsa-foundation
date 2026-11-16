@@ -33,7 +33,7 @@ Example: `IDictionary<string, string[]>` = alias `String`, kind dictionary, elem
 | Field | Meaning |
 |---|---|
 | Value key | What changed |
-| Kind | Member patch, replace, whole array |
+| Kind | Member change (partial update), whole assignment (replace), whole array |
 | Path | The changed path |
 | New value | Core value to write |
 | Lossy paths carried | Lossy entered numbers that the new value contains |
@@ -49,5 +49,12 @@ Example: `IDictionary<string, string[]>` = alias `String`, kind dictionary, elem
 
 | Field | Meaning |
 |---|---|
-| JavaScript adapter version | Pinned at publish (FR-027) |
-| Accept precision loss | Per script node, default false (FR-014) |
+| JavaScript adapter version | Pinned at publish (FR-028) |
+
+## Script value bridge (new, replaceable contract)
+
+| Operation | Meaning |
+|---|---|
+| Enter | Put the values a script or input expression reads into the engine; return the entry record |
+| Collect changes | After the run, return one change per value read (unchanged, member change, whole assignment) |
+| Metric | Enter and collect durations and bytes converted, per evaluation (FR-010) |
