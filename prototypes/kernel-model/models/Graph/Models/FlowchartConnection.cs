@@ -15,6 +15,13 @@ public sealed class FlowchartConnection
         Id = string.IsNullOrWhiteSpace(id) ? null : id.Trim();
     }
 
+    // Preserve the existing wire IDs for routing and arrivals, including authored IDs.
+    internal string GetId() => Id ?? $"{Source.NodeId}:{Source.Port}->{Target.NodeId}";
+
+    // Wire IDs may collide across accepted endpoints; joins also match the structural facts.
+    internal (string Source, string Port, string Target, string Connection) GetAnswerKey() =>
+        (Source.NodeId, Source.Port, Target.NodeId, GetId());
+
     [JsonPropertyName("id")]
     public string? Id { get; }
 
