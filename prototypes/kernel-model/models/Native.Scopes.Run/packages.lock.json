@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "kernel.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.graph": {
+        "type": "Project"
+      },
+      "kernel.native": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Graph": "[1.0.0, )",
+          "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.runtime": {
+        "type": "Project"
+      },
+      "kernel.sim": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

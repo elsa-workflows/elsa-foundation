@@ -1834,3 +1834,19 @@ The next idle wake also includes the earliest held caller deadline. The witness 
 initially, then 1 ms at time 99), rather than forcing an externally scheduled deadline pass; this scheduling control
 failed before the wake calculation changed. Existing Admission.Run callers now supply their request-start clock plus
 30 seconds, and its schedule/control suite is included in the affected-build check.
+
+## 28. Round 5 A: virtual partitions, the two fence granularities. Run
+
+The owner's experiment of 15 November, measured and modelled: 1,024 and 4,096 virtual partitions, ranges owned by
+nodes, the fence per virtual partition or per owned range. The code is `src/Kernel.Runtime/VirtualPartitions.cs`
+(addressing and placement, witnessed by `sim --placement-check`) and `experiments/VirtualPartitions` (the two variants
+as EF stores, the measurement harness, the ownership simulation and its mutations); no default changed and the kernel's
+gates ran unchanged on 64 partitions. The results, the findings F-A1 to F-A7, the recommendation and the owner's
+decisions are in [PARTITIONS.md](PARTITIONS.md). In one line: with the fence in the batch both variants cost 2 round
+trips per flush and the per-range variant one statement more; with the checked fence the per-virtual-partition variant
+as built costs *k* + 2 round trips against 3, a commit-SQL shape for round 5 B; the per-range variant still writes a
+position row per virtual partition, needs an epoch counter, split, merge and carve, and stales a whole range at a
+split. The recommendation was the fence per virtual partition, conditional on a one-statement multi-row checked fence.
+**Decided by the owner on 16 November 2026: (i) the fence per virtual partition, the multi-row checked fence in round
+5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stays in code until the Worker refactor,
+which will use 1,024).

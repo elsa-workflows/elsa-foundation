@@ -28,7 +28,7 @@ internal sealed class Turn : ITurn
             row is null ? spec!.Parent : row.Parent, input.Creation, row?.ParentCreation ?? spec?.ParentCreation ?? 0);
         _children = ChildRegistry.Read(row?.Children);
         foreach (var message in Inbox)
-            if (message.Kind == WorkflowKinds.ChildFinished)
+            if (Instance.Creation == 0 && message.Kind == WorkflowKinds.ChildFinished)
             {
                 var finished = message.Read<ChildFinished>();
                 _children.Remove(new(finished.Child, finished.Creation));
@@ -93,6 +93,17 @@ internal sealed class Turn : ITurn
             row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version, Jobs = _durable.Jobs() };
         if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.AddTerminalNotice(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = _durable.Outcome(row.Status);
+        // A qualified notice held by the model is still owed after eviction or owner recovery.
+        if (Instance.Creation > 0)
+        {
+            foreach (var delivery in unit.Consumed)
+                if (delivery.Message.Kind == WorkflowKinds.ChildFinished)
+                {
+                    var finished = delivery.Message.Read<ChildFinished>();
+                    _children.Remove(new(finished.Child, finished.Creation));
+                }
+            row = row with { Children = ChildRegistry.Write(_children) };
+        }
         // An ephemeral instance that ends in the turn that created it, or while it is still in memory, and leaves nothing
         // for anyone else, is never written.
         var unwritten = created ? Instance.Creation == 0 && _input.Spec!.Ephemeral : _input.Unwritten;

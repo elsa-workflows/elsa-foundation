@@ -124,11 +124,22 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
             + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
-            () => world.Store.CommitAsync(batch) is var landed && landed.Result.Landed && batch.Trial.Count > 0 ? Counted(landed, batch.Trial.Count) : landed);
+            () => Commit(batch));
 
-    private static ValueTask<Committed> Counted(ValueTask<Committed> landed, int trials)
+    private ValueTask<Committed> Commit(CommitBatch batch)
     {
-        World.Count("put on trial", trials);
+        var partition = world.Store.Partitions[batch.Partition];
+        var fenced = partition.Epoch == batch.Epoch && partition.Position == batch.Position;
+        var landed = world.Store.CommitAsync(batch);
+        if (landed.Result.Landed)
+        {
+            if (fenced)
+            {
+                world.ObserveAmbientCommit(batch);
+                world.ReadLifecycleChanges();
+            }
+            if (batch.Trial.Count > 0) World.Count("put on trial", batch.Trial.Count);
+        }
         return landed;
     }
 
@@ -196,6 +207,25 @@ public sealed partial class World
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
     private readonly Dictionary<Request, long> _requestedCreations = [];
+    private sealed record Emission(Request Recipient, long Revision, ReplyRelease Release);
+    private System.Runtime.CompilerServices.ConditionalWeakTable<Reply, Emission>? _emissions;
+    private sealed record CallerCheckpoint(Message Input, Task<InMemoryStore.DeletedCheckpoint> Deletion);
+    private Dictionary<Request, CallerCheckpoint>? _callerCheckpoints;
+
+    private void ObserveEmission(string node, Reply reply, long revision, ReplyRelease release)
+    {
+        if (reply.Channel != Request.Response || reply.Item is not string) return;
+        var caller = Asked.FindLast(c => c.Process == node && c.Request.Registration == reply.Request);
+        if (caller.Request is null) return;
+        var generation = _requestedCreations.GetValueOrDefault(caller.Request);
+        var split = reply.Key.LastIndexOf('#');
+        if (split < 0 || reply.Key[..split] != CreationProtocol.Origin(caller.Instance, generation)) return;
+        if (release == ReplyRelease.WriteFree) return;
+        if (release == ReplyRelease.EphemeralWriteFree && (generation != 0 || Store.Instances.ContainsKey(caller.Instance))) return;
+        // Reference identity follows this carrier through local delivery, a delayed hop and replay.
+        // A value-equal injection, even for a future genuine send, has no such issuance.
+        (_emissions ??= new()).Add(reply, new(caller.Request, revision, release));
+    }
 
     private bool AdmitCaller(string process, Request caller, Func<bool> admit)
     {
@@ -205,10 +235,13 @@ public sealed partial class World
         return false;
     }
 
-    private void AddDistinct(Message stimulus)
+    private Message AddDistinct(Message stimulus)
     {
         for (long suffix = 0; ; suffix = checked(suffix + 1))
-            if (Store.AddAsync(suffix == 0 ? stimulus : stimulus with { Id = stimulus.Id + "." + suffix }).Result) return;
+        {
+            var proposed = suffix == 0 ? stimulus : stimulus with { Id = stimulus.Id + "." + suffix };
+            if (Store.AddAsync(proposed).Result) return proposed;
+        }
     }
 
     private (string Process, Request Request, string Instance)? OpenCaller(string name)
@@ -273,7 +306,9 @@ public sealed partial class World
         _extraModel = extraModel;
         Config = config;
         Native = new NativeOracle(config.Partitions);
-        Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
+        Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour) };
+        Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
+            ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
@@ -306,7 +341,8 @@ public sealed partial class World
     {
         public void Send(string node, Reply reply)
         {
-            if (node == self) world.Processes[node].Receive(reply);
+            world.ObserveHostEnd(node, reply);
+            if (node == self) world.DeliverTo(world.Processes[node], reply);
             else world.Deliveries.Add((node, reply));
         }
     }
@@ -324,7 +360,7 @@ public sealed partial class World
         IExecutionModel[] models =
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => MarkDying(actor)), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
+            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => MarkDying(actor)), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)) { ObserveAmbient = (turn, state) => ObserveHttpTurn(actor, turn, state) },
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
             .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
@@ -336,6 +372,10 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnEmittedReply = ObserveEmission,
+            OnPreparedCheckpoint = PrepareCheckpoint,
+            OnCreationRefused = ObserveCreationRefusal,
+            Lifecycle = Store.Lifecycle,
             OnKeptInMemory = (instance, revision) => Oracle.InMemory[instance] = revision,
             OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
             OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
@@ -481,7 +521,7 @@ public sealed partial class World
             }
             case "add":
             {
-                var message = act.M!;
+                var message = act.M!.AsOrdinary();
                 if (Oracle.Sent.Contains(message.Id) && message.KeepUntil <= Time) return null;    // a client retries only within the window
                 if (!Oracle.Accepts(message)) return null;
                 var added = Store.AddAsync(message).Result;
@@ -490,8 +530,9 @@ public sealed partial class World
             }
             case "post":
             {
-                if (Live(act.A) is not { } actor || Oracle.Sequences.ContainsKey(act.M!.Target.Id) || !actor.Worker.Post(act.M, fresh: true)) return null;
-                Oracle.Note(act.M, posted: true);
+                var posted = act.M!.AsOrdinary();
+                if (Live(act.A) is not { } actor || Oracle.Sequences.ContainsKey(posted.Target.Id) || !actor.Worker.Post(posted, fresh: true)) return null;
+                Oracle.Note(posted, posted: true);
                 return "";
             }
             case "publish":
@@ -550,8 +591,13 @@ public sealed partial class World
                 var process = actor.Worker.Node;
                 var caller = Processes[process].Open(request, Deadline(request));
                 var asked = message.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
-                if (!AdmitCaller(process, caller, () => actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id))) return null;
+                var generation = asked.Start?.Creation?.Generation ?? 0;
+                var ambient = Http.StarterAmbient(asked.Target, generation, actor.Id);
+                if (!AdmitCaller(process, caller, () => actor.Worker.Post(asked, fresh: true, ambient: ambient))) return null;
                 Asked.Add((process, caller, asked.Target.Id));
+                if (asked.Start?.Model == "http") Oracle.ExpectHttp(asked);
+                (_postedHttpStarts ??= new()).Add(asked, new(ambient, actor.Id, actor.Worker.Epoch));
+                (_callerCheckpoints ??= [])[caller] = new(asked, Store.WatchDeletion(new(asked.Target.Id, generation)));
                 if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
@@ -565,7 +611,9 @@ public sealed partial class World
                 var asked = act.M.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
                 if (!AdmitCaller(process, caller, () => Store.AddAsync(asked).Result)) return "duplicate key";
                 Asked.Add((process, caller, asked.Target.Id));
-                if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
+                var addressed = asked.TargetCreation ?? asked.Start?.Creation?.Generation;
+                (_callerCheckpoints ??= [])[caller] = new(asked, Store.WatchDeletion(new(asked.Target.Id, addressed ?? 0)));
+                if (addressed is { } creation) _requestedCreations[caller] = creation;
                 return "added";
             }
             case "disconnect":
@@ -573,9 +621,11 @@ public sealed partial class World
                 if (OpenCaller(act.S) is not { } asked) return null;
                 Processes[asked.Process].Disconnect(asked.Request);
                 if (!act.Flag) return "";
+                var command = new Message("cancel-" + asked.Request.Registration, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000,
+                    TargetCreation: _requestedCreations.TryGetValue(asked.Request, out var generation) ? generation : null);
+                var admitted = AddDistinct(command);
+                (_httpCancelInputs ??= new()).Add(admitted, asked.Request);
                 Oracle.Https[asked.Instance] = Oracle.Https[asked.Instance] with { Cancel = true };
-                AddDistinct(new Message("cancel-" + asked.Request.Registration, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000,
-                    TargetCreation: _requestedCreations.TryGetValue(asked.Request, out var generation) ? generation : null));
                 return "cancel added";
             }
             case "deliver" or "drop":
@@ -583,7 +633,7 @@ public sealed partial class World
                 if (act.B >= Deliveries.Count) return null;
                 var (node, reply) = Deliveries[act.B];
                 if (act.Kind == "drop" || !act.Flag) Deliveries.RemoveAt(act.B);
-                if (act.Kind == "deliver" && Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
+                if (act.Kind == "deliver" && Processes.TryGetValue(node, out var requests) && Running(node)) DeliverTo(requests, reply);
                 return $"{reply.Key} for {node}|{reply.Request}";
             }
             default:

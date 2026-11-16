@@ -440,3 +440,5 @@ conflicts with a partitioned unique key that omits the partition column. Adding 
 change deduplication scope and store operations. Lazy/delta snapshots, segmented checkpoints, completed-instance retirement and durable
 response receipts are not added to this provider contract by this page. Candidate retention/receipt designs require
 separate approval and qualification; the current tables and sweep predicates above remain the reference.
+The [PostgreSQL guidance](../../prototypes/kernel-model/POSTGRES.md) (16 November) holds the partitioned-inbox fit report, the
+measured-against-recommended tuning table and the case for values by reference.
