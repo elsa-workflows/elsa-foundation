@@ -53,6 +53,9 @@ public sealed partial class RuntimeHistoryInspectionService
         }
         catch (RuntimeHistoryIntegrityException)
         {
+            workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
+            var currentBinding = await OccurrenceAccessBinding!(workflow, await BindingAsync(token), token);
+            if (currentBinding != query.AccessBinding) throw new RuntimeResourceMissingSignal();
             return EmptyOccurrences("history-invalid", InvalidCoverage());
         }
     }
