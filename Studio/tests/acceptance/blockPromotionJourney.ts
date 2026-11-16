@@ -167,10 +167,15 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     // Resume: with the block restored, choose the exact published version later instead of creating another.
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect.poll(async () => (await calls())[0]?.structure?.kind ?? null).toBe("elsa.sequence.structure");
+    // Open the review on the settled, saved document, as an author would after the Undo.
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     await row("block").click();
     await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
     const resume = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
-    await resume.getByRole("radio", { name: "Use a published version", exact: true }).check();
+    await expect(resume).toContainText("Proposed reusable activity");
+    const existing = resume.getByRole("radio", { name: "Use a published version", exact: true });
+    await existing.click();
+    await expect(existing).toBeChecked();
     await resume.getByRole("combobox", { name: "Published version", exact: true }).selectOption(reusable.headVersionId);
     await capture(page, info, "workflow-promotion-resume");
     await resume.getByRole("button", { name: "Replace block with this version", exact: true }).click();
@@ -187,8 +192,11 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
         resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {} } })])]), variables: [], inputs: [], outputs: [] }
     });
     workflowIds.push(opaque.definition.id);
-    const opaqueBefore = await api(`/design/workflows/drafts/${opaque.draft.id}`);
     await page.goto(`/workflows/definitions?backend=legacy&definition=${opaque.definition.id}`); await canvas();
+    // Opening expands wire inputs; an ordinary save acknowledges their canonical form before the baseline is taken.
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    const opaqueBefore = await api(`/design/workflows/drafts/${opaque.draft.id}`);
     await expect(row("block")).toBeVisible();
     await row("block").click();
     await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
