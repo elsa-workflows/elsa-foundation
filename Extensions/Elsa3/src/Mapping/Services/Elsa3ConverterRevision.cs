@@ -10,8 +10,10 @@ namespace Elsa3.Mapping.Services;
 /// </summary>
 /// <remarks>
 /// Bump <see cref="CurrentRevision"/> by one in the same change that makes the converter emit different Elsa 4 content
-/// for the same Elsa 3 input (a new rewrite, a changed mapping, a changed default). Do not bump it for a change that
-/// leaves every converted output byte-identical. Older Elsa 3 versions of a reusable workflow whose <c>{m}.{R}.0</c> would
+/// for the same Elsa 3 input (a new rewrite, a changed mapping, a changed default), once a converter has been released
+/// that hosts may have imported with durably. Before GA no host keeps durable imports: the revision stays 0 and
+/// rebuilding the store is the upgrade path. Do not bump it for a change that leaves every converted output
+/// byte-identical. Older Elsa 3 versions of a reusable workflow whose <c>{m}.{R}.0</c> would
 /// fall below a newer version already published are refused by the activity version bump rule and skipped; the versions
 /// imported at the earlier revision keep running.
 /// </remarks>

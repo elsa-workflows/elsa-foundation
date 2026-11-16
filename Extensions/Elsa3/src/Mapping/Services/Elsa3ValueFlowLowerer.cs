@@ -24,7 +24,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, bool>? isScriptBody = null,
         IReadOnlySet<string>? containerVariableIds = null,
         IReadOnlyDictionary<string, string>? memoryAliases = null,
-        bool isReusable = false)
+        bool isReusable = false,
+        Func<Elsa3Activity, string, TypeReference?>? inputTypeOf = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -99,7 +100,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (property.Expression is not null)
             {
                 if (isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
-                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
+                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, inputTypeOf, diagnostics);
                 else
                     LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 continue;
@@ -403,6 +404,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// A RunJavaScript body (plan D-16). Elsa 3 stores it as a literal and runs it with its host functions; Elsa 4 runs
     /// it as a function body that sees only <c>args</c>. The body is rewritten in script mode: its reads become
     /// <c>args.&lt;name&gt;</c>, bound by an <c>arguments</c> object expression, and its completion value is returned.
+    /// The <c>arguments</c> expression declares the type of the activity's own <c>arguments</c> input, because
+    /// publication requires the two to match exactly (#3287: Elsa 4's <c>RunJavaScript.Arguments</c> is a
+    /// <c>JsonElement</c>). Without a known contract it declares <c>Object</c>.
     /// </summary>
     private void LowerScript(
         Elsa3WorkflowDefinition definition,
@@ -411,6 +415,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
         AccessorScope accessors,
+        Func<Elsa3Activity, string, TypeReference?>? inputTypeOf,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
@@ -455,16 +460,17 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var members = definitionResult.Parameters.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
+        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference("Object");
         var arguments = new ExpressionDefinition(
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
-            new TypeReference("Object"),
+            argumentsType,
             definitionResult.Parameters,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
         {
-            ["typeName"] = "Object",
+            ["typeName"] = argumentsType.Alias,
             ["expression"] = new JsonObject
             {
                 ["type"] = "JavaScript",

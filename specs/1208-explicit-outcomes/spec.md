@@ -4,6 +4,9 @@
 
 **Created**: 2026-11-04
 
+**Amendment proposed 2026-11-16 (PR #4658)**: no multi-outcome declaration. Every activity may select several of its
+declared outcomes; FR-014, FR-017 and FR-023 change accordingly, and join behaviour goes to initiative #4193.
+
 **Status**: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-3**,
@@ -33,9 +36,9 @@ Q1. Its remaining refinements are merged in `a5d22a454` and applied here (FR-007
 
 **Related, not blocking:**
 - [#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286) (spec 266, ADR 0048, decision D-2a) reads
-  "the node's activity contract allows several outcomes per completion" to treat a node as an inclusive fork. This spec
-  provides that declaration (FR-014); spec 266 consumes it. Neither waits for the other: no built-in activity declares
-  it today.
+  "the node's activity contract allows several outcomes per completion" to treat a node as an inclusive fork. The
+  amendment of 2026-11-16 removes that declaration: any node may select several outcomes, so spec 266 cannot read it
+  from the contract, and how it treats such nodes goes to the join initiative (#4193).
 - [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425) and ADR 0092
   ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) define the step transaction (D-3) that a
   selection commits with. This spec only requires that the selection is part of the completion.
@@ -60,9 +63,8 @@ once this spec is approved (D-18, 13 Nov); it lands on `main` with the initiativ
 
 **In scope**: the outcome selection in the activity transition, the durable completion records and recovery; the
 script outcome API in RunJavaScript (form per Q1); removal of RunJavaScript's routing by return value and of its
-`Unmatched` outcome; the outcome set and its multi-outcome flag, derived at design time and pinned per node; name
-validation at publish and at run time; Flowchart scheduling, joins and inclusive-fork treatment for multi-outcome
-completions; Studio ports; the Elsa 3 converter (`Done` → `Done`, `setOutcome` / `setOutcomes`, Switch "match any",
+`Unmatched` outcome; the outcome set, derived at design time and pinned per node; name validation at publish and at
+run time; Flowchart scheduling of several selected outcomes under the default join; Studio ports; the Elsa 3 converter (`Done` → `Done`, `setOutcome` / `setOutcomes`, Switch "match any",
 Complete with several outcomes); the documents that state "one outcome per completion".
 
 **Out of scope**:
@@ -95,8 +97,7 @@ with a connection on each; run it once per selection below and check which succe
 1. **Given** a script that selects `Approved`, **When** it completes, **Then** only the `Approved` successor runs.
 2. **Given** a script that selects nothing, **When** it completes, **Then** the activity completes with `Done`, and a
    connection on `Done` is followed.
-3. **Given** a script that selects `Approved` and `Audit` on a node whose outcome set allows several, **When** it
-   completes, **Then** both successors run.
+3. **Given** a script that selects `Approved` and `Audit`, **When** it completes, **Then** both successors run.
 4. **Given** a script that makes an explicitly empty selection, **When** it completes, **Then** no outgoing connection
    is followed, the activity's result and the step's other changes still commit, and other running branches go on.
 5. **Given** a script that returns the string `"Approved"` and selects nothing, **When** it completes, **Then** the
@@ -156,8 +157,7 @@ the step faults with `VF-ACT-006`.
    **When** the data is unfamiliar, **Then** the activity selects that catch-all. **Given** any node, **When** a
    computed outcome name is outside the pinned set, **Then** the step faults with `VF-ACT-006`; no node setting turns
    it into another outcome (Q6).
-4. **Given** a selection of several names on a node whose outcome set does not allow several, **When** the step
-   completes, **Then** it faults with `VF-ACT-006`.
+4. *Removed by the amendment of 2026-11-16*: every node may select several of its declared outcomes.
 5. **Given** a node whose outcome set has no `Done` and whose activity cannot guarantee a selection on every
    successful completion, **When** the workflow is published, **Then** publication reports it, naming the node and
    saying to declare `Done` or select on every path (FR-002b).
@@ -180,8 +180,8 @@ after `A` and `B`; `C`'s path is dead.
 
 1. **Given** a node that selects `A` and `B`, **When** it completes, **Then** both connections run and `C`'s connection
    is routed dead, so a join downstream waits only for `A` and `B` (ADR 0064).
-2. **Given** a node whose outcome set allows several, **When** its outcome set is read by the unordered-write analysis,
-   inspection or Studio, **Then** the node is marked as allowing several outcomes.
+2. *Removed by the amendment of 2026-11-16*: no node is marked as allowing several outcomes; how analysis and joins
+   treat the paths after a node is for initiative #4193.
 3. **Given** two selected outcomes whose connections lead to the same node, **When** the node completes, **Then** the
    engine does not fault, and the target runs as Q4 decides.
 4. **Given** a selection of several outcomes, **When** the instance is inspected or recovered after a restart,
@@ -330,8 +330,9 @@ pins exactly those ports, and a connection on a port the node does not declare i
   selects a code or the unmatched status code (Q8). Without expected codes its set is unchanged.
 - **FR-013**: When provider-relevant configuration changes, Studio MUST refresh the node's ports and show the
   connections on ports that are gone.
-- **FR-014**: Each node's outcome set MUST record whether a completion may select several outcomes, pinned with the
-  set (Q10). RunJavaScript allows several; a Switch allows several only in "match any" mode.
+- **FR-014**: Every activity MAY select several of its declared outcomes in one completion: C# activities, scripts and
+  reusable activities alike. No activity declares it and no flag is pinned (amendment of 2026-11-16, replacing Q10's
+  per-node flag).
 
 **Validation**
 
@@ -341,8 +342,8 @@ pins exactly those ports, and a connection on a port the node does not declare i
   functions). An aliased `complete` or a computed name is checked at run time (FR-016).
 - **FR-016**: A selected name outside the node's pinned declared set MUST fault the step with `VF-ACT-006`, carried as
   the fault code (Q6). No node-level setting turns an invalid outcome name into another outcome.
-- **FR-017**: A selection of several names on a node whose set does not allow several MUST fault the step with
-  `VF-ACT-006`.
+- **FR-017**: *Removed by the amendment of 2026-11-16.* Several declared names are valid on any node; `Done` together
+  with a branch still faults (FR-002).
 - **FR-018**: S-3 MUST NOT add a generic node-level fallback; generic per-node fallbacks are deferred until a concrete
   use case justifies them (Q6). An activity or a script MAY deliberately map unfamiliar business data to an ordinary
   declared catch-all outcome in its contract (SendHttpRequest's unmatched status code, CreateUserTask's `Unmatched`, a
@@ -360,8 +361,9 @@ pins exactly those ports, and a connection on a port the node does not declare i
   target's synchronizing implicit join runs it once after both arrivals (two arrivals, one run). Loop re-entry and
   independent activations stay distinct executions (Q4). This spec defines no per-arrival join mode; join behaviour as
   a whole is designed in its own initiative.
-- **FR-023**: Path analysis, joins, inspection and the unordered-write analysis MUST treat a node whose set allows
-  several outcomes as an inclusive fork.
+- **FR-023**: The default join behaviour applies to the paths of several selected outcomes (FR-022). How path
+  analysis, joins and the unordered-write analysis treat a node that may select several outcomes is decided by the
+  join initiative (#4193), not by a declaration on the node (amendment of 2026-11-16).
 - **FR-024**: A parent that routes by outcomes MUST receive the whole selection. What a parent that does not route by
   outcomes does with it follows Q3.
 
@@ -395,8 +397,13 @@ pins exactly those ports, and a connection on a port the node does not declare i
   - A behaviour-changing conversion exception needs a separate, explicit, approved and documented decision; S-3 adds
     none.
 - **FR-028**: The converter MUST convert an Elsa 3 Switch in "match any" mode to an Elsa 4 Switch in "match any" mode.
-- **FR-029**: The converter MUST convert an Elsa 3 Complete with several literal outcomes to a completion that selects
-  all of them. An outcome given by an expression stays refused.
+  A "match any" Switch whose cases hold activities is out of scope: it is refused with `ELS3-ACTIVITY-UNSUPPORTED-MODE`
+  and guidance until spec row S-12 is implemented (amendment of 2026-11-17).
+- **FR-029**: The converter MUST convert an Elsa 3 Complete with several literal outcomes, in a workflow converted to a
+  reusable activity, to a Graph `Complete` that names all of them (FR-032). An outcome given by an expression stays
+  refused. In a workflow that is not reusable, several outcomes have no consumer in Elsa 4 (the `finish` intrinsic
+  records one outcome that nothing routes on), so they are refused with guidance to name one outcome or make the
+  workflow usable as an activity (amendment of 2026-11-17).
 - **FR-029a**: The converter MUST map Elsa 3's always-firing `Done` onto every branch outcome of the converted node,
   as it already does for If, Switch and DispatchWorkflow. For SendHttpRequest with expected status codes, `Done` maps to
   every code and the unmatched status code; whether `Failed` and `Timeout` are included follows the Elsa 3 source
@@ -406,9 +413,11 @@ pins exactly those ports, and a connection on a port the node does not declare i
 **Switch and Complete**
 
 - **FR-031**: The Elsa 4 Switch MUST offer a "match any" mode that selects every matching case, and `Default` when none
-  matches. "Match first" stays the default mode.
-- **FR-032**: The Graph `Complete` activity, the Finish intrinsic and the graph boundary MUST carry a selection of
-  several outcomes where the graph declares it, instead of requiring exactly one mapped outcome.
+  matches. "Match first" stays the default mode. In "match any" mode the cases route through their outcome connections;
+  a case that holds an activity is refused at publication until spec row S-12 defines how several matching cases run
+  their activities (amendment of 2026-11-17).
+- **FR-032**: The Graph `Complete` activity MAY name several literal boundary outcomes, and the graph boundary MUST
+  pass every one to its parent instead of requiring exactly one. An outcome given by an expression stays refused.
 
 **Documents**
 
@@ -419,8 +428,7 @@ pins exactly those ports, and a connection on a port the node does not declare i
 
 - **Outcome selection**: state (unspecified, named, empty) and the ordered, distinct names. Part of a successful
   completion.
-- **Outcome set**: per node, the declared outcome names plus the multi-outcome flag, derived at design time and pinned
-  at publication.
+- **Outcome set**: per node, the declared outcome names, derived at design time and pinned at publication.
 - **Activity-declared catch-all**: an ordinary declared outcome that an activity or script deliberately selects for
   unfamiliar business data (Q6); never a repair for an invalid outcome name.
 
@@ -467,7 +475,8 @@ the publish warning for a returned string that equals a connected outcome (FR-00
 - **SC-004**: A selection of several outcomes reaches a downstream join exactly once, after every taken path.
 - **SC-005**: Unspecified, named and empty selections survive a restart unchanged.
 - **SC-006**: Zero converter refusals remain for Elsa 3 `setOutcome` / `setOutcomes` with a non-empty
-  `PossibleOutcomes` or literal names, Switch "match any", and Complete with several literal outcomes; every converted
+  `PossibleOutcomes` or literal names, Switch "match any" without case activities (S-12), and Complete with several
+  literal outcomes in a reusable workflow; every converted
   computed selection runs the same paths as in Elsa 3, including names outside the known set.
 - **SC-007**: Every fixture script that returns a string literal equal to a connected outcome name gets the FR-008a
   warning at publication.
