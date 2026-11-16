@@ -41,6 +41,19 @@ test("uncancelled missing bodies and malformed JSON stay sticky without detached
   }
 });
 
+test("drain reads every started body before a reload and keeps failures for settle", async () => {
+  const f = fixture(); let release;
+  const waiting = response(); waiting.body = () => new Promise(resolve => { release = () => resolve(Buffer.from('{"state":"supported"}')); });
+  f.collector.observe(waiting); f.collector.observe(response({ unreadable: true })); await setImmediate();
+  let drained = false; const drain = f.collector.drain().then(() => { drained = true; });
+  await setImmediate(); assert.equal(drained, false); release(); await drain;
+  assert.equal(f.contexts.length, 1);
+  await assert.rejects(f.collector.settle(), error => {
+    assert.deepEqual(error.errors.map(item => item.message), ["activity-data-context-body-unavailable"]);
+    return true;
+  });
+});
+
 test("foreign hosts, paths and methods cannot supply context or a cancellation exemption", async () => {
   const f = fixture();
   for (const options of [{ address: endpoint.replace("51947", "51948") }, { address: endpoint + "/other" },

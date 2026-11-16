@@ -65,7 +65,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await page.locator(".wf-code-view").getByRole("button", { name: "Apply", exact: true }).click();
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect.poll(async () => wireIdentity((await s.saved(created)).state)).toBe(wireIdentity(before));
-    await page.reload(); await expect(node(visibleNodeId)).toBeAttached();
+    await s.settleContext(); await page.reload(); await expect(node(visibleNodeId)).toBeAttached();
     await s.select(consumerId);
     expect((await s.saved(created)).state).toEqual(before);
   }
@@ -129,7 +129,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       const producer: Node = role === "whole" ? echo() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
       const created = await s.seed(`copy ${sequencePairs ? "sequence" : "flowchart"} ${role}`,
         s.root(sequencePairs ? [canonicalLeaf(producer), canonicalLeaf(s.line())] : [producer, s.line()], sequencePairs ? "sequence" : "flowchart"));
-      await s.open(created); await s.trigger().click();
+      await s.settleContext(); await s.open(created); await s.trigger().click();
       const projection = role === "whole" ? "Result" : "Customer";
       await s.chooser().getByRole("option").filter({ has: page.locator(".wf-data-chooser-option-label", { hasText: new RegExp(`› ${projection}$`) }) }).click();
       if (role === "member") await s.commit(created, member, () => s.chooser().getByRole("option", { name: /^customerId/ }).click());
@@ -249,7 +249,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     const group = s.root([canonicalLeaf({ nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] }), consumer, portable, switchNode], "sequence", [variable]); group.nodeId = "group";
     const outer = s.root([group], "sequence", [{ ...variable, default: { expressionType: "Object", value: '{"a.b":{"":"outer-shadow"}}' } }]);
     const created = await s.seed("copy nested scope and portable", outer);
-    await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
+    await s.settleContext(); await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
     const beforeDuplicate = (await s.saved(created)).state;
     await s.select("group"); await s.canvas(); await node("group").press("ControlOrMeta+d");
     await waitCount(created, 13);
@@ -316,7 +316,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     consumer.inputs = [{ referenceKey: "text", value: selected }];
     const root = s.root(valid ? [echo(), consumer] : [consumer]); root.nodeId = `external-${info.project.name}-${Date.now()}`;
     const created = await s.seed(`consumer-only ${valid}`, root);
-    await s.open(created); await capture(page, info, valid ? "external-valid-original" : "external-invalid-original");
+    await s.settleContext(); await s.open(created); await capture(page, info, valid ? "external-valid-original" : "external-invalid-original");
     await s.canvas(); await node("consumer").press("ControlOrMeta+d");
     await waitCount(created, valid ? 4 : 3);
     const copiedConsumer = (await s.saved(created)).state.rootActivity.structure!.payload.activities.at(-1)!;
@@ -333,7 +333,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
         process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId, "--require-published"], { encoding: "utf8" }));
       boundaries.push({ kind: "published-store-positive-control", definitionId: created.definition.id, rootNodeId: root.nodeId, stores: publishedStores });
       const destination = await s.seed("resource-local same IDs", s.root([echo(), s.line()]));
-      await s.open(destination); const before = (await s.saved(destination)).state;
+      await s.settleContext(); await s.open(destination); const before = (await s.saved(destination)).state;
       await s.canvas(); await node("consumer").press("ControlOrMeta+v");
       expect((await s.saved(destination)).state).toEqual(before);
       await expect(page.locator(".wf-sequence-step")).toHaveCount(2);
