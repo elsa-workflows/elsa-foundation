@@ -41,9 +41,10 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     for (const [path, owner] of Object.entries(copyImplementationAssets))
       expect(matched.some(asset => new URL(asset.url).pathname === path && asset.sha256 === owner.sha256), `Browser fetched current copy implementation ${path}`).toBe(true);
   });
-  const timerVersion = await s.version("Elsa.Activities.Scheduling.Activities.Timer");
+  const echoVersion = await s.version("Elsa.Workbench.ActivityDataSelectionProof.EchoValue");
   const customerVersion = await s.version("Elsa.Workbench.ActivityDataSelectionProof.GetCustomer");
-  const timer = (): Node => ({ nodeId: "producer", activityVersionId: timerVersion, inputs: [{ referenceKey: "Interval", value: { expressionType: "Literal", value: "00:00:01" } }], outputs: [] });
+  // A non-trigger String producer: a copied whole-value reference must be able to run outside a start position.
+  const echo = (): Node => ({ nodeId: "producer", activityVersionId: echoVersion, inputs: [{ referenceKey: "Value", value: { expressionType: "Literal", value: "00:00:01" } }], outputs: [] });
   const member: Binding = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };
   const whole: Binding = { expressionType: "ActivityResult", value: { producerNodeId: "producer", projectionKey: "Result", isOptional: false } };
   const nodes = (node: Node): Node[] => [node, ...(node.structure?.payload.activities ?? []).flatMap(nodes),
@@ -125,11 +126,11 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
 
   if (mode === "pairs" || sequencePairs) {
     for (const role of ["whole", "member"] as const) {
-      const producer: Node = role === "whole" ? timer() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
+      const producer: Node = role === "whole" ? echo() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
       const created = await s.seed(`copy ${sequencePairs ? "sequence" : "flowchart"} ${role}`,
         s.root(sequencePairs ? [canonicalLeaf(producer), canonicalLeaf(s.line())] : [producer, s.line()], sequencePairs ? "sequence" : "flowchart"));
       await s.open(created); await s.trigger().click();
-      const projection = role === "whole" ? "Interval" : "Customer";
+      const projection = role === "whole" ? "Result" : "Customer";
       await s.chooser().getByRole("option").filter({ has: page.locator(".wf-data-chooser-option-label", { hasText: new RegExp(`› ${projection}$`) }) }).click();
       if (role === "member") await s.commit(created, member, () => s.chooser().getByRole("option", { name: /^customerId/ }).click());
       else {
@@ -313,7 +314,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   for (const valid of [true, false]) {
     const consumer = s.line(); const selected = valid ? whole : { ...whole, value: { ...(whole.value as object), producerNodeId: "missing-producer" } };
     consumer.inputs = [{ referenceKey: "text", value: selected }];
-    const root = s.root(valid ? [timer(), consumer] : [consumer]); root.nodeId = `external-${info.project.name}-${Date.now()}`;
+    const root = s.root(valid ? [echo(), consumer] : [consumer]); root.nodeId = `external-${info.project.name}-${Date.now()}`;
     const created = await s.seed(`consumer-only ${valid}`, root);
     await s.open(created); await capture(page, info, valid ? "external-valid-original" : "external-invalid-original");
     await page.getByRole("button", { name: "Duplicate Write Line", exact: true }).click();
@@ -331,7 +332,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       const publishedStores = JSON.parse(execFileSync("python3", [resolve("../e2e-tests/activity-data-selection/publication_snapshot.py"),
         process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId, "--require-published"], { encoding: "utf8" }));
       boundaries.push({ kind: "published-store-positive-control", definitionId: created.definition.id, rootNodeId: root.nodeId, stores: publishedStores });
-      const destination = await s.seed("resource-local same IDs", s.root([timer(), s.line()]));
+      const destination = await s.seed("resource-local same IDs", s.root([echo(), s.line()]));
       await s.open(destination); const before = (await s.saved(destination)).state;
       await s.canvas(); await node("consumer").press("ControlOrMeta+v");
       expect((await s.saved(destination)).state).toEqual(before);
