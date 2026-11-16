@@ -1252,6 +1252,14 @@ public sealed partial class GraphActivityProviderTests
                 return [new("Sequence.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
             if (IsFlowchart(activity.Structure) && payload.TryGetProperty("activities", out activities))
                 return [new("Flowchart.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
+            if (IsParallel(activity.Structure) && payload.TryGetProperty("branches", out var branches))
+                return branches.EnumerateArray()
+                    .Select(branch => new ActivityChildProjection(
+                        "Parallel." + branch.GetProperty("name").GetString(),
+                        branch.TryGetProperty("activity", out var branchActivity) && branchActivity.ValueKind == JsonValueKind.Object
+                            ? [branchActivity.Deserialize<ActivityNode>(Options)!]
+                            : []))
+                    .ToArray();
             if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
             {
                 var then = payload.TryGetProperty("then", out var thenElement) && thenElement.ValueKind == JsonValueKind.Object
@@ -1298,9 +1306,28 @@ public sealed partial class GraphActivityProviderTests
                 activity.Structure.SchemaVersion,
                 JsonSerializer.SerializeToElement(new { activities = childIds }, Options));
         }
+        // Spec 266 declarations of the test structures: a Sequence orders its children, a Parallel does not.
+        public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+        {
+            if (activity.Structure is null || StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId))
+                return ActivityChildTimeRelation.FirstBeforeSecond;
+            if (IsParallel(activity.Structure))
+                return ActivityChildTimeRelation.Unordered;
+            if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
+                return ActivityChildTimeRelation.MutuallyExclusive;
+            if (!IsSequence(activity.Structure))
+                return ActivityChildTimeRelation.Unspecified;
+            var ids = ProjectChildren(activity).SelectMany(x => x.Activities).Select(x => x.NodeId).ToList();
+            return ids.IndexOf(firstChildNodeId) < ids.IndexOf(secondChildNodeId)
+                ? ActivityChildTimeRelation.FirstBeforeSecond
+                : ActivityChildTimeRelation.SecondBeforeFirst;
+        }
+
+        public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
         public bool HasHandler(ActivityNodeStructure structure) =>
             hasHandlers &&
-            (IsSequence(structure) ||
+            (IsSequence(structure) || IsParallel(structure) ||
              IsFlowchart(structure) ||
              StringComparer.Ordinal.Equals(structure.Kind, "If") &&
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1"));
@@ -1322,6 +1349,10 @@ public sealed partial class GraphActivityProviderTests
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1")) ||
             (StringComparer.Ordinal.Equals(structure.Kind, "elsa.sequence.structure") &&
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0"));
+
+        private static bool IsParallel(ActivityNodeStructure structure) =>
+            StringComparer.Ordinal.Equals(structure.Kind, "elsa.parallel.structure") &&
+            StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0");
 
         private static bool IsFlowchart(ActivityNodeStructure structure) =>
             StringComparer.Ordinal.Equals(structure.Kind, "elsa.flowchart.structure") &&

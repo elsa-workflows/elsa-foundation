@@ -78,7 +78,15 @@ internal sealed class FlowchartChildResultAnalysis(
         _nonWaitingJoins
             .Where(join => !StringComparer.Ordinal.Equals(join, earlier))
             .Where(join => IsReachable(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || IsReachable(join, later)))
-            .All(join => Dominates(earlier, join));
+            .All(join => Dominates(earlier, join) || !OtherArrivalCanOverlap(join, earlier));
+
+    // Another arrival at the join can run it while the earlier child is in flight when it comes from a source that
+    // neither follows the earlier child nor excludes it.
+    private bool OtherArrivalCanOverlap(string join, string earlier) =>
+        _inboundSources.GetValueOrDefault(join, []).Any(source =>
+            !StringComparer.Ordinal.Equals(source, earlier) &&
+            !IsReachable(earlier, source) &&
+            !AreExclusive(source, earlier));
 
     // A non-waiting join runs once per arrival. Two arrivals can be in flight together when two of its inbound
     // connections come from one node (it may select several outcomes) or from two nodes that are neither ordered nor
