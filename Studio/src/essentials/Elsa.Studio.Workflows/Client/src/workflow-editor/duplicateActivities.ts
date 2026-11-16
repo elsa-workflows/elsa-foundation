@@ -6,12 +6,18 @@ import {
 import { flowchartStructureKind } from "../flowchartStartNode";
 import {
   collectActivityNodeIds,
+  getChildSlots,
+  findActivityNode,
+  bpmnStructureKind,
   replaceSlotActivities,
   resolveScope,
   updateScopeOwner,
   type ActivityCatalogLookup,
+  type ChildSlot,
   type ScopeFrame
 } from "../workflowAdapter";
+import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
+import { remapActivityReferences, type ActivityReferenceResourceKind } from "./activityReferenceRemapping";
 import type {
   ActivityNode,
   ActivityPresentationRecord,
@@ -113,6 +119,7 @@ export function snapshotSelectedActivities(options: {
 
 export function planActivityDuplicate(options: {
   snapshot: ActivityClipboardSnapshot;
+  resourceKind: ActivityReferenceResourceKind;
   draft: WorkflowDraft;
   frames: ScopeFrame[];
   catalog: ActivityCatalogLookup;
@@ -135,12 +142,22 @@ export function planActivityDuplicate(options: {
   const allocateId = options.allocateId ?? allocateActivityNodeId;
   const offset = options.offset ?? duplicatePositionOffset;
   const topLevelIds = new Set(options.snapshot.activities.map(activity => activity.nodeId));
+  // Allocate the complete selected forest before rewriting any reference, including sibling reads.
+  // Structural identities must not authorize a producer or lexical-scope remap.
   const idMap = new Map<string, string>();
-  const activities = options.snapshot.activities.map(activity => {
-    const remapped = remapActivityTree(activity, options.catalog, usedIds, allocateId);
-    for (const [from, to] of remapped.idMap) idMap.set(from, to);
-    return remapped.activity;
-  });
+  const structureIdMap = new Map<string, string>();
+  for (const activity of options.snapshot.activities) {
+    for (const nodeId of collectActivityNodeIds(activity, options.catalog)) {
+      if (!idMap.has(nodeId)) idMap.set(nodeId, allocateId(nodeIdPrefix(nodeId), usedIds));
+    }
+  }
+  for (const activity of options.snapshot.activities) {
+    for (const identity of collectStructureIdentityIds(activity, options.catalog, new Set())) {
+      if (!structureIdMap.has(identity)) structureIdMap.set(identity, allocateId(nodeIdPrefix(identity), usedIds));
+    }
+  }
+  const activities = options.snapshot.activities.map(activity =>
+    rewriteActivityIds(cloneValue(activity), options.catalog, idMap, structureIdMap, options.resourceKind));
 
   const takenNames = collectDisplayNames(options.draft.state.rootActivity, options.draft.activityPresentation, options.catalog);
   const presentationBySource = indexActivityPresentation(options.snapshot.presentation);
@@ -244,6 +261,7 @@ export function pasteActivitiesIntoDraft(options: {
   draft: WorkflowDraft;
   frames: ScopeFrame[];
   snapshot: ActivityClipboardSnapshot;
+  resourceKind: ActivityReferenceResourceKind;
   catalog: ActivityCatalogLookup;
   allocateId?: (prefix: string, usedIds: Set<string>) => string;
   offset?: { x: number; y: number };
@@ -255,79 +273,61 @@ export function pasteActivitiesIntoDraft(options: {
   return nextDraft ? { draft: nextDraft, selectedNodeIds: plan.selectedNodeIds, idMap: plan.idMap } : null;
 }
 
-function remapActivityTree(
-  activity: ActivityNode,
-  catalog: ActivityCatalogLookup,
-  usedIds: Set<string>,
-  allocateId: (prefix: string, usedIds: Set<string>) => string
-) {
-  const clone = cloneValue(activity);
-  const idMap = new Map<string, string>();
-  for (const nodeId of collectActivityNodeIds(clone, catalog)) {
-    idMap.set(nodeId, allocateId(nodeIdPrefix(nodeId), usedIds));
-  }
-  collectStructureIdentityIds(clone, catalog, new Set()).forEach(identity => {
-    if (!idMap.has(identity)) idMap.set(identity, allocateId(nodeIdPrefix(identity), usedIds));
-  });
-  return { activity: rewriteActivityIds(clone, idMap), idMap };
+function ownedChildSlots(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  // The compensation Steps slot is an aggregate view over the per-step owned locations.
+  return getChildSlots(activity, catalog).filter(slot =>
+    activity.structure?.kind !== compensationScopeStructureKind || slot.id !== compensationStepsSlotId);
 }
 
-function rewriteActivityIds(activity: ActivityNode, idMap: Map<string, string>): ActivityNode {
-  const next: ActivityNode = {
-    ...activity,
-    nodeId: idMap.get(activity.nodeId) ?? activity.nodeId
-  };
-  if (!activity.structure) return next;
-  return {
-    ...next,
-    structure: {
-      ...activity.structure,
-      payload: rewriteStructurePayload(activity.structure.payload, idMap)
-    }
-  };
+function rewriteActivityIds(activity: ActivityNode, catalog: ActivityCatalogLookup,
+  activityIds: Map<string, string>, structureIds: Map<string, string>, resourceKind: ActivityReferenceResourceKind): ActivityNode {
+  let next = remapActivityReferences(activity, resolveCatalogItem(activity, catalog), activityIds, resourceKind);
+  next = { ...next, nodeId: activityIds.get(activity.nodeId) ?? activity.nodeId };
+  for (const slot of ownedChildSlots(activity, catalog)) {
+    next = rewriteOwnedSlot(next, slot, child => rewriteActivityIds(child, catalog, activityIds, structureIds, resourceKind));
+  }
+  if (!next.structure) return next;
+  const payload = { ...next.structure.payload };
+  if (next.structure.kind === flowchartStructureKind) {
+    if (Array.isArray(payload.connections)) payload.connections = payload.connections.map(item =>
+      isRecord(item) ? rewriteConnection(item, activityIds, undefined, undefined, structureIds) : item);
+    if (typeof payload.startNodeId === "string") payload.startNodeId = activityIds.get(payload.startNodeId) ?? payload.startNodeId;
+    if (isRecord(payload.nodeMetadata)) payload.nodeMetadata = remapRecordKeys(payload.nodeMetadata, activityIds);
+    if (isRecord(payload.connectionMetadata)) payload.connectionMetadata = remapRecordKeys(payload.connectionMetadata, structureIds);
+  }
+  if (next.structure.kind === bpmnStructureKind) {
+    if (Array.isArray(payload.elements)) payload.elements = payload.elements.map(item => rewriteBpmnElement(item, activityIds, structureIds));
+    if (Array.isArray(payload.sequenceFlows)) payload.sequenceFlows = payload.sequenceFlows.map(item => rewriteBpmnFlow(item, structureIds));
+  }
+  return { ...next, structure: { ...next.structure, payload } };
 }
 
-function rewriteStructurePayload(
-  payload: Record<string, unknown>,
-  idMap: Map<string, string>
-): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...payload };
-  if (Array.isArray(next.activities)) {
-    next.activities = next.activities.map(item => (isActivityNode(item) ? rewriteActivityIds(item, idMap) : item));
+/** The designer projects only recognized children. Copy must retain raw unknown entries at the owned location. */
+function rewriteOwnedSlot(owner: ActivityNode, slot: ChildSlot, rewrite: (child: ActivityNode) => ActivityNode): ActivityNode {
+  if (!owner.structure) return owner;
+  const mapValue = (value: unknown) => slot.cardinality === "many" && Array.isArray(value)
+    ? value.map(child => isActivityNode(child) ? rewrite(child) : child)
+    : slot.cardinality === "single" && isActivityNode(value) ? rewrite(value) : value;
+  const payload = owner.structure.payload;
+  if (slot.collectionProperty && slot.childProperty && slot.collectionIndex !== undefined) {
+    const collection = payload[slot.collectionProperty];
+    if (!Array.isArray(collection)) return owner;
+    const item = collection[slot.collectionIndex];
+    if (!isRecord(item) || !(slot.childProperty in item)) return owner;
+    const nextCollection = [...collection];
+    nextCollection[slot.collectionIndex] = { ...item, [slot.childProperty]: mapValue(item[slot.childProperty]) };
+    return { ...owner, structure: { ...owner.structure, payload: { ...payload, [slot.collectionProperty]: nextCollection } } };
   }
-  if (isActivityNode(next.body)) next.body = rewriteActivityIds(next.body, idMap);
-  else if (Array.isArray(next.body)) next.body = next.body.map(item => isActivityNode(item) ? rewriteActivityIds(item, idMap) : item);
-  if (Array.isArray(next.connections)) {
-    next.connections = next.connections.map(item =>
-      isRecord(item) ? rewriteConnection(item, idMap) : item);
-  }
-  if (typeof next.startNodeId === "string" && idMap.has(next.startNodeId)) {
-    next.startNodeId = idMap.get(next.startNodeId);
-  }
-  if (isRecord(next.nodeMetadata)) next.nodeMetadata = remapRecordKeys(next.nodeMetadata, idMap);
-  if (isRecord(next.connectionMetadata)) next.connectionMetadata = remapRecordKeys(next.connectionMetadata, idMap);
-  if (Array.isArray(next.elements)) {
-    next.elements = next.elements.map(item => rewriteBpmnElement(item, idMap));
-  }
-  if (Array.isArray(next.sequenceFlows)) {
-    next.sequenceFlows = next.sequenceFlows.map(item => rewriteBpmnFlow(item, idMap));
-  }
-
-  for (const [key, value] of Object.entries(next)) {
-    if (ownedPayloadKeys.has(key)) continue;
-    if (isActivityNode(value)) next[key] = rewriteActivityIds(value, idMap);
-    else if (Array.isArray(value) && value.length > 0 && value.every(isActivityNode)) {
-      next[key] = value.map(item => rewriteActivityIds(item, idMap));
-    }
-  }
-  return next;
+  if (!(slot.property in payload)) return owner;
+  return { ...owner, structure: { ...owner.structure, payload: { ...payload, [slot.property]: mapValue(payload[slot.property]) } } };
 }
 
 function rewriteConnection(
   connection: Record<string, unknown>,
   idMap: Map<string, string>,
   usedIds?: Set<string>,
-  allocateId?: (prefix: string, usedIds: Set<string>) => string
+  allocateId?: (prefix: string, usedIds: Set<string>) => string,
+  structureIds?: Map<string, string>
 ) {
   const next = { ...connection };
   const source = isRecord(connection.source) ? { ...connection.source } : null;
@@ -338,18 +338,18 @@ function rewriteConnection(
   if (target) next.target = target;
   const previousId = readString(connection, "id");
   if (previousId) {
-    next.id = idMap.get(previousId)
+    next.id = structureIds?.get(previousId)
       ?? (usedIds && allocateId ? allocateId("flow", usedIds) : `${previousId}-copy`);
   }
   return next;
 }
 
-function rewriteBpmnElement(value: unknown, idMap: Map<string, string>) {
+function rewriteBpmnElement(value: unknown, idMap: Map<string, string>, structureIds: Map<string, string>) {
   if (!isRecord(value)) return value;
   const next = { ...value };
-  if (typeof next.elementId === "string") next.elementId = idMap.get(next.elementId) ?? next.elementId;
+  if (typeof next.elementId === "string") next.elementId = structureIds.get(next.elementId) ?? next.elementId;
   if (typeof next.childNodeId === "string") next.childNodeId = idMap.get(next.childNodeId) ?? next.childNodeId;
-  if (typeof next.defaultFlowId === "string") next.defaultFlowId = idMap.get(next.defaultFlowId) ?? next.defaultFlowId;
+  if (typeof next.defaultFlowId === "string") next.defaultFlowId = structureIds.get(next.defaultFlowId) ?? next.defaultFlowId;
   return next;
 }
 
@@ -368,44 +368,26 @@ function collectStructureIdentityIds(
   result: Set<string>
 ) {
   if (!activity) return result;
-  const payload = activity.structure?.payload;
-  if (payload) {
-    if (Array.isArray(payload.elements)) {
-      for (const element of payload.elements) {
-        if (isRecord(element) && typeof element.elementId === "string") result.add(element.elementId);
-      }
+  const structure = activity.structure;
+  const payload = structure?.payload;
+  if (payload && structure.kind === bpmnStructureKind) {
+    if (Array.isArray(payload.elements)) for (const element of payload.elements) {
+      if (isRecord(element) && typeof element.elementId === "string") result.add(element.elementId);
     }
-    if (Array.isArray(payload.sequenceFlows)) {
-      for (const flow of payload.sequenceFlows) {
-        if (isRecord(flow) && typeof flow.flowId === "string") result.add(flow.flowId);
-      }
-    }
-    if (Array.isArray(payload.connections)) {
-      for (const connection of payload.connections) {
-        const connectionId = isRecord(connection) ? readString(connection, "id") : null;
-        if (connectionId) result.add(connectionId);
-      }
+    if (Array.isArray(payload.sequenceFlows)) for (const flow of payload.sequenceFlows) {
+      if (isRecord(flow) && typeof flow.flowId === "string") result.add(flow.flowId);
     }
   }
-  for (const slot of activity.structure ? [{ activities: readNestedActivities(activity) }] : []) {
+  if (payload && structure.kind === flowchartStructureKind && Array.isArray(payload.connections)) {
+    for (const connection of payload.connections) {
+      const connectionId = isRecord(connection) ? readString(connection, "id") : null;
+      if (connectionId) result.add(connectionId);
+    }
+  }
+  for (const slot of ownedChildSlots(activity, catalog)) {
     for (const child of slot.activities) collectStructureIdentityIds(child, catalog, result);
   }
   return result;
-}
-
-function readNestedActivities(activity: ActivityNode): ActivityNode[] {
-  const payload = activity.structure?.payload;
-  if (!payload) return [];
-  const nested: ActivityNode[] = [];
-  if (Array.isArray(payload.activities)) nested.push(...payload.activities.filter(isActivityNode));
-  if (isActivityNode(payload.body)) nested.push(payload.body);
-  else if (Array.isArray(payload.body)) nested.push(...payload.body.filter(isActivityNode));
-  for (const [key, value] of Object.entries(payload)) {
-    if (key === "activities" || key === "body") continue;
-    if (isActivityNode(value)) nested.push(value);
-    else if (Array.isArray(value)) nested.push(...value.filter(isActivityNode));
-  }
-  return nested;
 }
 
 function collectDisplayNames(
@@ -424,7 +406,7 @@ function collectDisplayNames(
       catalogItem?.activityTypeKey ?? activity.activityVersionId
     );
     if (label) names.add(label.toLowerCase());
-    for (const child of readNestedActivities(activity)) visit(child);
+    for (const slot of ownedChildSlots(activity, catalog)) for (const child of slot.activities) visit(child);
   };
   visit(root);
   return names;
@@ -436,21 +418,7 @@ function findCopiedActivity(
   catalog: ActivityCatalogLookup
 ): ActivityNode | null {
   for (const activity of activities) {
-    if (activity.nodeId === nodeId) return activity;
-    for (const child of collectActivityNodeIds(activity, catalog)) {
-      if (child === nodeId) {
-        const found = findInTree(activity, nodeId);
-        if (found) return found;
-      }
-    }
-  }
-  return null;
-}
-
-function findInTree(activity: ActivityNode, nodeId: string): ActivityNode | null {
-  if (activity.nodeId === nodeId) return activity;
-  for (const child of readNestedActivities(activity)) {
-    const found = findInTree(child, nodeId);
+    const found = findActivityNode(activity, nodeId, catalog);
     if (found) return found;
   }
   return null;
@@ -499,14 +467,3 @@ function cloneValue<T>(value: T): T {
     ? structuredClone(value)
     : JSON.parse(JSON.stringify(value)) as T;
 }
-
-const ownedPayloadKeys = new Set([
-  "activities",
-  "body",
-  "connections",
-  "elements",
-  "sequenceFlows",
-  "nodeMetadata",
-  "connectionMetadata",
-  "startNodeId"
-]);

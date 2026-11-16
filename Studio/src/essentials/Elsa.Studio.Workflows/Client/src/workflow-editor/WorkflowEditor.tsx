@@ -588,6 +588,7 @@ export function WorkflowEditor({
     openContextMenu: openActivityContextMenu,
     closeContextMenu: closeActivityContextMenu
   } = useActivityClipboard({
+    resourceKind: "workflow",
     draft,
     frames,
     catalogByVersion,

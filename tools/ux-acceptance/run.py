@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlparse
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -83,8 +84,21 @@ CAPTURES['native dashboard questions and sharing'] += (
     + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
+COPY_SOURCE_PATHS = {'workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts'}
+COPY_ASSET_PREFIX = '/_content/Elsa.Studio.Workflows/studio/modules/workflows/'
+COPY_JOURNEYS = {'copy activity data pairs', 'copy sequence activity data pairs', 'copy scoped and portable activity data', 'preserve external activity references on copy'}
+CAPTURES.update({
+    'copy activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
+        ('original', 'duplicated', 'pasted', 'paste-undo', 'paste-redo', 'copied-start', 'reopened', 'runtime')], 'copy-reference-320'],
+    'copy sequence activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
+        ('original', 'duplicated', 'pasted', 'paste-undo', 'paste-redo', 'copied-source', 'reopened', 'reopened-source', 'runtime')], 'copy-reference-320'],
+    'copy scoped and portable activity data': ['reference', 'scope-pasted', 'scope-paste-undo', 'scope-paste-redo', 'scope-copied-reference', 'portable-copied-preserved', 'switch-copied-condition'],
+    'preserve external activity references on copy': ['reference', 'external-valid-original', 'external-valid-copy',
+        'foreign-resource-clipboard-cleared', 'external-invalid-original', 'external-invalid-copy',
+        'invalid-publication-refused', 'invalid-reference-320'],
+})
 MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
-DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'}
+DATA_JOURNEYS = MEMBER_JOURNEYS | COPY_JOURNEYS | {'choose data for activity outputs'}
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
 
@@ -120,7 +134,8 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
 ADDITIONAL_ARTIFACTS = {
     'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
-    **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
+    **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
+    **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS - COPY_JOURNEYS},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
@@ -281,13 +296,140 @@ def verdict(report, artifacts, journeys=None, composition="normal"):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
-        if title in DATA_JOURNEYS:
+        if title in COPY_JOURNEYS:
+            activity_copy_verdict(title, attachments, composition)
+        elif title in DATA_JOURNEYS:
             activity_data_verdict(title, attachments, composition)
         if title == 'native dashboard questions and sharing':
             trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
             if len(recorded_browser_contexts(trace)) < 2:
                 raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
     return len(rows)
+
+
+def activity_copy_verdict(title, attachments, composition):
+    files = {item.get('name'): item.get('path') for item in attachments}
+    proof = json.loads(Path(files['activity-data-copy-proof.json']).read_text())
+    if proof.get('composition') != composition or not proof.get('sourceSha') or not proof.get('studioSha'):
+        raise ValueError('Copy proof lacks exact source/composition identity')
+    receipts, runs, boundaries = proof.get('receipts', []), proof.get('runtime', []), proof.get('boundaries', [])
+    owners = proof.get('copyImplementationAssets', {})
+    if not owners or {source for owner in owners.values() for source in owner.get('sources', [])} != COPY_SOURCE_PATHS:
+        raise ValueError('Copy implementation chunk/source ownership is missing')
+    origin = urlparse(proof.get('studioOrigin', ''))
+    for path, owner in owners.items():
+        if not path.startswith(COPY_ASSET_PREFIX) or proof.get('builtAssets', {}).get(path.removeprefix(COPY_ASSET_PREFIX)) != owner.get('sha256'):
+            raise ValueError('Copy implementation chunk is not the normal built asset')
+        if not any(urlparse(item.get('url', '')).path == path and
+                   (urlparse(item.get('url', '')).scheme, urlparse(item.get('url', '')).netloc) == (origin.scheme, origin.netloc) and
+                   item.get('sha256') == owner.get('sha256') for item in proof.get('servedAssets', [])):
+            raise ValueError('Browser did not fetch the current copy implementation bytes at their owned URL')
+    expected = {'copy activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
+                'copy sequence activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
+                'copy scoped and portable activity data': {'duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'},
+                'preserve external activity references on copy': {'consumer-only-valid', 'consumer-only-invalid'}}[title]
+    if len(receipts) != len(expected) or {item.get('operation') for item in receipts} != expected:
+        raise ValueError('Copy operation inventory incomplete')
+    if any(not item.get('before') or not item.get('after') or not item.get('consumerId') for item in receipts):
+        raise ValueError('Missing before/after copy identity')
+    expected_runs = 2 if title in {'copy activity data pairs', 'copy sequence activity data pairs'} else 0 if composition == 'minimal' and title == 'copy scoped and portable activity data' else 1
+    if len(runs) != expected_runs or any(item.get('committed') != item.get('expected') for item in runs):
+        raise ValueError('Committed copy runtime inventory incomplete')
+    for run in runs:
+        ids = {execution['authoredActivityId']: execution['status'] for execution in run.get('executions', [])}
+        if ids.get(run['consumerId']) != 'Completed' or run.get('producerId') and ids.get(run['producerId']) != 'Completed':
+            raise ValueError('Copied producer/consumer did not complete')
+        if title == 'copy activity data pairs' and (run.get('originalNeverRuns') is not True or 'producer' in ids):
+            raise ValueError('Original producer ran; copied-start oracle did not prove the remap')
+    if title == 'copy sequence activity data pairs':
+        validate_sequence_pair_copy(proof)
+    if title == 'preserve external activity references on copy':
+        expected_boundaries = {'published-store-positive-control', 'resource-local', 'invalid-publication-no-write'}
+        if len(boundaries) != 3 or {item.get('kind') for item in boundaries} != expected_boundaries:
+            raise ValueError('Published positive, resource-local and invalid publication controls missing')
+        published = next(item for item in boundaries if item['kind'] == 'published-store-positive-control')
+        local = next(item for item in boundaries if item['kind'] == 'resource-local')
+        refused = next(item for item in boundaries if item['kind'] == 'invalid-publication-no-write')
+        valid_copy = next(item for item in receipts if item['operation'] == 'consumer-only-valid')
+        invalid_copy = next(item for item in receipts if item['operation'] == 'consumer-only-invalid')
+        definition_id = valid_copy.get('definitionId')
+        if not definition_id or published.get('definitionId') != definition_id or runs[0].get('definitionId') != definition_id \
+                or local.get('source') != definition_id or not published.get('rootNodeId') \
+                or published['rootNodeId'] != valid_copy['before'].get('nodeId'):
+            raise ValueError('Published store control does not belong to the copied source and its completed run')
+        if not refused.get('definitionId') or refused['definitionId'] != invalid_copy.get('definitionId') \
+                or refused['definitionId'] == definition_id:
+            raise ValueError('Invalid publication control does not belong to the separate invalid copy')
+        validate_publication_stores(published.get('stores'), require_published=True)
+        validate_publication_stores(refused.get('before'))
+        validate_publication_stores(refused.get('after'))
+        if refused.get('before') != refused.get('after') or len(refused.get('before', {})) != 4:
+            raise ValueError('Publication boundary stores changed or were not read')
+    if composition == 'minimal':
+        preserved = next((item for item in boundaries if item.get('kind') == 'missing-language'), None)
+        if title == 'copy scoped and portable activity data' and (not preserved or not preserved.get('bodyPreservedWithRemappedIdentity')):
+            raise ValueError('Missing-language body/identity preservation proof missing')
+        observed = json.loads(Path(files['activity-data-proof.json']).read_text())
+        if any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I) for url in observed.get('scripts', [])):
+            raise ValueError('Optional editor script requested in minimal copy proof')
+
+
+def validate_sequence_pair_copy(proof):
+    if proof.get('mode') != 'sequence-pairs':
+        raise ValueError('Sequence pair proof came from a different designer mode')
+    receipts = {item['operation']: item for item in proof['receipts']}
+    navigations = proof.get('navigations', [])
+    if len(navigations) != 4 or {(item.get('role'), item.get('stage')) for item in navigations} != \
+            {(role, stage) for role in ('whole', 'member') for stage in ('copied', 'reopened')}:
+        raise ValueError('Sequence whole/member copied and reopened source navigation is incomplete')
+    for role, expression_type, projection, expected in [('whole', 'ActivityResult', 'Result', '00:00:01'),
+                                                       ('member', 'ActivityResultMember', 'Customer', 'cust-1042')]:
+        for operation in ('duplicate', 'paste'):
+            receipt = receipts[operation + '-' + role]
+            structure = receipt['after'].get('rootActivity', {}).get('structure', {})
+            activities = structure.get('payload', {}).get('activities', [])
+            producer = next((node for node in activities if node.get('nodeId') == receipt.get('producerId')), None)
+            consumer = next((node for node in activities if node.get('nodeId') == receipt.get('consumerId')), None)
+            if structure.get('kind') != 'elsa.sequence.structure' or not producer or not consumer:
+                raise ValueError('Sequence copy receipt lacks its actual producer/consumer pair')
+            bindings = [item.get('value', {}) for item in consumer.get('inputs', []) if item.get('referenceKey') == 'text']
+            binding = bindings[0] if len(bindings) == 1 else {}
+            source = binding.get('value', {})
+            if binding.get('expressionType') != expression_type or source.get('producerNodeId') != receipt['producerId'] \
+                    or source.get('projectionKey') != projection or source.get('isOptional') is not False \
+                    or (role == 'member' and source.get('memberPath') != ['customerId']):
+                raise ValueError('Sequence copied whole/member binding lost its intended producer or literal selection')
+        pasted = receipts['paste-' + role]
+        for navigation in (item for item in navigations if item['role'] == role):
+            if navigation.get('definitionId') != pasted.get('definitionId') or navigation.get('consumerId') != pasted['consumerId'] \
+                    or navigation.get('producerId') != pasted['producerId'] or navigation.get('selectedNodeId') != pasted['producerId']:
+                raise ValueError('Sequence source navigation did not select the copied producer')
+        runs = [item for item in proof['runtime'] if item.get('consumerId') == pasted['consumerId']]
+        if len(runs) != 1 or runs[0].get('definitionId') != pasted.get('definitionId') \
+                or runs[0].get('producerId') != pasted['producerId'] or runs[0].get('expected') != expected \
+                or runs[0].get('committed') != expected:
+            raise ValueError('Sequence committed runtime does not belong to its copied whole/member source')
+
+
+def validate_publication_stores(stores, require_published=False):
+    # These are the ownership columns read by the WAL-aware publication_snapshot.py oracle.
+    owner_columns = {'elsa_runtime_workflow_executable': 'ContentJson',
+                     'elsa_runtime_workflow_executable_source_reference': 'DefinitionId',
+                     'elsa_publication_records': 'WorkflowDefinitionId',
+                     'elsa_runtime_workflow_activation_slot': 'WorkflowDefinitionId'}
+    if not isinstance(stores, dict) or set(stores) != set(owner_columns):
+        raise ValueError('Publication control is missing an owning store/table')
+    for table, owner_column in owner_columns.items():
+        value = stores[table]
+        if not isinstance(value, dict):
+            raise ValueError('Publication control has malformed store evidence')
+        store, columns, digest, count = (value.get(key) for key in ('store', 'columns', 'sha256', 'count'))
+        if not isinstance(store, str) or not store or Path(store).is_absolute() or '..' in Path(store).parts \
+                or not isinstance(columns, list) or not columns or any(not isinstance(column, str) or not column for column in columns) \
+                or len(set(columns)) != len(columns) or owner_column not in columns \
+                or not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest) \
+                or type(count) is not int or count < (1 if require_published else 0):
+            raise ValueError('Publication control has invalid schema, fingerprint or owned-row count')
 
 
 def validate_activity_admission(selection):
@@ -615,6 +757,34 @@ def fingerprints(root):
             (file.suffix in {'.dll', '.js', '.css', '.html'} or file.name in {'appsettings.json', 'shells.json'})}
 
 
+def copy_implementation_assets(source, normal, diagnostics):
+    """Map original reviewed sources to normal output chunks through a byte-identical hidden-map build."""
+    owners, found = {}, set()
+    for path in diagnostics.rglob('*.js.map'):
+        mapping = json.loads(path.read_text())
+        owned = [(index, expected) for index, item in enumerate(mapping.get('sources', []))
+                 for expected in COPY_SOURCE_PATHS if item.replace('\\', '/').endswith('/' + expected)]
+        if not owned:
+            continue
+        for index, expected in owned:
+            contents = mapping.get('sourcesContent', [])
+            if index >= len(contents) or contents[index] != (source / expected).read_text():
+                raise ValueError(f'Diagnostic map does not contain the current reviewed source: {expected}')
+        compiled = path.with_suffix('')
+        relative = compiled.relative_to(diagnostics)
+        current = normal / relative
+        if not current.is_file() or current.read_bytes() != compiled.read_bytes():
+            raise ValueError(f'Diagnostic owning chunk differs from the normal compiled bytes: {relative}')
+        sources = sorted(expected for _, expected in owned)
+        found.update(sources)
+        owners[COPY_ASSET_PREFIX + relative.as_posix()] = {
+            'sha256': hashlib.sha256(current.read_bytes()).hexdigest(), 'sources': sources,
+            'sourceMapSha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'diagnosticMap': str(path.relative_to(diagnostics))}
+    if found != COPY_SOURCE_PATHS:
+        raise ValueError('Diagnostic maps do not identify both reviewed copy implementation sources')
+    return owners
+
+
 def run(output, journey=None, studio_root=None, composition='normal'):
     output.mkdir(parents=True, exist_ok=False)
     studio_root = (studio_root or ROOT).resolve()
@@ -635,7 +805,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo']
+        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
         if selected & DATA_JOURNEYS:
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
             backend_command.append(f'-p:CustomAfterMicrosoftCommonTargets={fixture}')
@@ -644,6 +814,16 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             fixture_built = True
         command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
+        workflow_module = studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows'
+        workflow_assets = fingerprints(workflow_module / 'wwwroot/studio/modules/workflows')
+        report['workflowSourceAssets'] = workflow_assets
+        copy_assets = {}
+        if selected & COPY_JOURNEYS:
+            diagnostics = output / 'copy-asset-diagnostics'
+            command(['pnpm', '--filter', '@elsa-workflows/studio-workflows', 'exec', 'vite', 'build', '--sourcemap', 'hidden', '--outDir', str(diagnostics)],
+                    output / 'copy-asset-diagnostics.log', cwd=studio_root / 'Studio')
+            copy_assets = copy_implementation_assets(workflow_module / 'Client/src', workflow_module / 'wwwroot/studio/modules/workflows', diagnostics)
+            report['copyImplementationAssets'] = copy_assets
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
@@ -659,7 +839,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             report['isolatedFieldGallery']['url'] = gallery_url
         report['stage'] = 'build'
 
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             report['ownedRoot'] = str(data)
@@ -698,7 +878,8 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=combined['studioUrl'],
                                ELSA_WORKBENCH_URL=combined['backendUrl'], UX_BACKEND_URL=combined['backendUrl'],
                                UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
-                               UX_ACTIVITY_DATA_COMPOSITION=composition)
+                               UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data),
+                               UX_WORKFLOW_ASSET_SHA256S=json.dumps(workflow_assets), UX_COPY_IMPLEMENTATION_ASSETS=json.dumps(copy_assets))
             for item in hosts[1:]:
                 variable = item['name'].split('-')[0].upper()
                 browser_env.update({f'UX_{variable}_STUDIO_URL': item['studioUrl'], f'UX_{variable}_BACKEND_URL': item['backendUrl']})
@@ -767,11 +948,13 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         # TemporaryDirectory and nested host contexts have ended before removing the opt-in fixture build.
         if fixture_built:
             try:
-                command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
+                command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=false', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
                 dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.dll'
-                if b'ActivityDataSelectionProof' in dll.read_bytes():
-                    raise ValueError('Default Workbench still contains the opt-in customer fixture')
-                report['fixtureCleanup'] = {'status': 'passed', 'workbenchSha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'markerAbsent': True}
+                markers = ('DashboardQualificationBootstrap', 'QualificationPrincipals', 'DashboardQualificationServiceExclusions', 'ActivityDataSelectionProof')
+                marker_absence = {marker: marker.encode() not in dll.read_bytes() and marker.encode('utf-16-le') not in dll.read_bytes() for marker in markers}
+                if not all(marker_absence.values()):
+                    raise ValueError('Default Workbench still contains an opt-in customer fixture marker')
+                report['fixtureCleanup'] = {'status': 'passed', 'workbenchSha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'markerAbsent': True, 'markerAbsence': marker_absence}
                 if (sha, dirty) != source_state(ROOT) or (studio_sha, studio_dirty) != source_state(studio_root):
                     raise ValueError('Source changed during fixture cleanup')
             except Exception as error:

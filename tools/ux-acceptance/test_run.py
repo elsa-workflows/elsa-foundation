@@ -43,6 +43,65 @@ class VerdictTests(unittest.TestCase):
             title = row['title']
             if title not in acceptance.DATA_JOURNEYS:
                 continue
+            if title in acceptance.COPY_JOURNEYS:
+                operations = {'copy activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
+                              'copy sequence activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
+                              'copy scoped and portable activity data': ['duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'],
+                              'preserve external activity references on copy': ['consumer-only-valid', 'consumer-only-invalid']}[title]
+                run = {'consumerId': 'copied-consumer', 'producerId': 'copied-producer', 'expected': 'value', 'committed': 'value',
+                       'originalNeverRuns': True, 'executions': [{'authoredActivityId': id, 'status': 'Completed'} for id in ('copied-consumer', 'copied-producer')]}
+                proof = {'sourceSha': 'head', 'studioSha': 'head', 'composition': 'normal', 'studioOrigin': 'http://owned',
+                         'builtAssets': {'InspectorPanel-current.js': 'owner-hash', 'arrow.js': 'aux-hash'},
+                         'copyImplementationAssets': {'/_content/Elsa.Studio.Workflows/studio/modules/workflows/InspectorPanel-current.js': {
+                             'sha256': 'owner-hash', 'sources': ['workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts']}},
+                         'servedAssets': [{'url': 'http://owned/_content/Elsa.Studio.Workflows/studio/modules/workflows/InspectorPanel-current.js', 'sha256': 'owner-hash'}],
+                         'receipts': [{'operation': op, 'before': {'root': 'before'}, 'after': {'root': 'after'}, 'consumerId': 'copied-consumer'} for op in operations],
+                         'runtime': [copy.deepcopy(run) for _ in range(2 if title in {'copy activity data pairs', 'copy sequence activity data pairs'} else 1)],
+                         'boundaries': [{'kind': 'resource-local'}, {'kind': 'invalid-publication-no-write', 'before': {str(i): {} for i in range(4)}, 'after': {str(i): {} for i in range(4)}}]
+                         if title == 'preserve external activity references on copy' else []}
+                if title == 'copy sequence activity data pairs':
+                    proof.update(mode='sequence-pairs', receipts=[], runtime=[], navigations=[])
+                    for role, expression_type, projection, expected in [('whole', 'ActivityResult', 'Result', '00:00:01'),
+                                                                         ('member', 'ActivityResultMember', 'Customer', 'cust-1042')]:
+                        definition_id = role + '-definition'
+                        for operation in ('duplicate', 'paste'):
+                            producer, consumer = (role + '-' + operation + '-' + kind for kind in ('producer', 'consumer'))
+                            binding = {'expressionType': expression_type, 'value': {'producerNodeId': producer, 'projectionKey': projection, 'isOptional': False}}
+                            if role == 'member': binding['value']['memberPath'] = ['customerId']
+                            state = {'rootActivity': {'structure': {'kind': 'elsa.sequence.structure', 'payload': {'activities': [
+                                {'nodeId': producer, 'inputs': []}, {'nodeId': consumer, 'inputs': [{'referenceKey': 'text', 'value': binding}]}]}}}}
+                            proof['receipts'].append({'definitionId': definition_id, 'operation': operation + '-' + role,
+                                                      'before': {'rootActivity': {'nodeId': 'root'}}, 'after': state,
+                                                      'consumerId': consumer, 'producerId': producer})
+                        proof['runtime'].append({'definitionId': definition_id, 'consumerId': consumer, 'producerId': producer,
+                                                 'expected': expected, 'committed': expected, 'originalNeverRuns': False,
+                                                 'executions': [{'authoredActivityId': id, 'status': 'Completed'} for id in ('producer', producer, consumer)]})
+                        proof['navigations'] += [{'definitionId': definition_id, 'role': role, 'stage': stage, 'consumerId': consumer,
+                                                  'producerId': producer, 'selectedNodeId': producer} for stage in ('copied', 'reopened')]
+                if title == 'preserve external activity references on copy':
+                    columns = {'elsa_runtime_workflow_executable': 'ContentJson',
+                               'elsa_runtime_workflow_executable_source_reference': 'DefinitionId',
+                               'elsa_publication_records': 'WorkflowDefinitionId',
+                               'elsa_runtime_workflow_activation_slot': 'WorkflowDefinitionId'}
+                    stores = {table: {'store': 'runtime.db', 'columns': ['Id', column], 'count': 1, 'sha256': 'a' * 64}
+                              for table, column in columns.items()}
+                    for receipt, owner in zip(proof['receipts'], ('valid-definition', 'invalid-definition')):
+                        receipt['definitionId'] = owner
+                        receipt['before'] = {'nodeId': owner + '-root'}
+                    proof['runtime'][0]['definitionId'] = 'valid-definition'
+                    proof['boundaries'] = [
+                        {'kind': 'published-store-positive-control', 'definitionId': 'valid-definition',
+                         'rootNodeId': 'valid-definition-root', 'stores': stores},
+                        {'kind': 'resource-local', 'source': 'valid-definition', 'destination': 'other-definition', 'clipboardCleared': True},
+                        {'kind': 'invalid-publication-no-write', 'definitionId': 'invalid-definition',
+                         'before': {table: {**value, 'count': 0} for table, value in stores.items()},
+                         'after': {table: {**value, 'count': 0} for table, value in stores.items()}}]
+                file = self.root / (title.replace(' ', '-') + '.json'); file.write_text(json.dumps(proof))
+                for test in row['tests']:
+                    next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-copy-proof.json')['path'] = str(file)
+                    observed = self.root / (title.replace(' ', '-') + '-source.json'); observed.write_text(json.dumps({'scripts': []}))
+                    next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-proof.json')['path'] = str(observed)
+                continue
             member = {'expressionType': 'ActivityResultMember', 'value': {'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}}
             scoped = [{'expressionType': 'VariableMember', 'value': {'referenceKey': key, 'declaringScopeId': scope, 'memberPath': ['a.b', '']}}
                       for key, scope in [('inner-payload', 'root'), ('outer-payload', 'workflow')]]
@@ -182,6 +241,123 @@ class VerdictTests(unittest.TestCase):
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
         self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+
+    def test_copy_requires_copied_start_identity_and_unchanged_publication_stores(self):
+        for title, mutation in [('copy activity data pairs', 'original-ran'), ('copy activity data pairs', 'wrong-producer'),
+                                ('preserve external activity references on copy', 'store-changed')]:
+            with self.subTest(mutation=mutation):
+                file = self.root / (title.replace(' ', '-') + '.json'); original = file.read_text(); proof = json.loads(original)
+                if mutation == 'original-ran': proof['runtime'][0]['executions'].append({'authoredActivityId': 'producer', 'status': 'Completed'})
+                elif mutation == 'wrong-producer': proof['runtime'][0]['producerId'] = 'unexecuted-original'
+                else: next(item for item in proof['boundaries'] if item['kind'] == 'invalid-publication-no-write')['after']['elsa_publication_records']['count'] = 1
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
+                finally: file.write_text(original)
+
+    def test_copy_external_positive_store_control_is_required(self):
+        title = 'preserve external activity references on copy'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        self.assertEqual(len(acceptance.JOURNEY_PROJECTS[title]), acceptance.verdict(report, self.root, [title]))
+
+    def test_copy_external_rejects_missing_positive_store_control(self):
+        self.assert_external_store_control_rejected('missing-positive')
+
+    def test_copy_external_rejects_invalid_positive_store_evidence(self):
+        for change in ('duplicate-positive', 'zero-count', 'boolean-count', 'missing-table', 'wrong-owner-column',
+                       'empty-store', 'external-store', 'bad-hash', 'wrong-definition', 'wrong-root', 'wrong-runtime',
+                       'wrong-resource-source', 'invalid-definition-is-valid', 'invalid-store-schema', 'invalid-store-change'):
+            with self.subTest(change=change):
+                self.assert_external_store_control_rejected(change)
+
+    def assert_external_store_control_rejected(self, change):
+        title = 'preserve external activity references on copy'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        file = self.root / 'preserve-external-activity-references-on-copy.json'
+        original = file.read_text(); proof = json.loads(original)
+        positive, local, refused = proof['boundaries']
+        store = positive['stores']['elsa_publication_records']
+        if change == 'missing-positive': proof['boundaries'].remove(positive)
+        elif change == 'duplicate-positive': proof['boundaries'].append(copy.deepcopy(positive))
+        elif change == 'zero-count': store['count'] = 0
+        elif change == 'boolean-count': store['count'] = True
+        elif change == 'missing-table': positive['stores'].pop('elsa_publication_records')
+        elif change == 'wrong-owner-column': store['columns'] = ['Id', 'OtherDefinitionId']
+        elif change == 'empty-store': store['store'] = ''
+        elif change == 'external-store': store['store'] = '../foreign.db'
+        elif change == 'bad-hash': store['sha256'] = 'not-a-sha256'
+        elif change == 'wrong-definition': positive['definitionId'] = 'unrelated-definition'
+        elif change == 'wrong-root': positive['rootNodeId'] = 'unrelated-root'
+        elif change == 'wrong-runtime': proof['runtime'][0]['definitionId'] = 'unrelated-definition'
+        elif change == 'wrong-resource-source': local['source'] = 'unrelated-definition'
+        elif change == 'invalid-definition-is-valid': refused['definitionId'] = positive['definitionId']
+        elif change == 'invalid-store-schema': refused['before'] = refused['after'] = {str(i): {} for i in range(4)}
+        elif change == 'invalid-store-change': refused['after']['elsa_publication_records']['sha256'] = 'b' * 64
+        file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [title])
+        finally: file.write_text(original)
+
+    def test_copy_asset_fence_requires_owner_bytes_at_its_actual_url(self):
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == 'copy activity data pairs']
+        self.assertEqual(len(acceptance.JOURNEY_PROJECTS['copy activity data pairs']), acceptance.verdict(report, self.root, ['copy activity data pairs']))
+        file = self.root / 'copy-activity-data-pairs.json'; original = file.read_text()
+        for change in ('auxiliary-only', 'stale-owner', 'wrong-url'):
+            with self.subTest(change=change):
+                proof = json.loads(original)
+                auxiliary = {'url': 'http://owned/_content/Elsa.Studio.Workflows/studio/modules/workflows/arrow.js', 'sha256': 'aux-hash'}
+                if change == 'auxiliary-only': proof['servedAssets'] = [auxiliary]
+                elif change == 'stale-owner': proof['servedAssets'][0]['sha256'] = 'old-owner-hash'; proof['servedAssets'].append(auxiliary)
+                else: proof['servedAssets'][0]['url'] = 'http://owned/unrelated/InspectorPanel-current.js'
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['copy activity data pairs'])
+                finally: file.write_text(original)
+
+    def test_sequence_pair_receipts_cover_normal_and_minimal_without_inactive_originals(self):
+        title = 'copy sequence activity data pairs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        self.assertEqual(len(acceptance.JOURNEY_PROJECTS[title]), acceptance.verdict(report, self.root, [title]))
+        file = self.root / 'copy-sequence-activity-data-pairs.json'; original = file.read_text()
+        proof = json.loads(original); proof['composition'] = 'minimal'; file.write_text(json.dumps(proof))
+        try:
+            self.assertEqual(len(acceptance.JOURNEY_PROJECTS[title]), acceptance.verdict(report, self.root, [title], 'minimal'))
+        finally: file.write_text(original)
+
+    def test_sequence_pair_proof_requires_both_roles_native_navigation_and_copied_runtime(self):
+        title = 'copy sequence activity data pairs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        file = self.root / 'copy-sequence-activity-data-pairs.json'; original = file.read_text()
+        for change in ('missing-role', 'wrong-mode', 'missing-navigation', 'duplicate-navigation', 'wrong-navigation-target',
+                       'wrong-navigation-source', 'wrong-navigation-owner', 'whole-binding', 'member-binding', 'member-path',
+                       'wrong-runtime-producer', 'wrong-runtime-owner', 'wrong-runtime-value', 'missing-runtime'):
+            with self.subTest(change=change):
+                proof = json.loads(original)
+                if change == 'missing-role': proof['receipts'] = proof['receipts'][:2]
+                elif change == 'wrong-mode': proof['mode'] = 'pairs'
+                elif change == 'missing-navigation': proof['navigations'].pop()
+                elif change == 'duplicate-navigation': proof['navigations'][-1] = proof['navigations'][0]
+                elif change == 'wrong-navigation-target': proof['navigations'][0]['selectedNodeId'] = 'producer'
+                elif change == 'wrong-navigation-source': proof['navigations'][0]['consumerId'] = 'other-consumer'
+                elif change == 'wrong-navigation-owner': proof['navigations'][0]['definitionId'] = 'other-definition'
+                elif change in ('whole-binding', 'member-binding', 'member-path'):
+                    receipt = proof['receipts'][1 if change == 'whole-binding' else 3]
+                    binding = receipt['after']['rootActivity']['structure']['payload']['activities'][1]['inputs'][0]['value']
+                    if change == 'member-path': binding['value']['memberPath'] = ['customer', 'Id']
+                    else: binding['value']['producerNodeId'] = 'producer'
+                elif change == 'wrong-runtime-producer': proof['runtime'][0]['producerId'] = 'producer'
+                elif change == 'wrong-runtime-owner': proof['runtime'][0]['definitionId'] = 'other-definition'
+                elif change == 'wrong-runtime-value': proof['runtime'][0]['expected'] = proof['runtime'][0]['committed'] = 'other-value'
+                elif change == 'missing-runtime': proof['runtime'].pop()
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [title])
+                finally: file.write_text(original)
 
     def test_missing_actual_browser_cancellation_cannot_pass(self):
         file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
@@ -397,6 +573,35 @@ class VerdictTests(unittest.TestCase):
                         self.assertEqual(2, process.wait.call_count)
 
 
+
+
+class CopyAssetOwnershipTests(unittest.TestCase):
+    def test_map_sources_current_content_and_normal_js_parity_are_all_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); source, normal, diagnostics = root / 'source', root / 'normal', root / 'diagnostics'
+            source.mkdir(); normal.mkdir(); diagnostics.mkdir(); (source / 'workflow-editor').mkdir()
+            for path in acceptance.COPY_SOURCE_PATHS:
+                (source / path).write_text('reviewed:' + path)
+            content = b'current compiled owning chunk'
+            (normal / 'InspectorPanel-current.js').write_bytes(content)
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(content)
+            mapping = {'sources': ['../' + path for path in sorted(acceptance.COPY_SOURCE_PATHS)],
+                       'sourcesContent': [(source / path).read_text() for path in sorted(acceptance.COPY_SOURCE_PATHS)]}
+            map_path = diagnostics / 'InspectorPanel-current.js.map'; map_path.write_text(json.dumps(mapping))
+            owners = acceptance.copy_implementation_assets(source, normal, diagnostics)
+            self.assertEqual(1, len(owners)); self.assertEqual(acceptance.COPY_SOURCE_PATHS, set(next(iter(owners.values()))['sources']))
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(b'stale owning code')
+            with self.assertRaisesRegex(ValueError, 'normal compiled bytes'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(content)
+            mapping['sourcesContent'][0] = 'older reviewed source'; map_path.write_text(json.dumps(mapping))
+            with self.assertRaisesRegex(ValueError, 'current reviewed source'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
+            map_path.unlink()
+            with self.assertRaisesRegex(ValueError, 'both reviewed copy'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
+
+
 class CompositionTests(unittest.TestCase):
     def setUp(self):
         self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench/shells.json').read_text(encoding='utf-8-sig'))
@@ -544,6 +749,14 @@ class OrchestrationTests(unittest.TestCase):
                 target = source / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((acceptance.ROOT / relative).read_bytes())
+            workflow_module = source / 'Studio/src/essentials/Elsa.Studio.Workflows'
+            for relative in acceptance.COPY_SOURCE_PATHS:
+                target = workflow_module / 'Client/src' / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((acceptance.ROOT / 'Studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
+            assets = workflow_module / 'wwwroot/studio/modules/workflows'
+            assets.mkdir(parents=True)
+            (assets / 'copy-current.js').write_bytes(b'synthetic compiled copy module')
 
             @contextmanager
             def fake_host(directory, dll, url, ready, log, env):
@@ -562,6 +775,16 @@ class OrchestrationTests(unittest.TestCase):
                     events.append(('stop', directory.name, dll))
 
             def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+                if log.name == 'copy-asset-diagnostics.log':
+                    diagnostics = Path(args[args.index('--outDir') + 1])
+                    diagnostics.mkdir(parents=True)
+                    (diagnostics / 'copy-current.js').write_bytes((assets / 'copy-current.js').read_bytes())
+                    paths = sorted(acceptance.COPY_SOURCE_PATHS)
+                    (diagnostics / 'copy-current.js.map').write_text(json.dumps({
+                        'sources': ['../../src/' + path for path in paths],
+                        'sourcesContent': [(workflow_module / 'Client/src' / path).read_text() for path in paths],
+                    }))
+                    return
                 if log.name == 'fixture-cleanup-build.log':
                     dll = source / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
@@ -610,6 +833,11 @@ class OrchestrationTests(unittest.TestCase):
         browser = next(event[1] for event in events if event[0] == 'browser')
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
+        self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
+        self.assertEqual(report['workflowSourceAssets'], json.loads(browser['UX_WORKFLOW_ASSET_SHA256S']))
+        self.assertEqual(report['copyImplementationAssets'], json.loads(browser['UX_COPY_IMPLEMENTATION_ASSETS']))
+        self.assertEqual({acceptance.COPY_ASSET_PREFIX + 'copy-current.js'}, set(report['copyImplementationAssets']))
+        self.assertEqual(sorted(acceptance.COPY_SOURCE_PATHS), next(iter(report['copyImplementationAssets'].values()))['sources'])
         self.assertEqual((acceptance.RESTRICTED_USER, 'reader-id'), (browser['UX_RESTRICTED_USER'], browser['UX_RESTRICTED_SUBJECT']))
         self.assertTrue(browser['UX_RESTRICTED_PASSWORD'])
         self.assertNotIn(browser['UX_RESTRICTED_PASSWORD'], json.dumps(report))

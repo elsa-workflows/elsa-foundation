@@ -833,7 +833,7 @@ export function ActivityGraphImplementationEditor({
       activityPresentation: value.activityPresentation ?? [],
       validationErrors: []
     };
-    const plan = planActivityDuplicate({ snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
+    const plan = planActivityDuplicate({ resourceKind: "activity-definition", snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
     if (!plan?.activities.length) return;
     const duplicate = applyActivityDuplicatePlan(draft, scopeFrames, plan, catalogByVersion, nodeId);
     const nextRoot = duplicate?.state.rootActivity;
