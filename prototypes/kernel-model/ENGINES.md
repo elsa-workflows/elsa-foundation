@@ -264,7 +264,7 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
   Rerun: MySQL REPEATABLE READ checked 0 deadlocks; SQL Server and MySQL all hold. PostgreSQL locks only the rows it
   changes and needs neither (reasoned); the index would still save the scan.
 
-### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence is SQL Server's default)
+### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence), closed by round 5 B (the owned in-batch fence is the default again)
 
 - **Graph (`.out/f-mssql-deadlock-graphs.xml`):** a stale owner's SaveChanges holds X on a `PK_Messages` key (a seen
   or trial mark) and waits for U on `PK_Partitions` (its fence follows the message write); the take holds X on
@@ -278,8 +278,20 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
   the batch (EF orders by table, so that needs the fence as its own command, which is the checked fence). Changing the
   take's order would change the protocol shared by all engines; not done.
 - **Applied (round 4, FINDINGS section 25.1):** the owner chose the checked fence as SQL Server's default on 13 November.
-  `SqlServerEngine.FenceInBatchByDefault` is false, so a store that is not told takes it; `fence=batch` still gives the
+  `SqlServerEngine.FenceInBatchByDefault` was false, so a store that was not told took it; `fence=batch` still gave the
   fence in the batch. The stress test with the default had no take deadlocks (FINDINGS section 25.1).
+- **Decided 16 November (round 5 B, COMMIT-SQL.md):** with the owned commit the batch opens with the fence, so the
+  partition row is the commit's first lock as it is the take's and the cycle above cannot form: 0 deadlocks in the 40 s
+  runs against EF's 74. SQL Server's default is the fence in the batch again, as on every other engine
+  (`SqlServerEngine.FenceInBatchByDefault(ownedCommit)` true for the owned commit); `fence=checked` (`--checked-fence`)
+  stays selectable as the 13 November fallback and stays the default for the EF reference path (`commit=ef`), whose batch
+  still writes message rows before the fence (a reviewer measured 8 take deadlocks in 40 s with it in the batch). One round trip less per commit (the "SQL Server batch" column of the cost tables is now the default's).
+  Gates of the flip, on its head (SQL Server 2022, RCSI unless said, amd64 emulation, owned commit): conformance with
+  the default (now in the batch) 87 pass and 1 skipped, `--checked-fence` the same; `semantic fence --fence-ignores-count`
+  exits 1 (default 1 of 3 fail, checked 3 of 3); `semantic-broken fence` default 1 of 3 fail, checked 3 of 3; two 40 s and
+  5,000-message stress runs with the default, **0 deadlocks**, holds (resets 1,143 and 1,119); one with `rcsi=0` (locking
+  READ COMMITTED), **0 deadlocks**, holds (919 resets); the cost run with the default equals the "SQL Server batch"
+  column cell for cell (balanced on the owner 3, durable 30, 1,000 instances at once 10, 1,000 by poll 13).
 
 ### E10. MySQL's driver costs four round trips per commit more than PostgreSQL's. Run; not fixed
 
