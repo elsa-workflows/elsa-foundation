@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using System.Data.Common;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -42,7 +43,7 @@ public sealed partial class RuntimeModelMigrationTests
             }
             var after = await LegacyRows(connection);
             foreach (var (table, digest) in before) Assert.Equal(digest, after[table]);
-            Assert.Equal(before.Count + 8, after.Count);
+            Assert.Equal(before.Count + 16, after.Count);
             Assert.Contains("UserTasks", after.Keys); Assert.Contains("UserTaskForms", after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.StateTable, after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
@@ -50,8 +51,18 @@ public sealed partial class RuntimeModelMigrationTests
                 Assert.Contains(table, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 5, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 6, upgradedHistory.Length);
+            // Adding storage cannot invent capture or first-occurrence evidence for saved legacy runs.
+            foreach (var table in new[] { RuntimeHistoryProjectionSchema.HeadTable, RuntimeHistoryProjectionSchema.EventTable,
+                RuntimeHistoryProjectionSchema.BookmarkTable, RuntimeHistoryProjectionSchema.BookmarkCountTable, RuntimeHistoryProjectionSchema.ActivityTable,
+                RuntimeHistoryOccurrenceEntityConfiguration.OccurrenceTable, RuntimeHistoryOccurrenceEntityConfiguration.MembershipTable,
+                RuntimeHistoryOccurrenceEntityConfiguration.CounterTable })
+            {
+                Assert.Contains(table, after.Keys);
+                await using var historyRows = connection.CreateCommand(); historyRows.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
+                Assert.Equal(0L, (long)(await historyRows.ExecuteScalarAsync())!);
+            }
             await using (var nativeKinds = connection.CreateCommand())
             {
                 nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";

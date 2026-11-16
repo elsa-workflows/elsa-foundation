@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 
-/// <summary>Private projection model; production registration joins the generated migration slice.</summary>
+/// <summary>Private history shapes in the Runtime module's shared model and migration chain.</summary>
 internal static class RuntimeHistoryEntityConfiguration
 {
     private static void Common<T>(EntityTypeBuilder<T> b, string table) where T : class

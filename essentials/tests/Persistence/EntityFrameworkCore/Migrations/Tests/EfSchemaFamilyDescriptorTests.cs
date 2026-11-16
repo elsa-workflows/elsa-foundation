@@ -36,7 +36,7 @@ public sealed class EfSchemaFamilyDescriptorTests
         var families = EfSchemaFamilyCatalog.Discover(Declaring);
         var handles = Declaring
             .SelectMany(assembly => assembly.GetTypes())
-            .Select(type => type.GetField("Chain", BindingFlags.Public | BindingFlags.Static))
+            .Select(type => type.GetField("Chain", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
             .Where(field => field?.FieldType == typeof(EfSchemaChain))
             .Select(field => (EfSchemaChain)field!.GetValue(null)!)
             .ToDictionary(chain => chain.Family, StringComparer.Ordinal);
