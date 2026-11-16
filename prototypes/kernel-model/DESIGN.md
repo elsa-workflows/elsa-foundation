@@ -279,9 +279,10 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   activity hands the key to the receiver where the receiver looks for a repeat: the native `SendHttpRequest` sends it
   as the `Idempotency-Key` header and `SendEmail` as the local part of the `Message-ID`. **Deduplication is the
   receiving side's job**, conditional on its keeping the keys it has seen; the kernel records no key and drops no
-  repeat. The simulation's N7 checks the carrying, the stability (one activation, one key and one content across its
-  resends) and that one key belongs to one activation; the smoke's alias check replays one committed state over a
-  shorter and a longer inbox and asserts the same.
+  repeat. The simulation's N7 checks the carrying, the stability (one activation, one key across its resends; a
+  resend's content is not compared, the receiver keeps the first), that one key belongs to one activation, and that a
+  key never leaves in two turns that both landed; the smoke's alias check replays one committed state over a shorter
+  and a longer inbox and asserts the same.
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
   parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
@@ -461,8 +462,9 @@ mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once 
 upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
 External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed, and N7 (round 5 C) an
-outbound effect (HTTP, email) carries its effect key where its receiver looks, the same key and content every time the same
-logical activation (node, iteration path, attempt) is sent, and one key belongs to one activation. The graph invariants of the sketch (round 4):
+outbound effect (HTTP, email) carries its effect key where its receiver looks, the same key every time the same logical
+activation (node, iteration path, attempt) is sent, one key belongs to one activation, and a key never leaves in two turns that
+both landed (a resend's content is not compared). The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
 arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 

@@ -143,7 +143,10 @@ public static class VariantChecks
         if (expected is { } n) check(a.Count == n && b.Count == n, $"{n} sendings in A and B ({a.Count}, {b.Count})");
         var collisions = a.SelectMany(x => b.Where(y => x.Key == y.Key && x.Body != y.Body).Select(y => (x, y))).ToList();
         check(collisions.Count == 0, $"no key carried two bodies across A and B ({string.Join("; ", collisions.Select(c => $"{c.x.Key}: '{c.x.Body}' vs '{c.y.Body}'"))})");
-        var moved = a.Where(x => b.SingleOrDefault(y => y.Body == x.Body && y.Node == x.Node) is { } y && y.Key != x.Key).ToList();
+        // Every activation A sent is in B (B may send more: a longer collection, a higher limit), with the same key.
+        var missing = a.Where(x => !b.Any(y => y.Body == x.Body && y.Node == x.Node)).ToList();
+        check(missing.Count == 0, $"every activation of A is sent in B ({string.Join("; ", missing.Select(m => $"{m.Node} {m.Body}"))})");
+        var moved = a.Where(x => b.Any(y => y.Body == x.Body && y.Node == x.Node) && !b.Any(y => y.Body == x.Body && y.Node == x.Node && y.Key == x.Key)).ToList();
         check(moved.Count == 0, $"every logical activation kept its key across A and B ({string.Join("; ", moved.Select(m => $"{m.Node} {m.Body}: {m.Key}"))})");
         check(a.Select(s => s.Key).Distinct().Count() == a.Count, $"keys distinct within A ({a.Count} sendings, {a.Select(s => s.Key).Distinct().Count()} keys)");
         check(b.Select(s => s.Key).Distinct().Count() == b.Count, $"keys distinct within B ({b.Count} sendings, {b.Select(s => s.Key).Distinct().Count()} keys)");

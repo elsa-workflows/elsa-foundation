@@ -38,6 +38,8 @@ public enum NativeFlaw
     UnstableEffectKey = 1 << 9,
     NodelessEffectKey = 1 << 10,
     PathlessEffectKey = 1 << 11,
+    TurnLocalJoinOrdinal = 1 << 12, // a Flowchart join's firing ordinal counted per turn in memory instead of from the committed firings
+    FlatRetryGeneration = 1 << 13,  // every retry successor is generation 1, so the second retry of one activation shares its key with the first
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
@@ -455,15 +457,16 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         return string.Join('.', segments);
     }
 
-    /// <summary>How many retries lie between the original activation and this successor frame, from the committed lineage.</summary>
+    /// <summary>
+    /// How many retries lie between the original activation and this successor frame, from the committed lineage: the
+    /// receipt that made this frame the successor of its source, then the receipt that made that source a successor, and
+    /// so on (receipts are only ever added). The MUTATION gives every successor generation 1.
+    /// </summary>
     private int RetryGeneration(Frame frame)
     {
+        if (Has(NativeFlaw.FlatRetryGeneration)) return 1;
         var generation = 0;
-        for (var source = frame.RetrySource; source is not null && _s.Retries is { } retries;)
-        {
-            generation++;
-            source = retries.Values.FirstOrDefault(r => r.Successor == source)?.Source.RetrySource;
-        }
+        for (var current = frame.Id; _s.Retries is { } retries && retries.Values.FirstOrDefault(r => r.Successor == current) is { } receipt; current = receipt.Source.Id) generation++;
         return generation;
     }
 

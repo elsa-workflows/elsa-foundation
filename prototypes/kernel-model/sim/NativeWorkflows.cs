@@ -15,7 +15,7 @@ public static class NativeWorkflows
     /// <summary>The workflows the generator starts, with the events each waits for (by the key in its input).</summary>
     public static readonly (string Workflow, int Events)[] Mix =
     [
-        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1), ("n-out", 1),
+        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1), ("n-out", 3),
     ];
 
     /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
@@ -44,9 +44,10 @@ public static class NativeWorkflows
                         While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
                     Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
                 ForEach("each", Expr("[1, 2]"), Http("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
-                // A fork meets at a Merge and forks again to a join: the join fires once per token, the Http behind it twice.
+                // Two event branches meet at a Merge and fork again to a join: the join fires once per token, in one turn or
+                // in two, and the Http behind it twice, so the join's committed firing ordinal is what keeps the two keys apart.
                 Flowchart("mj",
-                    [WriteLine("f0", "fork"), WriteLine("p", "p"), WriteLine("q", "q"), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Http("hj", "https://partner.example/joined", "joined")],
+                    [WriteLine("f0", "fork"), Event("p", Expr("input.key + '-2'")), Event("q", Expr("input.key + '-3'")), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Http("hj", "https://partner.example/joined", "joined")],
                     [new("f0", "p"), new("f0", "q"), new("p", "m"), new("q", "m"), new("m", "u"), new("m", "v"), new("u", "hj"), new("v", "hj")],
                     ("m", Gateway.Merge), ("hj", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("'out ' + i + ' ' + tag"))),

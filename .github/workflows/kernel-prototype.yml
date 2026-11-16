@@ -97,7 +97,7 @@ jobs:
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 12 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 14 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
 
       - name: Store conformance, in memory
@@ -156,7 +156,7 @@ jobs:
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 14 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes

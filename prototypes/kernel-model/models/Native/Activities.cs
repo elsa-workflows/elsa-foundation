@@ -374,6 +374,7 @@ public sealed class Flowchart : CompositeActivity
         }
 
         foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
+        if (context.Flawed(NativeFlaw.TurnLocalJoinOrdinal)) firings = new(StringComparer.Ordinal);   // MUTATION: the count restarts every turn and is never committed
         var scheduling = new List<(Node Child, string Tag)>();
         foreach (var scheduled in step.Scheduled)
         {
@@ -391,7 +392,7 @@ public sealed class Flowchart : CompositeActivity
         // they are not kept in the instance's state (the rest is the state main stages). The join firing counts ride
         // beside the engine's state when there are any; a Flowchart without a join keeps the engine's state alone.
         var engine = JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact);
-        context.SetState(firings.Count == 0 ? engine : new JsonObject { ["engine"] = engine, ["firings"] = new JsonObject(firings.Select(f => KeyValuePair.Create(f.Key, (JsonNode?)f.Value))) });
+        context.SetState(firings.Count == 0 || context.Flawed(NativeFlaw.TurnLocalJoinOrdinal) ? engine : new JsonObject { ["engine"] = engine, ["firings"] = new JsonObject(firings.Select(f => KeyValuePair.Create(f.Key, (JsonNode?)f.Value))) });
         foreach (var (child, tag) in scheduling) context.Schedule(child, tag);
         switch (step.Kind)
         {

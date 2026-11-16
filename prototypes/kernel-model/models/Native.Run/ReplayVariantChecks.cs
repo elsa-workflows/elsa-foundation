@@ -99,6 +99,10 @@ public static class ReplayVariantChecks
         // Across the lost turn and its replay: one logical activation (same body) keeps its key.
         var moved = a.Count(x => b.Where(y => y.Body == x.Body && y.Node == x.Node).ToList() is [var y] && y.Key != x.Key);
         if (!contentMayDiffer) Check(moved == 0, $"{name}: every logical activation kept its key across the replay ({moved} moved)");
+        // Where a body does not name its activation (a join sending the same body twice), the key sets must still agree.
+        if (!contentMayDiffer && expectA == expectB && expectA >= 0)
+            Check(a.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal).SequenceEqual(b.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal)),
+                $"{name}: the same key set across the replay ({string.Join(", ", a.Select(o => o.Key))} against {string.Join(", ", b.Select(o => o.Key))})");
         var cross = a.Count(x => b.Any(y => y.Key == x.Key && y.Body != x.Body));
         if (contentMayDiffer) Console.WriteLine($"   {name}: {cross} keys carried another content in the replay (owner: the receiver keeps the first)");
         else Check(cross == 0, $"{name}: no key carried two bodies across the replay ({cross})");

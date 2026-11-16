@@ -85,6 +85,8 @@ public sealed class Actor(int id, int node, int partition)
     public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
     public readonly Dictionary<string, bool> ObservedHistory = new(StringComparer.Ordinal);
     public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
+    /// <summary>Round 5 C (N7): the outbound effects this actor's turns sent since its last commit call; they ride on the next one.</summary>
+    public readonly List<(string Instance, string Key)> PendingSendings = [];
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
@@ -115,16 +117,37 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return new ValueTask<T>(answer.Task);
     }
 
-    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
-        Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
+    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        actor.PendingSendings.Clear();      // a take starts from the rows: whatever this worker had in memory, sendings included, is gone
+        return Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
+    }
 
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
-    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
-            + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
-            () => Commit(batch));
+    public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    {
+        // Round 5 C (N7): the outbound effects of the turns this batch writes ride on it (a turn kept in memory folds into
+        // the commit that writes its instance later; an instance that ends without a write never lands here). When the
+        // kernel sees the commit land, their turns are committed truth: a key that leaves in two such turns is two
+        // activations, not a redelivery. A refused fence resets the worker, so everything pending is dropped with it; a
+        // failed call leaves the sendings pending for the retried batch.
+        var written = batch.Turns.Select(t => t.Instance).ToHashSet(StringComparer.Ordinal);
+        var sendings = actor.PendingSendings.Where(s => written.Contains(s.Instance)).ToArray();
+        actor.PendingSendings.RemoveAll(s => written.Contains(s.Instance));
+        Committed committed;
+        try
+        {
+            committed = await Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
+                + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
+                () => Commit(batch));
+        }
+        catch { actor.PendingSendings.AddRange(sendings); throw; }
+        if (committed.Landed) world.Landed(sendings);
+        else actor.PendingSendings.Clear();
+        return committed;
+    }
 
     private ValueTask<Committed> Commit(CommitBatch batch)
     {
