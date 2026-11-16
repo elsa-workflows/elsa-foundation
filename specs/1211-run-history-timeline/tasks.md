@@ -65,14 +65,16 @@
 
 **Independent test**: New processes/providers preserve original committed identities/order and fail closed on capture failure; gaps/legacy/no-record are honest.
 
-- [ ] T028 [P] [US5] Add scoped head/event/bookmark entities, indexes/configuration, provider-neutral content mapping and schema-family declarations in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/{Entities,Configuration,RuntimeDbContext.cs,RuntimeProviderContexts.cs,AssemblyInfo.cs}.
+- [x] T028 [P] [US5] Add scoped head/event/bookmark entities, indexes/configuration, provider-neutral content mapping and schema-family declarations in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/{Entities,Configuration,RuntimeDbContext.cs,RuntimeProviderContexts.cs,AssemblyInfo.cs}.
 - [ ] T029 [US5] Stage head allocation/events/bookmarks in the existing transaction/marker with bounded head-contention handling and actual selected reader qualification in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs and DependencyInjection/.
 - [ ] T030 [US5] Add policy/coverage/late-or-disabled/purge state handling and owned run deletion in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/, the in-memory deletion path and Runtime history contracts; required missing batches refuse, unsupported active policy changes remain explicit.
-- [ ] T031 [US5] Generate additive RunHistory migrations for all four providers through tools/ef/generate-module-migrations.sh --runtime-incremental and retain the existing Runtime Initial/history in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/.
+- [x] T031 [US5] Generate additive RunHistory migrations for all four providers through tools/ef/generate-module-migrations.sh --runtime-incremental and retain the existing Runtime Initial/history in Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/.
 - [ ] T032 [US5] Prove staging rollback, ambiguous post-commit acknowledgement, replay, first-head/CAS races, stale fences, reader mismatch, scope drift and deletion-observation races in Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/ with actual failure interceptors and fresh contexts.
 - [ ] T033 [US5] Qualify fresh install and frozen pre-change upgrades, schema validation and supported provider concurrency in existing Runtime EF ProviderTests and Essentials/tests/Persistence/EntityFrameworkCore/Migrations/{Tests,ProviderTests}/.
 - [ ] T034 [US5] Prove all persistence modes/physical cadence and legacy-marker replay after history enablement in Essentials/tests/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs and EF contract tests.
 - [ ] T035 [US5] Render uncaptured/disabled/late/purged/invalid/stale coverage, atomic group and exact instant details in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/ and meaningful state regressions.
+
+Completed schema evidence: #4642/#4648, actual main merge `30a3a6145cb103179358b280e2dac1fc7ec2b23e`. All four initial migration/Designer/snapshot sets landed with the shared model/family; generic migration516 and six native fresh/retained cases passed on the recorded source. These two checkmarks do not complete native binding, timer1.2 migrations, restart or Studio acceptance.
 
 ## Phase 8 — US6: bounded histories and live context
 
@@ -97,10 +99,10 @@
 
 - [ ] T045 Update touched public API baselines, Runtime extension-point catalogs, root index if needed and capability/module documentation under Essentials/src/Workflows/Runtime/ and EXTENSION_POINTS.md; no generated maps on main.
 - [ ] T046 Reconcile current main and live overlapping #3828/#3847 source changes without wholesale branch copying; run affected whole .NET/Workflows/frontend/browser/provider suites plus required architecture/maps/locked restore gates, recording exact source and test counts in specs/1211-run-history-timeline/evidence/.
-- [ ] T047 Run separate independent correctness, repository-standards and acceptance/spec-and-UX lenses on each exact replacement-slice head without sharing reviewer output; fix actionable findings in additive commits, repeat affected qualification and record numbered rounds (maximum six) under the organization standing self-merge protocol and repo evidence rules.
+- [ ] T047 Run separate independent correctness, repository-standards and acceptance/spec-and-UX lenses on each exact replacement-slice head without sharing reviewer output; fix actionable findings in additive commits, repeat affected qualification and record cumulative numbered rounds under the current feature-scoped owner exception and repository evidence rules.
 - [ ] T048 Update every slice PR title/body to its delivered scope with Part of #3849 and no automatic closing keyword, source-bound acceptance evidence and actual limitations; mark spec Implemented in specs/1211-run-history-timeline/spec.md in the final qualified delivery PR. Explicit issue closeout follows T050.
-- [ ] T049 Mark PR ready only after review converges; obtain green required exact-head checks, inspect independent actual UI evidence, post the standing audit comment/self-merged label and perform the normal protected merge through the author App. Do not bypass holds/protection or incomplete acceptance; no external Code Review/personal approval wait is required under standing authorization.
-- [ ] T050 Qualify resulting main/post-merge CI, update #3849 criteria and final evidence, close completed work with landed commit/PR and mark the delivery goal complete only when all required work above is done.
+- [ ] T049 Mark PR ready only after review converges; complete relevant exact-head local qualification, inspect independent actual UI evidence, post the standing audit comment/self-merged label and use the owner-authorized exact-head admin self-merge fallback. CI is bypassed as a merge gate for this feature; do not bypass actual human holds or incomplete product acceptance. Shared workflow/protection/credential settings stay unchanged.
+- [ ] T050 Qualify resulting main, record CI states without treating them as a merge gate under the owner exception, update #3849 criteria and final evidence, close completed work with landed commit/PR and mark the delivery goal complete only when all required work above is done.
 
 ## Historical work and resumed status
 

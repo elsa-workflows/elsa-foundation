@@ -41,7 +41,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             available.UnionWith(RuntimeHistoryDeliveryObservations.Kinds);
         }
         // Post-commit and timer owners are qualified in their own source/writer slices.
-        available.UnionWith(sourceSupport.Where(owner => owner.SourceIntentKind is null).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
+        available.UnionWith(sourceSupport.Where(sourceAvailability.SourceOwner).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
         return policy.SupportedKinds.All(available.Contains);
     }
 
@@ -167,6 +167,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         var deletesBookmarks = commit.StateChanges.Bookmarks.Any(change => change.Operation == RuntimeStateChangeOperation.Delete);
         var selectedBookmark = Read(RuntimeMetadataKeys.BookmarkId);
         var selectedActivity = Read(RuntimeMetadataKeys.ActivityExecutionId);
+        var sourceWork = Read(RuntimeMetadataKeys.SchedulerWorkItemId);
+        var workflowCancellation = sourceFacts.FirstOrDefault(fact => fact.Kind == RuntimeHistorySourceFactKind.ControlApplied &&
+            fact.ReasonCode == "workflow-cancelled" && (fact.SubjectId == commit.WorkflowExecutionId ||
+                sourceWork is not null && fact.SubjectId == sourceWork && fact.Causation?.SchedulerWorkItemId == sourceWork &&
+                Read(RuntimeMetadataKeys.CommandKind) == nameof(WorkflowExecutionCommandKind.Cancel)));
+        var alterationWorkflowCancellation = checkpoint.Name == RuntimeCheckpointNames.RuntimeAlterationJob ? workflowCancellation : null;
         var cause = checkpoint.HistoryCausation ?? new RuntimeHistoryCausation(CommandId: Read(RuntimeMetadataKeys.CommandId), SchedulerWorkItemId: Read(RuntimeMetadataKeys.SchedulerWorkItemId));
 
         var orderedContinuation = RuntimeHistorySourceFacts.IsFinalProfile(policy);
@@ -181,22 +187,37 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
         if (commit.StateChanges.WorkflowExecution is { } workflow &&
             (checkpoint.Name is RuntimeCheckpointNames.WorkflowStarted or RuntimeCheckpointNames.WorkflowCompleted or RuntimeCheckpointNames.WorkflowFaulted or RuntimeCheckpointNames.WorkflowCancelled or RuntimeCheckpointNames.WorkflowSuspended ||
-             workflow.State.Status == WorkflowExecutionStatus.Cancelled && (commit.HistorySourceFacts ?? []).Any(fact => fact.Kind == RuntimeHistorySourceFactKind.ControlApplied && fact.ReasonCode == "workflow-cancelled")))
+             workflow.State.Status == WorkflowExecutionStatus.Cancelled && workflowCancellation is not null))
+        {
+            if (alterationWorkflowCancellation is not null && workflow.State.Status == WorkflowExecutionStatus.Cancelled &&
+                (workflow.State.CompletedAt is not { } cancelledAt || !cancelledAt.EqualsExact(alterationWorkflowCancellation.OccurredAt)))
+                throw new InvalidOperationException("Workflow cancellation history must retain its actual owner time.");
             Add(workflow.State.Status == WorkflowExecutionStatus.Cancelled ? "WorkflowCancelled" : checkpoint.Name, RuntimeHistoryEventCategory.WorkflowLifecycle, commit.WorkflowExecutionId,
-                metadata: new Dictionary<string, string> { ["history.status"] = workflow.State.Status.ToString() });
+                metadata: new Dictionary<string, string> { ["history.status"] = workflow.State.Status.ToString() },
+                occurredAt: workflow.State.Status == WorkflowExecutionStatus.Cancelled ? alterationWorkflowCancellation?.OccurredAt : null);
+        }
 
         foreach (var change in commit.StateChanges.ActivityExecutions.OrderBy(change => change.State.ExecutionSequence).ThenBy(change => change.StateId, StringComparer.Ordinal))
         {
             var a = change.State;
+            var alteration = checkpoint.Name == RuntimeCheckpointNames.RuntimeAlterationJob
+                ? sourceFacts.FirstOrDefault(fact => fact.Kind == RuntimeHistorySourceFactKind.ControlApplied &&
+                    fact.SubjectId == a.InvocationId && fact.ActivityExecutionId == a.InvocationId &&
+                    (a.Status == ActivityExecutionStatus.Cancelled && fact.ReasonCode == "superseded-descendant" ||
+                     a.Status == ActivityExecutionStatus.Running && fact.ReasonCode == "successor-started" ||
+                     a.Status == ActivityExecutionStatus.Scheduled && fact.ReasonCode == "successor-scheduled")) : null;
+            var cancelledWithWorkflow = a.Status == ActivityExecutionStatus.Cancelled && alterationWorkflowCancellation is not null;
             if (checkpoint.Name is not (RuntimeCheckpointNames.ActivityScheduled or RuntimeCheckpointNames.ActivityStarted or
                 RuntimeCheckpointNames.ActivityAttemptClaimed or RuntimeCheckpointNames.ActivityCompleted or RuntimeCheckpointNames.IntrinsicCompleted or
                 RuntimeCheckpointNames.ActivitySuspended or RuntimeCheckpointNames.ActivityCancelled or RuntimeCheckpointNames.ActivityRecovered or RuntimeCheckpointNames.IncidentRecorded) &&
                 !(checkpoint.Name == RuntimeCheckpointNames.BookmarkCreated && a.Status == ActivityExecutionStatus.Suspended &&
-                  suspendedActivities.Contains(a.InvocationId)))
+                  suspendedActivities.Contains(a.InvocationId)) &&
+                alteration is null && !cancelledWithWorkflow)
                 continue; // Re-projecting a state is not itself an activity lifecycle transition.
             string? name = a.Status switch
             {
                 ActivityExecutionStatus.Scheduled => "ActivityScheduled",
+                ActivityExecutionStatus.Running when alteration is not null => "ActivityStarted",
                 ActivityExecutionStatus.Completed => "ActivityCompleted",
                 ActivityExecutionStatus.Suspended => "ActivitySuspended",
                 ActivityExecutionStatus.Cancelled => "ActivityCancelled",
@@ -212,8 +233,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             // Their status is unchanged; only the callback owner has this terminal transition.
             if (a.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Recovered &&
                 selectedActivity is not null && a.InvocationId != selectedActivity) continue;
+            var operationTime = alteration?.OccurredAt ?? (cancelledWithWorkflow ? alterationWorkflowCancellation!.OccurredAt : (DateTimeOffset?)null);
+            var stateTime = a.Status == ActivityExecutionStatus.Cancelled ? a.CompletedAt : a.Status == ActivityExecutionStatus.Running ? a.StartedAt : a.ScheduledAt;
+            if (operationTime is { } actual && (stateTime is not { } recorded || !actual.EqualsExact(recorded)))
+                throw new InvalidOperationException("Alteration lifecycle history must retain its exact state-owner time.");
             Add(name, RuntimeHistoryEventCategory.ActivityLifecycle, change.StateId, a,
-                metadata: new Dictionary<string, string> { ["history.status"] = a.Status.ToString() });
+                metadata: new Dictionary<string, string> { ["history.status"] = a.Status.ToString() }, occurredAt: operationTime);
         }
 
         foreach (var change in commit.StateChanges.Bookmarks.OrderBy(change => change.StateId, StringComparer.Ordinal))

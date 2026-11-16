@@ -82,6 +82,7 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
     internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs

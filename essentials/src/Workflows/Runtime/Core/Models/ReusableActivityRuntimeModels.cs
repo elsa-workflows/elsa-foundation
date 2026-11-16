@@ -45,6 +45,8 @@ public sealed class ExecutableActivityTemplate
         RuntimeRequirements = Array.AsReadOnly(runtimeRequirements
             .Concat(nodes.Select(node => new RuntimeRequirement(node.Descriptor.ConsumerKey, node.Descriptor.SchemaVersion)))
             .Concat(RuntimeReadSelectionRequirement.For(nodes))
+            .Concat(DirectDependencies.Any(dependency => dependency.OccurrenceOverlay?.MemberReads is { Count: > 0 })
+                ? [RuntimeReadSelectionRequirement.Requirement] : [])
             .Distinct()
             .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
             .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)
@@ -109,16 +111,32 @@ public sealed record ExecutableActivityTemplateDependency(
 public sealed record ExecutableActivityTemplateOccurrenceOverlay
 {
     public const string SupportedSchemaVersion = "1";
+    /// <summary>Occurrence read contracts require a reader that preserves their publication-time facts.</summary>
+    public const string MemberReadSchemaVersion = "2";
 
     public ExecutableActivityTemplateOccurrenceOverlay(
         string schemaVersion,
         JsonElement inputBindings,
         ExecutableActivityStructure? structure,
         JsonElement? outputBindings = null)
+        : this(schemaVersion, inputBindings, structure, outputBindings, null)
+    {
+    }
+
+    [JsonConstructor]
+    public ExecutableActivityTemplateOccurrenceOverlay(
+        string schemaVersion,
+        JsonElement inputBindings,
+        ExecutableActivityStructure? structure,
+        JsonElement? outputBindings,
+        IReadOnlyDictionary<string, ExecutableActivityTemplateMemberRead>? memberReads)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
-        if (!StringComparer.Ordinal.Equals(schemaVersion, SupportedSchemaVersion))
+        if (schemaVersion is not (SupportedSchemaVersion or MemberReadSchemaVersion))
             throw new ArgumentException($"Occurrence overlay schema version '{schemaVersion}' is not supported.", nameof(schemaVersion));
+        if (schemaVersion == SupportedSchemaVersion && memberReads is not null ||
+            schemaVersion == MemberReadSchemaVersion && (memberReads is null || memberReads.Count == 0))
+            throw new ArgumentException("Occurrence read contracts require schema 2 and a nonempty contract map.", nameof(memberReads));
         if (inputBindings.ValueKind != JsonValueKind.Array)
             throw new ArgumentException("An occurrence overlay input binding payload must be an array.", nameof(inputBindings));
         if (outputBindings is { ValueKind: not JsonValueKind.Array })
@@ -128,6 +146,17 @@ public sealed record ExecutableActivityTemplateOccurrenceOverlay
         InputBindings = inputBindings.Clone();
         Structure = structure;
         OutputBindings = outputBindings?.Clone();
+        if (memberReads is not null)
+        {
+            var copy = new Dictionary<string, ExecutableActivityTemplateMemberRead>(StringComparer.Ordinal);
+            foreach (var (key, read) in memberReads)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(key);
+                ArgumentNullException.ThrowIfNull(read);
+                copy.Add(key, read);
+            }
+            MemberReads = new ReadOnlyDictionary<string, ExecutableActivityTemplateMemberRead>(copy);
+        }
     }
 
     private IReadOnlyList<ActivityInputContract>? _inputContracts;
@@ -150,6 +179,27 @@ public sealed record ExecutableActivityTemplateOccurrenceOverlay
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? OutputBindings { get; }
+
+    /// <summary>Known result-member contracts captured by the original publication, keyed by occurrence input.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, ExecutableActivityTemplateMemberRead>? MemberReads { get; }
+}
+
+/// <summary>An exact occurrence-local result read and its immutable selected serialized contract.</summary>
+public sealed class ExecutableActivityTemplateMemberRead
+{
+    public ExecutableActivityTemplateMemberRead(RuntimeActivityResultReference source, RuntimeReadSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(selection);
+        if (source.ProducerScopeId is not null || selection.Mode != RuntimeReadSelectionMode.Known)
+            throw new ArgumentException("An occurrence member contract is a scope-free, known result selection.");
+        Source = source;
+        Selection = selection;
+    }
+
+    public RuntimeActivityResultReference Source { get; }
+    public RuntimeReadSelection Selection { get; }
 }
 
 /// <summary>A readable placement path. Its canonical length-framed bytes produce the placement namespace.</summary>
