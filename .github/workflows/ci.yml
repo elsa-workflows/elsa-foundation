@@ -1172,14 +1172,14 @@ jobs:
   studio-browser-tests:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio-heavy == 'true'
-    name: Studio browser tests (Chromium ${{ matrix.shard }}/2)
+    name: Studio browser tests (Chromium ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # Keep the complete inventory within the budget as it grows; no cases are omitted.
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1196,7 +1196,7 @@ jobs:
 
       - name: Run browser tests
         id: browser-tests
-        run: pnpm test:browser --shard=${{ matrix.shard }}/2
+        run: pnpm test:browser --shard=${{ matrix.shard }}/4
         working-directory: Studio
 
       # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
