@@ -58,6 +58,10 @@ that store's own operations and serve as a comparison point only; they set no ke
 
 ## Where it lives
 
+The contract below (attempt lease, heartbeat, timeouts, worker-classified retries, the effect key, the wire records and
+the way a completion re-enters the commit) is the design that this page proposes for adoption now. The actors that hold
+it inside the kernel are a **candidate topology** for the 1.x spike, with three limits still open (listed below).
+
 ```
 worker --HTTP/gRPC--> gateway --activate--> queue actor --grant--> job actor --commit--> reply --> gateway --> worker
 worker --HTTP/gRPC--> gateway --renew, complete, fail--> job actor --commit--> reply --> gateway --> worker
@@ -69,24 +73,40 @@ worker --HTTP/gRPC--> gateway --renew, complete, fail--> job actor --commit--> r
 | Job actor and queue actor | Layer 3 actor types | The turn contract only: state, sends, timers as messages, replies, background jobs. |
 | Tickets, the fenced commit, timers, polling, poison | Layer 2 | Unchanged. |
 
-The durable path needs no new layer 2 concept. A job actor is started as a child of its queue shard, so it lives in the
-queue's partition: the queue's grant reaches the job actor in memory after the commit, and both commit in the same
-partition's batches. The gateway addresses a queue by its actor id (`queue/{tenant}/{name}/{shard}`) and a job by the
+The durable path needs no new layer 2 concept. In the candidate, a job actor is placed in its queue shard's partition,
+so the queue's grant reaches it in memory after the commit and both commit in the same partition's batches. The gateway
+addresses a queue by its actor id (`queue/{tenant}/{name}/{shard}`) and a job by the
 job id in its grant; layer 2 maps both to a partition, and the gateway treats both as opaque strings. A busy queue is
 split into a fixed number of shards; the gateway spreads a worker's activates over them.
 
-### What each actor keeps, and its bound
+### What each actor keeps
 
-Every commit rewrites an actor's whole state, so each actor's state is kept small and bounded:
+| Actor | State |
+|---|---|
+| Queue shard | Capacity permits in use per job type; holds; the shard's settings. Waiting activates live in memory only. |
+| Job actor | The invocation (input, or a reference to it under decision 10), policy, implementation pin, result route; its attempts (id, worker, grant token, request id, lease, deadline, outcome); the selected result. At most the policy's attempt limit of attempts. |
+| Gateway | Nothing durable; open requests in memory until their reply deadline. |
 
-| Actor | State | Bound |
-|---|---|---|
-| Queue shard | Capacity permits in use per job type; holds; the shard's settings | Fixed size. Waiting activates live in memory only. Ready jobs are `job.ready` messages in the queue's inbox, so the backlog is inbox rows under question 3's inbox bound, outside the queue's state. |
-| Job actor | The invocation (input, or a reference to it under decision 10), policy, implementation pin, result route; its attempts (id, worker, grant token, request id, lease, deadline, outcome); the selected result | One invocation, and at most the policy's attempt limit of attempts |
-| Gateway | Nothing durable | Open requests in memory until their reply deadline |
+The record that answers a resent request is the job actor's attempt list, so it lives as long as the invocation.
 
-The record that answers a resent request is the job actor's attempt list, so it lives exactly as long as the invocation
-and its retention (question 2). No list of request ids grows without bound.
+### Open limits of the candidate, to settle in the 1.x spike
+
+Every commit rewrites an actor's whole row, so the queue shard is only cheap if its row stays small. In the candidate as
+written it does not, and this page claims no bound for it:
+
+1. **Children on the queue row.** A job actor started with `Start` is a kernel child: its id lands in the queue's
+   `InstanceRow.Children` ([Store.cs](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs),
+   `ChildRegistry` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)),
+   which the queue rewrites at every commit. Job actors need a start that places them in the queue's partition
+   without registering them as children; the turn contract has none today.
+2. **Ready jobs as held inbox rows.** Selecting matching `job.ready` messages and leaving the rest means holding them in
+   memory (`Hold`, FINDINGS section 14): the owner walks the whole backlog at every turn, and one type's backlog delays
+   another's. Candidates: ready jobs kept per type in separate holders, or as due timers in their job actors that offer
+   themselves when a worker waits.
+3. **The backlog counts against question 3's threshold.** Ready rows are due rows of the queue's virtual partition, so a
+   deep queue pushes that partition over the
+   [fairness page](fairness-and-backpressure.md#a-bound-on-inbox-growth)'s ingress threshold and refuses unrelated starts placed there. Candidates: give queues their own virtual partitions,
+   or count job readiness apart from ordinary due depth.
 
 ## The job contract after this change
 
@@ -109,10 +129,14 @@ from outside, by poll, behind a seen-mark commit. Left alone, a completion sent 
 the timer and its work would run again. The rule:
 
 - **Turn order decides.** Whichever of the completion's turn and the expiry timer's turn runs first wins. No timestamp
-  from the worker or the gateway is trusted.
-- **The expiry timer is due a grace after `LeaseUntil` and after `Deadline`.** The grace covers the gateway's
-  insert-to-turn delay: the poll interval plus one mark-before-run commit (proposed default: twice the poll interval,
-  at most a few seconds). The grant tells the worker `LeaseUntil`; the worker plans to finish or renew before it, so a
+  from the worker or the gateway is trusted. When both are in the same turn's inbox (the same poll, or a poll and a
+  timer handed over together), the job actor handles the completion first, as the kernel already handles a result
+  ahead of other messages.
+- **The expiry timer is due a grace after `LeaseUntil`, and the deadline timer a grace after `Deadline`.** The grace
+  covers the gateway's insert-to-turn delay: the poll interval plus one mark-before-run commit (proposed default: twice
+  the poll interval, at most a few seconds).
+- **A takeover adds the grace again.** A new owner has not yet polled the completions that arrived while the partition
+  had no owner, so it defers every lease and deadline expiry to at least one grace past its take. The grant tells the worker `LeaseUntil`; the worker plans to finish or renew before it, so a
   completion sent in time normally reaches its turn before the timer.
 - **A completion after the expiry turn is `Stale`.** It is recorded as evidence and changes nothing. The effect key
   lets the receiver drop the next attempt's repeat.
@@ -138,7 +162,7 @@ enum Disposition { Granted, Empty, Accepted, Duplicate, Stale, Refused, Unknown 
 
 | Operation | What happens |
 |---|---|
-| Activate | The queue shard takes up to `MaxJobs` `job.ready` messages whose type, version and pin the worker supports and whose holds and capacity allow it, and sends each job actor a grant. Each job actor records its attempt, arms its lease and deadline timers and replies; the gateway gathers the grants. With nothing ready, the queue keeps the request in memory until a job arrives or `LongPoll` passes (the reply deadline, decision 6). Either way the activate message itself was a row: an insert, a seen mark and the consuming commit. |
+| Activate | The queue shard takes up to `MaxJobs` `job.ready` messages whose type, version and pin the worker supports and whose holds and capacity allow it, and sends each job actor a grant. Each job actor records its attempt, arms its lease and deadline timers and, after that commit, sends the queue a `granted` message with the grant. The queue collects them and answers the Activate once with the list, after the commit that consumed them; a job actor that refused (a cancel came first) sends `declined` instead. A built `Request` ends with its first response, so the gathering is the queue's, never the gateway's. With nothing ready, the queue keeps the request in memory until a job arrives or `LongPoll` passes (the reply deadline, decision 6). Either way the activate message itself was a row: an insert, a seen mark and the consuming commit. |
 | Renew | The job actor checks attempt id, grant token and lease, extends `LeaseUntil` and returns a cancellation flag when the invocation was cancelled. An expired attempt cannot be revived. |
 | Complete | The job actor checks the attempt under the rule above, selects the result, recalls its timers, sends the result along the result route and tells the queue to release the permit. |
 | Fail | As Complete, then either schedules the next attempt (a `job.ready` to the queue, due after the backoff, within the attempt limit) or selects a failed result. A business error code is kept on the result, so a BPMN error boundary can match it later. |
@@ -211,13 +235,25 @@ stands: one job concept, Elsa.Jobs's public API kept (`IJobClient`, `IJobHandler
 `JobExecutionContext`, idempotent submission, policies, schedules, holds), its own store and workflow bridge dropped. On
 this contract:
 
-- A submission is a message to the queue shard. The queue starts the job actor as its child, with an id derived from the
-  tenant, the queue and the idempotency key, so a repeated submission meets the existing actor. The job actor compares
+- A submission is a message to the queue shard. The queue starts the job actor in its own partition (open limit 1),
+  with an id derived from the tenant, the queue and the idempotency key, so a repeated submission meets the existing actor. The job actor compares
   the request digest and answers duplicate or conflict.
 - A local `IJobHandler` takes grants in the job actor's own turn as a background job, with no gateway and no row per
   request. A remote worker takes them through the gateway. Both see the same attempt, effect key and result rules.
 - A workflow's awaited job stays the kernel's background job in the instance's partition. A workflow job meant for
   remote workers is a submission to a queue, sent in the instance's commit, with the instance as its continuation.
+
+### A job actor's lifecycle
+
+- **Cancel.** A workflow instance that submitted a remote job records its job id (derived from the submission) in its
+  state. `CancelJob` and a terminate of the instance's tree send `job.cancel` to that job actor in the instance's
+  commit. The job actor selects a cancelled result, recalls its timers, releases the permit and answers the worker's
+  next renewal with the cancellation flag; a completion after that is `Stale`.
+- **End.** Once its result is selected and sent, the job actor is ended. Its row stays under the retention policy of
+  question 2 (the `Finished`, `Cancelled` or `Faulted` window) and is then deleted by the built delete.
+- **Idempotency window.** A submission's id derives from tenant, queue and idempotency key, which makes it a caller key
+  under walkthrough decision 7: a repeat is refused while the key is within its `keep_until`, and may start a fresh run
+  after it. A resent worker request is recognised while its message row is kept (decision 3).
 
 ## Release 1
 
@@ -227,7 +263,8 @@ this contract:
   to a remote worker:
   - **the effect key**, computed by layer 3 (the workflow instance calls `EffectKey.For` when it starts the job) and
     carried by layer 2 as an opaque string on the ticket;
-  - **the attempt id**, which in process is the ticket's id;
+  - **the attempt id**, which in process is `{ticket id}#{attempt number}`, so a re-execution after a lost owner gets a
+    new one;
   - **the attempt number**, which in process is one plus the ticket's recorded attempts (owners lost while it was on
     trial). It is a lower bound on executions, since an owner lost outside a trial counts nothing;
   - **the deadline and the cancellation token.**
@@ -260,6 +297,7 @@ spike the sketch asks for measures submit, claim, complete and result delivered 
 - That the grant reaches the job actor before any completion for it, which rests on the reply being released after the
   grant's commit and on per-target `seq` order.
 - Throughput of one queue shard, and the shard count a queue needs.
+- The three open limits of the candidate topology, above.
 
 ## Decisions for the owner
 
@@ -307,7 +345,7 @@ The owner's ingress rule is "an idempotent message insertion keyed by the source
 
 | Option | How a resend is recognised | Cost |
 |---|---|---|
-| **a. The request id as the message id, with a `keep_until`** | At the insert, as for every outside message: a resend gets a duplicate-key answer. The gateway then asks the job actor for the recorded disposition with a read-only `job.status` message. An Activate whose answer was lost answers `Unknown`; its grants expire by lease and the jobs are granted again, as in Zeebe | Each request keeps a done row until its window (about 1.6 kB of WAL per outside message with its marks on PostgreSQL, the outside-start row of WRITES.md); a resend after a lost answer costs a status message |
+| **a. The worker and its request id as the message id (`{worker}/{request id}`, the worker taken from its authenticated identity), with a `keep_until`** | At the insert, as for every outside message: a resend gets a duplicate-key answer. The gateway then asks the job actor for the recorded disposition with a read-only `job.status` message. An Activate whose answer was lost answers `Unknown`; its grants expire by lease and the jobs are granted again, as in Zeebe | Each request keeps a done row until its window (about 1.6 kB of WAL per outside message with its marks on PostgreSQL, the outside-start row of WRITES.md); a resend after a lost answer costs a status message |
 | b. A fresh message id per request, deduplicated in actor state | The job actor recognises the request id in its attempt list | About 0.5 kB less per request, since a consumed row is deleted; departs from the ingress rule |
 
 **Recommendation: a.** It follows the adopted rule, and the window bounds how long a resend is recognised.
