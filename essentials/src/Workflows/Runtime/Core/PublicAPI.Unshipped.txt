@@ -12565,3 +12565,5 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity
 const Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.FingerprintLength = 16 -> int
 static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Derive(string! parentId, string! step) -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Fingerprint(string! value) -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowIntrinsicDescriptorSchemas
+const Elsa.Workflows.Runtime.Core.Models.WorkflowIntrinsicDescriptorSchemas.ActivityOutput = "2" -> string!

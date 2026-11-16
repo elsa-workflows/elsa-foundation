@@ -7,6 +7,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -29,7 +30,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 public sealed class RuntimeInputBindingCompiler(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
-    ValueConversionPlanResolver? conversionPlanResolver = null)
+    ValueConversionPlanResolver? conversionPlanResolver = null) : IActivityTemplateInputBindingCompiler
 {
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
@@ -62,6 +63,15 @@ public sealed class RuntimeInputBindingCompiler(
         requiresEncryption: true);
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
+
+    IReadOnlyDictionary<string, RuntimeInputBinding> IActivityTemplateInputBindingCompiler.CompileGraphInputs(
+        string nodeId, IEnumerable<InputDefinition> inputDefinitions, IEnumerable<ArgumentState> inputStates)
+    {
+        var states = inputStates.Select(state => InputReadLowering.Lower(state, key => key)).ToArray();
+        if (SecretInputKeys(states).FirstOrDefault() is { } secretKey)
+            throw SecretBindingDiagnostics.IntrinsicInputRefused(nodeId, secretKey);
+        return CompileAll(nodeId, inputDefinitions, states);
+    }
 
     /// <summary>
     /// Compiles every input of a node against its catalog input definitions. The credential-literal rule

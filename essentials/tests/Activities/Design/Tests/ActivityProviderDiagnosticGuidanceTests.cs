@@ -81,6 +81,39 @@ public sealed class ActivityProviderDiagnosticGuidanceTests
         Assert.DoesNotContain("PRIVATE", System.Text.Json.JsonSerializer.Serialize(result));
     }
 
+    [Theory]
+    [InlineData("/variables/0/initialValue", true)]
+    [InlineData("/variables/9999/initialValue", true)]
+    [InlineData("/variables/01/initialValue", false)]
+    [InlineData("/variables/10000/initialValue", false)]
+    [InlineData("/variables/PRIVATE/initialValue", false)]
+    [InlineData("/variables/0/initialValue/PRIVATE", false)]
+    [InlineData("/variables/0~1PRIVATE/initialValue", false)]
+    public void Declared_numeric_location_patterns_only_preserve_matching_bounded_indices(string pointer, bool expected)
+    {
+        var declaration = Guidance with { JsonPointer = "/variables", JsonPointerPattern = "/variables/{index}/initialValue" };
+        var result = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([
+            PrivateDiagnostic() with { Location = new("PRIVATE", pointer, "PRIVATE", NodeOrigin: [new("PRIVATE", "PRIVATE")]) }
+        ], "acme", [declaration]));
+        Assert.Equal(expected ? pointer : "/variables", result.Location!.JsonPointer);
+        Assert.Equal("acme", result.Location.ProviderKey);
+        Assert.Null(result.Location.ReferenceKey);
+        Assert.Null(result.Location.NodeOrigin);
+        Assert.DoesNotContain("PRIVATE", System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Theory]
+    [InlineData("/variables/{index}/{index}")]
+    [InlineData("/variables/../{index}")]
+    [InlineData("/variables/{name}/initialValue")]
+    public void Invalid_location_patterns_fail_closed(string pattern)
+    {
+        var result = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([PrivateDiagnostic()], "acme",
+            [Guidance with { JsonPointerPattern = pattern }]));
+        Assert.Null(result.Location!.JsonPointer);
+        Assert.Empty(result.Metadata);
+    }
+
     private static ActivityDiagnostic PrivateDiagnostic() => new(
         Guidance.Code, ActivityDiagnosticSeverity.Error, "PRIVATE payload and credential", new("PRIVATE", "PRIVATE"),
         new("PRIVATE", "/PRIVATE"), "PRIVATE endpoint", new Dictionary<string, string> { ["actionLabel"] = "PRIVATE", ["secret"] = "PRIVATE" });

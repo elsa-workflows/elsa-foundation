@@ -66,7 +66,7 @@ def main():
     predecessor = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=checkout, text=True).strip()
     current = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     subprocess.run(["git", "merge-base", "--is-ancestor", predecessor, current], cwd=REPO, check=True)
-    if "ClaimsProfile" in (checkout / "essentials/src/Activities/Bpmn/Core/BpmnModelDefinition.cs").read_text():
+    if "ClaimsProfile" in (checkout / "Essentials/src/Activities/Bpmn/Core/BpmnModelDefinition.cs").read_text():
         raise ValueError("The predecessor checkout already contains the claim writer.")
     products = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly.resolve(strict=True)), "--inspect-host-products",
         str(args.predecessor_workbench.resolve(strict=True))], text=True))
@@ -85,7 +85,7 @@ def main():
         restored[store] = snapshot["databaseSha256"]
     # The predecessor's own configuration, with the same single-node direct profile as the capture.
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
-        shutil.copyfile(checkout / "apps/Elsa.Workbench" / name, host_root / name)
+        shutil.copyfile(checkout / "Essentials/apps/Elsa.Workbench" / name, host_root / name)
     (host_root / "packages").mkdir()
     url = f"http://127.0.0.1:{_owned.free_port()}"
     shells = json.loads((host_root / "shells.json").read_text())
