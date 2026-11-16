@@ -749,6 +749,14 @@ class OrchestrationTests(unittest.TestCase):
                 target = source / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((acceptance.ROOT / relative).read_bytes())
+            workflow_module = source / 'Studio/src/essentials/Elsa.Studio.Workflows'
+            for relative in acceptance.COPY_SOURCE_PATHS:
+                target = workflow_module / 'Client/src' / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((acceptance.ROOT / 'Studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
+            assets = workflow_module / 'wwwroot/studio/modules/workflows'
+            assets.mkdir(parents=True)
+            (assets / 'copy-current.js').write_bytes(b'synthetic compiled copy module')
 
             @contextmanager
             def fake_host(directory, dll, url, ready, log, env):
@@ -767,6 +775,16 @@ class OrchestrationTests(unittest.TestCase):
                     events.append(('stop', directory.name, dll))
 
             def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+                if log.name == 'copy-asset-diagnostics.log':
+                    diagnostics = Path(args[args.index('--outDir') + 1])
+                    diagnostics.mkdir(parents=True)
+                    (diagnostics / 'copy-current.js').write_bytes((assets / 'copy-current.js').read_bytes())
+                    paths = sorted(acceptance.COPY_SOURCE_PATHS)
+                    (diagnostics / 'copy-current.js.map').write_text(json.dumps({
+                        'sources': ['../../src/' + path for path in paths],
+                        'sourcesContent': [(workflow_module / 'Client/src' / path).read_text() for path in paths],
+                    }))
+                    return
                 if log.name == 'fixture-cleanup-build.log':
                     dll = source / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
@@ -815,6 +833,11 @@ class OrchestrationTests(unittest.TestCase):
         browser = next(event[1] for event in events if event[0] == 'browser')
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
+        self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
+        self.assertEqual(report['workflowSourceAssets'], json.loads(browser['UX_WORKFLOW_ASSET_SHA256S']))
+        self.assertEqual(report['copyImplementationAssets'], json.loads(browser['UX_COPY_IMPLEMENTATION_ASSETS']))
+        self.assertEqual({acceptance.COPY_ASSET_PREFIX + 'copy-current.js'}, set(report['copyImplementationAssets']))
+        self.assertEqual(sorted(acceptance.COPY_SOURCE_PATHS), next(iter(report['copyImplementationAssets'].values()))['sources'])
         self.assertEqual((acceptance.RESTRICTED_USER, 'reader-id'), (browser['UX_RESTRICTED_USER'], browser['UX_RESTRICTED_SUBJECT']))
         self.assertTrue(browser['UX_RESTRICTED_PASSWORD'])
         self.assertNotIn(browser['UX_RESTRICTED_PASSWORD'], json.dumps(report))
