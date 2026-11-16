@@ -151,10 +151,97 @@ internal abstract class ReturningDialect(string now, string @true, string @false
 /// <summary>PostgreSQL (Npgsql): one command of many statements is one round trip; identity assigns seq; RETURNING rows come in VALUES order.</summary>
 internal sealed class PgCommitDialect() : ReturningDialect("(extract(epoch from clock_timestamp()) * 1000)::bigint", "true", "false")
 {
-    /// <summary>The engine's dialect, or null where the store still commits through EF (SQLite: round 5 B3; SQL Server B2; MySQL B4).</summary>
+    /// <summary>The engine's dialect, or null where the store still commits through EF (SQLite: round 5 B3; MySQL B4).</summary>
     public static CommitDialect? For(Engine? engine, bool postgres) => engine switch
     {
         null when postgres => new PgCommitDialect(),
+        SqlServerEngine => new SqlServerCommitDialect(),
         _ => null,
     };
+}
+
+/// <summary>
+/// SQL Server (SqlClient): one T-SQL batch per round trip. The server checks every count itself (IF @@ROWCOUNT <> n
+/// THROW), so a stale owner's batch stops at the fence before it touches a message row (E9: the partition row is the
+/// first lock, as in the take; E1 cannot arise), and the client reads only the fence's time and the seqs. Error 51010 is
+/// the fence, 51011 a count, 51029 an actor alias that names another row; each is answered as "not landed".
+/// </summary>
+internal sealed class SqlServerCommitDialect : CommitDialect
+{
+    public const int FenceMissed = 51010, CountMismatch = 51011, AliasMismatch = 51029;
+
+    public override string Now => "DATEDIFF_BIG(millisecond, '1970-01-01', SYSUTCDATETIME())";
+    public override string True => "1";
+    public override string False => "0";
+    public override bool ResultPerStatement => false;
+    /// <summary>2,100 parameters per request; the fence and the prelude need none, the rows at most 16 each.</summary>
+    public override int ParameterLimit => 2000;
+    /// <summary>XACT_ABORT: any error, THROW included, ends the batch and rolls the transaction back; the client never sends COMMIT after one.</summary>
+    public override string Prelude => "SET NOCOUNT ON; SET XACT_ABORT ON;\n";
+
+    public override bool NotLanded(Exception e)
+    {
+        for (var inner = e; inner is not null; inner = inner.InnerException)
+            if (inner is Microsoft.Data.SqlClient.SqlException { Number: FenceMissed or CountMismatch or AliasMismatch }) return true;
+        return false;
+    }
+
+    private static string Throw(int number, string what) => $"THROW {number}, '{what}', 1";
+
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced)
+    {
+        if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
+        var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
+        string matched;
+        if (rows.Count == 1)
+        {
+            var r = rows[0];
+            matched = FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}, {lease} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))})""");
+        }
+        else
+        {
+            // k rows: an update lock on each in ascending Id order first (the clustered key, as the take's range takes them), then one UPDATE.
+            c.Statement($"""IF (SELECT COUNT(*) FROM "Partitions" WITH (UPDLOCK, ROWLOCK) WHERE "Id" IN ({string.Join(", ", rows.Select(r => r.Id))})) <> {rows.Count} {Throw(FenceMissed, "kernel fence: a partition row is missing")}""");
+            matched = $"""UPDATE p SET "Position" = f.np, {lease} FROM "Partitions" p JOIN (VALUES {Values(rows)}) AS f(id, epoch, pos, np) ON p."Id" = f.id WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""";
+        }
+        // The fence's count is checked twice: by the server, which stops the batch, and by the client, which reads it back (the FenceIgnoresCount mutation skips the client's).
+        c.Statement(matched);
+        c.Statement($"DECLARE @kernel_fenced int = @@ROWCOUNT; IF @kernel_fenced <> {rows.Count} {Throw(FenceMissed, "kernel fence: the partition is no longer held by this owner at this position")}");
+        c.Statement($"""SELECT @kernel_fenced AS "Matched", {Now} AS "Now" """, Expect.Fence, rows.Count);
+    }
+
+    public override void Checked(OwnedCommand c, string dml, int count) => c.Statement($"{dml}; IF @@ROWCOUNT <> {count} {Throw(CountMismatch, "kernel commit: a row count did not match")}");
+    public override void Free(OwnedCommand c, string dml) => c.Statement(dml);
+
+    /// <summary>OUTPUT yields the identity values; sorted ascending they are in VALUES order (identity is assigned row by row). Messages has no trigger, so OUTPUT needs no INTO.</summary>
+    public override void InsertMessages(OwnedCommand c, string insert, int count)
+    {
+        var at = insert.IndexOf(" VALUES ", StringComparison.Ordinal);
+        c.Statement(insert[..at] + " OUTPUT inserted.\"Seq\"" + insert[at..], Expect.Seq, count);
+        c.Statement($"IF @@ROWCOUNT <> {count} {Throw(CountMismatch, "kernel commit: a message insert did not match")}");
+    }
+
+    /// <summary>No row-value IN on T-SQL: the key list is a VALUES table the row must exist in.</summary>
+    public override void KeyedMessages(OwnedCommand c, string action, IReadOnlyList<string[]> keys, bool exact) =>
+        Checked(c, $"""{action} WHERE "Done" = 0 AND "EventMatch" IS NULL AND EXISTS (SELECT 1 FROM (VALUES {KeyList(keys)}) AS k("Id", "InboxScope"{(exact ? ", \"IssuedWire\"" : "")}) WHERE k."Id" = "Messages"."Id" AND k."InboxScope" = "Messages"."InboxScope"{(exact ? " AND k.\"IssuedWire\" = \"Messages\".\"IssuedWire\"" : "")})""", keys.Count);
+
+    public override void AliasCheck(OwnedCommand c, string rowId, string actor) =>
+        c.Statement($"""IF NOT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {rowId} AND "Id" = {actor}) {Throw(AliasMismatch, "kernel actor alias mismatch")}""");
+
+    public override string SubscribeIfAbsent(string key, string instance, string wait, int partition) =>
+        FormattableString.Invariant($"""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") SELECT {key}, {instance}, {wait}, {partition} WHERE NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Key" = {key} AND "Instance" = {instance} AND "Wait" = {wait})""");
+
+    public override async Task<(long Count, List<long> Values)> ReadAsync(System.Data.Common.DbDataReader reader, Expect kind, int count, CancellationToken cancellationToken)
+    {
+        var values = new List<long>();
+        if (kind == Expect.Fence)
+        {
+            if (!await reader.ReadAsync(cancellationToken)) return (0, values);
+            values.Add(reader.GetInt64(1));
+            return (reader.GetInt32(0), values);
+        }
+        while (await reader.ReadAsync(cancellationToken)) values.Add(reader.GetInt64(0));
+        values.Sort();
+        return (values.Count, values);
+    }
 }
