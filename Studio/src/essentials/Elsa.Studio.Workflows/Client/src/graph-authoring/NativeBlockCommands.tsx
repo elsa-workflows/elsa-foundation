@@ -1,5 +1,6 @@
+import { describeWorkflowError } from "../workflow-editor/editorHelpers";
 import { describeNativeBlockChange } from "./nativeBlockPreview";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import { getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
 import { useDialogFocus } from "../workflow-editor/useDialogFocus";
@@ -32,11 +33,26 @@ export function NativeBlockCommands(props: {
   const [plan, setPlan] = useState<ReadyPlan | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [retryValidation, setRetryValidation] = useState(false);
+  const previewButton = useRef<HTMLButtonElement>(null);
+  const validating = useRef(false);
   const [committing, setCommitting] = useState(false);
   const committingRef = useRef(false);
   const request = useRef(0);
-  const close = () => { if (committingRef.current) return; request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); };
+  const close = () => { if (committingRef.current) return; request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); setRetryValidation(false); validating.current = false; };
   useEffect(() => () => { request.current++; }, []);
+  useLayoutEffect(() => { if (retryValidation && !busy) previewButton.current?.focus(); }, [retryValidation, busy]);
+  const invalidatePreview = () => { setPlan(null); setMessages([]); setRetryValidation(false); };
+  const reportFailure = (error: unknown, applying = false) => {
+    const failure = describeWorkflowError(error, "The validation request could not be completed.");
+    setPlan(null); setRetryValidation(true);
+    setMessages(Array.from(new Set([applying ? "The apply request failed. Check the resource before previewing again." : "Could not validate this change. Your document has not changed.",
+      failure.message, failure.detail, failure.status !== undefined ? `HTTP ${failure.status}` : undefined,
+      failure.code ? `Code: ${failure.code}` : undefined, failure.traceId ? `Trace: ${failure.traceId}` : undefined,
+      failure.status === 401 || failure.status === 403 ? "Check your sign-in and access, then retry validation." :
+        failure.status === 409 ? "Refresh the resource to load its current revision, then preview again." : "Retry validation when the service is available."]
+      .filter((message): message is string => Boolean(message)))));
+  };
   const scope = resolveScope(props.context.document.rootActivity, props.context.scope, props.context.catalog);
   const selected = scope?.slot.activities.find(node => props.selectedNodeIds.length === 1 && node.nodeId === props.selectedNodeIds[0]);
   const selectedKind = selected?.structure?.kind;
@@ -49,11 +65,12 @@ export function NativeBlockCommands(props: {
   const choices = props.context.catalog.filter(item => item.available !== false && item.activityTypeKey ===
     `Elsa.Activities.${kind === "sequence" ? "Sequence" : "Flowchart"}.Activities.${kind === "sequence" ? "Sequence" : "Flowchart"}`);
   const begin = (next: Action) => {
-    setAction(next); setPlan(null); setMessages([]); setName(""); setDescription(""); setVersion("");
+    setAction(next); setPlan(null); setMessages([]); setName(""); setDescription(""); setVersion(""); setRetryValidation(false);
   };
   const refuseStale = () => setMessages(["The document, selection, scope, permissions or installed modules changed. Preview this change again."]);
   const preview = async () => {
-    if (!action || busy) return;
+    if (!action || busy || validating.current) return;
+    setPlan(null); setRetryValidation(false);
     const original = current.current;
     const plannerContext = nativeBlockPlannerContext(original.context, original.createPosition);
     const identity = { nodeId: crypto.randomUUID(), activityVersionId: version || (choices.length === 1 ? choices[0].activityVersionId : ""), displayName: name, description };
@@ -62,22 +79,25 @@ export function NativeBlockCommands(props: {
         planCreateNativeBlock(plannerContext, { ...identity, kind: action, position: original.createPosition, beforeNodeId: original.selectedNodeIds[0] });
     if (proposed.status === "refused") { setMessages(proposed.diagnostics.map(item => item.message)); return; }
     const id = ++request.current;
+    validating.current = true;
     setBusy(true); setPlan(null); setMessages([]);
     try {
       const result = await original.validate(nativeBlockEditorDocument(proposed.document, original.context.catalog));
       if (id !== request.current) return;
       if (applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), proposed).status !== "ready") { refuseStale(); return; }
       setMessages(result.messages);
+      setRetryValidation(result.state === "unavailable");
       if (result.state === "validated") setPlan(proposed);
       else setMessages(result.messages.length ? result.messages : ["The owning resource could not validate this proposal. Refresh the resource and try again."]);
-    } catch { if (id === request.current) setMessages(["Validation is unavailable. Your document has not changed."]); }
-    finally { if (id === request.current) setBusy(false); }
+    } catch (error) { if (id === request.current) reportFailure(error); }
+    finally { if (id === request.current) { validating.current = false; setBusy(false); } }
   };
   const apply = async () => {
-    if (!plan || busy) return;
+    if (!plan || busy || validating.current || committingRef.current) return;
     const checked = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), plan);
     if (checked.status !== "ready") { setPlan(null); refuseStale(); return; }
     const id = ++request.current;
+    validating.current = true;
     setBusy(true); setMessages([]);
     try {
       // Recheck normal resource authority at confirmation, including server-side revision and access changes.
@@ -90,8 +110,8 @@ export function NativeBlockCommands(props: {
       await current.current.apply(nativeBlockEditorDocument(final.document, current.current.context.catalog), final.selection, () => request.current === id && applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), checked).status === "ready");
       committingRef.current = false; setCommitting(false);
       if (id === request.current) close();
-    } catch { if (id === request.current) setMessages(["The change was not applied. Refresh the resource and preview again."]); }
-    finally { committingRef.current = false; if (id === request.current) { setCommitting(false); setBusy(false); } }
+    } catch (error) { if (id === request.current) reportFailure(error, committingRef.current); }
+    finally { committingRef.current = false; if (id === request.current) { validating.current = false; setCommitting(false); setBusy(false); } }
   };
   const stale = plan && applyNativeBlockPlan(nativeBlockPlannerContext(props.context, props.createPosition), plan).status !== "ready";
   const changes = plan ? describeNativeBlockChange(nativeBlockPlannerContext(props.context, props.createPosition).document, plan.document, props.context.catalog) : null;
@@ -110,9 +130,9 @@ export function NativeBlockCommands(props: {
     {action ? <NativeBlockDialog title={title} onClose={close}>
       <h2>{title}</h2>
       {action !== "ungroup" ? <>
-        <StudioField label="Name"><input value={name} maxLength={200} disabled={busy} onChange={event => { setName(event.target.value); setPlan(null); }} /></StudioField>
-        <StudioField label="Summary"><textarea value={description} maxLength={2000} disabled={busy} onChange={event => { setDescription(event.target.value); setPlan(null); }} /></StudioField>
-        {choices.length !== 1 ? <StudioField label={`${kind === "sequence" ? "Sequence" : "Flowchart"} version`}><select value={version} disabled={busy} onChange={event => { setVersion(event.target.value); setPlan(null); }}><option value="">Choose an available version</option>{choices.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{item.version} · {item.activityVersionId}</option>)}</select></StudioField> : null}
+        <StudioField label="Name"><input value={name} maxLength={200} disabled={busy} onChange={event => { setName(event.target.value); invalidatePreview(); }} /></StudioField>
+        <StudioField label="Summary"><textarea value={description} maxLength={2000} disabled={busy} onChange={event => { setDescription(event.target.value); invalidatePreview(); }} /></StudioField>
+        {choices.length !== 1 ? <StudioField label={`${kind === "sequence" ? "Sequence" : "Flowchart"} version`}><select value={version} disabled={busy} onChange={event => { setVersion(event.target.value); invalidatePreview(); }}><option value="">Choose an available version</option>{choices.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{item.version} · {item.activityVersionId}</option>)}</select></StudioField> : null}
       </> : <p>Remove this container and keep its steps in the current scope. Generated result-transfer steps and variables are retained when still needed.</p>}
       <p>{action === "extract" ? `${props.selectedNodeIds.length} selected ${props.selectedNodeIds.length === 1 ? "step" : "steps"} will move into a ${kind === "sequence" ? "Sequence" : "Flowchart"} body.` : action === "ungroup" ? `${childCount} direct steps in ${label || "this block"}.` : `The block uses a native ${kind === "sequence" ? "Sequence" : "Flowchart"} body.`}</p>
       <p>Complete ends the nearest reusable graph boundary and cancels its remaining work. It does not continue through an outgoing connection.</p>
@@ -126,7 +146,7 @@ export function NativeBlockCommands(props: {
           {changes.addedVariables.length ? <details open><summary>Add {changes.addedVariables.length} result variables</summary><ul>{changes.addedVariables.map((label, index) => <li key={index}>{label}</li>)}</ul></details> : null}
           {changes.removedConnections.length || changes.addedConnections.length ? <details open><summary>Rewire connections</summary><ul>{changes.removedConnections.map((label, index) => <li key={`old-${index}`}>Remove: {label}</li>)}{changes.addedConnections.map((label, index) => <li key={`new-${index}`}>Add: {label}</li>)}</ul></details> : null}
         </> : null}<details><summary>Current graph, layout and names</summary><pre>{JSON.stringify(nativeBlockPlannerContext(props.context, props.createPosition).document, null, 2)}</pre></details><details><summary>Complete proposed graph, connections, bindings, layout and names</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></div> : null}
-      <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
+      <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button ref={previewButton} type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : retryValidation ? "Retry validation" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
     </NativeBlockDialog> : null}
   </>;
 }
