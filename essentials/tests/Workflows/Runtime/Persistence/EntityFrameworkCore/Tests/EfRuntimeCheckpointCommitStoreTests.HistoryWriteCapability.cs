@@ -76,7 +76,11 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
         IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
         var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
-        Assert.True(independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader));
+        var comparers = context.Model.GetEntityTypes().Where(entity => RuntimeHistoryEfModule.Chain.ContentColumns.Any(column => column.Entity == entity.ClrType))
+            .SelectMany(entity => entity.GetProperties()).Where(property => ((Microsoft.EntityFrameworkCore.Metadata.IReadOnlyProperty)property).GetValueComparer() is { } comparer &&
+                !ReferenceEquals(comparer, property.GetTypeMapping().Comparer))
+            .Select(property => $"{property.DeclaringType.Name}.{property.Name}: {property.GetValueComparer().GetType().FullName} vs {property.GetTypeMapping().Comparer.GetType().FullName}");
+        Assert.True(independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader), string.Join("; ", comparers));
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
