@@ -1528,3 +1528,6 @@ Supersession owners retain the exact successor schedule/start and cancelled-desc
 
 
 The public `AddWorkflowRuntimeHistory` entry now delegates to the existing internal semantic history composition. It selects no persistence and is opt-in for new admissions; retained captured policy stays authoritative. It is included with the actual built-in alteration owner so the public owner controls exercise the real production entry. Default Workbench feature enrollment remains separate.
+
+
+`WorkflowsRuntimeHistoryFeature` exposes the semantic metadata opt-in as an ordinary extensible shell feature. Workbench selects it alongside the existing runtime and EF owner. The feature declares no alternate store, capture payload authority or execution dependency. Explicit disablement applies only to new admissions; retained capture remains authoritative. The actual API capture predicate qualifies its selected native/read/source chain.

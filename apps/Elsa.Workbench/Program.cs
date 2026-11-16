@@ -211,6 +211,7 @@ builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 #if ELSA_DASHBOARD_QUALIFICATION
+ActivityPlaybackQualificationControls.Register(builder.Services);
 builder.Services.AddSingleton<DashboardQualificationBootstrap>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
 builder.Services.AddSingleton<IShellServiceExclusionProvider>(new DashboardQualificationServiceExclusions());
@@ -545,6 +546,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
+HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
+ActivityPlaybackQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
 // Shell middleware replaces request services; the bootstrap is owned by the root host.
 var dashboardQualification = app.Services.GetRequiredService<DashboardQualificationBootstrap>();
 app.MapGet(DashboardQualificationBootstrap.ReadinessPath, () => dashboardQualification.Ready

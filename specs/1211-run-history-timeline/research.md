@@ -515,3 +515,8 @@ The current v3 profile advertises alteration kinds only when the selected first-
 
 
 The first finite alteration compile stopped at four existing controls calling the intentionally deferred public enrollment extension. This owner unit now includes the original fourteen-line public `AddWorkflowRuntimeHistory` delegating entry and its one API baseline declaration; the actual owner controls exercise it directly. No default feature or persistence selection is introduced. No successful compilation was claimed for that first attempt.
+
+
+### Finite minimum composed Timeline backend (16 November)
+
+The actual alteration/public-entry unit adds the original extensible shell feature, five shell controls, and Workbench selection. Four root-owned conditional qualification companions are integrated narrowly from `8e77fbea0430dc7f314f22c228853faa066afa85`: Program registrations/routes and csproj links plus the two owned control sources. Existing Dashboard bootstrap, exclusion/readiness/security and all current host/T004 source are preserved. Links use current `../../tools` paths. Standard builds exclude these controls; actual runtime ports/persisted authority remain in use. The current v3 semantic profile does not advertise later publication/timer owners. This source preparation is not yet composed-host, Studio36 or native restart acceptance.
