@@ -55,6 +55,11 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
 
         if (metadata?.GetMetadata<ActivityInspectionProblemShapeMetadata>() is { } inspection)
         {
+            if (exception is SchemaWriteRefusedException refusal)
+            {
+                await ActivityExecutionProblemDetails.SchemaWriteRefusedAsync(context, refusal, context.RequestAborted);
+                return true;
+            }
             if (inspection.History)
             {
                 var problem = exception switch
@@ -76,9 +81,6 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     return true;
                 case ArgumentException argument:
                     await ActivityExecutionProblemDetails.InvalidRequestAsync(context, argument.Message, context.RequestAborted);
-                    return true;
-                case SchemaWriteRefusedException refusal:
-                    await ActivityExecutionProblemDetails.SchemaWriteRefusedAsync(context, refusal, context.RequestAborted);
                     return true;
                 default:
                     LogUnexpected(context, exception, inspection.Operation);
