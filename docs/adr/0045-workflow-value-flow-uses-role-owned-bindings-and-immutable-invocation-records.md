@@ -4,7 +4,7 @@ Status: accepted (2026-07-16; ratified through an architect grilling session). �
 D-15): expressions no longer need to be deterministic. §2 amended (accepted 2026-11-12; decisions D-10 and
 D-11): null, omitted values and `undefined`. §6 amended (accepted 2026-11-12;
 decisions D-4 and D-14): activities select their outcomes explicitly, several per completion. §6 amendment
-proposed (2026-11-16, PR #4325): no multi-outcome declaration; every activity may select several outcomes.
+proposed (2026-11-16, PR #4658): no multi-outcome declaration; every activity may select several outcomes.
 
 **Amendment accepted (2026-11-12, decision D-2).** The [execution contract](#d-2-execution-contract) below refines
 §3–§6. It is agreed and not yet implemented.

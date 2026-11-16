@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Amendment proposed 2026-11-16 (PR #4325)**: no multi-outcome declaration. Every activity may select several of its
+**Amendment proposed 2026-11-16 (PR #4658)**: no multi-outcome declaration. Every activity may select several of its
 declared outcomes; FR-014, FR-017 and FR-023 change accordingly, and join behaviour goes to initiative #4193.
 
 **Status**: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
