@@ -234,7 +234,7 @@ class VerdictTests(unittest.TestCase):
         proof['transportControls'].append(observed)
         try:
             file.write_text(json.dumps(proof))
-            self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+            self.assertEqual(sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in acceptance.NORMAL_JOURNEYS), acceptance.verdict(self.report, self.root))
             proof['transportControls'] = [observed]
             file.write_text(json.dumps(proof))
             with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)

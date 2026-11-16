@@ -88,7 +88,6 @@ CAPTURES['native dashboard questions and sharing'] += (
 MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
 EXPRESSION_JOURNEYS = {'insert JavaScript activity data', 'insert Liquid activity data'}
 MINIMAL_ONLY_JOURNEYS = {'preserve expression data without optional modules'}
-NORMAL_JOURNEYS = JOURNEYS - MINIMAL_ONLY_JOURNEYS
 DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'} | EXPRESSION_JOURNEYS | MINIMAL_ONLY_JOURNEYS
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
@@ -146,6 +145,7 @@ EVIDENCE = {
     'runtime-only API composition and combined return': ['subset-capabilities.json', 'subset-observation.json', 'combined-capabilities.json'],
 }
 JOURNEYS = set(CAPTURES)
+NORMAL_JOURNEYS = JOURNEYS - MINIMAL_ONLY_JOURNEYS
 SUPPLEMENT_PROJECTS = {
     'coarse pointer grouped navigation': TOUCH_PROJECTS,
     'restricted principal settings access': {'restricted-390-light'},
