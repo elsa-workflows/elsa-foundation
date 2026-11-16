@@ -80,8 +80,11 @@ node this is: for every frame between the root and the activation, what its pare
 iteration is (`CompositeActivity.IterationOf`, from the parent's committed state), root first, as `parent=iteration`
 segments joined by dots, plus `node=retryN` for a retried activity's successor (its generation, from the committed
 retry lineage); `-` when nothing repeats the node. ForEach gives the body's `CurrentIndex`; While counts its passes in
-its own state (`WhileState.Iteration`, new in round 5 C); a Flowchart gives the engine's round (`head-2`, carried on
-the child's tag); Sequence, If and Parallel run each child once and give nothing. The attempt is 0, or 1 for an
+its own state (`WhileState.Iteration`, new in round 5 C); a Flowchart gives the engine's round (`head-2`) and, forward
+of a Merge, the token (`^m-ea`: the merge and the source node of the arrival, chained through every merge passed in the
+round), both carried on the child's tag; a StateMachine gives the state and its visit serial (`B-4`, from the committed
+`MachineState`, reached through the child's lexical scope); Sequence, If and Parallel run each child once and give
+nothing. The attempt is 0, or 1 for an
 External activity in Durable mode (committed before it runs, N4); it takes no other value, a Background job's is 0, and
 a retry is a new generation in the path, never attempt 2. A Background job's path and key are computed in the turn that
 writes its ticket and committed with it.
@@ -99,12 +102,19 @@ looks for a repeat and returns the request as an `OutboundEffect` in its transit
 `OutboundSending`) inside the turn, before its commit, so it runs at least once. The kernel records no key and drops no
 repeat: deduplication is the receiver's, conditional on its keeping the keys it has seen.
 
-Open, reported to the owner and decided by nobody here: a Flowchart node behind a **Merge** may fire once per token
-within a round; the round alone does not tell those tokens apart (the engine's path ids are minted in mutation order, so
-they would not survive a reordered replay either). The mix has no merge. A **StateMachine** (`models/Statecharts.Native`)
-re-enters states on events; its committed `MachineState` carries visit serials that could give the iteration through
-`IterationOf`, which is not wired in this round, so an outbound activity hosted by a state entered twice would share a
-key across the two visits.
+Two constructs that repeat a node outside loops are covered the same way (closed on the owner's word of 16 November:
+the node plus its loop and branch iteration numbers, which replay cannot reorder, and different activations always get
+different keys). A Flowchart node forward of a **Merge** fires once per token within a round; each arrival is identified
+by its source: the merge's activation appends `^merge-source` to the token of the completing child that reached it, a
+plain successor inherits its predecessor's token, a join (several arrivals) and a new round start afresh; the engine's
+path ids are not used, since they are minted in mutation order. `AliasChecks` proves it replay-stable: two event
+branches meet at a merge and the Http behind it fires twice; the lost turn and its replay over the longer inbox carry
+the same two keys (`flow=^m-ea`, `flow=^m-eb`), in all three modes; with the round alone they shared one. A
+**StateMachine** re-enters states on events; a state's activity is one activation per visit, named by the visit's
+committed serial (`machine=B-2`, `machine=B-4` for a state entered twice), which `Statecharts.Run --effect-keys`
+witnesses in all three modes (the sim's N7 runs underneath it). Reported, not decided here: a **join forward of a
+merge** is fired by whichever arrival releases it, so its firing identity is order-dependent in the engine itself; it
+gets the round only, and the mix has none.
 
 What changed, and why:
 

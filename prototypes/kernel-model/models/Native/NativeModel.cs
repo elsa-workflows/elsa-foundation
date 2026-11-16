@@ -446,7 +446,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             if (f.RetrySource is not null) segments.Add($"{f.Node}=retry{RetryGeneration(f)}");
             if (f.Parent is not { } parentId || !_s.Frames.TryGetValue(parentId, out var parent)) continue;
             var probe = IterationProbes.GetOrAdd(_wf.Nodes[parent.Node].Type, static t => (CompositeActivity)Activator.CreateInstance(t)!);
-            if (probe.IterationOf(parent.State, f.Tag, f.Scope ?? f.LiveScope) is { } iteration) segments.Add($"{parent.Node}={iteration}");
+            if (probe.IterationOf(parent.State, f.Tag, f.Scope ?? f.LiveScope, f.LexicalScope) is { } iteration) segments.Add($"{parent.Node}={iteration}");
         }
         if (segments.Count == 0) return EffectKey.RootPath;
         segments.Reverse();

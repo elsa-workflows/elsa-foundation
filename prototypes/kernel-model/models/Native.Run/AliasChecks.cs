@@ -53,7 +53,34 @@ public static class AliasChecks
             check(collisions == 0, $"{mode}: no key carried two different bodies across the lost turn and its replay ({collisions} collisions)");
             check(moved == 0, $"{mode}: every logical activation kept its key across the replay ({moved} moved)");
             Console.WriteLine($"  {mode}: {reusedFrames} frame numbers were handed to another activation by the replay (the case the iteration path exists for)");
+            await MergeAsync(mode, check);
         }
+    }
+
+    /// <summary>
+    /// A Flowchart node forward of a Merge fires once per token (the owner's decision of 16 November: each arrival is
+    /// identified by its source). Two branches, each released by an event, meet at a Merge; the Http behind it fires
+    /// twice. A takes the events one turn apart, B takes both in one turn: the two firings must carry the same two
+    /// keys in A and in B, whatever order the agenda ran them in, and the two keys must differ. With the round alone
+    /// (no token) the two firings shared one key.
+    /// </summary>
+    private static async Task MergeAsync(string mode, Action<bool, string> check)
+    {
+        var registry = new WorkflowRegistry();
+        registry.Add(Workflow("alias", Sequence("root",
+                Flowchart("flow",
+                    [Set("s0", "x", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), Http("h", "https://partner.example/merged", "token")],
+                    [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "h")], ("m", Gateway.Merge)),
+                Set("out", "output", "done")),
+            ("x", 0), ("output", null)));
+        var a = await Run(registry, mode, "x", ["alias-1"], ["alias-2"]);
+        var b = await Run(registry, mode, "x", ["alias-1", "alias-2"], []);
+        var keysA = a.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var keysB = b.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        check(a.Count == 2 && b.Count == 2, $"{mode}, merge: the node behind the merge fired once per token in A and in B ({a.Count}, {b.Count})");
+        check(keysA.Distinct(StringComparer.Ordinal).Count() == 2, $"{mode}, merge: the two tokens carried two keys ({string.Join(", ", keysA)})");
+        check(keysA.SequenceEqual(keysB), $"{mode}, merge: the same two keys across the lost turn and its replay ({string.Join(", ", keysA)} against {string.Join(", ", keysB)})");
+        check(a.All(o => o.Path.Contains("^m-e", StringComparison.Ordinal)), $"{mode}, merge: each token names the merge and its source ({string.Join(", ", a.Select(o => o.Path))})");
     }
 
     private static async Task<List<(string Node, string Frame, string Path, int Attempt, string Key, string Body)>> Run(WorkflowRegistry registry, string mode, string id, string[] first, string[] second)

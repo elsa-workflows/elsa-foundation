@@ -232,7 +232,7 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     [Input] public JsonArray? Items { get; set; }
 
     /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C).</summary>
-    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
         childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
 
     protected internal override void Execute(CompositeContext context)
@@ -282,7 +282,7 @@ public sealed class While : CompositeActivity
     [Input] public bool Condition { get; set; }
 
     /// <summary>The body's iteration is this loop's committed pass count (round 5 C).</summary>
-    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
         (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
@@ -324,10 +324,10 @@ public sealed class Flowchart : CompositeActivity
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var (path, scope, _) = Decode(child.Tag);
+        var (path, scope, _, _) = Decode(child.Tag);
         if (!TryReadState(context, out var before)) return;
         Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
-            new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
+            new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)), source: child);
     }
 
     // The engine faults the Flowchart when a child faults (main, #308); the fault the instance carries is the child's
@@ -354,7 +354,7 @@ public sealed class Flowchart : CompositeActivity
         }
     }
 
-    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null)
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null, ChildCompleted? source = null)
     {
         FlowchartStep step;
         try
@@ -381,7 +381,7 @@ public sealed class Flowchart : CompositeActivity
             if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
                 && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)     // as the engine counts them
                 context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
-            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey));
+            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey, Token(context, scheduled, source)));
         }
         switch (step.Kind)
         {
@@ -465,21 +465,44 @@ public sealed class Flowchart : CompositeActivity
     };
 
     /// <summary>
-    /// The child's iteration for the effect key (round 5 C) is the engine's iteration key of the round it was scheduled
-    /// in (<c>head:2</c>: the loop head and the round, from the engine's committed state), carried on the tag. A node
-    /// outside a loop has none. A node behind a Merge may fire once per token within a round; the round does not tell
-    /// those tokens apart (reported to the owner, NATIVE.md: an open decision, nothing is invented here).
+    /// The child's iteration for the effect key (round 5 C): the engine's iteration key of the round it was scheduled in
+    /// (<c>head:2</c>: the loop head and the round, from the engine's committed state) and, forward of a Merge, the
+    /// token it rides (<see cref="Token"/>), both carried on the tag. A node outside a loop and not forward of a merge
+    /// has none: it fires once per instance.
     /// </summary>
-    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) =>
-        Decode(childTag).Iteration is { Length: > 0 } round ? round.Replace(':', '-') : null;
-
-    private static string Encode(string path, string scope, string? iteration) => iteration is null ? path + "|" + scope : path + "|" + scope + "|" + iteration;
-
-    private static (string? Path, string? Scope, string? Iteration) Decode(string? tag) => tag?.Split('|') switch
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope)
     {
-        [var path, var scope] => (path, scope, null),
-        [var path, var scope, var iteration] => (path, scope, iteration),
-        _ => (null, null, null),
+        var (_, _, round, token) = Decode(childTag);
+        return round is null && token is null ? null : (round?.Replace(':', '-') ?? "") + (token ?? "");
+    }
+
+    /// <summary>
+    /// A node fires once per round, so the round names its activation, except forward of a Merge, where it fires once
+    /// per token (the owner's decision of 16 November: identify each arrival by its source). A token is named by the
+    /// merges it passed in this round and the source node of each arrival, from committed facts only: the merge's own
+    /// activation appends <c>^merge-source</c> to the token of the completing child that reached it; a plain successor
+    /// (one arrival) inherits its predecessor's token; a join consumes several arrivals and fires once per round, so it
+    /// starts afresh; a new round starts afresh. The engine's path ids are not used: they are minted in mutation order.
+    /// A join forward of a merge is fired by whichever arrival releases it, which a replay can reorder; the mix has
+    /// none, and NATIVE.md reports it to the owner.
+    /// </summary>
+    private static string? Token(CompositeContext context, FlowchartScheduledNode scheduled, ChildCompleted? source)
+    {
+        if (source is null) return null;
+        var (_, _, round, token) = Decode(source.Tag);
+        var inherited = round == scheduled.IterationKey && scheduled.SchedulingCause != "join" ? token : null;
+        return context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) == Gateway.Merge ? $"{inherited}^{scheduled.NodeId}-{source.Node}" : inherited;
+    }
+
+    private static string Encode(string path, string scope, string? iteration, string? token) =>
+        iteration is null && token is null ? path + "|" + scope : path + "|" + scope + "|" + iteration + "|" + token;
+
+    private static (string? Path, string? Scope, string? Iteration, string? Token) Decode(string? tag) => tag?.Split('|') switch
+    {
+        [var path, var scope] => (path, scope, null, null),
+        [var path, var scope, var iteration] => (path, scope, iteration is "" ? null : iteration, null),
+        [var path, var scope, var iteration, var token] => (path, scope, iteration is "" ? null : iteration, token is "" ? null : token),
+        _ => (null, null, null, null),
     };
 }
 

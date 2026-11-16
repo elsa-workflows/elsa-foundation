@@ -288,10 +288,11 @@ public abstract class CompositeActivity : ActivityBase
     /// <summary>
     /// Which activation of a child this is, for the effect key's iteration path (round 5 C): null when this composite
     /// runs each child once, else a number or name from this composite's committed state (a ForEach index, a While
-    /// iteration, a Flowchart round) that two activations of one child never share and that a replay cannot reorder.
-    /// Called on a bare instance (no inputs) with the parent frame's state and the child's scheduling tag and scope.
+    /// iteration, a Flowchart round and token, a StateMachine visit) that two activations of one child never share and
+    /// that a replay cannot reorder. Called on a bare instance (no inputs) with the parent frame's state and the child's
+    /// scheduling tag, iteration scope and lexical scope.
     /// </summary>
-    protected internal virtual string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope) => null;
+    protected internal virtual string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) => null;
 }
 
 // ---- values --------------------------------------------------------------------------------------------------------
