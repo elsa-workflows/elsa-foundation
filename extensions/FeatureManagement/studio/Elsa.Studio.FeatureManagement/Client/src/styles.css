@@ -147,7 +147,7 @@
   overflow: auto;
   min-height: 0;
   /* Leave reachable space for the last choice's 4px focus outset and fractional scroll edges. */
-  padding: 2px 2px 6px;
+  padding: 4px 4px 6px;
   scroll-padding-block: 4px;
   margin: -2px;
 }

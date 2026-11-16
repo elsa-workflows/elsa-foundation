@@ -158,9 +158,20 @@ for (const mode of ["light", "dark"] as const) {
         const last = button.getBoundingClientRect();
         const scrollport = document.querySelector<HTMLElement>('[data-testid="feature-scrollport"]')!;
         const bounds = scrollport.getBoundingClientRect();
-        return { contained: last.top >= bounds.top && last.bottom <= bounds.bottom, height: bounds.height };
+        const options = button.closest<HTMLElement>(".feature-management-category-options")!;
+        const optionsBounds = options.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        const outset = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const clipLeft = optionsBounds.left + options.clientLeft;
+        const clipRight = clipLeft + options.clientWidth;
+        return {
+          contained: last.top >= bounds.top && last.bottom <= bounds.bottom,
+          focusContained: last.left - outset >= clipLeft && last.right + outset <= clipRight,
+          height: bounds.height
+        };
       });
       expect(geometry.contained).toBe(true);
+      expect(geometry.focusContained).toBe(true);
       const screenshot = testInfo.outputPath(`categories-shell-${mode}-${bottom}.png`);
       await page.screenshot({ path: screenshot });
       await testInfo.attach(`categories-shell-${mode}-${bottom}`, { path: screenshot, contentType: "image/png" });
