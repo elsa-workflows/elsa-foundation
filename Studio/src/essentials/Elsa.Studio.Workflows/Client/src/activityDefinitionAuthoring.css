@@ -77,6 +77,24 @@
   overflow-wrap: anywhere;
 }
 
+.ad-publication-toolbar-status.is-attention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem;
+  padding: .65rem .75rem;
+  border: 1px solid var(--studio-warning-fg);
+  border-radius: var(--studio-radius);
+  color: var(--studio-warning-fg);
+  background: var(--studio-surface-muted);
+  font-size: var(--studio-body-size);
+}
+
+.ad-publication-toolbar-status.is-attention > div { flex: 1 1 12rem; min-width: 0; }
+.ad-publication-toolbar-status.is-attention p { margin: .25rem 0 0; color: var(--studio-text); }
+.ad-draft-diagnostics-link { grid-column: 1 / -1; order: 2; justify-self: start; }
+.ad-diagnostics-panel:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+
 .ad-authoring-advanced { position: relative; }
 .ad-authoring-advanced > summary { list-style: none; }
 .ad-authoring-advanced > summary::-webkit-details-marker { display: none; }
@@ -166,8 +184,10 @@
 .ad-draft-editor .ad-authoring-view-tabs {
   flex-wrap: wrap;
   gap: 4px;
-  margin: 16px 0;
-  padding: 0 0 8px;
+  min-height: 2.5rem;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: .2rem .5rem;
   border: 0;
   border-bottom: 1px solid var(--studio-border);
   border-radius: 0;
@@ -175,7 +195,7 @@
 }
 
 .ad-draft-editor .ad-authoring-view-tabs button {
-  min-height: 36px;
+  min-height: 1.9rem;
   padding: 8px 12px;
   border-color: transparent;
   background: transparent;
@@ -270,3 +290,5 @@
 @media (max-width: 900px) {
   .ad-public-interface-view .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(0, 1fr); }
 }
+
+.ad-draft-diagnostics-link.needs-attention { color: var(--studio-danger-fg); border-color: var(--studio-danger-fg); }

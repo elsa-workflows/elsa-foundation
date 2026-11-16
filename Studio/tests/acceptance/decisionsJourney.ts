@@ -86,7 +86,15 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const capabilities = await page.request.get(`${backend}/capabilities`); expect(capabilities.ok()).toBe(true);
   expect((await capabilities.json()).capabilities).toEqual(expect.arrayContaining([expect.objectContaining({ id: "elsa.api.decisions", contractVersion: "1" })]));
 
-  await page.goto("/decisions"); await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
+  await page.goto("/");
+  const sidebar = page.locator(".sidebar");
+  const build = sidebar.getByRole("button", { name: "Build", exact: true });
+  await expect(build).toBeVisible();
+  if (await build.getAttribute("aria-expanded") !== "true") await build.click();
+  const decisions = sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Decisions", exact: true });
+  await expect(decisions).toBeVisible();
+  await decisions.click();
+  await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
   await tabTitle("Decisions");
   // The shared search shell draws the only border; the field inside it must not add a second one.
@@ -99,7 +107,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await part("decisions-search", search);
   if ((info.project.use.viewport?.width ?? 0) >= 1440) {
     const entry = page.getByRole("link", { name: "Decisions", exact: true });
-    if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+    if (!await entry.isVisible()) await build.click();
     await expect(entry.locator("svg.lucide-scale")).toBeVisible();
   }
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
