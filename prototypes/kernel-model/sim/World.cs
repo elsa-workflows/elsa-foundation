@@ -136,9 +136,10 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         // the commit that writes its instance later; an instance that ends without a write never lands here). The store
         // records them the moment the commit lands (Commit below), whatever becomes of the answer: their turns are committed
         // truth, and a key that leaves in two such turns is two activations, not a redelivery. A refused fence resets the
-        // worker, so everything pending is dropped with it; a failed call leaves the sendings pending for the retried batch,
-        // unless the store already landed them (an answer lost on the wire after the commit executed) or a take has
-        // happened since (the worker ignores a completion from before its take; the sendings belong to the memory it dropped).
+        // worker, and the take that follows drops everything pending with it (the take is the one place that discards this
+        // memory: a refusal's answer may be stale, from a call that outlived a take, and must touch nothing). A failed call
+        // leaves the sendings pending for the retried batch, unless the store already landed them (an answer lost on the wire
+        // after the commit executed) or a take has happened since (the worker ignores a completion from before its take).
         var written = batch.Turns.Select(t => t.Instance).ToHashSet(StringComparer.Ordinal);
         var sendings = actor.PendingSendings.Where(s => written.Contains(s.Instance)).ToArray();
         actor.PendingSendings.RemoveAll(s => written.Contains(s.Instance));
@@ -152,7 +153,6 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
                 () => Commit(batch, sendings, recorded));
         }
         catch { if (!recorded.Value && generation == actor.TakeGeneration) actor.PendingSendings.AddRange(sendings); throw; }
-        if (!committed.Landed) actor.PendingSendings.Clear();
         return committed;
     }
 
