@@ -57,7 +57,10 @@ so that mismatch, and the warning it produced, are both gone; the pin and the lo
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
 `Essentials/tests/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
-project beside it.
+project beside it. **Under `prototypes/`** a committed lock file needs only a committed `.csproj` beside it, since a
+prototype such as `prototypes/kernel-model/` is a self-contained repository outside the solution, with its own
+`Directory.Build.props`, `Directory.Packages.props`, `NuGet.config` and `global.json`, and keeping its lock files keeps
+its own locked restores reproducible; an orphan lock file there still fails.
 
 ### Reconciling framework package pruning
 
@@ -139,4 +142,4 @@ first commit of the lock files.
 - **Repository-local .NET tools.** `dotnet tool restore` reads `.config/dotnet-tools.json`, which pins each tool's version
   and has no lock file.
 - **Projects outside `Elsa.Server.slnx`**, such as the repros under `docs/reports/repros/`. Restoring one writes a lock
-  file, which stays uncommitted.
+  file, which stays uncommitted, except under `prototypes/`, whose lock files are committed (see the guard above).

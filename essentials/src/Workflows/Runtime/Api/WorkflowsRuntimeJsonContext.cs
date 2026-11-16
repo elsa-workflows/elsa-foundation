@@ -1,0 +1,124 @@
+using Elsa.Workflows.Runtime.Api.Commands;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Models.Alterations;
+using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Api.Requests.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Elsa.Workflows.Runtime.Api;
+
+[JsonSerializable(typeof(GetRuntimeHistory))]
+[JsonSerializable(typeof(GetRuntimeHistoryOccurrences))]
+[JsonSerializable(typeof(GetRuntimeHistoryEvent))]
+[JsonSerializable(typeof(GetRuntimeHistoryBookmarks))]
+[JsonSerializable(typeof(GetRuntimeHistoryBookmark))]
+[JsonSerializable(typeof(RuntimeHistoryPageView))]
+[JsonSerializable(typeof(RuntimeHistoryOccurrencePageView))]
+[JsonSerializable(typeof(RuntimeHistoryEventDetailsView))]
+[JsonSerializable(typeof(RuntimeHistoryBookmarkPageView))]
+[JsonSerializable(typeof(RuntimeHistoryBookmarkDetailsView))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor))]
+[JsonSerializable(typeof(UserTasks.FormPageRequest))]
+[JsonSerializable(typeof(UserTasks.FormVersionRequest))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage))]
+[JsonSerializable(typeof(UserTasks.TargetRequest))]
+[JsonSerializable(typeof(UserTasks.AssignmentTargets))]
+[JsonSerializable(typeof(UserTasks.UserTaskView))]
+[JsonSerializable(typeof(UserTasks.UserTaskHistoryView))]
+[JsonSerializable(typeof(UserTasks.UserTaskPageView))]
+[JsonSerializable(typeof(UserTasks.TaskListRequest))]
+[JsonSerializable(typeof(UserTasks.TaskIdRequest))]
+[JsonSerializable(typeof(UserTasks.TaskMutationRequest))]
+[JsonSerializable(typeof(UserTasks.TaskCompletionRequest))]
+[JsonSerializable(typeof(UserTasks.TaskAssignmentRequest))]
+[JsonSerializable(typeof(UserTasks.UserTaskProblem))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion))]
+[JsonSerializable(typeof(IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion>))]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(GetWorkflowInstance))]
+[JsonSerializable(typeof(DeleteWorkflowInstance))]
+[JsonSerializable(typeof(WorkflowInstanceDeletionView))]
+[JsonSerializable(typeof(ListWorkflowInstances))]
+[JsonSerializable(typeof(ListWorkflowExecutables))]
+[JsonSerializable(typeof(GetWorkflowExecutable))]
+[JsonSerializable(typeof(GetWorkflowExecutableInputSources))]
+[JsonSerializable(typeof(GetWorkflowExecutableProvenance))]
+[JsonSerializable(typeof(ListWorkflowActivationSlots))]
+[JsonSerializable(typeof(GetWorkflowActivationSlot))]
+[JsonSerializable(typeof(ExecuteWorkflow))]
+[JsonSerializable(typeof(DispatchStimulus))]
+[JsonSerializable(typeof(ListWorkflowDispatches))]
+[JsonSerializable(typeof(GetWorkflowDispatch))]
+[JsonSerializable(typeof(RedriveWorkflowDispatch))]
+[JsonSerializable(typeof(GetActivityExecution))]
+[JsonSerializable(typeof(BrowseActivityExecutions))]
+[JsonSerializable(typeof(ActivityExecutionBrowsePageView))]
+[JsonSerializable(typeof(GetActivityExecutionDescendants))]
+[JsonSerializable(typeof(GetActivityExecutionLayout))]
+[JsonSerializable(typeof(GetActivityExecutionStateView))]
+[JsonSerializable(typeof(GetActivityExecutionValuePayload))]
+[JsonSerializable(typeof(ListIncidents))]
+[JsonSerializable(typeof(GetRuntimePersistenceMode))]
+[JsonSerializable(typeof(Coalescing.RuntimePersistenceModeProjection))]
+[JsonSerializable(typeof(GetRuntimeDiagnosticsSettings))]
+[JsonSerializable(typeof(SaveRuntimeDiagnosticsSettings))]
+[JsonSerializable(typeof(SubmitWorkflowAlterationPlan))]
+[JsonSerializable(typeof(GetWorkflowAlterationPlan))]
+[JsonSerializable(typeof(PageWorkflowAlterationJobs))]
+[JsonSerializable(typeof(GetWorkflowAlterationJob))]
+[JsonSerializable(typeof(CancelWorkflowAlterationPlan))]
+[JsonSerializable(typeof(WorkflowExecutionStartDispatchView))]
+[JsonSerializable(typeof(DispatchStimulusResponse))]
+[JsonSerializable(typeof(IReadOnlyCollection<WorkflowDispatchView>))]
+[JsonSerializable(typeof(WorkflowDispatchView))]
+[JsonSerializable(typeof(WorkflowDispatchRedriveView))]
+[JsonSerializable(typeof(WorkflowInstanceDetailsView))]
+[JsonSerializable(typeof(WorkflowOutputView))]
+[JsonSerializable(typeof(WorkflowInstanceListView))]
+[JsonSerializable(typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>))]
+[JsonSerializable(typeof(WorkflowExecutablesListView))]
+[JsonSerializable(typeof(WorkflowExecutableDetailsView))]
+[JsonSerializable(typeof(WorkflowExecutableInputSourcesView))]
+[JsonSerializable(typeof(ExecutableProvenanceView))]
+[JsonSerializable(typeof(WorkflowActivationSlotListView))]
+[JsonSerializable(typeof(WorkflowActivationSlotView))]
+[JsonSerializable(typeof(ActivityExecutionInspectionView))]
+[JsonSerializable(typeof(ActivityExecutionHierarchyPageView))]
+[JsonSerializable(typeof(ActivityExecutionLayoutView))]
+[JsonSerializable(typeof(ActivityStateView))]
+[JsonSerializable(typeof(ActivityExecutionValuePayloadReadResult), TypeInfoPropertyName = "ValuePayloadReadResult")]
+[JsonSerializable(typeof(ActivityExecutionValuePayloadView))]
+[JsonSerializable(typeof(ListIncidentsResponse))]
+[JsonSerializable(typeof(RuntimeDiagnosticsSettingsView))]
+[JsonSerializable(typeof(WorkflowAlterationPlanSubmissionView))]
+[JsonSerializable(typeof(WorkflowAlterationPlanView))]
+[JsonSerializable(typeof(WorkflowAlterationJobPageView))]
+[JsonSerializable(typeof(WorkflowAlterationJobView))]
+[JsonSerializable(typeof(WorkflowAlterationPlanCancellationView))]
+[JsonSerializable(typeof(WorkflowAlterationProblemView))]
+[JsonSerializable(typeof(RuntimeProblemDetails))]
+[JsonSerializable(typeof(RuntimeValidationProblemDetails))]
+[JsonSerializable(typeof(ActivityExecutionProblemDetailsView))]
+[JsonSerializable(typeof(ActivityExecutionCursorProblemView))]
+[JsonSerializable(typeof(ActivityExecutionProblemDiagnosticView))]
+internal partial class WorkflowsRuntimeJsonContext : JsonSerializerContext;
+
+internal sealed record RuntimeProblemDetails(
+    string Type,
+    string Title,
+    int Status,
+    string Detail,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Instance,
+    IReadOnlyDictionary<string, string[]>? Errors = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code = null);
+
+internal sealed record RuntimeValidationProblemDetails(
+    IReadOnlyDictionary<string, string[]> Errors,
+    string Message,
+    int StatusCode);

@@ -24,26 +24,26 @@ class WorkflowScopeTests(unittest.TestCase):
     def test_composed_acceptance_inputs_and_deletions_select_studio(self):
         for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
                      'Studio/tests/acceptance/journeys.spec.ts',
-                     'Essentials/apps/Elsa.Workbench/shells.json',
-                     'Extensions/Agent/agents/Core/Manifest.cs']:
+                     'apps/Elsa.Workbench/shells.json',
+                     'extensions/Agent/agents/Core/Manifest.cs']:
             with self.subTest(path=path):
                 self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
 
     def test_ready_event_runs_every_proof_and_a_label_or_variable_restores_it_for_a_push(self):
         for paths in [['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
-                      ['tools/contributor-pair-proof/run.mjs'], ['Extensions/Weaver/src/Feature.cs'], ['.github/workflows/ci.yml'], None]:
+                      ['tools/contributor-pair-proof/run.mjs'], ['extensions/Weaver/src/Feature.cs'], ['.github/workflows/ci.yml'], None]:
             with self.subTest(paths=paths):
                 selected = self.selected(paths=paths, action='ready_for_review', pull_request={'draft': False})
                 labelled = self.selected(paths=paths, action='synchronize',
                                          pull_request={'draft': False, 'labels': [{'name': 'full-tier'}]})
                 forced = scope.select('pull_request', {'action': 'synchronize', 'pull_request': {'draft': False}},
                                       paths, self.patterns, every_push=True)
-                self.assertEqual(labelled, selected)
-                self.assertEqual(forced, selected)
+                self.assertEqual(labelled, dict(selected, **{'studio-ux': selected['studio']}))
+                self.assertEqual(forced, dict(selected, **{'studio-ux': selected['studio']}))
                 self.assertTrue(any(selected.values()))
 
     def test_later_push_to_a_ready_pr_skips_the_heavy_proofs_only(self):
-        paths = ['Studio/src/Feature.ts', 'Extensions/Weaver/src/Feature.cs']
+        paths = ['Studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs']
         push = self.selected(paths=paths, action='synchronize', pull_request={'draft': False})
         self.assertTrue(push['studio'])
         self.assertFalse(push['studio-heavy'] or push['weaver'])
@@ -61,7 +61,7 @@ class WorkflowScopeTests(unittest.TestCase):
             with self.subTest(event=event_name, action=event.get('action')):
                 self.assertTrue(scope.heavy_now(event_name, event, ['docs/x.md']))
         push = {'action': 'synchronize', 'pull_request': ready}
-        self.assertFalse(scope.heavy_now('pull_request', push, ['Essentials/src/Feature.cs']))
+        self.assertFalse(scope.heavy_now('pull_request', push, ['essentials/src/Feature.cs']))
         self.assertFalse(scope.heavy_now('pull_request', {'action': 'synchronize', 'pull_request': {'labels': [{'name': 'other'}]}}, []))
         self.assertTrue(scope.heavy_now('pull_request', push, ['tools/ci/test-tiers.json']))
         self.assertTrue(scope.heavy_now('pull_request', push, None))
@@ -72,9 +72,28 @@ class WorkflowScopeTests(unittest.TestCase):
 
     def test_push_scopes_studio_and_weaver_like_a_pull_request(self):
         self.assertFalse(any(self.selected('push', ['docs/README.md']).values()))
-        self.assertTrue(self.selected('push', ['Essentials/src/Feature.cs'])['weaver'])
+        self.assertTrue(self.selected('push', ['essentials/src/Feature.cs'])['weaver'])
         pushed = self.selected('push', ['Studio/src/Feature.ts'])
         self.assertTrue(pushed['studio'] and pushed['studio-heavy'])
+
+    def test_weaver_skips_foundation_test_sources_but_keeps_product_build_and_project_inputs(self):
+        for event_name, event in [('push', {}), ('merge_group', {'merge_group': {}}),
+                                  ('pull_request', {'action': 'ready_for_review', 'pull_request': {'draft': False}})]:
+            for path in ['essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs',
+                         'essentials/tests/Cluster/Readability/Tests/README.md']:
+                with self.subTest(event=event_name, path=path):
+                    self.assertFalse(self.selected(event_name, [path], **event)['weaver'])
+            for path in ['essentials/src/Workflows/Runtime/Core/Runtime.cs',
+                         'essentials/build/Analyzers/Analyzer.cs',
+                         'essentials/Directory.Build.props', 'essentials/Directory.Build.targets',
+                         'essentials/Directory.Packages.props', 'essentials/Example.csproj',
+                         'essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
+                         'Studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
+                         'extensions/Directory.Build.props',
+                         'extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.ts',
+                         'Directory.Build.props', 'tools/studio/Weaver.Conformance.Probe/browser.mjs']:
+                with self.subTest(event=event_name, path=path):
+                    self.assertTrue(self.selected(event_name, [path], **event)['weaver'])
 
     def test_draft_skips_only_the_heavy_studio_proofs(self):
         draft = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize', pull_request={'draft': True})
@@ -90,11 +109,12 @@ class WorkflowScopeTests(unittest.TestCase):
 
     def test_shared_build_files_and_extension_depth(self):
         self.assertTrue(self.selected(paths=['Directory.Build.props'], action='ready_for_review')['weaver'])
-        self.assertTrue(self.selected(paths=['Extensions/Example/studio/Client/src/module.ts'])['studio'])
-        self.assertFalse(scope.matches('Extensions/Example/other/studio/a.ts', 'Extensions/*/studio/**'))
+        self.assertTrue(self.selected(paths=['extensions/Example/studio/Client/src/module.ts'])['studio'])
+        self.assertFalse(scope.matches('extensions/Example/other/studio/a.ts', 'extensions/*/studio/**'))
 
     def test_unreadable_diff_selects_all_eligible_jobs(self):
-        self.assertTrue(all(self.selected().values()))
+        self.assertTrue(all(enabled for name, enabled in self.selected().items() if name != 'studio-ux'))
+        self.assertFalse(self.selected()['studio-ux'])
         with patch.object(scope.subprocess, 'run') as run:
             run.return_value.returncode = 128
             self.assertIsNone(scope.changed_paths('pull_request', {}, 'a' * 40))
@@ -130,12 +150,29 @@ class WorkflowScopeTests(unittest.TestCase):
         for suite in [*self.patterns, 'studio-order']:
             with self.subTest(suite=suite):
                 selected = self.selected('workflow_dispatch', inputs={'suite': suite})
-                expected = [suite, 'studio-heavy'] if suite == 'studio' else [suite]
+                expected = [suite, 'studio-heavy', 'studio-ux'] if suite == 'studio' else [suite]
                 self.assertEqual(sorted(expected), sorted(name for name, enabled in selected.items() if enabled))
         self.assertFalse(any(self.selected('workflow_dispatch', inputs={'suite': 'ci'}).values()))
 
-    def test_nightly_only_adds_shuffle(self):
-        self.assertEqual(['studio-order'], [name for name, enabled in self.selected('schedule').items() if enabled])
+    def test_nightly_adds_shuffle_and_composed_ux(self):
+        self.assertEqual(['studio-order', 'studio-ux'], [name for name, enabled in self.selected('schedule').items() if enabled])
+
+    def test_composed_ux_requires_explicit_opt_in_outside_nightly(self):
+        for event in ('push', 'pull_request', 'merge_group'):
+            with self.subTest(event=event):
+                selected = self.selected(event, ['Studio/src/Feature.ts'], action='ready_for_review',
+                                         pull_request={'draft': False})
+                self.assertTrue(selected['studio'] and selected['studio-heavy'])
+                self.assertFalse(selected['studio-ux'])
+                forced = scope.select(event, {'action': 'ready_for_review', 'pull_request': {'draft': False}},
+                                      ['Studio/src/Feature.ts'], self.patterns, every_push=True)
+                self.assertEqual(event == 'pull_request', forced['studio-ux'])
+        opted_in = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize',
+                                 pull_request={'draft': False, 'labels': [{'name': 'full-tier'}]})
+        self.assertTrue(opted_in['studio-ux'])
+        draft = self.selected(paths=['Studio/src/Feature.ts'],
+                              pull_request={'draft': True, 'labels': [{'name': 'full-tier'}]})
+        self.assertFalse(draft['studio-ux'])
 
 
 if __name__ == '__main__':

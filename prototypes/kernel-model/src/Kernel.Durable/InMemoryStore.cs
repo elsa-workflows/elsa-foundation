@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -7,9 +8,10 @@ namespace Kernel.Durable;
 /// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
 /// seen from the one place that sees every write.
 /// </summary>
-public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
+public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
     public bool CommitClockAvailable { get; set; } = true;
+    public bool PhysicalRetirementAvailable => true;
     public bool CreationIdentityAvailable { get; set; } = true;
 
     public sealed class PartitionRow
@@ -46,6 +48,23 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     /// <summary>A row the database refuses, every time: a value too long.</summary>
     public Func<InstanceRow, bool>? Refuses { get; set; }
 
+    public sealed record DeletedCheckpoint(InstanceRow Row, ImmutableArray<JournalRow> Journal)
+    {
+        public JournalRow? Receipt { get; init; }
+    }
+    private Dictionary<CreationAddress, TaskCompletionSource<DeletedCheckpoint>>? _watchedDeletes;
+
+    /// <summary>For tests: preserve the actual checkpoint and journal at the next fenced deletion of this occurrence.</summary>
+    public Task<DeletedCheckpoint> WatchDeletion(CreationAddress address)
+    {
+        lock (_gate)
+        {
+            var watches = _watchedDeletes ??= [];
+            if (!watches.TryGetValue(address, out var watch)) watches[address] = watch = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            return watch.Task;
+        }
+    }
+
     private bool Has(Flaw flaw) => (flaws & flaw) != 0;
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
@@ -67,7 +86,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+        StoreBatchRules.Validate(batch);
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
@@ -108,9 +128,18 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 (p.Position, p.LeaseUntil) = (batch.Position + batch.Positions, now + (long)batch.Lease.TotalMilliseconds);
             }
 
+            List<LifecycleObservation.Change>? changes = null;
             var (next, seqs) = (batch.Position, new List<long>());
+            List<(CreationAddress Address, DeletedCheckpoint Checkpoint, long? Position)>? deletes = null;
             foreach (var turn in batch.Turns)
             {
+                var opening = epoch && position ? Lifecycle?.BeforeTurn(turn, this) : null;
+                if (epoch && position && turn.Delete && _watchedDeletes is { Count: > 0 } watches &&
+                    Instances.GetValueOrDefault(turn.Instance) is { Retired: false } prior && watches.ContainsKey(new(prior.Id, prior.Creation)))
+                {
+                    var entries = prior.History == History.Full ? Journal.Values.Where(j => j.Instance == prior.Id).ToImmutableArray() : [];
+                    (deletes ??= []).Add((new(prior.Id, prior.Creation), new(prior, entries), turn.Journal is null ? null : next + 1));
+                }
                 if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
                 if (turn.Delete)
                 {
@@ -138,6 +167,9 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 foreach (var subscription in turn.Unsubscribed) Subscriptions.Remove(subscription);
                 if (turn.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == turn.Instance);
                 if (turn.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, turn.Instance, turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal);
+                if (opening is not null)
+                    (changes ??= []).Add(opening with { After = Instances.GetValueOrDefault(turn.Instance),
+                        Receipt = turn.Delete && turn.Journal is not null ? Journal[(batch.Partition, next)] : null });
             }
             foreach (var id in batch.Seen)
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
@@ -145,6 +177,11 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (batch.Epoch, batch.Epoch);
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
                 if (!Has(Flaw.HoldKeepsTrial) && Messages.GetValueOrDefault(id) is { } held) held.Trial = 0;
+            if (changes is not null) Lifecycle!.Publish(changes);
+            if (deletes is not null)
+                foreach (var (address, checkpoint, receiptPosition) in deletes)
+                    if (_watchedDeletes!.Remove(address, out var watch))
+                        watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault((batch.Partition, slot)) : null });
             return new(new Committed(fenced, now, seqs));
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.

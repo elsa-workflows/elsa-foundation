@@ -24,6 +24,7 @@ import {
   createWorkflowEdge,
   getActivityDisplay,
   getActivitySourcePorts,
+  graphBoundaryCompleteTypeKey,
   getChildSlots,
   type WorkflowNodeData
 } from "../workflowAdapter";
@@ -54,6 +55,28 @@ const isReadOnlyNodeChange = (change: NodeChange<Node<WorkflowNodeData>>) =>
   change.type === "select" || (change.type === "dimensions" && !change.resizing && !change.setAttributes);
 
 const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
+
+export interface CanvasFocusIntent {
+  isCurrent(): boolean;
+  dispose(): void;
+}
+
+/** Newer focus takes precedence over a delayed canvas restoration. */
+export function captureCanvasFocusIntent(): CanvasFocusIntent {
+  const origin = document.activeElement;
+  let current = true;
+  const dispose = () => {
+    current = false;
+    document.removeEventListener("focusin", laterFocus);
+  };
+  const laterFocus = (event: FocusEvent) => {
+    if (event.target !== origin && event.target !== document.body) dispose();
+  };
+  document.addEventListener("focusin", laterFocus);
+  return { isCurrent: () => current && (document.activeElement === origin || document.activeElement === document.body), dispose };
+}
+
+type PendingCanvasFocus = { nodeId: string; intent: CanvasFocusIntent };
 
 /**
  * Shape of the slot currently mirrored on the canvas. `unsupported` is a read-only projection of a
@@ -150,8 +173,12 @@ export interface GraphCanvasInteractionsResult {
   connectMenu: ConnectMenuState | null;
   setConnectMenu: React.Dispatch<React.SetStateAction<ConnectMenuState | null>>;
   edgeActions: WorkflowEdgeActions;
-  queueCanvasNodeFocus(nodeId: string): void;
+  queueCanvasNodeFocus(nodeId: string, intent?: CanvasFocusIntent): void;
   stampCanvasNode: GraphCanvasStamp;
+  /** Canvas selection is a set; the inspector retains a distinct primary node. */
+  selectNodes(nodeIds: string[], primaryNodeId?: string | null): void;
+  /** React Flow clicks inspect only nodes still selected after its selection-change event. */
+  inspectSelectedNode(nodeId: string): void;
   onNodesChange(changes: NodeChange<Node<WorkflowNodeData>>[]): void;
   onEdgesChange(changes: EdgeChange<WorkflowEdge>[]): void;
   onNodesDelete(deletedNodes: Node<WorkflowNodeData>[]): void;
@@ -229,7 +256,7 @@ export function useGraphCanvasInteractions({
   } | null>(null);
   const nativePaletteDragRef = useRef<{ itemKey: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
-  const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const pendingCanvasFocusRef = useRef<PendingCanvasFocus | null>(null);
   const focusObserverRef = useRef<MutationObserver | null>(null);
 
   const isUnsupported = mode === "unsupported";
@@ -270,21 +297,53 @@ export function useGraphCanvasInteractions({
     };
   }, [createPlacement, isOfferedActivity]);
 
-  // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
-  // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
-  // pointer click and the accessible pressed state always describes what the inspector is showing.
+  const selectedIdsRef = useRef(new Set(selectedNodeId ? [selectedNodeId] : []));
+  const pendingSelectionRef = useRef(false);
+  const selectionPrimaryRef = useRef(selectedNodeId);
+  const selectionScopeRef = useRef(scopeKey);
+  const renderedPrimaryRef = useRef(selectedNodeId);
+  if (selectionScopeRef.current !== scopeKey || renderedPrimaryRef.current !== selectedNodeId) {
+    if (selectionScopeRef.current !== scopeKey || selectionPrimaryRef.current !== selectedNodeId) {
+      selectedIdsRef.current = new Set(selectedNodeId ? [selectedNodeId] : []);
+      pendingSelectionRef.current = !!selectedNodeId && !nodes.some(node => node.id === selectedNodeId);
+    }
+    selectionPrimaryRef.current = selectedNodeId;
+    renderedPrimaryRef.current = selectedNodeId;
+    selectionScopeRef.current = scopeKey;
+  }
+  const visibleSelectionIds = new Set(nodes.map(node => node.id));
+  if ([...selectedIdsRef.current].every(id => visibleSelectionIds.has(id))) pendingSelectionRef.current = false;
+  if (!pendingSelectionRef.current) selectedIdsRef.current = new Set([...selectedIdsRef.current].filter(id => visibleSelectionIds.has(id)));
+  const selectNodes = useCallback((nodeIds: string[], primaryNodeId: string | null = nodeIds.at(-1) ?? null) => {
+    const visible = new Set(nodes.map(node => node.id));
+    selectedIdsRef.current = new Set(nodeIds);
+    pendingSelectionRef.current = nodeIds.some(id => !visible.has(id));
+    const primary = primaryNodeId && selectedIdsRef.current.has(primaryNodeId) ? primaryNodeId : [...selectedIdsRef.current].at(-1) ?? null;
+    selectionPrimaryRef.current = primary;
+    setNodes(current => current.map(node => ({ ...node, selected: selectedIdsRef.current.has(node.id) })));
+    select(primary);
+  }, [nodes, select, setNodes]);
+
+  const inspectSelectedNode = useCallback((nodeId: string) => {
+    if (!selectedIdsRef.current.has(nodeId)) return;
+    selectionPrimaryRef.current = nodeId;
+    select(nodeId);
+  }, [select]);
+
+  // Rebuilds and inspector edits retain the entire set. An external inspector/navigation selection
+  // starts a new set; selecting a primary through this hook does not collapse a canvas gesture.
   useEffect(() => {
     setNodes(current => {
       let changed = false;
       const next = current.map(node => {
-        const selected = node.id === selectedNodeId;
+        const selected = selectedIdsRef.current.has(node.id);
         if (!!node.selected === selected) return node;
         changed = true;
         return { ...node, selected };
       });
       return changed ? next : current;
     });
-  }, [selectedNodeId, setNodes]);
+  }, [nodes, scopeKey, selectedNodeId, setNodes]);
 
   const focusCanvasNode = useCallback((nodeId: string) => {
     const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node, .wf-sequence-step") ?? [])
@@ -294,17 +353,23 @@ export function useGraphCanvasInteractions({
     return document.activeElement === element;
   }, []);
 
-  const queueCanvasNodeFocus = useCallback((nodeId: string) => {
-    pendingFocusNodeIdRef.current = nodeId;
+  const clearPendingCanvasFocus = useCallback((expected?: PendingCanvasFocus) => {
+    const pending = pendingCanvasFocusRef.current;
+    if (expected && pending !== expected) return;
+    pending?.intent.dispose();
+    pendingCanvasFocusRef.current = null;
+    focusObserverRef.current?.disconnect();
+    focusObserverRef.current = null;
+  }, []);
+
+  const watchCanvasFocus = useCallback((pending: PendingCanvasFocus) => {
     focusObserverRef.current?.disconnect();
     const tryFocus = () => {
-      if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
-      pendingFocusNodeIdRef.current = null;
-      focusObserverRef.current?.disconnect();
-      focusObserverRef.current = null;
+      if (pendingCanvasFocusRef.current !== pending) return;
+      if (!pending.intent.isCurrent()) { clearPendingCanvasFocus(pending); return; }
+      if (focusCanvasNode(pending.nodeId)) clearPendingCanvasFocus(pending);
     };
-    // React Flow mounts new nodes hidden until measured. Observe its visibility update rather
-    // than treating a found-but-not-focusable wrapper as successful or guessing a render delay.
+    // React Flow mounts nodes hidden until measured; retain the original focus intent across those updates.
     const canvas = canvasRef.current;
     if (canvas) {
       const observer = new MutationObserver(tryFocus);
@@ -312,24 +377,24 @@ export function useGraphCanvasInteractions({
       focusObserverRef.current = observer;
     }
     window.requestAnimationFrame(tryFocus);
-  }, [focusCanvasNode]);
+  }, [clearPendingCanvasFocus, focusCanvasNode]);
 
-  useEffect(() => () => {
-    pendingFocusNodeIdRef.current = null;
-    focusObserverRef.current?.disconnect();
-  }, []);
+  const queueCanvasNodeFocus = useCallback((nodeId: string, intent = captureCanvasFocusIntent()) => {
+    if (!intent.isCurrent()) { intent.dispose(); return; }
+    clearPendingCanvasFocus();
+    const pending = { nodeId, intent };
+    pendingCanvasFocusRef.current = pending;
+    watchCanvasFocus(pending);
+  }, [clearPendingCanvasFocus, watchCanvasFocus]);
+
+  useEffect(() => () => clearPendingCanvasFocus(), [clearPendingCanvasFocus]);
 
   useEffect(() => {
-    const nodeId = pendingFocusNodeIdRef.current;
-    if (!nodeId) return;
-    if (nodes.some(node => node.id === nodeId)) {
-      queueCanvasNodeFocus(nodeId);
-    } else {
-      pendingFocusNodeIdRef.current = null;
-      focusObserverRef.current?.disconnect();
-      focusObserverRef.current = null;
-    }
-  }, [nodes, queueCanvasNodeFocus]);
+    const pending = pendingCanvasFocusRef.current;
+    if (!pending) return;
+    if (nodes.some(node => node.id === pending.nodeId)) watchCanvasFocus(pending);
+    else clearPendingCanvasFocus(pending);
+  }, [clearPendingCanvasFocus, nodes, watchCanvasFocus]);
 
   /**
    * Places an already-positioned node on the canvas, clearing the previous selection, selecting and
@@ -637,7 +702,7 @@ export function useGraphCanvasInteractions({
   // one — the same commit as dragging a new activity off its default port — otherwise add to the scope.
   const openAddStepMenu = (anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }) => {
     const sourceNodeId = source?.nodeId ?? selectedNodeId;
-    if (sourceNodeId && canCreateActivityFromPort && nodes.some(node => node.id === sourceNodeId)) {
+    if (sourceNodeId && canCreateActivityFromPort && nodes.some(node => node.id === sourceNodeId && node.data.activityTypeKey !== graphBoundaryCompleteTypeKey)) {
       setConnectMenu({ kind: "fromPort", sourceNodeId, sourceHandleId: source?.handleId ?? null, ...anchor });
       return;
     }
@@ -650,14 +715,19 @@ export function useGraphCanvasInteractions({
     // node until it is measured again, and a click in that frame reaches the pane and clears the selection.
     const allowedChanges = isUnsupported ? changes.filter(isReadOnlyNodeChange) : changes;
     if (allowedChanges.length === 0) return;
-    setNodes(current => applyNodeChanges(allowedChanges, current));
     const selectionChanges = allowedChanges.filter(change => change.type === "select");
-    const selectedChange = selectionChanges.find(change => change.selected);
-    if (selectedChange && selectedChange.id !== selectedNodeId) {
-      select(selectedChange.id);
-    } else if (!selectedChange && selectedNodeId && selectionChanges.some(change => change.id === selectedNodeId && !change.selected)) {
-      select(null);
+    if (selectionChanges.length > 0) {
+      for (const change of selectionChanges) {
+        if (change.selected) selectedIdsRef.current.add(change.id);
+        else selectedIdsRef.current.delete(change.id);
+      }
+      pendingSelectionRef.current = false;
+      const primary = selectedIdsRef.current.has(selectedNodeId ?? "") ? selectedNodeId :
+        [...selectionChanges].reverse().find(change => change.selected)?.id ?? [...selectedIdsRef.current].at(-1) ?? null;
+      selectionPrimaryRef.current = primary;
+      select(primary);
     }
+    setNodes(current => applyNodeChanges(allowedChanges, current).map(node => ({ ...node, selected: selectedIdsRef.current.has(node.id) })));
   };
 
   const onEdgesChange = (changes: EdgeChange<WorkflowEdge>[]) => {
@@ -668,6 +738,7 @@ export function useGraphCanvasInteractions({
   const isValidConnection = (connection: Connection | Edge) => {
     if (!canCreateActivityFromPort) return false;
     if (!connection.source || !connection.target) return false;
+    if (nodes.some(node => node.id === connection.source && node.data.activityTypeKey === graphBoundaryCompleteTypeKey)) return false;
     if (connection.source === connection.target) return false;
     if (!isGraphMode) return false;
     return !connection.targetHandle;
@@ -904,6 +975,8 @@ export function useGraphCanvasInteractions({
     edgeActions,
     queueCanvasNodeFocus,
     stampCanvasNode,
+    selectNodes,
+    inspectSelectedNode,
     onNodesChange,
     onEdgesChange,
     onNodesDelete,

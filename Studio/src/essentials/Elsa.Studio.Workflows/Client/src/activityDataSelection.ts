@@ -266,6 +266,7 @@ export function describeUnavailableSource(reasonCode: string | null, projectionK
 
 /** Explains a server finding about a stored activity output; null for findings unrelated to its source. */
 export function describeReferenceFinding(finding: ActivityDataInputFinding): string | null {
+  if (finding.type.startsWith("ValueConversion/")) return finding.message;
   switch (finding.type) {
     // The server reports a producer that is not certain to run first as UnavailableProducer, conditional or not.
     case "ValueFlow/UnavailableProducer":

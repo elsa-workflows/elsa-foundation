@@ -209,8 +209,9 @@ describe("Choose data for an activity input", () => {
     await settle();
     expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Source: Get customer › , Whole output");
     expect(document.activeElement).toBe(container.querySelector(".wf-data-reference-replace"));
-    // Choosing data opens no fixed-value chrome and needs no save: only the source request ran.
-    expect(dataHost.requestSources).toHaveBeenCalledTimes(1);
+    // The stored binding asks for its own conversion preview without saving or listing sources again.
+    expect(dataHost.requestSources).toHaveBeenLastCalledWith(
+      { nodeId: "node-1", inputKey: "customerId" }, expect.any(AbortSignal), 0, { previewBindingConversion: true });
   });
 
   it("says a reason shared by all of a producer's outputs once, and keeps differing reasons on their rows", async () => {
@@ -509,9 +510,11 @@ describe("a stored activity output", () => {
 
     expect(container.querySelector(".wf-data-reference-source")?.textContent).toContain("Get customer");
     expect(container.querySelector(".wf-syntax-picker-trigger")?.getAttribute("aria-label")).toBe("Customer ID expression syntax: Activity output");
-    // A stored reference offers Replace, not a second Choose data action, and nothing is requested until asked.
+    // A stored reference offers Replace and requests only its bound conversion.
     expect(trigger(container)).toBeNull();
-    expect(dataHost.requestSources).not.toHaveBeenCalled();
+    expect(dataHost.requestSources).toHaveBeenCalledTimes(1);
+    expect(dataHost.requestSources).toHaveBeenCalledWith(
+      { nodeId: "node-1", inputKey: "customerId" }, expect.any(AbortSignal), 0, { previewBindingConversion: true });
     expect(changes).toHaveLength(0);
     expect((activity.customerId as { expression: { value: unknown } }).expression.value).toBe(legacyValue);
 
@@ -520,6 +523,25 @@ describe("a stored activity output", () => {
     flushSync(() => goTo.click());
     expect(dataHost.revealActivity).toHaveBeenCalledWith("get-customer");
     expect(changes).toHaveLength(0);
+  });
+
+  it("shows the server's conversion and hides it immediately when the draft changes", async () => {
+    const target = { nodeId: "node-1", inputKey: "customerId" };
+    const conversion = {
+      sourceType: { alias: "Double", collectionKind: "single" }, targetType: { alias: "String", collectionKind: "single" },
+      operation: "NumericToString", rejection: null
+    };
+    const result = { target: { target, displayName: "Customer ID", constraint: null }, bindingConversion: conversion };
+    const first = host({ requestSources: vi.fn(async () => answer("empty", result)) });
+    const container = render({ dataHost: first, activity: storedActivity(legacyValue) });
+    await vi.waitFor(() => expect(container.textContent).toContain("Double → String · automatic"));
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2", requestSources: async () => answer("empty", {
+      ...result, documentRevision: "rev-2", bindingConversion: { ...conversion, operation: null,
+        rejection: "Mode None requires identical contracts." }
+    }) }));
+    expect(container.textContent).not.toContain("Double → String · automatic");
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent)
+      .toContain("Mode None requires identical contracts."));
   });
 
   it("replaces it with the newly chosen binding, marking the current source", async () => {

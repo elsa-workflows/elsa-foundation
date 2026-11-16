@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import { createActivityDataResponseCollector } from "./activityDataResponseCollector.mjs";
 
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
@@ -65,16 +66,18 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const base = process.env.ELSA_WORKBENCH_URL!;
   expect(base, "Owned Workbench URL").toBeTruthy();
   const composition = process.env.UX_ACTIVITY_DATA_COMPOSITION ?? "normal";
-  const contexts: Context[] = [], pending: Promise<void>[] = [], scripts: string[] = [], definitions: string[] = [];
+  const contexts: Context[] = [], scripts: string[] = [], definitions: string[] = [];
   const selections: { definitionId: string; binding: Binding; offered: Binding; admission: Context; before: Context["request"] }[] = [];
   const runtime: { definitionId: string; workflowExecutionId: string; expected: string; committed: string; consumer: Execution; producers: Execution[] }[] = [];
   const observations: string[] = [];
-  const transportControls: { kind: "cancelled"; request: unknown; failure: string }[] = [];
+  const transportControls: { kind: "cancelled" | "cancelled-context-response"; request: unknown; failure: string }[] = [];
+  const contextResponses = createActivityDataResponseCollector(`${base}/design/workflows/activity-data/context`, contexts, transportControls);
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
+  page.on("requestfailed", request => contextResponses.requestFailed(request));
   page.on("response", response => {
     if (response.url().includes("/design/workflows/activity-data/context") && response.ok()) {
-      pending.push((async () => { contexts.push({ request: response.request().postDataJSON(), response: await response.json() }); })());
+      contextResponses.observe(response);
     }
   });
   page.on("request", request => {
@@ -90,7 +93,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   // Registered before setup: failures and stock-timeout exits still attach partial observations and delete owned definitions.
   registerCleanup(async () => {
     const failures: unknown[] = [], cleanup: { id: string; status: string }[] = [];
-    try { await Promise.all(pending); } catch (error) { failures.push(error); }
+    try { await contextResponses.settle(); } catch (error) { failures.push(error); }
     for (const id of definitions) {
       try { await api(`/design/workflows/definitions/${id}`, "DELETE", undefined, 15_000); cleanup.push({ id, status: "deleted" }); }
       catch (error) { failures.push(error); cleanup.push({ id, status: "failed" }); }
@@ -116,9 +119,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       activities, startNodeId: activities[0].nodeId, nodeMetadata: {}, connectionMetadata: {},
       connections: activities.slice(1).map((activity, index) => ({ id: `edge-${index}`, source: { nodeId: activities[index].nodeId, port: "Done" }, target: { nodeId: activity.nodeId } }))
     } } });
-  async function seed(name: string, rootActivity: Node, inputs: unknown[] = [], variables: unknown[] = []) {
+  async function seed(name: string, rootActivity: Node, inputs: unknown[] = [], variables: unknown[] = [], outputs: unknown[] = []) {
     const created = await api<Created>("/design/workflows/definitions/submit", "POST", {
-      name: `Activity data ${name} ${info.project.name} ${Date.now()}`, state: { rootActivity, inputs, variables, outputs: [] }
+      name: `Activity data ${name} ${info.project.name} ${Date.now()}`, state: { rootActivity, inputs, variables, outputs }
     }); definitions.push(created.definition.id); return created;
   }
   const saved = (created: Created) => api<Draft>(`/design/workflows/drafts/${created.draftId}`);
@@ -153,13 +156,13 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const memberName = () => chooser().getByRole("textbox", { name: "Member name", exact: true });
   const path = () => chooser().getByRole("navigation", { name: "Member path", exact: true });
   async function commit(created: Created, expected: Binding, action: () => Promise<void>) {
-    await Promise.all(pending);
+    await contextResponses.settle();
     const oldBinding = await stored(created);
     const before = [...contexts].reverse().find(item => item.request.definitionId === created.definition.id && item.request.nodeId === "consumer" && item.request.inputKey === "text" &&
       wireIdentity(item.request.snapshot.rootActivity.structure!.payload.activities.find(node => node.nodeId === "consumer")!.inputs.find(input => input.referenceKey === "text")?.value ?? null) === wireIdentity(oldBinding));
     expect(before, "Current pre-edit snapshot before selection").toBeTruthy();
     const boundary = contexts.length;
-    await action(); await expect(chooser()).toHaveCount(0); await Promise.all(pending);
+    await action(); await expect(chooser()).toHaveCount(0); await contextResponses.settle();
     const admission = findActivityDataAdmission(contexts.slice(boundary), before!.request, expected);
     expect(admission, "Fresh supported pre-edit admission, not a post-edit provenance read").toBeTruthy();
     const offer = admission!.response.analysis!.sources.find(source => wireIdentity(source.binding) === wireIdentity(expected))!.binding!;
@@ -202,7 +205,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     expect(consumer.status).toBe("Completed");
     const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(`${instance}/activity-executions/${consumer.activityExecutionId}`);
     const evidence = detail.valueSnapshots.find(item => item.inputKey === "text"); expect(evidence).toBeTruthy();
-    const payload = await api<{ payload: { preview: string } }>(`${instance}/activity-executions/${consumer.activityExecutionId}/value-evidence/${evidence!.evidenceId}/payload`);
+    const payload = await api<{ payload: { kind: string; preview: string } }>(`${instance}/activity-executions/${consumer.activityExecutionId}/value-evidence/${evidence!.evidenceId}/payload`);
     expect(payload.payload.preview).toBe(expected);
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, expected, committed: payload.payload.preview, consumer, producers });
     // Publication returns the Inspector to the workflow root. Navigate back explicitly before the next input edit.
@@ -210,9 +213,10 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     if (authoring === "native") await expect(replace()).toBeVisible();
     else await expect(page.getByRole("button", { name: "Insert data", exact: true })).toBeVisible();
     expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
+    return { instance, consumerInput: payload.payload, publication, run };
   }
   async function assertComposition(expectedNativeSyntax: "Activity output member" | "Variable member" | "Activity output…") {
-    await Promise.all(pending);
+    await contextResponses.settle();
     expect(contexts.some(item => item.response.analysis?.memberReadsEnabled === (composition !== "default-off")), "Measured member capability").toBe(true);
     if (composition === "minimal") {
       const catalog = await api<{ features: FeatureFact[] }>("/modularity/features");

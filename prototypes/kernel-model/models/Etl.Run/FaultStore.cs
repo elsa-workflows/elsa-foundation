@@ -9,6 +9,7 @@ public sealed class FaultStore(IKernelStore inner, bool inject) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool Injected { get; private set; }
     public EtlState? LostCheckpoint { get; private set; }

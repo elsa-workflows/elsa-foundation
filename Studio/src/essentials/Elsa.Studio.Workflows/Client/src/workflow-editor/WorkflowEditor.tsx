@@ -1,4 +1,12 @@
 import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
+import { captureCanvasFocusIntent, type CanvasFocusIntent } from "../graph-authoring/useGraphCanvasInteractions";
+import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
+import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
+import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
+import { NativeBlockCommands } from "../graph-authoring/NativeBlockCommands";
+import { nextNativeBlockPosition } from "../graph-authoring/nativeBlockPlacement";
+import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
+import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
@@ -124,10 +132,10 @@ import {
 import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
 import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
-import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnElements, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { notifySuccess, useNotificationGuard } from "./notifications";
-import { assertLosslessBpmnImport, exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
+import { exportBpmnDocument, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
@@ -258,17 +266,31 @@ export function WorkflowEditor({
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
-  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
+  const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
+  const pendingHistoryView = useRef<(GraphAuthoringView & { focusIntent: CanvasFocusIntent }) | null>(null);
+  const historyFocusIntent = useRef<CanvasFocusIntent | null>(null);
+  useEffect(() => () => historyFocusIntent.current?.dispose(), []);
+  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft, view?: GraphAuthoringView) => {
     const root = snapshot.state.rootActivity;
-    let path = resolveScopeFrames(root, editableDoc.state.frames, historyCatalog.current);
+    let path = resolveScopeFrames(root, view?.frames ?? editableDoc.state.frames, historyCatalog.current);
     const scope = resolveScope(root, path, historyCatalog.current);
     if (scope?.slot.cardinality === "single") {
       path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
     }
+    const restoredScope = resolveScope(root, path, historyCatalog.current);
+    const visible = restoredScope?.slot.mode === "bpmn"
+      ? readBpmnElements(restoredScope.owner).map(element => element.elementId)
+      : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
+    const selected = view?.selectedNodeIds.filter(id => visible.includes(id)) ?? [];
+    const primary = view?.primaryNodeId && selected.includes(view.primaryNodeId) ? view.primaryNodeId : selected.at(-1) ?? null;
+    historyFocusIntent.current?.dispose();
+    const focusIntent = view ? captureCanvasFocusIntent() : null;
+    historyFocusIntent.current = focusIntent;
+    pendingHistoryView.current = focusIntent ? { frames: path, selectedNodeIds: selected, primaryNodeId: primary, focusIntent } : null;
     editableDoc.editDraft(() => snapshot);
-    editableDoc.navigateToScope(path);
+    editableDoc.navigateToScope(path, primary);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, transitions: editableDoc.state.historyTransitions, onTransitionsCaptured: editableDoc.acknowledgeHistoryTransitions });
+  const { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current), transitions: editableDoc.state.historyTransitions, onTransitionsCaptured: editableDoc.acknowledgeHistoryTransitions });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -293,6 +315,7 @@ export function WorkflowEditor({
   }, [reload, setError]);
   const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
   const { draft, frames, selectedNodeId } = editorDoc.state;
+  const commitNativeBlock = useWorkflowNativeBlockCommit(editorDoc, { prepareEdit, recordEdit, cancelPreparedEdit });
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
@@ -526,14 +549,32 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
+  const showEditorRunData = () => {
+    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+  };
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+    showEditorRunData();
+  };
+  const selectEditorNodes = (nodeIds: string[], primaryNodeId?: string | null) => {
+    canvas.selectNodes(nodeIds, primaryNodeId);
+    if (nodeIds.length) showEditorRunData();
   };
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
   }, [nodes, selectedNodeId]);
+  historyView.current = { frames, selectedNodeIds: selectedCanvasNodeIds, primaryNodeId: selectedNodeId };
+  useEffect(() => {
+    const pending = pendingHistoryView.current;
+    if (!pending || JSON.stringify(pending.frames.map(frame => [frame.ownerNodeId, frame.slotId])) !== JSON.stringify(frames.map(frame => [frame.ownerNodeId, frame.slotId]))) return;
+    if (pending.selectedNodeIds.some(id => !authoringNodes.some(node => node.id === id))) return;
+    pendingHistoryView.current = null;
+    canvas.selectNodes(pending.selectedNodeIds, pending.primaryNodeId);
+    if (pending.primaryNodeId) queueCanvasNodeFocus(pending.primaryNodeId, pending.focusIntent);
+    else pending.focusIntent.dispose();
+  }, [authoringNodes, canvas, frames, queueCanvasNodeFocus]);
+
   const {
     copy: copySelectedActivities,
     paste: pasteCopiedActivities,
@@ -1031,24 +1072,14 @@ export function WorkflowEditor({
   const isBpmnRoot = draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
   const canUseBpmnInterchange = isBpmnRoot && frames.length === 0;
   const bpmnFileInputRef = useRef<HTMLInputElement | null>(null);
-  const bpmnImportRequest = useRef<AbortController | null>(null);
-  const [refusedBpmnFile, setRefusedBpmnFile] = useState<File | null>(null);
-  const bpmnImportScope = useRef({ draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange });
-  bpmnImportScope.current = { draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange };
-  useEffect(() => () => bpmnImportRequest.current?.abort(), [context, definitionId]);
-  const downloadRefusedBpmn = useCallback(() => {
-    if (!refusedBpmnFile) return;
-    const url = URL.createObjectURL(refusedBpmnFile);
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = refusedBpmnFile.name;
-    anchor.click(); URL.revokeObjectURL(url);
-  }, [refusedBpmnFile]);
+  const [bpmnImportFile, setBpmnImportFile] = useState<File | null>(null);
 
   const exportBpmn = useCallback(async () => {
     const rootActivity = draft?.state.rootActivity;
     if (!rootActivity) return;
     const canNotify = captureNotificationGuard();
     try {
-      const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout));
+      const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout, draft.activityPresentation));
       const blob = new Blob([xml], { type: "application/xml" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -1058,58 +1089,10 @@ export function WorkflowEditor({
       URL.revokeObjectURL(url);
       if (canNotify.isOwned()) setError("");
       if (canNotify()) notifySuccess("Exported BPMN 2.0 XML.");
-    } catch {
-      if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
+    } catch (error) {
+      if (canNotify.isOwned()) { setStatus(""); setError(error instanceof Error ? error.message.startsWith("BPMN export was refused") ? error.message : `BPMN export failed. ${error.message}` : "BPMN export failed."); }
     }
   }, [captureNotificationGuard, context, details?.definition?.name, draft, setError, setStatus]);
-
-  const importBpmn = useCallback(async (file: File) => {
-    const rootActivity = draft?.state.rootActivity;
-    if (!rootActivity || editorDoc.pinned || !canUseBpmnInterchange) return;
-    bpmnImportRequest.current?.abort();
-    const request = new AbortController(); bpmnImportRequest.current = request;
-    const signature = getDraftSignature(draft);
-    const assertCurrent = () => {
-      const current = bpmnImportScope.current;
-      if (request.signal.aborted || backendSession?.disposed || current.pinned || !current.root || !current.draft
-        || current.draft.id !== draft.id || getDraftSignature(current.draft) !== signature)
-        throw new DOMException("The BPMN import no longer belongs to this editable process.", "AbortError");
-    };
-    try {
-      const xml = await file.text(); assertCurrent();
-      const result = await importBpmnDocument(context, xml, undefined, request.signal); assertCurrent();
-      if (directBpmnRoot) {
-        // Keep the original bytes before refusing the conversion; do not normalize its vendor data.
-        setRefusedBpmnFile(file);
-        assertLosslessBpmnImport(result.analysis);
-      }
-      const importedLayout = layoutFromBpmnDiagram(result.processNode);
-      editDraftAndSelect(({ draft: current }) => {
-        const currentRoot = current?.state.rootActivity;
-        if (!current || !currentRoot) return null;
-        return {
-          ...current,
-          layout: importedLayout,
-          state: {
-            ...current.state,
-            rootActivity: {
-              ...result.processNode,
-              nodeId: currentRoot.nodeId,
-              activityVersionId: currentRoot.activityVersionId
-            }
-          }
-        };
-      }, null);
-      setRefusedBpmnFile(null);
-      const issueSummary = summarizeBpmnImportIssues(result.analysis);
-      setError("");
-      setStatus(issueSummary ? `Imported BPMN document (${issueSummary}).` : "Imported BPMN document.");
-    } catch (error) {
-      if (request.signal.aborted || backendSession?.disposed || error instanceof DOMException && error.name === "AbortError") return;
-      setStatus("");
-      setError(error instanceof Error ? error.message : "BPMN import failed — check that the file is a valid BPMN 2.0 document.");
-    }
-  }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
   const { versionChange, openVersionChange, cancelVersionChange, applyVersionChange, saveFromToolbar, saveAndGoBack } = useWorkflowEditorSaveCommands({
     draft, canEdit: editorDoc.canEdit, lineage: lineageHold.lineage, saveDraft, loadDraft, save, flushDefinitionMeta, onBack,
@@ -1205,35 +1188,7 @@ export function WorkflowEditor({
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
   const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
-  const visibleFrames = frames.map((frame, index) => {
-    if (!frame.label) return frame;
-    // A hidden selector and its following primary container frame represent one slot entry. Keep
-    // that crumb named after the entered slot while resolving live presentation labels.
-    const frameOwner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
-    const viewedPrimary = frameOwner && getChildSlots(frameOwner, catalogByVersion)[0]?.id === frame.slotId;
-    const previous = frames[index - 1];
-    const rootPrimary = draft.state.rootActivity ? getChildSlots(draft.state.rootActivity, catalogByVersion)[0] : undefined;
-    const labelFrame = viewedPrimary && previous?.label === "" ? previous
-      : viewedPrimary && index === 0 && rootPrimary?.cardinality === "single" && rootPrimary.activities[0]?.nodeId === frame.ownerNodeId
-        ? { ownerNodeId: draft.state.rootActivity!.nodeId, slotId: rootPrimary.id }
-        : frame;
-    const owner = findActivityNode(draft.state.rootActivity, labelFrame.ownerNodeId, catalogByVersion);
-    const slot = owner
-      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === labelFrame.slotId)
-      : undefined;
-    const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
-    return owner && slot
-      ? {
-          ...frame,
-          label: slotCrumbLabel(
-            resolveActivityLabel(
-              presentationByNodeId.get(owner.nodeId),
-              catalogItem,
-              catalogItem?.activityTypeKey ?? owner.activityVersionId),
-            slot)
-        }
-      : frame;
-  });
+  const visibleFrames = presentationScopeFrames(draft.state.rootActivity, frames, catalogByVersion, draft.activityPresentation);
   // Keep raw editor text: normalizing here removes a space before the next word is typed.
   const inspectedPresentation = inspectedNode
     ? draft.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId)
@@ -1506,7 +1461,6 @@ export function WorkflowEditor({
                   : "Publish this workflow first: only a published version has a compiled executable artifact",
                 onSelect: () => void exportExecutableArtifact()
               }] : []),
-              ...(refusedBpmnFile ? [{ label: "Download refused BPMN source", icon: <Download size={15} />, onSelect: downloadRefusedBpmn }] : []),
               ...(canUseBpmnInterchange ? [
                 {
                   label: "Import BPMN",
@@ -1536,7 +1490,7 @@ export function WorkflowEditor({
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = "";
-            if (file) void importBpmn(file);
+            if (file) setBpmnImportFile(file);
           }}
         />
       ) : null}
@@ -1662,6 +1616,39 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
+          {draft.state.rootActivity ? <NativeBlockCommands
+            endpoint={context}
+            bpmnImportFile={frames.length === 0 ? bpmnImportFile : null}
+            onBpmnImportFileConsumed={() => setBpmnImportFile(null)}
+            context={{
+              document: { rootActivity: draft.state.rootActivity, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] },
+              catalog, scope: frames, canEdit: editorDoc.canEdit() && canAddActivitiesToCanvas && !isUnsupportedDesigner && !editorDoc.pinned,
+              referenceContext: [Object.fromEntries(Object.entries(draft.state).filter(([key]) => key !== "rootActivity"))],
+              sourceKey: JSON.stringify([draft, persistedDraft, selectedCanvasNodeIds, documentAdapter?.weaverResource?.revision(), descriptorStatus]),
+              expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
+            }}
+            selectedNodeIds={selectedCanvasNodeIds}
+            createPosition={nextNativeBlockPosition(authoringNodes, selectedNodeId)}
+            validate={async document => {
+              if (!editorDoc.canEdit() || editorDoc.pinned || (!documentAdapter && !persistedDraft)) return { state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] };
+              const candidate = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+              if (documentAdapter) return documentAdapter.validateCandidate?.(context, candidate) ?? { state: "unavailable", messages: ["This resource does not provide candidate validation."] };
+              return validateWorkflowCandidate(context, persistedDraft!, candidate);
+            }}
+            apply={async (document, selection, isCurrent) => {
+              const next = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+              if (!editorDoc.canEdit()) throw new Error("The resource is no longer editable.");
+              const applied = await commitNativeBlock(draft, frames, selectedNodeId, next, selection, () => isCurrent() && editorDoc.canEdit());
+              if (!applied) throw new Error("The source changed before the edit could be committed.");
+              canvas.selectNodes(selection);
+              if (selection[0]) queueCanvasNodeFocus(selection[0]);
+            }}
+            open={nodeId => {
+              const node = scope?.slot.activities.find(item => item.nodeId === nodeId);
+              const slot = node && getChildSlots(node, catalogByVersion).find(item => item.property === "activities");
+              if (node && slot) enterSlotScope(nodeId, slot, slotCrumbLabel(resolveActivityLabel(presentationByNodeId.get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), slot));
+            }}
+          /> : null}
           {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
             <CompensationScopeDesigner
               owner={scopeOwner}
@@ -1696,6 +1683,7 @@ export function WorkflowEditor({
               canvasRef={canvasRef}
               availabilityLookup={availabilityLookup}
               onSelect={selectEditorNode}
+              onSelectMany={selectEditorNodes}
               onInsert={openSequenceInsertMenu}
               onDropActivity={(versionId, index) => {
                 const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
@@ -1756,7 +1744,8 @@ export function WorkflowEditor({
               },
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
-                selectEditorNode(node.id);
+                if (runCanvas.attached) selectEditorNode(node.id);
+                else canvas.inspectSelectedNode(node.id);
               },
               onNodeContextMenu: isUnsupportedDesigner || editorDoc.pinned ? undefined : (event, node) => {
                 event.preventDefault();

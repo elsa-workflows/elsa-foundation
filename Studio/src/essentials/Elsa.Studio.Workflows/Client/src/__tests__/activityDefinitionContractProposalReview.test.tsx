@@ -14,6 +14,19 @@ afterEach(() => {
 });
 
 describe("Activity Definition contract proposal review", () => {
+  it.each(["Error", "error"])("blocks applying a proposal with a blocking wire diagnostic (%s)", async severity => {
+    vi.useFakeTimers();
+    const candidate = proposal();
+    candidate.diagnostics = [{ code: "activity.test.invalid", severity: severity as "Error", message: "An input needs correction.", subject: { kind: "ActivityDraft", id: "draft-1" }, metadata: {} }];
+    const postJson = vi.fn(async () => candidate);
+    const harness = renderReview({ context: endpoint(postJson), draft: exactDraft() });
+    await vi.advanceTimersByTimeAsync(900);
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("An input needs correction."));
+    expect((buttonByText(harness.container, "Apply selected changes") as HTMLButtonElement).disabled).toBe(true);
+    expect(postJson).toHaveBeenCalledTimes(1);
+    await harness.unmount();
+  });
+
   it("debounces generation, cancels obsolete exact bindings, and never blocks editor state", async () => {
     vi.useFakeTimers();
     let proposalSignal: AbortSignal | undefined;

@@ -22,12 +22,26 @@ Approvals, revisions and withdrawal remain sample application concepts, not Elsa
 | Full-graph native bridge, [#4487](https://github.com/elsa-workflows/elsa-foundation/pull/4487) | Merged as `d9fb8edc5d`; normal private hydration, durable current/planned visits and fixed phase work. |
 | Generic native lexical resources, [#4490](https://github.com/elsa-workflows/elsa-foundation/pull/4490) | Merged as `995a5e76ae`; values stay with the normal native owner. |
 | StateMachine visit scopes, [#4495](https://github.com/elsa-workflows/elsa-foundation/pull/4495) and [#4505](https://github.com/elsa-workflows/elsa-foundation/pull/4505) | Merged as `383c9eb9f8` and `db416ee7c8`; private literal defaults, exact visit ownership, source Action lifetime and fresh/retained scopes across durable phases. |
+| Ordinary native intervention/retry, [#4517](https://github.com/elsa-workflows/elsa-foundation/pull/4517), [#4518](https://github.com/elsa-workflows/elsa-foundation/pull/4518), [#4520](https://github.com/elsa-workflows/elsa-foundation/pull/4520), [#4524](https://github.com/elsa-workflows/elsa-foundation/pull/4524) | Merged private profiles cover qualified root/known-parent and stateful failures, fresh successors and preserved logical obligations; unsupported activity families remain open. |
+| StateMachine phase-parent recovery, [#4560](https://github.com/elsa-workflows/elsa-foundation/pull/4560) | Merged as `8b4b2675ab`; exact phase-child rebinding preserves completed work, visits and resources. |
+| Actual machine invocation inbox, [#4564](https://github.com/elsa-workflows/elsa-foundation/pull/4564) | Merged as `d0d41088a7`; bounded native FIFO/receipts remain available while ordinary phases await recovery. Configured machines reject competing raw signals; old profiles retain their behavior. |
+| Qualified authored CLR failures, [#4569](https://github.com/elsa-workflows/elsa-foundation/pull/4569) | Merged as `722d6fba94`; private policy5/schema11 handles qualified activation/leaf/Start/Resume/External-leaf failures through existing recovery ownership. Runtime cancellation and owner application failures remain outside the catch. |
 | StateMachine runtime and Studio | The earlier inventory found no production activity/designer at `dff7c490d0`. The private prototypes above do not deliver M1–M3. |
 
-The latest visit-scope result's entire main tree matches its reviewed proof source. Its 55 cases are separately
+The visit-scope result retains its original source/tree proof. Its 55 cases are separately
 labelled as 24 actual workflows, 17 literal fixtures and 14 seeded context refusals; the runner
 [documents commands and limits](../../prototypes/kernel-model/models/Statecharts.Run/README.md).
 The [values proposal](contracts/values.md) keeps Action-after-Exit visibility explicit as engineering direction.
+
+Fresh bounded qualification of exact resulting main `722d6fba94296b9e7b6aa603e7b1848040e62395` passed 49 stages,
+including seven focused builds, both witness-host nonpackability properties, the 80 phase-recovery cases,
+110 inbox cases, 384 CLR-recovery entries and affected whole runners. The 384 entries distinguish 360 actual
+actor schedules, eight direct model/service fixtures, six pure readers and ten constructed old-policy contexts;
+none establishes historical old-binary or provider qualification. All three independent reviewers accepted the
+source/assembly freezes and unchanged 316-file prototype tree. Fourteen distinct CLR controls retain their
+reviewed-head execution provenance; the original failed classifier/unrun suffix and corrective packet remain
+separate. The linked PR records the exact receipts, two nonblocking Code Review limits and CI exceptions.
+Resulting-main CI and Packages runs were cancelled; they are not passes.
 Passing targeted prototypes does not establish full main CI health; [#4177](https://github.com/elsa-workflows/elsa-foundation/issues/4177)
 remains separately tracked. Exact review/run/merge receipts stay on the linked PRs and program issue.
 
@@ -69,6 +83,16 @@ The [selection and phase contract](contracts/selection.md) remains an engineerin
 and native phases above qualify a bounded subset. Ordinary trigger/rearming, automatic/completion arbitration, loop
 recovery and complete source grouping remain open; neither the engine nor its phase proof closes Q1.
 
+The private [internal-progress protocol](../../prototypes/kernel-model/models/Statecharts.Run/README.md#internal-progress-protocol)
+extends that same compiled selector with explicit automatic/completion categories, once-per-visit local completion,
+phase gates, ready ordering and an experimental sticky causal limit. Its pure configuration/JSON fixtures do not
+qualify actual native internal progress, ordinary guard/loop incidents, recovery or durable restart. Native hydration
+refuses those categories without the explicit opt-in execution profile. The separate bounded
+[native internal driver](../../prototypes/kernel-model/models/Statecharts.Run/README.md#native-internal-driver-private-b7b-profile)
+exercises automatic/completion progress, guard/loop incidents, native recovery and model-store restart with that
+profile. This supplies no product limit, provider durability, source-owner agreement, ordinary-trigger rearming or
+change to Q1/M0 and the full StateMachine/Studio scope.
+
 The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
 executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.
 
@@ -80,8 +104,9 @@ readiness before chart selection. Source installation, transitive responsibility
 and recovery remain planned qualification. The identity prerequisite has landed; applicable shared source-owner
 review before executable adoption and actual product architecture agreement remain separate gates.
 
-The proposed [ordinary recovery profile](contracts/recovery.md) maps existing intervention/successor semantics before
-new native implementation: fresh activity identity, pinned inputs/operation/provenance, atomic parent rebinding and
-completed-work preservation. Its initial leaf/known-parent profile is deliberately bounded; ordinary root and other
-activation boundaries, actual chart/admission integration and complete operator recovery remain required. It is a
-technical proposal with no executable recovery, source-owner or product agreement implied.
+The proposed [ordinary recovery profile](contracts/recovery.md) maps the existing intervention/successor semantics:
+fresh activity identity, pinned inputs/operation/provenance, atomic parent rebinding and completed-work preservation.
+The private profiles above now qualify selected root/container/stateful/chart/admission and CLR boundaries.
+Composite-owned callbacks, binding before usable snapshots, intrinsic, Background and External-stateful recovery,
+complete operator recovery and corrupted-material qualification remain open. These bounded implementations do not
+ratify the proposal, supply the source-owner agreement or approve a production recovery API.

@@ -18,6 +18,15 @@ public interface IActorType
     /// <summary>A mixed host dispatches the classifier by the committed model. Single-model actors keep their existing boundary.</summary>
     bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => SingleMessage(delivery.Message);
 
+    /// <summary>Pre-turn selection keeps legacy batching unless the actor explicitly opts in.
+    /// The existing contextual classifier selects alone by default only on a qualified creation.</summary>
+    bool SelectsAlone(string? model, InstanceRow? row, Delivery delivery) =>
+        row is { Creation: > 0 } && SingleMessage(model, row, delivery);
+
+    /// <summary>Whether a sole consumed delivery, after its row commits, revisits earlier held input.
+    /// Existing actor types keep their contextual boundary as the default committed stimulus.</summary>
+    bool RevisitsHeld(string? model, InstanceRow row, Delivery delivery) => SingleMessage(model, row, delivery);
+
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 
@@ -73,6 +82,7 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
     internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
@@ -84,6 +94,9 @@ public sealed class Delivery(Message message, long seq)
     public bool HasRequestAddress => RequestAddress is not null;
     internal string? RequestAddress;   // a single live response to a retryable PostRequest; never persisted
     internal bool Durable;            // it is a row
+    /// <summary>A completion produced by this worker from its own issued ticket, including an unwritten job.</summary>
+    public bool IsWorkerJobCompletion => CompletedJob && Message.Kind == Kinds.JobFinished;
+    public bool IsDurableJobTicket => Durable && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
     internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
     internal bool RecoveryOrdering;   // a previously marked row read on takeover, or a command that matured during recovery
@@ -97,6 +110,9 @@ public sealed class Delivery(Message message, long seq)
     internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
+    internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
+    internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
     internal bool CompletedJob;       // only the Worker can turn a ticket into a result
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
@@ -175,14 +191,17 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    internal bool CreationRefused;
     internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
 
     /// <summary>Reply on the consumed delivery's own route when this outcome lands.</summary>
-    public void ReplyTo(Delivery delivery, object? value)
+    public void ReplyTo(Delivery delivery, object? value) => ReplyTo(delivery, value, creationRefusal: false);
+
+    internal void ReplyTo(Delivery delivery, object? value, bool creationRefusal)
     {
         if ((delivery.RequestAddress ?? delivery.Message.ReplyTo) is { } route)
-            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null });
+            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null, RefusedInput = creationRefusal ? delivery.Message : null });
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
@@ -204,6 +223,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
+    internal Message? RefusedInput { get; init; }
 }
 
 /// <summary>
@@ -233,8 +253,8 @@ public sealed class DurableTurn
         _custom = input.Row?.CustomHandles is { } handles ? DurableKeyJson.ReadKeys(handles).ToHashSet(StringComparer.Ordinal) : [];
         Inbox = input.Taken.Skip(input.From).Select(i => i.Message).ToList();
         _jobs = input.Row?.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : [];
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
+        foreach (var delivery in input.Taken.Skip(input.From))
+            if (CompletedTicket(delivery, out var key)) _jobs.Remove(key);
         Revision = (input.Row?.Revision ?? 0) + 1;
         Clock = new TurnClock(input.Row, Revision, input.Services);
     }
@@ -320,6 +340,8 @@ public sealed class DurableTurn
     public void Add(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
+        if (_input.Creation > 0 && CreationProtocol.IsCompatibleTerminalHandle(message.Id, Origin))
+            throw new ArgumentException("A qualified actor's reserved end handle requires AddTerminalNotice.", nameof(message));
         if (message.Sender == Id) message = message with { SenderCreation = _input.Creation };
         // An actor may compose its own recallable ID. Unrelated caller-chosen IDs stay in ordinary ingress.
         if (message.Id.StartsWith(Origin + "#", StringComparison.Ordinal) && !OwnsHandle(message.Id))
@@ -333,7 +355,7 @@ public sealed class DurableTurn
     public void AddTerminalNotice(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
-        if (message.Sender != Id || message.Id != $"{Origin}#{Revision}.end")
+        if (message.Sender != Id || message.Id != CreationProtocol.TerminalNoticeId(Id, _input.Creation, Revision))
             throw new ArgumentException("A terminal notice must use its issuing actor and revision.", nameof(message));
         _sent.Add((message with { SenderCreation = _input.Creation }).AsIssued());
     }
@@ -432,9 +454,19 @@ public sealed class DurableTurn
     /// <summary>A held job result is still in flight; then the row's <c>Jobs</c>.</summary>
     public string? Jobs()
     {
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished && _held.Contains(message.InboxKey)) _jobs.Add(message.Read<JobFinished>().Key);   // a held result: still in flight
-        return _jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(_jobs);
+        var jobs = new List<string>(_jobs);
+        foreach (var delivery in _input.Taken.Skip(_input.From))
+            if (_held.Contains(delivery.Message.InboxKey) && CompletedTicket(delivery, out var key) && !jobs.Contains(key))
+                jobs.Add(key);
+        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
+    }
+
+    private bool CompletedTicket(Delivery delivery, out string key)
+    {
+        key = "";
+        if (!delivery.IsWorkerJobCompletion) return false;
+        key = delivery.Message.Read<JobFinished>().Key;
+        return delivery.Message.Target == Actor && delivery.Message.InboxKey == InboxKey.Ticket(Id, key, _input.Creation);
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>
@@ -446,7 +478,7 @@ public sealed class DurableTurn
     };
 
     /// <summary>The turn's end is its commit, and the only one: the row, the journal, and everything it sent.</summary>
-    public TurnOutcome Seal(TurnOutcome unit, InstanceRow row, object state, string? journal)
+    public TurnOutcome Seal(TurnOutcome unit, InstanceRow row, object? state, string? journal)
     {
         if (_kept.Count > 0)
         {

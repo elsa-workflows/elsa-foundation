@@ -1,0 +1,388 @@
+using System.Text.Json;
+using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Interchange.Exceptions;
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Models;
+using Xunit;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+
+namespace Elsa.Activities.Bpmn.Interchange.Tests;
+
+public sealed class BpmnRoundTripTests
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
+    private readonly BpmnDocumentExporter _exporter = new();
+
+    [Fact]
+    public void Export_AcceptsStudioIntrinsicAndConversionStrings()
+    {
+        using var document = JsonDocument.Parse("""
+            {
+              "activities": [{
+                "nodeId": "set-variable", "activityVersionId": "elsa.intrinsic.set@1", "outputs": [],
+                "inputs": [{ "referenceKey": "value", "value": { "value": 42, "expressionType": "Literal" }, "conversion": { "mode": "json" } }],
+                "intrinsic": { "kind": "set", "valueType": { "alias": "Int32" }, "variable": { "referenceKey": "counter" } }
+              }],
+              "elements": [{ "elementId": "task", "elementType": "task", "childNodeId": "set-variable", "name": "Set Variable" }]
+            }
+            """);
+        var node = new ActivityNode("process", "bpmn-version", [], [],
+            new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, document.RootElement.Clone()));
+
+        var xml = _exporter.Export(node);
+        var imported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var task = Assert.Single(imported.Elements);
+        Assert.Equal("task", task.ElementId);
+        Assert.Equal("Set Variable", task.Name);
+    }
+
+    private static ActivityNode ProcessNode(BpmnAuthoredStructure structure) =>
+        new(
+            "node-bpmn",
+            "Elsa.BpmnProcess",
+            [],
+            [],
+            new ActivityNodeStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(structure, SerializerOptions)));
+
+    [Fact]
+    public void ExportThenImport_RoundTripsElementsFlowsAndConditions()
+    {
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("gw", BpmnElementTypes.ExclusiveGateway, defaultFlowId: "flow-no"),
+                new BpmnElement("task-yes", BpmnElementTypes.Task, name: "Approve"),
+                new BpmnElement("task-no", BpmnElementTypes.Task),
+                new BpmnElement("end", BpmnElementTypes.EndEvent),
+                new BpmnElement("end-term", BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Terminate)])
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "gw"),
+                new BpmnSequenceFlow("flow-yes", "gw", "task-yes", conditionOutcome: "Approved"),
+                new BpmnSequenceFlow("flow-no", "gw", "task-no"),
+                new BpmnSequenceFlow("flow-2", "task-yes", "end"),
+                new BpmnSequenceFlow("flow-3", "task-no", "end-term")
+            ]);
+
+        var xml = _exporter.Export(ProcessNode(authored));
+        var result = _importer.Import(xml);
+        var reimported = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        Assert.Equal(
+            authored.Elements.Select(element => (element.ElementId, element.ElementType, element.DefaultFlowId)),
+            reimported.Elements.Select(element => (element.ElementId, element.ElementType, element.DefaultFlowId)));
+        Assert.Equal(
+            authored.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef, flow.ConditionOutcome)),
+            reimported.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef, flow.ConditionOutcome)));
+
+        var terminate = reimported.Elements.Single(element => element.ElementId == "end-term");
+        Assert.Contains(terminate.EventDefinitions, definition => definition.Type == BpmnEventDefinitionTypes.Terminate);
+
+        // The elsa:conditionOutcome attribute round-trips cleanly — the paired human-readable
+        // conditionExpression must not double-report as a degraded import.
+        Assert.DoesNotContain(result.Analysis.Issues, issue => issue.ElementId == "flow-yes");
+    }
+
+    [Fact]
+    public void CyclicProcess_ImportsClean_AndRoundTrips()
+    {
+        // A loop-back sequence flow (gw --again--> body) is executable, so a cyclic document
+        // imports with NO cycle degradation finding and round-trips through export → import unchanged.
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("body", BpmnElementTypes.Task),
+                new BpmnElement("gw", BpmnElementTypes.ExclusiveGateway, defaultFlowId: "exit"),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "body"),
+                new BpmnSequenceFlow("flow-2", "body", "gw"),
+                new BpmnSequenceFlow("again", "gw", "body", conditionOutcome: "Retry"),
+                new BpmnSequenceFlow("exit", "gw", "end")
+            ]);
+
+        var xml = _exporter.Export(ProcessNode(authored));
+        var result = _importer.Import(xml);
+        var reimported = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        Assert.DoesNotContain(result.Analysis.Issues, issue =>
+            issue.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            authored.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)),
+            reimported.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)));
+    }
+
+    [Fact]
+    public void Export_SynthesizesDiagramWhenAbsent_AndPreservesAuthoredShapes()
+    {
+        var diagram = JsonSerializer.SerializeToElement(new
+        {
+            shapes = new Dictionary<string, object> { ["start"] = new { x = 42, y = 24, width = 36, height = 36 } },
+            edges = new Dictionary<string, object>()
+        }, SerializerOptions);
+
+        var authored = new BpmnAuthoredStructure(
+            elements: [new BpmnElement("start", BpmnElementTypes.StartEvent), new BpmnElement("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new BpmnSequenceFlow("flow-1", "start", "end")],
+            diagram: diagram);
+
+        var xml = _exporter.Export(ProcessNode(authored));
+        var reimported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        var shapes = reimported.Diagram!.Value.GetProperty("shapes");
+        Assert.Equal(42, shapes.GetProperty("start").GetProperty("x").GetDouble());
+        // The shape without an authored position got a synthesized one, so other modelers can render it.
+        Assert.True(shapes.GetProperty("end").GetProperty("x").GetDouble() > 0);
+    }
+
+    [Fact]
+    public void Native_subprocess_DI_keeps_its_own_fractional_bounds_and_waypoints()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements: [new("inner-start", BpmnElementTypes.StartEvent), new("inner-end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("inner-flow", "inner-start", "inner-end")],
+            diagram: JsonSerializer.SerializeToElement(new {
+                shapes = new Dictionary<string, object> { ["inner-start"] = new { x = 10.25, y = 20.75, width = 36.5, height = 35.25 } },
+                edges = new Dictionary<string, object> { ["inner-flow"] = new { waypoints = new[] { new { x = 46.75, y = 38.375 }, new { x = 100.5, y = 38.375 } } } }
+            }, SerializerOptions));
+        var nested = ProcessNode(inner) with { NodeId = "native-subprocess" };
+        var outer = new BpmnAuthoredStructure(activities: [nested],
+            elements: [new("start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("entry", "start", "sub"), new("exit", "sub", "end")],
+            diagram: JsonSerializer.SerializeToElement(new { shapes = new Dictionary<string, object> { ["sub"] = new { x = 300.5, y = 400.25, width = 120, height = 80 } }, edges = new Dictionary<string, object>() }, SerializerOptions));
+        var result = ExportImport(outer);
+        Assert.Equal(300.5, result.Diagram!.Value.GetProperty("shapes").GetProperty("sub").GetProperty("x").GetDouble());
+        var body = Assert.Single(result.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        Assert.NotNull(body.Diagram);
+        var bounds = body.Diagram.Value.GetProperty("shapes").GetProperty("inner-start");
+        Assert.Equal(10.25, bounds.GetProperty("x").GetDouble());
+        Assert.Equal(20.75, bounds.GetProperty("y").GetDouble());
+        Assert.Equal(36.5, bounds.GetProperty("width").GetDouble());
+        Assert.Equal(35.25, bounds.GetProperty("height").GetDouble());
+        var points = body.Diagram.Value.GetProperty("edges").GetProperty("inner-flow").GetProperty("waypoints");
+        Assert.Equal(46.75, points[0].GetProperty("x").GetDouble());
+        Assert.Equal(100.5, points[1].GetProperty("x").GetDouble());
+    }
+
+    [Fact]
+    public void Generated_subprocess_routes_and_missing_shapes_stay_in_their_own_DI_plane()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements: [new("inner-start", BpmnElementTypes.StartEvent), new("inner-task", BpmnElementTypes.Task), new("inner-end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("inner-entry", "inner-start", "inner-task"), new("inner-exit", "inner-task", "inner-end")],
+            diagram: JsonSerializer.SerializeToElement(new {
+                shapes = new Dictionary<string, object> { ["inner-start"] = new { x = 10.25, y = 20.75, width = 36.5, height = 35.25 } },
+                edges = new Dictionary<string, object>()
+            }, SerializerOptions));
+        var nested = ProcessNode(inner) with { NodeId = "native-subprocess" };
+        var outer = new BpmnAuthoredStructure(activities: [nested],
+            elements: [new("start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("entry", "start", "sub"), new("exit", "sub", "end")]);
+        var result = ExportImport(outer);
+        var body = Assert.Single(result.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var shapes = body.Diagram!.Value.GetProperty("shapes");
+        var edges = body.Diagram.Value.GetProperty("edges");
+        foreach (var id in new[] { "inner-start", "inner-task", "inner-end" })
+        {
+            Assert.True(shapes.TryGetProperty(id, out _), $"Missing local shape {id}");
+            Assert.False(result.Diagram!.Value.GetProperty("shapes").TryGetProperty(id, out _));
+        }
+        foreach (var id in new[] { "inner-entry", "inner-exit" })
+        {
+            Assert.Equal(2, edges.GetProperty(id).GetProperty("waypoints").GetArrayLength());
+            Assert.False(result.Diagram!.Value.GetProperty("edges").TryGetProperty(id, out _));
+        }
+        Assert.Equal(10.25, shapes.GetProperty("inner-start").GetProperty("x").GetDouble());
+        Assert.Equal(20.75, shapes.GetProperty("inner-start").GetProperty("y").GetDouble());
+    }
+
+    [Fact]
+    public void Native_scalar_variable_type_survives_XML_without_an_unrepresentable_default()
+    {
+        var authored = new BpmnAuthoredStructure(variables: [new("counter", "counter", new TypeReference("Int32"), null, null)]);
+        var imported = ExportImport(authored);
+        var variable = Assert.Single(imported.Variables);
+        Assert.Equal("counter", variable.ReferenceKey);
+        Assert.Equal("counter", variable.Name);
+        Assert.Equal(new TypeReference("Int32"), variable.Type);
+        Assert.Null(variable.Default);
+    }
+
+    [Theory]
+    [InlineData("identity")]
+    [InlineData("type")]
+    [InlineData("collection")]
+    [InlineData("storage")]
+    [InlineData("expression")]
+    [InlineData("literal-default")]
+    public async Task Unrepresented_variable_settings_are_explicit_export_omissions(string setting)
+    {
+        var variable = new VariableDefinition("counter", "counter", new TypeReference("Int32"), null, null);
+        variable = setting switch {
+            "identity" => variable with { ReferenceKey = "stable-counter-key" },
+            "type" => variable with { Type = new TypeReference("Acme.Account") },
+            "collection" => variable with { Type = new TypeReference("Int32", CollectionKind.Array) },
+            "storage" => variable with { StorageDriverType = "external-store" },
+            "literal-default" => variable with { Default = new ArgumentValue(42, "Literal") },
+            _ => variable with { Default = new ArgumentValue("variables.outer", "JavaScript") }
+        };
+        var source = ProcessNode(new BpmnAuthoredStructure(variables: [variable]));
+        var before = source.Structure!.Payload.GetRawText();
+        var result = await _exporter.ExportAsync(source);
+        Assert.Throws<BpmnInterchangeException>(() => _exporter.Export(source));
+        Assert.Equal(before, source.Structure.Payload.GetRawText());
+        var omission = Assert.Single(result.Omissions);
+        Assert.Equal("unsupported-variable", omission.Code);
+        Assert.Equal(variable.ReferenceKey, omission.ReferenceKey);
+        Assert.Equal("node-bpmn", omission.ElementId);
+    }
+
+    [Fact]
+    public void ExportThenImport_RoundTripsNestedSubprocess()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("inner-start", BpmnElementTypes.StartEvent),
+                new BpmnElement("inner-end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows: [new BpmnSequenceFlow("inner-flow", "inner-start", "inner-end")]);
+
+        var innerNode = new ActivityNode(
+            "node-inner",
+            "Elsa.BpmnProcess",
+            [],
+            [],
+            new ActivityNodeStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(inner, SerializerOptions)));
+
+        var outer = new BpmnAuthoredStructure(
+            activities: [innerNode],
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("sub", BpmnElementTypes.SubProcess, childNodeId: "node-inner"),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "sub"),
+                new BpmnSequenceFlow("flow-2", "sub", "end")
+            ]);
+
+        var xml = _exporter.Export(ProcessNode(outer));
+        var reimported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        var subprocess = reimported.Elements.Single(element => element.ElementId == "sub");
+        Assert.Equal("node-sub", subprocess.ChildNodeId);
+        var child = Assert.Single(reimported.Activities);
+        var childStructure = child.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        Assert.Equal(["inner-start", "inner-end"], childStructure.Elements.Select(element => element.ElementId));
+    }
+
+    [Theory]
+    [InlineData(BpmnEventDefinitionTypes.Timer, BpmnEventDefinitionProperties.Cron, "0 * * * *")]
+    [InlineData(BpmnEventDefinitionTypes.Timer, BpmnEventDefinitionProperties.Interval, "PT5M")]
+    [InlineData(BpmnEventDefinitionTypes.Message, BpmnEventDefinitionProperties.Name, "order-placed")]
+    [InlineData(BpmnEventDefinitionTypes.Signal, BpmnEventDefinitionProperties.Name, "cancel-requested")]
+    public void EventDefinedStart_RoundTripsDefinitionAndProperties(string type, string propertyKey, string propertyValue)
+    {
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start-evt", BpmnElementTypes.StartEvent, eventDefinitions:
+                    [new BpmnEventDefinition(type, new Dictionary<string, string> { [propertyKey] = propertyValue })]),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows: [new BpmnSequenceFlow("flow-1", "start-evt", "end")]);
+
+        var reimported = ExportImport(authored);
+
+        var start = reimported.Elements.Single(element => element.ElementId == "start-evt");
+        Assert.Null(start.ChildNodeId); // pure element
+        var definition = Assert.Single(start.EventDefinitions);
+        Assert.Equal(type, definition.Type);
+        Assert.Equal(propertyValue, definition.Properties[propertyKey]);
+    }
+
+    [Fact]
+    public void TimerCatchEvent_RoundTripsDurationAndRegeneratesDelayChild()
+    {
+        var authored = CatchStructure(
+            new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = "PT5M" }),
+            new ActivityNode("node-catch", "Elsa.Delay",
+                [new ArgumentState("Duration", new ArgumentValue("PT5M", "Literal"), null, null, null, null)], []));
+
+        var reimported = ExportImport(authored);
+
+        var catchEvent = reimported.Elements.Single(element => element.ElementId == "catch");
+        Assert.Equal(BpmnElementTypes.IntermediateCatchEvent, catchEvent.ElementType);
+        Assert.Equal("node-catch", catchEvent.ChildNodeId);
+        Assert.Equal("PT5M", Assert.Single(catchEvent.EventDefinitions).Properties[BpmnEventDefinitionProperties.Interval]);
+        var child = Assert.Single(reimported.Activities);
+        Assert.Equal("Elsa.Delay", child.ActivityVersionId);
+        Assert.Equal("00:05:00", LiteralString(child, "Duration"));
+    }
+
+    [Theory]
+    [InlineData(BpmnEventDefinitionTypes.Message)]
+    [InlineData(BpmnEventDefinitionTypes.Signal)]
+    public void MessageOrSignalCatchEvent_RoundTripsNameAndRegeneratesEventChild(string type)
+    {
+        var authored = CatchStructure(
+            new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = "order-shipped" }),
+            new ActivityNode("node-catch", "Elsa.Event",
+                [new ArgumentState("EventName", new ArgumentValue("order-shipped", "Literal"), null, null, null, null)], []));
+
+        var reimported = ExportImport(authored);
+
+        var catchEvent = reimported.Elements.Single(element => element.ElementId == "catch");
+        Assert.Equal(type, Assert.Single(catchEvent.EventDefinitions).Type);
+        Assert.Equal("order-shipped", Assert.Single(catchEvent.EventDefinitions).Properties[BpmnEventDefinitionProperties.Name]);
+        var child = Assert.Single(reimported.Activities);
+        Assert.Equal("Elsa.Event", child.ActivityVersionId);
+        Assert.Equal("order-shipped", LiteralString(child, "EventName"));
+    }
+
+    // The structure payload is JSON, so a deserialized literal surfaces as a JsonElement string.
+    private static string? LiteralString(ActivityNode node, string key)
+    {
+        var value = Assert.Single(node.Inputs, argument => argument.ReferenceKey == key).Value.Value;
+        return value is JsonElement element ? element.GetString() : value?.ToString();
+    }
+
+    private static BpmnAuthoredStructure CatchStructure(BpmnEventDefinition definition, ActivityNode child) =>
+        new(
+            activities: [child],
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("catch", BpmnElementTypes.IntermediateCatchEvent, childNodeId: child.NodeId, eventDefinitions: [definition]),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "catch"),
+                new BpmnSequenceFlow("flow-2", "catch", "end")
+            ]);
+
+    private BpmnAuthoredStructure ExportImport(BpmnAuthoredStructure authored)
+    {
+        var xml = _exporter.Export(ProcessNode(authored));
+        return _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+    }
+}

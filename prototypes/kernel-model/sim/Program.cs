@@ -31,6 +31,7 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
+if (args.Contains("--placement-check")) return PlacementChecks.Run();
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
@@ -208,7 +209,7 @@ int Mutations(int seeds)
         // round 3: the rule of each new piece
         Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.TurnNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren, Flaw.EvictBusy, Flaw.DeleteLeavesJournal, Flaw.ProjectorStopsAtGap,
         // round 4 (FINDINGS 25)
-        Flaw.KeepExpiredCallers, Flaw.ForgetShortWaits, Flaw.NoWriteFirst,
+        Flaw.KeepExpiredCallers, Flaw.ForgetShortWaits, Flaw.NoWriteFirst, Flaw.JobPoisonAsError,
     ];
     var missed = 0;
     // A deploy in progress meets an older owner only now and then: this one runs 1,000 actions a seed.

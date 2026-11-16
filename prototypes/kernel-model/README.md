@@ -36,6 +36,7 @@ section 23: the merge of the four branches and its gates); what each database en
 | `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
+| `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
 
 ## Build
 
@@ -56,6 +57,7 @@ $SIM --native --seeds 200000                         # the same with native inst
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw

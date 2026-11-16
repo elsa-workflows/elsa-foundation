@@ -50,6 +50,7 @@ of the workflow that calls it:
 | One of the activity's variables | a `Variable` reference with scope `workflow` | the variable in this invocation |
 | A variable of a container inside the body | a `Variable` reference with the container's node id as scope | that container's variable |
 | Another body node's result | an `ActivityResult` reference to the body node id | that node's result in the same invocation |
+| A declared public output | a Set Output node targeting the declaration by name | writes the value for this invocation and returns it when the activity completes |
 | An output captured into a variable | a node output bound to a `workflow`-scope `Variable` | writes the activity's own variable |
 
 Inside a body, the `workflow` scope means the activity, because the body is authored like a workflow whose root is
@@ -57,8 +58,11 @@ the activity. When a workflow that uses the activity is published, placement rew
 to the placed activity, so two uses of one activity never share values, and each run of the activity reads its own
 inputs and variables. JavaScript in a body
 sees the activity's variables by name (`variables.x`, `getVariable('x')`, `get<X>()`); it reads inputs through
-request parameters, as in a workflow. A graph published before graph compiler `3.0.0` and used inside a newer one
+request parameters, as in a workflow. For example, to calculate `args.A + args.B` in Set Output, bind the parameters `A` and `B` to their declared activity inputs. A graph published before graph compiler `3.0.0` and used inside a newer one
 reads the newer graph as its caller.
+
+An output mapped directly to a graph variable reads its final value when that invocation completes. The mapping
+stores the variable's reference key, so renaming the variable preserves the connection.
 
 Publishing the activity refuses a body reference the activity does not declare or contain:
 
@@ -90,4 +94,9 @@ These checks run both when a draft is validated and when the activity compiles:
 |---|---|
 | `activity.graph.argument-malformed` | A node's `inputs` or `outputs` is not a list of arguments, or an argument has no `referenceKey` or a `value` that is not an expression object. An argument without a value is unbound, not malformed |
 | `activity.graph.root-activity-malformed` | The root activity cannot be read as an activity node for any other reason |
-| `activity.graph.intrinsic-unsupported` | A node is an engine intrinsic (Set variable, Set output, Correlate, Set name). Graph activities cannot run intrinsics yet ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |
+| `activity.graph.set-output-mapping-conflict` | The same public output has both a Set Output assignment and a mapped value |
+| `activity.graph.intrinsic-unsupported` | A node uses an engine intrinsic other than Set Output or Set (such as Correlate or Set Name) ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |
+| `activity.graph.set-local-target-invalid` | A Set does not target exactly one declared variable of an enclosing native body container below the graph boundary. A target in the workflow or graph scope, outside the graph, in a sibling container, or not declared exactly once is refused |
+| `activity.graph.set-local-invalid` | A Set does not have exactly one `value` input, has a missing or secret value, or has outputs, child structure or an execution placement |
+
+When the activity compiles, `activity.graph.local-value-invalid` refuses a body-local Set value or native-container variable declaration that cannot be compiled to its declared contract, for example a declaration that selects external storage.

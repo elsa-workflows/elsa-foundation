@@ -37,7 +37,7 @@ internal static class PhaseReaders
             catch (InvalidOperationException) when (!future) { Console.WriteLine("PASS " + name); return; }
             throw new InvalidOperationException("P7: accepted invalid checkpoint " + name);
         }
-        Refuse(legacy with { Version = 5 }, Names[2], true);
+        Refuse(legacy with { Version = 8 }, Names[2], true);
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["bad"] = 4 } } }, Names[3]);
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["a"] = 1, ["b"] = 1 } } }, Names[4]);
         Refuse(legacy with { Cursor = 0 }, Names[5]);

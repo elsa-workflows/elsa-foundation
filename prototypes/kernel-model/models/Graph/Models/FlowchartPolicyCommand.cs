@@ -25,14 +25,54 @@ public sealed record FlowchartPolicyCommand
         Metadata = metadata ?? new Dictionary<string, string>();
     }
 
-    public FlowchartPolicyCommandKind Kind { get; init; }
-    public string? NodeId { get; init; }
-    public string? ConnectionId { get; init; }
+    // One-step built-in selection evidence; never serialized or recovered by wire ID.
+    [JsonIgnore]
+    internal FlowchartConnection? SelectedConnection { get; init; }
+
+    // Record copies retain the exact selection for scope and diagnostic edits. Changing a
+    // routing field hands selection back to the public command's normal lookup rules.
+    public FlowchartPolicyCommandKind Kind
+    {
+        get;
+        init
+        {
+            if (field != value) SelectedConnection = null;
+            field = value;
+        }
+    }
+
+    public string? NodeId
+    {
+        get;
+        init
+        {
+            if (field != value) SelectedConnection = null;
+            field = value;
+        }
+    }
+
+    public string? ConnectionId
+    {
+        get;
+        init
+        {
+            if (field != value) SelectedConnection = null;
+            field = value;
+        }
+    }
+
     public string? ExecutionPathId { get; init; }
     public string? ExecutionScopeId { get; init; }
     public string? TargetExecutionScopeId { get; init; }
     public string? Message { get; init; }
     public IReadOnlyDictionary<string, string> Metadata { get; init; }
+
+    // Transient selection evidence is not part of this public record's value.
+    private (FlowchartPolicyCommandKind, string?, string?, string?, string?, string?, string?, IReadOnlyDictionary<string, string>) Value =>
+        (Kind, NodeId, ConnectionId, ExecutionPathId, ExecutionScopeId, TargetExecutionScopeId, Message, Metadata);
+
+    public bool Equals(FlowchartPolicyCommand? other) => other is not null && Value.Equals(other.Value);
+    public override int GetHashCode() => Value.GetHashCode();
 }
 
 public enum FlowchartPolicyCommandKind

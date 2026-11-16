@@ -12,8 +12,11 @@ namespace Elsa.Workbench.ActivityDataSelectionProof;
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class GetCustomer : Activity<CustomerResult>
 {
+    [ActivityInput(Key = "customerId", DefaultValue = "cust-1042", DefaultSyntax = "Literal")]
+    public string CustomerId { get; set; } = "cust-1042";
+
     protected override ValueTask<ActivityTransition<CustomerResult>> ExecuteAsync(ActivityExecutionContext context) =>
-        ValueTask.FromResult(ActivityTransition.Complete(new CustomerResult()));
+        ValueTask.FromResult(ActivityTransition.Complete(new CustomerResult { Customer = new Customer { CustomerId = this.CustomerId } }));
 }
 
 public sealed record CustomerResult

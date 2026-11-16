@@ -517,11 +517,12 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
   const browsing = browsingFor === targetKey;
   const producer = reference && host ? host.describeActivity(reference.producerNodeId) : null;
   const missing = Boolean(reference && host && !producer);
+  const preview = useBindingConversionPreview(host, target, Boolean(reference && producer && !disabled));
   const problem = !reference
     ? "No output is chosen yet. Use Choose data to pick one."
     : missing
       ? "The source activity is no longer in this workflow. Replace it or clear it."
-      : host?.findingsFor(target).map(describeReferenceFinding).find((text): text is string => text != null) ?? null;
+      : preview?.rejection ?? host?.findingsFor(target).map(describeReferenceFinding).find((text): text is string => text != null) ?? null;
   const producerLabel = reference ? producer?.label ?? reference.producerNodeId : "";
   const disambiguation = reference && producer?.sharesLabel ? reference.producerNodeId : null;
   const outputLabel = reference ? describeOutput(reference.projectionKey, producer) : "";
@@ -551,6 +552,9 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
             {outputLabel}
           </span>
         </p>
+      ) : null}
+      {preview?.operation === "NumericToString" && !problem ? (
+        <p className="wf-data-chooser-note">{preview.sourceType.alias} → {preview.targetType.alias} · automatic</p>
       ) : null}
       {problem ? (
         <p className="wf-data-reference-problem">
@@ -604,6 +608,31 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
       ) : null}
     </div>
   );
+}
+
+/** The server reads both the reference and its conversion mode from the current snapshot. */
+function useBindingConversionPreview(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, enabled: boolean) {
+  const [answer, setAnswer] = useState<{ key: string; preview: ActivityDataContextResult["bindingConversion"] } | null>(null);
+  const key = JSON.stringify([target.nodeId, target.inputKey, host?.documentRevision, host?.baseRevision]);
+  const requestSources = host?.requestSources;
+  const revision = host?.documentRevision;
+  const base = host?.baseRevision;
+  const { nodeId, inputKey } = target;
+  useEffect(() => {
+    setAnswer(null);
+    if (!enabled || !requestSources || !base || !revision) return;
+    const controller = new AbortController();
+    const revoke = () => { controller.abort(); setAnswer(null); };
+    window.addEventListener(authSessionEndedEvent, revoke);
+    requestSources({ nodeId, inputKey }, controller.signal, 0, { previewBindingConversion: true }).then(result => {
+      if (!controller.signal.aborted && (result.state === "empty" || result.state === "supported") &&
+        result.documentRevision === revision && result.baseRevision === base && result.target?.target?.nodeId === nodeId &&
+        result.target.target.inputKey === inputKey)
+        setAnswer({ key, preview: result.bindingConversion });
+    }, () => undefined);
+    return () => { controller.abort(); window.removeEventListener(authSessionEndedEvent, revoke); };
+  }, [enabled, requestSources, key, nodeId, inputKey, base, revision]);
+  return enabled && answer?.key === key ? answer.preview : null;
 }
 
 function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {

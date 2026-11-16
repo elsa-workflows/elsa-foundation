@@ -495,6 +495,7 @@ async function workingDraft(name) {
       const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
       await expect(menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ })).toBeFocused();
       result.evidence.push(retain(name + "-menu-focus", { control: "Autosave", initialFocusObserved: true }));
+      if (["working-after-undo", "working-after-redo"].includes(name)) await screenshot(name + "-menu-focus");
       await nativeEnter(name + "-export", page.getByRole("menuitem", { name: "Export JSON", exact: true }), "Export JSON");
     })()
   ]);
@@ -1253,6 +1254,12 @@ async function rendererUnavailable() {
   await screenshot("renderer-fallback");
 }
 
+async function navigateToWorkflows() {
+  const workflows = page.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Workflows", exact: true });
+  if (!await workflows.isVisible()) await page.getByRole("button", { name: "Build", exact: true }).click();
+  await workflows.click();
+}
+
 async function incompatibleModule() {
   const expected = config.incompatibleModule;
   need(expected?.moduleId === witness.moduleId && typeof expected.packageId === "string" && expected.packageId
@@ -1279,8 +1286,16 @@ async function incompatibleModule() {
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
   await expect(page.locator(".topbar h1")).toHaveText("Home");
   await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
-  await expect(page.locator(".topbar h1")).toContainText("Workflow");
+  const backendReference = new URL(page.url()).searchParams.get("backend");
+  need(backendReference, "The prepared backend must be explicit in native Studio resource URLs.");
+  const workflowDestination = new URL("/workflows/definitions", studio);
+  workflowDestination.searchParams.set("backend", backendReference);
+  await navigateToWorkflows();
+  await expect(page).toHaveURL(workflowDestination.toString());
+  const workflowsPage = page.getByRole("main");
+  await expect(workflowsPage.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
+  await expect(workflowsPage.getByRole("navigation", { name: "Workflows views", exact: true })
+    .getByRole("link", { name: "Definitions", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("main")).not.toContainText("No Studio route is registered");
   await page.getByRole("button", { name: /^Weaver/ }).click();
   await expect(dock().getByTestId("weaver-provider-status")).toBeVisible();
@@ -1357,10 +1372,10 @@ async function consumedIntentRemount() {
   result.evidence.push(retain("capability-registry-remount", { sameDocument: true, automaticDockRemount: true,
     realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
   // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
-  await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByLabel("Search Studio", { exact: true }).fill("Features");
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
-  await page.getByLabel("Search modules", { exact: true }).fill("");
+  await page.getByLabel("Search Studio", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
   const tokenResponse = await page.request.get(backend + "/_elsa/identity/token");
   need(tokenResponse.status() === 200, "Normal cookie-backed Studio management token exchange failed.");
@@ -1410,10 +1425,10 @@ async function consumedIntentRemount() {
   // Connection startup renders a temporary searchable shell. Its query is discarded
   // when the connected AppContent mounts; the launcher exists only in that ready shell.
   await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
-  await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByLabel("Search Studio", { exact: true }).fill("Features");
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
-  await page.getByLabel("Search modules", { exact: true }).fill("");
+  await page.getByLabel("Search Studio", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
     && new URL(request.url()).pathname === "/_elsa/weaver/bootstrap");
   await nativeEnter("remount-reopen-weaver", page.getByRole("button", { name: "Weaver", exact: true }), "Reopen Weaver in the new document");
@@ -1433,7 +1448,7 @@ async function consumedIntentRemount() {
   const featuresState = { url: diagnosticUrl(page.url()), providerStatus: await dock().getByTestId("weaver-provider-status").innerText(),
     composerDisabled: await dock().getByLabel("Ask Weaver", { exact: true }).isDisabled(), busy: await dock().getAttribute("aria-busy") };
   result.evidence.push(retain("remount-features-state", featuresState));
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await navigateToWorkflows();
   await expect(page).toHaveURL(studioRoute("/workflows/definitions"));
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
@@ -2135,7 +2150,11 @@ async function workflowRun() {
   await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
   // Verify the exact occurrence through the same copyable execution detail a person can inspect.
   const panel = page.getByLabel("Run details panel", { exact: true });
-  await nativeEnter("inspect-run-activity", panel.getByRole("tab", { name: "Activity", exact: true }), "Activity");
+  // The selected-execution deep link opens Activity. Re-activating it while initial
+  // canvas focus is settling can send Enter to the canvas instead of the inspector.
+  const activityTab = panel.getByRole("tab", { name: "Activity", exact: true });
+  await expect(activityTab).toHaveAttribute("aria-selected", "true", { timeout: 30000 });
+  result.evidence.push(retain("inspect-run-activity", { selected: await activityTab.getAttribute("aria-selected"), source: "deep-link" }));
   const technical = panel.locator(".wf-activity-execution-details");
   await expect(technical).toBeVisible({ timeout: 30000 });
   if (await technical.getAttribute("open") === null)
