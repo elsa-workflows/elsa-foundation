@@ -263,8 +263,9 @@ this contract:
   to a remote worker:
   - **the effect key**, computed by layer 3 (the workflow instance calls `EffectKey.For` when it starts the job) and
     carried by layer 2 as an opaque string on the ticket;
-  - **the attempt id**, which in process is `{ticket id}#{attempt number}`, so a re-execution after a lost owner gets a
-    new one;
+  - **the attempt id**, which in process layer 2 builds as `{ticket id}@{epoch}` from the epoch of the take under
+    which the owner started the work. Every take increments the epoch, so a re-execution after any lost owner, in a
+    trial or outside one, gets a new id. Layer 3 sees an opaque string and never parses it;
   - **the attempt number**, which in process is one plus the ticket's recorded attempts (owners lost while it was on
     trial). It is a lower bound on executions, since an owner lost outside a trial counts nothing;
   - **the deadline and the cancellation token.**
@@ -280,8 +281,8 @@ Reasoned from the commit shape of [ownership and fencing](ownership-and-fencing.
 
 | Remote operation | Round trips before batching | Rows |
 |---|---|---|
-| Activate | 1 insert, the poll's share, 2 for the seen mark, 2 for the queue's commit; the job actor's grant commit is the same partition's next flush (2) | 1 request; 1 grant message handed over in memory |
-| Activate, nothing ready | The same up to the queue's commit | 1 request |
+| Activate with grants | 1 insert, the poll's share, 2 for the seen mark, 2 for the queue's commit that sends the grants; 2 for the job actors' commit, which records the attempts and sends `granted` or `declined` back; 2 for the queue's second turn, which consumes those and releases the answer. Both later commits are the same partition's next flushes, shared by every job actor and queue in them | 1 request; per job 1 grant and 1 `granted` or `declined` message, all handed over in memory within the partition and written as rows |
+| Activate, nothing ready | 1 insert, the poll's share, 2 for the seen mark, 2 for the consuming commit | 1 request |
 | Complete or Fail | 1 insert, the poll's share, 2 for the seen mark, 2 for the job actor's commit | 1 request, the result message, the permit release |
 | Renew, durable | As Complete | 1 request |
 | Renew over the transport | 0 per renewal; one timer re-arm commit per lease period per attempt | 1 timer row per lease period |
