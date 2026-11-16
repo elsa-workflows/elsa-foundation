@@ -152,12 +152,16 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await capture(page, info, "workflow-promotion-undone");
     proof.workflowUndo = { restored: (await calls())[0].nodeId, reusableKept: kept.definition };
 
-    // Activity Definition host: the same command in the reusable graph editor.
+    // Activity Definition host: the same command in the reusable graph editor. Its own root Sequence maps Done to
+    // its public outcome, so the host resource is valid before and after the replacement.
+    const rootContract = await api<{ contract: { outcomes: { referenceKey: string; name: string; isEmitted: boolean }[] } }>(`/design/activities/versions/${versions.sequence}`);
+    const done = rootContract.contract.outcomes.find(item => item.isEmitted && (item.name || item.referenceKey).toLowerCase() === "done");
+    expect(done).toBeTruthy();
     const graph = await api<{ definition: { definitionId: string }; draft: { draftId: string } }>("/design/activities/definitions", "POST", {
       category: "Qualification", displayName: `Block promotion host ${stamp}`, description: null,
       contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
       provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: sequence("root", [sequence("block", [line("inside", { expressionType: "Literal", value: "packed" })]), line("after", { expressionType: "Literal", value: "after" })]),
-        variables: [], outputMappings: [], outcomeMappings: [] } },
+        variables: [], outputMappings: [], outcomeMappings: [{ sourceOutcomeReferenceKey: done!.referenceKey, boundaryOutcomeReferenceKey: "done" }] } },
       layout: [{ nodeId: "block", data: { x: 80, y: 100 } }, { nodeId: "after", data: { x: 380, y: 100 } }], activityPresentation: [{ nodeId: "block", displayName: "Pack items" }]
     });
     activityIds.push(graph.definition.definitionId);
