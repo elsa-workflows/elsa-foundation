@@ -65,15 +65,16 @@ remaining failures and evidence limits. The program and registry are marked comp
 ## Closeout (16 November 2026)
 
 On 11 November the owner replaced the runtime core with the clean-slate kernel
-([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)). The owner then decided on 16 November:
+([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)). The owner then decided on 16 November
+([record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6917554545)):
 
 - old-core-only objectives close as superseded by the kernel;
 - layer 3 work that carries over stays delivered;
 - current-core defects are fixed only where needed, and the ones the kernel makes irrelevant are closed;
 - M5 becomes part of kernel release 1 qualification.
 
-The current core has shipped only as the contributor preview `contributor-preview-2026-10-07.1`. It is deleted at the
-switch (#4229 gate 5). Kernel figures below are prototype counts from `prototypes/kernel-model` at main `baed25d04`.
+The current core has shipped only as the contributor preview `contributor-preview-2026-10-07.1`. It is deleted when the
+old core is removed (#4229 gate 5). Kernel figures below are prototype counts from `prototypes/kernel-model` at main `baed25d04`.
 They are not product budgets.
 
 | Milestone | Outcome | Evidence |
@@ -86,10 +87,10 @@ They are not product budgets.
 | M5 | Handed to #4229 gate 3 with its acceptance, the 32-command and 16-round-trip budgets, the M2/M3 tests to keep, the M1 controls, graceful stop and uncertain commits | [Hand-off](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686), [additional rows](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917418143) |
 
 Fresh receipt on main `6f275e16c`, Release, run locally on 16 November: the M2 and M3 tests named above and the ID burst
-control all pass (48 passed, 0 failed, 0 skipped). This is a correctness receipt, not a timing result.
+control all pass (48 passed, 0 failed, 0 skipped). It is a correctness receipt and measures no timing.
 
 The open children #3698, #3700, #3703 and #3939, and #4043 (filed as part of this program, not a sub-issue), were
 closed as superseded by the kernel. Each closing comment
-names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905, #3915 and #3941 were
-closed unmerged, with their branches and evidence kept. The sections above remain the charter as it stood while the
+names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905 and #3915, and its ready PR #3941,
+were closed unmerged, with their branches and evidence kept. The sections above remain the charter as it stood while the
 program ran.
