@@ -57,6 +57,7 @@ public sealed class MongoStore : IKernelStore
         _views = db.GetCollection<BsonDocument>("views");
     }
 
+    public bool PhysicalRetirementAvailable => true;
     public IMongoDatabase Database { get; }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
@@ -147,7 +148,8 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        CreationProtocol.RejectUnsupported(batch);
+        StoreBatchRules.Validate(batch);
+        CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
@@ -208,14 +210,16 @@ public sealed class MongoStore : IKernelStore
             var (key, position, seqs) = (clock - sends, batch.Position, new List<long>(sends));
             foreach (var turn in batch.Turns)
             {
-                if (turn.Delete)
+                if (turn.Delete && turn.Row is not { Retired: true })
                 {
                     // Round 3: an ended instance goes at its revision (a count that must be 1, as for an update), with its
                     // journal documents. All in the one bulk write: with the fence in the batch it stops at the fence first.
                     checks.Add((models.Count, true, 1, false));
                     models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", turn.Instance }, { "revision", turn.Expected!.Value } }));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", batch.Partition }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
+
                 }
+                if (turn.Delete)
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", batch.Partition }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
                 if (turn.Row is { } row)
                 {
                     var doc = ToDocument(row, batch.Partition);
@@ -223,7 +227,9 @@ public sealed class MongoStore : IKernelStore
                     else
                     {
                         checks.Add((models.Count, false, 1, false));
-                        models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", row.Id }, { "revision", expected } }, doc));
+                        var match = new BsonDocument { { "_id", row.Id }, { "revision", expected }, { "retired", false } };
+                        if (row.Retired) match["status"] = (int)row.Status; // ended status was checked by the marker shape
+                        models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_instances.CollectionNamespace, match, doc));
                     }
                 }
                 if (turn.Consumed.Count > 0)
@@ -427,9 +433,9 @@ public sealed class MongoStore : IKernelStore
     {
         if (ids.Count == 0) return [];
         var docs = await _instances.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids))), new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
-        return docs.Select(d => new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
+        return docs.Select(d => StoredState.Restore(new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
             d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["jobs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
-            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)))).ToList();
+            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, Retired: d["retired"].AsBoolean, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)), IdentityOnly: false))).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
@@ -606,9 +612,9 @@ public sealed class MongoStore : IKernelStore
     private static BsonDocument ToDocument(InstanceRow row, int partition) => new()
     {
         { "_id", row.Id }, { "partition", partition }, { "model", row.Model }, { "definition", row.Definition }, { "status", (int)row.Status },
-        { "state", row.State }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "customHandles", (BsonValue?)row.CustomHandles ?? BsonNull.Value }, { "revision", row.Revision },
+        { "state", StoredState.Encode(row) }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "customHandles", (BsonValue?)row.CustomHandles ?? BsonNull.Value }, { "revision", row.Revision },
         { "parent", (BsonValue?)row.Parent ?? BsonNull.Value }, { "fault", (BsonValue?)row.Fault ?? BsonNull.Value },
-        { "history", (int)row.History }, { "suspended", row.Suspended }, { "children", (BsonValue?)row.Children ?? BsonNull.Value }, { "stateVersion", row.StateVersion },
+        { "retired", row.Retired }, { "history", (int)row.History }, { "suspended", row.Suspended }, { "children", (BsonValue?)row.Children ?? BsonNull.Value }, { "stateVersion", row.StateVersion },
     };
 
     private static BsonDocument InboxId(InboxKey key)

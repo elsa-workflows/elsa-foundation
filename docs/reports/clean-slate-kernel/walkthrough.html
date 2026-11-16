@@ -281,7 +281,7 @@ ol.stmts code { font-size: 12.5px; }
   <div class="picker" id="layers-picker" data-default="l2">
   <figure>
     <div class="fig">
-    <svg class="dg" viewBox="0 0 960 470" role="img" aria-label="Three layers: actor types on top of durable actors on top of an actor runtime, with the durable layer using a persistence provider through IKernelStore.">
+    <svg class="dg" viewBox="0 0 960 470" role="img" aria-label="Three layers with persistence through IKernelStore. A dashed later replicated-log profile also connects to layer 1 ownership: leadership replaces leases; planned, not designed.">
       <!-- hosts -->
       <g>
         <rect class="box" x="740" y="20" width="200" height="130" rx="8"/>
@@ -342,6 +342,14 @@ ol.stmts code { font-size: 12.5px; }
         <text class="ts" x="756" y="312">Later: a replicated log store</text>
       </g>
       <text class="ts" x="840" y="350" text-anchor="middle">correct = passes the store suite</text>
+      <!-- planned, not designed: replicated log store -->
+      <g class="planned"><title>Planned, not designed: replicated log and local state. The dashed uplink to layer 1 ownership means leadership replaces leases; both IKernelStore and IActorRuntime are involved.</title>
+        <path class="edge dash" d="M740,392 L690,392 L690,370 L642,370"/>
+        <rect class="box dashed" x="740" y="364" width="200" height="56" rx="8"/>
+        <text class="tt" x="754" y="386">Replicated log (Zeebe-like)</text>
+        <text class="ts" x="754" y="406">later · planned, not designed</text>
+        <text class="ts" x="840" y="436" text-anchor="middle">leadership replaces leases</text>
+      </g>
       <!-- layer 1 -->
       <g data-pick="l1" tabindex="0" role="button" aria-label="Layer 1, actor runtime">
         <rect class="b1" x="20" y="360" width="620" height="92" rx="10"/>
@@ -350,10 +358,10 @@ ol.stmts code { font-size: 12.5px; }
         <rect class="box" x="240" y="398" width="190" height="40" rx="6"/><text x="335" y="422" text-anchor="middle">Orleans adapter (tests)</text>
         <rect class="box dashed" x="444" y="398" width="182" height="40" rx="6"/><text x="535" y="422" text-anchor="middle">Your adapter</text>
       </g>
-      <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
+      <text class="ts" x="840" y="456" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with a few of the workflow instance's types and columns still in layer 2 (DESIGN.md lists these seam leaks); the other runtimes, models and actor types shown are planned or samples.</figcaption>
+    <figcaption>The dashed box is planned, not designed: replicated log plus local state. Its uplink reaches layer 1 ownership: leadership replaces leases, involving both IKernelStore and IActorRuntime. Virtual partitions need not map one to one to Raft groups. Every guarantee lives in layer 2; layer 3 says what an actor does. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with seam leaks recorded in DESIGN.md. This picture is not product or later-profile qualification.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -394,7 +402,7 @@ ol.stmts code { font-size: 12.5px; }
     <dt>Actor</dt><dd>Something with its own state that handles one message batch at a time. A workflow instance is one kind.</dd>
     <dt>Turn</dt><dd>An instance's turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages. Temporal calls this a workflow task. One turn is not one activity.</dd>
     <dt>Pass</dt><dd>The runtime's call into a partition it hosts: it runs the turns that are due and commits them in batches. One pass holds many turns.</dd>
-    <dt>Partition</dt><dd>A fixed bucket of instances (64 on server databases, 1 on SQLite). Its owner is the only node that writes its instances.</dd>
+    <dt>Partition</dt><dd>A fixed bucket of instances whose owner is their only writer. The original prototype uses 64 on server databases and 1 on SQLite; existing illustrations use that shape. The adopted 15 November experiment compares 1,024 and 4,096 fixed virtual partitions, provisionally 4,096; both fence variants preserve a gapless journal per virtual partition. Final fence granularity awaits the owner's decision after measurements; this experiment is not implemented.</dd>
     <dt>Epoch</dt><dd>A counter on the partition row, raised every time a node takes the partition. Work started under an older epoch is thrown away.</dd>
     <dt>Position</dt><dd>How many journal rows a partition has written (a turn at the Minimal history level writes none). The commit checks it, so two commits can never land at the same position.</dd>
     <dt>Fence</dt><dd>The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.</dd>
@@ -478,8 +486,8 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="data">
   <div class="num">04</div>
   <h2>What is stored</h2>
-  <p>Eight record kinds, shown as tables; a document store keeps the same records as documents. The instance row is the truth about the present, the journal the truth about the past. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker or timer table. Click a table.</p>
-  <p class="note">These eight cards use the sketch's proposed record names. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
+  <p>Eight record kinds in the shared-store shape, shown as tables; EF and MongoDB implement equivalent records. The checkpoint holds owner state; the journal records committed history. Their current transaction inserts the recipient inbox with sender state, so this shape needs no separate outbox. The accepted provider-neutral rule records sends atomically with sender state and permits deduplicated later delivery through an outbox when cross-partition transactions are unavailable. Click a table.</p>
+  <p class="note">These cards use the sketch's proposed record names for the existing shared-store shape. Non-owner queries, including lists and counts, use read models in the proposed design. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> separates that proposal from built behavior. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
   <div class="picker" id="data-picker" data-default="message">
   <figure>
     <div class="fig">
@@ -502,17 +510,17 @@ ol.stmts code { font-size: 12.5px; }
       <g data-pick="journal" tabindex="0" role="button"><rect class="box" x="385" y="310" width="190" height="58" rx="7"/><text class="tt" x="401" y="334">journal</text><text class="tm" x="401" y="354">position · entries</text></g>
       <g data-pick="subscription" tabindex="0" role="button"><rect class="box" x="740" y="30" width="190" height="58" rx="7"/><text class="tt" x="756" y="54">subscription</text><text class="tm" x="756" y="74">key · instance · wait</text></g>
       <g data-pick="event" tabindex="0" role="button"><rect class="box" x="740" y="170" width="190" height="58" rx="7"/><text class="tt" x="756" y="194">event</text><text class="tm" x="756" y="214">key · id · keep_until</text></g>
-      <text class="ts" x="740" y="318">Not here: outbox, dispatcher,</text>
+      <text class="ts" x="740" y="318">Shared-store shape: no outbox,</text>
       <text class="ts" x="740" y="336">scheduler queue, timer table,</text>
       <text class="ts" x="740" y="354">per-run lease, commit marker.</text>
     </svg>
     </div>
-    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
+    <figcaption>Arrows point from a row to the row it refers to. In this shared-store shape every partition commit updates its fence row. These are proposed names for that shape; DESIGN.md gives the prototype's schema in "Data". A future provider may record sends for later delivery instead of inserting the destination inbox in the sender's transaction.</figcaption>
   </figure>
   <div class="grid">
     <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: partition lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
     <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: node lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
-    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: instance lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. This checkpoint is owner state; the proposed non-owner list/count read path uses read models, not this row directly.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: instance lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
     <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: message lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
     <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: subscription lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
     <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: event lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
@@ -872,7 +880,7 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="profiles">
   <div class="num">12</div>
   <h2>Deployment profiles</h2>
-  <p>Three things vary independently, each behind its own seam. There is no fourth "runtime" plug-in: a deployment profile is a named preset of the last two. A workflow behaves the same under every profile, and synchronous HTTP works on all of them. Pick a profile.</p>
+  <p>A deployment profile combines an actor runtime and a persistence provider; persistence mode remains the workflow author's choice. Release 1 adopts Embedded and Cluster with the same Native structured containers, Flowchart and StateMachine. Orleans requires proven demand. Log is later, planned, not designed; equivalent behavior and synchronous HTTP remain requirements for that future design. Pick a profile.</p>
   <div class="seg" role="group" aria-label="Deployment profile" id="profile-seg">
     <button type="button" data-profile="embedded" aria-pressed="false">Embedded</button>
     <button type="button" data-profile="cluster" aria-pressed="true">Cluster</button>
@@ -886,16 +894,29 @@ ol.stmts code { font-size: 12.5px; }
       <span class="opt" data-in="embedded">Built-in, one node, no transport</span>
       <span class="opt" data-in="cluster">Built-in, partitions shared over nodes</span>
       <span class="opt" data-in="orleans">Orleans adapter</span>
-      <span class="opt" data-in="log">Built-in, partitions as replicated-log groups</span></div>
-    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What stores the rows.</p>
+      <span class="opt" data-in="log">Planned: replicated-log leadership</span></div>
+    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What persists the data.</p>
       <span class="opt" data-in="embedded orleans">SQLite (1 partition)</span>
       <span class="opt" data-in="embedded cluster orleans">PostgreSQL</span>
       <span class="opt" data-in="embedded cluster orleans">SQL Server (RCSI on)</span>
       <span class="opt" data-in="embedded cluster orleans">MySQL</span>
       <span class="opt" data-in="embedded cluster orleans">MongoDB 8 (replica set)</span>
-      <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
+      <span class="opt" data-in="log">Planned: replicated log (Zeebe-like)</span></div>
   </div>
   <p id="profile-note"></p>
+  <div class="principle"><strong>Log profile: planned, not designed.</strong> What each kernel concept becomes with a replicated log (Zeebe-like):
+    <div class="tablewrap"><table>
+      <thead><tr><th>Kernel concept</th><th>With a replicated log</th></tr></thead>
+      <tbody>
+        <tr><td>Commit</td><td>a fenced batch appended to the partition's Raft-replicated log, acknowledged after consensus commitment</td></tr>
+        <tr><td>Fence and epoch</td><td>Raft term-based authority, enforced by the commit protocol</td></tr>
+        <tr><td>Lease and take</td><td>leader election</td></tr>
+        <tr><td>Journal</td><td>the log itself</td></tr>
+        <tr><td>Inbox and polling</td><td>log entries plus local state; no inbox-table polling</td></tr>
+        <tr><td>Projector</td><td>an exporter that reads committed log records past its position</td></tr>
+      </tbody>
+    </table></div>
+    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
   <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 
@@ -903,11 +924,12 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="costs">
   <div class="num">13</div>
   <h2>What it costs</h2>
-  <p>PostgreSQL round trips per workflow run: today's core, counted on 11 November, against the native model on the new kernel. Hover a row for both figures.</p>
-  <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
+  <p>EF Core commands per workflow run on SQLite, for three systems in one unit: Elsa 3 (3.10.1), Elsa 4 today (main) and the new kernel's native model. Hover a row for the three figures. On PostgreSQL the kernel's Balanced commit is 2 round trips with the fence in the batch, 3 with the checked fence (NATIVE.md section 5).</p>
+  <div class="seg" id="cost-mode" role="group" aria-label="Save mode"><button type="button" data-mode="0" aria-pressed="true">Default (Balanced)</button><button type="button" data-mode="1" aria-pressed="false">Save after every activity (Durable)</button></div>
+  <div class="legend"><span><i style="background:var(--l1)"></i>Elsa 3 (3.10.1)</span><span><i style="background:var(--hot)"></i>Elsa 4 today (main)</span><span><i style="background:var(--accent)"></i>New kernel (prototype)</span></div>
   <figure>
-    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
-    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 360" role="img" aria-label="EF Core commands per workflow run on SQLite for Elsa 3, Elsa 4 today and the new kernel, for three workflows; switch between default and save-after-every-activity."></svg></div>
+    <figcaption style="overflow-wrap:anywhere"><b>What is counted:</b> the run's own EF Core commands on SQLite; commands, not time. Elsa 3 (from evidence/elsa3-cost/RECEIPT.md, workflow-flow column): its saves are separate writes with no single transaction, background queue polls are excluded, and the count is largely history (25 of 29, 11 of 15, 12 of 25 in the default mode). Elsa 4 (Essentials/tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json): the gate counts one database context, where Elsa 3's count covers both of its contexts. Kernel (prototypes/kernel-model/NATIVE.md section 5, the SQLite commands in brackets): the history projector is not in its bars (about 4 to 5 SQLite commands per round), so for fork-join the kernel is about level with Elsa 3 once that is added. The kernel is a prototype, not product code.</figcaption>
   </figure>
   <div class="tablewrap"><table>
     <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
@@ -916,10 +938,10 @@ ol.stmts code { font-size: 12.5px; }
       <tr><td>SQL Server</td><td class="n">4 (3)</td><td>Needs read-committed snapshot isolation.</td></tr>
       <tr><td>MySQL</td><td class="n">7 (6)</td><td>Oracle's EF provider; upserts and <code>INSERT IGNORE</code>.</td></tr>
       <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the store assigns the order key.</td></tr>
-      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
+      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row. This counts BEGIN and COMMIT too, so it is 5 here against the chart's 3 commands.</td></tr>
     </tbody>
   </table></div>
-  <p class="note">Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
+  <p class="note">This table counts a different unit from the chart above: round trips for the server databases, and engine calls (BEGIN and COMMIT included) for SQLite. Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
 </section>
 
 <!-- 14 ─────────────────────────────────────────── -->
@@ -950,16 +972,17 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="tradeoffs">
   <div class="num">15</div>
   <h2>Trade-offs and the chosen defaults</h2>
-  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. The original 12 November defaults are shown below; the partition experiment was amended on 15 November.</p>
   <div class="chips">
     <span class="chip">Side effects at least once in Balanced</span>
     <span class="chip">History: Full</span>
     <span class="chip">Lease: 10 s</span>
-    <span class="chip">64 partitions, 1 on SQLite</span>
+    <span class="chip">Original prototype: 64 server partitions, 1 on SQLite</span>
     <span class="chip">HTTP response after commit</span>
     <span class="chip">No reads across instances</span>
     <span class="chip">Events not kept unless asked</span>
   </div>
+  <p class="note">Adopted experiment, not implemented: compare 1,024 and 4,096 fixed virtual partitions, provisionally 4,096. Both fence variants retain a gapless ordered journal per virtual partition. Final fence granularity is the owner's decision after measurements; existing diagrams retain the original prototype numbers.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>#</th><th>Gain</th><th>Price</th><th>Lever</th></tr></thead>
     <tbody>
@@ -1028,27 +1051,29 @@ ol.stmts code { font-size: 12.5px; }
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
-        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>StateMachine implementation design (#3815); inclusion in both release-one profiles adopted 15 November</li>
         <li>The default join for a Flowchart node with several inbound connections</li>
         <li>BPMN's scope for its first release</li>
       </ul></div>
   </div>
-  <h3>Release 1 scope (decided 12 November)</h3>
+  <h3>Release 1 scope (amended 15 November)</h3>
   <div class="two">
     <div class="card"><h4>In release 1</h4>
       <ul>
         <li>The kernel, the built-in runtime, the Embedded and Cluster profiles</li>
-        <li>The native model: structured containers and the Flowchart on the graph engine</li>
+        <li>The same Native model set in both profiles: structured containers, Flowchart and StateMachine</li>
         <li>Synchronous HTTP</li>
         <li>PostgreSQL, SQL Server and SQLite, tuned; MySQL supported, not tuned</li>
         <li>Studio on the new core</li>
         <li>Basic trace context and metrics, retention and delete, admission control, simple instance migration</li>
-        <li>StateMachine, unless its design milestone is late; then 1.1</li>
+        <li>Parked-work operator tools: inspect, retry and discard</li>
+        <li>Values by reference (decision 10), a release 1 priority</li>
         <li>Agents as native activities, agent calls as background jobs</li>
       </ul></div>
     <div class="card"><h4>After release 1</h4>
       <ul>
-        <li>BPMN, the Orleans adapter and ETL, each proven by a spike now</li>
+        <li>BPMN and ETL, each proven by a spike now</li>
+        <li>Orleans only after proven demand; no automatic product commitment</li>
         <li>MongoDB in 1.1; proven in CI against a replica set from release 1</li>
         <li>The aggregating fan-out pattern, with ETL; release 1 caps a parallel ForEach</li>
         <li>The out-of-process job worker protocol (1.x); its contract designed now</li>
@@ -1195,44 +1220,50 @@ ol.stmts code { font-size: 12.5px; }
   const showTip = (e, text) => { tip.textContent = text; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1; };
   const hideTip = () => { tip.style.opacity = 0; };
   const cs = document.getElementById("cost-svg");
-  const data = [
-    ["HTTP request to response, Ephemeral", 80, 0],
-    ["HTTP request to response, Balanced", 80, 3],
-    ["HTTP request to response, Durable", 153, 12],
-    ["WriteLine sequence, Balanced", 48, 3],
-    ["Ten WriteLines, Durable", 230, 33],
-    ["Fork, wait, resume, join, Balanced", 142, 11],
-    ["Forty WriteLines, Durable", 680, 123]
+  const sys = [["Elsa 3 (3.10.1)", "var(--l1)"], ["Elsa 4 today (main)", "var(--hot)"], ["New kernel (prototype)", "var(--accent)"]];
+  const wfs = [
+    ["Ten WriteLines", [[29, 64], [64, 221], [3, 63]]],
+    ["HTTP request to response", [[15, 29], [83, 149], [3, 21]]],
+    ["Fork, wait, resume, join", [[25, 42], [131, 194], [18, 30]]]
   ];
-  const x0 = 320, k = 0.8, top = 20, rh = 52;
-  for (let v = 0; v <= 700; v += 100) {
-    const x = x0 + v * k;
-    cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + data.length * rh }));
-    cs.appendChild(el("text", { class: "ts", x, y: top + data.length * rh + 18, "text-anchor": "middle" }, String(v)));
-  }
-  cs.appendChild(el("text", { class: "ts", x: x0 + 280, y: top + data.length * rh + 36, "text-anchor": "middle" }, "PostgreSQL round trips per run"));
-  data.forEach(([label, today, model], n) => {
-    const y = top + n * rh;
-    cs.appendChild(el("text", { x: x0 - 14, y: y + 30, "text-anchor": "end" }, label));
-    const tw = Math.max(today * k, 2), mw = Math.max(model * k, 2);
-    const t = el("rect", { x: x0, y: y + 10, width: tw, height: 14, rx: 3 }); t.style.fill = "var(--hot)";
-    const m = el("rect", { x: x0, y: y + 27, width: mw, height: 14, rx: 3 }); m.style.fill = "var(--accent)";
-    cs.appendChild(t); cs.appendChild(m);
-    cs.appendChild(el("text", { class: "ts", x: x0 + tw + 6, y: y + 22 }, String(today)));
-    cs.appendChild(el("text", { class: "ts", x: x0 + mw + 6, y: y + 39 }, String(model)));
-    const hit = el("rect", { x: 0, y: y + 4, width: 960, height: rh - 4, fill: "transparent" });
-    const msg = label + ": today " + today + ", new kernel " + model + " round trips";
-    hit.addEventListener("mousemove", e => showTip(e, msg));
-    hit.addEventListener("mouseleave", hideTip);
-    cs.appendChild(hit);
-  });
+  const x0 = 250, k = 2.6, top = 16, rh = 96;
+  const drawCosts = mode => {
+    cs.replaceChildren();
+    for (let v = 0; v <= 250; v += 50) {
+      const x = x0 + v * k;
+      cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + wfs.length * rh }));
+      cs.appendChild(el("text", { class: "ts", x, y: top + wfs.length * rh + 18, "text-anchor": "middle" }, String(v)));
+    }
+    cs.appendChild(el("text", { class: "ts", x: x0 + 325, y: top + wfs.length * rh + 38, "text-anchor": "middle" }, "EF Core commands per workflow run, SQLite"));
+    wfs.forEach(([label, vals], n) => {
+      const y = top + n * rh;
+      cs.appendChild(el("text", { x: x0 - 14, y: y + 50, "text-anchor": "end" }, label));
+      vals.forEach((pair, i) => {
+        const v = pair[mode], w = Math.max(v * k, 2);
+        const r = el("rect", { x: x0, y: y + 8 + i * 25, width: w, height: 19, rx: 3 }); r.style.fill = sys[i][1];
+        cs.appendChild(r);
+        cs.appendChild(el("text", { class: "ts", x: x0 + w + 6, y: y + 23 + i * 25 }, String(v)));
+      });
+      const hit = el("rect", { x: 0, y: y + 2, width: 960, height: rh - 8, fill: "transparent" });
+      const msg = label + ": Elsa 3 " + vals[0][mode] + ", Elsa 4 today " + vals[1][mode] + ", new kernel " + vals[2][mode] + " commands";
+      hit.addEventListener("mousemove", e => showTip(e, msg));
+      hit.addEventListener("mouseleave", hideTip);
+      cs.appendChild(hit);
+    });
+  };
+  const costBtns = document.querySelectorAll("#cost-mode button");
+  costBtns.forEach(b => b.addEventListener("click", () => {
+    costBtns.forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+    drawCosts(+b.dataset.mode);
+  }));
+  drawCosts(0);
 
   /* deployment profiles */
   const pnotes = {
     embedded: "Embedded: one node, no transport between nodes. For a Windows service, a desktop app or a single API. Any provider; SQLite is typical.",
     cluster: "Cluster: partitions shared fairly over the nodes, which count each other by heartbeat. For scaling out on a server database.",
     orleans: "Orleans: an adapter for hosts that already run Orleans, written by the integrator; Elsa keeps one in its tests. Any provider. Each partition is a grain, so commits still batch.",
-    log: "Log, later: partitions as replicated-log groups on a Zeebe-like provider, for very high throughput. Synchronous HTTP still works, as Zeebe's create-instance-with-result shows."
+    log: "Log, later — planned, not designed. Replicated log plus local state; leadership replaces leases. No provider, throughput result or synchronous HTTP qualification is claimed."
   };
   const setProfile = p => {
     document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.setAttribute("aria-pressed", b.dataset.profile === p ? "true" : "false"));

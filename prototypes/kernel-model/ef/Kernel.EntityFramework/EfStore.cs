@@ -40,6 +40,7 @@ public sealed class InstanceEntity
     public bool Suspended { get; set; }
     public string? Children { get; set; }
     public int StateVersion { get; set; }
+    public bool Retired { get; set; }
 }
 
 public sealed class ProjectionEntity
@@ -108,6 +109,9 @@ public sealed class JournalEntity
 
 public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
+    internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
+    internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
+    internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
     public DbSet<PartitionEntity> Partitions => Set<PartitionEntity>();
     public DbSet<NodeEntity> Nodes => Set<NodeEntity>();
     public DbSet<InstanceEntity> Instances => Set<InstanceEntity>();
@@ -122,6 +126,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
         MySqlCommandBatchPreparer.Configure(optionsBuilder);
+        optionsBuilder.AddInterceptors(AliasUpdateGuard.Instance);
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -137,7 +142,12 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<InstanceEntity>(e =>
         {
             e.ToTable("Instances");
+            if (Database.IsSqlServer()) e.ToTable(t => t.UseSqlOutputClause(false));
             e.Property(i => i.Revision).IsConcurrencyToken();   // every update is WHERE revision = r
+            // New physical-provider rows are always active. Omit the known false INSERT value without
+            // generated-value readback; retirement UPDATEs retain their normal written predicate.
+            var retired=e.Property(i=>i.Retired).HasDefaultValue(false).ValueGeneratedNever();
+            retired.Metadata.SetBeforeSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Ignore);
         });
         model.Entity<MessageEntity>(e =>
         {
@@ -214,6 +224,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
     /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
     /// </summary>
     private bool _windowInstalled;
+    public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault ?? true;
@@ -266,6 +277,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        await PhysicalRetirement.InstallAsync(db, Engine, postgres);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
         {
@@ -340,7 +352,12 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        CreationProtocol.RejectUnsupported(batch);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases);
+        // Marker shape uses the canonical row address. A raw update's alternate spelling is
+        // authorized separately by the database-column predicate in AliasUpdateGuard.
+        var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
+            ? batch with{Turns=batch.Turns.Select(t=>t.Row is {} r?t with{Instance=r.Id}:t).ToArray()}:batch;
+        CreationProtocol.RejectUnsupported(qualification, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
         // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
@@ -365,6 +382,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
             catch (DbUpdateConcurrencyException)
             {
                 return new Committed(false, 0, []);     // the fence (in the batch) or a count did not match: either way, reset
+            }
+            catch(Exception e) when(AliasUpdateGuard.Refused(e))
+            {
+                return new Committed(false,0,[]); // the transaction was rolled back; no separate fence read is needed
             }
             catch (Exception e)
             {
@@ -412,6 +433,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
     private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
     {
         await using var db = create();
+        foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
+        {
+            db.AliasGuards.Add(turn.Row!.Id,turn.Instance);
+            if(turn.Expected is null)db.InsertAliasGuards.Add(turn.Row.Id);
+        }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var now = 0L;
@@ -459,16 +485,20 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         {
             // An ended instance: its row at the expected revision, in the batch, so a revision that does not match is a
             // count that does not match (not landed), as for an update. Its journal rows go after the batch, below.
-            if (turn.Delete) db.Attach(new InstanceEntity { Id = turn.Instance, Revision = turn.Expected!.Value }).State = EntityState.Deleted;
+            if (turn.Delete && turn.Row is not { Retired: true }) db.Attach(new InstanceEntity { Id = turn.Instance, Revision = turn.Expected!.Value }).State = EntityState.Deleted;
             if (turn.Row is { } row)
             {
                 var entity = new InstanceEntity
                 {
                     Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                    State = row.State, Jobs = row.Jobs, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
+                    State = StoredState.Encode(row), Jobs = row.Jobs, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion, Retired = row.Retired,
                 };
                 if (turn.Expected is not { } expected) db.Add(entity);
-                else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
+                else
+                {
+                    var entry = db.Update(entity);
+                    entry.Property(i => i.Revision).OriginalValue = expected;
+                }
             }
             foreach (var id in turn.Consumed) db.Remove(MailKey(id));
             foreach (var id in turn.Done) db.Attach(MailKey(id)).Entity.Done = true;
@@ -497,6 +527,8 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         }
 
         await db.SaveChangesAsync(cancellationToken);       // one batch; EF checks every affected-row count
+        if(db.AliasGuards.Keys.Any(id=>!db.GuardedAliases.Contains(id)))
+            throw new StoreException(Failure.Definite,"Unsupported aliased update SQL shape.");
 
         // The careful path: each wait as a statement of its own, after the batch, for the reason the deletes below are.
         if (careful)
@@ -587,8 +619,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         return rows.Select(Snapshot).ToList();
     }
 
-    private static InstanceRow Snapshot(InstanceEntity i) => new(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision,
-        i.Parent, i.Fault, i.Jobs, i.History, i.Suspended, i.Children, i.StateVersion, CustomHandles: i.CustomHandles);
+    private static InstanceRow Snapshot(InstanceEntity i)
+    {
+        return StoredState.Restore(new(i.Id,i.Model,i.Definition,i.Status,i.State,i.Revision,i.Parent,i.Fault,i.Jobs,i.History,
+            i.Suspended,i.Children,i.StateVersion,Retired:i.Retired,CustomHandles:i.CustomHandles));
+    }
 
     private sealed class RequestedActor
     {
