@@ -1862,7 +1862,7 @@ mode as before, every round-trip budget of the cost runs holds or drops (Postgre
 fence in the batch: 13 → 8 round trips; SQL Server 22 → 13; MySQL 24 → 18; SQLite 4,008 → 8 engine calls), statements
 fall from 3n to a handful per flush (2,001 → 3 for 1,000 new instances), bytes per commit do not move, the fence is one
 multi-row statement shaped for k virtual partitions (`EfStore.FenceAsync`, probe `x fence`, all four engines), and on
-SQL Server the in-batch fence is the first lock of the batch, so the E9 take deadlocks are gone: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI).
+SQL Server the in-batch fence is the first lock of the batch, so the E9 take deadlocks are gone: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). On that evidence the owner moved SQL Server's default fence to the batch on 16 November (the checked fence stays selectable); the flip and its gates are their own pull request (ENGINES.md E9).
 
 Delivered as five pull requests on branches `agent/claude/4229-r5b-1` to `-5`: the seam and PostgreSQL (`2c5d0f5fa`),
 SQL Server (`e308e8a34`), SQLite (`def75ba81`), MySQL (`3e7169f14`, and `8c5e944a5` for the mutation of F-B7), and this
