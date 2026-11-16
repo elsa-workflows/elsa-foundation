@@ -9,4 +9,8 @@ public sealed record ActivityProviderDiagnosticDescriptor(
     string Message,
     string Remediation,
     string? JsonPointer = null,
-    string? ActionLabel = null);
+    string? ActionLabel = null)
+{
+    /// <summary>Optional static pointer template. One {index} segment permits a canonical index from 0 through 9999.</summary>
+    public string? JsonPointerPattern { get; init; }
+}
