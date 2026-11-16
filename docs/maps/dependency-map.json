@@ -24893,6 +24893,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Runtime",
+          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events",
           "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
