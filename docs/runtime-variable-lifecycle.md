@@ -85,6 +85,21 @@ still at that version. A write to another variable in the same frame does not co
 is versioned with an `Alteration` writer, so a later write on a stale base names the operator's change in its
 warning and keeps the operator's value.
 
+## Retry and re-execute
+
+An operator recovers a faulted step that waits for intervention in one of two ways (ADR 0092 decision 8 as amended
+2026-11-16). Both replace the faulted row with a successor row.
+
+| Action | Alteration | Identity | Inputs |
+|---|---|---|---|
+| Retry | `RetryFaultedActivity/1` | the same logical invocation (`LogicalInvocationId`, operation keys) | the committed snapshot and its read set |
+| Re-execute | `ReExecuteFaultedActivity/1`, and `RescheduleActivity/1` | a new logical invocation | materialized again from current committed state |
+
+A retry suits a transient failure, where an external service deduplicates on the same key. Its write is judged against
+the base it read before, so a variable an operator changed meanwhile is overwritten with a lost-update warning that
+keeps the operator's value. A re-execution sees the corrected value. Activity code reads the stable identity through
+`context.OperationKey`.
+
 ## What is not covered yet
 
 - Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters and the
@@ -94,6 +109,6 @@ warning and keeps the operator's value.
 - A `ModifyVariable` leaves no write-history record of its own; its version carries an `Alteration` writer, and the
   alteration job keeps its own outcome.
 - Variables of a closed scope (graph rows) are read and written outside the root frame; their writes are blind.
-- The operator retry / re-execute / accept-recorded-completion split and the background admission refresh are
-  delivered separately (see the spec's tasks).
+- Accepting a recorded completion and the background admission refresh are delivered separately (see the spec's
+  tasks).
 - The write history is data only; the inspection surfaces that present it are spec S-6.

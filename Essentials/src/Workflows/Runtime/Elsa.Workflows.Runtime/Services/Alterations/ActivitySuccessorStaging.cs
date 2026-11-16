@@ -25,12 +25,62 @@ internal static class ActivitySuccessorStaging
     public static string SuccessorScopeId(string successorId) => RuntimeChainId.Derive(successorId, "scope");
 
     /// <summary>
-    /// Builds the successor of <paramref name="source"/>. It keeps the source's inputs, parent, scheduling identity,
-    /// branch, iteration and pinned node, and starts directly when its inputs are pinned and it is a CLR activity;
-    /// <c>StartActivity</c> executes intrinsics only from <c>Scheduled</c>, so intrinsic successors re-enter through
-    /// <c>ScheduleActivity</c>.
+    /// Builds the successor of <paramref name="source"/> for one of the two operator actions that replace a row (spec
+    /// 1221 FR-014, ADR 0092 decision 8 as amended 2026-11-16). Both keep the source's parent, scheduling identity,
+    /// branch, iteration and pinned node.
+    /// <list type="bullet">
+    /// <item><see cref="SuccessorKind.Retry"/>: the same logical invocation. The successor joins the source's attempt
+    /// lineage (<see cref="ActivityExecutionState.LogicalInvocationId"/> stays), keeps the committed input snapshot and
+    /// its read set, and starts directly when its inputs are pinned and it is a CLR activity.</item>
+    /// <item><see cref="SuccessorKind.ReExecute"/>: a new logical invocation. The successor has no lineage, no snapshot
+    /// and no activated frames: it re-enters through <c>ScheduleActivity</c>, so <c>StartActivity</c> activates its
+    /// frames once and materializes fresh inputs, with a new read set, from current committed state.</item>
+    /// </list>
+    /// <c>StartActivity</c> executes intrinsics only from <c>Scheduled</c>, so intrinsic successors always re-enter
+    /// through <c>ScheduleActivity</c>.
     /// </summary>
     public static ActivityExecutionState NewSuccessor(
+        ActivityExecutionState source,
+        ExecutableNode sourceNode,
+        string successorId,
+        string scopeId,
+        ActivitySchedulingProvenance provenance,
+        IReadOnlyDictionary<string, string> metadata,
+        DateTimeOffset now,
+        SuccessorKind kind = SuccessorKind.Retry)
+    {
+        var successor = NewRetrySuccessor(source, sourceNode, successorId, scopeId, provenance, metadata, now);
+        if (kind == SuccessorKind.Retry)
+        {
+            var lineage = source.Attempt ?? source.Provenance.Attempt;
+            return successor with
+            {
+                Attempt = new ActivityExecutionAttemptLineage(
+                    (lineage?.AttemptNumber ?? 1) + 1,
+                    source.LogicalInvocationId,
+                    source.Execution.ActivityExecutionId)
+            };
+        }
+
+        // A re-execution starts over: the source's activated frames belong to the source's activation, and the
+        // iteration it ran in is requested again so the successor's own Start activates it once (FR-016).
+        var iterationRequest = source.IterationFrameRequest ??
+                               (source.IterationVariableFrame is { } iteration && source.IterationId is { } iterationId
+                                   ? new LoopIterationScopeRequest(iteration.ScopeId, iterationId, iteration.Values)
+                                   : null);
+        return successor with
+        {
+            Status = ActivityExecutionStatus.Scheduled,
+            StartedAt = null,
+            InputSnapshot = null,
+            VariableFrame = null,
+            IterationVariableFrame = null,
+            IterationFrameRequest = iterationRequest,
+            Attempt = null
+        };
+    }
+
+    private static ActivityExecutionState NewRetrySuccessor(
         ActivityExecutionState source,
         ExecutableNode sourceNode,
         string successorId,
@@ -44,6 +94,7 @@ internal static class ActivitySuccessorStaging
             : ActivityExecutionStatus.Scheduled;
         return source with
         {
+            VariableWrites = null,
             Execution = source.Execution with { ActivityExecutionId = successorId },
             Status = successorStatus,
             SubStatus = null,
@@ -74,6 +125,16 @@ internal static class ActivitySuccessorStaging
             SupersededByActivityExecutionId = null,
             SupersededAt = null
         };
+    }
+
+    /// <summary>Which operator action a successor row stands for (spec 1221 FR-014).</summary>
+    public enum SuccessorKind
+    {
+        /// <summary>The same logical invocation: kept identity, operation keys, snapshot and read set; a new attempt.</summary>
+        Retry,
+
+        /// <summary>A new logical invocation: fresh inputs, a new read set, new identity.</summary>
+        ReExecute
     }
 
     /// <summary>Marks <paramref name="source"/> superseded by <paramref name="successorId"/>, validating the lineage.</summary>

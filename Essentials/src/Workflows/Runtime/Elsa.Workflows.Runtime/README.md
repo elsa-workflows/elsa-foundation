@@ -69,15 +69,19 @@ mandatory Runtime checkpoint, or stores one failed outcome and skips all non-app
 at-least-once; deterministic checkpoint IDs reconcile a lost acknowledgement without replaying an applied change.
 
 The built-in descriptors are `CancelWorkflow/1`, `ModifyVariable/1`, `ScheduleActivity/1`,
-`RescheduleActivity/1`, `RetryFaultedActivity/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
+`RescheduleActivity/1`, `RetryFaultedActivity/1`, `ReExecuteFaultedActivity/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
 the sole envelope. Scheduling requires an activity-owned compiled scheduling capability; migration is limited to a
 quiescent suspended execution and an exact compatible executable artifact. Alterations never recover a workflow or
-resolve an incident implicitly. Two explicit exceptions resolve an incident that waits for intervention in a running
-run, and they are the only two outcomes the incident rule lets replace a committed `WaitForIntervention`:
+resolve an incident implicitly. Three explicit operator actions resolve an incident that waits for intervention in a running
+run, and they are the only outcomes the incident rule lets replace a committed `WaitForIntervention`:
 
 - `RetryFaultedActivity/1` retries the faulted activity, resolving the incident with an `OperatorRetry` outcome and
   scheduling a successor that keeps the source's inputs, parent, scheduling cause, provenance metadata and operation
-  keys. It refuses a source whose parent is no longer running (`SourceParentNotRunning`).
+  keys. It refuses a source whose parent is no longer running (`SourceParentNotRunning`). The successor continues
+  the same logical invocation (spec 1221, ADR 0092 decision 8 as amended).
+- `ReExecuteFaultedActivity/1` (spec 1221) resolves the incident the same way, but re-executes: the successor is a new
+  logical invocation whose inputs are materialized again from current committed state, so a variable corrected with
+  `ModifyVariable` reaches it. `RescheduleActivity/1` is a re-execution too.
 - `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a
   required reason: it resolves the incident with an `OperatorDecision` outcome from `OperatorDecisionAlteration` and
   enqueues the decision for the parent, which applies it in its own evaluation

@@ -38,8 +38,14 @@ public sealed class RetryFaultedActivityAlterationHandler(
     /// <summary>The longest operator reason the payload accepts.</summary>
     public const int MaxReasonLength = 500;
 
-    private const string Slug = "retry";
-    private const string Reason = "OperatorRetryFaultedActivity";
+    private const string RetrySlug = "retry";
+    private const string RetryReason = "OperatorRetryFaultedActivity";
+    private const string ReExecuteSlug = "reexecute";
+    private const string ReExecuteReason = "OperatorReExecuteFaultedActivity";
+
+    /// <summary>The outcome-metadata value that names which operator action resolved the incident.</summary>
+    internal const string OperatorActionRetry = "Retry";
+    internal const string OperatorActionReExecute = "ReExecute";
 
     private readonly IWorkflowExecutableStore _executableStore = executableStore ?? throw new ArgumentNullException(nameof(executableStore));
     private readonly IIncidentStateStore _incidentStateStore = incidentStateStore ?? throw new ArgumentNullException(nameof(incidentStateStore));
@@ -47,15 +53,30 @@ public sealed class RetryFaultedActivityAlterationHandler(
     private readonly ActivityExecutionSupersessionPlanner _supersessionPlanner = supersessionPlanner ?? throw new ArgumentNullException(nameof(supersessionPlanner));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(
+    public ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(
         WorkflowAlterationPreflightContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        PreflightAsync(context, ActivitySuccessorStaging.SuccessorKind.Retry, cancellationToken);
+
+    /// <summary>
+    /// The shared preflight of the two operator actions on a faulted activity waiting for intervention (spec 1221
+    /// FR-014): a retry continues the same logical invocation on its committed inputs; a re-execution
+    /// (<c>ReExecuteFaultedActivity/1</c>) starts a new invocation on fresh inputs. Both resolve the source's
+    /// incidents and supersede it with a successor row.
+    /// </summary>
+    internal async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(
+        WorkflowAlterationPreflightContext context,
+        ActivitySuccessorStaging.SuccessorKind kind,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        var reExecute = kind == ActivitySuccessorStaging.SuccessorKind.ReExecute;
+        var slug = reExecute ? ReExecuteSlug : RetrySlug;
+        var reason = reExecute ? ReExecuteReason : RetryReason;
         if (!TryReadPayload(context.Envelope.Payload, out var sourceId, out var operatorReason))
             return WorkflowAlterationPreflightResult.Rejected(
                 "InvalidRetryFaultedActivityPayload",
-                $"RetryFaultedActivity requires sourceActivityExecutionId and accepts only an optional reason of at most {MaxReasonLength} characters.");
+                $"{(reExecute ? ReExecuteFaultedActivityAlterationHandler.Kind : Kind)} requires sourceActivityExecutionId and accepts only an optional reason of at most {MaxReasonLength} characters.");
 
         var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();
         if (workflow.Status.IsTerminal())
@@ -106,25 +127,27 @@ public sealed class RetryFaultedActivityAlterationHandler(
 
         var plan = await _alterationStore.FindPlanAsync(context.Job.PlanId, cancellationToken);
         var now = _timeProvider.GetUtcNow();
-        var successorId = ActivitySuccessorStaging.SuccessorId(context, Slug, source);
+        var successorId = ActivitySuccessorStaging.SuccessorId(context, slug, source);
         var scopeId = ActivitySuccessorStaging.SuccessorScopeId(successorId);
         var successor = ActivitySuccessorStaging.NewSuccessor(
             source,
             sourceNode,
             successorId,
             scopeId,
-            NewProvenance(workflow, source, scopeId),
-            NewMetadata(source),
-            now);
+            NewProvenance(workflow, source, scopeId, reason, keepOperationKeys: !reExecute),
+            NewMetadata(source, reExecute),
+            now,
+            kind);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
         var resolvedIncidents = sourceIncidents
-            .Select(incident => ResolveRetriedIncident(incident, context, plan?.SubmittedBy.Subject, operatorReason, now))
+            .Select(incident => ResolveRetriedIncident(incident, context, plan?.SubmittedBy.Subject, operatorReason, now,
+                reExecute ? OperatorActionReExecute : OperatorActionRetry))
             .ToArray();
 
-        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
+        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, slug, reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
         context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
-            $"runtime.alteration.retry:{superseded.Execution.ActivityExecutionId}",
+            $"runtime.alteration.{slug}:{superseded.Execution.ActivityExecutionId}",
             superseded,
             successor,
             supersession.CancelledDescendants,
@@ -137,17 +160,25 @@ public sealed class RetryFaultedActivityAlterationHandler(
     }
 
     // The successor keeps the source's scheduling cause and provenance metadata: a structural parent recognises its
-    // retried child by them. The source's operation keys are written as assigned keys, so the successor resolves the
-    // same keys even when the source's came from its own first-attempt identity or invocation id.
+    // retried child by them. For a retry the source's operation keys are written as assigned keys, so the successor
+    // resolves the same keys even when the source's came from its own first-attempt identity or invocation id. A
+    // re-execution is a new invocation: it keeps only the keys a structural parent assigned, and otherwise derives new
+    // ones from its own identity.
     private static ActivitySchedulingProvenance NewProvenance(
         WorkflowExecutionState workflow,
         ActivityExecutionState source,
-        string scopeId)
+        string scopeId,
+        string reason,
+        bool keepOperationKeys)
     {
         var metadata = source.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.OperationKey] = ActivityOperationKeyResolver.ResolveOperationKey(source);
-        if (ActivityOperationKeyResolver.ResolveTargetOperationKey(source) is { } targetOperationKey)
-            metadata[RuntimeMetadataKeys.TargetOperationKey] = targetOperationKey;
+        if (keepOperationKeys)
+        {
+            metadata[RuntimeMetadataKeys.OperationKey] = ActivityOperationKeyResolver.ResolveOperationKey(source);
+            if (ActivityOperationKeyResolver.ResolveTargetOperationKey(source) is { } targetOperationKey)
+                metadata[RuntimeMetadataKeys.TargetOperationKey] = targetOperationKey;
+        }
+
         return ActivitySchedulingProvenance.From(
             workflow.WorkflowExecutionId,
             source.ParentActivityExecutionId,
@@ -156,15 +187,18 @@ public sealed class RetryFaultedActivityAlterationHandler(
             source.IterationId,
             source.Provenance.ExecutionPathId,
             scopeId,
-            source.Provenance.SchedulingCause ?? Reason,
+            source.Provenance.SchedulingCause ?? reason,
             metadata);
     }
 
-    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
+    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source, bool reExecute)
     {
-        // The shared successor metadata already drops the source's per-invocation markers.
+        // The shared successor metadata already drops the source's per-invocation markers. Both successors carry
+        // RetryOfActivityExecutionId: a structural parent recognises its replaced faulted child by it.
         var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
         metadata[RuntimeMetadataKeys.RetryOfActivityExecutionId] = source.Execution.ActivityExecutionId;
+        if (reExecute)
+            metadata[AlterationOutcomeMetadataKeys.OperatorAction] = OperatorActionReExecute;
         return metadata;
     }
 
@@ -173,12 +207,14 @@ public sealed class RetryFaultedActivityAlterationHandler(
         WorkflowAlterationPreflightContext context,
         string? submittedBy,
         string? operatorReason,
-        DateTimeOffset resolvedAt)
+        DateTimeOffset resolvedAt,
+        string operatorAction)
     {
         var outcomeMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [AlterationJobIdKey] = context.Job.JobId,
-            [AlterationPlanIdKey] = context.Job.PlanId
+            [AlterationPlanIdKey] = context.Job.PlanId,
+            [AlterationOutcomeMetadataKeys.OperatorAction] = operatorAction
         };
         if (!string.IsNullOrWhiteSpace(submittedBy))
             outcomeMetadata[AlterationSubmittedByKey] = submittedBy;

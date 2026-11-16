@@ -323,7 +323,8 @@ supersession lineage. That is not what this decision is for. In this decision, a
   It keeps the `InvocationId`, the operation keys, the committed input snapshot and its input read set, and it starts a
   new attempt. An activity that deduplicates on the `InvocationId` or an operation key sees the same identity.
 - **Re-execute and reschedule** create a successor row that is a new logical invocation. It gets a new `InvocationId`
-  and new operation keys, its inputs are materialized from current committed state, and it gets a new input read set.
+  and new operation keys (a key its structural parent assigned stays the parent's), its inputs are materialized from
+  current committed state, and it gets a new input read set.
 - **Recovery** (redelivery, resume) stays on the same row, as before.
 - The row id stays the key of the row: lineage (`SupersededBy…`), inspection, cleanup and scheduling keep using it.
   Activity code that needs a stable idempotency key reads the logical `InvocationId` or an operation key, never the

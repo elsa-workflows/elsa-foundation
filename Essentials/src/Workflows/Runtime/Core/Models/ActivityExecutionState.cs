@@ -53,6 +53,15 @@ public sealed record ActivityExecutionState(
 {
     public string InvocationId => Execution.ActivityExecutionId;
 
+    /// <summary>
+    /// The logical invocation identity (ADR 0092 decision 8, amended 2026-11-16): the first attempt's row id for a row
+    /// that continues an earlier attempt (an operator retry), otherwise this row's own id. <see cref="InvocationId"/>
+    /// stays the row key that lineage, inspection and scheduling use; activity code that needs one identity across
+    /// retries reads this, or <see cref="OperationKey"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string LogicalInvocationId => NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
     /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
     [JsonIgnore]
     public string OperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.OperationKey)

@@ -18,12 +18,18 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   0090's session is not implemented), so there is no session read or session write to instrument. The read-set model
   keeps one entry per variable (oldest read wins, the spec's oldest-in-use rule); session reads and own-write base
   advancement land with the session API.
-- **T017–T021 (US2 operator actions):** a second implementation PR. The retry-identity finding is settled by the
-  ADR 0092 decision 8 amendment of 2026-11-16 (#4316): `InvocationId` is the logical invocation identity, which a
-  retry's successor row inherits and a re-execution's does not; the supersession lineage stays. US2 adds that identity
-  to the activity execution (seeded from the first row's id; `ActivityExecutionAttemptLineage` and `OperationKey`
-  already fall back to it) and moves `context.InvocationId` to it. A re-execution with fresh inputs must also re-derive
-  the iteration frames of a loop body.
+- **US2 operator actions (T017–T020 in #4316):** following the ADR 0092 decision 8 amendment of 2026-11-16,
+  `ActivityExecutionState.LogicalInvocationId` is the logical invocation identity (the first attempt's row id through
+  the attempt lineage; `OperationKey` already falls back to it). A retry successor joins the source's lineage and keeps
+  its snapshot and read set; `RescheduleActivity/1` and the new `ReExecuteFaultedActivity/1` create a re-execution
+  successor that re-enters through `ScheduleActivity` with no snapshot and no activated frames, so its Start activates
+  them once and materializes fresh inputs. Activity code reads the stable identity through `context.OperationKey`; the
+  activity context does not expose the logical id itself yet.
+- **T020 (partly):** the re-execution successor carries no activated frames and re-requests its loop iteration, so
+  frames are activated once by construction; no loop-body re-execution drive yet.
+- **T021 (accept recorded completion):** held until S-3 (spec 1208, #4314) lands. It must record and re-apply a whole
+  rejected completion (outcome, outputs and every capture), and S-3 is reshaping the completion record
+  (`ActivityCompletion.OutcomeKey` → `Selection`). Today a `Fault` refusal keeps only the refused variable write.
 - **T010a, T029–T032 (background branches, admission refresh):** with US5 in a later implementation PR. The stale-base
   drives of T010/T011 cover the commit rule a background result meets.
 - **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`
@@ -95,9 +101,9 @@ default of FR-011 depends on it (FR-013a).
 
 **Goal**: `ModifyVariable` corrections reach a re-executed step; retry keeps the snapshot; accept applies without the body.
 
-- [ ] T017 [US2] **(test-first)** Drive: `ModifyVariable` then re-execute uses the corrected value; retry keeps `InvocationId` + snapshot. In `.../Tests/VariableLifecycle/OperatorActionsTests.cs`.
-- [ ] T018 [US2] Split the three actions in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/ActivitySuccessorStaging.cs`: retry (same id + snapshot), re-execute/reschedule (new id + fresh inputs + new input read set), accept recorded completion.
-- [ ] T019 [US2] Fix the current bug where an operator retry gets a new id with a copied snapshot; amend ADR 0045 §3 behavior (re-execute materializes fresh inputs).
+- [x] T017 [US2] **(test-first)** Drive: `ModifyVariable` then re-execute uses the corrected value; retry keeps `InvocationId` + snapshot. In `.../Tests/VariableLifecycle/OperatorActionsTests.cs`.
+- [x] T018 [US2] Split the three actions in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/ActivitySuccessorStaging.cs`: retry (same id + snapshot), re-execute/reschedule (new id + fresh inputs + new input read set), accept recorded completion.
+- [x] T019 [US2] Fix the current bug where an operator retry gets a new id with a copied snapshot; amend ADR 0045 §3 behavior (re-execute materializes fresh inputs).
 - [ ] T020 [P] [US2] Add the owned-frame re-activation guard on the successor `Start` re-entry path in `WorkflowStartActivitySchedulerWorkHandler.cs`.
 - [ ] T021 [US2] Implement accept-recorded-completion: revalidate state/scope/contracts/policies, apply the recorded transition atomically + duplicate-safely, refuse a faulted body, keep the conflict in history, no silent input refresh; test repeated acceptance does not double-schedule downstream.
 
