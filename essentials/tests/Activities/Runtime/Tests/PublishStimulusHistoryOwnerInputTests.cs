@@ -190,7 +190,8 @@ public sealed class PublishStimulusHistoryOwnerInputTests
         {
             var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, new("owner", At, TimeSpan.FromMinutes(1), 1));
             item = state == "delivering" ? claim.Item : RuntimePostCommitOutboxClaimTransitions.Complete(claim.Item, claim,
-                new(item.OutboxItemId, state == "delivered" ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal, At.AddSeconds(1)));
+                new(item.OutboxItemId, state == "delivered" ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal,
+                    At.AddSeconds(1), state == "delivered" ? null : "Controlled permanent delivery failure."));
             if (state == "redriven") item = RuntimePostCommitOutboxClaimTransitions.RedriveFailedFinal(item, At.AddSeconds(2));
         }
         var changed = original with { StateChanges = original.StateChanges.WithPostCommitOutbox([
