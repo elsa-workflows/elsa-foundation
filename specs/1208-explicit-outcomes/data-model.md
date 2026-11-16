@@ -30,7 +30,6 @@ attempt starts ──► Unspecified
 | Field | Rule |
 |---|---|
 | `Outcomes` | Declared names: static outcomes plus provider outcomes over the node's configuration. Contains `Done` exactly when a completion may choose no branch (Q2, model A); `Done` is never selected with a branch. |
-| `AllowsMultiple` | `true` when a completion may name more than one outcome (Q10). RunJavaScript: always; Switch: in `MatchAny` mode. |
 | `Fallback` | None at node level (Q6). An activity-declared catch-all is an ordinary member of `Outcomes` that the activity or script selects deliberately. |
 
 ## Completion record (`ActivityCompletion`)
