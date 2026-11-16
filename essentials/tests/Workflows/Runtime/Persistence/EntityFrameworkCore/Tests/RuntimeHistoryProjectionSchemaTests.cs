@@ -18,11 +18,20 @@ public sealed class RuntimeHistoryProjectionSchemaTests
         typeof(RuntimeHistoryBookmarkEntity), typeof(RuntimeHistoryActivityEntity), typeof(RuntimeHistoryBookmarkCountEntity)];
 
     [Fact]
-    public void Production_runtime_model_does_not_register_the_private_tables_before_migrations()
+    public void Production_runtime_model_and_declared_chain_cover_the_complete_history_family()
     {
         using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
             .UseSqlite("Data Source=:memory:").Options);
-        foreach (var type in ProjectionTypes) Assert.Null(context.Model.FindEntityType(type));
+        var types = ProjectionTypes.Concat([typeof(RuntimeHistoryOccurrenceEntity), typeof(RuntimeHistoryOccurrenceMembershipEntity), typeof(RuntimeHistoryOccurrenceCounterEntity)]).ToArray();
+        Assert.Equal(types.OrderBy(type => type.FullName), RuntimeHistoryEfModule.Chain.ContentColumns.Select(column => column.Entity).OrderBy(type => type.FullName));
+        Assert.Equal(RuntimeHistoryEfModule.SchemaVersion, RuntimeHistoryEfModule.Chain.CurrentVersion);
+        Assert.All(RuntimeHistoryEfModule.Chain.ContentColumns, column => Assert.Equal("ContentJson", column.Name));
+        foreach (var type in types)
+        {
+            var entity = context.Model.FindEntityType(type); Assert.NotNull(entity);
+            Assert.True(entity.FindProperty("Revision")!.IsConcurrencyToken);
+            Assert.Contains(entity.GetIndexes(), index => index.Properties.Select(property => property.Name).SequenceEqual(["SchemaVersion"]));
+        }
     }
 
     [Fact]

@@ -82,6 +82,14 @@ file static class RuntimeProviderModel
 
     public static void ConfigureText(ModelBuilder modelBuilder, string type)
     {
+        // All eight history shapes belong to the same declared family. Unbounded complete identities
+        // and JSON use the provider's large text type; bounded hashes/keys retain their index widths.
+        foreach (var column in RuntimeHistoryEfModule.Chain.ContentColumns)
+        {
+            var entity = modelBuilder.Entity(column.Entity);
+            foreach (var property in entity.Metadata.GetProperties().Where(property => property.ClrType == typeof(string) && property.GetMaxLength() is null).ToArray())
+                entity.Property(property.Name).HasColumnType(type);
+        }
         modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);
