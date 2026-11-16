@@ -88,6 +88,18 @@ p { margin: 0 0 .6rem; }
 .chips { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.6rem; }
 .chip { font: 500 .95rem/1 var(--sans); padding: .45rem .8rem; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); }
 .chip.ok { border-color: var(--l3); color: var(--l3); } .chip.warn { border-color: var(--hot); color: var(--hot); }
+.flow { max-width: 72rem; }
+.flow-h { font-size: 2.2rem; margin: 0 0 1.2rem; }
+.flow-row { display: grid; grid-template-columns: minmax(0,1.1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1.2fr); align-items: center; gap: .8rem; }
+.flow-in { display: grid; gap: .45rem; }
+.flow-in span { border: 1.5px solid var(--line-strong); border-radius: 999px; padding: .35rem .8rem; font-size: 1.05rem; background: var(--surface); }
+.flow-arrow { font-size: 2rem; color: var(--muted); }
+.flow-box { border: 2px solid var(--accent); border-radius: 12px; padding: 1rem; background: var(--surface); display: grid; gap: .3rem; }
+.flow-box b { font-size: 1.5rem; }
+.flow-box span { font-size: 1.05rem; color: var(--muted); }
+.flow-box.out { border-color: var(--st, var(--accent)); }
+.flow-sub { font-size: 1.3rem; margin-top: 1.6rem; }
+@media (max-width: 760px) { .flow-row { grid-template-columns: minmax(0,1fr); } .flow-arrow { transform: rotate(90deg); justify-self: center; } }
 .words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem 1.4rem; margin-top: 1.6rem; max-width: 72rem; font-size: 1rem; color: var(--muted); }
 .words b { color: var(--ink); }
 
@@ -323,18 +335,31 @@ marker path.n { fill: var(--muted); }
   <div class="eyebrow tech">Elsa · team demo · 16 November 2026</div>
   <h1>Elsa's new kernel</h1>
   <p class="lede">A clean-slate core for running workflows: correct under failure, few database calls, any execution model.</p>
-  <div class="cards">
+  <div class="flow" id="s1flow" aria-label="One way in, one way out">
+    <h2 class="flow-h">One way in, one way out</h2>
+    <div class="flow-row">
+      <div class="flow-in"><span>a request</span><span>a timer</span><span>an event</span><span>a job's result</span></div>
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-box"><b>Inbox</b><span>everything arrives as a message</span></div>
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-box"><b>Turn</b><span>runs in memory, reads nothing</span></div>
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-box out"><b>One save</b><span>new state, messages and history: all or nothing</span></div>
+    </div>
+    <p class="flow-sub">Three layers, one job each: <b>where it runs</b> · <b>what it guarantees</b> · <b>what runs</b>.</p>
+  </div>
+  <div class="cards" id="s1cards">
     <div class="card c1"><h3>Correct</h3><p>If a server dies, its workflows carry on from their last save on another server, and a server that is no longer the owner can never write.</p><p class="tech">one writer per partition, fenced in the database</p></div>
     <div class="card"><h3>Lean</h3><p>One save carries many workflows, and a workflow kept in memory runs its next step without reading the database.</p><p class="tech">a turn reads nothing; one commit carries many instances</p></div>
     <div class="card c3"><h3>Open</h3><p>Different kinds of workflow plug in: Elsa's own workflows, BPMN, and more.</p><p class="tech">execution models: native (Flowchart and StateMachine are its containers, each on its own engine), BPMN, …</p></div>
   </div>
-  <div class="words" aria-label="Words used on these slides">
+  <div class="words" id="s1words" aria-label="Words used on these slides">
     <div><b>Partition:</b> a fixed group of actors, the things the kernel runs, such as running workflows; one server owns each group.</div>
     <div><b>Turn:</b> one burst of work by one actor, run in memory.</div>
     <div><b>Commit:</b> one save to the database, in one transaction.</div>
     <div><b>Fence:</b> a check inside every save that refuses a server which is no longer the owner.</div>
   </div>
-  <div class="chips"><span class="chip ok">Proposed design, prototype on main</span><span class="chip warn">Not product code yet</span></div>
+  <div class="chips" id="s1chips"><span class="chip ok">Proposed design, prototype on main</span><span class="chip warn">Not product code yet</span></div>
 </section>
 
 <!-- 2 · the structure ─────────────────────────────────────────────── -->
@@ -1318,8 +1343,11 @@ const S5NOTES = [
 
 // ==== the deck ============================================================================================================
 const SLIDES = [
-  { title: 'Elsa\'s new kernel', steps: 1, render: () => {},
-    notes: () => ['This is the clean-slate kernel: a proposed design, with a prototype on main that was built, measured and attacked by a deterministic simulation. It is not product code yet.', 'Three things to take away: it stays correct when servers fail, it makes few database calls, and different kinds of workflow plug in.'] },
+  { title: 'Elsa\'s new kernel', steps: 2, render: i => {
+      $('s1flow').style.display = i === 0 ? '' : 'none';
+      ['s1cards', 's1words', 's1chips'].forEach(id => { $(id).style.display = i === 1 ? '' : 'none'; });
+    },
+    notes: i => i === 0 ? ['Open with the shape, before any numbers. Everything that can happen to a workflow arrives the same way: as a message in its inbox. When a turn needs saving, its changes end the same way: in one save, all at once or not at all. (An Ephemeral run that sends nothing and only waits briefly saves nothing; effects outside Elsa, such as an email, can still repeat after a failure.)', 'One way in, one way out, and three layers with one job each. That is what makes it easy to extend: a new trigger drops a message in the inbox, a new kind of workflow plugs in as a model, a new database plugs in as storage. Proven ideas (Erlang, Orleans, Zeebe), put together for Elsa.'] : ['This is the clean-slate kernel: a proposed design, with a prototype on main that was built, measured and attacked by a deterministic simulation. It is not product code yet.', 'Three things to take away: it stays correct when servers fail, it makes few database calls, and different kinds of workflow plug in.'] },
   { title: 'The structure: three layers', steps: 4, render: renderS2,
     notes: i => S2NOTES[i] },
   { title: 'How it works: one request', steps: ACT.length, render: renderS3, notes: i => ACT[i].notes },
