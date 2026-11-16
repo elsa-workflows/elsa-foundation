@@ -22,6 +22,19 @@ public sealed class Oracle
     public readonly Dictionary<string, long> InMemory = new(StringComparer.Ordinal);      // decision 4: instances kept in memory, unwritten, and their last revision there
     public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
+    private Dictionary<string, HashSet<Message>>? _httpInputs;
+
+    internal void ExpectHttp(Message input)
+    {
+        _httpInputs ??= [];
+        if (!_httpInputs.TryGetValue(input.Target.Id, out var starts))
+            _httpInputs.Add(input.Target.Id, starts = new(ReferenceEqualityComparer.Instance));
+        starts.Add(input);
+    }
+
+    internal void RefusedHttp(Message input) => _httpInputs?.GetValueOrDefault(input.Target.Id)?.Remove(input);
+    internal bool OnlyRefusedHttp(string id) => _httpInputs?.GetValueOrDefault(id) is { Count: 0 };
+
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
     public void Note(Message m, bool posted = false)
@@ -38,7 +51,7 @@ public sealed class Oracle
             case "cwaiter": CWaiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "correlation": Published.Add(target); break;
             case "tree": Trees.Add(target); break;
-            case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
+            case "http": ExpectHttp(m); Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
             case "fragile":
@@ -71,7 +84,10 @@ public sealed partial class World
 
     private T? State<T>(string id) where T : class =>
         Store.Instances.GetValueOrDefault(id) is not { State: var json } || json == "null" ? null
-        : (T)(_parsed.TryGetValue((typeof(T), json), out var state) ? state : _parsed[(typeof(T), json)] = Json.Read<T>(json));
+        : ParsedState<T>(json);
+
+    private T ParsedState<T>(string json) where T : class =>
+        (T)(_parsed.TryGetValue((typeof(T), json), out var state) ? state : _parsed[(typeof(T), json)] = Json.Read<T>(json));
 
     private static bool InOrder(List<string> applied, List<string> sent)
     {
@@ -90,6 +106,7 @@ public sealed partial class World
     public string? Check()
     {
         if (Store.Ghost.Count > 0) return Store.Ghost[0];
+        ReadLifecycleChanges();
         if (Config.Native) ScanJournal();      // the native checks read the journal (NativeSim.cs)
         if (Faults.Count > 0) return Faults[0];
         _watched.RemoveAll(t => t.IsCompletedSuccessfully);
@@ -124,8 +141,10 @@ public sealed partial class World
             .ToDictionary(g => g.Key, g => (Revision: g.Max(j => j.Revision), Commits: g.Count()), StringComparer.Ordinal);
         var deletions = Store.Journal.Values.Where(j => j.Revision < 0).GroupBy(j => j.Instance)
             .ToDictionary(g => g.Key, g => g.MaxBy(j => j.Position)!, StringComparer.Ordinal);
-        if (_creations.FirstOrDefault(c => c.Value.Generation > 0 && !Store.Instances.ContainsKey(c.Key)) is { Key: not null } lostCreation)
-            return $"I22 {lostCreation.Key} lost its retained creation high-water mark";
+        if (_creations.FirstOrDefault(c => (c.Value.Generation > 0 || CreationProtocol.IsPhysicalAddress(c.Key)) && !Store.Instances.ContainsKey(c.Key)) is { Key: not null } lostCreation)
+            return lostCreation.Value.Generation > 0 ? $"I22 {lostCreation.Key} lost its retained creation high-water mark"
+                : lostCreation.Value.Retired || _births?.ContainsKey(new(lostCreation.Key, 0)) == true ? $"I10 the fenced row of {lostCreation.Key} disappeared"
+                : $"I10 the sampled physical row of {lostCreation.Key} disappeared";
         foreach (var id in deletions.Keys.Where(id => Oracle.Deleted.Contains(id) && !Store.Instances.ContainsKey(id))) _gone.Add(id);   // also those created and deleted between two checks
         foreach (var (id, view) in Store.Views)
             if (deletions.TryGetValue(id, out var deletion) && deletion.Position > Store.Projection[deletion.Partition]) continue;    // deleted; the projector has not got there yet
@@ -157,25 +176,37 @@ public sealed partial class World
             var first = Oracle.InMemory.TryGetValue(id, out var kept) && (revisions[0] == kept || revisions[0] == kept + 1) ? revisions[0] : 1;
             if (revisions.Count != row.Revision - first + 1 || revisions[0] != first || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
+        if (_sampledActive is not null)
+            foreach (var (id, sampled) in _sampledActive)
+                if (sampled.Row.Creation == 0 && !CreationProtocol.IsPhysicalAddress(id) && !Store.Instances.ContainsKey(id) &&
+                    !(_physicalCheckpoints?.TryGetValue(id, out var closed) == true && closed is null))
+                    return _generationError ?? (_physicalCheckpoints?.GetValueOrDefault(id) is null ? $"I10 the row of {id} disappeared" : $"I10 the fenced row of {id} disappeared");
+        if (_generationError is not null) return _generationError;
         foreach (var row in Store.Instances.Values)
         {
             if (_creations.TryGetValue(row.Id, out var birth) && row.Creation != birth.Generation)
             {
-                if (!birth.Retired || birth.Generation <= 0 || birth.Generation == long.MaxValue || row.Creation != birth.Generation + 1 || row.Retired || row.Revision != 1)
+                if (!ValidSuccessor(row, birth.Generation, birth.Retired, r => Oracle.Deleted.Contains(row.Id)))
                     return $"I10 {row.Id} changed creation {birth.Generation} to {row.Creation} without a valid observed retirement";
                 _known.Remove(row.Id); _versions.Remove(row.Id); _gone.Remove(row.Id);
             }
+            else if (!row.Retired && ConflictsWithSampledHeader(row))
+                return _generationError ??= FencedRowError(row);
+            else if (!row.Retired && ConflictsWithFencedHeader(row))
+                return FencedRowError(row);
+            if (!row.Retired && InvalidCreationMetadata(row))
+                return _generationError ??= $"I10 {row.Id} has invalid creation metadata";
             if (row.Retired)
             {
                 if (_creations.TryGetValue(row.Id, out var observed) && !observed.Retired &&
                     _known.TryGetValue(row.Id, out var active) && row.Revision <= active.Revision)
                     return $"I22 {row.Id} retired without advancing observed active revision {active.Revision}";
-                // Generation-zero markers are valid only for generated physical addresses and the exact empty marker shape.
-                var physicalMarker = row.Creation == 0 && CreationProtocol.IsPhysicalAddress(row.Id) &&
-                    row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
-                if (row.Creation <= 0 && !physicalMarker || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
-                    row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
+                if (MissingRetirement(row)) return _generationError ??= $"I22 {row.Id} has an invalid lifecycle tombstone";
+                if (!CanonicalMarker(row) || !ValidMarkerRevision(row) || ConflictsWithFencedHeader(row) || !Oracle.Deleted.Contains(row.Id) || !deletions.TryGetValue(row.Id, out var receipt) || receipt.Revision != -1 ||
+                    receipt.Entries != """["deleted"]""" && _retirements?.ContainsKey(new(row.Id, row.Creation)) != true)
                     return $"I22 {row.Id} has an invalid lifecycle tombstone";
+                RememberMarker(row, receipt);
+                if (_generationError is not null) return _generationError;
                 _gone.Add(row.Id); _versions.Remove(row.Id);
             }
             _creations[row.Id] = (row.Creation, row.Retired);
@@ -191,10 +222,12 @@ public sealed partial class World
                 return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a turn " + bound.Wrong[0] : "")}";
             if (row.Model == "counter" && row.StateVersion == 2 && State<CounterState>(row.Id) is { } counted && counted.Count != counted.Tokens.Count)
                 return $"I18 {row.Id} at state version 2 counts {counted.Count} tokens and holds {counted.Tokens.Count}";
-            if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
+            if (_known.TryGetValue(row.Id, out var before) && ContradictsSample(row, before))
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             if (!_known.ContainsKey(row.Id) && row.Parent is { } up && Store.Instances.GetValueOrDefault(up) is { Status: not InstanceStatus.Running }) _late.Add(row.Id);
             _known[row.Id] = (row.Revision, row.Status);
+            if (!row.Retired) RememberActiveSample(row);
+            else _sampledActive?.Remove(row.Id);
             if (row.Retired || row.Status != InstanceStatus.Faulted) continue;
             // I14: parked for losing owners only at the threshold; otherwise only an instance that really fails is parked.
             var poison = row.Fault is { } fault && fault.StartsWith("message ") ? fault[8..fault.IndexOf(" was on trial")] : null;
@@ -203,6 +236,7 @@ public sealed partial class World
             var ownJob = poison is not null && Oracle.KillerJobs.Contains(row.Id) && poison.StartsWith(row.Id + "!", StringComparison.Ordinal);
             if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id) && !ownJob) Interlocked.Increment(ref Bystanders);
         }
+        if (RetainedDeletionError() is { } changed) return changed;
         // I22: a row disappears only when its instance was deleted, and a deleted instance never comes back.
         if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id) && !_gone.Contains(id)) is { } gone)
         {
@@ -379,20 +413,47 @@ public sealed partial class World
 
     // I15: a caller gets at most one response and at most one end, and a response only from a turn that committed or had
     // nothing to commit. A turn had nothing to commit only if its instance is ephemeral and was never written.
-    private readonly HashSet<string> _answered = new(StringComparer.Ordinal);
+    private readonly HashSet<Request> _answered = new(ReferenceEqualityComparer.Instance);
+    private string? _answerFailure;
     private string? Answers()
     {
+        if (_answerFailure is not null) return _answerFailure;
         foreach (var (process, request, instance) in Asked)
         {
-            if (request.Responses + request.Ends > 1) return $"I15 request {request.Id} on {process} got {request.Responses} responses and {request.Ends} ends";
-            if (request.Answer is not string answer || !_answered.Add(request.Id)) continue;
-            var committed = Store.Journal.Values.Any(j => j.Instance == instance && j.Entries.Contains($"\"{answer}\""));
-            var unwritten = Oracle.Https[instance].Ephemeral && !Store.Instances.ContainsKey(instance);
-            if (!committed && !unwritten) return $"I15 request {request.Id} was answered {answer}, which no commit of {instance} wrote";
+            if (request.Responses + request.Ends > 1) return _answerFailure = $"I15 request {request.Id} on {process} got {request.Responses} responses and {request.Ends} ends";
+            if (request.Responses == 0 || _answered.Contains(request)) continue;
+            if (request.AcceptedResponse is { Item: CreationResult } refusal && _creationRefusals?.TryGetValue(refusal, out var recipient) == true && recipient == request)
+            {
+                _answered.Add(request);
+                continue;
+            }
+            if (request.Answer is not string answer)
+                return _answerFailure = $"I15 request {request.Id} received {request.Answer?.GetType().Name ?? "null"} for {instance}, whose HTTP model emits strings";
+            var row = Store.Instances.GetValueOrDefault(instance);
+            var deleted = _callerCheckpoints?.GetValueOrDefault(request)?.Deletion;
+            Emission? sent = null;
+            if (request.AcceptedResponse is { } carrier) _emissions?.TryGetValue(carrier, out sent);
+            var committed = (deleted is { IsCompletedSuccessfully: true }
+                ? HasHttpAnswer(deleted.Result.Row, answer, deleted.Result.Journal, sent?.Revision)
+                : row is { Model: "http", Retired: false } && row.Creation == _requestedCreations.GetValueOrDefault(request) &&
+                  HasHttpAnswer(row, answer, Store.Journal.Values, sent?.Revision));
+            if (sent?.Recipient != request && committed)
+                return _answerFailure = $"I15 request {request.Id} accepted {answer} without an emission to this registration";
+            if (sent?.Recipient == request && sent.Release == ReplyRelease.BeforeCommit)
+                return _answerFailure = $"I15 answer {answer} for request {request.Id} was released before the emitting turn of {instance} committed";
+            if (sent?.Recipient != request || sent.Release == ReplyRelease.AfterCommit && !committed)
+                return _answerFailure = $"I15 request {request.Id} was answered {answer}, which no commit of {instance} wrote";
+            _answered.Add(request);
         }
-        foreach (var (id, (_, _, posted, _)) in Oracle.Https)
-            if (State<HttpState>(id) is { } state && state.Ambient.Find(a => a != $"seen@{posted}") is { } stray) return $"I15 {id} was started by actor {posted} and a turn saw the ambient as {stray}";
-        return null;
+        return _answerFailure = CheckHttpAmbients();
+    }
+
+    private static bool HasHttpAnswer(InstanceRow row, string answer, IEnumerable<JournalRow> journal, long? revision = null)
+    {
+        if (row.Model != "http" || row.State == "null" || !Json.Read<HttpState>(row.State).Answers.Contains(answer)) return false;
+        var text = Json.Write(answer);
+        return row.History != History.Full || journal.Any(j => j.Instance == row.Id && (revision is null || j.Revision == revision) && j.Entries.Contains(text, StringComparison.Ordinal) &&
+            Json.Read<List<string>>(j.Entries).Contains(answer));
     }
 
     // I13 through correlation instances: no wait is given two events, and one that was given an event has finished.
@@ -473,7 +534,7 @@ public sealed partial class World
             }
             for (var n = 0; n < Config.Nodes; n++) Watch(Runtimes[(n + round) % Config.Nodes].BalanceAsync());   // every node beats and asks for its share
             foreach (var (node, reply) in Deliveries.ToList())      // the transport delivers what it still carries
-                if (Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
+                if (Processes.TryGetValue(node, out var requests) && Running(node)) DeliverTo(requests, reply);
             Deliveries.Clear();
             foreach (var requests in Processes.Values) requests.Expire(Time);
             foreach (var row in Store.Instances.Values.Where(i => i.Suspended).ToList())     // the outsider resumes whatever is suspended
@@ -546,8 +607,11 @@ public sealed partial class World
         foreach (var root in Oracle.Trees)      // only the roots: the kernel must reach the rest
             if (Store.Instances.GetValueOrDefault(root) is { } row && (row.Status == InstanceStatus.Running || row.Children is not null))
                 Store.AddAsync(new Message("end-" + root, new InstanceRef(root), Kinds.Terminate, KeepUntil: Time + 3_600_000)).AsTask().Wait();
-        foreach (var (id, _) in Oracle.Https.Where(h => h.Value.Mode == Http.Wait))   // whatever still waits is resumed, with nobody asking
-            if (Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running) Store.AddAsync(new Message("last-" + id, new InstanceRef(id), "resume", KeepUntil: Time + 3_600_000)).AsTask().Wait();
+        foreach (var id in Oracle.Https.Keys)
+            if (Store.Instances.GetValueOrDefault(id) is { Model: "http", Status: InstanceStatus.Running, Retired: false } row &&
+                State<HttpState>(id)?.Mode == Http.Wait)
+                AddDistinct(new Message("last-" + CreationProtocol.Origin(id, row.Creation), new InstanceRef(id), "resume",
+                    KeepUntil: Time + 3_600_000, TargetCreation: row.Creation > 0 ? row.Creation : null));
         var left = Oracle.Waiters.Keys.Where(id => Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running)
             .Select(id => (Id: id, State<WaiterState>(id)!.Waits)).Where(w => w.Waits.Count > 0).ToList();
         foreach (var (id, waits) in left)
@@ -570,6 +634,7 @@ public sealed partial class World
 
     private string? End()
     {
+        ReadLifecycleChanges();
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
         var started = _startedBy.Values.ToList();
@@ -619,11 +684,22 @@ public sealed partial class World
             if (!request.Done && Running(process)) return $"I15 request {request.Id} on {process} for {instance} still waits";
             Count("request " + (request.Answer is not null ? "answered" : request.Error ?? $"ended {request.Status}") + (Oracle.Https[instance].PostedBy < 0 ? ", resume" : ", start"));
         }
+        if (_retiredHttpEnds is not null)
+            foreach (var unpaid in _retiredHttpEnds.Values)
+                if (!AcceptedHostEnd(unpaid.Row, unpaid.Starter))
+                {
+                    var mode = unpaid.Row.State == "null" ? unpaid.Mode : ParsedState<HttpState>(unpaid.Row.State).Mode;
+                    return $"END {unpaid.Row.Id} ({mode}) ended as {unpaid.Row.Status}{(unpaid.Cancel ? " after a cancel" : "")}";
+                }
         foreach (var (id, (mode, ephemeral, posted, cancel)) in Oracle.Https)
         {
             var row = Store.Instances.GetValueOrDefault(id);
-            if (row is null ? posted < 0 : row.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted) && !(cancel && row.Status == InstanceStatus.Cancelled))
-                return $"END {id} ({mode}) ended as {row?.Status.ToString() ?? "no row"}{(cancel ? " after a cancel" : "")}";
+            if (SettledHttpDelete(id, row) || row?.Model != "http" && Oracle.OnlyRefusedHttp(id)) continue;
+            var actualMode = row is { Model: "http" } ? State<HttpState>(id)?.Mode ?? mode : mode;
+            var cancelled = row is { Status: InstanceStatus.Cancelled } && (AcceptedHostEnd(row, _httpStarters?.GetValueOrDefault(id)) ||
+                _cancelledHttp?.GetValueOrDefault(id) is { } applied && row.Creation == applied.Creation && (row.Retired || SameHeader(applied, row)));
+            if (row is null ? posted < 0 : row.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted) && !cancelled)
+                return $"END {id} ({actualMode}) ended as {row?.Status.ToString() ?? "no row"}{(cancel ? " after a cancel" : "")}";
         }
         foreach (var (id, bad) in Oracle.Fragiles)
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad || Oracle.KillerJobs.Contains(id) ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";

@@ -12,6 +12,8 @@ public static class LeaseChecks
         await StarterContextChecks.Run(Check, CaseInsensitive);
         await ChildCompletionChecks.Run(Check);
         await ChildCompletionRecoveryChecks.Run(Check);
+        await HttpAmbientHistoryChecks.Run(Check);
+        await GenerationSamplingChecks.Run(Check);
         await CheckLoadAfterEviction(Check);
         await CheckLoadDuringUnrelatedEvictions(Check);
         await CheckMissingAliasDuringLoad(Check);
@@ -24,6 +26,7 @@ public static class LeaseChecks
         await CheckRecreatedNeighbors(Check);
         await CheckFutureMintedName(Check);
         await CheckMergedSpellings(Check);
+        await CheckStarterAmbient(Check);
         await CheckEphemeralDuringAliasRetry(Check);
         const string id = "0/subject";
         long time = 100;
@@ -438,6 +441,43 @@ public static class LeaseChecks
             check(result.Revision == 2 && Json.Read<CounterState>(result.State).Ids.SequenceEqual(["create", "after"]) &&
                 !owner.Messages.Any(m => m.Id == new Message("after", upper, "add").InboxKey),
                 $"a resident alias miss preserves the real birth and following input: {order}, capacity={capacity}, revision={result.Revision}");
+        }
+    }
+
+    private static async Task CheckStarterAmbient(Action<bool, string> check)
+    {
+        foreach (var alias in new[] { false, true })
+        foreach (var posted in new[] { false, true })
+        {
+            long time = 100;
+            var store = new InMemoryStore(1, () => time);
+            var wire = CaseInsensitive(store);
+            await using var owner = new Worker("ambient", 0, wire, new WorkflowInstance([new Http(0, (_, _) => new((object?)null))]),
+                new() { Monotonic = () => time });
+            await new DurableHost([owner]).ActivateAsync(0);
+            var id = InstanceRef.In(0, "ACTOR"); var route = alias ? InstanceRef.In(0, "actor") : id;
+            owner.Post(new("start", id, Kinds.Start, Start: Http.Spec(Http.Wait) with { Creation = new(1, 0, "g1") }),
+                fresh: true, ambient: Http.StarterAmbient(id, 1, 0));
+            await Pump(owner);
+            var future = new Message("future", route, Kinds.Start, TargetCreation: 2, Due: time + 2000,
+                Start: Http.Spec(Http.Respond) with { Creation = new(2, 1, "g2") });
+            if (posted) owner.Post(future, ambient: Http.StarterAmbient(id, 2, 0));
+            else { await store.AddAsync(future); await owner.PollAsync(); }
+            owner.Post(new("join", route, "resume", TargetCreation: 1));
+            await Pump(owner); time += 350; await Pump(owner);
+            var first = store.Instances[id.Id];
+            owner.Post(new("retire", id, Kinds.Delete, TargetCreation: 1)); await Pump(owner);
+            time += 2100; await owner.PollAsync(); await Pump(owner);
+            var next = store.Instances[id.Id];
+            check(first.Creation == 1 && first.Status == InstanceStatus.Finished &&
+                Json.Read<HttpState>(first.State).Ambient.SequenceEqual(["seen@0", "seen@0", "seen@0"]) &&
+                next.Creation == 2 && Json.Read<HttpState>(next.State).Ambient.SequenceEqual(posted ? ["seen@0"] : Array.Empty<string>()),
+                $"ambient follows the selected creator across a resume and a pending successor, alias={alias}, local successor={posted}");
+        }
+
+        static async Task Pump(Worker owner)
+        {
+            for (var pass = 0; pass < 12; pass++) { await owner.PollAsync(); await owner.RunAsync(); }
         }
     }
 

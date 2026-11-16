@@ -191,14 +191,17 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    internal bool CreationRefused;
     internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
 
     /// <summary>Reply on the consumed delivery's own route when this outcome lands.</summary>
-    public void ReplyTo(Delivery delivery, object? value)
+    public void ReplyTo(Delivery delivery, object? value) => ReplyTo(delivery, value, creationRefusal: false);
+
+    internal void ReplyTo(Delivery delivery, object? value, bool creationRefusal)
     {
         if ((delivery.RequestAddress ?? delivery.Message.ReplyTo) is { } route)
-            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null });
+            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null, RefusedInput = creationRefusal ? delivery.Message : null });
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
@@ -220,6 +223,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
+    internal Message? RefusedInput { get; init; }
 }
 
 /// <summary>
