@@ -3,7 +3,8 @@
 Status: accepted (2026-07-16; ratified through an architect grilling session). §5 amended (accepted 2026-11-12; decisions D-1, D-5, D-6 and
 D-15): expressions no longer need to be deterministic. §2 amended (accepted 2026-11-12; decisions D-10 and
 D-11): null, omitted values and `undefined`. §6 amended (accepted 2026-11-12;
-decisions D-4 and D-14): activities select their outcomes explicitly, several per completion.
+decisions D-4 and D-14): activities select their outcomes explicitly, several per completion. §6 amendment
+proposed (2026-11-16, PR #4325): no multi-outcome declaration; every activity may select several outcomes.
 
 **Amendment accepted (2026-11-12, decision D-2).** The [execution contract](#d-2-execution-contract) below refines
 §3–§6. It is agreed and not yet implemented.
@@ -420,7 +421,7 @@ not publish successful values or outcomes through mutable execution-context `Set
     ordinary business-object properties. This replaces RunJavaScript's routing by return value (recorded in
     `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome, so returning data can no
     longer change the route by accident: "nothing selected" is `Done` (not a silent `Unmatched`), an unknown name
-    faults (not a silent `Unmatched`), and several outcomes are expressible where the node permits them.
+    faults (not a silent `Unmatched`), and several outcomes are expressible.
   - **One set of rules.** A selection follows the same rules whether a C# activity returns it in `Complete` or a script
     returns it in the recognized form.
   - **Ending routing by return value is deliberate.** A plain returned value is data and never selects a route; only the
@@ -452,20 +453,30 @@ not publish successful values or outcomes through mutable execution-context `Set
     per-node fallback setting that turns any invalid name into another outcome is **deferred** until a concrete use case
     justifies it. Dynamic selections stay possible, within the set the designer declared.
 - **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
-- **Several outcomes.** Whether a node's completions may select more than one outcome is resolved at design time with
-  its outcome set, from the activity's static declaration or a provider over the node's configuration (a Switch may
-  in "match any" mode only), and pinned per node.
-  - The runtime rejects a selection of several outcomes on a node that does not permit it.
+- **Several outcomes.** Every activity may select several of its declared outcomes in one completion: a C# activity,
+  a script and a reusable activity alike. Nothing declares it, and nothing pins a multi-outcome flag. An activity that
+  emits outcomes is not responsible for how the paths after it join; that is the join's concern (*Amendment of
+  2026-11-16* below).
   - The connections of every selected outcome are scheduled. When two of them lead to the same node, each is an
     arrival at that node. **By default** its synchronizing implicit join
     ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)) accounts for the arrivals of one activation
     and runs the target once (two arrivals, one run). Loop re-entry and independent activations stay distinct
     executions. This amendment defines no other join behaviour; whether a target may run once per arrival belongs to
     the design of join behaviour as a whole, not to the outcome contract. S-3 carries the detail.
-  - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
-    warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
-    and inspection treat a node that may select several outcomes as an inclusive fork.
+  - The default join behaviour applies, whatever it implies for several selected outcomes. Joins, path analysis and the
+    unordered-write warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md),
+    spec 266) cannot tell from a node's contract whether it selects several outcomes; how they treat the paths after a
+    node is decided by the join initiative ([#4193](https://github.com/elsa-workflows/elsa-foundation/issues/4193)).
   - This replaces the "one outcome per completion" invariant that was proposed before this amendment.
+
+  *Amendment of 2026-11-16 (proposed, spec S-3 implementation).* The amendment of 2026-11-12 pinned, per node, whether
+  a completion may select several outcomes, declared by the activity or a provider over its configuration, and the
+  runtime rejected several outcomes on a node that did not permit it. Implementing S-3 showed that the declaration
+  exists only for the joins and the analyses that follow the node, so authors of C# and reusable activities would set a
+  flag for a concern that is not theirs. The declaration and the runtime check are removed: any activity may select
+  several of its declared outcomes, and the default join applies. Unknown names still fault with `VF-ACT-006`, and
+  `Done` is still never selected with a branch. How joins and analyses should treat a node that may select several
+  outcomes is input to the join initiative (#4193), recorded there on 2026-11-13.
 
 *Effect on Elsa 3 conversion.* These become convertible where conversion is faithful, and are refused otherwise:
 - Elsa 3's `setOutcome` / `setOutcomes`;
@@ -505,7 +516,6 @@ amendment does not itself implement or prove the `Done` to `Done` rule; S-3 does
 - whether publication flags an activity without `Done` that can complete with no selection;
 - the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
-- how a multi-outcome declaration appears in the activity contract and in Studio;
 - the activity-declared catch-all handling (a generic per-node fallback is deferred until a concrete use case);
 - the changes to scheduling and joins, including when the default "two arrivals, one run" applies, and spec 266's
   exclusivity analysis.
@@ -849,6 +859,14 @@ the committed typed `HttpResponseInstruction` after the inline drain instead of 
 `HttpContext` or request-scoped sink into the activity attempt.
 
 ## Alternatives considered
+
+### Declare which activities may select several outcomes (§6, amendment of 2026-11-16)
+
+The amendment of 2026-11-12 pinned a multi-outcome flag per node, from an activity's declaration or a provider over its
+configuration (a Switch in "match any" mode), and the runtime rejected several outcomes elsewhere. It was not kept:
+the flag serves only the joins and analyses after the node, so it puts a join concern on the activity's author, and a
+flag that is always set for reusable activities adds nothing. Keeping it until the join initiative replaces it was the
+fallback, taken only if the default join broke without it; it did not (spec 1208 tests).
 
 ### Keep the Elsa 3 memory model
 
