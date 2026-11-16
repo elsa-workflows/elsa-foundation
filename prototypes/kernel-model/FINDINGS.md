@@ -1911,5 +1911,10 @@ What this round found, beyond COMMIT-SQL.md:
   (`THROW 51010`) and read back by the client; `FenceIgnoresCount` skipped the client's check only, and 3 of 3 fence
   cases passed with it. The mutation now drops both (`8c5e944a5`), and the cases fail as on the other engines. A
   mutation must switch off every copy of the rule it names.
+- **F-B8. With the lease check off, the stress pins the fence on every engine.** `stalelease=1` in `EngineRun` passes
+  `Flaw.IgnoreLeaseDeadline` (the simulation's mutation) to the stress workers, so a stalled owner commits past its local
+  deadline and the fence is asked (F-B2's gap). Clean, the stress holds in both modes on every engine with hundreds of
+  fenced commits; with the fence broken (`unfenced=1`) and with the fence count ignored (`fencecount=0`) it fails in both
+  modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-7` adds the option and these runs.
 
 Not done, unverified: COMMIT-SQL.md's last section.

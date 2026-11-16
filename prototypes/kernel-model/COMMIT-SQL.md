@@ -230,6 +230,20 @@ today).
   had to skip the server's own `IF @@ROWCOUNT <> k THROW` as well as the client's read-back, or the server's check alone
   masked it (3 of 3 fence cases passed): FINDINGS 29 F-B7. `semantic-broken fence --fence-ignores-count` proves nothing
   about the count: `semantic-broken` already breaks the fence's predicate.
+- **The lease check off** (`stalelease=1`: `Flaw.IgnoreLeaseDeadline`, the simulation's mutation, passed by the stress
+  harness): a stalled owner commits past its local deadline and the fence is what refuses it. Under it the stress is a
+  pin on every engine: clean it holds in both modes, and both mutations fail in both modes (FINDINGS 29 F-B8):
+  | Engine | clean, checked | clean, in batch | fence broken, checked | fence broken, in batch | count ignored, checked | count ignored, in batch |
+  |---|---|---|---|---|---|---|
+  | PostgreSQL | holds (281 fenced) | holds (326 fenced) | **fails**, 1,712 violations | **fails**, 1,900 | **fails**, 2,079 | **fails**, 2,211 |
+  | SQL Server (RCSI) | holds (103 fenced) | holds (103 fenced) | held in the one run (449 fenced, 255 definite) | **fails**, 1,154 | **fails**, 2,201 | **fails**, 2,281 |
+  | SQLite | holds (1,090 fenced) | holds (1,095 fenced) | **fails**, 2,133 | **fails**, 1,729 | **fails**, 33 | **fails**, 37 |
+  | MySQL | holds (275 fenced) | holds (269 fenced) | **fails**, 1,990 | **fails**, 1,745 | **fails**, 2,255 | **fails**, 2,011 |
+
+  40 s and 5,000 messages, owned commit, one run per cell (`evidence/b6/`). The one cell that held, SQL Server with the
+  checked fence broken, is a single run: with the lease check off the fence is asked (449 fenced), but the stale commits
+  that got through (255 definite errors) did not reach a checked property in 40 s. The fence-count mutation is caught in
+  every cell.
 - **E1 off** (`--m5`, `m5=1`): changes nothing on the owned commit (3 of 3 fence cases pass on every engine; the stress
   holds with `KeyViolationsAsFence` 0), where EF's path failed 2 of 3 on PostgreSQL. E1 does not arise (above).
 - **The kernel's own gates** (sim, mutations with the 43 and 9 pins, in-memory conformance, graph corpus): unchanged,

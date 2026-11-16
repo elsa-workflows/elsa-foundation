@@ -135,8 +135,10 @@ $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fe
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]   # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch] [isolation=rc]
 $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fence=checked|batch] [wal=0]
-$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail on SQLite; on PostgreSQL it holds since the Worker's lease check (FINDINGS 29, F-B2)
-$EFR x stress <engine> "<same>" [commit=ef|owned] [fencecount=0]                   # the commit writer (default: owned, COMMIT-SQL.md); the owned fence's count ignored: a mutation
+$EFR x stress <engine> "<same>" stalelease=1 [fence=checked|batch]                 # the Worker's lease check off: stale owners reach the fence, and the fence alone keeps the end state (must hold)
+$EFR x stress <engine> "<same>" stalelease=1 unfenced=1 [fence=checked|batch]      # the fence broken on purpose: must fail on every engine (FINDINGS 29 F-B8); without stalelease=1 it holds on PostgreSQL and MySQL (F-B2)
+$EFR x stress <engine> "<same>" stalelease=1 fencecount=0 [fence=checked|batch]    # the owned fence's count ignored: must fail on every engine (F-B8)
+$EFR x stress <engine> "<same>" [commit=ef|owned]                                    # the commit writer (default: owned, COMMIT-SQL.md)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch] [commit=ef|owned]   # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
 $EFR x fence <engine> "<connection;Database=kernel_fence>"                            # the k-row fence over eight partitions, one stale: COMMIT-SQL.md
