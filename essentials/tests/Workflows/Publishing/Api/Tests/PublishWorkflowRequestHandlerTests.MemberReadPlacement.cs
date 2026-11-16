@@ -319,6 +319,165 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(before, await State());
     }
 
+    [Fact]
+    public async Task A_stored_known_schema1_body_stays_deferred_after_the_same_body_is_republished_with_facts()
+    {
+        var shape = new CustomerIdShape();
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
+        var versions = new List<ActivityDefinitionVersion> { _writeLineActivity, _sequenceActivity, CustomerProducerVersion };
+        var versionStore = new FakeActivityVersionStore(versions);
+        var publications = new DefaultPublications();
+        var templates = new DefaultTemplates();
+        var sources = new List<WorkflowExecutableSourceReference>();
+        foreach (var (dependency, root) in new[]
+                 {
+                     (_writeLineActivity, Node("write", Text("body"))),
+                     (CustomerProducerVersion, new ActivityNode("produce", CustomerProducerVersion.Id, [], [])),
+                     (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))]))
+                 })
+            await PublishAuthorableAsync(dependency, root, versionStore, registry, publications, templates, sources);
+        using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
+        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()),
+            services.GetRequiredService<IServiceScopeFactory>());
+        var definition = new ActivityDefinition { Id = "legacy-upgrade-definition", ActivityTypeKey = "legacy-upgrade-body", Category = "Test" };
+        var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
+        var body = BodySequence("body", [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", BodyRead(null))]);
+        var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
+        {
+            rootActivity = body, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var authoredBytes = manifest.Payload.GetRawText();
+        var known = await shape.DescribeResultAsync(CustomerProducerVersion, "$result", ["customerId"], new());
+        Assert.Equal(ActivitySerializedShapeState.Known, known!.State);
+        Assert.Equal(new TypeReference("String"), known.Type);
+        Assert.Equal("elsa.activity-value-json/1", known.ProfileRevision);
+
+        // Explicit valid legacy fixture, not an old compiler emission: compile provider-owned local content,
+        // then store original four-argument schema-1 overlays BEFORE any current fact capture/pin pass.
+        var discovery = await graph.DiscoverDependenciesAsync(new(definition.Id, "legacy-draft", 1, manifest));
+        var resolved = new List<ActivityResolvedDependency>();
+        foreach (var dependency in discovery.Dependencies)
+        {
+            var publication = (await publications.FindAsync(dependency.DefinitionVersionId))!;
+            var catalogVersion = versions.Single(version => version.Id == dependency.DefinitionVersionId);
+            Assert.True(ActivityStructureDesignFacetReader.TryReadSingle(catalogVersion.DesignFacets, out var facet));
+            ActivityStructureContract? structure = null;
+            if (facet is not null) { Assert.True(ActivityStructureDesignFacetReader.TryReadContract(facet, out var parsed)); structure = parsed; }
+            resolved.Add(new(publication.DefinitionId, publication.DefinitionVersionId, publication.Version, publication.TemplateId,
+                publication.TemplateHash, publication.Contract, publication.Lifecycle, publication.TenantId, dependency.OccurrenceId,
+                dependency.NodeOrigin, dependency.ParentOccurrenceId, dependency.ChildSlotName, dependency.ChildIndex, dependency.MemberUsage, structure));
+        }
+        var local = await graph.CompileAsync(new(definition.Id, definition.ActivityTypeKey, "legacy-draft", 1, "1.0.0", contract, manifest, resolved, GraphActivityProvider.Fingerprint));
+        Assert.DoesNotContain(local.Diagnostics, diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        var dependencies = resolved.Select(dependency =>
+        {
+            var occurrence = local.Occurrences.Single(item => item.OccurrenceId == dependency.OccurrenceId);
+            Assert.Null(occurrence.StructureInputs); // This body has no structure-added input contract.
+            var structure = occurrence.Structure is null ? null : new ExecutableActivityStructure(occurrence.Structure.Kind, occurrence.Structure.SchemaVersion, occurrence.Structure.Payload);
+            var overlay = new ExecutableActivityTemplateOccurrenceOverlay("1", occurrence.InputBindings, structure, occurrence.OutputBindings);
+            // Exercise the retained constructor's actual wire, with known source metadata still available.
+            overlay = JsonSerializer.Deserialize<ExecutableActivityTemplateOccurrenceOverlay>(JsonSerializer.Serialize(overlay))!;
+            return new ExecutableActivityTemplateDependency(dependency.DefinitionId, dependency.VersionId, dependency.Version,
+                dependency.TemplateId, dependency.TemplateHash, dependency.OccurrenceId,
+                new ActivityInvocationOrigin(dependency.NodeOrigin.Select(origin =>
+                {
+                    Assert.Equal("AuthoredNode", origin.Kind);
+                    return new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.AuthoredNode, origin.Id);
+                }).ToArray()),
+                dependency.ParentOccurrenceId, dependency.ChildSlotName, dependency.ChildIndex, overlay);
+        }).ToArray();
+        var closed = new List<ExecutableActivityTemplate>();
+        foreach (var dependency in resolved) closed.Add((await templates.FindAsync(dependency.TemplateId))!);
+        var identities = closed.Select(template => new ExecutableActivityTemplateIdentity(template.TemplateId, template.TemplateHash)).Distinct().OrderBy(x => x.TemplateHash, StringComparer.Ordinal).ToArray();
+        var requirements = local.RuntimeRequirements.Concat(closed.SelectMany(template => template.RuntimeRequirements)).Distinct().OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal).ToArray();
+        var drivers = local.StorageDriverRequirements.Concat(closed.SelectMany(template => template.StorageDriverRequirements)).Distinct().OrderBy(x => x.DriverKey, StringComparer.Ordinal).ToArray();
+        var compatibility = new Dictionary<string, string>();
+        var legacyHash = ExecutableActivityTemplateBehaviorHasher.Compute(local.ExecutableRoot!, local.TemplateLocalResumeTargets, dependencies,
+            identities, requirements, drivers, local.ProviderFingerprint, compatibility);
+        var legacy = new ExecutableActivityTemplate("activity-template-" + legacyHash["sha256:".Length..], legacyHash, local.ExecutableRoot!, local.TemplateLocalResumeTargets,
+            dependencies, identities, requirements, local.ProviderFingerprint, compatibility, DateTimeOffset.UnixEpoch, drivers);
+
+        ActivityDefinitionVersion Store(ExecutableActivityTemplate template, string id, string version)
+        {
+            var publication = new ActivityDefinitionVersionPublication
+            {
+                Id = id, DefinitionVersionId = id, DefinitionId = definition.Id, ActivityTypeKey = definition.ActivityTypeKey, Version = version,
+                ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, Contract = contract, Provider = manifest,
+                TemplateId = template.TemplateId, TemplateHash = template.TemplateHash, SourceReferenceId = id + "-source", ProviderFingerprint = template.ProviderFingerprint,
+                DirectDependencyCount = template.DirectDependencies.Count, ClosedTemplateCount = template.ClosedTemplates.Count,
+                RuntimeRequirements = template.RuntimeRequirements.Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion)).ToList(),
+                Lifecycle = ActivityDefinitionVersionLifecycle.Active
+            };
+            publications.Add(publication); templates.Add(template); sources.Add(SourceOf(publication, template));
+            var catalogVersion = new ActivityDefinitionVersion(version, definition.Id)
+            {
+                Id = id, Definition = definition, ProviderKey = manifest.ProviderKey, ProviderSchemaVersion = manifest.SchemaVersion,
+                ConsumerKey = template.Root.Descriptor.ConsumerKey, ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
+                DescriptorPayload = template.Root.Descriptor.Payload, Inputs = []
+            };
+            versions.Add(catalogVersion);
+            return catalogVersion;
+        }
+        var oldVersion = Store(legacy, "legacy-upgrade-v1", "1.0.0");
+        var legacyBytes = JsonSerializer.Serialize(legacy);
+        var oldPublicationBytes = JsonSerializer.Serialize(await publications.FindAsync(oldVersion.Id));
+        var oldSourceBytes = JsonSerializer.Serialize(sources.Single(source => source.DefinitionVersionId == oldVersion.Id));
+        Assert.All(legacy.DirectDependencies, dependency => { Assert.Equal("1", dependency.OccurrenceOverlay!.SchemaVersion); Assert.Null(dependency.OccurrenceOverlay.MemberReads); });
+
+        async Task<RuntimeInputBinding> Place(ActivityDefinitionVersion selected, string suffix)
+        {
+            shape.RefuseQueries = true;
+            var calls = shape.Calls;
+            var workflow = WorkflowVersion(SequenceNode("workflow", [new ActivityNode("placed", selected.Id, [], [])]),
+                "legacy-upgrade-parent-" + suffix, "legacy-upgrade-parent-version-" + suffix, "1.0.0");
+            var store = new FakeVersionStore(workflow);
+            var compiler = TestCompiler.Create(store, versionStore, _activityStructureService, registry, publications, templates,
+                new DefaultSourceReferences([.. sources]), dataSelectionAnalyzer: TestCompiler.SourceAuthority(versionStore, _activityStructureService, memberReads: true,
+                    services => services.AddSingleton<IActivitySerializedShapeSource>(shape)));
+            var publication = await Handler(null, compiler, store).Handle(new PublishWorkflow(workflow.Id), CancellationToken.None);
+            var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
+            Assert.Equal(calls, shape.Calls);
+            Assert.Equal(legacyBytes, JsonSerializer.Serialize(await templates.FindAsync(legacy.TemplateId)));
+            Assert.Equal(oldPublicationBytes, JsonSerializer.Serialize(await publications.FindAsync(oldVersion.Id)));
+            Assert.Equal(oldSourceBytes, JsonSerializer.Serialize(sources.Single(source => source.DefinitionVersionId == oldVersion.Id)));
+            Assert.Equal(authoredBytes, manifest.Payload.GetRawText());
+            return Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.InputBindings.Values.Any(binding => binding.Source == RuntimeInputBindingSource.ActivityResultMember)).InputBindings["Text"];
+        }
+        var beforeUpgrade = await Place(oldVersion, "old-before");
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, beforeUpgrade.Selection!.Mode);
+        Assert.Null(beforeUpgrade.ConversionPlan);
+        shape.RefuseQueries = false;
+        var beforeRepublishQueries = shape.Calls;
+        var coordinator = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([graph]), new ActivityTemplateDependencyDiscovererRegistry([graph]),
+            publications, versionStore, templates, new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [graph],
+            TestCompiler.SourceAuthority(versionStore, _activityStructureService, memberReads: true, services => services.AddSingleton<IActivitySerializedShapeSource>(shape)), _activityStructureService);
+        var compiled = await coordinator.CompileAsync(new(definition, new ActivityTemplateCandidate("ActivityDraft", "same-body-draft", 2, contract, manifest), "legacy-upgrade-v2", "1.1.0", 0));
+        Assert.True(compiled.IsSuccessful, string.Join("; ", compiled.Diagnostics.Select(diagnostic => diagnostic.Code + ": " + diagnostic.Message)));
+        var current = compiled.Template!;
+        Assert.True(shape.Calls > beforeRepublishQueries);
+        Assert.Equal(legacy.ProviderFingerprint, current.ProviderFingerprint);
+        var currentVersion = Store(current, "legacy-upgrade-v2", "1.1.0");
+        Assert.Equal(oldVersion.DefinitionId, currentVersion.DefinitionId);
+        Assert.Equal(oldVersion.Definition.ActivityTypeKey, currentVersion.Definition.ActivityTypeKey);
+        Assert.NotEqual(oldVersion.Id, currentVersion.Id);
+        Assert.NotEqual((await publications.FindAsync(oldVersion.Id))!.SourceReferenceId, (await publications.FindAsync(currentVersion.Id))!.SourceReferenceId);
+        Assert.NotEqual(legacy.TemplateId, current.TemplateId);
+        Assert.NotEqual(legacy.TemplateHash, current.TemplateHash);
+        var reader = Assert.Single(current.DirectDependencies, dependency => dependency.OccurrenceId == "reader").OccurrenceOverlay!;
+        Assert.Equal("2", reader.SchemaVersion);
+        Assert.Equal(RuntimeReadSelectionMode.Known, Assert.Single(reader.MemberReads!).Value.Selection.Mode);
+        var upgraded = await Place(currentVersion, "new");
+        Assert.Equal(RuntimeReadSelectionMode.Known, upgraded.Selection!.Mode);
+        Assert.Equal("String", upgraded.Selection.SelectedType!.Alias);
+        Assert.Equal(ValueConversionOperation.Identity, upgraded.ConversionPlan!.Operation);
+        var retained = await Place(oldVersion, "old-after");
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, retained.Selection!.Mode);
+        Assert.Null(retained.ConversionPlan);
+        Assert.Equal(legacyHash, ExecutableActivityTemplateBehaviorHasher.Compute(legacy.Root, legacy.ResumeTargets, legacy.DirectDependencies, legacy.ClosedTemplates,
+            legacy.RuntimeRequirements, legacy.StorageDriverRequirements, legacy.ProviderFingerprint, legacy.CompatibilityMetadata));
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {

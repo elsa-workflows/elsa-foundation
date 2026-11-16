@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -73,20 +74,65 @@ public sealed class MemberReadSelectionPinnerTests
     public void Occurrence_pinning_uses_explicit_identity_and_never_enters_nested_children()
     {
         var original = Tree();
+        string[] segments = ["address", "a.b", ""];
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            isSensitive: true, requiresEncryption: true, redactionMode: "Full", retentionPolicy: "P7D",
+            metadata: new Dictionary<string, string> { ["policy.owner"] = "kept" });
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("String", CollectionKind.List), policy,
+            RuntimeInputBindingSource.ActivityResultMember, new RuntimeReadSelection(1, segments, RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new RuntimeActivityResultReference("producer", "$result", null, isOptional: true),
+            metadata: new Dictionary<string, string> { ["input.owner"] = "kept" });
         var root = new ExecutableNode("placed-root", "dependency-authored-id", "test", "1", original.Descriptor,
-            Consumer(original).InputBindings, original.OutputCaptures, original.Metadata, childSlots: original.ChildSlots);
-        var read = new ExecutableActivityTemplateMemberRead(new("producer", "$result", null),
-            new(1, Segments, RuntimeReadSelectionMode.Known, new("String", CollectionKind.List), true, true,
-                ValueRepresentation.StructuredValue, "elsa.activity-value-json/1"));
-        var pinned = MemberReadSelectionPinner.PinOccurrence(root, "body-reader", new Dictionary<string, ExecutableActivityTemplateMemberRead> { ["value"] = read });
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                ["value"] = binding,
+                ["scope"] = new("scope", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.VariableRead, variable: new RuntimeVariableReference("local", PlacedReferenceRemapper.LegacyGraphScopeId))
+            }, original.OutputCaptures, original.Metadata, childSlots: original.ChildSlots);
+        ArgumentState[] arguments = [new("value", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        {
+            producerNodeId = "producer", projectionKey = "$result", isOptional = true, memberPath = segments
+        }), "ActivityResultMember"), null, null, null, null)];
+        // These are the effective flags already composed by the shape owner from optional/nullable prefixes.
+        var fact = new ActivityDataMemberReadFacts("body-reader/inputs/value", "producer", "$result", [.. segments], true,
+            new TypeReference("String", CollectionKind.List), true, true, ValueRepresentation.StructuredValue, "elsa.activity-value-json/1");
+        var originalBytes = JsonSerializer.Serialize(new { root, arguments, fact });
+        var reads = MemberReadSelectionPinner.CaptureOccurrence("body-reader", arguments, [fact]);
+        var capturedBytes = JsonSerializer.Serialize(reads);
+        var pinned = MemberReadSelectionPinner.PinOccurrence(root, "body-reader", reads);
+        var remapped = PlacedReferenceRemapper.Remap(pinned,
+            new Dictionary<string, string> { ["producer"] = "placed-producer" }, "placed-graph-scope");
+        var selected = remapped.InputBindings["value"];
         Assert.Equal("dependency-authored-id", pinned.AuthoredActivityId);
-        Assert.Equal(RuntimeReadSelectionMode.Known, pinned.InputBindings["value"].Selection!.Mode);
-        Assert.Equal(CollectionKind.List, pinned.InputBindings["value"].Selection!.SelectedType!.CollectionKind);
-        Assert.True(pinned.InputBindings["value"].Selection!.MayBeAbsent);
-        Assert.True(pinned.InputBindings["value"].Selection!.MayBeNull);
+        Assert.Equal("dependency-authored-id", remapped.AuthoredActivityId);
+        Assert.Equal(RuntimeReadSelectionMode.Known, selected.Selection!.Mode);
+        Assert.Equal(new ValueTypeDescriptor("String", CollectionKind.List), selected.Selection.SelectedType);
+        Assert.True(selected.Selection.MayBeAbsent);
+        Assert.True(selected.Selection.MayBeNull);
+        Assert.Equal(ValueRepresentation.StructuredValue, selected.Selection.Representation);
+        Assert.Equal("elsa.activity-value-json/1", selected.Selection.ProfileRevision);
+        Assert.Equal(segments, selected.Selection.Segments);
+        Assert.Equal("placed-producer", selected.ActivityResult!.ProducerExecutableNodeId);
+        Assert.True(selected.ActivityResult.IsOptional);
+        Assert.Null(selected.ActivityResult.ProducerScopeId); // A body read stays scope-free; its own graph frame resolves it.
+        Assert.Equal("placed-graph-scope", remapped.InputBindings["scope"].Variable!.DeclaringScopeId);
+        Assert.Same(policy, selected.EffectivePolicy);
+        Assert.Equal(DurableValueLifecycle.Instance, selected.EffectivePolicy.Lifecycle);
+        Assert.Equal(DurableValueStorage.Inline, selected.EffectivePolicy.Storage);
+        Assert.True(selected.EffectivePolicy.IsSensitive);
+        Assert.True(selected.EffectivePolicy.RequiresEncryption);
+        Assert.Equal("Full", selected.EffectivePolicy.RedactionMode);
+        Assert.Equal("P7D", selected.EffectivePolicy.RetentionPolicy);
+        Assert.Equal("kept", selected.EffectivePolicy.Metadata["policy.owner"]);
+        Assert.Equal("kept", selected.Metadata["input.owner"]);
+        Assert.Same(pinned.InputBindings["value"].Selection, selected.Selection);
         Assert.Same(root.ChildSlots.Single(), pinned.ChildSlots.Single());
+        Assert.Same(root.ChildSlots.Single(), remapped.ChildSlots.Single());
         Assert.Equal(RuntimeReadSelectionMode.DeferredFit, Consumer(pinned).InputBindings["value"].Selection!.Mode);
         Assert.Equal(RuntimeReadSelectionMode.DeferredFit, root.InputBindings["value"].Selection!.Mode);
+        Assert.Equal("producer", root.InputBindings["value"].ActivityResult!.ProducerExecutableNodeId);
+        Assert.Equal(originalBytes, JsonSerializer.Serialize(new { root, arguments, fact }));
+        Assert.Equal(capturedBytes, JsonSerializer.Serialize(reads));
     }
 
     [Theory]
