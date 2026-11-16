@@ -56,8 +56,8 @@ capture at phase2000. It contributes safe publication inputs through Core's opti
 projection only when the original final profile promises `StimulusPublicationCommitted`,
 `StimulusRoutingAttemptObserved` and `StimulusRoutingDispositionObserved`. Earlier vocabularies retain
 their original unstamped replay identity. This contribution does not advertise recording support or enable
-a production history module; actual capture/provider/handler qualification follows separately. See the
-[Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
+an expanded admission profile; complete source/admission qualification follows separately. See the
+[Runtime extension catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
 
 The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native
 owner, observation pair and clock. Its existing durable-handler port qualifies that actual chain; the
@@ -66,5 +66,12 @@ source the handler revalidates the canonical physical source and original native
 its attempt. A separate closed disposition reports the actual routing return/failure/capacity shed, without
 claiming a recipient executed. Ambiguous observation writes retry the same immutable event once, never
 the routing effect. Primary and observation failures retain both causes; unchanged unstamped delivery
-uses the existing path. Native source/profile admission qualification and the public history module still
-follow; this handler support does not add a default supported source kind.
+uses the existing path. Native source/profile admission qualification remains separate; this handler
+support does not add a default supported source kind. Canonical source reads precede the shared retained
+source-scope shape check; that check preserves logical tenancy independently of physical partition and
+grants no initial admission or live claim authority.
+
+Current qualification is recorded on [PR #4678](https://github.com/elsa-workflows/elsa-foundation/pull/4678):
+whole Activities891 and Runtime4382 passed with zero skips at the recorded source. Controlled policy/
+observation ports and actual native component controls retain their individual scopes; this is not
+complete publication, restart or Studio acceptance. New independent review remains pending.
