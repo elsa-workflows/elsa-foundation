@@ -1,3 +1,4 @@
+import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
@@ -155,6 +156,7 @@ export function ActivityGraphPublicInterfaceEditor({
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const payload = normalizePayload(value.payload);
   const root = payload.rootActivity;
+  const assignedOutputNames = activityGraphAssignedOutputNames(activityGraphDocumentAdapter.readRoot(value), catalogByVersion);
   const outcomeMappingOptions = useMemo(
     () => getActivityGraphOutcomeMappingOptions(
       root,
@@ -176,8 +178,8 @@ export function ActivityGraphPublicInterfaceEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
 
   useEffect(() => {
@@ -219,10 +221,11 @@ export function ActivityGraphPublicInterfaceEditor({
       <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
       {(!contractSection || contractSection === "outputs") && <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
-        {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
+        {(contract?.outputs ?? []).length > 0 ? <p>Assign outputs in the designer with Set Output, or choose a value here.</p> : null}
         {(contract?.outputs ?? []).length === 0
           ? <p className="wf-muted">Add an output above to connect a value.</p>
           : <WorkflowReferenceAuthoringProvider
+              inputBindingTarget="referenceKey"
               workflowState={workflowState}
               workflowInputs={publicInputs}
               visibleVariables={visibleVariables}
@@ -235,6 +238,7 @@ export function ActivityGraphPublicInterfaceEditor({
                     key={output.referenceKey}
                     output={output}
                     mapping={mapping}
+                    assignedBySetOutput={assignedOutputNames.has(output.name)}
                     expressionDescriptors={expressionState.descriptors}
                     expressionDescriptorStatus={expressionState.status}
                     expressionEditors={expressionEditors}
@@ -404,7 +408,10 @@ export function ActivityGraphImplementationEditor({
     restoreView(view, document) {
       const documentRoot = activityGraphDocumentAdapter.readRoot(document);
       const path = resolveScopeFrames(documentRoot, view.frames, catalogByVersion);
-      const visible = resolveScope(documentRoot, path, catalogByVersion)?.slot.activities.map(node => node.nodeId) ?? [];
+      const restoredScope = resolveScope(documentRoot, path, catalogByVersion);
+      const visible = restoredScope?.slot.mode === "bpmn"
+        ? readBpmnElements(restoredScope.owner).map(element => element.elementId)
+        : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
       const ids = view.selectedNodeIds.filter(id => visible.includes(id));
       const primary = view.primaryNodeId && ids.includes(view.primaryNodeId) ? view.primaryNodeId : ids.at(-1) ?? null;
       pendingHistoryView.current = { frames: path, selectedNodeIds: ids, primaryNodeId: primary };
@@ -467,8 +474,8 @@ export function ActivityGraphImplementationEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
@@ -657,7 +664,7 @@ export function ActivityGraphImplementationEditor({
     const present = isBpmnSlot
       ? nodes.some(node => node.id === selectedNodeId)
       : activities.some(activity => activity.nodeId === selectedNodeId);
-    if (present) return;
+    if (present || pendingDiagnosticFocusRef.current?.target === selectedNodeId) return;
     setSelectedNodeId(null);
   }, [activities, isBpmnSlot, nodes, selectedNodeId]);
 
@@ -682,10 +689,15 @@ export function ActivityGraphImplementationEditor({
       const targetPath = findNodeScopePath(root, nodeId, activity => nodeLabel(activity, catalogByVersion), catalogByVersion);
       if (!targetPath) return;
       event.preventDefault();
+      const targetScope = resolveScope(root, targetPath, catalogByVersion);
+      const selectionId = targetScope?.slot.mode === "bpmn"
+        ? readBpmnElements(targetScope.owner).find(element => element.childNodeId === nodeId)?.elementId
+        : nodeId;
+      if (!selectionId) return;
       setScopePath(targetPath);
-      setSelectedNodeId(nodeId);
+      setSelectedNodeId(selectionId);
       pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
-      pendingDiagnosticFocusRef.current = { target: nodeId, complete: event.detail.complete };
+      pendingDiagnosticFocusRef.current = { target: selectionId, complete: event.detail.complete };
       setDiagnosticFocusVersion(version => version + 1);
     };
     editor.addEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
@@ -901,11 +913,11 @@ export function ActivityGraphImplementationEditor({
       render: () => (
         <>
           {/* A pure BPMN structure element has no bound activity, but is still removable. */}
-          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
+          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions" role="group" aria-label="Selected activity actions">
             {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
-            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowLeft size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Remove</StudioButton>
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
@@ -974,7 +986,8 @@ export function ActivityGraphImplementationEditor({
     />
   ) : null;
 
-  return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
+  return <WorkflowReferenceAuthoringProvider inputBindingTarget="referenceKey" workflowState={workflowState} workflowInputs={publicInputs} visibleVariables={visibleVariables} status="ready">
+  <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
     <GraphAuthoringWorkbench
       resourceKind="activity-definition-graph"
       className="ad-graph-workspace"
@@ -1113,12 +1126,24 @@ export function ActivityGraphImplementationEditor({
         onSelect: setActiveRightPanelId
       }}
     />
-  </div>;
+  </div>
+  </WorkflowReferenceAuthoringProvider>;
 }
 
-function ActivityGraphOutputMappingEditor({
+function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<string, ActivityCatalogItem>): Set<string> {
+  return new Set(getActivityGraphOutputSetters(root, catalog).flatMap(setter => setter.outputName === null ? [] : [setter.outputName]));
+}
+
+// These are the expression syntaxes evaluated by GraphActivity at its completion checkpoint.
+const graphOutputSyntaxes = new Set(["literal", "object", "input", "variable", "javascript"]);
+
+export function ActivityGraphOutputMappingEditor({
   output,
   mapping,
+  assignedBySetOutput,
+  embedded = false,
+  changingSource = true,
+  preserveValue = false,
   expressionDescriptors,
   expressionDescriptorStatus,
   expressionEditors,
@@ -1128,6 +1153,10 @@ function ActivityGraphOutputMappingEditor({
 }: {
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
+  assignedBySetOutput: boolean;
+  embedded?: boolean;
+  changingSource?: boolean;
+  preserveValue?: boolean;
   expressionDescriptors: StudioExpressionDescriptor[];
   expressionDescriptorStatus: "loading" | "ready" | "failed";
   expressionEditors: StudioExpressionEditorContribution[];
@@ -1135,6 +1164,7 @@ function ActivityGraphOutputMappingEditor({
   readOnly: boolean;
   onChange(source: ActivityGraphOutputMapping["source"] | null): void;
 }) {
+  const valueReadOnly = readOnly || preserveValue;
   const descriptor = useMemo<StudioActivityInputDescriptor>(() => ({
     name: output.name,
     referenceKey: output.referenceKey,
@@ -1155,8 +1185,10 @@ function ActivityGraphOutputMappingEditor({
       item.surfaces.inline && item.supports(candidateContext));
     return contribution ? [{ descriptor: expression, contribution }] : [];
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
+  const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
   const currentSyntax = mapping?.source.syntax ?? "";
   const active = available.find(item => item.descriptor.type === currentSyntax);
+  const supportedMapping = graphOutputSyntaxes.has(currentSyntax.toLowerCase());
   const Editor = active?.contribution.surfaces.inline;
   const context = {
     syntax: currentSyntax,
@@ -1168,8 +1200,11 @@ function ActivityGraphOutputMappingEditor({
   };
   const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
 
+  const defaultSource = embedded
+    ? ["Literal", "Input", "Variable"].map(type => supportedSources.find(item => item.descriptor.type === type)).find(Boolean) ?? supportedSources[0]
+    : supportedSources[0];
   const add = () => {
-    const first = available[0];
+    const first = defaultSource;
     if (!first) return;
     const nextContext = { ...context, syntax: first.descriptor.type };
     onChange({
@@ -1178,7 +1213,7 @@ function ActivityGraphOutputMappingEditor({
     });
   };
   const changeSyntax = (syntax: string) => {
-    const next = available.find(item => item.descriptor.type === syntax);
+    const next = supportedSources.find(item => item.descriptor.type === syntax);
     if (!next) return;
     const nextContext = { ...context, syntax };
     onChange({
@@ -1189,31 +1224,34 @@ function ActivityGraphOutputMappingEditor({
   };
 
   return (
-    <article className="ad-graph-output-mapping">
-      <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header>
-      {!mapping ? <>
-        {output.isRequired ? <span role="alert">Choose a value for this required output.</span> : <span className="wf-muted">No value is configured.</span>}
-        <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
+    <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
+      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
+      {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
+      <div data-output-source>{!mapping ? <>
+        {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
+        <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        <StudioField label={<><span>Value source</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField>
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
         {Editor ? <Editor
           descriptor={descriptor}
           syntax={currentSyntax}
           value={mapping.source.value}
-          disabled={readOnly}
+          disabled={valueReadOnly || !supportedMapping}
           context={context}
           onChange={nextValue => onChange({ ...mapping.source, value: nextValue })}
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}
         {diagnostics.map((diagnostic, index) => <span key={`${diagnostic.code ?? "diagnostic"}:${index}`} role={diagnostic.severity === "error" ? "alert" : "status"}>{diagnostic.message}</span>)}
       </>}
-      <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details>
+      </div>
+      {!embedded ? <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details> : null}
       {expressionDescriptorStatus === "loading" ? <span role="status">Loading value sources…</span> : null}
       {expressionDescriptorStatus === "failed" ? <span role="alert">Expression types could not be loaded. Existing mappings remain unchanged.</span> : null}
     </article>
   );
 }
 
-function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
+export function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{
     descriptors: StudioExpressionDescriptor[];
@@ -1242,7 +1280,7 @@ function useActivityGraphExpressionDescriptors(context: StudioActivityDefinition
   };
 }
 
-function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
+export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
   const type = isRecord(input.type) ? input.type : {};
   return {
     ...input,
@@ -1261,7 +1299,7 @@ function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["in
   };
 }
 
-function toVisibleGraphVariable(value: unknown) {
+export function toVisibleGraphVariable(value: unknown) {
   if (!isRecord(value)) return [];
   const referenceKey = typeof value.referenceKey === "string" ? value.referenceKey.trim() : "";
   const name = typeof value.name === "string" ? value.name.trim() : "";
@@ -1285,7 +1323,7 @@ function toVariableEditorRecords(values: unknown[]) {
   });
 }
 
-function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
+export function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
   return toVariableEditorRecords(values).flatMap(value => {
     if (!isRecord(value) ||
         typeof value.referenceKey !== "string" ||

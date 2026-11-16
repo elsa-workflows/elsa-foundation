@@ -348,8 +348,12 @@ it("renders an explicit external integration and submits its nested case-sensiti
 
 it("selects task assignment and form contributions before the generic scalar editor", async () => {
   const registered: StudioActivityPropertyEditorContribution[] = [];
-  const context = { ...api(vi.fn(async (path: string) => path.includes("targets") ? { users: [], groups: [] } : path.includes("forms") ? { items: [] } : task())), featureAreas: { add: vi.fn() }, propertyEditors: { add: (item: StudioActivityPropertyEditorContribution) => registered.push(item) }, userTaskForms: { add: vi.fn() } } as unknown as ElsaStudioModuleApi;
+  const featureArea = vi.fn();
+  const context = { ...api(vi.fn(async (path: string) => path.includes("targets") ? { users: [], groups: [] } : path.includes("forms") ? { items: [] } : task())), featureAreas: { add: featureArea }, propertyEditors: { add: (item: StudioActivityPropertyEditorContribution) => registered.push(item) }, userTaskForms: { add: vi.fn() } } as unknown as ElsaStudioModuleApi;
   register(context);
+  const nav = (featureArea.mock.calls[0][0] as { nav: { items: Array<{ title: string; placement?: string }> } }).nav;
+  expect(nav.items.map(item => item.title)).toEqual(["Inbox", "Forms"]);
+  expect(nav.items.map(item => item.placement)).toEqual(["operate", "operate"]);
   const fallback: StudioActivityPropertyEditorContribution = { id: "generic.scalar", order: 100, supports: () => true, component: () => <input aria-label="Generic scalar" /> };
   for (const hint of ["user-task-user", "user-task-group", "user-task-form"]) {
     const descriptor = { name: "Test", typeName: "String", uiHint: hint }; const propertyContext = { activity: {}, expressionDescriptors: [] };
