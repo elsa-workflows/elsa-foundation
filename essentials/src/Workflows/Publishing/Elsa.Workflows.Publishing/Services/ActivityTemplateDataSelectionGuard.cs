@@ -16,6 +16,7 @@ internal sealed record ActivityTemplateDataSelectionFacts(
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> RequestMembersByConsumer)
 {
     internal IReadOnlyDictionary<(string Consumer, string Input), ActivityTemplateOriginalMemberRead>? OriginalMemberReads { get; init; }
+    internal IReadOnlyDictionary<(string Consumer, string Input, string? Parameter), ActivityTemplateOriginalResultRead>? OriginalResultReads { get; init; }
 }
 
 internal sealed record ActivityTemplateOriginalMemberRead(
@@ -33,7 +34,7 @@ internal static class ActivityTemplateDataSelectionGuard
     {
         ArgumentNullException.ThrowIfNull(facts);
         Validate(root, [], hasSourceAnalysis, facts.VariableDeclarations, facts.RequestMembersByConsumer,
-            facts.VisibleVariableScopesByConsumer, facts.OriginalMemberReads);
+            facts.VisibleVariableScopesByConsumer, facts.OriginalMemberReads, facts.OriginalResultReads);
     }
 
     // Only original compilation calls this: dependencies are exact immutable templates, not placed nodes.
@@ -104,12 +105,15 @@ internal static class ActivityTemplateDataSelectionGuard
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? variableDeclarations = null,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? requestMembersByConsumer = null,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? visibleVariableScopesByConsumer = null,
-        IReadOnlyDictionary<(string Consumer, string Input), ActivityTemplateOriginalMemberRead>? originalMemberReads = null)
+        IReadOnlyDictionary<(string Consumer, string Input), ActivityTemplateOriginalMemberRead>? originalMemberReads = null,
+        IReadOnlyDictionary<(string Consumer, string Input, string? Parameter), ActivityTemplateOriginalResultRead>? originalResultReads = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(publicRequestMembers);
         var errors = new List<ValidationError>();
         var members = publicRequestMembers.ToArray();
+        var originalResultsByInput = originalResultReads?.GroupBy(read => (read.Key.Consumer, read.Key.Input))
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var nodes = root.DescendantsAndSelf().ToArray();
         var byId = nodes.GroupBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
@@ -121,6 +125,12 @@ internal static class ActivityTemplateDataSelectionGuard
         foreach (var binding in node.InputBindings.Values)
         {
             var path = $"{node.AuthoredActivityId}/inputs/{binding.InputKey}";
+            if (originalResultsByInput is not null && originalResultsByInput.TryGetValue((node.ExecutableNodeId, binding.InputKey), out var originals) &&
+                originals.Any(read => !ActivityTemplateOriginalResultReadFacts.Matches(binding, read.Key.Parameter, read.Value.Source)))
+            {
+                errors.Add(new(path, "ActivityDataSelection/ResultContractMismatch", "The compiled result read differs from its exact original authored read."));
+                continue;
+            }
             if (originalMemberReads is not null && originalMemberReads.TryGetValue((node.ExecutableNodeId, binding.InputKey), out var owned) &&
                 !MatchesOriginalRead(binding, owned))
             {
@@ -135,7 +145,7 @@ internal static class ActivityTemplateDataSelectionGuard
                 Result(result.ProducerExecutableNodeId, result.ProjectionKey, path, node.ExecutableNodeId, binding);
             if (binding.Expression is null)
                 continue;
-            foreach (var parameter in binding.Expression.Parameters.Values)
+            foreach (var (parameterKey, parameter) in binding.Expression.Parameters)
                 switch (parameter)
                 {
                     case WorkflowRequestExpressionParameterBinding parameterRequest:
@@ -145,7 +155,7 @@ internal static class ActivityTemplateDataSelectionGuard
                         Variable(parameterVariable.DeclaringScopeNodeId, parameterVariable.VariableKey, node.ExecutableNodeId, path);
                         break;
                     case ActivityResultExpressionParameterBinding parameterResult:
-                        Result(parameterResult.ProducerNodeId, parameterResult.ProjectionKey, path);
+                        Result(parameterResult.ProducerNodeId, parameterResult.ProjectionKey, path, node.ExecutableNodeId, binding, parameterKey);
                         break;
                 }
         }
@@ -161,12 +171,22 @@ internal static class ActivityTemplateDataSelectionGuard
                 errors.Add(new(path, "ActivityDataSelection/InputUnknown", "The compiled read does not name one declared public activity input."));
         }
 
-        void Result(string producerId, string projectionKey, string path, string? consumer = null, RuntimeInputBinding? binding = null)
+        void Result(string producerId, string projectionKey, string path, string? consumer = null, RuntimeInputBinding? binding = null, string? parameter = null)
         {
             Elsa.Activities.Runtime.Core.Models.ActivityResultContract? result;
             // Dependency occurrence IDs and provider-local executable IDs are different namespaces.
             // A bound original read selects its exact dependency even when the two ID texts collide.
-            if (consumer is not null && binding is not null && originalMemberReads is not null &&
+            if (consumer is not null && binding is not null && originalResultReads is not null &&
+                originalResultReads.TryGetValue((consumer, binding.InputKey, parameter), out var originalResult))
+            {
+                result = originalResult.ProducerResult;
+                if (result is null)
+                {
+                    errors.Add(new(path, "ActivityDataSelection/ProducerUnknown", "The original result read does not name one exact immutable dependency producer."));
+                    return;
+                }
+            }
+            else if (parameter is null && consumer is not null && binding is not null && originalMemberReads is not null &&
                 originalMemberReads.TryGetValue((consumer, binding.InputKey), out var original))
             {
                 result = original.ProducerResult;

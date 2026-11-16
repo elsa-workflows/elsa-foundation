@@ -279,9 +279,11 @@ public sealed class ActivityTemplateCompiler(
         if (compilation.ExecutableRoot is not null)
         {
             var readFacts = ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(compilation.ExecutableRoot,
-                request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures) with
+                request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures, compilation.Occurrences) with
             {
                 OriginalMemberReads = ActivityTemplateDataSelectionGuard.DescribeOriginalMemberReads(compilation.ExecutableRoot,
+                    document, sourceAnalysis, resolved, loadedTemplates, activityStructures),
+                OriginalResultReads = ActivityTemplateOriginalResultReadFacts.Describe(compilation.ExecutableRoot,
                     document, sourceAnalysis, resolved, loadedTemplates, activityStructures)
             };
             ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected, readFacts);
