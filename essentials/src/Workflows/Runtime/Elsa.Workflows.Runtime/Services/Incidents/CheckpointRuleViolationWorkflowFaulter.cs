@@ -37,8 +37,8 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 /// dispatch. A dispatched child is therefore faulted into existence from its start command, which still carries the
 /// execution's whole identity. That is deliberately the same terminal shape a child with accepted state gets, so the
 /// ordinary enrichers project the dispatch and the parent-resume intent exactly as they do for a child's business fault,
-/// and nothing new has to know about refusals. Only a start that declares a parent is synthesized this way; a root start
-/// reports its refusal to its caller and gains nothing from a durable execution that never ran.
+/// and nothing new has to know about refusals. A legacy root start reports its refusal to its caller. An explicitly
+/// admitted captured root retains a fault boundary for diagnostics without asserting that the workflow executed.
 /// </para>
 /// <para>
 /// When the fault commit itself fails, that failure is thrown, so an execution that could not be faulted is never
@@ -115,7 +115,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
         if (stored is { } workflow && workflow.Status.IsTerminal())
             return;
 
-        var faultable = stored ?? SynthesizeDispatchedStart(envelope, workflowExecutionId, occurredAt);
+        var faultable = stored ?? SynthesizeAdmittedStart(envelope, workflowExecutionId, occurredAt);
         if (faultable is null)
             return;
 
@@ -132,24 +132,23 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
 
     /// <summary>
     /// The execution a refused first commit would have created, read back from the start command that carried it. Only a
-    /// start that declares a parent qualifies: it is the case whose refusal has nowhere else to go, and the payload carries
-    /// every field a dispatch is matched on, so the synthesized child cannot drift from the dispatch that is waiting on it.
-    /// A root start reports its refusal to its caller.
+    /// start that declares a parent retains its existing dispatch-capability gate. A root qualifies only when its actual
+    /// start payload pins a known enabled final history profile; legacy/unknown/disabled starts retain their old behavior.
+    /// The payload carries the actual identity; this never substitutes content from the refused checkpoint.
     /// </summary>
-    private WorkflowExecutionState? SynthesizeDispatchedStart(
+    private WorkflowExecutionState? SynthesizeAdmittedStart(
         WorkflowExecutionCommandEnvelope? envelope,
         string workflowExecutionId,
         DateTimeOffset occurredAt)
     {
-        // Leave a store that cannot project the dispatch on the path it already had (see CanFaultDispatchedChild).
-        if (!StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore))
-            return null;
-
         var execution = StartCommandExecution.Read(envelope, workflowExecutionId, occurredAt, exception => _logger.LogWarning(
             exception,
             "Workflow execution {WorkflowExecutionId} could not be faulted from its start command because the command payload could not be read; its refusal stays with the start's delivery result",
             workflowExecutionId));
-        return execution?.ParentWorkflowExecutionId is null ? null : execution;
+        if (execution is null) return null;
+        if (execution.ParentWorkflowExecutionId is null)
+            return execution.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(execution.HistoryCapturePolicy) ? execution : null;
+        return StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore) ? execution : null;
     }
 
     private static RuntimeCheckpointCommit NewFaultCommit(
@@ -200,7 +199,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [],
-                Metadata: metadata),
+                Metadata: metadata)
+            { HistoryStartsAtAdmission = !hasAcceptedState && workflow.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(workflow.HistoryCapturePolicy) ? true : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(workflowExecutionId, RuntimeStateChangeOperation.Upsert, faulted, metadata),
                 scheduler: null,
