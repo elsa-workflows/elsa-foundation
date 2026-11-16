@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefCallback } from "react";
 import {
   collapsedSidePanelWidth,
@@ -42,6 +42,7 @@ export interface AdaptiveSidePanelLayout {
   paletteCollapsed: boolean;
   inspectorCollapsed: boolean;
   autoCollapsePalette: boolean;
+  phoneLayout: boolean;
 }
 
 export type SidePanelEditorBodyStyle = React.CSSProperties & {
@@ -52,7 +53,8 @@ export type SidePanelEditorBodyStyle = React.CSSProperties & {
 /**
  * Resolves rendered panel sizes from the available workbench width without changing the saved
  * user preferences. When both panels no longer fit at their minimum widths, the activity palette
- * becomes a rail first so that the inspector remains available for editing. Hosts without a
+ * becomes a rail first. On phones, both become rails until a tool is explicitly opened,
+ * retaining room for the canvas without changing saved preferences. Hosts without a
  * palette allocate that width and its resize handle directly to the canvas and inspector.
  */
 export function resolveAdaptiveSidePanelLayout({
@@ -92,9 +94,12 @@ export function resolveAdaptiveSidePanelLayout({
   const wantsInspector = !inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
   const canFitBothPanels = !palettePresent || !measured || initialPanelSpace >= minPaletteWidth + minInspectorWidth;
   const autoCollapsePalette = measured && wantsPalette && wantsInspector && !canFitBothPanels;
+  const phoneLayout = measured && containerWidth <= 600 && !effectiveMaximizedSidePanel
+    && (autoCollapsePalette || (!palettePresent && wantsInspector && !paletteCollapsed));
   const forcePaletteOpen = autoCollapsePalette && responsiveExpandedSide === "palette";
   const effectivePaletteCollapsed = !wantsPalette || (autoCollapsePalette && !forcePaletteOpen);
-  const effectiveInspectorCollapsed = !wantsInspector || (autoCollapsePalette && forcePaletteOpen);
+  const effectiveInspectorCollapsed = !wantsInspector || (autoCollapsePalette && forcePaletteOpen)
+    || (phoneLayout && responsiveExpandedSide !== "inspector");
 
   if (!measured || effectiveMaximizedSidePanel) {
     return {
@@ -104,7 +109,8 @@ export function resolveAdaptiveSidePanelLayout({
       inspectorMinimumWidth: Math.min(minInspectorWidth, effectiveInspectorCollapsed ? collapsedSidePanelWidth : preferredInspectorWidth),
       paletteCollapsed: effectivePaletteCollapsed,
       inspectorCollapsed: effectiveInspectorCollapsed,
-      autoCollapsePalette
+      autoCollapsePalette,
+      phoneLayout
     };
   }
 
@@ -142,7 +148,8 @@ export function resolveAdaptiveSidePanelLayout({
     inspectorMinimumWidth: Math.min(minInspectorWidth, widths.inspectorWidth),
     paletteCollapsed: effectivePaletteCollapsed,
     inspectorCollapsed: effectiveInspectorCollapsed,
-    autoCollapsePalette
+    autoCollapsePalette,
+    phoneLayout
   };
 }
 
@@ -214,6 +221,7 @@ export function useSidePanelLayout(
   const palettePresent = options.palettePresent ?? true;
   const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const lastMeasuredWidth = useRef(0);
   const [paletteWidth, setPaletteWidth] = useState(() => readStoredNumber(storageKeys.paletteWidth, defaultPaletteWidth, minPaletteWidth, maxPaletteWidth));
   const [inspectorWidth, setInspectorWidth] = useState(() => readStoredNumber(storageKeys.inspectorWidth, defaultInspectorWidth, minInspectorWidth, maxInspectorWidth));
   const [paletteCollapsed, setPaletteCollapsed] = useState(() => readStoredBoolean(storageKeys.paletteCollapsed, false));
@@ -237,10 +245,19 @@ export function useSidePanelLayout(
   useLayoutEffect(() => {
     if (!containerElement) return;
 
-    const measure = () => {
-      const width = Math.round(containerElement.getBoundingClientRect().width);
-      setContainerWidth(Number.isFinite(width) ? width : 0);
+    const applyWidth = (measuredWidth: number) => {
+      const width = Number.isFinite(measuredWidth) ? Math.round(measuredWidth) : 0;
+      if (width === lastMeasuredWidth.current) return;
+      lastMeasuredWidth.current = width;
+      if (width > 0 && width <= 600) {
+        // Keep an actively edited tool mounted when resizing into phone layout.
+        const focused = document.activeElement;
+        if (focused && !containerElement.classList.contains("inspector-collapsed") && containerElement.querySelector(".wf-inspector")?.contains(focused)) setResponsiveExpandedSide("inspector");
+        else if (focused && !containerElement.classList.contains("palette-collapsed") && containerElement.querySelector(".wf-palette")?.contains(focused)) setResponsiveExpandedSide("palette");
+      }
+      setContainerWidth(width);
     };
+    const measure = () => applyWidth(containerElement.getBoundingClientRect().width);
     measure();
 
     if (typeof ResizeObserver === "undefined") {
@@ -251,17 +268,17 @@ export function useSidePanelLayout(
     const observer = new ResizeObserver(entries => {
       const entry = entries[0];
       const width = entry?.contentRect.width ?? containerElement.getBoundingClientRect().width;
-      setContainerWidth(Number.isFinite(width) ? Math.round(width) : 0);
+      applyWidth(width);
     });
     observer.observe(containerElement);
     return () => observer.disconnect();
   }, [containerElement]);
 
   useEffect(() => {
-    if (!adaptiveLayout.autoCollapsePalette && responsiveExpandedSide) {
+    if (containerWidth > 0 && !adaptiveLayout.autoCollapsePalette && !adaptiveLayout.phoneLayout && !maximizedSidePanel && responsiveExpandedSide) {
       setResponsiveExpandedSide(null);
     }
-  }, [adaptiveLayout.autoCollapsePalette, responsiveExpandedSide]);
+  }, [containerWidth, adaptiveLayout.autoCollapsePalette, adaptiveLayout.phoneLayout, maximizedSidePanel, responsiveExpandedSide]);
 
   useEffect(() => {
     writeStoredValue(storageKeys.paletteWidth, String(paletteWidth));
@@ -295,13 +312,18 @@ export function useSidePanelLayout(
   }, [maximizedSidePanel]);
 
   const toggleSidePanelCollapsed = useCallback((side: WorkflowSidePanel) => {
+    if (!palettePresent && adaptiveLayout.phoneLayout && !inspectorCollapsed) {
+      setResponsiveExpandedSide(adaptiveLayout.inspectorCollapsed ? "inspector" : null);
+      setMaximizedSidePanel(null);
+      return;
+    }
     if (adaptiveLayout.autoCollapsePalette && !paletteCollapsed && !inspectorCollapsed) {
       const sideIsAutoCollapsed = side === "palette"
         ? adaptiveLayout.paletteCollapsed
         : adaptiveLayout.inspectorCollapsed;
       if (sideIsAutoCollapsed) {
         setResponsiveExpandedSide(side);
-      } else if (side === "palette") {
+      } else if (side === "palette" || containerWidth <= 600) {
         setResponsiveExpandedSide(null);
       } else {
         setResponsiveExpandedSide(null);
@@ -311,7 +333,7 @@ export function useSidePanelLayout(
       return;
     }
 
-    setResponsiveExpandedSide(null);
+    setResponsiveExpandedSide(containerWidth > 0 && containerWidth <= 600 ? side : null);
     setMaximizedSidePanel(current => current === side ? null : current);
     if (side === "palette") {
       setPaletteCollapsed(current => !current);
@@ -322,12 +344,15 @@ export function useSidePanelLayout(
     adaptiveLayout.autoCollapsePalette,
     adaptiveLayout.inspectorCollapsed,
     adaptiveLayout.paletteCollapsed,
+    adaptiveLayout.phoneLayout,
+    palettePresent,
+    containerWidth,
     inspectorCollapsed,
     paletteCollapsed
   ]);
 
   const toggleSidePanelMaximized = useCallback((side: WorkflowSidePanel) => {
-    setResponsiveExpandedSide(null);
+    setResponsiveExpandedSide(side);
     if (side === "palette") {
       setPaletteCollapsed(false);
     } else {

@@ -33,7 +33,7 @@ import {
   leafNode,
   writeLine
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { collectActivityNodeIds, createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
@@ -297,7 +297,7 @@ function ActivityDuplicateEditorFixtureContent() {
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
-        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" initialHistorySearch="?view=diagram" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
+        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
           : <WorkflowEditor
               context={context}
@@ -490,7 +490,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
         if (runCanvas && url === "/runtime/workflows/instances/editor-execution") return {
           instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", definitionId: "definition-1", definitionVersionId: "draft-1",
             createdAt: "2026-10-27T10:00:00Z", status: live?.status ?? "Completed", activityCount: 3 },
-          activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
+          activities: new URLSearchParams(window.location.search).has("timeline-entries") ? observedRecords() : [],
+          incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
           artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",

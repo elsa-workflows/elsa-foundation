@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
@@ -27,7 +28,7 @@ export function CompensationTargetEditor({ descriptor, value, disabled, context,
 
   return (
     <div className="wf-compensation-target">
-      <select
+      <StudioField label={descriptor.displayName || descriptor.name}><select
         aria-label={descriptor.displayName || descriptor.name}
         aria-describedby={problem ? messageId : undefined}
         aria-invalid={problem ? true : undefined}
@@ -43,7 +44,7 @@ export function CompensationTargetEditor({ descriptor, value, disabled, context,
         ))}
         {!scopes && target ? <option value={target}>{target}</option> : null}
         {!known ? <option value={target}>{target} (not an enclosing scope)</option> : null}
-      </select>
+      </select></StudioField>
       {problem ? (
         <p className="wf-compensation-target-problem" id={messageId} role="status">
           <AlertTriangle size={12} aria-hidden="true" /> {problem}

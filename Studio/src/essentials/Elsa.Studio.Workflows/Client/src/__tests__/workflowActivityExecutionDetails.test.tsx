@@ -1,3 +1,4 @@
+import { setNotifications } from "../workflow-editor/notifications";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -60,6 +61,7 @@ let active: { root: Root; container: HTMLElement } | null = null;
 let restoreClipboard: (() => void) | null = null;
 
 afterEach(() => {
+  notifications.notify.mockClear();
   if (active) {
     flushSync(() => active!.root.unmount());
     active.container.remove();
@@ -244,6 +246,8 @@ function valueEvidence(overrides: Partial<ActivityExecutionInspectionValueSnapsh
   };
 }
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
+setNotifications(notifications);
 describe("WorkflowActivityExecutionDetails", () => {
   it("uses projected incident counts and falls back only to available legacy IDs", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
@@ -275,7 +279,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     for (const [summary, expected] of cases) {
       rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
-      expect(metadataValue(container, "Current bookmarks")).toBe(expected);
+      expect(metadataValue(container, "Bookmarks")).toBe(expected);
     }
   });
 
@@ -1274,11 +1278,16 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.querySelectorAll(".wf-copy-button")).toHaveLength(10);
 
     const executionIdCopy = container.querySelector<HTMLButtonElement>("[aria-label='Copy activity execution ID']")!;
+    writeText.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+    executionIdCopy.click();
+    await waitFor(() => expect(container.querySelector(".wf-copy-status")?.textContent).toContain("Could not copy activity execution ID."));
+    expect(notifications.notify).not.toHaveBeenCalled();
     executionIdCopy.click();
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith("ae-1");
-      expect(overview.querySelector("[role=status]")?.textContent).toBe("Copied activity execution ID.");
+      expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Copied activity execution ID." });
+      expect(overview.querySelector(".wf-copy-status")).toBeNull();
     });
   });
 
@@ -1792,17 +1801,4 @@ describe("buildInstanceCanvas", () => {
       domAttributes: { "aria-pressed": false }
     });
   });
-});
-
-
-it("keeps captured values behind an explicit Data view while an activity journal is being inspected", async () => {
-  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({ name: "Private input preview", captureMode: "DiagnosticSnapshot", accessState: "visible", snapshot: { kind: "string", preview: "permitted preview", length: 17, truncated: false } })]));
-  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="journal" />);
-  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
-  expect(container.textContent).not.toContain("Private input preview"); expect(container.textContent).not.toContain("permitted preview");
-  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
-  const data = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(tab => tab.textContent === "Data");
-  flushSync(() => data!.click());
-  await vi.waitFor(() => expect(container.textContent).toContain("Private input preview"));
-  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
