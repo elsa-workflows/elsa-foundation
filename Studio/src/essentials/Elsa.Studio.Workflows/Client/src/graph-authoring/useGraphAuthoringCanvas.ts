@@ -1,3 +1,4 @@
+import type { GraphAuthoringView } from "./GraphAuthoringView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyEdgeChanges,
@@ -35,6 +36,8 @@ export function useGraphAuthoringCanvas<TDocument>({
   reconcileDocument,
   documentSignature = stableSignature,
   onChange,
+  captureView,
+  restoreView,
   tryChange
 }: {
   document: TDocument;
@@ -58,9 +61,15 @@ export function useGraphAuthoringCanvas<TDocument>({
   documentSignature?(document: TDocument): string;
   /** Legacy notification; its return value is not a parent acknowledgement. */
   onChange(document: TDocument): void;
+  captureView?(): GraphAuthoringView;
+  restoreView?(view: GraphAuthoringView, document: TDocument): void;
   /** Optional synchronous admission against the exact acknowledged baseline. */
   tryChange?(document: TDocument, expectedDocument: TDocument): boolean;
 }) {
+  const viewHandlersRef = useRef({ captureView, restoreView });
+  viewHandlersRef.current = { captureView, restoreView };
+  type Position = { document: TDocument; view?: GraphAuthoringView };
+  const position = useCallback((source: TDocument): Position => ({ document: source, view: viewHandlersRef.current.captureView?.() }), []);
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const derive = useCallback(
@@ -78,7 +87,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   const [edges, setEdges] = useState(initial.edges);
   const documentRef = useRef(document);
   const emittedSignatureRef = useRef<string | null>(null);
-  const historyRef = useRef(createActivityGraphHistory<TDocument>(resetKey));
+  const historyRef = useRef(createActivityGraphHistory<Position>(resetKey));
   const [, setHistoryVersion] = useState(0);
   const signature = documentSignature(document);
 
@@ -96,7 +105,7 @@ export function useGraphAuthoringCanvas<TDocument>({
       emittedSignatureRef.current = null;
       return;
     }
-    historyRef.current = createActivityGraphHistory<TDocument>(resetKey);
+    historyRef.current = createActivityGraphHistory<Position>(resetKey);
     setHistoryVersion(version => version + 1);
   }, [resetKey, signature]);
 
@@ -105,7 +114,7 @@ export function useGraphAuthoringCanvas<TDocument>({
     const next = reconcileDocument?.(previous, candidate) ?? candidate;
     const model = derive(next);
     const nextSignature = documentSignature(next);
-    const history = record ? recordActivityGraphEdit(historyRef.current, previous) : nextHistory;
+    const history = record ? recordActivityGraphEdit(historyRef.current, position(previous)) : nextHistory;
     const previousEmission = emittedSignatureRef.current;
     const restoreCanvas = () => {
       emittedSignatureRef.current = previousEmission;
@@ -138,7 +147,7 @@ export function useGraphAuthoringCanvas<TDocument>({
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
     return true;
-  }, [derive, documentSignature, onChange, reconcileDocument, tryChange]);
+  }, [derive, documentSignature, onChange, position, reconcileDocument, tryChange]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
@@ -149,16 +158,20 @@ export function useGraphAuthoringCanvas<TDocument>({
   }, [applyModel, edges, emit]);
 
   const undo = useCallback(() => {
-    const step = undoActivityGraph(historyRef.current, documentRef.current);
+    const step = undoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
-    return emit(step.document, false, step.state);
-  }, [emit]);
+    const accepted = emit(step.document.document, false, step.state);
+    if (accepted && step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    return accepted;
+  }, [emit, position]);
 
   const redo = useCallback(() => {
-    const step = redoActivityGraph(historyRef.current, documentRef.current);
+    const step = redoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
-    return emit(step.document, false, step.state);
-  }, [emit]);
+    const accepted = emit(step.document.document, false, step.state);
+    if (accepted && step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    return accepted;
+  }, [emit, position]);
 
   return {
     nodes,

@@ -7,7 +7,7 @@ import {
   normalizeFlowchartStartNode,
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
-import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { bpmnStructureKind } from "./bpmn/bpmnStructure";
 import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -33,7 +33,7 @@ export {
   readFlowchartStartNodeId,
   setFlowchartStartNode
 } from "./flowchartStartNode";
-export { bpmnStructureKind } from "./bpmn/bpmnTypes";
+export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -571,7 +571,8 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
   };
 }
 
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
@@ -1142,7 +1143,11 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
     .filter(edge => edge !== null);
 }
 
+/** Complete terminates the nearest reusable graph boundary, regardless of legacy catalog Done metadata. */
+export const graphBoundaryCompleteTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  if (catalogItem?.activityTypeKey === graphBoundaryCompleteTypeKey) return [];
   // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
   const pinned = readStringList(activity.executableOutcomes);
   if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));

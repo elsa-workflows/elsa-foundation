@@ -1,3 +1,9 @@
+import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
+import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
+import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
+import { NativeBlockCommands } from "./graph-authoring/NativeBlockCommands";
+import { useNativeBlockAuthority } from "./graph-authoring/nativeBlockAuthority";
+import { composeExpressionScopePreservation } from "./graph-authoring/expressionScopePreservation";
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -291,6 +297,7 @@ export function ActivityGraphImplementationEditor({
   readOnly,
   onChange
 }: StudioActivityDefinitionImplementationEditorProps) {
+  const blockAuthority = useNativeBlockAuthority();
   const catalogQuery = useWorkflowActivities(context);
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
@@ -310,6 +317,9 @@ export function ActivityGraphImplementationEditor({
   } | null>(null);
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
+
+  const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
+  const pendingHistoryView = useRef<GraphAuthoringView | null>(null);
 
   const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>, document: typeof value) => {
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
@@ -390,6 +400,17 @@ export function ActivityGraphImplementationEditor({
     applyModel,
     reconcileDocument,
     documentSignature: activityGraphDocumentSignature,
+    captureView: () => structuredClone(historyView.current),
+    restoreView(view, document) {
+      const documentRoot = activityGraphDocumentAdapter.readRoot(document);
+      const path = resolveScopeFrames(documentRoot, view.frames, catalogByVersion);
+      const visible = resolveScope(documentRoot, path, catalogByVersion)?.slot.activities.map(node => node.nodeId) ?? [];
+      const ids = view.selectedNodeIds.filter(id => visible.includes(id));
+      const primary = view.primaryNodeId && ids.includes(view.primaryNodeId) ? view.primaryNodeId : ids.at(-1) ?? null;
+      pendingHistoryView.current = { frames: path, selectedNodeIds: ids, primaryNodeId: primary };
+      setScopePath(path);
+      setSelectedNodeId(primary);
+    },
     onChange
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
@@ -562,6 +583,16 @@ export function ActivityGraphImplementationEditor({
       : undefined,
     resolveRemovedActivityNodeIds
   });
+  historyView.current = { frames: scopeFrames, selectedNodeIds: nodes.filter(node => node.selected).map(node => node.id), primaryNodeId: selectedNodeId };
+  useEffect(() => {
+    const pending = pendingHistoryView.current;
+    if (!pending || JSON.stringify(pending.frames.map(frame => [frame.ownerNodeId, frame.slotId])) !== JSON.stringify(scopeFrames.map(frame => [frame.ownerNodeId, frame.slotId]))) return;
+    if (pending.selectedNodeIds.some(id => !nodes.some(node => node.id === id))) return;
+    pendingHistoryView.current = null;
+    interactions.selectNodes(pending.selectedNodeIds, pending.primaryNodeId);
+    if (pending.primaryNodeId) interactions.queueCanvasNodeFocus(pending.primaryNodeId);
+  }, [interactions, nodes, scopeFrames]);
+
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
 
@@ -957,19 +988,43 @@ export function ActivityGraphImplementationEditor({
       }}
       canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer">
         <ScopeBreadcrumb
-          frames={scopeFrames}
+          frames={presentationScopeFrames(root, scopeFrames, catalogByVersion, value.activityPresentation)}
           onNavigate={nextFrames => {
             setScopePath(nextFrames);
             setSelectedNodeId(null);
           }}
         />
-        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
+        <NativeBlockCommands
+          context={{
+            document: { rootActivity: root, layout: activityGraphLayoutToDesign(value.layout), activityPresentation: value.activityPresentation ?? [] },
+            catalog, scope: scopeFrames, canEdit: !readOnly && blockAuthority?.canEdit === true && !catalogQuery.isPending && !catalogQuery.isError,
+            referenceContext: [contract, Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "rootActivity"))],
+            sourceKey: JSON.stringify([blockAuthority?.sourceKey, value, nodes.filter(node => node.selected).map(node => node.id), selectedNodeId]),
+            expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
+          }}
+          selectedNodeIds={nodes.filter(node => node.selected).map(node => node.id)}
+          createPosition={nextNativeBlockPosition(nodes, selectedNodeId)}
+          validate={async document => blockAuthority ? blockAuthority.validate({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation }) : { state: "unavailable", messages: [] }}
+          apply={(document, selection) => {
+            if (readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+            commitDocument({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation });
+            interactions.selectNodes(selection);
+            if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);
+          }}
+          open={nodeId => {
+            const node = activities.find(item => item.nodeId === nodeId);
+            const child = node && getChildSlots(node, catalogByVersion).find(item => item.property === "activities");
+            if (node && child) enterChildSlot(nodeId, child, slotCrumbLabel(resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), child));
+          }}
+        />
+        <div className="ad-graph-scope-label"><span>{resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(owner.nodeId), ownerCatalogItem, "Root")}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
         {isSequenceSlot ? <SequenceDesigner
           nodes={nodes.filter(node => node.type !== "bpmnElement")}
           selectedNodeId={selectedNodeId}
           readOnly={readOnly}
           canvasRef={interactions.canvasRef}
           onSelect={setSelectedNodeId}
+          onSelectMany={interactions.selectNodes}
           onInsert={interactions.openSequenceInsertMenu}
           onDropActivity={(activityVersionId, index) => {
             const activity = catalogByVersion.get(activityVersionId);
@@ -1013,7 +1068,7 @@ export function ActivityGraphImplementationEditor({
             onDragLeave: interactions.onCanvasDragLeave,
             onDrop: interactions.onCanvasDrop,
             onPaneClick: () => setSelectedNodeId(null),
-            onNodeClick: (_, node) => setSelectedNodeId(node.id),
+            onNodeClick: (_, node) => interactions.inspectSelectedNode(node.id),
             onNodeDragStop: interactions.commitLayout,
             nodesConnectable: interactions.canCreateActivityFromPort,
             nodesDraggable: !readOnly,
