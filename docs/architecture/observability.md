@@ -135,7 +135,10 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
 13 November decision and are therefore decision 2:
 
 1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows marked as kept: a nullable
-   `KeptBy` column on the message row holds the revision of the Park that kept it. Park's commit and every later
+   `KeptBy` column on the message row says "kept by the current Park". An instance has at most one unresolved Park,
+   so the marker needs no Park identity; it carries the Park's first revision, which the `ParkRecord` also keeps, for
+   diagnostics only. The built code can park an already-faulted row again (the `MaxAttempts` check in `Worker.cs`, or a
+   definite commit error), which bumps the revision; that re-park continues the same Park and marks rows the same way. Park's commit and every later
    commit in which the faulted instance consumes an arrival set it in the same update that marks the row done, so it
    costs no statement, only the column (8 bytes where set, a null-bitmap bit elsewhere). Ordinary done markers,
    outside commands the instance handled before the Park and still within their window, have no `KeptBy` and are
@@ -149,7 +152,8 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
    update that sets their ordinary outside-command window; discard; and delete of a parked instance, which gives the
    rows the ordinary window and clears `KeptBy`, or removes them, as the data lifecycle page says. Revisions start
    again for a new creation under the same id, so the rule keeps a later Park of a new run at the same revision from
-   ever finding a predecessor's rows; an ordinary delete then needs nothing extra.
+   ever finding a predecessor's rows; an ordinary delete then needs nothing extra. Every step that reads or clears the
+   marker selects by `Target = :instance AND KeptBy IS NOT NULL`.
 
    A child completion that arrives while parked is kept with the rest, and its entry stays in the parent's child
    registry; today such a notice closes the entry without the model.
@@ -169,13 +173,14 @@ one commit, and calls one new model hook.
   `RestorePlan RestoreWaits(object state, ParkRecord park, IReadOnlySet<string> pendingTimers)`. It returns the
   subscriptions, timers and jobs the model's committed state still waits on. Native, Flowchart and StateMachine each
   implement it.
-- **Checks.** The instance is parked at the expected revision and, per decision 1, recoverable; otherwise the command is
-  refused and the refusal recorded.
+- **Checks.** The instance is parked, its Park's first revision (from the `ParkRecord`, the revision the parked-work
+  read model shows) equals the expected revision, which stays valid across a re-park, and, per decision 1,
+  recoverable; otherwise the command is refused and the refusal recorded.
 - **Subscriptions** were removed by Park and are restored from the plan. A wait that asked for kept events receives the
   events published while it was parked, within their keep window; a wait that did not misses them, as the owner
   decided.
 - **Timers.** The owner reads the instance's inbox rows (one read by target, of pending rows and of rows with
-  `KeptBy` equal to this Park's revision) and passes the ids of timers still pending.
+  `KeptBy` not null) and passes the ids of timers still pending.
   A pending timer stays as it is. A timer that came due while parked and was kept (decision 2a) is restored as its own
   row, below, which arms it with its original id and due time, so it fires at once. A timer whose row is gone
   (decision 2b) is armed again by the plan with its original due time. A timer the Park itself consumed is restored
@@ -183,34 +188,36 @@ one commit, and calls one new model hook.
   poison again. No timer is armed twice.
 - **Jobs.** A job still in the row's jobs with a live ticket keeps it. A kept ticket row is restored like any kept
   delivery, below, with its original id. A job whose ticket is gone (decision 2b, or a ticket the Park consumed under
-  `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation and the recovery's ordinal `n`
-  (`Worker.TicketId` takes the first three today), so it collides with neither the old ticket nor its kept done row.
-  The model never sees the generation: the job context and the `job-finished` result carry the model's own key, and the
-  kernel maps the generation back. A result from the old generation matches no live ticket and is dropped.
+  `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation
+  and the recovery's ordinal `n` (`Worker.TicketId` takes the first three today), so it collides with neither the old
+  ticket nor its kept done row. The model never sees the generation: the job context and the `job-finished` result
+  carry the model's own key, and the kernel maps the generation back. A result from the old generation matches no live
+  ticket and is dropped.
 - **Deliveries are restored, never copied** (under decision 2). Both modes restore every kept arrival from while
-  parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition fence,
-  updates each row to be restored by its key with the predicate `Done AND KeptBy = :park` (the row is still there,
-  still done, and kept by this Park): it clears `Done` and `KeptBy`, resets `Attempts` to 0 and `Trial` to none, sets
-  `Seen` to the current epoch and `KeepUntil` to the ordinary outside-command window from now. In the same commit, the
-  rows this Park kept that recover does not restore (the Park-consumed rows under `resume`) get the ordinary window and
-  a cleared `KeptBy`, by the predicate `KeptBy = :park`, so no row keeps the marker after the Park is resolved. Resetting the poison counters matters: the owner parks any delivery whose
-  attempts reached the threshold (the `MaxAttempts` check in
+  parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition
+  fence, updates each row to be restored by its key with the predicate `Done AND KeptBy IS NOT NULL` (the row is still
+  there, still done, and kept by the current Park): it clears `Done` and `KeptBy`, resets `Attempts` to 0 and `Trial`
+  to none, sets `Seen` to the current epoch and `KeepUntil` to the ordinary outside-command window from now. In the
+  same commit, the rows this Park kept that recover does not restore (the Park-consumed rows under `resume`) get the
+  ordinary window and a cleared `KeptBy`, by the predicate `Target = :instance AND KeptBy IS NOT NULL`, so no row
+  keeps the marker after the Park is resolved. Resetting the poison counters matters: the owner parks any delivery
+  whose attempts reached the threshold (the `MaxAttempts` check in
   [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs)), so a retried poison message or job ticket
   would otherwise park the instance again at once. Each row's update has its count checked; a row that matched nothing
-  (the sweep removed it first) goes on the "could not deliver" list and does not fail the commit. Only rows whose update
-  landed are handed to the instance in memory after the commit, in their original `seq` order, so nothing is in memory
-  that is not on disk (invariant 9). A restored row keeps its id, sender, kind, payload and
-  creations. That matters because the kernel authenticates some kinds: a child completion to a creation-qualified
-  parent must carry a terminal-notice id, `Sender` equal to the finished child and matching creations
-  (`WorkflowInstance.cs`, the `ChildFinished` check), and a copy under a new id would be refused by
-  `CreationProtocol.Refuse` and consumed ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)).
-  Job, meet and publish tickets keep their kernel-issued ids the same way. A restored row is marked done again when
-  consumed, and the sweep removes it after its new window.
+  (the sweep removed it first) goes on the "could not deliver" list and does not fail the commit. Only rows whose
+  update landed are handed to the instance in memory after the commit, in their original `seq` order, so nothing is in
+  memory that is not on disk (invariant 9). A restored row keeps its id, sender, kind, payload and creations. That
+  matters because the kernel authenticates some kinds: a child completion to a creation-qualified parent must carry a
+  terminal-notice id, `Sender` equal to the finished child and matching creations (`WorkflowInstance.cs`, the
+  `ChildFinished` check), and a copy under a new id would be refused by `CreationProtocol.Refuse` and consumed
+  ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)). Job, meet and publish tickets keep
+  their kernel-issued ids the same way. A restored row is marked done again when consumed, and the sweep removes it
+  after its new window.
 - **A store contract change.** Clearing `Done` is a new message transition: today a row goes from pending to seen,
-  trial and done, and never back. The `KeptBy` column is new too, set only by Park and by a parked instance's
-  consuming commits, and cleared on all of a Park's rows by every step that resolves it (recover, discard, delete of
-  the parked instance), under the invariant above. Both are kernel behaviour, and every provider and the store
-  conformance suite need them.
+  trial and done, and never back. The `KeptBy` column is new too, a marker of the current Park, set only by Park and
+  by a parked instance's consuming commits, selected by target, and cleared on all of a Park's rows by every step that
+  resolves it (recover, discard, delete of the parked instance), under the invariant above. Both are kernel behaviour,
+  and every provider and the store conformance suite need them.
 - **Expired kept rows.** A row whose `Parked` window has passed but that the sweep has not yet removed still matches,
   and is restored under the ordinary window set above. The sweep's delete and the restore update meet on the row: the
   one that runs second finds nothing, and the restore's count says which happened. A row the sweep removed goes on the
