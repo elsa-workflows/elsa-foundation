@@ -8,14 +8,15 @@ asks for observability as a contract: trace context on every message, stable met
 parked messages, inboxes and partitions. Release 1 ships trace context and metrics "in a basic form", and its parked-work
 tooling must support inspect, retry and discard
 ([release 1 scope](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)).
-This page proposes the contract, where each part lives in the three layers, and what release 1 builds.
+This page proposes the contract, where each part lives in the three layers, and what release 1 builds. Retry of parked
+work needs an extension of the owner's Park decision; the page marks it and puts it to the owner.
 
 ## Terms
 
 | Term | Meaning on this page |
 |---|---|
-| Park | The owner's decision of 13 November, as built: a fenced commit faults the instance, consumes its deliveries and removes every active subscription, keeping the last committed state, the fault and the configured history. The parent receives the faulted-child notice. |
-| Parked work | A parked instance with the deliveries its Park consumed, until an operator recovers or discards it. |
+| Park | The owner's decision of 13 November, as built: a fenced commit faults the instance, consumes its deliveries and removes every active subscription, keeping the last committed state, the fault and the configured history. The parent receives the faulted-child notice; later arrivals are dropped. |
+| Parked work | A parked instance, with what its Park kept, until an operator recovers or discards it. |
 | Read model | A projection that non-owners read: lists, counts, the run viewer. Layer 3 reads only these and never an owner's rows. |
 | Operator action | A command an authorized person or tool sends to the kernel: a message to an instance, or a host administration call. |
 
@@ -28,7 +29,9 @@ This page proposes the contract, where each part lives in the three layers, and 
   ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md), [ENGINES.md](../../prototypes/kernel-model/ENGINES.md)),
   which shows where each number comes from.
 - **Park**, in `WorkflowInstance.Park` ([WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs);
-  [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), "Park").
+  [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), "Park"). Unrelated jobs already entered keep their tickets and
+  completion path (`RemainingJobs`). A timer not yet due stays a row; when it comes due it is a message to a faulted
+  instance and is dropped.
 - **Control kinds** `kernel.suspend`, `kernel.resume`, `kernel.terminate`, `kernel.delete` (`Kinds` in Messages.cs). The
   actor type handles each alone and in order; no model sees them.
 - **The inputs of projector lag:** the partition position and the projection cursor (`IKernelStore.ProjectedAsync` in
@@ -56,7 +59,7 @@ at every send, so no model or activity has to:
 
 | Span | Parent and links | Attributes |
 |---|---|---|
-| `elsa.kernel.turn` | Parent: the context of the turn's first message in `seq` order. Links: the other messages' contexts, up to 32, with a dropped-link count | actor type, model, definition, instance id, outcome |
+| `elsa.kernel.turn` | Parent: the context of the turn's first message in inbox order. Links: the other messages' contexts, up to 32, with a dropped-link count | actor type, model, definition, instance id, outcome |
 | `elsa.kernel.commit` | A new trace per flush; links to the turns it carries, up to 32 | outcome, instance commits, engine |
 | `elsa.kernel.job` | The turn that started the job | job key, outcome |
 | `elsa.kernel.take`, `elsa.kernel.poll` | Their own short traces | outcome |
@@ -69,23 +72,29 @@ at every send, so no model or activity has to:
   trace. Unsampled turns record nothing extra. Sampling never changes what executes.
 - An ingress adapter may drop context from an untrusted caller and start a fresh trace.
 
-**Storage.** One nullable `trace` column on `message` (the sketch's `headers`). In binary it is 26 bytes (version,
-trace id, span id, flags), in text 55; `tracestate` only when present. A PostgreSQL outside insert writes about 497 B of
-WAL and a message to self about 365 B for its insert and delete
-([WRITES.md](../../prototypes/kernel-model/WRITES.md#the-cost-run-bytes-per-commit-without-chaos)), so the binary form
-adds roughly 5 to 7 % to those rows. That is an estimate; release 1's cost run measures it with the same harness.
+**Storage.** The kernel's context gets its own nullable `trace` column on `message`, in binary: 26 bytes (version,
+trace id, span id, flags) plus a one-byte length header on PostgreSQL, 55 bytes as text; `tracestate` only when present.
+Application headers stay in the sketch's `headers` column, set through the turn contract's send options; this page does
+not change them. PostgreSQL writes a row's bytes again at every tuple rewrite, so the trace column is paid at the insert
+and at each seen or done mark. Against WRITES.md's rows
+([cost run](../../prototypes/kernel-model/WRITES.md#the-cost-run-bytes-per-commit-without-chaos)): a message to self
+(insert and delete, about 365 B) gains about 27 B, 7 %; an outside message kept until its window (about 1.56 kB with
+its marks) gains about 81 B, 5 %. These are estimates; release 1's cost run measures them with the same harness.
 
 ## Metrics
 
 Meter `Elsa.Kernel`, instrument names in Elsa's existing style (`elsa.runtime.admission.*` in
 `RuntimeAdmissionTelemetry.cs`). Attributes are small fixed sets. Instance ids, keys and payloads never become
-attributes; tenant is opt-in with a cap. Per-partition series are opt-in, since 1,024 virtual partitions per gauge is
-too many for most backends; by default a node reports the partitions it owns in aggregate.
+attributes; tenant appears only where a row says so, with a cap on distinct values. A per-partition attribute is
+opt-in, since 1,024 virtual partitions per gauge is too many for most backends; the distribution over partitions is
+reported as a histogram instead.
 
 | Name | Instrument, unit | Meaning | Why |
 |---|---|---|---|
-| `elsa.kernel.inbox.depth` | gauge, {message} | Due, unconsumed messages in the partitions this node owns, as of its last poll and its memory | Backlog, and the bound of question 3 |
+| `elsa.kernel.inbox.depth` | gauge, {message} | Due, unconsumed messages in the partitions this node owns. Exact while a partition's last poll came back short; beyond that, question 3's capped estimate | Backlog |
+| `elsa.kernel.partition.backlog` | histogram, {message} | Each owned virtual partition's due-depth estimate (question 3's `backlog` field), one sample per partition per sample interval; per-partition series opt-in | The bound of question 3, per virtual partition |
 | `elsa.kernel.inbox.oldest_age` | gauge, s | Time since the oldest due, unconsumed message became due | The alerting signal for a stuck or slow partition |
+| `elsa.kernel.admission.refusals` | counter, {request} | Requests refused at admission, by reason and by tenant (capped) | Question 3's refusals, named here as #4705 asks |
 | `elsa.kernel.timer.lateness` | histogram, s | Delivery time minus due time, for timers | Timers are messages; lateness is what users notice |
 | `elsa.kernel.turn.duration` | histogram, s | Wall time of a turn, by actor type, model and outcome (committed, held, parked, threw) | Slow models and activities |
 | `elsa.kernel.commit.duration` | histogram, s | The fenced store call, from send to answer, by outcome (landed, fenced, unknown, transient, definite) | Commit latency, the database's share |
@@ -102,37 +111,63 @@ too many for most backends; by default a node reports the partitions it owns in 
 | `elsa.kernel.jobs.active`, `elsa.kernel.job.duration` | gauge {job}; histogram, s, by outcome | Background jobs in flight and their run time | Job load |
 | `elsa.kernel.instances.loaded` | gauge, {instance} | Instances held in memory | The bound on instances in memory (FINDINGS section 19) |
 
-Question 3's admission controls add their own `elsa.kernel.admission.*` instruments. Gauges are sampled off the turn
-path, once per pass or poll. A counter records what this node saw: a commit whose answer was lost counts as an unknown
-outcome.
+Gauges are sampled off the turn path, once per pass or poll. A counter records what this node saw: a commit whose
+answer was lost counts as an unknown outcome.
 
 ## Operator actions
 
 | Action | How | Release 1 |
 |---|---|---|
-| Inspect parked work | The parked-work read model: instance, actor type, model, definition and version, fault, reason, when, and the deliveries the Park consumed (id, kind, sender, `seq`, size). Payloads need a separate permission | Yes |
-| Retry parked work | A `kernel.recover` message in `retry` mode, naming the deliveries to deliver again | Yes |
-| Recover without retry | `kernel.recover` in `resume` mode: waits restored, nothing delivered again | Yes |
+| Inspect parked work | The parked-work read model: instance, actor type, model, definition and version, fault, reason, when, and what the Park kept (decision 2). Payloads need a separate permission | Yes |
+| Retry parked work | A `kernel.recover` message in `retry` mode | Yes, under decisions 1 and 2 |
+| Recover without retry | `kernel.recover` in `resume` mode: waits restored, nothing delivered again | Yes, under decision 1 |
 | Discard parked work | A `kernel.discard` message | Yes |
-| Inspect an inbox | Pending deliveries of one instance: id, kind, sender, `seq`, due, seen, trial, attempts, size; paged | Metadata only |
+| Inspect an inbox | Pending deliveries of one instance, in delivery order: id, kind, sender, due, state (pending, held or on trial), attempts, size; paged | Metadata only |
 | Suspend, resume, terminate, delete | The built control kinds | Yes |
 | Release a partition, drain a node | Host administration: asks the owner to release, through the runtime | Yes |
-| Force a handover from an unresponsive owner | Host administration: a conditional update that ends the named owner's lease at the expected epoch; the fence then stops any late commit | Later |
+| Force a handover from an unresponsive owner | Host administration: a forced take, a conditional update at the expected owner and epoch that names the new owner and **increments the epoch**, so the old owner's next commit fails the fence. Ending the lease alone would not do: with the fence in the batch, the old owner's next commit at the same epoch would still land and renew its lease | Later |
 
-**Park keeps what a retry needs.** Today Park consumes its deliveries: it deletes them, or marks done those that carry a `keep_until`. Proposed: Park marks them
-done with a `keep_until` set by the parked-work retention (question 2's retention policy owns its length), the same
-columns an outside message uses, so their payloads stay and the sweep removes them later. Park also writes a journal row at every history level, as a delete does, so the
-projector can maintain the parked-work read model even at Minimal history. Neither adds work to a commit that does not
-park.
+### What Park keeps: an extension of the owner's decision
 
-**Recover.** `kernel.recover {operation, expected revision, mode, deliveries}` is handled by the actor type alone, like
-the other control kinds. In one commit it checks that the instance is still parked at that revision, asks the model to
-restore its waits (the owner's decision: explicit recovery restores waits), sets the status back to running and, in
-`retry` mode, sends the selected deliveries again as new messages whose ids derive from the operation id. A wait that
-asked for kept events receives the events published while it was parked, within their keep window; a wait that did
-not misses them, as the owner decided. Kernel tickets (job, meet, publish) are never copied: the model's restore hook
-issues fresh ones, as the kernel refuses an application send of those kinds. Side effects of the retried turn may
-repeat, with the same effect keys.
+Today Park consumes its deliveries (deletes them, or marks done those that carry a `keep_until`), and later arrivals are
+dropped. A retry then has nothing to deliver again: only `resume` is possible. FINDINGS 25.9 records that Park does not
+keep consumed deliveries in a dead-letter queue. Retry of a parked message needs two additions, which **extend** the
+13 November decision and are therefore decision 2:
+
+1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows with a `keep_until` set by the
+   parked-work retention (question 2 sets its length), so their payloads stay and the sweep removes them later.
+2. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
+   Minimal. If [#4707](https://github.com/elsa-workflows/elsa-foundation/pull/4707)'s format item 4 (lifecycle
+   transitions journalled at every level) is adopted, this row is its "ended" entry and adds nothing.
+
+If the extension is adopted, #4707's format item 6 (done markers keep only the id and window) must exempt a parked
+instance's kept deliveries, or a retry finds no payload.
+
+### Recover
+
+`kernel.recover {operation, expected revision, mode, deliveries}` is a control kind: the actor type handles it alone, in
+one commit, and calls one new model hook.
+
+- **The contract gains a hook,** beside `UpgradeState`:
+  `RestorePlan RestoreWaits(object state, ParkRecord park, IReadOnlySet<string> pendingTimers)`. It returns the
+  subscriptions, timers and jobs the model's committed state still waits on. Native, Flowchart and StateMachine each
+  implement it.
+- **Checks.** The instance is parked at the expected revision and, per decision 1, recoverable; otherwise the command is
+  refused and the refusal recorded.
+- **Subscriptions** were removed by Park and are restored from the plan. A wait that asked for kept events receives the
+  events published while it was parked, within their keep window; a wait that did not misses them, as the owner
+  decided.
+- **Timers.** The owner reads the instance's inbox rows (one read by target) and passes the ids of timers still pending.
+  A pending timer stays as it is. A timer whose row is gone (it came due while parked) is armed again with its original
+  due time, so it fires at once when that time has passed. No timer is armed twice.
+- **Jobs.** A job still in the row's jobs with a live ticket keeps it. A job whose ticket is gone starts again under a
+  new key generation (`{key}#r{n}`, `n` the recovery's ordinal), so its ticket id, which `Worker.TicketId` derives from
+  instance, key and creation, collides with neither the old ticket nor its kept done row.
+- **Deliveries** (`retry` mode, under decision 2). The selected kept deliveries and every kept arrival from while parked
+  are sent again in their original order, as new messages whose ids derive from the operation id and the original id.
+  Kernel tickets (job, meet, publish) are never copied: the plan issues fresh ones, as the kernel refuses an application
+  send of those kinds. A result of a job restarted under a new key matches no job and is dropped.
+- **Side effects** of the retried turn may repeat, with the same effect keys.
 
 **Discard** `{operation, expected revision}` deletes the kept deliveries and records the disposition. The instance stays
 faulted, and retention or a delete removes it.
@@ -145,7 +180,7 @@ its principal, reason and outcome.
 ## Read models: how layer 3 stays off partitions
 
 Studio and the operator API depend on the turn contract, the four seams and read models only. They name an instance by
-its `InstanceRef` and never by a partition, position or SQL statement:
+its `InstanceRef` and never see a partition, a position, an epoch, an order key or SQL:
 
 ```csharp
 interface IParkedWork      // read model, written by the projector from Park, recover and discard journal rows
@@ -158,10 +193,18 @@ interface IInboxInspection // delivery seam: rows only, eventually consistent
 {
     ValueTask<Page<PendingDelivery>> PendingAsync(InstanceRef target, PageToken? from, CancellationToken cancellationToken);
 }
+
+record PendingDelivery(string Id, string Kind, string? Sender, DateTimeOffset? Due,
+                       DeliveryState State, int Attempts, int Size);   // State: Pending, Held, OnTrial
 ```
 
-- The provider derives the partition from the `InstanceRef` inside layer 2. Today's `Viewer.ReadAsync` still takes a
-  partition argument; its layer 3 facade drops it.
+- **Ids are opaque to layer 3.** Today an `InstanceRef` id embeds its partition (`3/order-17` in
+  [Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)), and `InstanceRef.Partition` parses it.
+  The contracts package layer 3 builds against exposes no such property: layer 3 compares and stores ids as strings and
+  never parses them; only layer 2 derives a partition from an id.
+- **No order keys or epochs.** A page comes in delivery order; its position travels as an opaque `PageToken`. `seq`,
+  `seen` and `trial` stay in layer 2; inspection reports them as the `State` above.
+- Today's `Viewer.ReadAsync` takes a partition argument; its layer 3 facade drops it.
 - Commands travel through the delivery seam's add, the path every API command takes; their outcome is visible in the
   read models, or through a reply address for a synchronous API call.
 - Each answer says how fresh it is: read models lag the projector, and inbox inspection sees rows only, so messages an
@@ -174,8 +217,8 @@ interface IInboxInspection // delivery seam: rows only, eventually consistent
 | In release 1 | Later |
 |---|---|
 | The `trace` column and propagation on every message; turn, commit and job spans | Trace-horizon tuning per route; richer span attributes |
-| The metric set above, aggregated per node | Per-partition series by default |
-| The parked-work read model; inspect, retry, resume and discard | Bulk actions; incident annotations |
+| The metric set above, aggregated per node, with the partition backlog as a histogram | Per-partition series by default |
+| The parked-work read model; inspect and discard; recover and retry as decisions 1 and 2 settle them | Bulk actions; incident annotations |
 | Inbox inspection, metadata only | Payload inspection in Studio |
 | Release a partition and drain a node | Forced handover from an unresponsive owner |
 
@@ -183,27 +226,39 @@ interface IInboxInspection // delivery seam: rows only, eventually consistent
 
 | Item | Cost | Status |
 |---|---|---|
-| Trace context | 26 to 55 bytes per message row; 16 bytes per sampled journal row | Estimated, unmeasured |
-| Metrics | In memory; gauges come from poll answers and the owner's memory; the parked gauge reads the read model's count | No database work on the hot path |
-| Park keeping its deliveries | A done mark in place of a delete for each consumed delivery, a journal row, and rows kept until the window ends | Only when an instance parks |
-| Recover or discard | One outside add, its seen mark and one commit, plus one read of the kept deliveries | Per operator action |
+| Trace context | About 27 bytes per message row write in binary; 16 bytes per sampled journal row | Estimated, unmeasured |
+| Metrics | In memory, from poll answers and the owner's memory, except the depth beyond a full poll, which reuses question 3's capped count (once per behind virtual partition per sample interval); the parked gauge reads the read model's count | No database work of their own on the hot path |
+| Park keeping its deliveries (decision 2) | A done mark in place of a delete for each consumed delivery and each arrival while parked, a journal row, and rows kept until the window ends | Only when an instance parks |
+| Recover or discard | One outside add, its seen mark and one commit, plus one read of the instance's inbox rows | Per operator action |
 
 ## Not verified
 
 - The whole contract: no trace column, instrument, recovery or inspection exists in the prototype.
-- That restoring waits through a model hook covers every model's waits; Native, StateMachine and Flowchart each need it
-  shown, with kept events in the gap.
+- That `RestoreWaits` covers every model's waits: Native, Flowchart and StateMachine each need it shown, with kept
+  events in the gap, timers that came due while parked, and jobs still in flight.
 - The byte cost of the trace column, against WRITES.md's cost run.
 
 ## Decisions for the owner
 
-### 1. Which instance a recovery continues
+### 1. Whether a parked instance can be recovered, and which instance continues
 
 The parent received the faulted-child notice when its child parked, and may have moved on.
 
 | Option | Behaviour | For | Against |
 |---|---|---|---|
-| **a. In place** | The same instance id and creation continues at its next revision. The parent is not told again; a later completion of the child reaches a parent that no longer registers it, and is consumed and dropped | External references, bookmarks and caller keys keep working; matches "recovery restores waits" | A terminal row becomes running again, which the viewer and retention must show as a new episode |
+| **a. In place** | The same instance id and creation continues at its next revision. The parent is not told again; a later completion of the child reaches a parent that no longer registers it, and is consumed and dropped | External references, bookmarks and caller keys keep working; matches "recovery restores waits" | A terminal row becomes running again, which the viewer and retention must show as a new episode. Spec 1210's recovery contract says reopening the Park row does not implement its continuing-coordinator recovery |
 | b. A linked successor | A new instance starts from the parked state with fresh waits; the parked one stays faulted | Terminal rows stay terminal | Every outside reference to the old id breaks; caller keys need re-binding |
+| c. Refuse recovery of a terminal run | Today's rule: `RetryFaultedActivity` refuses a terminal run or an ended parent ([spec 1210 recovery contract](../../specs/1210-state-machine/contracts/recovery.md)). Parked work offers inspect and discard; "retry" starts a fresh run with the original start input | Nothing terminal ever changes | Release 1's retry becomes a restart; the parked run's progress is lost |
+| d. Intervention without Park | Faults an operator can handle keep the instance Running with a blocking incident, as the native intervention experiment does; Park stays terminal for poison and definite commit errors, with c's rules | Matches spec 1210; parents keep waiting | Covers only faults the model can hold; poison still needs a, b or c |
 
-**Recommendation: a**, with the viewer showing the Park and the recovery as journal entries of the same run.
+**Recommendation: a for parked work, with d for authored faults the model can hold.** The viewer shows the Park and the
+recovery as journal entries of the same run.
+
+### 2. Whether Park keeps what a retry needs
+
+| Option | Behaviour |
+|---|---|
+| **a. Extend Park** as described under "What Park keeps": it keeps consumed deliveries and arrivals while parked as done rows until the parked-work window, and journals at every history level. #4707's format item 6 then exempts a parked instance's kept deliveries | `retry` redelivers the poisoning message and everything that arrived later |
+| b. Keep Park as decided on 13 November | Only `resume` is possible; release 1's "retry" restores waits on the committed state and delivers nothing again |
+
+**Recommendation: a.** It costs nothing on a commit that does not park.
