@@ -51,7 +51,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/5.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/5.1.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -63,6 +63,12 @@ public sealed class GraphActivityProvider(
 
     IReadOnlyList<ActivityProviderDiagnosticDescriptor> IActivityProviderDiagnosticCatalog.DiagnosticDescriptors { get; } =
     [
+        new("activity.graph.set-local-target-invalid", "Set must target a declared variable of an enclosing native body container.",
+            "Choose a body-local variable below this reusable activity's boundary."),
+        new("activity.graph.set-local-invalid", "Set of a body-local variable has an unsupported shape.",
+            "Provide exactly one storable value without child structure or output captures."),
+        new("activity.graph.local-value-invalid", "A body-local value could not be compiled to its declared contract.",
+            "Review the local declaration's type, storage and literal default, and its assignment value."),
         new("activity.graph.set-output-mapping-conflict", "An output has both a mapped value and a Set Output assignment.",
             "Remove the connection in Outputs or remove the Set Output assignment in the designer.", "/outputMappings"),
         new("activity.graph.set-output-unknown", "Set Output targets an output this activity does not declare.",
@@ -220,7 +226,7 @@ public sealed class GraphActivityProvider(
             nodes = EnumerateNodes(graph.RootActivity);
             completeNodes = FindCompleteNodes(nodes, request.ResolvedDirectDependencies);
             ValidateGraph(graph, request.Contract, subject, diagnostics, completeNodes);
-            ValidateDependencies(nodes.Where(x => !x.IsSetOutput).ToArray(), request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateDependencies(nodes.Where(x => !x.IsLocalIntrinsic).ToArray(), request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateBodyReferences(
@@ -245,28 +251,37 @@ public sealed class GraphActivityProvider(
         var descriptorPayload = BuildBoundaryPayload(graph, request.Contract, nodes, directDependencies, completeNodes);
         var runtimeContract = BuildRuntimeContract(request, descriptorPayload);
         var localNodes = new List<ExecutableNode>();
-        if (nodes.Any(x => x.IsSetOutput))
+        var structures = new Dictionary<string, ActivityNodeStructure?>(StringComparer.Ordinal);
+        var needsCompiler = nodes.Any(node => node.IsLocalIntrinsic || activityStructureService.ProjectScopedVariables(node.Activity).Count != 0);
+        using var compilerScope = needsCompiler
+            ? (scopeFactory ?? throw new InvalidOperationException("Compiling graph-local values requires the publishing input binding compiler.")).CreateScope()
+            : null;
+        var compiler = compilerScope?.ServiceProvider.GetRequiredService<IActivityTemplateInputBindingCompiler>();
+        foreach (var node in nodes)
         {
-            using var scope = (scopeFactory ?? throw new InvalidOperationException("Compiling Set Output requires the publishing input binding compiler.")).CreateScope();
-            var compiler = scope.ServiceProvider.GetRequiredService<IActivityTemplateInputBindingCompiler>();
-            foreach (var node in nodes.Where(x => x.IsSetOutput))
+            try
             {
-                var output = request.Contract.Outputs.Single(x => x.Name == ReadLiteralInput(node, WorkflowIntrinsicInputKeys.Name));
-                try
-                {
-                    localNodes.Add(CompileSetOutput(node, output, compiler));
-                }
-                catch (ArgumentException exception)
-                {
-                    diagnostics.Add(Diagnostic("activity.graph.set-output-binding-invalid", exception.Message, subject, node.JsonPointer, node.NodeId));
-                }
+                if (node.IsSetOutput)
+                    localNodes.Add(CompileSetOutput(node, request.Contract.Outputs.Single(output => output.Name == ReadLiteralInput(node, WorkflowIntrinsicInputKeys.Name)), compiler!));
+                else if (node.IsSetVariable)
+                    localNodes.Add(CompileLocalSet(node, LocalVariableTarget(node, nodes)!, graph, nodes, request.Contract, compiler!));
+                else
+                    structures.Add(node.NodeId, CompileBodyStructure(node, compiler));
             }
-            if (diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
-                return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics)));
+            catch (ArgumentException exception)
+            {
+                diagnostics.Add(Diagnostic(node.IsSetOutput ? "activity.graph.set-output-binding-invalid" : "activity.graph.local-value-invalid",
+                    exception.Message, subject, node.JsonPointer, node.NodeId));
+            }
         }
+        if (diagnostics.Any(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error))
+            return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics)));
+        var occupied = nodes.Select(node => node.NodeId).Concat(localNodes.Select(node => node.ExecutableNodeId)).ToHashSet(StringComparer.Ordinal);
+        var boundaryId = "graph-boundary";
+        for (var suffix = 1; occupied.Contains(boundaryId); suffix++) boundaryId = $"graph-boundary:{suffix}";
         var executableRoot = new ExecutableNode(
-            "graph-boundary",
-            "graph-boundary",
+            boundaryId,
+            boundaryId,
             RuntimeConsumerKey,
             RuntimeDescriptorSchemaVersion,
             new RuntimeActivityDescriptor(RuntimeConsumerKey, RuntimeDescriptorSchemaVersion, descriptorPayload),
@@ -284,13 +299,14 @@ public sealed class GraphActivityProvider(
             maximumDepth,
             descriptorBytes,
             0,
-            request.Contract.Inputs.Count + request.Contract.Outputs.Count + graph.Variables.Count);
-        var occurrences = nodes.Where(x => !x.IsSetOutput)
+            request.Contract.Inputs.Count + request.Contract.Outputs.Count + graph.Variables.Count +
+            nodes.Sum(node => activityStructureService.ProjectScopedVariables(node.Activity).Count));
+        var occurrences = nodes.Where(x => !x.IsLocalIntrinsic)
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
                 EffectiveInputArray(node),
-                activityStructureService.CompileExecutableStructure(node.Activity),
+                structures[node.NodeId],
                 // A body node's captures into graph variables; absent when it captures nothing.
                 ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
             { StructureInputs = OptionalInputProjection(node.Activity) })
@@ -324,7 +340,7 @@ public sealed class GraphActivityProvider(
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         if (graph is null)
             return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], ActivityDiagnosticOrderer.Order(diagnostics)));
-        var dependencies = EnumerateNodes(graph.RootActivity).Where(x => !x.IsSetOutput)
+        var dependencies = EnumerateNodes(graph.RootActivity).Where(x => !x.IsLocalIntrinsic)
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(x => new ActivityTemplateDependencyDeclaration(
                 x.ActivityVersionId,
@@ -507,15 +523,15 @@ public sealed class GraphActivityProvider(
                 }
             }
 
-            // Set Output is the engine operation implemented for a closed graph body.
+            // Only boundary output assignment and writes to native body-local frames are supported.
             if (TryGetPropertyIgnoreCase(candidate.Element, "intrinsic", out var intrinsic) &&
                 intrinsic.Value.ValueKind != JsonValueKind.Null &&
-                !(TryReadRootNode(candidate.Element, out var activity) && activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput &&
-                  activity.ActivityVersionId == "elsa.intrinsic.set-output@1"))
+                !(TryReadRootNode(candidate.Element, out var activity) && (activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput && activity.ActivityVersionId == "elsa.intrinsic.set-output@1" ||
+                   activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.Set && activity.ActivityVersionId == "elsa.intrinsic.set@1")))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.intrinsic-unsupported",
-                    "Only Set Output is supported as an engine intrinsic inside a graph activity.",
+                    "Only Set Output and Set of a declared enclosing body-local variable are supported inside a graph activity.",
                     subject,
                     $"{candidate.JsonPointer}/{EscapePointer(intrinsic.Name)}"));
             }
@@ -544,6 +560,19 @@ public sealed class GraphActivityProvider(
                     $"{node.JsonPointer}/nodeId",
                     duplicate.Key));
             }
+        }
+
+        foreach (var node in nodes.Where(node => node.IsSetVariable))
+        {
+            if (LocalVariableTarget(node, nodes) is null)
+                diagnostics.Add(Diagnostic("activity.graph.set-local-target-invalid",
+                    $"Set '{node.NodeId}' must target one declared variable of an enclosing native body container, below this graph boundary.",
+                    subject, $"{node.JsonPointer}/intrinsic/variable", node.NodeId));
+            if (node.Activity.Inputs.Count() != 1 || node.Activity.Inputs.SingleOrDefault()?.ReferenceKey != WorkflowIntrinsicInputKeys.Value ||
+                node.Activity.Inputs.FirstOrDefault()?.Value is null || node.Activity.Outputs.Any() || node.Activity.Structure is not null ||
+                node.Activity.ExecutionPlacement != default || node.Activity.Inputs.Any(input => string.Equals(input.Value?.ExpressionType, "Secret", StringComparison.OrdinalIgnoreCase)))
+                diagnostics.Add(Diagnostic("activity.graph.set-local-invalid", "Set of a body-local variable requires exactly one storable value and no child structure or captures.",
+                    subject, node.JsonPointer, node.NodeId));
         }
 
         return (candidates, nodes);
@@ -842,7 +871,7 @@ public sealed class GraphActivityProvider(
         var entry = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First();
         var emittedEntryOutcomes = EntryOutcomes(entry, dependencies).Where(x => x.IsEmitted)
             .ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        if (!entry.IsSetOutput && !dependencies.Any(x => x.OccurrenceId == entry.NodeId))
+        if (!entry.IsLocalIntrinsic && !dependencies.Any(x => x.OccurrenceId == entry.NodeId))
             return;
         foreach (var mapping in graph.OutcomeMappings)
         {
@@ -859,8 +888,69 @@ public sealed class GraphActivityProvider(
     }
 
     private static IReadOnlyCollection<ActivityOutcomeContract> EntryOutcomes(GraphNode entry, IReadOnlyList<ActivityResolvedDependency> dependencies) =>
-        entry.IsSetOutput ? [new("done", "Done", true)] :
+        entry.IsLocalIntrinsic ? [new("done", "Done", true)] :
             dependencies.FirstOrDefault(x => x.OccurrenceId == entry.NodeId)?.Contract.Outcomes ?? [];
+
+    private VariableDefinition? LocalVariableTarget(GraphNode node, IReadOnlyList<GraphNode> nodes)
+    {
+        var target = node.Activity.Intrinsic?.Variable;
+        if (target is null || target.IsWorkflowScope || target.DeclaringScopeId == "activity-graph") return null;
+        var parentId = node.ParentOccurrenceId;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (parentId is not null && visited.Add(parentId))
+        {
+            var parent = nodes.FirstOrDefault(candidate => candidate.NodeId == parentId);
+            if (parent is null) return null;
+            if (parent.NodeId == target.DeclaringScopeId)
+            {
+                var declarations = activityStructureService.ProjectScopedVariables(parent.Activity)
+                    .Where(variable => variable.ReferenceKey == target.ReferenceKey).ToArray();
+                return declarations.Length == 1 ? declarations[0] : null;
+            }
+            parentId = parent.ParentOccurrenceId;
+        }
+        return null;
+    }
+
+    private ActivityNodeStructure? CompileBodyStructure(GraphNode node, IActivityTemplateInputBindingCompiler? compiler)
+    {
+        var structure = activityStructureService.CompileExecutableStructure(node.Activity);
+        var variables = activityStructureService.ProjectScopedVariables(node.Activity);
+        if (structure is null || variables.Count == 0) return structure;
+        var payload = JsonNode.Parse(structure.Payload.GetRawText())!.AsObject();
+        payload["variables"] = JsonNode.Parse(compiler!.CompileGraphVariables(node.NodeId, variables).GetRawText());
+        return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
+    }
+
+    private ExecutableNode CompileLocalSet(GraphNode node, VariableDefinition target, ActivityGraphManifest graph, IReadOnlyList<GraphNode> nodes, DesignActivityContract contract, IActivityTemplateInputBindingCompiler compiler)
+    {
+        // Native Set compiles its value under the declared policy; the promoted local Set must not reinterpret the
+        // argument envelope's storage or sensitivity hints as new requirements.
+        var bindings = compiler.CompileGraphIntrinsicInputs(node.NodeId,
+            [new InputDefinition(WorkflowIntrinsicInputKeys.Value, WorkflowIntrinsicInputKeys.Value, target.Type, null,
+                target.Name, null, IsNullable: false, IsRequired: true)], node.Activity.Inputs).ToDictionary(binding => binding.Key, binding => binding.Value, StringComparer.Ordinal);
+        var value = bindings[WorkflowIntrinsicInputKeys.Value];
+        TypeReference? sourceType = null;
+        if (value.Source == RuntimeInputBindingSource.VariableRead && value.Variable is { } variable)
+        {
+            var sourceDeclarations = variable.DeclaringScopeId is "workflow" or "activity-graph"
+                ? graph.Variables.Where(item => item.ReferenceKey == variable.VariableKey).Select(item => item.Type).ToArray()
+                : nodes.Where(owner => owner.NodeId == variable.DeclaringScopeId).SelectMany(owner => activityStructureService.ProjectScopedVariables(owner.Activity))
+                    .Where(item => item.ReferenceKey == variable.VariableKey).Select(item => item.Type).ToArray();
+            if (sourceDeclarations.Length == 1) sourceType = sourceDeclarations[0];
+        }
+        else if (value.Source == RuntimeInputBindingSource.WorkflowRequest && string.IsNullOrWhiteSpace(value.WorkflowRequest!.Path))
+            sourceType = contract.Inputs.FirstOrDefault(input => input.ReferenceKey == value.WorkflowRequest.MemberKey)?.Type;
+        bindings[WorkflowIntrinsicInputKeys.Value] = compiler.PinAssignmentSourceConversion(node.NodeId, value, sourceType);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            kind = "Set", schemaVersion = "1.0.0", node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
+        }, NodeSerializerOptions);
+        return new ExecutableNode($"set-local:{node.NodeId}", node.NodeId, "elsa.intrinsic.set", "1.0.0",
+            WellKnownRuntimeActivityConsumers.Intrinsic, payload, bindings, new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference(target.ReferenceKey, node.Activity.Intrinsic!.Variable!.DeclaringScopeId!));
+    }
 
     private static ExecutableNode CompileSetOutput(GraphNode node, ActivityOutputContract output, IActivityTemplateInputBindingCompiler compiler)
     {
@@ -1582,6 +1672,8 @@ public sealed class GraphActivityProvider(
         IReadOnlyList<ActivityContractMemberUsage> MemberUsage)
     {
         public bool IsSetOutput => Activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput;
+        public bool IsSetVariable => Activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.Set;
+        public bool IsLocalIntrinsic => IsSetOutput || IsSetVariable;
     }
     private sealed record NodeCandidate(JsonElement Element, string JsonPointer);
 }

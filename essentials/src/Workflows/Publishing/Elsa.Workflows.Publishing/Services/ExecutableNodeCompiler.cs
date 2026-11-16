@@ -392,7 +392,7 @@ public sealed class ExecutableNodeCompiler(
 
         var bindings = inputTypes.ToDictionary(
             input => input.Key,
-            input => inputBindingCompiler.Compile(
+            input => inputBindingCompiler.CompileIntrinsicInput(
                 activity.NodeId,
                 new InputDefinition(
                     input.Key,
@@ -403,12 +403,7 @@ public sealed class ExecutableNodeCompiler(
                     Category: null,
                     IsNullable: false,
                     IsRequired: true),
-                authoredInputs[input.Key].Value,
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "ActivityResult", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "WorkflowRequest", StringComparison.OrdinalIgnoreCase)
-                    ? authoredInputs[input.Key].Conversion
-                    : null),
+                authoredInputs[input.Key]),
             StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {
@@ -464,12 +459,6 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs)
     {
-        // A member read has no static source contract here (a result member's is planned by the linker, a variable
-        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
-        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember)
-            return binding;
-        if (binding.Selection is not null)
-            throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
         TypeReference? sourceType = binding.Source switch
         {
             RuntimeInputBindingSource.VariableRead => ResolveIntrinsicVariableType(nodeId,
@@ -478,27 +467,7 @@ public sealed class ExecutableNodeCompiler(
                 workflowInputs.SingleOrDefault(input => StringComparer.Ordinal.Equals(input.Name, binding.WorkflowRequest.MemberKey))?.Type,
             _ => null
         };
-        if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
-            return binding;
-
-        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
-        // the destination contract before storage; do not invent a source type or parse string content.
-        if (sourceType is null || sourceType.Alias == "Elsa.Any")
-            return binding;
-        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
-        try
-        {
-            var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
-            var plan = _conversionPlanResolver.Resolve(source, ValueRepresentationDefaults.Infer(source),
-                binding.TargetType, binding: context);
-            return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
-                binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
-                plan, binding.ConversionRequest, binding.Secret);
-        }
-        catch (ValueConversionPublicationException exception)
-        {
-            throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
-        }
+        return inputBindingCompiler.PinAssignmentSourceConversion(nodeId, binding, sourceType, _conversionPlanResolver);
     }
 
     private TypeReference ResolveIntrinsicVariableType(
@@ -868,43 +837,8 @@ public sealed class ExecutableNodeCompiler(
             .ToArray();
     }
 
-    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
-    {
-        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
-        // storage profile; Studio advertises this driver for durable variable declarations.
-        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-            ? null
-            : variable.StorageDriverType;
-        var policy = ValuePolicyCombiner.ToProtectionPolicy(
-            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
-        if (policy.Storage != DurableValueStorage.Inline)
-        {
-            throw new ArgumentException(
-                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
-        }
-        RuntimeInputBinding? initialBinding = null;
-        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
-            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
-        if (variable.Default is not null)
-        {
-            initialBinding = inputBindingCompiler.Compile(
-                nodeId,
-                new InputDefinition(
-                    variable.ReferenceKey,
-                    variable.Name,
-                    variable.Type,
-                    storageProfile,
-                    variable.Name,
-                    Category: null,
-                    IsNullable: true),
-                variable.Default);
-            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
-                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
-        }
-
-        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
-    }
+    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable) =>
+        inputBindingCompiler.CompileVariableDeclaration(nodeId, variable);
 
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(
         ExecutableNode root,
