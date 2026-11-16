@@ -45,7 +45,7 @@ export default defineConfig({
   },
   server: {
     fs: {
-      allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../Extensions")]
+      allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../extensions")]
     },
     host: "127.0.0.1",
     port: 4179,
