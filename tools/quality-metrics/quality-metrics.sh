@@ -27,7 +27,7 @@ count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; 
 
 mapfile -t essentials < <(cs_files essentials/src)
 # Production and test files are disjoint, so a file under src/**/tests is counted once, as a test.
-backend_roots=(essentials/src apps essentials/tests Extensions)
+backend_roots=(essentials/src apps essentials/tests extensions)
 mapfile -t src_all < <(cs_files "${backend_roots[@]}" -not -path '*/tests/*' -not -path '*/studio/*')
 mapfile -t tests_all < <(cs_files "${backend_roots[@]}" -path '*/tests/*' -not -path '*/studio/*')
 # Test classes can sit in a Migrations folder (EF migration tests); count their methods, not generated migration LOC.
@@ -63,7 +63,7 @@ kb() {
 meta_kb=$(kb '' docs specs); code_kb=$(kb '^extensions/[^/]+/studio/' essentials apps extensions)
 meta_pct=$(( meta_kb * 100 / (meta_kb + code_kb) ))
 
-budget_file=$(find essentials/tests Extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
+budget_file=$(find essentials/tests extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
 if [[ -n "$budget_file" ]] && command -v jq >/dev/null; then
   ef=$(jq -r 'to_entries | map("\(.key): \(.value)") | join("; ")' "$budget_file" 2>/dev/null || echo "unreadable")
 else

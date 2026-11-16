@@ -44,7 +44,7 @@ tooling_dir="tools/ef/Elsa.EntityFrameworkCore.Tooling"
 cli_project="essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj"
 cli_dir="essentials/src/Cli/Elsa.Cli"
 # One root covers every module: required under essentials/src, optional under Extensions (#1815).
-module_roots=(essentials/src Extensions)
+module_roots=(essentials/src extensions)
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 usage() {
