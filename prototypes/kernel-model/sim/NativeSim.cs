@@ -460,10 +460,18 @@ public static class NativeReference
         // a key the reference sends twice is a collision, a key the run sends and the reference never does has moved.
         var keys = new HashSet<string>(StringComparer.Ordinal);
         var duplicates = new List<string>();
+        var bodies = new HashSet<string>(StringComparer.Ordinal);
         var model = new NativeModel(NativeWorkflows.Registry, new NativeOptions
         {
             Flaws = KeyFlaws,     // the join-ordinal and retry flaws are left out: the reference must stay the fault-free truth about them
-            OnOutbound = s => { var local = NodeAndPath(s.EffectKey); if (!keys.Add(local)) duplicates.Add(local); },
+            OnOutbound = s =>
+            {
+                var local = NodeAndPath(s.EffectKey); if (!keys.Add(local)) duplicates.Add(local);
+                // The lost-turn half's rule enforces itself: a node listed in ContentNamesActivation sends every body once here.
+                var body = s.Effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" };
+                if (NativeWorkflows.ContentNamesActivation.Contains(s.Node) && !bodies.Add(s.Node + "|" + body))
+                    throw new InvalidOperationException($"{workflow}: node {s.Node} is listed in ContentNamesActivation and sends '{body}' twice in a run without faults; its body does not name its activation");
+            },
         });
         var worker = new Worker("reference", 0, store, new WorkflowInstance([model]), new WorkerOptions { Monotonic = () => time });
         new DurableHost([worker]).ActivateAsync(0).AsTask().Wait();

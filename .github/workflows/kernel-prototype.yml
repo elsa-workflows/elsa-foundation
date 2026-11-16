@@ -88,6 +88,7 @@ jobs:
           $SIM --seeds 10000
           $SIM --native --seeds 10000
           $SIM --lease-check
+          $SIM --landed-check
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
@@ -154,6 +155,7 @@ jobs:
           $SIM --native --seeds 200000
           $SIM --native --seeds 20000 --actions 1000
           $SIM --lease-check
+          $SIM --landed-check
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
