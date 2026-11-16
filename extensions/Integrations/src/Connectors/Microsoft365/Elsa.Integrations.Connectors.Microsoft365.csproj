@@ -19,8 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

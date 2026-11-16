@@ -106,7 +106,7 @@ registers no mutating run tool.
 
 ## Owning contracts
 
-[`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md)
+[`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md)
 (Workflows Runtime Core, D4) are the only Runtime reads. The Executable default reads through the same inspector as
 `GET runtime/workflows/executables/{artifactId}` and returns a subset of that response; the Run default reads through the
 run endpoints' own services (instance, activity execution, state view and value payload). See their catalog entries.

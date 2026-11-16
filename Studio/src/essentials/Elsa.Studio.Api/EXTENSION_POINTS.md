@@ -42,7 +42,7 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Kind: Contributor; optional `StudioExpressionEditorContribution.variableAdditionPreservation` on `api.expressionEditors`.
 - Signature: `{ language, revision, allows(expression: Readonly<Record<string, unknown>>): boolean }`.
 - The language owner proves whether introducing an unrelated variable preserves an authored expression. The shared native-block planner receives the verdict through the composing host; Workflows does not parse another module's source language. Missing, duplicate or faulting language support refuses the rewrite. Replacing support or its revision invalidates a preview.
-- Known implementation: JavaScript expression editor (`Extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-pure-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
+- Known implementation: JavaScript expression editor (`extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-pure-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
 
 ### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
 
@@ -60,7 +60,7 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Signature: `StudioWorkflowRunRelatedLinkContribution { id, order?, activityTypes, anyActivityType?, viewKind, viewVersion, requiresBackend?, getLinks(context) }` returning `StudioWorkflowRunRelatedLink { id, label, path }`. `anyActivityType` matches every activity type, for user-defined activity families whose type keys are unknown in advance, so the view kind alone decides.
 - Register: call `api.workflowRunRelatedLinks?.add(contribution)` during registration; hosts without the slot show no links.
 - Consumer: `WorkflowRunRelatedLinks` in native run details and attached Test Run inspection. It reads the authorized activity state view matching `viewKind`/`viewVersion`, and keeps only same-origin Studio paths on the selected backend. The target route reauthorizes its own reads.
-- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent`, cross-domain, `anyActivityType` over view `elsa.agent.invocation/1`).
+- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent`, cross-domain, `anyActivityType` over view `elsa.agent.invocation/1`).
 - An any-type contribution shows nothing for an activity until a matching view yields a link. Its links appear under "Related" when no listed contribution matches that activity type, and alongside a listed contribution's links under "Related runs" when one does.
 
 ### Frontend route workspace options (SDK — Elsa.Studio.Hosting)

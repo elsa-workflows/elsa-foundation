@@ -17,8 +17,8 @@ internal static class ElsaCliProcess
         get
         {
             var framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
-            var path = Path.Join(FoundationHostProcess.RepoRoot, "Essentials", "src", "Cli", "Elsa.Cli", "bin", FoundationHostProcess.Configuration, framework, "Elsa.Cli.dll");
-            return File.Exists(path) ? path : throw new FileNotFoundException($"Build Essentials/src/Cli/Elsa.Cli ({FoundationHostProcess.Configuration}) before running these tests.", path);
+            var path = Path.Join(FoundationHostProcess.RepoRoot, "essentials", "src", "Cli", "Elsa.Cli", "bin", FoundationHostProcess.Configuration, framework, "Elsa.Cli.dll");
+            return File.Exists(path) ? path : throw new FileNotFoundException($"Build essentials/src/Cli/Elsa.Cli ({FoundationHostProcess.Configuration}) before running these tests.", path);
         }
     }
 

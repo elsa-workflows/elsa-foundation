@@ -17,7 +17,7 @@ Use `services.AddConnections()` to register defaults, then replace these service
   the document's and then increments the revision; otherwise, including after a delete/recreate at the same revision, it throws
   `ConnectionConflictException` and writes nothing. Its expected-version `DeleteAsync` deletes only while
   the stored version equals the expected one, atomically. Derive the replacement's tests from
-  `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
+  `ConnectionRepositoryContractTests` in `essentials/tests/Connections/Tests/`.
 - `IConnectionManager` for lifecycle. A replacement must keep the compare-and-swap contract on
   `IConnectionRepository.SaveAsync`, and the exception contract in the `IConnectionManager` XML docs:
   `ArgumentException` (HTTP 400), `ConnectionConflictException` (409), `ConnectionUnavailableException`,
@@ -57,9 +57,9 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 - `IConnectionTypeProvider` for a new connection type.
   Known cross-domain contributions: `AgentModelConnectionTypeProvider` configured by
-  [AnthropicAgents](../../../../Extensions/Agent/src/Anthropic/README.md),
-  [OpenAIAgents](../../../../Extensions/Agent/src/OpenAI/README.md) and
-  [AzureOpenAIAgents](../../../../Extensions/Agent/src/AzureOpenAI/README.md).
+  [AnthropicAgents](../../../../extensions/Agent/src/Anthropic/README.md),
+  [OpenAIAgents](../../../../extensions/Agent/src/OpenAI/README.md) and
+  [AzureOpenAIAgents](../../../../extensions/Agent/src/AzureOpenAI/README.md).
   They contribute immutable type metadata without capturing a scoped model client factory.
 - `IAuthenticationSchemeProvider` for a new auth scheme (OAuth2 plugs in here; see #2728).
 - `IHttpRequestAuthenticator` for applying a scheme to `HttpRequestMessage`.

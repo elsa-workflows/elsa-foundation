@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="CShells.Abstractions" />
@@ -9,10 +9,10 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../Core/Elsa.Agent.Core.csproj" />
     <ProjectReference Include="../Connections/Elsa.Agent.Connections.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
   </ItemGroup>
 </Project>
