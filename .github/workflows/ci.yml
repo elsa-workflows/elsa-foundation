@@ -51,20 +51,18 @@ on:
 permissions:
   contents: read
 
-# A ready transition or newer head supersedes its own PR; one group prevents stale ready runs
-# surviving a later push. A newer push to main supersedes an older main run (#2622): five
-# queued main runs once each ran the whole EF matrix for an hour. Manual and scheduled runs get a group of
-# their own and are never cancelled. So are merge-queue runs: github.ref is the entry's own gh-readonly-queue
-# branch, and cancelling one would fail the entry. A cancelled run is not a failure, so the alert job below stays quiet
-# for it, and the jobs that use always()-style conditions use !cancelled() so a cancellation cannot turn
-# into a red aggregate that files a "main is red" issue.
+# PR updates cancel the superseded head. Main finishes its active run and keeps only the
+# newest pending push in the same group, so a stream of merges cannot restart validation
+# indefinitely. Intermediate pending pushes are replaced by the latest one. Manual,
+# scheduled and merge-queue runs retain their own groups. A cancelled run is not a failure,
+# and the aggregate jobs use !cancelled() so cancellation does not file a red-main issue.
 concurrency:
   group: >-
     ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
     || github.event_name == 'push' && format('ci-push-{0}', github.ref)
     || github.event_name == 'merge_group' && format('ci-merge-group-{0}', github.ref)
     || format('ci-run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   plan-scope:

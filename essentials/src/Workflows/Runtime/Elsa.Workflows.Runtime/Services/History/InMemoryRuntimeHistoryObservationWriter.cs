@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.History;
 
@@ -45,7 +46,7 @@ internal sealed class InMemoryRuntimeHistoryObservationWriter(InMemoryRuntimeChe
                 var execution = await executions.FindAsync(e.WorkflowExecutionId, token);
                 if (access.Current != context) throw new InvalidOperationException("Persistence access changed during observation admission.");
                 if (execution is null) return new RuntimeHistoryObservationResult(false, null);
-                context.EnsureTenantScope(execution.TenantId);
+                NativeIngressCheckpointAuthority.EnsureHistoryScope(context, execution);
                 lock (state.SyncRoot)
                 {
                     var key = (scope, e.WorkflowExecutionId);

@@ -281,16 +281,8 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
             throw new InvalidOperationException("Persistence access changed during captured checkpoint replay.");
     }
 
-    private static void EnsureHistoryNativeScope(PersistenceAccessContext access, WorkflowExecutionState execution)
-    {
-        var scope = access.RequireScope();
-        // Sealed ingress/saved starts bind a physical partition independently of their logical tenant.
-        // Admission still validates the actual source seal; this grants no new source authority.
-        if (!NativeIngressCheckpointAuthority.HasBoundScope(execution, scope.Value))
-            access.EnsureTenantScope(execution.TenantId);
-        if (execution.Partition is { } partition && partition.Value != scope.Value)
-            throw new InvalidOperationException("The native execution belongs to a different physical persistence scope.");
-    }
+    private static void EnsureHistoryNativeScope(PersistenceAccessContext access, WorkflowExecutionState execution) =>
+        NativeIngressCheckpointAuthority.EnsureHistoryScope(access, execution);
 
     internal IWorkflowSchedulerPoisonStore? InitialStartFaultPoisonStore { private get; set; }
 

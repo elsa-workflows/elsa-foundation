@@ -548,7 +548,6 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
             services.AddSingleton<TimeProvider>(clock);
             services.AddSingleton<IWorkflowExecutionActorProvider>(actors);
             services.AddSingleton<IStimulusDeliveryIntentAdapter, SavedAdapter>();
-            services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             services.AddWorkflowRuntime();
             services.AddWorkflowStimulusRouter();
             RuntimeHistoryRegistration.AddServices(services, new() { Enabled = profile is "captured" or "receipt-only" });
@@ -574,7 +573,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
             Assert.Empty(actors.Activations); // Qualification must not activate a workflow actor.
             await f.Workflows.SaveAsync(new("run", Pin, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, "scope-a",
                 new Dictionary<string, string>()) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = policy is not null,
-                Partition = new("partition"), RunKind = WorkflowRunKind.PublishedRun });
+                Partition = new("scope-a"), RunKind = WorkflowRunKind.PublishedRun });
             await f.Activities.SaveAsync(new(new("activity", "run", "node", "authored", "test/activity", "1"), ActivityExecutionStatus.Suspended,
                 null, 1, At, At, null, null, null, null, null, ActivitySchedulingProvenance.From("run", null, null, null, null, null, "activity", "test"),
                 0, [], [], 0, 0, new Dictionary<string, string>(), ExecutionScopeId: "activity"));
@@ -590,7 +589,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         {
             var publisher = new WorkflowExecutionState("publisher", Pin, WorkflowExecutionStatus.Running, null, At, At, At,
                 null, null, null, "scope-a", new Dictionary<string, string>())
-                { Partition = new("partition"), RunKind = WorkflowRunKind.PublishedRun };
+                { Partition = new("scope-a"), RunKind = WorkflowRunKind.PublishedRun };
             await Workflows.SaveAsync(publisher);
             var intent = new RuntimePostCommitIntent("send", "publisher", "test.history-delivery", At, "publisher-activity", "source-key",
                 JsonSerializer.SerializeToElement(new { value = "private canonical input" }));

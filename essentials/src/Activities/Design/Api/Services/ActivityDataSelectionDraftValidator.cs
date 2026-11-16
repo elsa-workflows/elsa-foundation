@@ -37,7 +37,7 @@ internal sealed class ActivityDataSelectionDraftValidator(
             // Native/opaque providers without authored graphs keep their own diagnostics. Executable
             // admission independently checks their typed compiled reads and requires graph ownership.
             if (document is null) return existing;
-            var analysis = await authorities[0].AnalyzeAsync(document, cancellationToken: cancellationToken);
+            var analysis = await authorities[0].AnalyzeAsync(document with { ValidateBindingConversions = true }, cancellationToken: cancellationToken);
             if (analysis.ContractRevision != revision)
                 throw new InvalidOperationException("Activity data selection analysis does not match the actual candidate.");
             return Merge(analysis.Findings);

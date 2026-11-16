@@ -15,6 +15,10 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposi
             descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer) && !descriptor.IsKeyedService).ToArray();
         if (registrations.Length != 1 || registrations[0].Lifetime != ServiceLifetime.Scoped)
             throw new InvalidOperationException("Exactly one scoped IActivityDataSelectionAnalyzer must be composed.");
+        var previewers = composition.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IActivityBindingConversionPreviewer) && !descriptor.IsKeyedService).ToArray();
+        if (previewers.Length > 1 || previewers.Any(descriptor => descriptor.Lifetime != ServiceLifetime.Scoped))
+            throw new InvalidOperationException("At most one scoped IActivityBindingConversionPreviewer can be composed. Use services.Replace(...) to replace the Publishing implementation.");
         return Task.CompletedTask;
     }
 
