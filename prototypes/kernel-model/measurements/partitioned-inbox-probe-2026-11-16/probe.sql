@@ -29,3 +29,15 @@ insert into b(id,scope,part) select 'y'||g,0,g%64 from generate_series(1,2000) g
 create index on b(part,seq);
 analyze b;
 explain (costs off) select id from b where part=3 and done=false order by seq limit 10;
+-- A2: LIST by part, key kept as (Id, InboxScope): expected refused
+create table a2(id text, scope bigint, part int, primary key (id, scope)) partition by list (part);
+-- J1: Journal, key (Partition, Position), range by Partition: expected accepted
+create table j1(part int, pos bigint, instance text, rev bigint, entries text, primary key (part, pos)) partition by range (part);
+create table j1a partition of j1 for values from (0) to (32);
+create index on j1(part, instance);
+-- J2: Journal, range by (Partition, Position): expected accepted, with the same key
+create table j2(part int, pos bigint, instance text, rev bigint, entries text, primary key (part, pos)) partition by range (part, pos);
+create table j2a partition of j2 for values from (0, 0) to (0, 1000000);
+create table j2b partition of j2 for values from (0, 1000000) to (0, 2000000);
+create index on j2(part, instance);
+select 'J2 partitions:', count(*) from pg_inherits where inhparent = 'j2'::regclass;

@@ -436,8 +436,9 @@ These samples do not establish sustained vacuum capacity, production sizing, tun
 The linked report retains the complete case data, tuple observations and source/provenance limits.
 
 Partitioning the PostgreSQL inbox by kernel partition was probed, not adopted: global ordinary-ID uniqueness still
-conflicts with a partitioned unique key that omits the partition column. The [PostgreSQL guidance](../../prototypes/kernel-model/POSTGRES.md) (16 November) holds the fit report, the
-measured-against-recommended tuning table and the case for values by reference. Adding that column to scoped keys would
+conflicts with a partitioned unique key that omits the partition column. Adding that column to scoped keys would
 change deduplication scope and store operations. Lazy/delta snapshots, segmented checkpoints, completed-instance retirement and durable
 response receipts are not added to this provider contract by this page. Candidate retention/receipt designs require
 separate approval and qualification; the current tables and sweep predicates above remain the reference.
+The [PostgreSQL guidance](../../prototypes/kernel-model/POSTGRES.md) (16 November) holds the partitioned-inbox fit report, the
+measured-against-recommended tuning table and the case for values by reference.

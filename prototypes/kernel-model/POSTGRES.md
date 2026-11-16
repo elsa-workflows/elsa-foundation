@@ -1,6 +1,9 @@
 # PostgreSQL guidance for the kernel's tables
 
-Round 5, item D (kernel program #4229). A report: it changes no kernel code. It does three things:
+Round 5, item D (kernel program #4229). A report: it changes no kernel code. Terms: a **take** is a node acquiring a
+kernel partition's lease; the **fence** is the check (epoch and position on the `Partitions` row) that stops a stale owner's
+commit; a **pass** is one run of the owner loop (poll, turns, commit); a **VP** is a virtual partition, the fixed-count
+kernel partitions of round 5 A (1,024 or 4,096, no rehash). "Kernel partition" below means a VP under round 5 A. It does three things:
 
 1. tuning guidance for the four tables whose write pattern matters on PostgreSQL (`Messages`, `Instances`, `Journal`,
    `Partitions`), separating what was measured from what is only recommended;
@@ -52,8 +55,8 @@ no guidance here.
 
 | Setting | Guidance | Status |
 |---|---|---|
-| `full_page_writes` | Keep on. The measured WAL figures are a floor: with a checkpoint every 30 s, full-page images added about a third to a small-state commit (2,032 to 2,732 B) and about a quarter to a padded one (6,913 to 8,644 B). | Measured (the 30 s against 5 min comparison, one run each) |
-| `checkpoint_timeout`, `max_wal_size` | Fewer checkpoints mean fewer full-page images. Start from a longer interval (for example 15 minutes) with `max_wal_size` sized so checkpoints are time-triggered, not WAL-triggered, and `checkpoint_completion_target` 0.9. The interval-to-image relation was measured only at 30 s and 5 min. The best values depend on how many distinct pages a deployment touches per interval, which no run measured. | Direction measured; values recommended, unmeasured |
+| `full_page_writes` | Keep on. The measured WAL figures are a floor: with a checkpoint every 30 s, full-page images added about a third (+34 %, 2,032 to 2,732 B) to a small-state commit and about a quarter (+27 %, 6,800 to 8,644 B) to a padded one. | Measured (the small-state comparison is one run at each interval; the padded 5-minute baseline is from the second set, which ran twice) |
+| `checkpoint_timeout`, `max_wal_size` | Fewer checkpoints mean fewer full-page images. Start from a longer interval (for example 15 minutes) with `max_wal_size` sized so checkpoints are time-triggered, not WAL-triggered, and `checkpoint_completion_target` 0.9. The interval-to-image relation was measured only at 30 s and 5 min. A longer interval also lengthens crash recovery (more WAL to replay), which no run measured. The best values depend on how many distinct pages a deployment touches per interval, which no run measured. | Direction measured; values recommended, unmeasured |
 | `wal_compression` | Consider `lz4` or `zstd` (PostgreSQL 15 and later) to shrink full-page images. | Recommended, unmeasured |
 | `autovacuum_naptime` | The default 1 minute bounds how often any table is looked at, so per-table thresholds did nothing below it (see Messages). Try 15 to 30 seconds on a busy deployment. WRITES.md already names this as "the likely lever" without measuring it. | Recommended, unmeasured |
 | `autovacuum_max_workers`, `autovacuum_vacuum_cost_limit` | Autovacuum's default cost throttling can leave it behind a fast producer. Raise the cost limit before adding workers; a few large tables share the cost budget. | Recommended, unmeasured |
@@ -63,7 +66,7 @@ no guidance here.
 ### `Messages`
 
 - **Fill factor 70, set while the table is empty.** Measured on the 13 November schema. Under a trickle, HOT updates of
-  `Messages` reached 99 to 100 % (91 to 97 % at fill factor 100). In a burst (1,000 outside starts arriving by poll)
+  `Messages` alone reached 99 % (91 to 95 % at fill factor 100; the 100 % and 91 to 97 % ranges in WRITES.md combine Instances and Messages). In a burst (1,000 outside starts arriving by poll)
   the commits' `Messages` WAL fell 44 to 47 % (1,062 kB to 564 to 594 kB), and the whole row, with its inserts counted,
   20 to 22 %. Across three repeats HOT updates over the cost run rose from 42 to 51 of 2,212 to 1,175 to 1,241. At
   fill factor 90 they were 434 to 447. The stress comparison's 4 % WAL saving is below the runs' resolution (about 5 %).
@@ -79,7 +82,7 @@ no guidance here.
 - **No extra indexes on updated columns.** `Seen` and `Done` change on every message; indexing either removes HOT
   updates. The poll uses `(Partition, Seq)`, which no update touches. Keep it that way. (General PostgreSQL behaviour.)
 - **Expect the files not to shrink.** Reclaimed space is reused, not returned (the 14 November padded run's relation
-  stayed 12,877,824 bytes after dead TOAST tuples went from 141,939 to 0). Size for the high-water mark.
+  stayed 12,877,824 bytes after dead TOAST tuple bytes went from 141,939 to 0). Size for the high-water mark.
 - **The sweep** deletes handled rows after `KeepUntil` in one statement (`DELETE ... WHERE "Done" <> false AND
   "KeepUntil" < now`). Run it often in small amounts, not rarely in one large delete, so autovacuum sees steady small
   batches. No index serves that predicate (none is declared), so its cost grows with the table. **Open:** whether the
@@ -111,11 +114,13 @@ no guidance here.
 - Dead tuples come from aborted inserts and deleted instances (peaks of 769 to 1,059). PostgreSQL 13 and later start an
   autovacuum on insert volume (`autovacuum_vacuum_insert_scale_factor`), which keeps the visibility map current for the
   projector's and viewer's range reads. The default is probably enough. **Recommended, unmeasured.**
-- Its two indexes, `(Partition, Position)` and `(Partition, Instance)`, are most of its WAL. The second serves only the
-  delete of an instance's rows. Do not add a third.
-- Retention is not implemented (no journal TTL). When it is, range partitioning by `Partition` fits the key as it is
-  (see the fit report) and would let old data be detached and dropped without a vacuum. **Open** until retention is
-  designed.
+- Its two indexes, `(Partition, Position)` and `(Partition, Instance)`, are most of its WAL. The second serves the delete of an
+  instance's rows and the viewer's tail read (`ReadJournalOfAsync`). Do not add a third.
+- Retention is not implemented (no journal TTL). Range partitioning by `Partition` does **not** give retention: it
+  groups kernel partitions, not ages, so dropping a range would delete live instances' rows. Retention needs
+  position- or time-bounded segments inside each partition, for example `RANGE (Partition, Position)`, which keeps the
+  key and was accepted by PostgreSQL in the probe (stand-in table, no data at scale) but multiplies the table count.
+  **Open** until retention is designed.
 
 ### `Partitions` (the fence)
 
@@ -141,7 +146,7 @@ select * from pgstattuple((select reltoastrelid from pg_class where relname = 'I
 -- WAL and full-page images
 select wal_records, wal_fpi, wal_bytes from pg_stat_wal;
 -- what is holding back vacuum
-select pid, state, xact_start, backend_xmin from pg_stat_activity where backend_xmin is not null order by xact_start;
+select pid, state, xact_start, backend_xid, backend_xmin from pg_stat_activity where backend_xid is not null or backend_xmin is not null order by xact_start;
 select slot_name, active, xmin, catalog_xmin from pg_replication_slots;
 ```
 
@@ -179,9 +184,11 @@ state, however small, therefore costs the whole state's WAL and TOAST churn. The
 | Whole-workload stress, per landed commit (13 Nov) | 2,125 to 2,144 B | 6,913 to 6,931 B | 3.2x |
 | Instances share only, stress (13 Nov) | 663 to 681 B | 5,408 to 5,461 B | about 8x |
 
-So **a large state costs about 7 times the WAL of a small one for a clean commit**, and about 3 times for a whole
-chaotic workload, because the inbox and journal dilute it. Both are real: the first is the cost a large-state
-instance pays on every turn, the second is the effect on a mixed deployment. Then add:
+The additive cost is the stable number: **about 4.5 to 4.8 kB more WAL per commit in every case** (4,807 minus 286 for an
+insert; 5,247 minus 708; 6,913 minus 2,125). The ratio depends on how much other work a commit carries. A lean commit
+sees about 7 times (6.2 to 7.4); commits that also pay for polled inbox rows see less: 1,800 to 6,340 B (3.5x, 13 Nov),
+1,953 to 6,492 B (3.3x, 14 Nov), the event start 2,256 to 6,808 B (3.0x), and the chaos stress 3.2x. The dilution comes
+from the inbox and journal work in the commit, not from chaos. Then add:
 
 - **TOAST bloat.** The TOAST table reaches 2.1 to 2.3 times its live data and is reused, not returned. At scale the
   churn space is roughly live state plus (commits per second times state size times the time between vacuums).
@@ -202,15 +209,24 @@ Caveats, so the case is not overstated:
   turn changes the state, and the column is a single value, so one changed field still rewrites all of it.
 - The numbers above are the **ceiling** for what a reference saves: a reference written once removes the cost for every
   commit that does not change the value, but a value that changes every turn still pays once per change, and the
-  reference table adds its own rows. Decision 10 is not a cure for a large value that changes every turn. That case is
+  reference adds a blob write and read (the witness uses a file store, not a table). Decision 10 is not a cure for a large value that changes every turn. That case is
   the lazy snapshot of WRITES.md, which is sketched, not built.
 - The "external-values witness" mentioned in storage-model.md was built after the 13 November run. No write-cost
   measurement of it exists.
 
-What decision 10 needs from the cost harness before it is accepted: the existing `pad=` case against the reference
-(same states, the value rewritten each turn and not), for both the WAL per commit and the TOAST table's growth, on
-PostgreSQL; plus the load path's round trips (none extra if the value is read with the row, one more otherwise). The
-tooling for this exists (`Writes.cs`, `pad=`). **That run is the acceptance test for decision 10, and it is unrun.**
+**The opt-in witness.** [VALUES.md](models/Values/VALUES.md) describes the values-by-reference experiment: the
+checkpoint and Full journal store a length and SHA-256 digest, the value lives in a file store written through an
+existing job ticket, and a later job reads and verifies it. Its measured costs (SQLite, ten value-bearing revisions,
+sums of serialized UTF-8 bytes): a 4 KiB value is 59,351 state bytes inline against 1,351 by reference (journal 58,930
+against 930); 100 KiB is 1,469,721 against 1,371. Engine calls rise: 5 inline against 13 by reference to the first
+value-bearing commit, and 12 against 20 for a fresh owner to read it, plus one blob put and one blob read. **It
+measured no WAL, TOAST, pages or PostgreSQL round trips, and file-store durability, pruning and erasure are
+unqualified.** So the byte saving is shown, the WAL saving is inferred, and the cost is extra calls and a second store.
+
+What decision 10 needs before it is accepted: the existing `pad=` case against that witness or a successor (same
+states, the value changing each turn and not), measuring WAL per commit and TOAST growth on PostgreSQL, plus the load
+path's round trips. The cost harness (`Writes.cs`, `pad=`) does not drive the witness today, so it needs wiring for the
+reference side. **That run is the acceptance test, and it is unrun.**
 
 ## Partitioned inbox: fit report
 
@@ -225,10 +241,12 @@ partitioned by VP on PostgreSQL, and what would that require of the store's keys
 - `Messages.Partition` is the **destination** instance's VP, not a function of `Id`. A caller chooses the `Id`.
 - Ordinary add is `INSERT ... ON CONFLICT ("Id","InboxScope") DO NOTHING`. Its meaning is store-wide
   deduplication of a caller-supplied id: a second add of the same `Id` is a no-op wherever the target is.
-- The owner's reads and writes carry the partition: the poll (`WHERE "Partition" = p ...`), the take's trial update
-  (`Partition` and `Trial`), the consumption of a message (its row is addressed through its key).
+- Statements that carry the partition: the poll (`WHERE "Partition" = p ...`) and the take's trial update (`Partition`
+  and `Trial`).
 - Statements that carry **no** partition: the event insert function (`WHERE "Id" = wire`, and
-  `min("InboxScope") WHERE "Id" = wire`) and the sweep (`"Done"` and `"KeepUntil"`).
+  `min("InboxScope") WHERE "Id" = wire`), the sweep (`"Done"` and `"KeepUntil"`), and the commit's own message writes:
+  consumed (delete), done, held, trial and seen updates all go through `MailKey(InboxKey)` (EfStore.cs), which carries
+  `Id` and scope but no `Partition`.
 - `Journal`'s key is already `(Partition, Position)`. `Instances`' key is `(Id)`; its `Partition` is derived from the
   instance's address (an `InstanceRef` carries it). `Subscriptions` is keyed `(Key, Instance, Wait)` and carries a
   `Partition` column.
@@ -241,7 +259,7 @@ partitioned by VP on PostgreSQL, and what would that require of the store's keys
 | Range by `Partition`, key `(Partition, Id, InboxScope)` | Accepted. `ON CONFLICT (Id, InboxScope)` then fails ("no unique or exclusion constraint matching"). The same `Id` with two different partitions inserts twice: dedup scope narrows from the store to the partition. The poll prunes to one partition and uses that partition's `(Partition, Seq)` index. |
 | Hash by `Id`, key kept as `(Id, InboxScope)` | Accepted. `ON CONFLICT (Id, InboxScope)` works and deduplicates store-wide. The poll (which filters on `Partition`) does a Merge Append over **every** partition's `(Partition, Seq)` index, so poll cost grows with the partition count. An id lookup prunes to one partition. |
 
-The probe shows plans and DDL on a 2,000-row table. It is not a performance comparison and does not count WAL.
+The probe uses stand-in tables with the same key columns, not the EF DDL, and shows plans on a 2,000-row table. It is not a performance comparison and does not count WAL. It also covers a list-partitioned `Messages` stand-in (refused with the old key, like range) and two `Journal` stand-ins: key `(Partition, Position)` partitioned by range on `Partition`, and by range on `(Partition, Position)`; both accepted. SQL Server, MySQL and SQLite were not probed.
 
 ### What partitioning would and would not buy
 
@@ -259,15 +277,18 @@ The probe shows plans and DDL on a 2,000-row table. It is not a performance comp
 1. **The key gains `Partition`:** `(Partition, Id, InboxScope)`. This changes the dedup rule from store-wide to
    per-partition for ordinary ids. A caller who reuses one `Id` for two different targets would, today, have the second
    dropped; after the change both would be delivered. The kernel's own ids (issued, job, child, event, caller-key
-   starts) already put the destination into the identity, so they are unaffected. **This is an owner decision**
+   starts) are not all alike: issued ids are unique by construction, job tickets are destination-scoped, and
+   `Custom(actor, id)` handles are origin-scoped (Turns.cs). The effect on custom handles and event starts is **not
+   verified**. **This is an owner decision**
    because it narrows a documented guarantee ("scope zero preserves store-wide ordinary deduplication").
 2. **The add's conflict target becomes `("Partition","Id","InboxScope")`.** The provider's `AddAsync` and `EfStore`
-   statement change; so do the conflict targets in `EventInsert` (the event insert function must be told the
-   partition, which it receives already as `part`).
+   statement change. `EventInsert` has no `ON CONFLICT` on any provider (it uses `pg_advisory_xact_lock` and lookups),
+   so it needs only the partition in its lookups (it receives `part` already).
 3. **Every statement that addresses a message by `Id` must also carry `Partition`,** or it scans all partitions:
-   `kernel_insert_event`'s two `WHERE "Id" = wire` lookups, the SQL Server and MySQL equivalents, and EF's
-   concurrency-checked update and delete of a consumed row (EF includes all key columns in the predicate, so this
-   follows from the key change). Without a partition predicate those lookups need an `Id`-leading local index on every
+   `kernel_insert_event`'s two `WHERE "Id" = wire` lookups, the SQL Server and MySQL equivalents, and every
+   `MailKey`/`InboxKey` write (consume, done, held, trial, seen). `MailKey` and `InboxKey` must gain a `Partition`,
+   supplied by the caller, for example `batch.Partition` in the commit (a message consumed by a commit belongs to the
+   committing owner's partition). EF would then include it in the key predicate. Without a partition predicate those lookups need an `Id`-leading local index on every
    partition, and a probe becomes one index probe per partition.
 4. **The sweep** deletes across all partitions with `Done`/`KeepUntil`. It still works, and runs per partition. No
    change is needed for correctness. Its missing index is a separate matter.
@@ -291,8 +312,10 @@ beyond the plan.**
 ### `Journal`, `Instances`, `Subscriptions`
 
 - **`Journal` fits without a key change.** `(Partition, Position)` already contains the partition column, so range
-  partitioning by `Partition` is accepted by PostgreSQL as it stands. The `(Partition, Instance)` index is local to each
-  partition. This is the cheapest partitioned table to adopt and the one retention would use (detach and drop a range).
+  partitioning by `Partition`, or by `(Partition, Position)`, is accepted by PostgreSQL as it stands (probed on a
+  stand-in table). The `(Partition, Instance)` index is local to each table. A range on `Partition` alone gives smaller
+  vacuum units and partition moves, not retention (it groups kernel partitions, not ages). Retention would need
+  `RANGE (Partition, Position)` or time-bounded segments, which multiplies the table count; not probed at scale.
   Round 5 A's per-VP journals ("both per-VP and range-fence variants") are a logical split of positions; a physical split is a separate, later choice.
 - **`Instances`** is keyed `(Id)`. It would need `(Partition, Id)`, and every load, update and delete would carry the
   partition, which the owner always knows. An instance id maps to one partition, so the dedup narrowing above does
@@ -306,14 +329,15 @@ beyond the plan.**
 1. **Do not partition `Messages` for release 1 by default.** The measured windows show no vacuum bottleneck, there is no
    WAL gain, and the cost is a store-contract change (dedup scope) plus statement changes in every provider that is
    not PostgreSQL. Keep the current keys.
-2. **Keep the option open at no cost now.** Whatever round 5 A decides about VPs, the store should not assume a global
-   unique `Id`: new code should address messages by `(Partition, Id, InboxScope)` where the partition is known (it
-   nearly always is), so that switching the key later changes DDL, not call sites. This is an engineering
+2. **Keep the option open at no cost now.** Whatever round 5 A decides about VPs, new code should not rely on `Id`
+   alone to locate a row; the store-wide guarantee is unchanged. It should address messages by
+   `(Partition, Id, InboxScope)` where the partition is known (it nearly always is), so that switching the key later
+   changes DDL, not call sites. This is an engineering
    suggestion for round 5 A and B; it is not a change made here.
 3. **If a deployment proves vacuum or move cost on `Messages`,** use range-by-VP groups with the extended key, as an
    opt-in PostgreSQL DDL profile, after an owner decision on the dedup scope. Hash on `Id` is the fallback if the
    dedup scope must stay store-wide.
-4. **Partition `Journal` first, when retention arrives:** no key change.
+4. **If `Journal` is partitioned, it is the cheapest table to start with** (no key change). A range on `Partition` buys smaller vacuum units and moves; retention would need `RANGE (Partition, Position)` or time-bounded segments, designed with retention itself.
 5. **Measure before any of it:** a stress run on a range-partitioned `Messages` (group counts 16, 64, 256) against the
    unpartitioned table: poll plans and latency under backlog, vacuum behaviour, and rebalance cost. None was run.
 
@@ -332,6 +356,7 @@ beyond the plan.**
 
 ```
 docker run -d --rm -P -e POSTGRES_PASSWORD=probe --name km-r5d-probe-<unique> postgres:17
+for i in $(seq 1 30); do docker exec km-r5d-probe-<unique> pg_isready -h 127.0.0.1 -U postgres && break; sleep 1; done
 docker exec -i km-r5d-probe-<unique> psql -U postgres < prototypes/kernel-model/measurements/partitioned-inbox-probe-2026-11-16/probe.sql
 docker stop km-r5d-probe-<unique>
 ```

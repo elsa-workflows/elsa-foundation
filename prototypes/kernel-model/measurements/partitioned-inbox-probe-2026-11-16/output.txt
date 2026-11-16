@@ -67,3 +67,17 @@ ANALYZE
          Filter: (NOT done)
 (4 rows)
 
+ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "a2" lacks column "part" which is part of the partition key.
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+    ?column?    | count 
+----------------+-------
+ J2 partitions: |     2
+(1 row)
+
