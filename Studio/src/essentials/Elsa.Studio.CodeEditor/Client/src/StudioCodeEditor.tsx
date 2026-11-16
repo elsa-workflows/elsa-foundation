@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
 import {
   getStudioCodeEditorSession,
@@ -31,6 +31,8 @@ function subscribeToCompactSessions(notify: (activeSession: string | undefined) 
 
 export function StudioCodeEditor({
   document,
+  documentEditing,
+  actions,
   profile = "expanded",
   sessionKey,
   session: suppliedSession,
@@ -53,6 +55,8 @@ export function StudioCodeEditor({
   onExpand,
   onNewline
 }: StudioCodeEditorProps) {
+  const editingInteraction = useRef(false);
+  editingInteraction.current = documentEditing?.interactionActive === true;
   const [compactActive, setCompactActive] = useState(profile === "expanded");
   const compactSession = sessionKey ?? document.uri;
   const [authorizationRevoked, setAuthorizationRevoked] = useState(
@@ -90,9 +94,10 @@ export function StudioCodeEditor({
   const RichCodeEditor = useMemo(() => loadEditor ? lazy(loadEditor) : null, [loadEditor]);
   void authorizationGeneration;
   const session = suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri);
-  const isCompactPreview = profile === "compact" && !compactActive;
+  const isCompactPreview = profile === "compact" && !compactActive && !editingInteraction.current;
   const engineProps: StudioCodeEditorEngineProps = {
     document,
+    documentEditing,
     profile,
     session,
     readOnly,
@@ -112,7 +117,7 @@ export function StudioCodeEditor({
     },
     onBlur: () => {
       onBlur?.();
-      if (profile === "compact") releaseCompactSession(compactSession);
+      if (profile === "compact" && !documentEditing) releaseCompactSession(compactSession);
     },
     onExpand,
     onNewline
@@ -141,7 +146,7 @@ export function StudioCodeEditor({
         // compact editor always returns to its lightweight preview.
         const editorElement = event.currentTarget;
         queueMicrotask(() => {
-          if (!editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
+          if (!editingInteraction.current && !editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
         });
       }}
     >
@@ -151,6 +156,7 @@ export function StudioCodeEditor({
           <code>{document.uri}</code>
         </div>
       ) : null}
+      {!authorizationRevoked && actions ? <div className="studio-code-editor-actions">{actions}</div> : null}
       {authorizationRevoked ? (
         <div className="studio-code-editor-status" role="status">
           Expression source is hidden because the authorization session changed.

@@ -410,3 +410,56 @@ describe("member metadata and focused queries", () => {
   });
 
 });
+
+
+describe("canonical portable expression metadata", () => {
+  const parameter = { kind: "ActivityResult" as const, producerNodeId: "get-customer", projectionKey: "$result", isOptional: false };
+  const path = ["a.b", "", "quoted\"key"];
+  function response() {
+    const base = supportedResponse("rev-1");
+    return { ...base, analysis: { ...base.analysis, hasMoreSources: false, memberReadsEnabled: false,
+      expressionParametersEnabled: true, expressionType: "JavaScript",
+      sources: [{ ...base.analysis.sources[0], binding: null, reasonCode: "EarlierProducerRun", parameterSource: parameter, parameterPath: path }] } };
+  }
+  function request() {
+    return { definitionId: "definition-1", draftId: "draft-1", expectedBaseRevision: "base-1", documentRevision: "rev-1",
+      target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: {} as WorkflowDefinitionState,
+      query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path, expectedSnapshotHash: "hash" } };
+  }
+  it("accepts a fresh portable-only path with native member reads off and pins the root snapshot", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => response()); const result = await requestWorkflowActivityData(context(post), request());
+    expect(result.state).toBe("supported"); expect(result.memberReadsEnabled).toBe(false); expect(result.expressionParametersEnabled).toBe(true);
+    expect(result.sources[0].binding).toBeNull(); expect(result.sources[0].parameterSource).toEqual(parameter);
+    expect(result.sources[0].parameterPath).toEqual(path);
+    expect(post.mock.calls[0][1]).toMatchObject({ expectedSnapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect((post.mock.calls[0][1] as { query: unknown }).query).not.toHaveProperty("source");
+    expect(parameter).not.toHaveProperty("memberPath");
+  });
+  it("uses the activity-definition owner's snapshotHash field for the same shared query", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => ({ ...response(), resourceKind: "ActivityDefinition", baseRevision: "5" }));
+    const result = await requestActivityDefinitionActivityData(context(post), { draftId: "draft-1", expectedBaseRevision: 5, documentRevision: "rev-1",
+      target: request().target, currentSnapshot: {}, query: request().query });
+    expect(result.state).toBe("supported"); expect(post.mock.calls[0][1]).toMatchObject({ snapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect(post.mock.calls[0][1]).not.toHaveProperty("expectedSnapshotHash");
+  });
+  it.each(["old-server", "wrong-syntax", "wrong-path", "wrong-source", "wrong-optional", "wrong-snapshot", "no-offer"])("refuses %s without inventing a portable offer", async scenario => {
+    const post = vi.fn(async () => {
+      const value = response();
+      if (scenario === "old-server") value.analysis.expressionParametersEnabled = false;
+      if (scenario === "wrong-syntax") value.analysis.expressionType = "Liquid";
+      if (scenario === "wrong-path") value.analysis.sources[0].parameterPath = [];
+      if (scenario === "wrong-source") value.analysis.sources[0].parameterSource = { ...parameter, projectionKey: "different" };
+      if (scenario === "wrong-optional") value.analysis.sources[0].parameterSource = { ...parameter, isOptional: true };
+      if (scenario === "wrong-snapshot") value.snapshotHash = "different";
+      if (scenario === "no-offer") value.analysis.sources = [];
+      return value;
+    });
+    expect(await requestWorkflowActivityData(context(post), request())).toMatchObject({ state: "incompatible", sources: [], expressionParametersEnabled: false });
+  });
+  it("rejects mixed modes and unsupported parameter fields before requesting metadata", async () => {
+    const post = vi.fn(); const host = context(post);
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, source: binding } })).rejects.toThrow();
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, parameterSource: { ...parameter, memberPath: ["secret"] } as typeof parameter } })).rejects.toThrow();
+    expect(post).not.toHaveBeenCalled();
+  });
+});

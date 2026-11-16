@@ -54,7 +54,7 @@ export interface StudioCodeToolingCatalogPage {
 }
 
 export interface StudioCodeToolingResult<T> {
-  state: "ready" | "supported-empty" | "unavailable" | "unauthorized" | "incompatible";
+  state: "ready" | "supported-empty" | "unavailable" | "unauthorized" | "incompatible" | "stale" | "canceled";
   data?: T;
 }
 

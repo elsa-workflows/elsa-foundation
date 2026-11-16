@@ -18,6 +18,38 @@ acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
 
 
+def expression_fixture(syntax='JavaScript', composition='normal'):
+    parameters = [{'kind': 'ActivityResult', 'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False},
+                  {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None},
+                  {'kind': 'Variable', 'declaringScopeNodeId': 'workflow', 'variableKey': 'escaped-payload'}]
+    sources = ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
+               '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
+               '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    before_sources = ['', sources[1].removesuffix('args.data2' if syntax == 'JavaScript' else '{{ data2 }}'),
+                      sources[2].removesuffix('args.data3["a.b"][""]' if syntax == 'JavaScript' else '{{ data3["a.b"][""] }}')]
+    carrier = {'language': syntax, 'source': '', 'resultType': {'alias': 'String', 'collectionKind': 'Single'},
+               'parameters': {}, 'options': {}, 'capabilityProfile': 'binding-pure-v1'}
+    insertions, contexts = [], []
+    for index, (alias, path) in enumerate(zip(['data', 'data2', 'data3'], [['customerId'], [], ['a.b', '']])):
+        before = {'expressionType': syntax, 'value': {**copy.deepcopy(carrier), 'source': before_sources[index]}} if index else {'expressionType': syntax, 'value': ''}
+        carrier['parameters'][alias] = parameters[index]; carrier['source'] = sources[index]
+        after = {'expressionType': syntax, 'value': copy.deepcopy(carrier)}
+        request = {'definitionId': 'owned', 'nodeId': 'consumer', 'inputKey': 'text', 'documentRevision': f'rev-{index}', 'expectedSnapshotHash': 'a' * 64,
+                   'query': {'expressionType': syntax, 'parameterSource': parameters[index], 'memberPath': path},
+                   'snapshot': {'rootActivity': {'structure': {'payload': {'activities': [{'nodeId': 'consumer', 'inputs': [{'referenceKey': 'text', 'value': before}]}]}}}}}
+        response = {'state': 'supported', 'documentRevision': request['documentRevision'], 'snapshotHash': 'a' * 64,
+                    'analysis': {'memberReadsEnabled': composition != 'default-off', 'expressionParametersEnabled': True, 'expressionType': syntax,
+                                 'sources': [{'parameterSource': parameters[index], 'parameterPath': path}]}}
+        admission = {'request': request, 'response': response}; contexts.append(admission)
+        insertions.append({'definitionId': 'owned', 'alias': alias, 'path': path, 'parameter': parameters[index], 'before': before, 'after': after, 'admission': admission})
+    native = {'sourceSha': 'b' * 40, 'composition': composition, 'contexts': contexts, 'selections': [], 'scripts': [],
+              'runtime': [{'definitionId': 'owned', 'workflowExecutionId': 'owned-execution', 'committed': 'CUST-1042-tail-escaped-id', 'expected': 'CUST-1042-tail-escaped-id',
+                           'consumer': {'status': 'Completed'}, 'producers': [{'status': 'Completed'}]}]}
+    proof = {'sourceSha': 'b' * 40, 'composition': composition, 'syntax': syntax, 'contexts': contexts, 'insertions': insertions}
+    return native, proof
+
+
 class VerdictTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -36,7 +68,7 @@ class VerdictTests(unittest.TestCase):
                         {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)} for name in
                         ['trace'] + sorted(acceptance.ADDITIONAL_ARTIFACTS.get(journey, set())) + list(acceptance.EVIDENCE.get(journey, [])) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in sorted(acceptance.JOURNEY_PROJECTS[journey])]}
-            for journey in acceptance.JOURNEYS]}]}
+            for journey in acceptance.NORMAL_JOURNEYS]}]}
 
         # Explicit positive receipt fixtures; every behavioral guard below mutates one fact at a time.
         for row in self.report['suites'][0]['specs']:
@@ -118,12 +150,18 @@ class VerdictTests(unittest.TestCase):
                 selection['before'] = before
                 selection['admission'] = {'request': {**copy.deepcopy(before), 'query': {'source': {'expressionType': 'Variable', 'value': 'setup'}, 'memberPath': selection['binding']['value']['memberPath']}},
                                           'response': {'state': 'supported', 'documentRevision': 'before', 'analysis': {'sources': [{'binding': copy.deepcopy(selection['offered'])}]}}}
+            if title in acceptance.EXPRESSION_JOURNEYS:
+                proof, expression = expression_fixture('JavaScript' if title == 'insert JavaScript activity data' else 'Liquid')
+                expression_file = self.root / (title.replace(' ', '-') + '-expression.json')
+                expression_file.write_text(json.dumps(expression))
+                for test in row['tests']:
+                    next(item for item in test['results'][0]['attachments'] if item['name'] == 'expression-data-proof.json')['path'] = str(expression_file)
             file = self.root / (title.replace(' ', '-') + '.json')
             file.write_text(json.dumps(proof))
             for test in row['tests']:
                 attachments = test['results'][0]['attachments']
                 next(item for item in attachments if item['name'] == 'activity-data-proof.json')['path'] = str(file)
-                if not bindings:
+                if title == 'choose data for activity outputs':
                     runtime = self.root / 'whole-runtime.json'
                     runtime.write_text(json.dumps({'committed': '00:00:01'}))
                     attachments += [{'name': f'whole-output-runtime-{index}.json', 'path': str(runtime)} for index in range(2)]
@@ -135,7 +173,7 @@ class VerdictTests(unittest.TestCase):
             acceptance.verdict(self.report, self.root)
 
     def test_complete_evidence(self):
-        self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+        self.assertEqual(sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in acceptance.NORMAL_JOURNEYS), acceptance.verdict(self.report, self.root))
 
     def test_inventory_adds_bounded_supplementary_cases(self):
         standard = {journey for journey, projects in acceptance.JOURNEY_PROJECTS.items() if projects == acceptance.PROJECTS}
@@ -240,7 +278,7 @@ class VerdictTests(unittest.TestCase):
                 try:
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
-        self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+        self.assertEqual(sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in acceptance.NORMAL_JOURNEYS), acceptance.verdict(self.report, self.root))
 
     def test_copy_requires_copied_start_identity_and_unchanged_publication_stores(self):
         for title, mutation in [('copy activity data pairs', 'original-ran'), ('copy activity data pairs', 'wrong-producer'),
@@ -372,7 +410,7 @@ class VerdictTests(unittest.TestCase):
         proof['transportControls'].append(observed)
         try:
             file.write_text(json.dumps(proof))
-            self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+            self.assertEqual(sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in acceptance.NORMAL_JOURNEYS), acceptance.verdict(self.report, self.root))
             proof['transportControls'] = [observed]
             file.write_text(json.dumps(proof))
             with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
@@ -391,7 +429,7 @@ class VerdictTests(unittest.TestCase):
         try:
             with self.assertRaisesRegex(ValueError, 'pre-edit admission'): acceptance.verdict(self.report, self.root)
         finally: file.write_text(original)
-        self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+        self.assertEqual(sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in acceptance.NORMAL_JOURNEYS), acceptance.verdict(self.report, self.root))
 
     def test_default_off_rejects_an_enabled_host_and_still_requires_typed_source_and_whole_runtime(self):
         title = 'choose data for activity outputs'
@@ -887,12 +925,13 @@ class OrchestrationTests(unittest.TestCase):
 
 class ActivityDataCompositionTests(unittest.TestCase):
     def test_defaults_and_explicit_inventory(self):
-        self.assertEqual(acceptance.JOURNEYS, acceptance.selected_journeys())
+        self.assertEqual(acceptance.NORMAL_JOURNEYS, acceptance.selected_journeys())
         for mode in ('minimal', 'default-off'):
             with self.assertRaises(ValueError): acceptance.selected_journeys(None, mode)
         for choices in ([], ['unknown'], ['choose nested activity data'] * 2):
             with self.assertRaises(ValueError): acceptance.selected_journeys(choices)
-        self.assertEqual(acceptance.DATA_JOURNEYS, acceptance.selected_journeys(sorted(acceptance.DATA_JOURNEYS), 'minimal'))
+        minimal = acceptance.DATA_JOURNEYS - acceptance.EXPRESSION_JOURNEYS
+        self.assertEqual(minimal, acceptance.selected_journeys(sorted(minimal), 'minimal'))
         with self.assertRaises(ValueError): acceptance.selected_journeys(['choose nested activity data'], 'default-off')
         with self.assertRaises(ValueError): acceptance.selected_journeys(['agent authoring and navigation'], 'minimal')
 
@@ -1036,6 +1075,72 @@ class SourcePairTests(unittest.TestCase):
             self.assertFalse(report["isolatedFieldGallery"]["portOverrideConfirmed"])
             self.assertNotIn("url", report["isolatedFieldGallery"])
 
+
+class ExpressionProofTests(unittest.TestCase):
+    def test_real_insertion_contract_has_both_languages_and_explicit_default_off(self):
+        for syntax, composition in [('JavaScript', 'normal'), ('Liquid', 'normal'), ('JavaScript', 'default-off')]:
+            native, proof = expression_fixture(syntax, composition)
+            acceptance.validate_expression_data(native, proof, f'insert {syntax} activity data', composition)
+
+    def test_expression_proof_rejects_wrong_authority_path_carrier_context_and_runtime(self):
+        for change in ['canonical-identity', 'literal-path', 'requested-path', 'snapshot', 'before', 'stored-parameter', 'source', 'capability',
+                       'raw-options', 'metadata-loss', 'runtime', 'recorded-response', 'wrong-context', 'definition-mix', 'member-default']:
+            with self.subTest(change=change):
+                native, proof = copy.deepcopy(expression_fixture(composition='default-off'))
+                item = proof['insertions'][2]; admission = item['admission']
+                if change == 'canonical-identity': admission['response']['analysis']['sources'][0]['parameterSource']['variableKey'] = 'other'
+                if change == 'literal-path': admission['response']['analysis']['sources'][0]['parameterPath'] = ['a', 'b', '']
+                if change == 'requested-path': admission['request']['query']['memberPath'] = ['a', 'b', '']
+                if change == 'snapshot': admission['response']['snapshotHash'] = 'b' * 64
+                if change == 'before': admission['request']['snapshot']['rootActivity']['structure']['payload']['activities'][0]['inputs'][0]['value'] = {'expressionType': 'Literal', 'value': 'not-before'}
+                if change == 'stored-parameter': item['after']['value']['parameters']['data3']['kind'] = 'VariableMember'
+                if change == 'source': item['after']['value']['source'] = 'args.data3.a.b'
+                if change == 'capability': admission['response']['analysis']['expressionParametersEnabled'] = False
+                if change == 'raw-options': proof['insertions'][0]['after']['value']['options'] = {'ambient': True}
+                if change == 'metadata-loss': item['before']['value']['metadata'] = {'manual': 'keep'}
+                if change == 'runtime': native['runtime'][0]['committed'] = 'wrong'
+                if change == 'recorded-response': proof['contexts'] = []
+                if change == 'wrong-context': admission['request']['nodeId'] = 'other'
+                if change == 'definition-mix': item['definitionId'] = 'other'
+                if change == 'member-default': admission['response']['analysis']['memberReadsEnabled'] = True
+                with self.assertRaises(ValueError): acceptance.validate_expression_data(native, proof, 'insert JavaScript activity data', 'default-off')
+
+    def test_missing_module_preserves_full_argument_unknown_fields_and_conversion(self):
+        native = {'sourceSha': 'b' * 40, 'runtime': []}
+        proof = {'sourceSha': 'b' * 40, 'composition': 'minimal', 'preserved': []}
+        for syntax in ['JavaScript', 'Liquid']:
+            binding = {'expressionType': syntax, 'value': {'language': syntax, 'source': 'manual source',
+                'parameters': {'manual': {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None}},
+                'options': {'preserve': True}, 'metadata': {'original': 'keep'}, 'capabilityProfile': 'binding-pure-v1', 'futureCarrier': {'opaque': ['keep', None, 7]}}}
+            argument = {'referenceKey': 'text', 'value': binding, 'autoEvaluate': False,
+                        'conversion': {'mode': 'profile', 'profile': {'id': 'partner.customer-json', 'version': '3'}, 'limits': {'maxDepth': 8}, 'options': {'preserved': True}}}
+            proof['preserved'].append({'syntax': syntax, 'before': copy.deepcopy(binding), 'after': copy.deepcopy(binding),
+                                      'beforeArgument': copy.deepcopy(argument), 'afterArgument': copy.deepcopy(argument), 'noWritesOpeningOrCancelling': True})
+        acceptance.validate_expression_preservation(native, proof)
+        for change in ['parameter', 'source', 'options', 'profile', 'metadata', 'unknown', 'conversion', 'argument', 'writes', 'execution']:
+            with self.subTest(change=change):
+                broken, wrong_native = copy.deepcopy(proof), copy.deepcopy(native); item = broken['preserved'][0]
+                if change == 'parameter': item['after']['value']['parameters'] = {}
+                if change == 'source': item['after']['value']['source'] = 'changed'
+                if change == 'options': item['after']['value']['options'] = {}
+                if change == 'profile': item['after']['value']['capabilityProfile'] = 'other'
+                if change == 'metadata': item['after']['value']['metadata'] = {}
+                if change == 'unknown': item['after']['value'].pop('futureCarrier')
+                if change == 'conversion': item['afterArgument']['conversion']['profile']['version'] = '4'
+                if change == 'argument': item['afterArgument']['autoEvaluate'] = True
+                if change == 'writes': item['noWritesOpeningOrCancelling'] = False
+                if change == 'execution': wrong_native['runtime'] = [{'status': 'Completed'}]
+                with self.assertRaises(ValueError): acceptance.validate_expression_preservation(wrong_native, broken)
+
+    def test_mode_inventory_keeps_all_normal_titles_and_requires_actual_native_controls(self):
+        self.assertEqual(acceptance.JOURNEYS - {'preserve expression data without optional modules'}, acceptance.selected_journeys())
+        self.assertTrue(acceptance.EXPRESSION_JOURNEYS <= acceptance.selected_journeys())
+        expected = {'choose data for activity outputs', 'insert JavaScript activity data'}
+        self.assertEqual(expected, acceptance.selected_journeys(expected, 'default-off'))
+        for mode, selected in [('default-off', {'insert JavaScript activity data'}), ('default-off', {'choose data for activity outputs', 'insert Liquid activity data'}),
+                               ('minimal', {'insert JavaScript activity data'}), ('minimal', acceptance.MINIMAL_ONLY_JOURNEYS), ('normal', acceptance.MINIMAL_ONLY_JOURNEYS)]:
+            with self.subTest(mode=mode, selected=selected):
+                with self.assertRaises(ValueError): acceptance.selected_journeys(selected, mode)
 
 
 

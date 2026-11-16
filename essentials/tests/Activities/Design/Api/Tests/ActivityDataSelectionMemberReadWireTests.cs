@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 
@@ -31,5 +32,28 @@ public sealed class ActivityDataSelectionMemberReadWireTests
             ActivitiesDesignJsonOptions.WireContext.ActivityDataSelectionContextResponse);
 
         Assert.False(read!.Analysis!.MemberReadsEnabled);
+        Assert.False(read.Analysis.ExpressionParametersEnabled);
     }
+    [Theory]
+    [InlineData("request")]
+    [InlineData("variable")]
+    [InlineData("result")]
+    public void The_activity_definition_wire_retains_portable_query_kinds_without_authored_member_fields(string role)
+    {
+        ExpressionParameterBinding parameter = role switch
+        {
+            "request" => new WorkflowRequestExpressionParameterBinding("DeclaredName"),
+            "variable" => new VariableExpressionParameterBinding("scope-case", "VariableKey"),
+            _ => new ActivityResultExpressionParameterBinding("producer", "$result", true)
+        };
+        var request = new ActivityDataSelectionContextRequest("draft", "1", 5, "edit-7", new("consumer", "value"),
+            new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["a.b", ""] });
+        var json = JsonSerializer.Serialize(request, ActivitiesDesignJsonOptions.WireContext.ActivityDataSelectionContextRequest);
+        var read = JsonSerializer.Deserialize(json, ActivitiesDesignJsonOptions.WireContext.ActivityDataSelectionContextRequest);
+        Assert.Equal(parameter, read!.Query!.ParameterSource); Assert.Equal("JavaScript", read.Query.ExpressionType);
+        Assert.Equal(new[] { "a.b", "" }, read.Query.MemberPath.ToArray());
+        using var wire = JsonDocument.Parse(json);
+        Assert.False(wire.RootElement.GetProperty("query").GetProperty("parameterSource").TryGetProperty("memberPath", out _));
+    }
+
 }
