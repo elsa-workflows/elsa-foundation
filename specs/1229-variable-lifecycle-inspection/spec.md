@@ -4,7 +4,8 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft — waits for the approvers' answers to Q1–Q9; the ADR it applies (ADR 0092) is agreed.
+**Status**: Draft — waits for the coordinator's answers to Q1–Q9; the ADR it applies (ADR 0092) is agreed, and no
+ADR change is needed.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-6**,
 decisions **D-8** and **D-9**.
