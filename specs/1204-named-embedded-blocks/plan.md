@@ -5,9 +5,9 @@
 
 ## Summary
 
-Deliver **Block** creation, bounded extraction, nested editing, safe Ungroup and promotion to ordinary reusable Activity Graphs. Use existing Sequence, Flowchart and BPMN process composites. Introduce no Block runtime activity, private definition catalog or implicit isolation/retry/transaction/compensation boundary.
+Delivered **Block** creation, bounded extraction, nested editing, safe Ungroup and promotion to ordinary reusable Activity Graphs, using the existing Sequence, Flowchart and BPMN process composites. No Block runtime activity, private definition catalog or implicit isolation/retry/transaction/compensation boundary was introduced.
 
-The owner approved this scope and autonomous end-to-end delivery on 3 November. Establishment persists the plan and issue hierarchy; a real-host prototype must prove the composition before production completion. The program remains open until every acceptance row has merged, exact-head and resulting-main evidence.
+The owner approved this scope and autonomous end-to-end delivery on 3 November. Establishment persisted the plan and issue hierarchy, and a real-host prototype proved the composition before production work. Every acceptance row now has merged, exact-head and resulting-main evidence; the program-exit record is PR [#4697](https://github.com/elsa-workflows/elsa-foundation/pull/4697).
 
 ## Technical Context
 
