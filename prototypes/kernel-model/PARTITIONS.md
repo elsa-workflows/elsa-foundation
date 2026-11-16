@@ -1,6 +1,6 @@
 # Virtual partitions: per-virtual-partition fence against per-range fence (round 5 A, 16 November 2026)
 
-Status: **measured, not decided.** The owner's experiment of 15 November (sketch draft 5, decision 4): 1,024 and 4,096
+Status: **measured; decided by the owner on 16 November 2026** (see "The owner's decisions" at the end). The owner's experiment of 15 November (sketch draft 5, decision 4): 1,024 and 4,096
 fixed virtual partitions (4,096 provisional), stable placement, no rehash, a journal per virtual partition, nodes owning
 ranges, and the fence row either **(i) per virtual partition** or **(ii) per owned range**. This records what each
 costs and what each means, on SQLite and PostgreSQL, with a seeded model of the ownership protocol at both counts.
@@ -15,8 +15,9 @@ What was run, and where the code is:
 - `experiments/VirtualPartitions`: the two variants as EF stores over the kernel's entity classes, keys and
   concurrency tokens, the measurement harness, and the ownership simulation ([its README](experiments/VirtualPartitions/README.md)).
   Experiment code: no default changed. The commit SQL is EF's `SaveChanges` with the fence as concurrency tokens, or
-  the fence checked as its own statement first, as `EfStore` does today; takes, splits and merges are conditional
-  statements with RETURNING, as the take is today. Hand-tuned commit SQL is round 5 B.
+  the fence checked as its own statement first, as `EfStore` does today; takes are conditional
+  statements with RETURNING, as the take is today; carve, split and merge are conditional UPDATE, INSERT and DELETE
+  statements checked by their affected-row counts. Hand-tuned commit SQL is round 5 B.
 
 ## The two variants, as built
 
@@ -82,7 +83,7 @@ PostgreSQL, in-batch fence runs (the checked runs give the same statements and t
 | Journal after all of it | gapless per virtual partition; 1,024 fence rows | gapless; 3 range rows + 1,024 position rows | gapless; 4,096 fence rows | gapless; 3 range rows + 4,096 position rows |
 
 Takeover times are millisecond-level either way on a local container; the differences (3.8 against 4.1 ms, 3.9 against
-8.6 ms) are within the run-to-run noise seen across the eight runs (min 2.1, max 17.5 ms over all of them) and are not
+8.6 ms) are within the run-to-run noise seen across the eight runs (min 1.8, max 17.5 ms over all of them) and are not
 a ranking. What is structural: (i) returns *R* rows per take and touches *R* rows per beat, (ii) one row for each but
 reads *R* position rows at a take; (i) writes nothing to move a range, (ii) splits and merges.
 
@@ -94,9 +95,9 @@ reads *R* position rows at a take; (i) writes nothing to move a range, (ii) spli
 - **(ii) cannot do without a position row per virtual partition.** The alternative, `max(position)` from the journal at a
   take, breaks on deletes: a delete removes its instance's journal rows (section 20 of FINDINGS, invariant 6: the
   projector tells a deleted row from a late one by the partition's position), so the position must be a row of its own.
-  Hence (ii)'s *k* position rows per flush: it does not remove the per-virtual-partition writes, it changes them from
-  fence rows to position rows. The position row's concurrency token is kept (it costs nothing and keeps "no two commits
-  at one position" at the row, not only at the journal's primary key).
+  Hence (ii)'s *k* position rows per flush: (ii) keeps the per-virtual-partition writes, which move from fence rows to
+  position rows. The position row's concurrency token is kept (it costs nothing and keeps "no two commits
+  at one position" at the row as well as at the journal's primary key).
 - **What makes a stale picture stale.** In (i) the kept virtual partitions of a range do not change when a tail is
   released, so a commit from an older picture into them lands (and should: no one else wrote). In (ii) the split
   changes the range row, so the whole range's picture is stale: a commit in flight at the moment of a split is refused
@@ -135,8 +136,11 @@ Every run passed with 0 failures. Per seed, averaged:
 | 1,000 x 300, 16 nodes, 4,096 | (i) | 45.8 / 24.0 | 25.3 | 55.7 (286) | 0 / 0 | 750 | 2.11 |
 | | (ii) | 61.2 / 25.3 | 26.9 | 63.7 (220) | 22.8 / 1.0 | 557 | 1.00 |
 
-Reading it: a commit of 1, 3 or 10 random virtual partitions touches 2.1 to 3.5 fence rows in (i) and one in (ii) (plus
-as many position rows, not counted as fence rows). (ii) splits 7 to 23 times and merges 1 to 11 times per seed where
+Reading it: the "fence rows per commit" column averages over every commit of a seed, the settle phase's one-virtual-
+partition commits included, which pulls it down. Over the action phase alone (replays of seeds 1 to 40, distinct
+virtual partitions counted per logged commit) a commit of 1, 3 or 10 random virtual partitions touches on average
+3.97 fence rows in (i) at 1,024 and 4 nodes (870 commits), 4.09 at 16 nodes, 4.18 at 4,096 and 4 nodes and 4.31 at
+16 nodes; (ii) fences one row per commit and moves as many position rows as (i) fences, which the column leaves out. (ii) splits 7 to 23 times and merges 1 to 11 times per seed where
 (i) writes nothing to move a range. The counts of commits and takes differ between the variants because (ii)'s takes
 are all-or-nothing on a row while (i) takes runs of rows, so the seeds' schedules diverge; they are not a throughput
 comparison. The 16-node runs refuse more because leases run out faster against more balancing.
@@ -153,7 +157,7 @@ comparison. The 16-node runs refuse more because leases run out faster against m
 | (ii) A split frees the tail without writing its row | | caught, seed 1 | |
 | (ii) A merge leaves the second row | | caught, seed 1 | |
 | (i) A release while a flush is in flight | not caught (as expected) | | a release changes no kept row; a commit that lands on a freed row before its take moves the position the take reads |
-| (i) A beat renews only the rows the last flush touched | not caught (as expected) | | availability, not safety: idle rows expire and are taken; the owner resets |
+| (i) A beat renews only the rows the last flush touched | not caught (as expected) | | an availability cost: idle rows expire and are taken; the owner resets; nothing wrong lands |
 
 ## Placement and rebalance (`sim --placement-check`)
 
@@ -174,7 +178,7 @@ comparison. The 16-node runs refuse more because leases run out faster against m
   checked fence (E9), so this is the one measured cost that separates them, and it is a commit-SQL question: one
   statement that fences *k* rows and returns their count (round 5 B) removes it.
 - **F-A2. (ii) still writes *k* rows per flush.** The position row per virtual partition is forced by deletes
-  (invariant 6), so "one fence row" saves one token check per flush, not the per-virtual-partition writes.
+  (invariant 6). "One fence row" saves one token check per flush; the per-virtual-partition writes stay.
 - **F-A3. (ii) carries more machinery:** one epoch counter (a statement in every take, split and merge), carve at
   bootstrap and at every contiguous rebalance, split and merge rows, and a range identity (lo) that changes at a merge.
   (i) carries *R* rows per take and per beat (one statement each) and *R* independent epochs in the owner's memory.
@@ -198,14 +202,22 @@ comparison. The 16-node runs refuse more because leases run out faster against m
   per-virtual-partition positions is a refactor of `Worker`, both stores, the projector (per virtual partition), the
   balancer, the runtime conformance suite and the Orleans adapter, and it is the same refactor for either variant but
   for the fence rows. The kernel simulation at both sizes and its mutation pins (43 and 9) ran unchanged on 64
-  partitions; they do not exercise range ownership. The ownership simulation above models the protocol, not the worker.
+  partitions; they do not exercise range ownership. The ownership simulation above models the protocol; the worker itself is unmodelled.
 - SQL Server and MySQL were not run (the checked-fence count above is PostgreSQL's); the SQL Server deadlock surface of
-  *k* fence rows in one batch (E9) is a risk for (i) in the batch there, not measured.
+  *k* fence rows in one batch (E9) is an unmeasured risk for (i) in the batch there.
 - Not modelled: trial and attempt marks per virtual-partition epoch at a take in (i); a flush that spans two of a node's
   range fragments in (ii); the projector's per-virtual-partition rounds; MongoDB.
 - `tcp` for one 100-instance flush read 3 instead of 2 once (README: the PostgreSQL stream varies by a read or two).
+- **Unverified (raised in review):** on PostgreSQL every row update is a new tuple version, so (i)'s beat of *R* rows
+  every few seconds per node is steady WAL and vacuum churn even when the cluster is idle (1,024 rows per beat at
+  4,096 and four nodes); (ii) renews one row. A node-level lease row for the beat, as today's `Nodes.SeenAt`, with the
+  per-virtual-partition rows left to the fence, is an option for (i). Not measured (WRITES.md's method would measure it).
+- **Unverified (raised in review):** EF's SQL Server and MySQL providers put at most 42 statements in one command by
+  default (ENGINES.md E7; the cost runs and the conformance suite set `MaxBatchSize(1000)`, the experiment's context does
+  not), so a 100-instance flush there is about ten round trips in either variant at the default, and an in-batch fence
+  rides only in the first command. Not measured.
 
-## Recommendation, and what the owner decides
+## Recommendation, and what the owner decided
 
 **Recommendation: (i), the fence per virtual partition, on the condition that round 5 B gives the checked fence one
 statement for *k* rows.** The measured hot path is equal on the default fence; (i) has no split, no merge, no epoch
@@ -223,9 +235,9 @@ Trade-offs the owner weighs:
 - **(ii)** fewer rows per beat and take; split, merge, carve and an epoch counter; the whole range resets at a split;
   fragmentation is workers and rows; the range identity changes at a merge.
 
-Decisions that are the owner's, with what the numbers say:
+The decisions that were the owner's, with what the numbers said:
 
-1. **Fence granularity:** (i) or (ii). Evidence above; the recommendation is (i).
+1. **Fence granularity:** (i) or (ii). Evidence above; the recommendation was (i).
 2. **The count:** 1,024 or 4,096. No per-flush difference; 4,096 is four times the rows per take and beat in (i) and
    four times the projection cursors in both; 1,024 still gives 100 nodes ten virtual partitions each. The numbers lean
    to 1,024 unless a cluster of several hundred nodes is a goal.
@@ -235,3 +247,11 @@ Decisions that are the owner's, with what the numbers say:
    fragments). In (i) this is a balancer policy with no store cost; in (ii) it decides how many fence rows a node holds.
 5. **When the worker refactor to range ownership happens:** it is the same work for either variant and larger than
    a round-5 slice; it belongs after this decision and, per the program order, with the design proposal.
+
+## The owner's decisions (Sipke, 16 November 2026)
+
+- **Fence granularity: (i), one fence row per virtual partition,** conditional on round 5 B sending the checked fence
+  as one multi-row statement. **That multi-row checked fence is now in B's scope.**
+- **Count: 1,024 virtual partitions.** The code keeps `VirtualPartitions.Provisional = 4096` as written on 15 November
+  (no code changed in this round's documentation fix); the Worker refactor to range ownership will use 1,024.
+- Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) remain open.

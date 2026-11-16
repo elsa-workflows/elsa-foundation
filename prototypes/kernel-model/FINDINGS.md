@@ -1846,5 +1846,7 @@ decisions are in [PARTITIONS.md](PARTITIONS.md). In one line: with the fence in 
 trips per flush and the per-range variant one statement more; with the checked fence the per-virtual-partition variant
 as built costs *k* + 2 round trips against 3, a commit-SQL shape for round 5 B; the per-range variant still writes a
 position row per virtual partition, needs an epoch counter, split, merge and carve, and stales a whole range at a
-split. The recommendation is the fence per virtual partition, conditional on a one-statement multi-row checked fence;
-the owner decides.
+split. The recommendation was the fence per virtual partition, conditional on a one-statement multi-row checked fence.
+**Decided by the owner on 16 November 2026: (i) the fence per virtual partition, the multi-row checked fence in round
+5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stays in code until the Worker refactor,
+which will use 1,024).
