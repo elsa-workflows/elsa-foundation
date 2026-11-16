@@ -918,13 +918,15 @@ public sealed class GraphActivityProvider(
         var variables = activityStructureService.ProjectScopedVariables(node.Activity);
         if (structure is null || variables.Count == 0) return structure;
         var payload = JsonNode.Parse(structure.Payload.GetRawText())!.AsObject();
-        payload["variables"] = JsonSerializer.SerializeToNode(compiler!.CompileGraphVariables(node.NodeId, variables), NodeSerializerOptions);
+        payload["variables"] = JsonNode.Parse(compiler!.CompileGraphVariables(node.NodeId, variables).GetRawText());
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
     }
 
     private ExecutableNode CompileLocalSet(GraphNode node, VariableDefinition target, ActivityGraphManifest graph, IReadOnlyList<GraphNode> nodes, DesignActivityContract contract, IActivityTemplateInputBindingCompiler compiler)
     {
-        var bindings = compiler.CompileGraphInputs(node.NodeId,
+        // Native Set compiles its value under the declared policy; the promoted local Set must not reinterpret the
+        // argument envelope's storage or sensitivity hints as new requirements.
+        var bindings = compiler.CompileGraphIntrinsicInputs(node.NodeId,
             [new InputDefinition(WorkflowIntrinsicInputKeys.Value, WorkflowIntrinsicInputKeys.Value, target.Type, null,
                 target.Name, null, IsNullable: false, IsRequired: true)], node.Activity.Inputs).ToDictionary(binding => binding.Key, binding => binding.Value, StringComparer.Ordinal);
         var value = bindings[WorkflowIntrinsicInputKeys.Value];

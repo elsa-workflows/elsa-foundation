@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -749,10 +750,29 @@ public sealed class ActivityTemplatePlacer(
         if (structure is null)
             return null;
 
+        // The variables field holds Publishing's compiled declarations (ExecutableNodeCompiler.CompileStructure), not
+        // the owner's authored variables. The owner's remapper only routes child ids, so it never sees that field and
+        // the compiled declarations are put back unchanged after routing.
+        var payload = structure.Payload;
+        var hasCompiledVariables = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("variables", out _);
+        JsonNode? compiledVariables = null;
+        if (hasCompiledVariables)
+        {
+            var routed = JsonNode.Parse(payload.GetRawText())!.AsObject();
+            compiledVariables = routed["variables"]?.DeepClone();
+            routed.Remove("variables");
+            payload = JsonSerializer.SerializeToElement(routed, DescriptorPayloadSerializer.Options);
+        }
+
         var rewritten = activityStructureService.RemapExecutableStructure(
-            new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, structure.Payload),
+            new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, payload),
             placedNodeIds);
-        return new(rewritten.Kind, rewritten.SchemaVersion, rewritten.Payload);
+        if (!hasCompiledVariables)
+            return new(rewritten.Kind, rewritten.SchemaVersion, rewritten.Payload);
+        var restored = JsonNode.Parse(rewritten.Payload.GetRawText()) as JsonObject
+            ?? throw new InvalidOperationException($"Structure '{rewritten.Kind}@{rewritten.SchemaVersion}' remapped to a non-object payload.");
+        restored["variables"] = compiledVariables;
+        return new(rewritten.Kind, rewritten.SchemaVersion, JsonSerializer.SerializeToElement(restored, DescriptorPayloadSerializer.Options));
     }
 
     private RuntimeActivityDescriptor StampBoundaryDescriptor(

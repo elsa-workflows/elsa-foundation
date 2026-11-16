@@ -73,13 +73,49 @@ public sealed class RuntimeInputBindingCompiler(
         return CompileAll(nodeId, inputDefinitions, states);
     }
 
-    IReadOnlyCollection<RuntimeVariableDeclaration> IActivityTemplateInputBindingCompiler.CompileGraphVariables(
+    IReadOnlyDictionary<string, RuntimeInputBinding> IActivityTemplateInputBindingCompiler.CompileGraphIntrinsicInputs(
+        string nodeId, IEnumerable<InputDefinition> inputDefinitions, IEnumerable<ArgumentState> inputStates)
+    {
+        var definitions = inputDefinitions.ToArray();
+        var states = inputStates.Select(state => InputReadLowering.Lower(state, key => key)).ToArray();
+        var statesByKey = states.GroupBy(state => state.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        if (statesByKey.Count != definitions.Length || statesByKey.Values.Any(group => group.Length != 1) ||
+            definitions.Any(definition => !statesByKey.ContainsKey(definition.ReferenceKey)))
+        {
+            throw new ArgumentException(
+                $"Workflow intrinsic node '{nodeId}' requires exactly these inputs: {string.Join(", ", definitions.Select(definition => definition.ReferenceKey).Order(StringComparer.Ordinal))}.");
+        }
+        if (SecretInputKeys(states).FirstOrDefault() is { } secretKey)
+            throw SecretBindingDiagnostics.IntrinsicInputRefused(nodeId, secretKey);
+        return definitions.ToDictionary(
+            definition => definition.ReferenceKey,
+            definition => CompileIntrinsicInput(nodeId, definition, statesByKey[definition.ReferenceKey][0]),
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Compiles one native intrinsic input. Workflow publication and reusable graph bodies share this rule: the input's
+    /// declared policy applies, and conversion intent is forwarded only for whole result, variable and request reads.
+    /// </summary>
+    internal RuntimeInputBinding CompileIntrinsicInput(string nodeId, InputDefinition inputDefinition, ArgumentState state) =>
+        Compile(nodeId, inputDefinition, state.Value, ForwardsIntrinsicConversion(state.Value) ? state.Conversion : null);
+
+    private static bool ForwardsIntrinsicConversion(ArgumentValue value) =>
+        string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase);
+
+    JsonElement IActivityTemplateInputBindingCompiler.CompileGraphVariables(
         string nodeId, IEnumerable<VariableDefinition> variables)
     {
         var declarations = variables.ToArray();
         if (declarations.GroupBy(variable => variable.ReferenceKey, StringComparer.Ordinal).Any(group => group.Count() > 1))
             throw new ArgumentException($"Activity node '{nodeId}' declares a variable more than once.");
-        return declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
+        // The same wire form ExecutableNodeCompiler.CompileStructure writes and placement reads back.
+        return JsonSerializer.SerializeToElement(
+            declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray(),
+            DescriptorPayloadSerializer.Options);
     }
 
     internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)

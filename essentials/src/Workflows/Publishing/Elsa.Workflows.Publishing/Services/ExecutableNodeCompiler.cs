@@ -392,7 +392,7 @@ public sealed class ExecutableNodeCompiler(
 
         var bindings = inputTypes.ToDictionary(
             input => input.Key,
-            input => inputBindingCompiler.Compile(
+            input => inputBindingCompiler.CompileIntrinsicInput(
                 activity.NodeId,
                 new InputDefinition(
                     input.Key,
@@ -403,12 +403,7 @@ public sealed class ExecutableNodeCompiler(
                     Category: null,
                     IsNullable: false,
                     IsRequired: true),
-                authoredInputs[input.Key].Value,
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "ActivityResult", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "WorkflowRequest", StringComparison.OrdinalIgnoreCase)
-                    ? authoredInputs[input.Key].Conversion
-                    : null),
+                authoredInputs[input.Key]),
             StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {
