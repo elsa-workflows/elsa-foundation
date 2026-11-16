@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -55,6 +56,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         {
             ValueConversionOperation.Identity => inline.Clone(),
             ValueConversionOperation.NullableCompatibility => inline.Clone(),
+            ValueConversionOperation.NumericToString => FormatNumericAsString(inline, plan),
             ValueConversionOperation.NumericWidening => ConvertNumeric(inline, plan),
             ValueConversionOperation.RecursiveCollection => ConvertCollection(inline, plan, depth: 1),
             ValueConversionOperation.CanonicalAny => CanonicalizeAny(inline, plan),
@@ -76,6 +78,8 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 throw Reject(plan, "identity conversion requires matching source and target contracts");
             case ValueConversionOperation.NullableCompatibility when !ValueConversionCompatibility.IsNullableCompatibility(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "nullable compatibility requires matching source and target contracts");
+            case ValueConversionOperation.NumericToString when !ValueConversionCompatibility.CanFormatNumericAsString(plan.SourceType, plan.SourceRepresentation, plan.TargetType):
+                throw Reject(plan, "numeric text formatting requires a typed scalar Double and a plain String target");
             case ValueConversionOperation.NumericWidening when !ValueConversionCompatibility.IsSafeNumericWidening(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "numeric conversion is not a safe widening");
             case ValueConversionOperation.RecursiveCollection when !ValueConversionCompatibility.CanRecursivelyWidenCollection(plan.SourceType, plan.TargetType):
@@ -96,6 +100,14 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (plan.SourceRepresentation == ValueRepresentation.FormattedContent &&
             plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility and not ValueConversionOperation.Profile)
             throw Reject(plan, "formatted content requires a dedicated pinned profile conversion");
+    }
+
+    private static JsonElement FormatNumericAsString(JsonElement value, ValueConversionPlan plan)
+    {
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number))
+            throw Reject(plan, "numeric text formatting requires a finite Double");
+
+        return JsonSerializer.SerializeToElement(number.ToString("R", CultureInfo.InvariantCulture));
     }
 
     private static JsonElement ConvertNumeric(JsonElement value, ValueConversionPlan plan)

@@ -55,6 +55,9 @@ public sealed class ValueConversionPlanResolver(
         if (ValueConversionCompatibility.IsSafeNumericWidening(sourceType, targetType))
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.NumericWidening, null, limits, options);
 
+        if (ValueConversionCompatibility.CanFormatNumericAsString(sourceType, sourceRepresentation, targetType))
+            return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.NumericToString, null, limits, options);
+
         if (ValueConversionCompatibility.CanRecursivelyWidenCollection(sourceType, targetType))
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.RecursiveCollection, null, limits, options);
 

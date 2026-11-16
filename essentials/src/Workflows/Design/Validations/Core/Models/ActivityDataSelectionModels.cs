@@ -23,6 +23,10 @@ public sealed record ActivityDataSelectionDocument(
     ImmutableArray<VariableDefinition> Variables,
     ImmutableArray<OutputDefinition> Outputs)
 {
+    /// <summary>Draft validators can request binding conversion findings before promotion.</summary>
+    [JsonIgnore]
+    public bool ValidateBindingConversions { get; init; }
+
     /// <summary>
     /// Complete input states selected by Publishing for each exact resolved closed boundary, including
     /// authored values and selected public defaults. Presence, including an empty array, makes the
@@ -59,6 +63,8 @@ public sealed record ActivityDataSelectionQuery
 
     /// <summary>False resolves only the actual target and restrictions, before any source metadata is acquired.</summary>
     public bool IncludeSources { get; init; } = true;
+    /// <summary>Preview the stored direct activity-result binding without listing alternative sources.</summary>
+    public bool PreviewBindingConversion { get; init; }
     public string? Search { get; init; }
     public int Skip { get; init; }
     public int Take { get; init; } = 100;
@@ -117,6 +123,9 @@ public sealed record ActivityDataSelectionAnalysis(
     /// selection only when it is true; an answer that does not carry it reads as false.
     /// </summary>
     public bool MemberReadsEnabled { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ActivityBindingConversionPreview? BindingConversion { get; init; }
 }
 
 /// <summary>
@@ -152,3 +161,7 @@ public sealed record ActivityDataInputConstraint(
     ImmutableArray<string> AllowedExpressionTypes,
     string ReasonCode,
     string Message);
+
+/// <summary>The planned operation or publication rejection for a known, authored result-to-input binding.</summary>
+public sealed record ActivityBindingConversionPreview(TypeReference SourceType, TypeReference TargetType,
+    string? Operation, string? ReasonCode = null, string? Rejection = null);

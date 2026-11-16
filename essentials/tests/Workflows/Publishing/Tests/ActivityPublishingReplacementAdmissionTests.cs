@@ -1,4 +1,5 @@
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -31,7 +32,7 @@ public sealed class ActivityPublishingReplacementAdmissionTests
     {
         typeof(IActivityTemplateCompiler), typeof(IActivityTemplateInputBindingCompiler),
         typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),
-        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy)
+        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy), typeof(IActivityBindingConversionPreviewer)
     }.Select(type => new object[] { type });
 
     [Theory]
@@ -71,6 +72,19 @@ public sealed class ActivityPublishingReplacementAdmissionTests
             await ResolveGuard(child).ExecuteAsync(default);
             await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(parent).ExecuteAsync(default));
         }
+    }
+
+    [Fact]
+    public async Task A_keyed_previewer_does_not_participate_in_unkeyed_contract_admission()
+    {
+        IServiceCollection services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+        services.AddKeyedScoped<IActivityBindingConversionPreviewer>("other", (_, _) => throw new InvalidOperationException());
+        await ResolveGuard(services).ExecuteAsync(default);
+
+        services.RemoveAll<IActivityBindingConversionPreviewer>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(services).ExecuteAsync(default));
+        Assert.Contains("IActivityBindingConversionPreviewer (0 registrations)", error.Message);
     }
 
     private static IStartupTask ResolveGuard(IServiceCollection services)
