@@ -1340,7 +1340,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
     if (tab === activeInspectorTab) return;
-    beginEvidenceNavigation();
+    // Opening the selected execution's Activity view does not navigate away from its pending ancestry.
+    const pendingScope = scopeRequest.current;
+    const openingPendingSelection = tab === "activity" && scopeNavigation.context === browserContext
+      && pendingScope !== null && !pendingScope.signal.aborted && focusReadyScope.current !== pendingScope
+      && requestedScope.current?.includeSelf === false
+      && requestedScope.current.execution.activityExecutionId === selectedActivity?.activityExecutionId;
+    if (!openingPendingSelection) beginEvidenceNavigation();
     setActiveInspectorTab(tab);
   };
 
@@ -1628,6 +1634,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setSelectedEvidenceId(current => data?.details.incidents?.some(incident => incident.incidentId === current) ? null : current);
     reloadDetailsRequested.current = true; refreshObservation();
   };
+  const runName = data?.definitionName ?? data?.definitionVersion?.definition?.name ?? "Workflow run";
 
   return (
     <>
@@ -1635,12 +1642,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         <div className="wf-run-identity">
           <button type="button" className="wf-run-tool" onClick={goBack}><ChevronLeft size={14} aria-hidden="true" /> Runs</button>
           <ChevronRight size={13} aria-hidden="true" />
-          <strong>{data?.definitionName ?? data?.definitionVersion?.definition?.name ?? "Workflow run"}</strong>
+          <strong title={runName}>{runName}</strong>
           {data ? <WorkflowStatusBadge status={data.details.instance.status} subStatus={data.details.instance.subStatus} /> : null}
         </div>
         <div className="wf-run-actions">
           {selectedDefinitionCanBeReviewed && selectedDefinitionId ? <button type="button" className="wf-run-tool"
-            onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</button> : null}
+            onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> <span className="wf-run-tool-label">Open definition</span></button> : null}
           <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
           <RunObservationControls following={observation.following} onFollowingChange={observation.setFollowing}
             onRefresh={refreshWorkspace} complete={observation.status === "connected" && isTerminalExecution(data?.details.instance.status)} />

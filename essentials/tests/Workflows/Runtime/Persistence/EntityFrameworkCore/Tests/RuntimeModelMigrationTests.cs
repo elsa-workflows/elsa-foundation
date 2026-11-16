@@ -30,10 +30,12 @@ public sealed partial class RuntimeModelMigrationTests
             Assert.DoesNotContain(RuntimeModelStateEfModule.StateTable, before.Keys);
             var history = await History(connection);
             Assert.Equal(["20261017151421_Initial"], history);
+            long legacyWorkflowOutboxRows;
             await using (var captured = connection.CreateCommand())
             {
                 captured.CommandText = $"SELECT COUNT(*) FROM \"{RuntimePostCommitOutboxEfModule.TableName}\" WHERE SchemaVersion = '2.0.0' AND WorkflowExecutionId IS NOT NULL";
-                Assert.Equal(239L, (long)(await captured.ExecuteScalarAsync())!);
+                legacyWorkflowOutboxRows = (long)(await captured.ExecuteScalarAsync())!;
+                Assert.True(legacyWorkflowOutboxRows > 0);
             }
             await using (var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).Options))
@@ -77,7 +79,7 @@ public sealed partial class RuntimeModelMigrationTests
             await using (var workflowSources = connection.CreateCommand())
             {
                 workflowSources.CommandText = $"SELECT COUNT(*) FROM \"{RuntimePostCommitOutboxEfModule.TableName}\" WHERE SchemaVersion = '2.0.0' AND WorkflowExecutionId IS NOT NULL AND SourceKind IS NULL AND SourceId IS NULL AND TriggerIdHash IS NULL AND SourceKeyHash IS NULL";
-                Assert.Equal(239L, (long)(await workflowSources.ExecuteScalarAsync())!);
+                Assert.Equal(legacyWorkflowOutboxRows, (long)(await workflowSources.ExecuteScalarAsync())!);
             }
             // Schema upgrade only: no execution is resumed and no direct-host acceptance is implied.
         }

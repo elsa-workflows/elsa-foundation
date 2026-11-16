@@ -1614,7 +1614,9 @@ export function WorkflowEditor({
             </fieldset>
           ) : (
           <>
+          <div className="wf-canvas-context">
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
+          <div className="wf-canvas-context-commands">
           {draft.state.rootActivity ? <NativeBlockCommands
             endpoint={context}
             bpmnImportFile={frames.length === 0 ? bpmnImportFile : null}
@@ -1648,6 +1650,8 @@ export function WorkflowEditor({
               if (node && slot) enterSlotScope(nodeId, slot, slotCrumbLabel(resolveActivityLabel(presentationByNodeId.get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), slot));
             }}
           /> : null}
+          </div>
+          </div>
           {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
             <CompensationScopeDesigner
               owner={scopeOwner}

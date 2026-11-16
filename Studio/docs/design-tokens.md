@@ -276,7 +276,7 @@ onto the `--studio-*` contract in one block, then styles **only** against that p
 vocabulary — no literals, no per-theme rules in the component rules. Light/dark and material
 themes are inherited through whatever the aliases resolve to.
 
-`Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/styles.css` is the exemplar: it defines an
+`extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/styles.css` is the exemplar: it defines an
 `--otel-*` block on `.otel-page, .otel-panel`, layering primitives as fallbacks, with a single
 `html[data-theme-mode="dark"]` block to adjust the private aliases for dark mode. Every
 component rule references `--otel-*` only. (Its alias block is the one place that legitimately

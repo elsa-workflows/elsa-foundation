@@ -1,5 +1,7 @@
 .wf-block-backdrop{position:fixed;inset:0;z-index:1000;background:color-mix(in srgb, var(--studio-text) 38%, transparent);display:grid;place-items:center;padding:1rem}
-.wf-block-commands{display:flex;flex-wrap:wrap;gap:var(--wf-space-2,.5rem);padding:.5rem 1rem}
+/* Keep canvas commands reachable without spending its remaining height on wrapped rows. */
+.wf-block-commands{display:flex;flex:0 0 auto;flex-wrap:nowrap;min-width:0;overflow-x:auto;gap:var(--wf-space-2,.5rem);padding:.5rem 1rem}
+.wf-block-commands > button{flex:0 0 auto;white-space:nowrap}
 .wf-block-commands button,.wf-block-dialog-actions button{border:1px solid var(--wf-border);border-radius:var(--wf-radius-md,.5rem);background:var(--wf-surface);color:var(--wf-text);padding:.4rem .65rem;font:inherit}
 .wf-block-commands button:disabled,.wf-block-dialog-actions button:disabled{opacity:.5;cursor:not-allowed}
 .wf-block-dialog{background:var(--wf-surface);color:var(--wf-text);border:1px solid var(--wf-border);border-radius:var(--wf-radius-md,.5rem);width:min(54rem,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);overflow:auto;overflow-wrap:anywhere;padding:1.25rem}

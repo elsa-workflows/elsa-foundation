@@ -33,7 +33,7 @@ code.
    The adjacent publication menu selects the supported publication mode; it is part of that same action.
 3. **Tokens only.** Colour, radius, shadow, spacing and type come from `--studio-*` tokens.
    Colour lint is only partly true today: `pnpm lint:css` (`elsa/no-raw-color-literal`) covers
-   `src/essentials/*/Client/src/**/*.css` and `Extensions/*/studio/*/Client/src/**/*.css`.
+   `src/essentials/*/Client/src/**/*.css` and `extensions/*/studio/*/Client/src/**/*.css`.
    `.stylelintrc.json` ignores `**/Elsa.Studio.Hosting/Client/**`, so the app shell, `ui/forms`,
    `ui/layout`, `ui/feedback` and `app/styles.css` are **not** colour-linted. The disclosure kit
    CSS (`ui/disclosure/**/*.css`) is linted via `.stylelintrc.disclosure.json`. Module colour:
