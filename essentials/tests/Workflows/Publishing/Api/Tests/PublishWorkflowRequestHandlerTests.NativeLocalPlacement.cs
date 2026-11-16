@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Expressions.Core.Models;
@@ -14,8 +13,8 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed partial class PublishWorkflowRequestHandlerTests
 {
-    private static readonly JsonSerializerOptions DeclarationOptions = new(JsonSerializerDefaults.Web)
-    { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
+    // Publishing's own descriptor wire form (web defaults, numeric enums); a string-enum payload does not read back.
+    private static readonly JsonSerializerOptions PublishedDeclarationOptions = new(JsonSerializerDefaults.Web);
 
     // A reusable body's native container local is compiled to the canonical declaration (key, policy, initial binding).
     // Placement remaps the owner's child ids through the owner's structure handler; the declaration must survive that
@@ -54,7 +53,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         {
             var declaringOwner = Assert.Single(nodes, node => node.ExecutableNodeId == setter.IntrinsicVariable!.DeclaringScopeId);
             Assert.Contains(declaringOwner.ChildSlots.SelectMany(slot => slot.Activities), child => child.ExecutableNodeId == setter.ExecutableNodeId);
-            var declarations = declaringOwner.Structure!.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(DeclarationOptions)!;
+            var declarations = declaringOwner.Structure!.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(PublishedDeclarationOptions)!;
             var declaration = Assert.Single(declarations);
             Assert.Equal("local", declaration.VariableKey);
             Assert.Equal("String", declaration.Type.Alias);

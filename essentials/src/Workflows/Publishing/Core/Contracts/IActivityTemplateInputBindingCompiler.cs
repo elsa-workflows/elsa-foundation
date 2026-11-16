@@ -18,7 +18,8 @@ public interface IActivityTemplateInputBindingCompiler
     /// <summary>
     /// Compiles a native intrinsic's inputs as workflow publication does: each input keeps its declared policy, the
     /// argument envelope's own storage and sensitivity hints do not apply, and conversion intent is forwarded only for
-    /// whole result, variable and request reads.
+    /// whole result, variable and request reads. Inside the closed boundary an input read lowers to a request read of the
+    /// boundary input's reference key, where workflow publication keys it by the input's public name.
     /// </summary>
     IReadOnlyDictionary<string, RuntimeInputBinding> CompileGraphIntrinsicInputs(
         string nodeId,

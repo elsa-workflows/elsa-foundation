@@ -29,8 +29,10 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 
     // Replays the production planner's reviewed promotion candidates (the documents the held native-host Fact
-    // submits) through ordinary in-memory reusable compilation, publication and placement of two exact-version
-    // calls. It executes no workflow and is not native-host evidence.
+    // submits) through the reusable template compiler with an accept-all admission policy and a test-built publication
+    // record, then publishes a workflow with two literal call sites through the real publish handler and placement.
+    // It does not use the planner's call-site or replacement documents, executes no workflow and is not native-host
+    // or ordinary activity-publication evidence.
     [Theory]
     [InlineData("sequence-direct")]
     [InlineData("sequence-parameter")]
@@ -135,7 +137,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             var scope = setter.IntrinsicVariable!.DeclaringScopeId;
             scopes.Add(scope);
             var owner = Assert.Single(nodes, node => node.ExecutableNodeId == scope);
-            var declaration = Assert.Single(owner.Structure!.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(CandidateOptions)!);
+            var declaration = Assert.Single(owner.Structure!.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(PublishedDeclarationOptions)!);
             Assert.Equal(("local", "String"), (declaration.VariableKey, declaration.Type.Alias));
             Assert.NotNull(declaration.InitialBinding);
             Assert.Equal(DurableValueStorage.Inline, declaration.Policy.Storage);
