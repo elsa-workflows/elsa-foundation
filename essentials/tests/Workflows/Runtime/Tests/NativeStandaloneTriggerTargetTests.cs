@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -373,7 +374,20 @@ public sealed class NativeStandaloneTriggerTargetTests
     public Task Captured_saved_cohort_preserves_real_physical_scope_through_first_retained_and_replayed_commits(string tenant, bool coalescing, bool batch) =>
         RunSavedCohort(tenant, coalescing, true, commitCaptured: true, batch);
 
-    private static async Task RunSavedCohort(string tenant, bool coalescing, bool? historyEnabled, bool commitCaptured = false, bool batch = false, bool firstFault = false)
+    [Theory]
+    [InlineData("tenant", false, "none")]
+    [InlineData("tenant", true, "none")]
+    [InlineData("logical-tenant", false, "none")]
+    [InlineData("logical-tenant", true, "none")]
+    [InlineData("logical-tenant", false, "unsealed")]
+    [InlineData("logical-tenant", true, "unsealed")]
+    [InlineData("tenant", false, "foreign-partition")]
+    [InlineData("tenant", true, "foreign-partition")]
+    public Task Captured_saved_cohort_observation_respects_bound_physical_scope(string tenant, bool coalescing, string nativeHeader) =>
+        RunSavedCohort(tenant, coalescing, true, commitCaptured: true, batch: true, observationCheck: nativeHeader);
+
+    private static async Task RunSavedCohort(string tenant, bool coalescing, bool? historyEnabled, bool commitCaptured = false, bool batch = false,
+        bool firstFault = false, string? observationCheck = null)
     {
         using var fixture = await Fixture.CreateAsync(tenant, coalescing);
         var parentSeal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(parentSeal);
@@ -418,7 +432,8 @@ public sealed class NativeStandaloneTriggerTargetTests
                 new WorkflowExecutableStimulusDeliveryAuthority(sourceId, fingerprint, scope, "previous-owner", 1, binding.TriggerBindingId)), 0)
             {
                 StimulusDeliveryOrigin = savedOrigin,
-                HistoryCapturePolicy = historyEnabled == true ? new("saved-start-history", 1, !commitCaptured || batch, ["WorkflowStarted"]) : null,
+                HistoryCapturePolicy = historyEnabled == true ? new("saved-start-history", 1, !commitCaptured || batch,
+                    observationCheck is null ? ["WorkflowStarted"] : ["WorkflowStarted", "DeliveryReceived"]) : null,
                 HistoryCaptureEnabledAtAdmission = historyEnabled
             };
         var authority = payload.StartAuthority!.StimulusDelivery!;
@@ -508,8 +523,9 @@ public sealed class NativeStandaloneTriggerTargetTests
             Assert.True(staged.StateChanges.WorkflowExecution.State.HistoryCaptureEnabledAtAdmission);
             if (commitCaptured)
             {
+                var historyAccess = new Access(scope);
                 var reader = new Elsa.Workflows.Runtime.Services.History.InMemoryRuntimeHistoryStore(fixture.Executions.CheckpointState,
-                    new Access(scope), new Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+                    historyAccess, new Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
                     { SigningKey = "saved-history-scope-control-signing-key-32-bytes" })));
                 RuntimeCheckpointCommit WithHistory(RuntimeCheckpointCommit value, bool starts) => batch ? value with
                 {
@@ -537,6 +553,43 @@ public sealed class NativeStandaloneTriggerTargetTests
                 await Assert.ThrowsAsync<InvalidOperationException>(() => foreign.CommitAsync(first,
                     new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
                 Assert.Equal(retainedHead, await reader.FindHeadAsync(key.WorkflowExecutionId));
+                if (observationCheck is not null)
+                {
+                    // Start and seal through the real native source before exercising the independent observation port.
+                    // These two corruptions supply negative retained-header controls; they grant no fresh admission authority.
+                    var owner = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
+                    if (observationCheck == "unsealed")
+                        await fixture.Executions.SaveAsync(owner with { StimulusDeliveryOrigin = null });
+                    else if (observationCheck == "foreign-partition")
+                        await fixture.Executions.SaveAsync(owner with { Partition = new("other-scope") });
+                    var writer = new InMemoryRuntimeHistoryObservationWriter(fixture.Executions.CheckpointState,
+                        historyAccess, fixture.Executions, fixture.Clock);
+                    Assert.True(writer.CanRecordHistory(reader));
+                    var observation = new RuntimeHistoryObservation(required,
+                        new RuntimeHistoryEvent("saved-scope-observation", key.WorkflowExecutionId, 0,
+                            RuntimeHistoryEventCategory.DeliveryObservation, "DeliveryReceived", fixture.Clock.GetUtcNow())
+                        { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = new(DeliveryId: "saved-scope-delivery") });
+                    var beforeObservation = (await reader.FindHeadAsync(key.WorkflowExecutionId))!;
+                    var markerCount = fixture.CheckpointStore.ListCommits().Count;
+                    if (observationCheck == "none")
+                    {
+                        var result = await writer.RecordAsync(observation);
+                        Assert.True(result.Recorded);
+                        Assert.Equal(beforeObservation.LastSequence + 1, result.Event!.Sequence);
+                        Assert.Equal(result.Event, (await writer.RecordAsync(observation)).Event);
+                        var afterObservation = (await reader.FindHeadAsync(key.WorkflowExecutionId))!;
+                        Assert.Equal(result.Event.Sequence, afterObservation.LastSequence);
+                        Assert.Equal(beforeObservation.LastPhysicalCommitId, afterObservation.LastPhysicalCommitId);
+                        Assert.Equal(beforeObservation.LastCommittedAt, afterObservation.LastCommittedAt);
+                    }
+                    else
+                    {
+                        await Assert.ThrowsAnyAsync<InvalidOperationException>(async () => await writer.RecordAsync(observation));
+                        Assert.Equal(beforeObservation, await reader.FindHeadAsync(key.WorkflowExecutionId));
+                        Assert.Null(await reader.FindEventAsync(key.WorkflowExecutionId, observation.Event.HistoryEventId));
+                    }
+                    Assert.Equal(markerCount, fixture.CheckpointStore.ListCommits().Count);
+                }
                 return;
             }
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), fixture.CheckpointStore,
