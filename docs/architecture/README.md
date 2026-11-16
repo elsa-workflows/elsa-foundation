@@ -16,6 +16,7 @@ These pages describe the proposed clean-slate execution kernel. They are design 
 8. [Write volume and bloat](write-volume.md) — **Proposed**: bytes per commit and dead tuples before and after the mitigations, values by reference as release 1's priority, and the lazy-snapshot fallback.
 9. [Migrating running instances](migrating-running-instances.md) — **Proposed**: state versions per model and per activity, the migration command and each container's hook, what in-flight work does, and release 1's simple cases.
 10. [Job workers outside the process](job-workers.md) — **Proposed**: one job contract for in-process and remote workers, attempt leases, heartbeats, the effect key, completion through the fenced commit, and the release placement of standalone Jobs.
+11. [Observability and operator actions](observability.md) — **Proposed**: trace context on every message, stable metric names, inspect, retry and discard of parked work, and the read models operators use.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 
