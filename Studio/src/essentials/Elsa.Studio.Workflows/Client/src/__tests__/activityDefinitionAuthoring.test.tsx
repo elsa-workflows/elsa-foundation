@@ -31,6 +31,32 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("marks local invalid JSON diagnostics as needing attention and reveals them from the header", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    openDetails(rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!);
+    click(buttonByText(rendered.container, "Edit code"));
+    await waitFor(() => expect(rendered.container.querySelector(".studio-code-editor textarea")).not.toBeNull());
+    change(rendered.container.querySelector<HTMLTextAreaElement>(".studio-code-editor textarea")!, "{ invalid");
+    await waitForText(rendered.container, "The JSON buffer is invalid and remains local");
+    expect(rendered.container.querySelector(".ad-draft-diagnostics-link")?.classList.contains("needs-attention")).toBe(true);
+    const panel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    panel.scrollIntoView = vi.fn();
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(document.activeElement).toBe(panel);
+    expect(panel.textContent).toContain("The JSON buffer is invalid and remains local");
+    await rendered.unmount();
+  });
+
   it("retains the create form and entered name when its host rerenders after first collection history initialization", async () => {
     const rendered = renderPage({
       getJson: async url => {
@@ -1539,6 +1565,17 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("1 warning");
     expect(rendered.container.textContent).toContain("1 info");
     expect(rendered.container.textContent).toContain("Provide a stable reference key.");
+    const diagnosticsPanel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    const diagnosticsDetails = diagnosticsPanel.querySelector("details")!;
+    diagnosticsDetails.open = false;
+    const scrollToDiagnostics = vi.fn();
+    const firstDiagnostic = diagnosticsPanel.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]")!;
+    firstDiagnostic.scrollIntoView = scrollToDiagnostics;
+    expect(rendered.container.querySelectorAll(".ad-draft-diagnostics-link")).toHaveLength(1);
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(diagnosticsDetails.open).toBe(true);
+    expect(document.activeElement).toBe(firstDiagnostic);
+    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "center" });
     const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
     expect(codes).toEqual([
       "activity.contract.input-invalid",

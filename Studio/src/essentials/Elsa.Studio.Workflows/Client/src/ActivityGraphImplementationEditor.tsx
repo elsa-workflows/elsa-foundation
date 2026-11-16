@@ -910,11 +910,11 @@ export function ActivityGraphImplementationEditor({
       render: () => (
         <>
           {/* A pure BPMN structure element has no bound activity, but is still removable. */}
-          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
+          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions" role="group" aria-label="Selected activity actions">
             {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
-            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowLeft size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Remove</StudioButton>
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
@@ -1221,10 +1221,10 @@ export function ActivityGraphOutputMappingEditor({
   };
 
   return (
-    <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`}>
+    <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
       {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
       {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
-      {!mapping ? <>
+      <div data-output-source>{!mapping ? <>
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
@@ -1240,6 +1240,7 @@ export function ActivityGraphOutputMappingEditor({
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}
         {diagnostics.map((diagnostic, index) => <span key={`${diagnostic.code ?? "diagnostic"}:${index}`} role={diagnostic.severity === "error" ? "alert" : "status"}>{diagnostic.message}</span>)}
       </>}
+      </div>
       {!embedded ? <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details> : null}
       {expressionDescriptorStatus === "loading" ? <span role="status">Loading value sources…</span> : null}
       {expressionDescriptorStatus === "failed" ? <span role="alert">Expression types could not be loaded. Existing mappings remain unchanged.</span> : null}
