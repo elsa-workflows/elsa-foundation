@@ -24,7 +24,7 @@ public sealed class ModulePayloadColumnTests
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
             // Includes standalone trigger definitions, subscriptions, mutations and ingress reservations.
-            ["ContentJson"] = 39,
+            ["ContentJson"] = 47,
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1
