@@ -9,8 +9,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Spec 1208: every outcome selection state round-trips through the runtime store's serializer at the current
-/// value-flow document version. No stored data predates that version, so an older document is refused, not upcast.
+/// Spec 1208 FR-025: every outcome selection state round-trips through the runtime store's serializer at the current
+/// value-flow document version. A version 2 document, as the contributor preview wrote it, reads its single outcome key
+/// as a named selection of that key; an older document is still refused.
 /// </summary>
 public sealed class ActivityCompletionSelectionRoundTripTests
 {
@@ -27,16 +28,48 @@ public sealed class ActivityCompletionSelectionRoundTripTests
         Assert.Equal(selection, read.Completion!.Selection);
     }
 
+    [Theory]
+    [InlineData("Approved")]
+    [InlineData("Done")]
+    public void A_version_2_outcome_key_reads_as_a_named_selection_of_that_key(string outcomeKey)
+    {
+        var read = Read(Version2Content(outcomeKey));
+
+        Assert.Equal(ActivityExecutionValueFlowDocumentVersions.Current, read.DocumentVersion);
+        Assert.Equal(OutcomeSelection.Named(outcomeKey), read.Completion!.Selection);
+        read.EnsureValueFlowCompatible();
+        Assert.DoesNotContain("outcomeKey", RuntimeArtifactJson.Serialize(read), StringComparison.Ordinal);
+    }
+
     [Fact]
-    public void An_older_document_version_is_refused()
+    public void A_completion_with_both_an_outcome_key_and_a_selection_is_refused()
     {
         var node = JsonNode.Parse(RuntimeArtifactJson.Serialize(State(OutcomeSelection.Named("A"))))!.AsObject();
-        node["documentVersion"] = ActivityExecutionValueFlowDocumentVersions.Current - 1;
+        node["completion"]!.AsObject()["outcomeKey"] = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("A");
+
+        Assert.ThrowsAny<Exception>(() => Read(node.ToJsonString()));
+    }
+
+    [Fact]
+    public void A_version_1_document_is_still_refused()
+    {
+        var node = JsonNode.Parse(RuntimeArtifactJson.Serialize(State(OutcomeSelection.Named("A"))))!.AsObject();
+        node["documentVersion"] = ActivityExecutionValueFlowDocumentVersions.Legacy;
 
         var read = Read(node.ToJsonString());
 
-        Assert.Equal(ActivityExecutionValueFlowDocumentVersions.Current - 1, read.DocumentVersion);
         Assert.Throws<InvalidOperationException>(read.EnsureValueFlowCompatible);
+    }
+
+    /// <summary>The version 2 shape: <c>documentVersion: 2</c> and <c>completion.outcomeKey</c>, with no selection.</summary>
+    private static string Version2Content(string outcomeKey)
+    {
+        var node = JsonNode.Parse(RuntimeArtifactJson.Serialize(State(OutcomeSelection.Named(outcomeKey))))!.AsObject();
+        node["documentVersion"] = ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey;
+        var completion = node["completion"]!.AsObject();
+        completion.Remove("selection");
+        completion["outcomeKey"] = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(outcomeKey);
+        return node.ToJsonString();
     }
 
     public static TheoryData<OutcomeSelection> Selections() =>

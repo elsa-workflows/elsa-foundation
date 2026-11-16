@@ -10374,3 +10374,4 @@ const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersi
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete() -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey = 2 -> int
