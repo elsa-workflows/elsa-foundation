@@ -3832,6 +3832,7 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
   flex-direction: column;
   background: var(--wf-canvas);
 }

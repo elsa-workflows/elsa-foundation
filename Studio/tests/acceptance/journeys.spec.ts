@@ -2,6 +2,7 @@ import { activityValidationReportingJourney } from "./activityValidationReportin
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { setOutputJourney } from "./setOutputJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
+import { bpmnNamedBlocksJourney } from "./bpmnNamedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
@@ -1082,4 +1083,20 @@ test("named blocks across graph authoring", async ({ page }, info) => {
 test("named blocks preserve declared expression results", async ({ page }, info) => {
   test.setTimeout(240_000);
   await namedBlocksJourney(page, info, capture, "expression-results");
+});
+
+test("native BPMN workflow blocks preserve reviewed XML bindings", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "interchange", ["workflow"]);
+});
+
+test("native BPMN reusable blocks preserve reviewed XML bindings", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "interchange", ["activity"]);
+});
+
+test("native BPMN workflow blocks retain authoring boundaries", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["workflow"]);
+});
+
+test("native BPMN reusable blocks retain authoring boundaries", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["activity"]);
 });

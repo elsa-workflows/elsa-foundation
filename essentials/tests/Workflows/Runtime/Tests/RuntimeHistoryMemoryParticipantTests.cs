@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>Physical in-memory participant tests with supplied logical groups; not native owner/EF/host qualification.</summary>
-public sealed class RuntimeHistoryMemoryParticipantTests
+public sealed partial class RuntimeHistoryMemoryParticipantTests
 {
     private static readonly DateTimeOffset At = DateTimeOffset.UnixEpoch;
     private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["Transition", "BookmarkCreated", "BookmarkRemoved"]);

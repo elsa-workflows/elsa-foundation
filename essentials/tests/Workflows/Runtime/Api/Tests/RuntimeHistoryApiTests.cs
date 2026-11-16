@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.AspNetCore.Authentication;
@@ -30,7 +31,7 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 
 // Actual mapped HTTP endpoints/services over controlled read projections. These do not qualify
 // physical history capture, provider isolation, replay, source settlement or Studio acceptance.
-public sealed class RuntimeHistoryApiTests
+public sealed partial class RuntimeHistoryApiTests
 {
     private const string Path = "/runtime/workflows/instances/run/history";
     private static readonly DateTimeOffset Now = new(2026, 11, 13, 12, 0, 0, TimeSpan.Zero);
@@ -41,6 +42,7 @@ public sealed class RuntimeHistoryApiTests
     [InlineData("/events/event")]
     [InlineData("/bookmarks")]
     [InlineData("/bookmarks/bookmark")]
+    [InlineData("/occurrences")]
     public async Task Every_route_requires_read_permission_and_reauthorizes_before_history_access(string suffix)
     {
         await using var host = await Host.StartAsync();
@@ -513,7 +515,7 @@ public sealed class RuntimeHistoryApiTests
         public Projection History { get; } = history;
         public Authorization Authorization { get; } = authorization;
         public void Authenticate() { Client.DefaultRequestHeaders.Remove("X-History-Test"); Client.DefaultRequestHeaders.Add("X-History-Test", "read"); }
-        public static async Task<Host> StartAsync(Action<IServiceCollection>? configure = null, bool includeHistory = true)
+        public static async Task<Host> StartAsync(Action<IServiceCollection>? configure = null, bool includeHistory = true, WorkflowExecutionState? workflow = null)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -524,7 +526,7 @@ public sealed class RuntimeHistoryApiTests
             var history = new Projection();
             var authorization = new Authorization();
             var workflows = new InMemoryWorkflowExecutionStateStore();
-            await workflows.SaveAsync(Workflow());
+            await workflows.SaveAsync(workflow ?? Workflow());
             builder.Services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
             if (includeHistory) builder.Services.AddSingleton<IRuntimeHistoryStore>(history);
             builder.Services.AddSingleton<IActivityInspectionContextAsync>(authorization);
@@ -547,9 +549,25 @@ public sealed class RuntimeHistoryApiTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue("X-History-Test", out var permission)) return Task.FromResult(AuthenticateResult.NoResult());
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "operator"), new Claim(IdentityClaimTypes.Normalized, "v1"),
-                 new Claim(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")], Scheme.Name)), Scheme.Name)));
+            var identityKind = Request.Headers["X-History-Identity"].ToString();
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, identityKind == "canonical-alias" ? "token-subject" : "operator"), new(IdentityClaimTypes.TenantId, "tenant-a"),
+                new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission),
+                new(IdentityClaimTypes.Normalized, "v1"),
+                new(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")
+            };
+            if (identityKind is not ("provider-only" or "no-user")) claims.Add(new(IdentityClaimTypes.UserId, "operator"));
+            if (identityKind == "conflicting-user") claims.Add(new(IdentityClaimTypes.UserId, "another-user"));
+            if (identityKind == "conflicting-provider-casing") claims.Add(new(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "external-provider"));
+            if (identityKind is "provider-only" or "conflicting-provider") claims.Add(new(IdentityClaimTypes.SubjectProvider, "external-provider"));
+            if (Request.Headers.ContainsKey("X-History-Values"))
+            {
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission));
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission));
+            }
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
+                new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }
 }

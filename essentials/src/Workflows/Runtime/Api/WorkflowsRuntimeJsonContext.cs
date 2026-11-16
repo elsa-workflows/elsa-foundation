@@ -11,10 +11,12 @@ using System.Text.Json.Serialization;
 namespace Elsa.Workflows.Runtime.Api;
 
 [JsonSerializable(typeof(GetRuntimeHistory))]
+[JsonSerializable(typeof(GetRuntimeHistoryOccurrences))]
 [JsonSerializable(typeof(GetRuntimeHistoryEvent))]
 [JsonSerializable(typeof(GetRuntimeHistoryBookmarks))]
 [JsonSerializable(typeof(GetRuntimeHistoryBookmark))]
 [JsonSerializable(typeof(RuntimeHistoryPageView))]
+[JsonSerializable(typeof(RuntimeHistoryOccurrencePageView))]
 [JsonSerializable(typeof(RuntimeHistoryEventDetailsView))]
 [JsonSerializable(typeof(RuntimeHistoryBookmarkPageView))]
 [JsonSerializable(typeof(RuntimeHistoryBookmarkDetailsView))]
