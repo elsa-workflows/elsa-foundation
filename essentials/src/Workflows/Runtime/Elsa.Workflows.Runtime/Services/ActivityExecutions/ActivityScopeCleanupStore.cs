@@ -50,11 +50,21 @@ public sealed class ActivityScopeCleanupStore(
         RuntimeHistoryCapturePolicy? policy = null;
         if (_historyExecutions is not null)
         {
-            try { policy = (await _historyExecutions.FindAsync(workflowExecutionId, cancellationToken))?.HistoryCapturePolicy; }
+            try
+            {
+                policy = (await _historyExecutions.FindAsync(workflowExecutionId, cancellationToken))?.HistoryCapturePolicy;
+                cancellationToken.ThrowIfCancellationRequested();
+            }
             catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
-            { throw new RuntimeHistoryIntegrityException(workflowExecutionId, "the cleanup owner could not interpret its admitted policy", exception); }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && RuntimeHistoryReadFailures.IsUnavailable(exception))
-            { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The history cleanup source is unavailable.", exception); }
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new RuntimeHistoryIntegrityException(workflowExecutionId, "the cleanup owner could not interpret its admitted policy", exception);
+            }
+            catch (Exception exception) when (RuntimeHistoryReadFailures.IsUnavailable(exception))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The history cleanup source is unavailable.", exception);
+            }
         }
         return new ActivityScopeCleanupRequest(
             workflowExecutionId,
