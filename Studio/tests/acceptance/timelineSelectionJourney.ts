@@ -63,7 +63,7 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   expect(firstEvent?.historyEventId).toBeTruthy(); expect(secondEvent?.historyEventId).toBeTruthy();
   await info.attach("recorded-event-identities.json", { body: JSON.stringify({ coverage: history.coverage, firstEvent, secondEvent }, null, 2), contentType: "application/json" });
 
-  if (info.project.name.startsWith("narrow")) await page.setViewportSize({ width: 320, height: 900 });
+  if (info.project.name === "narrow-light" || info.project.name === "narrow-dark") await page.setViewportSize({ width: 320, height: 900 });
   await page.goto(`/workflows/instances/${run.workflowExecutionId}?view=timeline`);
   await waitCapturedPlaybackReady(page);
   const views = page.getByRole("navigation", { name: "Run workspace views", exact: true });

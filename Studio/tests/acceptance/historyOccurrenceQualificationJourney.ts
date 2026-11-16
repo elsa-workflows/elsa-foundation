@@ -30,7 +30,7 @@ export async function historyOccurrenceQualificationJourney(page: Page, info: Te
   };
   const admin = await request.newContext({ storageState: await page.context().storageState() });
   try {
-    if (info.project.name.startsWith("narrow")) await page.setViewportSize({ width: 320, height: 900 });
+    if (info.project.name === "narrow-light" || info.project.name === "narrow-dark") await page.setViewportSize({ width: 320, height: 900 });
     const version = async (key: string) => {
       const catalog = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(admin,
         `/design/activities/definitions?search=${encodeURIComponent(key)}`);
