@@ -23,17 +23,7 @@ internal static class NativeIngressCheckpointAuthority
         if (count > 1) throw new InvalidDataException("A workflow cannot combine independent start origins.");
     }
 
-    internal static bool HasBoundScope(WorkflowExecutionState state, string scope)
-    {
-        if (state.Partition?.Value != scope || state.RunKind != WorkflowRunKind.PublishedRun || state.TestScope is not null ||
-            state.ParentWorkflowExecutionId is not null || state.Authority is null) return false;
-        if (state.StimulusDeliveryOrigin is { } saved)
-            return saved.Scope.Value == scope && state.IngressOrigin is null && state.ModelWorkOrigin is null;
-        if (state.IngressOrigin is { } direct)
-            return direct.Scope.Value == scope && state.ModelWorkOrigin is null && state.PinnedSource is not null;
-        return state.ModelWorkOrigin is { IngressOrigin: { } parent } work && parent.Scope.Value == scope && work.Scope.Value == scope &&
-            work.WorkerExecutionId == state.WorkflowExecutionId && WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable);
-    }
+    internal static bool HasBoundScope(WorkflowExecutionState state, string scope) => state.HasRetainedSourceScope(new(scope));
 
     internal static void EnsureHistoryScope(PersistenceAccessContext access, WorkflowExecutionState execution)
     {

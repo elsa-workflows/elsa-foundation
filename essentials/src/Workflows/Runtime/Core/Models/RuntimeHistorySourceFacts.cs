@@ -59,11 +59,12 @@ public static class RuntimeHistorySourceFacts
         var intents = commit.PostCommitIntents.Select(intent => Stamp(intent, out _)).ToArray();
         var outbox = commit.StateChanges.PostCommitOutbox.Select(change =>
         {
-            if (change.Operation != RuntimeStateChangeOperation.Upsert || change.State is not { } item) return change;
+            if (change.Operation != RuntimeStateChangeOperation.Upsert || change.State is not { } item ||
+                item.SourceKind != RuntimeDeliverySourceKind.WorkflowCheckpoint || item.Intent is null) return change;
             var intent = Stamp(item.Intent, out var owned);
             if (!owned) return change;
             if (item.OutboxItemId != RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, item.Intent.IntentId) ||
-                item.Status != RuntimePostCommitOutboxStatus.Pending || item.RecipientSnapshot is not null ||
+                item.Status != RuntimePostCommitOutboxStatus.Pending || item.RecipientSnapshot is not null || item.SubscriptionDelivery is not null ||
                 item.DeliveryAttemptCount != 0 || item.DeliveryFencingToken != 0 || item.DeliveringOwnerId is not null ||
                 item.DeliveryStartedAt is not null || item.DeliveredAt is not null || item.DeliveryVisibleAfter is not null ||
                 item.StimulusDeliverySourceScope is { } priorScope && priorScope != scope)
@@ -73,7 +74,8 @@ public static class RuntimeHistorySourceFacts
             return change with { State = new RuntimePostCommitOutboxItem(item.OutboxItemId, intent, item.Status, item.RecordedAt,
                 item.AvailableAt, item.RetryPolicy, item.DeliveryAttemptCount, item.DeliveringOwnerId, item.DeliveryStartedAt,
                 item.DeliveredAt, item.LastFailureMessage, item.Metadata, item.DeliveryFencingToken, item.DeliveryVisibleAfter,
-                item.StimulusDeliveryProtocolVersion, scope, item.RecipientSnapshot) };
+                item.StimulusDeliveryProtocolVersion, scope, item.RecipientSnapshot, item.StandaloneIngress,
+                item.SubscriptionDeliveryProtocolVersion, item.SubscriptionDelivery, item.SavedStimulusStarts) };
         }).ToArray();
         return changed ? commit with { PostCommitIntents = intents, StateChanges = commit.StateChanges.WithPostCommitOutbox(outbox) } : commit;
 

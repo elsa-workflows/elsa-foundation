@@ -38,7 +38,9 @@ internal sealed class PublishStimulusHistoryObservations(PostCommitDeliveryConte
             EnsureContext(access, context, source.Scope);
             if (owner?.HistoryCapturePolicy is not { } policy || !RuntimeHistorySourceFacts.IsFinalProfile(policy))
                 throw new InvalidDataException("The stamped publication lacks its original captured native owner.");
-            context.EnsureTenantScope(owner.TenantId);
+            if (!owner.HasRetainedSourceScope(source.Scope)) context.EnsureTenantScope(owner.TenantId);
+            if (owner.Partition is { } partition && partition.Value != source.Scope.Value)
+                throw new InvalidOperationException("The native publisher belongs to a different physical persistence scope.");
             var writer = services.GetService<IRuntimeHistoryObservationWriter>() ?? throw new NotSupportedException("The publication observation writer is unavailable.");
             if (services.GetService<IRuntimeHistoryStore>() is not { } reader || !writer.CanRecordHistory(reader))
                 throw new NotSupportedException("Publication observations require the selected scoped writer/read pair.");

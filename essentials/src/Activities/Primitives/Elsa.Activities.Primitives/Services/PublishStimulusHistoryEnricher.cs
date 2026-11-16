@@ -44,5 +44,5 @@ internal sealed class PublishStimulusHistoryEnricher(IPersistenceAccessContextAc
             CommandId: Read(RuntimeMetadataKeys.CommandId), SchedulerWorkItemId: Read(RuntimeMetadataKeys.SchedulerWorkItemId));
         return RuntimeHistorySourceFacts.WithPostCommitCausation(enriched, Origin, scope);
     }
-    private static bool IsPublication(RuntimePostCommitIntent intent) => intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind;
+    private static bool IsPublication(RuntimePostCommitIntent? intent) => intent?.Kind == PublishStimulusConstants.PublishStimulusIntentKind;
 }
