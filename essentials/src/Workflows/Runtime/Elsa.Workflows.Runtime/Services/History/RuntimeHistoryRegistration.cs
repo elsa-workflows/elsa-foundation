@@ -27,6 +27,9 @@ internal static class RuntimeHistoryRegistration
         RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
         RuntimeHistorySourceFactKind.ControlApplied]);
 
+    internal static readonly RuntimeHistorySourceSupport AlterationSources = new([
+        RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.AlterationApplied]);
+
     internal static void AddServices(IServiceCollection services, RuntimeHistoryOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -37,6 +40,7 @@ internal static class RuntimeHistoryRegistration
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, AlterationSources))) services.AddSingleton(AlterationSources);
     }
 
     internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)
@@ -59,7 +63,8 @@ internal static class RuntimeHistoryRegistration
             var reader = provider.GetRequiredService<IRuntimeHistoryStore>();
             if (!writer.SupportsHistory || !writer.CanCommitHistory(reader))
                 throw Unavailable("The selected history providers cannot acknowledge one scoped native checkpoint.");
-            var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(owner => owner.SourceIntentKind is null)
+            var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
+            var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
                 .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName);
             var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
                 RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
