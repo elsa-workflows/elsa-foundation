@@ -66,7 +66,13 @@ for (const width of [390, 1440, 2400]) {
     expect(pageBox.x + pageBox.width - contextBox.x - contextBox.width).toBeGreaterThanOrEqual(16);
     expect(buttonBox.y - toolbarBox.y).toBeLessThanOrEqual(16);
     const viewNavigationBox = (await page.getByRole("navigation", { name: "Run workspace views", exact: true }).boundingBox())!;
-    expect(canvasBox.y - viewNavigationBox.y - viewNavigationBox.height).toBeLessThanOrEqual(24);
+    const playback = page.getByRole("region", { name: "Activity playback", exact: true });
+    await expect(playback).toBeVisible();
+    const playbackBox = (await playback.boundingBox())!;
+    // Playback is an intentional sibling between the view selector and canvas. Both
+    // adjacent gaps stay compact; the canvas retains the height/bottom checks above.
+    expect(playbackBox.y - viewNavigationBox.y - viewNavigationBox.height).toBeLessThanOrEqual(24);
+    expect(canvasBox.y - playbackBox.y - playbackBox.height).toBeLessThanOrEqual(24);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({ path: test.info().outputPath("run-layout.png"), fullPage: true });
   });
@@ -88,7 +94,7 @@ for (const width of [320, 1440]) {
       const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
       const submit = timeline.getByRole("button", { name: "Search", exact: true });
       const surfaces: Array<[string, Locator]> = [
-        ["Search field", search.locator("xpath=ancestor::label[1]")],
+        ["Search field", search.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' studio-form-control ')][1]")],
         ["Search surface", search.locator("..")],
         ...["History scope", "History detail", "History category"].map(name => [name, timeline.getByRole("combobox", { name, exact: true })] as [string, Locator]),
         ["Search button", submit],
@@ -98,13 +104,14 @@ for (const width of [320, 1440]) {
       ];
       for (const [name, control] of surfaces) {
         await expect(control).toBeVisible();
-        const bounds = await control.evaluate(element => ({
-          height: element.getBoundingClientRect().height,
-          roleHeight: Number.parseFloat(getComputedStyle(element).getPropertyValue("--studio-control-height"))
-        }));
-        expect(bounds.roleHeight, `${name}: the supported Minimal density is active`).toBe(36);
-        // Larger touch targets remain valid; local chrome must not shrink the public role.
-        expect(bounds.height + 0.5, `${name}: rendered height honors the public role`).toBeGreaterThanOrEqual(bounds.roleHeight);
+        await expect.poll(() => control.evaluate(element =>
+          Number.parseFloat(getComputedStyle(element).getPropertyValue("--studio-control-height"))),
+        { message: `${name}: the supported Minimal density is active` }).toBe(36);
+        // Appearance changes animate the control height. Check its settled native
+        // geometry without weakening the public role or the existing tolerance.
+        await expect.poll(() => control.evaluate(element =>
+          element.getBoundingClientRect().height + 0.5 - Number.parseFloat(getComputedStyle(element).getPropertyValue("--studio-control-height"))),
+        { message: `${name}: rendered height honors the public role` }).toBeGreaterThanOrEqual(0);
       }
       await search.focus();
       await page.keyboard.press("Tab");
