@@ -1,6 +1,6 @@
 # Generated maps
 
-Generated from [`b84be3226d755bdb9e578b4f3067db568e38c0ea`](https://github.com/elsa-workflows/elsa-foundation/commit/b84be3226d755bdb9e578b4f3067db568e38c0ea) of `main`. Links into the source tree are pinned to that commit.
+Generated from [`4b935f2f0f2bb5d1d02541ab24a6742424748106`](https://github.com/elsa-workflows/elsa-foundation/commit/4b935f2f0f2bb5d1d02541ab24a6742424748106) of `main`. Links into the source tree are pinned to that commit.
 
 This branch is written only by the `Publish generated maps` job in `.github/workflows/ci.yml`, after every push to `main`. Do not commit to it or open pull requests against it. To regenerate the same set locally from a checkout of `main`:
 
