@@ -89,7 +89,12 @@ public sealed class RuntimeRequirementCheckerTests
         var result = checker.Check(subject);
 
         Assert.True(result.IsSatisfied);
-        AssertRequirement(Assert.Single(result.Requirements), "intrinsic", "1", RuntimeRequirementStatus.Available, ["1"]);
+        AssertRequirement(Assert.Single(result.Requirements), "intrinsic", "1", RuntimeRequirementStatus.Available, ["1", "2"]);
+
+        var scoped = new RuntimeRequirementCheckSubject("scoped-output", [new RuntimeRequirement("intrinsic", "2")], [], []);
+        Assert.True(checker.Check(scoped).IsSatisfied);
+        var legacy = Checker([new RuntimeActivityConsumerCapability("intrinsic", ["1"])], []);
+        AssertRequirement(Assert.Single(legacy.Check(scoped).Requirements), "intrinsic", "2", RuntimeRequirementStatus.UnsupportedSchema, ["1"]);
     }
 
     private static void AssertRequirement(

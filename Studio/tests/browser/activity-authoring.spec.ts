@@ -207,3 +207,23 @@ for (const theme of ["light", "dark"]) {
     await page.screenshot({ path: `/tmp/workflow-argument-button-${theme}.png` });
   });
 }
+
+
+for (const theme of ["light", "dark"]) for (const width of [1440, 360]) {
+  test(`activity tabs keep their spacing (${theme}, ${width})`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const tabs = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+    await expect(tabs.getByRole("tab", { name: "Designer", exact: true })).toBeVisible();
+    const geometry = () => tabs.evaluate(element => {
+      const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+      return { x: box.x, y: box.y, width: box.width, height: box.height, padding: style.padding, margin: style.margin };
+    });
+    const original = await geometry();
+    for (const id of ["inputs", "outputs", "outcomes", "variables", "designer"]) {
+      await tabs.locator(`[data-tab-id="${id}"]`).click();
+      expect(await geometry()).toEqual(original);
+    }
+    await page.screenshot({ path: info.outputPath("consistent-tabs.png") });
+  });
+}
