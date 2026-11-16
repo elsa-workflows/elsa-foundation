@@ -41,7 +41,7 @@ public static class RuntimePostCommitOutboxItems
         var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
         if (contribution?.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress)
             throw new InvalidOperationException("A standalone source contribution cannot be produced by a workflow checkpoint intent.");
-        var required = contribution?.RequiresDurableSource == true;
+        var required = intent.HistoryCausation is not null || contribution?.RequiresDurableSource == true;
         if (required && sourceScope is null)
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);

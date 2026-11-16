@@ -11,7 +11,7 @@ public static class RuntimeCoalescingMetadataKeys
     /// policy to force <c>Immediate</c> persistence and the coalescing commit store to apply the (already-folded)
     /// commit straight to the durable inner store rather than re-buffering it.
     /// </summary>
-    public const string CoalescedFlush = "runtime.coalescing.flush";
+    public const string CoalescedFlush = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CoalescedFlush;
 
     /// <summary>Checkpoint name used for the synthetic folded quiescence-flush commit.</summary>
     public const string FlushCheckpointName = "CoalescedSegmentFlush";

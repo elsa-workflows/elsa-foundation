@@ -1938,3 +1938,4 @@ Elsa.Workflows.Runtime.History.WorkflowsRuntimeHistoryFeature.WorkflowsRuntimeHi
 Elsa.Workflows.Runtime.History.WorkflowsRuntimeHistoryFeature.Enabled.get -> bool
 Elsa.Workflows.Runtime.History.WorkflowsRuntimeHistoryFeature.Enabled.set -> void
 virtual Elsa.Workflows.Runtime.History.WorkflowsRuntimeHistoryFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitIntentDispatcher.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
