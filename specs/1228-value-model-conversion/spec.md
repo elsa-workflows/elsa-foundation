@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft — **provisional**. The coordinator approves it; implementation starts once the ADR 0046 amendment is merged into the initiative branch.
+**Status**: Approved — by the coordinator on 2026-11-16. Implementation starts once the ADR 0046 amendment is merged into the initiative branch.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-8**,
 analysis **A-1**, decisions **D-12**, **D-15**, **D-16** and **D-17**.
@@ -22,8 +22,8 @@ or are refused at import, never at publish. .NET objects stay out of scripts.
 
 ## Approval
 
-> **Provisional** until the coordinator approves it. Every decision it applies is agreed. If an ADR text changes
-> before approval, this spec follows it.
+> **Approved** by the coordinator on 2026-11-16. Every decision it applies is agreed. A later change to an ADR it
+> applies is rechecked here.
 
 | ADR | What this spec takes from it | Text applied |
 |---|---|---|
