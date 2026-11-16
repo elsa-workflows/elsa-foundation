@@ -957,7 +957,7 @@ only by the `jobs` rename).
 The items the owner decided on 12 and 13 November (the sketch's "Decisions taken so far"), built one pull request
 each. Each subsection says what changed, what was run, and what it did not change.
 
-### 25.1 SQL Server's default fence (E9, decided 13 November). Run
+### 25.1 SQL Server's default fence (E9, decided 13 November; superseded 16 November, see ENGINES.md E9 and section 29). Run
 
 **What changed.** The EF store's fence mode is the engine's default when it is not told: the fence in the batch on
 PostgreSQL, SQLite and MySQL, the checked fence on SQL Server (`Engine.FenceInBatchByDefault`, false only in

@@ -13,7 +13,7 @@ using Npgsql;
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock|fence postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
-/// Options: fence=checked|batch (default: the engine's, so batch but checked on SQL Server, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  seconds=40  messages=5000  partitions=2  nodes=3
+/// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -650,7 +650,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public string Get(string key, string fallback) => options.GetValueOrDefault(key, fallback);
     public int Int(string key, int fallback) => int.Parse(Get(key, fallback.ToString()));
     public bool Has(string key) => Get(key, "0") != "0";
-    public bool FenceInBatch => Get("fence", "") switch { "batch" => true, "checked" => false, _ => Dialect()?.FenceInBatchByDefault ?? true };
+    public bool FenceInBatch => Get("fence", "") switch { "batch" => true, "checked" => false, _ => Dialect()?.FenceInBatchByDefault(Get("commit", "") != "ef") ?? true };
 
     /// <summary>The engine's code for a deadlock victim (for SQLite: BUSY), as <see cref="Tally.Code"/> writes it.</summary>
     public string DeadlockCode => engine switch { "postgres" => "pg 40P01", "sqlserver" => "mssql 1205", "mysql" => "mysql 1213", _ => "sqlite 5" };

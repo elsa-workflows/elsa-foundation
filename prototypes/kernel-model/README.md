@@ -143,8 +143,9 @@ $EFR x fence <engine> "<connection;Database=kernel_fence>"                      
 $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
-Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
-Server (decided 13 November; ENGINES.md E9). Without a commit option it writes the commit with its own SQL on every
+Without a fence option the EF store takes the engine's default: the fence in the batch on every engine (SQL Server since
+16 November, for the owned commit; ENGINES.md E9; `fence=checked` is the 13 November fallback and stays the default with
+`commit=ef`, whose batch still deadlocks takes). Without a commit option it writes the commit with its own SQL on every
 engine (round 5 B, COMMIT-SQL.md); `commit=ef` is EF's SaveChanges, the reference. `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
 terminate, delete) and starts on events. Do not run the conformance suite on an engine while a stress test runs there:
 the stress test kills the suite's sessions too.

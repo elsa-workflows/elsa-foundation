@@ -70,7 +70,7 @@ definite or transient error after the fence held is answered as such only when t
 | Engine | Fence mode by default | Commit writer by default | Why |
 |---|---|---|---|
 | PostgreSQL | in the batch | owned | 2 round trips per commit; the fence's result is read first, so E1 cannot arise |
-| SQL Server | in the batch (decided 16 November, on this evidence; the checked fence of 13 November stays selectable, `fence=checked`) | owned | the owned in-batch fence is the first lock of the batch and the E9 take deadlocks are gone (below): one round trip less per commit. The flip is its own pull request (branch `agent/claude/4229-r5b-6`: ENGINES.md E9 carries its gates) |
+| SQL Server | in the batch for the owned commit (decided 16 November, on this evidence); **checked** for the EF reference path (`commit=ef`, `--ef-commit`), whose batch still writes message rows before the fence; `fence=checked` stays selectable on both | owned | the owned in-batch fence is the first lock of the batch and the E9 take deadlocks are gone (below): one round trip less per commit. `SqlServerEngine.FenceInBatchByDefault(ownedCommit)`; the flip is its own pull request (branch `agent/claude/4229-r5b-6`: ENGINES.md E9 carries its gates) |
 | SQLite | in the batch | owned | one writer; one command instead of one per row |
 | MySQL | in the batch | owned | as PostgreSQL; the Oracle provider's partial-batch acknowledgement (E11) is not on this path |
 

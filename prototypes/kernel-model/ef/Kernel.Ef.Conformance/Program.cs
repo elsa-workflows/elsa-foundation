@@ -13,7 +13,7 @@ using Npgsql;
 //   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch|--checked-fence] [--m5] semantic|stress|cost ...
 //   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic ...
 //   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic ...
-// Without a fence flag the engine's default: the fence in the batch, but the checked fence on SQL Server (ENGINES.md E9).
+// Without a fence flag the engine's default: the fence in the batch on every engine (SQL Server since 16 November, for the owned commit; with --ef-commit it keeps the checked fence, ENGINES.md E9).
 // --ef-commit | --owned-commit: who writes the commit, EF's SaveChanges or the store's own SQL (COMMIT-SQL.md); no flag: the engine's default.
 // --m5: the mutation that lets a definite error beat a fence that did not match (ENGINES.md E1, MONGO.md M5).
 // --fence-ignores-count: the mutation that lets the owned fence pass whatever it matched (COMMIT-SQL.md); semantic-broken must fail with it.
@@ -34,7 +34,7 @@ switch (args)
 sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
     // The fence flag, else the engine's default (EfStore.FenceInBatch).
-    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault ?? true);
+    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault(Commit != CommitSql.EntityFramework) ?? true);
 
     private CommitSql? Commit => flags.Contains("--owned-commit") ? CommitSql.Owned : flags.Contains("--ef-commit") ? CommitSql.EntityFramework : null;
 

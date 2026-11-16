@@ -36,8 +36,11 @@ public abstract class Engine
     /// </summary>
     public bool Savepoints { get; init; }
 
-    /// <summary>Whether <see cref="EfStore"/> puts the fence in the batch when it is not told: true but on SQL Server.</summary>
-    public virtual bool FenceInBatchByDefault => true;
+    /// <summary>
+    /// Whether <see cref="EfStore"/> puts the fence in the batch when it is not told: true on every engine, but on SQL Server
+    /// only for the owned commit (<paramref name="ownedCommit"/>; E9, COMMIT-SQL.md). <c>fence=batch</c> said outright still wins.
+    /// </summary>
+    public virtual bool FenceInBatchByDefault(bool ownedCommit) => true;
 
     /// <summary>Begins the commit's transaction.</summary>
     public virtual Task<IDbContextTransaction> BeginAsync(KernelDb db, CancellationToken cancellationToken)
@@ -150,10 +153,14 @@ public abstract class Engine
 public sealed class SqlServerEngine : Engine
 {
     /// <summary>
-    /// ENGINES.md E9, decided 13 November: the checked fence. When EF writes messages before the batched fence, a stale
-    /// commit holds a message lock and waits for the partition row while a take holds the row and waits for the message.
+    /// ENGINES.md E9. Decided 13 November: the checked fence, because when EF wrote messages before the batched fence a stale
+    /// commit held a message lock and waited for the partition row while a take held the row and waited for the message.
+    /// Decided 16 November, with the owned commit (COMMIT-SQL.md): the fence in the batch, as on every other engine. The
+    /// owned batch opens with the fence, so the partition row is the commit's first lock as it is the take's, and the E9
+    /// deadlocks do not recur (0 in the 40 s runs against EF's 74). <c>fence=checked</c> stays selectable as the 13 November fallback,
+    /// and the EF reference path (<c>commit=ef</c>) keeps it as its default: there the batch still writes message rows before the fence.
     /// </summary>
-    public override bool FenceInBatchByDefault => false;
+    public override bool FenceInBatchByDefault(bool ownedCommit) => ownedCommit;
 
     /// <summary>Adds WITH (READPAST) to the poll. For the experiment only: it breaks the order rule (ENGINES.md E6).</summary>
     public bool ReadPast { get; init; }
