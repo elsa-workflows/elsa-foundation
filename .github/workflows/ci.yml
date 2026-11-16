@@ -265,6 +265,57 @@ jobs:
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
           --summary "$GITHUB_STEP_SUMMARY"
 
+      - name: Capture whole-project BPMN and design test discovery
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          shard = Path(os.environ["RUNNER_TEMP"]) / "shard"
+          runs = json.loads((shard / "runs.json").read_text())
+          if not isinstance(runs, list):
+              raise RuntimeError("Expected the shard's recorded run list")
+          projects = {
+              "essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+              "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+              "essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+          }
+          seen = set()
+          failed = False
+          for index, run in enumerate(runs):
+              project = run["project"]
+              if project not in projects:
+                  continue
+              if run.get("filter", "") != "" or run.get("group", "") != "" or project in seen:
+                  raise RuntimeError("Discovery requires one unfiltered whole-project run: " + project)
+              seen.add(project)
+              out = shard / "discovery" / str(index)
+              out.mkdir(parents=True, exist_ok=False)
+              command = ["dotnet", "test", project, "-c", "Release", "--no-build", "--no-restore",
+                         "--list-tests", "-p:WarningsNotAsErrors=NU1603"]
+              metadata = {
+                  "project": project, "runIndex": index, "command": command,
+                  "cwd": os.getcwd(), "githubSha": os.environ["GITHUB_SHA"],
+                  "language": {"DOTNET_CLI_UI_LANGUAGE": "en-US", "VSLANG": "1033"},
+                  "normalTry1": "try1/" + str(index), "normalTry2": "try2/" + str(index),
+                  "exitCode": None,
+              }
+              record = out / "metadata.json"
+              record.write_text(json.dumps(metadata, indent=2) + "\n")
+              with (out / "stdout.log").open("wb") as stdout, (out / "stderr.log").open("wb") as stderr:
+                  result = subprocess.run(command, stdout=stdout, stderr=stderr,
+                                          env={**os.environ, **metadata["language"]}, check=False)
+              metadata["exitCode"] = result.returncode
+              record.write_text(json.dumps(metadata, indent=2) + "\n")
+              print(project + ": raw discovery exit " + str(result.returncode), flush=True)
+              failed = failed or result.returncode != 0
+          if failed:
+              raise SystemExit(1)
+          PY
+
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -280,7 +331,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trx-${{ matrix.shard }}
-          path: ${{ runner.temp }}/shard/try*/**/*.trx
+          path: |
+            ${{ runner.temp }}/shard/try*/**/*.trx
+            ${{ runner.temp }}/shard/discovery/**
           if-no-files-found: ignore
           retention-days: 7
 
@@ -548,12 +601,12 @@ jobs:
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Build the architecture guards
-        run: dotnet build Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: dotnet build essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       # Through the shard runner, so a failure gets the same single retry and quarantine as every PR-tier test (FR-004).
       - name: Run the architecture guards
         run: |
-          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
+          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
           python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the outcome
@@ -1162,7 +1215,8 @@ jobs:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1182,9 +1236,38 @@ jobs:
       - name: Exercise real composed hosts with disposable stores
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+        run: |
+          node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs pin --output "$RUNNER_TEMP/external-auth-ui-toolchain.json"
+          node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs studio --root "$RUNNER_TEMP/external-auth-ui-build" --standard-output "$RUNNER_TEMP/ux-acceptance" --toolchain "$RUNNER_TEMP/external-auth-ui-toolchain.json"
       - name: Qualify shared decision execution and runtime-only restart
         run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
+      - name: Exercise managed external sign-in on the full Studio host
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          TMPDIR: ${{ runner.temp }}
+          ELSA_EXTERNAL_AUTH_UI_BUILD_ROOT: ${{ runner.temp }}/external-auth-ui-build
+        run: |
+          node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs controls --root "$RUNNER_TEMP/external-auth-ui-build"
+          node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs probe --root "$RUNNER_TEMP/external-auth-ui-build"
+          node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs
+          for profile in empty configuration provider-reader denied external-owned hybrid missing-api missing-sessions; do
+            node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs "$profile"
+          done
+      - name: Retain external sign-in screenshots and source-bound receipts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-auth-ux-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/elsa-3579-full-studio-*/*.png
+            ${{ runner.temp }}/elsa-3579-full-studio-*/studio-receipt.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/browser-receipt.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/ui-evidence/*.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/build-provenance.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/failure-*.json
+            ${{ runner.temp }}/elsa-3579-full-studio-*/mode-failure.json
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -1228,7 +1311,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'Extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
+          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-studio-nuget-
 
@@ -1344,12 +1427,12 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
-          dotnet restore Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+        run: dotnet build apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
@@ -1357,7 +1440,7 @@ jobs:
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey

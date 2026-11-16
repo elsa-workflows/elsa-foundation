@@ -14,13 +14,6 @@ import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearanc
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/settings.css";
 import "./workspaceAppearanceFixture.css";
 
-// The retained run owns a normal run URL, so product selection writes use the same route guard as Studio.
-if (new URLSearchParams(window.location.search).get("host") === "instance") {
-  const runUrl = new URL(window.location.href);
-  runUrl.pathname = "/workflows/instances/editor-execution";
-  window.history.replaceState(window.history.state, "", runUrl);
-}
-
 const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
@@ -34,8 +27,7 @@ const panels = new URLSearchParams(location.search).has("bottom-panel")
 
 function Fixture() {
   const [view, setView] = useState(new URLSearchParams(location.search).get("screen") ?? "editor");
-  const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability"
-    : new URLSearchParams(location.search).get("host") === "instance" ? "/workflows/instances/editor-execution" : "/workflows/definitions";
+  const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability" : "/workflows/definitions";
   return <ThemeProvider>
     <ShellFrame navigation={navigation} panels={panels} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
       backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />}
@@ -43,6 +35,12 @@ function Fixture() {
       {view === "availability" ? <ActivityAvailabilityFixture /> : view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
         <button onClick={() => void dialogs.confirm({ title: "Delete workflow", message: "Delete this workflow?", tone: "danger" })}>Delete workflow</button>
         <button onClick={() => void dialogs.confirm({ title: "Publish workflow", message: "Publish this workflow?" })}>Publish workflow</button>
+        <button onClick={() => void dialogs.confirm({
+          title: "Remove external link",
+          message: `Remove the external sign-in link for external-${"a".repeat(64)}?\nIssuer: https://identity.example/${"tenant".repeat(24)}\nSubject: ${"subject".repeat(24)}`,
+          confirmLabel: "Remove link",
+          tone: "danger"
+        })}>Remove external link</button>
         <DialogHost />
       </> : <ActivityDuplicateEditorFixture />}
     </ShellFrame>

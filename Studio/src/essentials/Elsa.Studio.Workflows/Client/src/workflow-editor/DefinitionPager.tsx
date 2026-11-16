@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { definitionPageSizes } from "./constants";
 import { getTotalPages } from "./editorListHelpers";
-import { StudioCollectionFooter, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioCollectionFooter, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 
 export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNextPage, usesCursorPaging = false, onPageChange, onPageSizeChange }: {
   page: number;
@@ -24,12 +24,9 @@ export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNext
       <span className="wf-pagination-summary" aria-live="polite">
         {usesCursorPaging ? `Showing ${itemCount}${hasKnownTotal ? ` of ${totalCount} matching workflows` : " workflows"}` : `Showing ${firstItem}-${lastItem}${hasKnownTotal ? ` of ${totalCount}` : ""}`}
       </span>
-      <label className="wf-page-size">
-        Rows
-        <select value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))}>
+      <StudioField className="wf-page-size" label="Rows"><select value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))}>
           {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-        </select>
-      </label>
+        </select></StudioField>
       <div className="wf-page-controls">
         <StudioButton onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label="Previous page" title="Previous page">
           <ChevronLeft size={14} /> Previous

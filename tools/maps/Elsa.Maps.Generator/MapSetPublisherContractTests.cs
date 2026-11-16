@@ -19,8 +19,8 @@ public static class MapSetPublisherContractTests
         Rewrites("in-set sibling stays relative", "[d](domain-map.md)", "[d](domain-map.md)", published);
         Rewrites("in-set report stays relative", "[f](../reports/maps-v1-findings.md)", "[f](../reports/maps-v1-findings.md)", published);
         Rewrites("source project is pinned",
-            "[T](../../Essentials/tests/X/Tests/X.Tests.csproj)",
-            $"[T]({RepoUrl}/blob/{Sha}/Essentials/tests/X/Tests/X.Tests.csproj)", published);
+            "[T](../../essentials/tests/X/Tests/X.Tests.csproj)",
+            $"[T]({RepoUrl}/blob/{Sha}/essentials/tests/X/Tests/X.Tests.csproj)", published);
         Rewrites("published dataset next to the maps stays relative",
             "[ds](dependency-map.json)", "[ds](dependency-map.json)", published);
         Rewrites("out-of-set report keeps its anchor when pinned",
