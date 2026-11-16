@@ -5,7 +5,7 @@ import { createActivityDataResponseCollector } from "./activityDataResponseColle
 
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
-export type Node = { nodeId: string; activityVersionId: string; inputs: { referenceKey: string; value: Binding }[]; outputs: unknown[];
+export type Node = { nodeId: string; activityVersionId: string; inputs: { referenceKey: string; value: Binding; conversion?: unknown; autoEvaluate?: boolean }[]; outputs: unknown[];
   structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables?: unknown[]; [key: string]: unknown } } | null };
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
@@ -194,7 +194,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect.poll(() => stored(created)).toEqual(before); await open(created);
   }
-  async function publishRun(created: Created, expected: string, inputs: unknown = {}, producer = false) {
+  async function publishRun(created: Created, expected: string, inputs: unknown = {}, producer = false, authoring: "native" | "expression" = "native") {
     const authoredBinding = await stored(created);
     await page.getByRole("button", { name: "Review & publish", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Publish workflow", exact: true });
@@ -219,7 +219,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     expect(payload.payload.preview).toBe(expected);
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, expected, committed: payload.payload.preview, consumer, producers });
     // Publication returns the Inspector to the workflow root. Navigate back explicitly before the next input edit.
-    await select(); await expect(replace()).toBeVisible();
+    await select();
+    if (authoring === "native") await expect(replace()).toBeVisible();
+    else await expect(page.getByRole("button", { name: "Insert data", exact: true })).toBeVisible();
     expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
     return { instance, consumerInput: payload.payload, publication, run };
   }

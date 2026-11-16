@@ -208,3 +208,18 @@ describe("workflow Choose data host", () => {
   });
 
 });
+
+it("fences owner context separately from unchanged draft content and harmless host rerenders", async () => {
+  const first = endpoint(); const saved = draft("C-1", { authoringRevision: "base-2" });
+  render(first.context, { draft: saved, persistedDraft: saved, enabled: true, validationErrors: [] });
+  await vi.waitFor(() => expect(current).not.toBeNull());
+  const original = current!;
+  flushSync(() => rerender({ validationErrors: [] }));
+  expect(current!.ownerContext).toBe(original.ownerContext);
+  const other = endpoint(); other.context.baseUrl = first.context.baseUrl;
+  flushSync(() => rerender({ context: other.context }));
+  await vi.waitFor(() => expect(current).not.toBeNull());
+  expect(current!.ownerContext).not.toBe(original.ownerContext);
+  expect(current!.documentRevision).toBe(original.documentRevision); expect(current!.baseRevision).toBe(original.baseRevision);
+  expect(current!.requestSources).toBe(original.requestSources);
+});

@@ -203,3 +203,12 @@ it("lets an unnamed block be named when replacing it with a published version", 
   click("Replace block with this version"); await settle(6);
   expect(host.apply).toHaveBeenCalledTimes(1);
 });
+
+it("refuses to replace after edit permission was lost following publication", async () => {
+  await createAndPublish();
+  nativeContext = { ...nativeContext, canEdit: false }; render();
+  click("Replace block with this version"); await settle(6);
+  expect(container.textContent).toContain("Open an editable draft before promoting a block.");
+  expect(host.validate).not.toHaveBeenCalled();
+  expect(host.apply).not.toHaveBeenCalled();
+});
