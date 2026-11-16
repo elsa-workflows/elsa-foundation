@@ -5,13 +5,16 @@ import { EditorView } from "@codemirror/view";
 import { Transaction } from "@codemirror/state";
 import { undo, redo } from "@codemirror/commands";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEditor";
+import { CodeMirrorStudioCodeEditor, destroyParkedCompactView } from "../engines/CodeMirrorStudioCodeEditor";
 import { createStudioCodeEditorSession } from "../sessions/studioCodeEditorSessions";
 import type { StudioCodeEditorController, StudioCodeEditorEdit, StudioCodeEditorEngineProps } from "../types";
 
 let close: () => void;
 beforeEach(() => window.dispatchEvent(new Event("elsa:auth-session-started")));
-afterEach(() => close?.());
+// Unmounting a compact editor parks its view instead of destroying it, so an Undo/Redo scroll measure
+// stays scheduled and runs after the test, where jsdom's Range has no getClientRects. Destroying the
+// parked view cancels that measure.
+afterEach(() => { close?.(); destroyParkedCompactView(); });
 function editor() {
   const host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host);
