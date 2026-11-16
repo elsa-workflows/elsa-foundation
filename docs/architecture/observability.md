@@ -94,7 +94,7 @@ reported as a histogram instead.
 | `elsa.kernel.inbox.depth` | gauge, {message} | Due, unconsumed messages in the partitions this node owns. Exact while a partition's last poll came back short; beyond that, question 3's capped estimate | Backlog |
 | `elsa.kernel.partition.backlog` | histogram, {message} | Each owned virtual partition's due-depth estimate (question 3's `backlog` field), one sample per partition per sample interval; per-partition series opt-in | The bound of question 3, per virtual partition |
 | `elsa.kernel.inbox.oldest_age` | gauge, s | Time since the oldest due, unconsumed message became due | The alerting signal for a stuck or slow partition |
-| `elsa.kernel.admission.refusals` | counter, {request} | Requests refused at admission, by reason and by tenant (capped) | Question 3's refusals, named here as #4705 asks |
+| `elsa.kernel.admission.refusals` | counter, {request} | Requests refused at admission, by reason and by tenant (capped) | Question 3's refusals, named here as the [fairness page](fairness-and-backpressure.md#release-1-the-basic-form) asks |
 | `elsa.kernel.timer.lateness` | histogram, s | Delivery time minus due time, for timers | Timers are messages; lateness is what users notice |
 | `elsa.kernel.turn.duration` | histogram, s | Wall time of a turn, by actor type, model and outcome (committed, held, parked, threw) | Slow models and activities |
 | `elsa.kernel.commit.duration` | histogram, s | The fenced store call, from send to answer, by outcome (landed, fenced, unknown, transient, definite) | Commit latency, the database's share |
@@ -119,8 +119,8 @@ answer was lost counts as an unknown outcome.
 | Action | How | Release 1 |
 |---|---|---|
 | Inspect parked work | The parked-work read model: instance, actor type, model, definition and version, fault, reason, when, and what the Park kept (decision 2). Payloads need a separate permission | Yes |
-| Retry parked work | A `kernel.recover` message in `retry` mode | Yes, under decisions 1 and 2 |
-| Recover without retry | `kernel.recover` in `resume` mode: waits restored, nothing delivered again | Yes, under decision 1 |
+| Retry parked work | A `kernel.recover` message in `retry` mode: as `resume`, and the deliveries the Park consumed are delivered again | Yes, under decisions 1 and 2 |
+| Recover without retry | `kernel.recover` in `resume` mode: waits restored, and the arrivals kept while parked (decision 2) delivered; the deliveries the Park consumed are not delivered again. Under decision 2b nothing was kept, so a wait for a child completion, a reply or a direct resume that arrived while parked never ends | Yes, under decision 1 |
 | Discard parked work | A `kernel.discard` message | Yes |
 | Inspect an inbox | Pending deliveries of one instance, in delivery order: id, kind, sender, due, state (pending, held or on trial), attempts, size; paged | Metadata only |
 | Suspend, resume, terminate, delete | The built control kinds | Yes |
@@ -134,14 +134,18 @@ dropped. A retry then has nothing to deliver again: only `resume` is possible. F
 keep consumed deliveries in a dead-letter queue. Retry of a parked message needs two additions, which **extend** the
 13 November decision and are therefore decision 2:
 
-1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows with a `keep_until` set by the
-   parked-work retention (question 2 sets its length), so their payloads stay and the sweep removes them later.
+1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows. Their `keep_until` follows
+   the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's time plus that window, or no expiry when it
+   is null (the default: kept until recovered or discarded). Recover in either mode, discard and delete give the kept
+   rows the ordinary outside-command window from that moment, or remove them in the same commit. A child completion
+   that arrives while parked is kept with the rest, and its entry stays in the parent's child registry; today such a
+   notice closes the entry without the model.
 2. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
-   Minimal. If [#4707](https://github.com/elsa-workflows/elsa-foundation/pull/4707)'s format item 4 (lifecycle
-   transitions journalled at every level) is adopted, this row is its "ended" entry and adds nothing.
+   Minimal. If the data lifecycle page's format item 4 (lifecycle transitions journalled at every level) is adopted, this
+   row is its "ended" entry and adds nothing.
 
-If the extension is adopted, #4707's format item 6 (done markers keep only the id and window) must exempt a parked
-instance's kept deliveries, or a retry finds no payload.
+If the extension is adopted, the data lifecycle page's format item 6 (done markers keep only the id and window) must
+exempt a parked instance's kept deliveries, or a retry finds no payload.
 
 ### Recover
 
@@ -158,19 +162,26 @@ one commit, and calls one new model hook.
   events published while it was parked, within their keep window; a wait that did not misses them, as the owner
   decided.
 - **Timers.** The owner reads the instance's inbox rows (one read by target) and passes the ids of timers still pending.
-  A pending timer stays as it is. A timer whose row is gone (it came due while parked) is armed again with its original
-  due time, so it fires at once when that time has passed. No timer is armed twice.
+  A pending timer stays as it is. A timer that came due while parked (its row is gone, or kept as a done row under
+  decision 2) is armed again with its original due time, so it fires at once when that time has passed. Timers are
+  never among the redelivered rows below, so no timer fires twice.
 - **Jobs.** A job still in the row's jobs with a live ticket keeps it. A job whose ticket is gone starts again under a
-  new key generation (`{key}#r{n}`, `n` the recovery's ordinal), so its ticket id, which `Worker.TicketId` derives from
-  instance, key and creation, collides with neither the old ticket nor its kept done row.
-- **Deliveries** (`retry` mode, under decision 2). The selected kept deliveries and every kept arrival from while parked
-  are sent again in their original order, as new messages whose ids derive from the operation id and the original id.
-  Kernel tickets (job, meet, publish) are never copied: the plan issues fresh ones, as the kernel refuses an application
-  send of those kinds. A result of a job restarted under a new key matches no job and is dropped.
+  new ticket generation: the kernel derives the ticket id from instance, key, creation and the recovery's ordinal `n`
+  (`Worker.TicketId` takes the first three today), so it collides with neither the old ticket nor its kept done row.
+  The model never sees the generation: the job context and the `job-finished` result carry the model's own key, and the
+  kernel maps the generation back. A result from the old generation (a kept arrival) matches no live ticket and is
+  dropped.
+- **Deliveries** (under decision 2). Both modes deliver every kept arrival from while parked; `retry` also delivers the
+  selected deliveries the Park consumed. They are sent in their original order, as new messages whose ids derive from
+  the operation id and the original id. Timers and kernel tickets (job, meet, publish) are never copied: the plan
+  re-arms the timers and issues fresh tickets, as the kernel refuses an application send of those kinds.
+- **Expired kept rows.** When a non-null `Parked` window has passed and the sweep removed kept rows, recover delivers
+  what remains and its answer lists the ids it could not deliver. `retry` of a Park whose consumed deliveries are all
+  gone is refused; `resume` stays possible.
 - **Side effects** of the retried turn may repeat, with the same effect keys.
 
-**Discard** `{operation, expected revision}` deletes the kept deliveries and records the disposition. The instance stays
-faulted, and retention or a delete removes it.
+**Discard** `{operation, expected revision}` gives the kept deliveries the ordinary window, or removes them in the same
+commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
 
 **Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
 gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
@@ -258,7 +269,7 @@ recovery as journal entries of the same run.
 
 | Option | Behaviour |
 |---|---|
-| **a. Extend Park** as described under "What Park keeps": it keeps consumed deliveries and arrivals while parked as done rows until the parked-work window, and journals at every history level. #4707's format item 6 then exempts a parked instance's kept deliveries | `retry` redelivers the poisoning message and everything that arrived later |
-| b. Keep Park as decided on 13 November | Only `resume` is possible; release 1's "retry" restores waits on the committed state and delivers nothing again |
+| **a. Extend Park** as described under "What Park keeps": it keeps consumed deliveries and arrivals while parked as done rows under the `Parked` window, and journals at every history level. The data lifecycle page's format item 6 then exempts a parked instance's kept deliveries | `resume` delivers what arrived while parked; `retry` also redelivers the poisoning message |
+| b. Keep Park as decided on 13 November | Only `resume` is possible; release 1's "retry" restores waits on the committed state and delivers nothing again. Arrivals while parked were dropped, so a wait for a child completion, a reply or a direct resume that arrived in that time never ends after recovery |
 
 **Recommendation: a.** It costs nothing on a commit that does not park.
