@@ -793,6 +793,20 @@ public sealed class RuntimeInputBindingCompiler(
         ValueProtectionPolicy effectivePolicy,
         AuthoredValueConversionRequest? conversion)
     {
+        var reference = ReadActivityResultReference(nodeId, inputDefinition, value);
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: effectivePolicy,
+            source: RuntimeInputBindingSource.ActivityResult,
+            activityResult: reference,
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+    }
+
+    internal static RuntimeActivityResultReference ReadActivityResultReference(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
         var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
@@ -804,14 +818,7 @@ public sealed class RuntimeInputBindingCompiler(
                          optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                          optionalElement.GetBoolean();
 
-        return new RuntimeInputBinding(
-            inputKey: inputDefinition.ReferenceKey,
-            targetType: ToValueTypeDescriptor(inputDefinition),
-            effectivePolicy: effectivePolicy,
-            source: RuntimeInputBindingSource.ActivityResult,
-            activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional),
-            metadata: BuildInputMetadata(inputDefinition),
-            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+        return new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional);
     }
 
     /// <summary>
@@ -1196,7 +1203,7 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition));
     }
 
-    private static bool TryReadPortableExpressionDefinition(object? value, out ExpressionDefinition definition)
+    internal static bool TryReadPortableExpressionDefinition(object? value, out ExpressionDefinition definition)
     {
         if (value is ExpressionDefinition instance)
         {

@@ -495,7 +495,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null,
         bool declaresCustomerInput = false, IActivitySerializedShapeSource? shapeSource = null,
         Action<ExecutableActivityTemplate>? beforePlacement = null, int copies = 1, bool nested = false,
-        bool assignOutput = false, bool rootSetter = false, bool sumInputs = false)
+        bool assignOutput = false, bool rootSetter = false, bool sumInputs = false, string? outputAlias = null)
     {
         var shape = shapeSource ?? new CustomerIdShape();
         void Shape(IServiceCollection services) => services.AddSingleton<IActivitySerializedShapeSource>(shape);
@@ -558,7 +558,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var body = rootSetter ? reader : BodySequence("body",
             [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]);
         var contract = new DesignContract("1", sumInputs ? [new("a", "A", new("Double"), false, true, null, "elsa.json"), new("b", "B", new("Double"), false, true, null, "elsa.json")] : declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [],
-            assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
+            assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : outputAlias ?? "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
         var reusable = await PublishReusable("reusable-member-read", body, contract, bodyVariables ?? []);
         beforePlacement?.Invoke(frozen[0].Template);
         if (nested)

@@ -282,6 +282,8 @@ public sealed class ActivityTemplateCompiler(
                 request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures, compilation.Occurrences) with
             {
                 OriginalMemberReads = ActivityTemplateDataSelectionGuard.DescribeOriginalMemberReads(compilation.ExecutableRoot,
+                    document, sourceAnalysis, resolved, loadedTemplates, activityStructures),
+                OriginalResultReads = ActivityTemplateOriginalResultReadFacts.Describe(compilation.ExecutableRoot,
                     document, sourceAnalysis, resolved, loadedTemplates, activityStructures)
             };
             ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected, readFacts);
