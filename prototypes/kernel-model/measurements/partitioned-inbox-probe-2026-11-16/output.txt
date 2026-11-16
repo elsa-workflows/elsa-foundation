@@ -1,0 +1,69 @@
+                                                          version                                                           
+----------------------------------------------------------------------------------------------------------------------------
+ PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+(1 row)
+
+ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "a" lacks column "part" which is part of the partition key.
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+INSERT 0 1
+INSERT 0 1
+           ?column?           | count 
+------------------------------+-------
+ B same id in two partitions: |     2
+(1 row)
+
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+INSERT 0 2000
+INSERT 0 0
+         ?column?          | count 
+---------------------------+-------
+ C dedup ok, rows with x1: |     1
+(1 row)
+
+ANALYZE
+SET
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Limit
+   ->  Merge Append
+         Sort Key: c.seq
+         ->  Index Scan using c0_part_seq_idx on c0 c_1
+               Index Cond: (part = 3)
+               Filter: (NOT done)
+         ->  Index Scan using c1_part_seq_idx on c1 c_2
+               Index Cond: (part = 3)
+               Filter: (NOT done)
+         ->  Index Scan using c2_part_seq_idx on c2 c_3
+               Index Cond: (part = 3)
+               Filter: (NOT done)
+         ->  Index Scan using c3_part_seq_idx on c3 c_4
+               Index Cond: (part = 3)
+               Filter: (NOT done)
+(15 rows)
+
+                    QUERY PLAN                     
+---------------------------------------------------
+ Index Only Scan using c2_pkey on c2 c
+   Index Cond: ((id = 'x7'::text) AND (scope = 0))
+(2 rows)
+
+INSERT 0 2000
+CREATE INDEX
+ANALYZE
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Index Scan using b0_part_seq_idx on b0 b
+         Index Cond: (part = 3)
+         Filter: (NOT done)
+(4 rows)
+
