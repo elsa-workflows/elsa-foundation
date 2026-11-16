@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.History;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
@@ -44,7 +45,7 @@ public sealed class RuntimeHistoryNativeDeliveryTests
         Assert.NotNull(await f.Bookmarks.FindAsync(Run, Wait));
         Assert.Equal(BookmarkResumeDispatchStatus.Duplicate, (await f.Dispatcher.DispatchAsync(request)).Status);
         Assert.Equal(0, f.Activator.Calls);
-        var queued = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         Assert.Equal(received.HistoryEventId, queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!.HistoryEventId);
         var drained = await f.DrainAsync();
         Assert.Equal(1, drained.DrainedCount);
@@ -92,7 +93,7 @@ public sealed class RuntimeHistoryNativeDeliveryTests
         var drained = await f.DrainAsync();
         Assert.Equal(1, drained.DrainedCount);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(drained.Items).Status);
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run)));
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         Assert.Empty(await f.Poison.ListAsync(Run));
         Assert.Equal(0, f.Activator.Calls);
         var events = (await f.History.ReadPageAsync(new(Run))).Items;
@@ -154,6 +155,7 @@ public sealed class RuntimeHistoryNativeDeliveryTests
             services.AddSingleton<ActivityCompletionProjector>(); services.AddSingleton<RuntimeOutputCaptureProjector>();
             services.AddScoped(sp => new ActivityFaultIncidentRecorder(sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(), DefaultRuntimeFaultCapturePolicy.CreateDefault()));
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
             services.AddWorkflowRuntime(); RuntimeHistoryRegistration.AddServices(services);
             services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "native-history-delivery-tests-signing-key-at-least-32-bytes");
             services.AddSingleton(new RuntimeHistorySourceSupport([
