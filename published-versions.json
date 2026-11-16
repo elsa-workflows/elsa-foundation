@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f020e50947a4fd8bc24d9b819fcccde896f56bf1",
+  "last_publish_commit": "af20f0cb44084681330e0e77f57e527669fe66ff",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1019,13 +1019,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Validations",
-      "version": "4.0.28-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.29-preview",
+      "commit": "af20f0cb44084681330e0e77f57e527669fe66ff"
     },
     {
       "package_id": "Elsa.Workflows.Design.Validations.Core",
-      "version": "4.0.21-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.22-preview",
+      "commit": "af20f0cb44084681330e0e77f57e527669fe66ff"
     },
     {
       "package_id": "Elsa.Workflows.ExecutionEvidence",
