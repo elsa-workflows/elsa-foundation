@@ -89,3 +89,60 @@ The initial generated `RunHistoryTimeline` migrations, designers and snapshots f
 upgrade control preserves every original table digest/history ID and requires empty new history storage,
 so schema installation cannot fabricate capture or activity occurrence evidence. No capture feature or
 provider capability is enabled by the schema declaration alone.
+
+The native checkpoint binding calls history staging after its fence boundary and before incoming native
+workflow state staging on every new physical commit, including missing Required contributions. All
+history reservations and derived projections join the existing final participant/marker-last save and
+ambiguous-acknowledgement reconciliation. Allocation-only contention leaves as cause-preserving history
+unavailability after rollback/marker reconciliation; corruption and stale fences remain distinct. Actual
+selected reader/DI/profile admission remains unadvertised until the separately owned read adapter and
+observation/retention/deletion binding qualify. This direct-store source does not enable the public feature.
+
+After checking immutable native admission, a confirmed uncaptured/no-contribution checkpoint returns
+before accessing any history storage. Required/Optional captured obligations remain independent of
+current module switches. Captured provider failures retain run/operation/cause after native rollback
+and marker reconciliation; failed reconciliation preserves both write and lookup causes. Requested
+cancellation, hard retained integrity, exact admission, model and stale-fence cases retain precedence.
+
+The selected EF read adapter and its deferred SQLite read boundary are integrated from the reviewed
+occurrence/ordinary-reader contributions. The existing public native checkpoint registration selects
+that one scoped reader when no explicit history reader exists, replacing only the owned volatile
+default. Explicit foreign registrations remain untouched. All read facets share the selected instance
+and actual context/access/declared chain. No independent details/occurrence backend or capture feature
+is added. Native SupportsHistory/pairing and independent mutation/deletion admission remain unadvertised
+until their full provider binding qualifies.
+
+
+The internal independent mutation owner implements the existing observation and retention ports with
+one owned Serializable transaction on the same reader/context/access/chain. It refuses pending caller
+work and caller/ambient/enlisted transactions. A result leaves only after a commit or exact persisted
+receipt reconciliation. Purged replay retains its original acknowledgement without restoring content;
+purge reconciliation pins the boundary actually staged and never broadens it to later arrivals. Failed
+write and acknowledgement reads preserve their causes; access retirement and hard integrity remain
+separate. This source does not register these ports or enable capture/deletion capability.
+
+
+Native execution deletion retires all eight history shapes inside the same root lock/ownership
+transaction, before removing the retention root. Both deletion entry points retire captured history;
+canonical terminal cleanup also removes any remaining history family. Confirmed uncaptured direct
+root deletion remains independent of history-only storage. Hard/access/schema failures clear staged
+tracker state, preserving rollback and preventing later accidental tombstone publication. Prefix
+retention still keeps replay receipts until this full run retirement; no capture capability is enabled.
+
+
+The existing public native aggregate selects one scoped independent EF mutation owner for both
+observation and retention only alongside its owned selected EF reader. Stable known default factory
+identity supports either registration order; explicit foreign readers/independent ports are preserved
+without invoking factories during selection. This installs no capture options or source profile and
+leaves native capture capability unadvertised pending complete provider/default-owner qualification.
+
+Production hosts enroll semantic metadata history with AddWorkflowRuntimeHistory. It preserves retained
+capture policy, requires qualified actual source/native/read support at admission and selects no
+persistence or payload capture. Native EF registration alone adds no history options; EF capability
+remains separately qualified. The same public entry supports the default-order integration controls.
+
+Native history support now qualifies the actual reader/context/accessor/owner chain, ordinary scope
+and complete declared projection model. Independent observation uses that same metadata-only model
+check. CanCommitHistory never reads diagnostic content. Backend capability installs no history
+options: explicit production enrollment must still qualify actual source/value/cleanup/delivery
+inputs before admitting new captured runs. Authored workflow/default-source acceptance is separate.
