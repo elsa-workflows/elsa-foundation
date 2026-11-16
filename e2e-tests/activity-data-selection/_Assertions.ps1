@@ -10,9 +10,18 @@ function Assert-PublicationUnchanged($Before, $After) {
     if ($beforeJson -cne $afterJson) { throw 'Refused publication changed owned artifact/reference/publication/activation rows' }
 }
 
+# RuntimeReadSelectionMode is an integer on the current public JSON contract (Known=0, DeferredFit=1).
+# Check its CLR wire type before comparing: PowerShell would otherwise coerce strings and booleans.
+function Assert-KnownMemberSelectionMode($Mode) {
+    if (($Mode -isnot [int] -and $Mode -isnot [long]) -or $Mode -ne 0) {
+        throw 'Placed member selection must use integer Known mode 0'
+    }
+}
 function Assert-PlacedMemberBinding($Binding, [string] $ProducerId) {
+    if ($null -eq $Binding -or $null -eq $Binding.selection) { throw 'Placed member binding lost its exact known contract, conversion or producer identity' }
+    Assert-KnownMemberSelectionMode $Binding.selection.mode
     if ($null -eq $Binding -or $Binding.source -cne 'ActivityResultMember' -or $null -eq $Binding.selection -or
-        $Binding.selection.mode -ne 'Known' -or $Binding.selection.selectedType.alias -cne 'String' -or
+        $Binding.selection.selectedType.alias -cne 'String' -or
         $Binding.selection.selectedType.collectionKind -ne 'Single' -or
         (ConvertTo-Json -InputObject @($Binding.selection.segments) -Compress) -cne '["customerId"]' -or
         $Binding.selection.profileRevision -cne 'elsa.activity-value-json/1' -or

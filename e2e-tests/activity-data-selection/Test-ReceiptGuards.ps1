@@ -64,7 +64,13 @@ $caller.provenance.parentActivityExecutionId = $otherB.runtime.activityExecution
 $wrongParent.runtime.details[$caller.activityExecutionId].provenance.parentActivityExecutionId = $otherB.runtime.activityExecutionId
 # Existing C owner/value records remain intact; only the caller's actual B ancestry is wrong.
 Expect-Refusal 'wrong-wrapper-parent' { Assert-PlacedReusableCase $wrongParent } 'Nested placed wrapper owns the wrong C boundary or outside caller'
+foreach ($invalidMode in @(@{name='deferred-selection-mode';value=[long]1}, @{name='string-known-selection-mode';value='Known'},
+        @{name='string-zero-selection-mode';value='0'}, @{name='boolean-false-selection-mode';value=$false})) {
+    $wrongMode = Copy-Nested
+    $wrongMode.frames[0].bodyBinding.selection.mode = $invalidMode.value
+    Expect-Refusal $invalidMode.name { Assert-PlacedReusableCase $wrongMode } 'Placed member selection must use integer Known mode 0'
+}
 @{status='passed';receiptSha256=(Get-FileHash (Join-Path $EvidenceDirectory 'receipt.json') -Algorithm SHA256).Hash;
     assertionsSha256=(Get-FileHash "$PSScriptRoot/_Assertions.ps1" -Algorithm SHA256).Hash;controls=$controls} |
     ConvertTo-Json -Depth 100 | Set-Content (Join-Path $EvidenceDirectory 'receipt-guard-controls.json')
-Write-Host 'Receipt guards: real values, frame ownership and four-store fingerprints pass; nine isolated mutations refused.'
+Write-Host 'Receipt guards: real values, frame ownership and four-store fingerprints pass; thirteen isolated mutations refused.'
