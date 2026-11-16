@@ -467,3 +467,8 @@ Initial complete EF build compiled new code and stopped before tests at the miss
 ### Finite EF bounded read adapter current integration
 
 Ports only the authored4418/4442 read deltas over private stage654fde6cab, without old donor ancestry or model/registration activation. The corrected occurrence projection mapping/test already present from13486 is byte-identical to the overlapping4418 contribution and retained once. New reader/transaction/ancestry/page/token/adapter files preserve original owner boundaries; the native owner authorization calls the current shared EnsureHistoryScope helper, carrying the known sealed tenant/scope correction. Private read catalog links use current lowercase paths. Owning EF execution is in progress at this source; no green or physical-provider result is inferred. Exact original frozen inputs match the prior staging receipt. Cumulative component review/evidence will be carried forward before publication.
+
+
+### Finite EF observation/retention staging current integration
+
+Ports only private4420/4423 authored deltas over read adapter9609045. Retains overlapping corrected occurrence mapper exactly once and preserves read catalog plus mutation-stage catalog. Independent observation reserves the same head and retains native coverage; prefix/full retirement preserves immutable receipts and joins the caller's admitted transaction. Native+incoming checkpoint checks and reader/observation/retention owner checks all reuse the current exact EnsureHistoryScope semantics; no optional timer owner is imported. No native model/binding/registration/schema/capture is activated. Whole owning EF execution and cumulative review remain due; separate MySQL old-read-view control is not a SQLite test result.
