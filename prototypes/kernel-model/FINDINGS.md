@@ -1915,6 +1915,6 @@ What this round found, beyond COMMIT-SQL.md:
   `Flaw.IgnoreLeaseDeadline` (the simulation's mutation) to the stress workers, so a stalled owner commits past its local
   deadline and the fence is asked (F-B2's gap). Clean, the stress holds in both modes on every engine with hundreds of
   fenced commits; with the fence broken (`unfenced=1`) and with the fence count ignored (`fencecount=0`) it fails in both
-  modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-6` adds the option and these runs.
+  modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-7` adds the option and these runs.
 
 Not done, unverified: COMMIT-SQL.md's last section.

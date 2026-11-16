@@ -235,7 +235,7 @@ today).
   pin on every engine: clean it holds in both modes, and both mutations fail in both modes (FINDINGS 29 F-B8):
   | Engine | clean, checked | clean, in batch | fence broken, checked | fence broken, in batch | count ignored, checked | count ignored, in batch |
   |---|---|---|---|---|---|---|
-  | PostgreSQL | holds (281 fenced) | holds (326 fenced) | **fails**, 2,079 violations | **fails**, 1,712 | **fails**, 2,211 | **fails**, 1,900 |
+  | PostgreSQL | holds (281 fenced) | holds (326 fenced) | **fails**, 1,712 violations | **fails**, 1,900 | **fails**, 2,079 | **fails**, 2,211 |
   | SQL Server (RCSI) | holds (103 fenced) | holds (103 fenced) | held in the one run (449 fenced, 255 definite) | **fails**, 1,154 | **fails**, 2,201 | **fails**, 2,281 |
   | SQLite | holds (1,090 fenced) | holds (1,095 fenced) | **fails**, 2,133 | **fails**, 1,729 | **fails**, 33 | **fails**, 37 |
   | MySQL | holds (275 fenced) | holds (269 fenced) | **fails**, 1,990 | **fails**, 1,745 | **fails**, 2,255 | **fails**, 2,011 |
