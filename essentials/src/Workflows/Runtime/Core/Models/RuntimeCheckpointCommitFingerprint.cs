@@ -145,7 +145,12 @@ public static class RuntimeCheckpointCommitFingerprint
         return (negative ? "-" : "") + coefficient + "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }
 
-    public static string Compute(RuntimeCheckpointCommit commit)
+    public static string Compute(RuntimeCheckpointCommit commit) => ComputeCore(commit, exactHistorySource: false);
+
+    /// <summary>Canonical exact source agreement for history capture, separate from durable replay identity.</summary>
+    public static string ComputeHistorySource(RuntimeCheckpointCommit commit) => ComputeCore(commit, exactHistorySource: true);
+
+    private static string ComputeCore(RuntimeCheckpointCommit commit, bool exactHistorySource)
     {
         ArgumentNullException.ThrowIfNull(commit);
 
@@ -154,7 +159,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // Consumed scheduler work items only appear on the atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
-        object stateChanges = !commit.StateChanges.BackgroundActivityWork.IsEmpty
+        // Source agreement covers every participant, even when historical durable replay selected an older shape.
+        object stateChanges = exactHistorySource || !commit.StateChanges.BackgroundActivityWork.IsEmpty
             ? new
             {
                 commit.StateChanges.WorkflowExecution,
@@ -185,7 +191,7 @@ public static class RuntimeCheckpointCommitFingerprint
                         .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
                     Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
                         .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds), StringComparer.Ordinal)
+                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds, exactHistorySource ? ExactBookmarkOptions : null), StringComparer.Ordinal)
                         .ToArray()
                 },
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
@@ -279,7 +285,7 @@ public static class RuntimeCheckpointCommitFingerprint
             // Preserve the new raw owner identifiers before the historical JSON conversion can replace UTF-16 units.
             element = JsonSerializer.SerializeToElement(new { CheckpointValueCaptureVersion = 1, Payload = payload }, ExactBookmarkOptions);
         else
-            element = JsonSerializer.SerializeToElement(payload, SerializerOptions);
+            element = JsonSerializer.SerializeToElement(payload, exactHistorySource ? ExactBookmarkOptions : SerializerOptions);
         if (commit.IngressWaitOrigin is not null)
             element = JsonSerializer.SerializeToElement(new { IngressWaitOriginVersion = 1, Payload = element, commit.IngressWaitOrigin }, ExactBookmarkOptions);
         if (commit.Checkpoint.HistoryCausation is { } cause)
@@ -297,6 +303,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // in WorkflowExecutionState.ModelWorkOrigin, which already participates in the decision identity.
         // ExpectedModelParentWait is likewise only a refreshed physical condition. The model-owned state
         // retains its immutable native invocation/result address and participates in this fingerprint.
+        if (exactHistorySource)
+            element = JsonSerializer.SerializeToElement(new { HistoryCaptureSourceVersion = 1, Payload = element, commit.RetainSchedulerWork }, SerializerOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

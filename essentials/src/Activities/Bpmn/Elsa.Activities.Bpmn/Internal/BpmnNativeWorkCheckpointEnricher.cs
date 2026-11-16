@@ -16,7 +16,8 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
     private const string RetirementMetadata = "bpmn.nativeWorkStartRetirement";
     // Capture every child-cancellation delivery contributed by native activity integrations, including older handlers.
     // ValidateFinalAsync refuses any later contributor that changes that inventory.
-    public int Order => int.MaxValue;
+    // Semantic result ownership precedes the final history observer.
+    public int Order => int.MaxValue - 1;
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
         if (commit.StateChanges.WorkflowExecution?.State is not { ModelWorkOrigin: { } origin } worker) return commit;
