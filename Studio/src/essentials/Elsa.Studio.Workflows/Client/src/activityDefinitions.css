@@ -305,7 +305,7 @@
 .ad-graph-outcome-mappings ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
 .ad-graph-outcome-mappings li, .ad-graph-outcome-mapping-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; }
 .ad-graph-outcome-mapping-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-.ad-graph-node-actions { display: grid; grid-template-columns: auto auto 1fr; gap: .4rem; padding: .65rem .75rem 0; }
+.ad-graph-node-actions { display: flex; align-items: center; gap: .4rem; padding: .65rem .75rem 0; }
 /* Canvas fill is inherited from the shared .wf-canvas-shell tone; only the host-specific
    sizing/overflow belongs here. */
 .ad-graph-canvas { min-width: 0; padding: 0; overflow: hidden; }
@@ -344,19 +344,6 @@
   flex-direction: column;
   overflow: hidden;
   padding: 0;
-}
-
-.ad-draft-editor.is-graph-designer .ad-authoring-view-tabs {
-  min-height: 2.5rem;
-  flex: 0 0 auto;
-  margin: 0;
-  padding: .2rem .5rem;
-  border-width: 0 0 1px;
-  border-radius: 0;
-}
-
-.ad-draft-editor.is-graph-designer .ad-authoring-view-tabs button {
-  min-height: 1.9rem;
 }
 
 .ad-draft-editor.is-graph-designer .ad-draft-lifecycle {
@@ -405,6 +392,7 @@
 }
 
 .ad-draft-editor.is-graph-designer .ad-diagnostics-panel {
+  overflow: auto;
   max-height: 35%;
   flex: 0 0 auto;
   margin: 0;

@@ -1,3 +1,5 @@
+import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
+import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { setOutputJourney } from "./setOutputJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
@@ -81,6 +83,8 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity validation explains and locates graph settings", async ({ page }, info) => activityValidationReportingJourney(page, info, capture));
+test("native block validation errors and retry", async ({ page }, info) => nativeBlockValidationJourney(page, info, capture));
 test("set output assigns reusable activity output", async ({ page }, info) => {
   const creations: CreatedWorkflow[] = [];
   createdWorkflows.set(page, creations);
@@ -877,6 +881,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await instructions.press("Tab");
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
   await publish.click();
+  await dialog.getByRole("button", { name: /Prepare publication|Check again/, exact: true }).click();
   await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
   await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(0);
   await capture(page, info, "model-blocked");
@@ -970,6 +975,19 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await expect(name).toBeFocused();
   await name.press("Tab");
   await expect(description).toBeFocused();
+  for (const control of [startingPoint, name, description]) {
+    await control.focus();
+    const frame = control.locator("xpath=ancestor::fieldset[1]");
+    const focus = await frame.evaluate(element => {
+      const style = getComputedStyle(element);
+      const probe = document.createElement("span"); probe.style.color = "var(--studio-focus-ring-solid, var(--studio-accent))";
+      element.append(probe); const color = getComputedStyle(probe).color; probe.remove();
+      return { border: style.borderColor, focus: color, outline: style.outlineStyle };
+    });
+    expect(focus.border).toBe(focus.focus);
+    expect(focus.outline).toBe("none");
+  }
+  await capture(page, info, "create-focused-description");
   await page.keyboard.press("Escape");
   await expect(open).toBeFocused();
   await open.click();

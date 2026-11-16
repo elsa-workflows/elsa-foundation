@@ -1,3 +1,4 @@
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { activityGraphDocumentAdapter } from "./activityGraphDocumentAdapter";
 import { NativeBlockAuthorityProvider } from "./graph-authoring/nativeBlockAuthority";
@@ -121,6 +122,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
   const authoringTabsId = useId();
+  const draftDiagnosticsId = useId();
   const [codeBufferState, setCodeBufferState] = useState<ActivityDefinitionDraftCodeBufferState>({
     dirty: false,
     valid: true
@@ -142,6 +144,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
   const contractEditorRef = useRef<HTMLDivElement | null>(null);
   const contractEditorHandle = useRef<ActivityDefinitionContractEditorHandle | null>(null);
   const providerEditorRef = useRef<HTMLElement | null>(null);
+  const variablesEditorRef = useRef<HTMLElement | null>(null);
+  const diagnosticsPanelRef = useRef<HTMLElement | null>(null);
   const providerPublicInterfaceRef = useRef<HTMLElement | null>(null);
   const diagnosticReturnRef = useRef<HTMLButtonElement | null>(null);
   const publicationToolbarRef = useRef<HTMLButtonElement | null>(null);
@@ -513,6 +517,15 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
       await waitForAuthoringView();
       if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
       result = focusContractDiagnostic(contractEditorRef.current, location.jsonPointer, location.referenceKey, contractEditorHandle.current);
+    } else if (location.providerKey === draft.provider.providerKey && location.jsonPointer?.startsWith("/variables")) {
+      setActiveView("variables");
+      await waitForAuthoringView();
+      if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+      const index = /^\/variables\/(0|[1-9][0-9]{0,3})(?:\/|$)/.exec(location.jsonPointer)?.[1];
+      const target = await waitForSettingTarget(() => index === undefined ? variablesEditorRef.current : variablesEditorRef.current?.querySelector<HTMLElement>(`[data-variable-index="${index}"] [data-variable-default]`) ?? null,
+        () => request === diagnosticFocusRequestRef.current);
+      if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+      result = focusSettingControl(target, "variable initial value");
     } else if (
       location.providerKey === draft.provider.providerKey &&
       isBoundaryMappingPointer(location.jsonPointer)
@@ -536,7 +549,11 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
         const target = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
         if (target) { target.tabIndex = -1; target.focus(); target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
         else result = unsupportedDiagnosticFocus();
-      } else result = focusBoundaryMappingDiagnostic(providerPublicInterfaceRef.current, location.jsonPointer);
+      } else {
+        await waitForSettingTarget(() => providerPublicInterfaceRef.current?.querySelector<HTMLElement>("[data-output-source], .ad-graph-outcome-mappings") ?? null, () => request === diagnosticFocusRequestRef.current);
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+        result = focusBoundaryMappingDiagnostic(providerPublicInterfaceRef.current, location.jsonPointer, draft.provider.payload);
+      }
     } else if (
       location.providerKey === draft.provider.providerKey &&
       contribution?.focusDiagnosticLocation
@@ -656,6 +673,18 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
   const visibleSaveStatus = saveStatusNeedsAttention ? saveStatusDetail : null;
   const advancedSaveStatus = saveStatusNeedsAttention || status === "conflict" ? null : saveStatusDetail;
 
+  const viewDraftDiagnostics = () => {
+    const panel = diagnosticsPanelRef.current;
+    const details = panel?.querySelector<HTMLDetailsElement>("details");
+    const summary = details?.querySelector<HTMLElement>("summary");
+    if (details && !details.open) summary?.click();
+    const first = panel?.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]");
+    const target = first ?? panel;
+    target?.focus();
+    target?.scrollIntoView?.({ block: "center" });
+  };
+  const draftErrorCount = draft.validation?.diagnostics.filter(item => activityDiagnosticSeverity(item.severity) === "Error").length ?? 0;
+
   return <main className={`ad-page ad-draft-editor${graphDesignerActive ? " is-graph-designer" : ""}`} aria-labelledby="activity-draft-title">
     <div className="ad-draft-editor-toolbar">
       <header className="ad-workbench-header">
@@ -687,6 +716,9 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           />
+          {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure || codeBufferState.dirty ? " needs-attention" : ""}`} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
+            {draftErrorCount || validationFailure || codeBufferState.dirty ? <AlertTriangle size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {codeBufferState.dirty ? "View draft diagnostics" : validationFailure ? "View validation problem" : draftErrorCount ? `View ${draftErrorCount} draft error${draftErrorCount === 1 ? "" : "s"}` : "View draft diagnostics"}
+          </button> : null}
           <button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
           <button type="button" className="ad-primary-action" onClick={saveNow} disabled={!draftIsActive || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button>
           <details className="ad-authoring-advanced">
@@ -708,6 +740,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
               </div>
             </div>
           </details>
+
         </div>
       </header>
     </div>
@@ -784,11 +817,11 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
           layout: candidate.layout, activityPresentation: candidate.activityPresentation ?? []
         });
         if (signature !== JSON.stringify(currentRef.current) || !isActiveDraft(currentRef.current.status)) return { state: "stale", messages: [] };
-        return { state: result.state, messages: result.validation?.diagnostics.map(item => item.message) ?? [] };
+        return { state: result.state, messages: result.validation?.diagnostics.map(item => `${item.code}: ${item.message}`) ?? [] };
       }
     }}><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></NativeBlockAuthorityProvider></section>}
     </section>
-    {hasGraphVariables ? <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
+    {hasGraphVariables ? <section ref={variablesEditorRef} id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
       {activeView === "variables" ? <>
         <p className="wf-muted">Private to each execution of this activity and available throughout its designer.</p>
         <Suspense fallback={<p role="status">Loading variables…</p>}>
@@ -809,6 +842,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
       />
     </section>
     <ActivityDefinitionDiagnosticsPanel
+      panelRef={diagnosticsPanelRef}
+      id={draftDiagnosticsId}
       validation={draft.validation}
       failure={validationFailure}
       localDiagnostics={codeBufferState.dirty ? [{
@@ -984,8 +1019,16 @@ function isBoundaryMappingPointer(pointer?: string | null) {
 
 function focusBoundaryMappingDiagnostic(
   root: HTMLElement | null,
-  pointer?: string | null
+  pointer?: string | null,
+  payload?: unknown
 ): StudioActivityDiagnosticFocusResult {
+  const mappingIndex = /^\/outputMappings\/(0|[1-9][0-9]{0,3})(?:\/|$)/.exec(pointer ?? "")?.[1];
+  if (mappingIndex !== undefined && payload && typeof payload === "object" && "outputMappings" in payload && Array.isArray(payload.outputMappings)) {
+    const mapping = payload.outputMappings[Number(mappingIndex)] as { outputReferenceKey?: unknown } | undefined;
+    const target = [...root?.querySelectorAll<HTMLElement>("[data-output-reference-key]") ?? []]
+      .find(item => item.dataset.outputReferenceKey === mapping?.outputReferenceKey);
+    return focusSettingControl(target?.querySelector<HTMLElement>("[data-output-source]") ?? null, "output value source");
+  }
   const exactTarget = root?.querySelector<HTMLElement>(
     pointer?.startsWith("/outputMappings")
       ? ".ad-graph-output-mappings"
@@ -1004,6 +1047,25 @@ function focusBoundaryMappingDiagnostic(
       ? "Focused the boundary output mappings."
       : "Focused the boundary outcome mappings."
   };
+}
+
+async function waitForSettingTarget(read: () => HTMLElement | null, isCurrent: () => boolean) {
+  for (let attempt = 0; attempt < 80 && isCurrent(); attempt++) {
+    const target = read();
+    if (target) return target;
+    await new Promise<void>(resolve => window.setTimeout(resolve, 25));
+  }
+  return null;
+}
+
+function focusSettingControl(target: HTMLElement | null, label: string): StudioActivityDiagnosticFocusResult {
+  if (!target) return unsupportedDiagnosticFocus();
+  const control = target.querySelector<HTMLElement>("input:not(:disabled),select:not(:disabled),textarea:not(:disabled),button:not(:disabled)");
+  const focused = control ?? target;
+  if (!control) focused.tabIndex = -1;
+  focused.focus();
+  focused.scrollIntoView?.({ block: "center" });
+  return { kind: "focused", announcement: `Focused the ${label}${control ? " control" : " settings context"}. Use Return to diagnostic to restore the diagnostics context.` };
 }
 
 function waitForAuthoringView() {

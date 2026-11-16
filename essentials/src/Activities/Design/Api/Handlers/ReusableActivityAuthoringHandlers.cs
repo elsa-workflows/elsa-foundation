@@ -422,9 +422,18 @@ public sealed class ReusableActivityAuthoringService(
         var state = new ActivityDefinitionDraftState(contract, command.Provider, new Dictionary<string, string>(draft.State.Options));
         var hash = ActivityDataSelectionSnapshot.Hash(state);
         ActivityDataSelectionDocument? document = null;
+        var projectionRejected = false;
         foreach (var projector in candidateProjectors ?? [])
         {
-            var projected = await projector.TryProjectAsync(state.Provider, state.Contract, draft.Id, hash, ct);
+            ActivityDataSelectionDocument? projected;
+            try { projected = await projector.TryProjectAsync(state.Provider, state.Contract, draft.Id, hash, ct); }
+            catch (ActivityDataSelectionRejectedException rejected)
+            {
+                // Do not forward arbitrary projector findings. The normal validator owns public diagnostics.
+                projectionRejected = true;
+                projected = rejected.Document;
+                if (projected is null) return Refuse("unavailable");
+            }
             if (projected is null) continue;
             if (document is not null || projected.ResourceId != draft.Id || projected.ContractRevision != hash) return Refuse("unavailable");
             document = projected;
@@ -451,6 +460,7 @@ public sealed class ReusableActivityAuthoringService(
         if (!afterCatalog.Allowed) return Refuse("denied");
         if (ActivityDataSelectionSnapshot.Hash(afterCatalog) != catalogRevision || ActivityDataSelectionSnapshot.Hash(afterProvider.AuthoringCapabilities) != manifest)
             return Refuse("stale");
+        if (projectionRejected && result.IsValid) return Refuse("unavailable");
         var valid = result.IsValid && result.Diagnostics.All(diagnostic => diagnostic.Severity != ActivityDiagnosticSeverity.Error);
         return new(valid ? "validated" : "invalid", new(result.DraftId, result.Revision, valid, result.ValidatedAt, result.Diagnostics));
     }
