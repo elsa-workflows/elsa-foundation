@@ -2,14 +2,15 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Rejects authored value flows whose producer, scope, or write ordering cannot be resolved
-/// deterministically before an executable is published.
+/// Rejects authored value flows whose producer or scope cannot be resolved before an executable is published, and
+/// warns about writes to one variable whose order the definition does not fix (spec 266).
 /// </summary>
 public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
@@ -19,7 +20,6 @@ public sealed class ValueFlowValidator(
     public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!) { }
 
     private const string ParallelStructureKind = "elsa.parallel.structure";
-    private const string FlowchartStructureKind = "elsa.flowchart.structure";
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -33,7 +33,7 @@ public sealed class ValueFlowValidator(
 
         var graph = ValueFlowGraph.Create(draft.State.RootActivity, activityStructureService);
         var errors = new List<ValidationError>();
-        ValidateConcurrentWrites(graph, errors);
+        ValidateUnorderedWrites(draft.State.RootActivity, errors, cancellationToken);
         var analysis = await sourceAnalyzer.AnalyzeAsync(new ActivityDataSelectionDocument(
             "WorkflowDefinition", draft.Id, $"{draft.Id}/{draft.LastModifiedAt:O}", draft.State.RootActivity,
             [.. draft.State.Inputs], [.. draft.State.Variables], [.. draft.State.Outputs]), cancellationToken: cancellationToken);
@@ -42,25 +42,26 @@ public sealed class ValueFlowValidator(
         return errors;
     }
 
-    private static void ValidateConcurrentWrites(ValueFlowGraph graph, ICollection<ValidationError> errors)
+    // Spec 266: declared writes to one variable whose order the definition does not fix are a warning, never a
+    // refusal. The ordering knowledge comes only from the structures' declarations.
+    private void ValidateUnorderedWrites(ActivityNode root, ICollection<ValidationError> errors, CancellationToken cancellationToken)
     {
-        var writes = graph.Nodes
-            .Select(info => (Info: info, Target: GetVariableWriteTarget(info.Node)))
-            .Where(item => item.Target is not null)
-            .GroupBy(
-                item => new VariableKey(NormalizeScopeId(item.Target!.DeclaringScopeId), item.Target.ReferenceKey),
-                item => item.Info);
-
-        foreach (var group in writes)
+        var result = UnorderedVariableWriteAnalysis.Analyze(
+            root, activityStructureService, node => UnorderedVariableWriteAnalysis.DeclaredWrites(node), cancellationToken);
+        foreach (var finding in result.UnorderedWrites)
         {
-            var candidates = group.ToArray();
-            if (!HasConcurrentPair(candidates, graph))
-                continue;
-
             AddOnce(errors, new ValidationError(
-                VariablePath(group.Key),
+                VariablePath(new VariableKey(finding.ScopeId, finding.ReferenceKey)),
                 "ValueFlow/ConcurrentWrite",
-                $"Variable '{group.Key.ReferenceKey}' in scope '{group.Key.ScopeId}' has potentially concurrent writes. Collect branch contributions and apply one explicit deterministic merge or reduction after the join."));
+                finding.Message) { Severity = ValidationSeverities.Warning });
+        }
+
+        foreach (var duplicate in result.DuplicateCaptureTargets)
+        {
+            AddOnce(errors, new ValidationError(
+                $"{duplicate.NodeId}/outputs/{duplicate.OutputKeys[^1]}",
+                "ValueFlow/DuplicateCaptureTarget",
+                duplicate.Message) { Severity = ValidationSeverities.Warning });
         }
     }
 
@@ -89,98 +90,8 @@ public sealed class ValueFlowValidator(
         }
     }
 
-    private static bool HasConcurrentPair(IReadOnlyList<NodeInfo> writes, ValueFlowGraph graph)
-    {
-        for (var left = 0; left < writes.Count; left++)
-        for (var right = left + 1; right < writes.Count; right++)
-        {
-            if (ArePotentiallyConcurrent(writes[left], writes[right], graph))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool ArePotentiallyConcurrent(NodeInfo left, NodeInfo right, ValueFlowGraph graph)
-    {
-        var common = FindNearestCommonContainer(left, right);
-        if (common is null)
-            return false;
-
-        var leftChild = ChildBelow(left, common);
-        var rightChild = ChildBelow(right, common);
-        if (ReferenceEquals(leftChild, rightChild))
-            return false;
-
-        if (IsStructure(common, ParallelStructureKind))
-            return true;
-
-        if (!IsStructure(common, FlowchartStructureKind))
-            return false;
-
-        var forward = graph.AssessChildResult(common, leftChild.Node.NodeId, rightChild.Node.NodeId);
-        var reverse = graph.AssessChildResult(common, rightChild.Node.NodeId, leftChild.Node.NodeId);
-        if (forward.MayRunConcurrently == true || reverse.MayRunConcurrently == true)
-            return true;
-        if (forward.MayRunConcurrently == false || reverse.MayRunConcurrently == false)
-            return false;
-
-        // Legacy owners may supply only completion order. Unknown facts cannot certify two
-        // colliding writes as safe; explicit ordering or exclusion can establish that safety.
-        return forward.Availability != ActivityChildResultAvailability.Definite &&
-               reverse.Availability != ActivityChildResultAvailability.Definite &&
-               forward.AreMutuallyExclusive != true && reverse.AreMutuallyExclusive != true;
-    }
-
-    private static VariableReference? GetVariableWriteTarget(ActivityNode node)
-    {
-        if (node.Intrinsic?.Kind is AuthoredWorkflowIntrinsicKind.Set or
-            AuthoredWorkflowIntrinsicKind.Merge or
-            AuthoredWorkflowIntrinsicKind.Reduce)
-            return node.Intrinsic.Variable;
-
-        if (!StringComparer.Ordinal.Equals(node.ActivityVersionId, "elsa.intrinsic.set@1"))
-            return null;
-
-        var variable = node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, "variable"));
-        return variable is not null && VariableReference.TryParse(variable.Value.Value, out var target) ? target : null;
-    }
-
-    private static NodeInfo? FindNearestCommonContainer(NodeInfo left, NodeInfo right, string? requiredKind = null)
-    {
-        var leftAncestors = new HashSet<NodeInfo>();
-        for (var current = left.Parent; current is not null; current = current.Parent)
-        {
-            if (requiredKind is null || IsStructure(current, requiredKind))
-                leftAncestors.Add(current);
-        }
-
-        for (var current = right.Parent; current is not null; current = current.Parent)
-        {
-            if (leftAncestors.Contains(current) && (requiredKind is null || IsStructure(current, requiredKind)))
-                return current;
-        }
-
-        return null;
-    }
-
-    private static NodeInfo ChildBelow(NodeInfo node, NodeInfo ancestor)
-    {
-        var current = node;
-        while (current.Parent is not null && !ReferenceEquals(current.Parent, ancestor))
-            current = current.Parent;
-        return current;
-    }
-
     private static bool IsStructure(NodeInfo info, string kind) =>
         StringComparer.Ordinal.Equals(info.Node.Structure?.Kind, kind);
-
-    private static string NormalizeScopeId(string? scopeId) =>
-        string.IsNullOrWhiteSpace(scopeId) ||
-        StringComparer.Ordinal.Equals(scopeId, VariableReference.WorkflowScopeId) ||
-        StringComparer.Ordinal.Equals(scopeId, "$workflow")
-            ? VariableReference.WorkflowScopeId
-            : scopeId;
 
     private static string VariablePath(VariableKey key) =>
         StringComparer.Ordinal.Equals(key.ScopeId, VariableReference.WorkflowScopeId)
@@ -211,7 +122,6 @@ public sealed class ValueFlowValidator(
     private sealed class ValueFlowGraph
     {
         private readonly IActivityStructureService _structureService;
-        private readonly Dictionary<(NodeInfo Container, string Producer, string Consumer), ActivityChildResultFacts> _childResultFacts = [];
         private readonly List<NodeInfo> _nodes = [];
         private readonly Dictionary<string, NodeInfo> _byNodeId = new(StringComparer.Ordinal);
 
@@ -225,17 +135,6 @@ public sealed class ValueFlowValidator(
             var graph = new ValueFlowGraph(structureService);
             graph.Add(root);
             return graph;
-        }
-
-        public ActivityChildResultFacts AssessChildResult(NodeInfo container, string producerChildNodeId, string consumerChildNodeId)
-        {
-            var key = (container, producerChildNodeId, consumerChildNodeId);
-            if (_childResultFacts.TryGetValue(key, out var cached))
-                return cached;
-
-            var facts = _structureService.AssessChildResult(container.Node, producerChildNodeId, consumerChildNodeId);
-            _childResultFacts[key] = facts;
-            return facts;
         }
 
         private void Add(ActivityNode root)

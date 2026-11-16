@@ -1,3 +1,4 @@
+using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Design.Core.Models;
 
@@ -11,8 +12,14 @@ internal sealed class FlowchartChildResultAnalysis(
     IReadOnlyCollection<string> entryNodeIds,
     IReadOnlyCollection<string> nodeIds,
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> successors,
-    IReadOnlyDictionary<string, IReadOnlyCollection<string>> predecessors)
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> predecessors,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? inboundSources = null,
+    IReadOnlySet<string>? nonWaitingJoins = null)
 {
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _inboundSources =
+        inboundSources ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+    private readonly IReadOnlySet<string> _nonWaitingJoins = nonWaitingJoins ?? new HashSet<string>(StringComparer.Ordinal);
+
     public ActivityChildResultFacts Assess(string producer, string consumer)
     {
         var sameChild = StringComparer.Ordinal.Equals(producer, consumer);
@@ -38,6 +45,62 @@ internal sealed class FlowchartChildResultAnalysis(
         // successors, so no run of it lies behind another.
         return new(availability, cyclicBackEdge, !forward && !backward && !exclusive, exclusive)
         { EarlierProducerRunCanReachConsumer = IsReachable(producer, producer, requireEdge: true) };
+    }
+
+    /// <summary>
+    /// How two children relate in time (spec 266, D-2/D-2a). Paths through the same port and paths through different
+    /// ports both count as forks: any activity may select several outcomes (ADR 0045 §6, amendment of 2026-11-16).
+    /// Branches from different trigger entries are exclusive. A child reachable from another runs after it, because
+    /// every join waits for its live inbound paths, except a <c>merge</c> join, which runs once per arrival.
+    /// </summary>
+    public ActivityChildTimeRelation Relate(string first, string second)
+    {
+        if (!nodeIds.Contains(first) || !nodeIds.Contains(second))
+            return ActivityChildTimeRelation.Unspecified;
+        if (StringComparer.Ordinal.Equals(first, second))
+            return SelfOverlaps(first) ? ActivityChildTimeRelation.Unordered : ActivityChildTimeRelation.FirstBeforeSecond;
+
+        var forward = IsReachable(first, second);
+        var backward = IsReachable(second, first);
+        if (!forward && !backward)
+            return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
+
+        // In a cycle each child runs after the other's earlier pass; take the direction a dominator gives.
+        var firstEarlier = forward && (!backward || !Dominates(second, first));
+        return firstEarlier
+            ? OrderedThroughJoins(first, second) ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.Unordered
+            : OrderedThroughJoins(second, first) ? ActivityChildTimeRelation.SecondBeforeFirst : ActivityChildTimeRelation.Unordered;
+    }
+
+    // A non-waiting join between the two that another arrival can reach without the earlier child lets the later
+    // child run while the earlier one is still in flight.
+    private bool OrderedThroughJoins(string earlier, string later) =>
+        _nonWaitingJoins
+            .Where(join => !StringComparer.Ordinal.Equals(join, earlier))
+            .Where(join => IsReachable(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || IsReachable(join, later)))
+            .All(join => Dominates(earlier, join));
+
+    // A non-waiting join runs once per arrival. Two arrivals can be in flight together when two of its inbound
+    // connections come from one node (it may select several outcomes) or from two nodes that are neither ordered nor
+    // exclusive. Every node reachable from such a join runs once per join run.
+    private bool SelfOverlaps(string node) =>
+        _nonWaitingJoins.Any(join =>
+            (StringComparer.Ordinal.Equals(join, node) || IsReachable(join, node)) && ArrivalsCanOverlap(join));
+
+    private bool ArrivalsCanOverlap(string join)
+    {
+        var sources = _inboundSources.GetValueOrDefault(join, []);
+        if (sources.Count != sources.Distinct(StringComparer.Ordinal).Count())
+            return true;
+        for (var left = 0; left < sources.Count; left++)
+        for (var right = left + 1; right < sources.Count; right++)
+        {
+            if (!IsReachable(sources[left], sources[right]) && !IsReachable(sources[right], sources[left]) &&
+                !AreExclusive(sources[left], sources[right]))
+                return true;
+        }
+
+        return false;
     }
 
     private bool IsReachable(string source, string target, bool requireEdge = false)
@@ -148,7 +211,17 @@ internal sealed class FlowchartChildResultAnalysis(
             id => id,
             id => (IReadOnlyCollection<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Target, id)).Select(edge => edge.Source).Distinct(StringComparer.Ordinal).ToArray(),
             StringComparer.Ordinal);
-        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors);
+        var inboundSources = nodeIds.ToDictionary(
+            id => id,
+            id => (IReadOnlyList<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Target, id)).Select(edge => edge.Source).ToArray(),
+            StringComparer.Ordinal);
+        // FlowchartJoinCoordinator.ShouldWaitForTarget: only a merge node with several inbound connections does not wait.
+        var nonWaitingJoins = nodeIds
+            .Where(id => inboundSources[id].Count > 1 &&
+                         structure.NodeMetadata.TryGetValue(id, out var metadata) &&
+                         StringComparer.Ordinal.Equals(metadata?.PolicyKind, FlowchartPolicyKinds.Merge))
+            .ToHashSet(StringComparer.Ordinal);
+        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins);
     }
 
 }

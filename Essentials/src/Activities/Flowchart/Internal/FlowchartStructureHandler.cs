@@ -47,6 +47,17 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
                ?? new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
     }
 
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        FlowchartChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Relate(firstChildNodeId, secondChildNodeId)
+        ?? ActivityChildTimeRelation.Unspecified;
+
+    // A first-wins race marks the losing paths cancelled in the Flowchart's state, but their running activities are not
+    // cancelled: the Flowchart can complete while they still run and commit. A Break does the same, but whether a child
+    // ends with Break cannot be seen at design time (spec 266 research R-3).
+    public bool? CompletesAfterItsChildren(ActivityNode activity) =>
+        !ReadAuthoredStructure(activity).NodeMetadata.Values.Any(metadata =>
+            StringComparer.Ordinal.Equals(metadata?.PolicyKind, Policies.FlowchartPolicyKinds.FirstWins));
+
     public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Connections
             .GroupBy(connection => connection.Source.NodeId, StringComparer.Ordinal)

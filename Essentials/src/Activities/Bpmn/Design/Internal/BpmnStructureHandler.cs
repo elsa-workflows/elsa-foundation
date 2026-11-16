@@ -28,6 +28,14 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Assess(producerChildNodeId, consumerChildNodeId)
         ?? new(ActivityChildResultAvailability.Unknown);
 
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        BpmnTimeRelationAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Relate(firstChildNodeId, secondChildNodeId)
+        ?? ActivityChildTimeRelation.Unspecified;
+
+    // The process runtime cancels its live children before it completes (BpmnProcessRuntime requests their subtree
+    // cancellation), so no child commits a write after the process completed.
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
     public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
         BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.CompletedBefore(childNodeId);
 

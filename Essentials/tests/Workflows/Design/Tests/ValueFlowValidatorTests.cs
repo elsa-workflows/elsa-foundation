@@ -23,7 +23,7 @@ public sealed class ValueFlowValidatorTests
     [InlineData("", true)]
     [InlineData(" \t ", true)]
     [InlineData(" start ", true)]
-    public async Task An_omitted_flowchart_start_accepts_ordered_writes_but_rejects_a_real_fork(string? start, bool fork)
+    public async Task An_omitted_flowchart_start_accepts_ordered_writes_but_warns_about_a_real_fork(string? start, bool fork)
     {
         var flow = Flowchart("flow", [Activity("start"), Set("write-left", "counter", "workflow"), Set("write-right", "counter", "workflow")],
             fork ? [("left", "start", "write-left"), ("right", "start", "write-right")]
@@ -31,7 +31,7 @@ public sealed class ValueFlowValidatorTests
         var errors = await Validate(Sequence("root", flow));
         Assert.Equal(fork, errors.Any(error => error.Type == "ValueFlow/ConcurrentWrite"));
         if (fork)
-            Assert.Equal("$workflow/variables/counter", Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite").Path);
+            Assert.Equal("$workflow/variables/counter", SingleConcurrentWrite(errors).Path);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public sealed class ValueFlowValidatorTests
     }
 
     [Fact]
-    public async Task Concurrent_ordinary_writes_to_the_same_variable_are_rejected()
+    public async Task Concurrent_ordinary_writes_to_the_same_variable_are_warned_about()
     {
         var parallel = Parallel(
             ("left", Set("set-left", "counter", "$workflow")),
@@ -64,7 +64,7 @@ public sealed class ValueFlowValidatorTests
 
         var errors = await Validate(Sequence("root", parallel));
 
-        var error = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        var error = SingleConcurrentWrite(errors);
         Assert.Equal("$workflow/variables/counter", error.Path);
     }
 
@@ -89,7 +89,7 @@ public sealed class ValueFlowValidatorTests
 
         var errors = await Validate(Sequence("root", parallel));
 
-        var error = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        var error = SingleConcurrentWrite(errors);
         Assert.Equal("$workflow/variables/counter", error.Path);
     }
 
@@ -251,14 +251,14 @@ public sealed class ValueFlowValidatorTests
 
         var errors = await Validate(Sequence("root", flowchart));
 
-        var error = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        var error = SingleConcurrentWrite(errors);
         Assert.Equal("$workflow/variables/counter", error.Path);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task A_legacy_structure_replacement_with_unknown_fork_facts_refuses_only_colliding_writes(bool sameVariable)
+    public async Task A_legacy_structure_replacement_with_unknown_fork_facts_warns_only_about_colliding_writes(bool sameVariable)
     {
         using var actual = StructureProvider();
         var legacy = new LegacyStructureService(actual.GetRequiredService<IActivityStructureService>());
@@ -270,7 +270,7 @@ public sealed class ValueFlowValidatorTests
 
         Assert.Equal(sameVariable, errors.Any(error => error.Type == "ValueFlow/ConcurrentWrite"));
         if (sameVariable)
-            Assert.Equal("$workflow/variables/counter", Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite").Path);
+            Assert.Equal("$workflow/variables/counter", SingleConcurrentWrite(errors).Path);
     }
 
     [Theory]
@@ -364,6 +364,286 @@ public sealed class ValueFlowValidatorTests
                 Assert.Single(errors, error => error.Type == "ValueFlow/UnavailableProducer").Path);
     }
 
+    // Spec 266, Story 1 scenarios 1 and 2; ADR 0048 required evidence "shared-ancestor parallel capture warning".
+    [Fact]
+    public async Task Parallel_branches_capturing_into_one_variable_warn_and_name_both_writers()
+    {
+        var errors = await Validate(Sequence("root", Parallel(
+            ("left", Capture("capture-left", "total")),
+            ("right", Capture("capture-right", "total")))));
+
+        var warning = SingleConcurrentWrite(errors);
+        Assert.Equal("$workflow/variables/total", warning.Path);
+        Assert.Contains("'capture-left', 'capture-right'", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("last successfully committed write wins", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("order the branches, capture into separate variables, or combine them with one write after the join", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("Fault lost-update mode", warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(errors, error => error.Severity == "Error" && error.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Separate_variables_combined_after_the_join_do_not_warn()
+    {
+        var errors = await Validate(Sequence("root",
+            Parallel(("left", Capture("capture-left", "left-total")), ("right", Capture("capture-right", "right-total"))),
+            Set("combine", "total", "workflow")));
+
+        Assert.DoesNotContain(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    // Story 1 scenario 3.
+    [Fact]
+    public async Task A_flowchart_fork_through_one_port_with_two_captures_warns()
+    {
+        var flowchart = Flowchart("flow",
+            [Activity("start"), Capture("capture-left", "total"), Capture("capture-right", "total")],
+            [("left", "start", "capture-left"), ("right", "start", "capture-right")], "start");
+
+        Assert.Contains("'capture-left', 'capture-right'", SingleConcurrentWrite(await Validate(Sequence("root", flowchart))).Message, StringComparison.Ordinal);
+    }
+
+    // Story 1 scenario 4.
+    [Theory]
+    [InlineData(AuthoredWorkflowIntrinsicKind.Set)]
+    [InlineData(AuthoredWorkflowIntrinsicKind.Merge)]
+    [InlineData(AuthoredWorkflowIntrinsicKind.Reduce)]
+    public async Task A_capture_and_an_unordered_intrinsic_write_warn(AuthoredWorkflowIntrinsicKind kind)
+    {
+        var errors = await Validate(Sequence("root", Parallel(
+            ("left", Capture("capture", "total")),
+            ("right", Intrinsic(kind, "write", "total", "workflow")))));
+
+        Assert.Contains("'capture', 'write'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+    }
+
+    // Story 1 scenario 5.
+    [Fact]
+    public async Task Three_unordered_writers_give_one_warning_naming_all_three()
+    {
+        var errors = await Validate(Sequence("root", Parallel(
+            ("a", Capture("write-a", "total")),
+            ("b", Set("write-b", "total", "workflow")),
+            ("c", Capture("write-c", "total")))));
+
+        Assert.Contains("3 nodes", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+        Assert.Contains("'write-a', 'write-b', 'write-c'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+    }
+
+    // Story 1 scenario 7 and Story 2 scenario 4.
+    [Fact]
+    public async Task Consecutive_writes_in_a_sequence_or_on_a_flowchart_path_do_not_warn()
+    {
+        var flowchart = Flowchart("flow",
+            [Capture("path-first", "result"), Capture("path-second", "result")],
+            [("next", "path-first", "path-second")], "path-first");
+
+        var errors = await Validate(Sequence("root", Capture("first", "total"), Capture("second", "total"), flowchart));
+
+        Assert.DoesNotContain(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    // Story 1 scenario 8: a threshold Parallel releases its successor while the other branch still runs.
+    [Fact]
+    public async Task A_threshold_parallel_leaves_the_outstanding_branch_unordered_with_the_continuation()
+    {
+        var parallel = Structured("parallel", "elsa.parallel.structure", new
+        {
+            branches = new[]
+            {
+                new { name = "a", activity = Activity("branch-a") },
+                new { name = "b", activity = Capture("branch-b", "total") }
+            },
+            threshold = (int?)1
+        });
+
+        var errors = await Validate(Sequence("root", parallel, Capture("continuation", "total")));
+
+        Assert.Contains("'branch-b', 'continuation'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+    }
+
+    // Story 1 scenario 8: a merge join runs its continuation on the first arrival.
+    [Fact]
+    public async Task A_merge_join_does_not_order_an_incoming_branch_before_the_continuation()
+    {
+        var errors = await Validate(Sequence("root", JoinFlowchart("merge")));
+
+        Assert.Contains("'branch-b', 'continuation'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+    }
+
+    // Story 2 scenario 6: a waiting join orders every incoming branch before its continuation.
+    [Fact]
+    public async Task A_waiting_join_orders_an_incoming_branch_before_the_continuation()
+    {
+        Assert.DoesNotContain(await Validate(Sequence("root", JoinFlowchart(null))), error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    [Fact]
+    public async Task A_waiting_join_still_reports_unordered_writes_between_incoming_branches()
+    {
+        var errors = await Validate(Sequence("root", JoinFlowchart(null, branchAWrites: true)));
+
+        Assert.Contains("'branch-a', 'branch-b'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("'continuation'", SingleConcurrentWrite(errors).Message, StringComparison.Ordinal);
+    }
+
+    // Story 2 scenarios 1-3.
+    [Fact]
+    public async Task If_arms_switch_cases_and_loop_passes_do_not_warn()
+    {
+        var @if = Structured("if", "elsa.if.structure", new { then = Capture("then", "result"), @else = Capture("else", "result") });
+        var @switch = new ActivityNode("switch", "switch@1", [], [],
+            new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind,
+                Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    cases = new[]
+                    {
+                        new { caseId = "case-a", match = "A", condition = (ArgumentState?)null, activity = Capture("case-a", "choice") },
+                        new { caseId = "case-b", match = "B", condition = (ArgumentState?)null, activity = Capture("case-b", "choice") }
+                    },
+                    @default = Capture("default", "choice")
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+        var loop = Structured("loop", "elsa.while.structure", new { body = Capture("body", "counter") });
+
+        var errors = await Validate(Sequence("root", @if, @switch, loop));
+
+        Assert.DoesNotContain(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    // Story 2 scenario 5 under ADR 0045 §6 (amendment of 2026-11-16): any activity may select several outcomes, so the
+    // paths leaving two ports of a decision node are unordered (D-2a), as before this spec.
+    [Fact]
+    public async Task Paths_leaving_two_ports_of_a_node_are_unordered_because_any_node_may_select_several_outcomes()
+    {
+        var flowchart = Structured("flow", "elsa.flowchart.structure", new
+        {
+            activities = new[] { Activity("decision"), Capture("on-yes", "result"), Capture("on-no", "result") },
+            connections = new[]
+            {
+                new { id = "yes", source = new { nodeId = "decision", port = "Yes" }, target = new { nodeId = "on-yes", port = (string?)null } },
+                new { id = "no", source = new { nodeId = "decision", port = "No" }, target = new { nodeId = "on-no", port = (string?)null } }
+            },
+            startNodeId = "decision",
+            nodeMetadata = new Dictionary<string, object>(),
+            connectionMetadata = new Dictionary<string, object>(),
+            variables = Array.Empty<object>()
+        });
+
+        Assert.Contains("'on-yes', 'on-no'", SingleConcurrentWrite(await Validate(Sequence("root", flowchart))).Message, StringComparison.Ordinal);
+    }
+
+    // Story 4 scenario 3 and SC-004: a structure registered only here takes part through its declaration alone.
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(ActivityChildTimeRelation.Unordered, false)]
+    [InlineData(ActivityChildTimeRelation.MutuallyExclusive, false)]
+    public async Task A_test_only_structure_takes_part_through_its_declaration(ActivityChildTimeRelation? declared, bool undeclared)
+    {
+        using var actual = StructureProvider();
+        var custom = new CustomStructureService(actual.GetRequiredService<IActivityStructureService>(), declared);
+        var node = new ActivityNode("custom", "test.activity@1", [], [],
+            new ActivityNodeStructure("test.custom.structure", "1", JsonSerializer.SerializeToElement(new { })));
+
+        var errors = await Validate(Sequence("root", node), custom);
+
+        if (declared == ActivityChildTimeRelation.MutuallyExclusive)
+        {
+            Assert.DoesNotContain(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+            return;
+        }
+
+        var warning = SingleConcurrentWrite(errors);
+        Assert.Contains("'custom-left', 'custom-right'", warning.Message, StringComparison.Ordinal);
+        Assert.Equal(undeclared, warning.Message.Contains("Structure 'test.custom.structure' (node 'custom') does not declare how its children are ordered", StringComparison.Ordinal));
+    }
+
+    // Edge case: two outputs of one node capture into one variable (FR-010).
+    [Fact]
+    public async Task Two_outputs_of_one_node_capturing_into_one_variable_get_a_duplicate_capture_warning()
+    {
+        var node = new ActivityNode("node", "test.activity@1", [], [VariableOutput("first", "total"), VariableOutput("second", "total")]);
+
+        var errors = await Validate(Sequence("root", node));
+
+        var warning = Assert.Single(errors, error => error.Type == "ValueFlow/DuplicateCaptureTarget");
+        Assert.Equal("Warning", warning.Severity);
+        Assert.Equal("node/outputs/second", warning.Path);
+        Assert.DoesNotContain(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    private static Elsa.Workflows.Design.Validations.Core.Models.ValidationError SingleConcurrentWrite(
+        IEnumerable<Elsa.Workflows.Design.Validations.Core.Models.ValidationError> errors)
+    {
+        var warning = Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite");
+        Assert.Equal("Warning", warning.Severity);
+        return warning;
+    }
+
+    // fork -> a, b; a -> join, b -> join; join -> continuation. Branch b and the continuation write total.
+    private static ActivityNode JoinFlowchart(string? joinPolicy, bool branchAWrites = false) =>
+        Structured("flow", "elsa.flowchart.structure", new
+        {
+            activities = new[]
+            {
+                Activity("fork"),
+                branchAWrites ? Capture("branch-a", "total") : Activity("branch-a"),
+                Capture("branch-b", "total"),
+                Activity("join"),
+                Capture("continuation", "total")
+            },
+            connections = new[]
+            {
+                Connection("to-a", "fork", "branch-a"), Connection("to-b", "fork", "branch-b"),
+                Connection("a-join", "branch-a", "join"), Connection("b-join", "branch-b", "join"),
+                Connection("join-next", "join", "continuation")
+            },
+            startNodeId = "fork",
+            nodeMetadata = joinPolicy is null
+                ? new Dictionary<string, object>()
+                : new Dictionary<string, object> { ["join"] = new { policyKind = joinPolicy } },
+            connectionMetadata = new Dictionary<string, object>(),
+            variables = Array.Empty<object>()
+        });
+
+    private static object Connection(string id, string source, string target) =>
+        new { id, source = new { nodeId = source, port = (string?)null }, target = new { nodeId = target, port = (string?)null } };
+
+    private static ActivityNode Capture(string nodeId, string variableKey) =>
+        new(nodeId, "test.activity@1", [], [VariableOutput("result", variableKey)]);
+
+    private static ArgumentState VariableOutput(string outputKey, string variableKey) =>
+        new(outputKey,
+            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = variableKey, declaringScopeId = "workflow" }), "Variable"),
+            null, null, null, null);
+
+    private static ActivityNode Intrinsic(AuthoredWorkflowIntrinsicKind kind, string nodeId, string variableKey, string declaringScopeId) =>
+        new ActivityNode(nodeId, "$intrinsic", [new ArgumentState("value", new ArgumentValue(1, "Literal"), null, null, null, null)], [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(kind, new TypeReference("Int32"), new VariableReference(variableKey, declaringScopeId))
+        };
+
+    // A structure kind no module owns: it projects two capturing children and declares only what the test says.
+    private sealed class CustomStructureService(IActivityStructureService inner, ActivityChildTimeRelation? declared) : IActivityStructureService
+    {
+        private static readonly ActivityNode[] Children = [Capture("custom-left", "total"), Capture("custom-right", "total")];
+
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
+            activity.Structure?.Kind == "test.custom.structure" ? [new ActivityChildProjection("children", Children)] : inner.ProjectChildren(activity);
+
+        public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string first, string second) =>
+            activity.Structure?.Kind == "test.custom.structure"
+                ? first == second ? ActivityChildTimeRelation.Unspecified : declared ?? ActivityChildTimeRelation.Unspecified
+                : inner.RelateChildren(activity, first, second);
+
+        public bool? CompletesAfterItsChildren(ActivityNode activity) =>
+            activity.Structure?.Kind == "test.custom.structure" ? true : inner.CompletesAfterItsChildren(activity);
+
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children) => inner.ReplaceChildren(activity, children);
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => inner.CompileExecutableStructure(activity);
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => inner.ProjectScopedVariables(activity);
+        public bool SupportsScopedVariables(ActivityNode activity) => inner.SupportsScopedVariables(activity);
+    }
+
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root, IActivityStructureService? structures = null)
     {
         using var services = StructureProvider(structures);
@@ -375,7 +655,8 @@ public sealed class ValueFlowValidatorTests
     private static ServiceProvider StructureProvider(IActivityStructureService? structures = null)
     {
         var catalog = new StubActivityCatalog().Add("test.activity@1").Add("elsa.sequence.structure@1")
-            .Add("elsa.parallel.structure@1").Add("elsa.flowchart.structure@1").Add("switch@1");
+            .Add("elsa.parallel.structure@1").Add("elsa.flowchart.structure@1").Add("switch@1")
+            .Add("elsa.if.structure@1").Add("elsa.while.structure@1");
         return ActivityDataSelectionTestSupport.Provider(catalog, structures);
     }
 

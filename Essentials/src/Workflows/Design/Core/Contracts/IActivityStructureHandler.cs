@@ -64,6 +64,24 @@ public interface IActivityStructureHandler
         return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
     }
 
+    /// <summary>
+    /// How two direct children of <paramref name="activity"/> relate in time within one run of this structure: one
+    /// always before the other, their order not defined, mutually exclusive, or not said (the default). The two ids
+    /// may be the same child; see <see cref="ActivityChildTimeRelation"/>. The default adapts
+    /// <see cref="ChildrenCompletedBefore"/>: a child declared completed before another runs before it; anything else is
+    /// not said. The unordered-write warning (spec 266)
+    /// takes all of its ordering knowledge from this declaration.
+    /// </summary>
+    ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        ActivityChildTimeRelationDefaults.FromCompletedBefore(this.ChildrenCompletedBefore, activity, firstChildNodeId, secondChildNodeId);
+
+    /// <summary>
+    /// Whether this structure completes only after every child run it started has ended, or was cancelled before it
+    /// could commit a write. <see langword="false"/> when it can complete while a child still runs (an early-release
+    /// join); <see langword="null"/> (the default) when it does not say, which is treated as <see langword="false"/>.
+    /// </summary>
+    bool? CompletesAfterItsChildren(ActivityNode activity) => null;
+
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>

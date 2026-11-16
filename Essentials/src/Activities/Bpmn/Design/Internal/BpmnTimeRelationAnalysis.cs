@@ -1,0 +1,268 @@
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Workflows.Design.Core.Models;
+
+namespace Elsa.Activities.Bpmn.Internal;
+
+/// <summary>
+/// How two children of a BPMN process relate in time (spec 266, D-2, research R-6), read from the element graph.
+/// </summary>
+/// <remarks>
+/// <para>A child reachable from another through sequence flows runs after it: parallel and inclusive gateways wait for
+/// their inbound tokens. Exclusive and event-based gateways, and any other element with several incoming flows, pass
+/// each token on, so another token can run what follows them while the earlier child is still in flight.</para>
+/// <para>Two children that do not reach each other are mutually exclusive when an exclusive split dominates both and
+/// every path to one starts on a different choice than every path to the other. Exclusive splits are exclusive
+/// gateways, the alternative start events, and a host with interrupting boundary events (its normal flow and each
+/// interrupting boundary are choices). Every other split (parallel, inclusive and event-based gateways, implicit
+/// splits, non-interrupting boundaries) is unordered, and so are event subprocesses and compensation handlers, which
+/// have no sequence flows.</para>
+/// <para>A non-sequential multi-instance child overlaps itself.</para>
+/// </remarks>
+internal sealed class BpmnTimeRelationAnalysis
+{
+    private const string Root = "\u0000root";
+    private const string HostEntryPrefix = "\u0000host:";
+
+    private readonly Dictionary<string, BpmnElement> _elements;
+    private readonly Dictionary<string, string> _elementOfChild;
+    private readonly Dictionary<string, List<Edge>> _outgoing = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<string>> _inbound = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _nonWaitingJoins = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string, string), bool> _reachable = [];
+    private Dictionary<string, HashSet<string>>? _dominators;
+
+    private BpmnTimeRelationAnalysis(Dictionary<string, BpmnElement> elements, Dictionary<string, string> elementOfChild)
+    {
+        _elements = elements;
+        _elementOfChild = elementOfChild;
+    }
+
+    public ActivityChildTimeRelation Relate(string firstChild, string secondChild)
+    {
+        if (!_elementOfChild.TryGetValue(firstChild, out var first) || !_elementOfChild.TryGetValue(secondChild, out var second))
+            return ActivityChildTimeRelation.Unspecified;
+
+        if (StringComparer.Ordinal.Equals(firstChild, secondChild))
+            return OverlapsItself(first) ? ActivityChildTimeRelation.Unordered : ActivityChildTimeRelation.FirstBeforeSecond;
+
+        // A body and the listener of one event subprocess, or anything paired with a flow-less element.
+        if (StringComparer.Ordinal.Equals(first, second) || !InGraph(first) || !InGraph(second))
+            return ActivityChildTimeRelation.Unordered;
+
+        var forward = IsReachable(first, second);
+        var backward = IsReachable(second, first);
+        if (!forward && !backward)
+            return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
+
+        var firstEarlier = forward && (!backward || !Dominates(second, first));
+        return firstEarlier
+            ? OrderedThroughJoins(first, second) ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.Unordered
+            : OrderedThroughJoins(second, first) ? ActivityChildTimeRelation.SecondBeforeFirst : ActivityChildTimeRelation.Unordered;
+    }
+
+    private bool InGraph(string node) => _inbound.ContainsKey(node);
+
+    private bool OverlapsItself(string element)
+    {
+        if (_elements[element].LoopCharacteristics is { IsSequential: false })
+            return true;
+        return InGraph(element) && _nonWaitingJoins.Any(join =>
+            (StringComparer.Ordinal.Equals(join, element) || IsReachable(join, element)) && ArrivalsCanOverlap(join));
+    }
+
+    private bool ArrivalsCanOverlap(string join)
+    {
+        var sources = _inbound[join];
+        if (sources.Count != sources.Distinct(StringComparer.Ordinal).Count())
+            return true;
+        for (var left = 0; left < sources.Count; left++)
+        for (var right = left + 1; right < sources.Count; right++)
+        {
+            if (!IsReachable(sources[left], sources[right]) && !IsReachable(sources[right], sources[left]) &&
+                !AreExclusive(sources[left], sources[right]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool OrderedThroughJoins(string earlier, string later) =>
+        _nonWaitingJoins
+            .Where(join => !StringComparer.Ordinal.Equals(join, earlier))
+            .Where(join => IsReachable(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || IsReachable(join, later)))
+            .All(join => Dominates(earlier, join));
+
+    private bool AreExclusive(string left, string right)
+    {
+        foreach (var (split, edges) in _outgoing)
+        {
+            if (edges.All(edge => edge.Choice is null) || !Dominates(split, left) || !Dominates(split, right))
+                continue;
+            if (Choices(split, edges, left) is not { Count: > 0 } leftChoices ||
+                Choices(split, edges, right) is not { Count: > 0 } rightChoices)
+                continue;
+            if (!leftChoices.Overlaps(rightChoices))
+                return true;
+        }
+
+        return false;
+    }
+
+    // The choices of a split through which the node is reached without passing the split again; null when some path
+    // starts on an edge that is not a choice.
+    private HashSet<string>? Choices(string split, IReadOnlyList<Edge> edges, string node)
+    {
+        var choices = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var edge in edges)
+        {
+            if (!StringComparer.Ordinal.Equals(edge.Target, node) && !IsReachable(edge.Target, node, avoid: split))
+                continue;
+            if (edge.Choice is null)
+                return null;
+            choices.Add(edge.Choice);
+        }
+
+        return choices;
+    }
+
+    private bool IsReachable(string source, string target, string? avoid = null)
+    {
+        if (avoid is null && _reachable.TryGetValue((source, target), out var cached))
+            return cached;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>();
+        pending.Push(source);
+        var found = false;
+        while (pending.Count > 0 && !found)
+        {
+            var current = pending.Pop();
+            foreach (var edge in _outgoing.GetValueOrDefault(current, []))
+            {
+                if (StringComparer.Ordinal.Equals(edge.Target, target)) { found = true; break; }
+                if (StringComparer.Ordinal.Equals(edge.Target, avoid) || !visited.Add(edge.Target)) continue;
+                pending.Push(edge.Target);
+            }
+        }
+
+        if (avoid is null)
+            _reachable[(source, target)] = found;
+        return found;
+    }
+
+    private bool Dominates(string candidate, string node)
+    {
+        _dominators ??= ComputeDominators();
+        return _dominators.TryGetValue(node, out var dominators) && dominators.Contains(candidate);
+    }
+
+    private Dictionary<string, HashSet<string>> ComputeDominators()
+    {
+        var reachable = new HashSet<string>(StringComparer.Ordinal) { Root };
+        var pending = new Stack<string>([Root]);
+        while (pending.Count > 0)
+            foreach (var edge in _outgoing.GetValueOrDefault(pending.Pop(), []))
+                if (reachable.Add(edge.Target)) pending.Push(edge.Target);
+
+        var dominators = reachable.ToDictionary(
+            id => id,
+            id => StringComparer.Ordinal.Equals(id, Root)
+                ? new HashSet<string>([Root], StringComparer.Ordinal)
+                : new HashSet<string>(reachable, StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var node in reachable.Where(id => !StringComparer.Ordinal.Equals(id, Root)))
+            {
+                var predecessors = _inbound.GetValueOrDefault(node, []).Where(reachable.Contains).Distinct(StringComparer.Ordinal).ToArray();
+                var next = predecessors.Length == 0 ? new HashSet<string>(StringComparer.Ordinal) : new HashSet<string>(dominators[predecessors[0]], StringComparer.Ordinal);
+                foreach (var predecessor in predecessors.Skip(1))
+                    next.IntersectWith(dominators[predecessor]);
+                next.Add(node);
+                if (dominators[node].SetEquals(next)) continue;
+                dominators[node] = next;
+                changed = true;
+            }
+        }
+
+        return dominators;
+    }
+
+    private void AddEdge(string source, string target, string? choice)
+    {
+        if (!_outgoing.TryGetValue(source, out var edges))
+            _outgoing[source] = edges = [];
+        edges.Add(new(target, choice));
+        if (!_inbound.TryGetValue(target, out var sources))
+            _inbound[target] = sources = [];
+        sources.Add(source);
+        _inbound.TryAdd(source, []);
+    }
+
+    public static BpmnTimeRelationAnalysis? TryCreate(BpmnAuthoredStructure structure)
+    {
+        var elements = new Dictionary<string, BpmnElement>(StringComparer.Ordinal);
+        var elementOfChild = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var element in structure.Elements)
+        {
+            if (element is null || string.IsNullOrWhiteSpace(element.ElementId) || !elements.TryAdd(element.ElementId, element))
+                return null;
+            foreach (var child in new[] { element.ChildNodeId, element.ListenerNodeId })
+                if (!string.IsNullOrWhiteSpace(child) && !elementOfChild.TryAdd(child, element.ElementId))
+                    return null;
+        }
+
+        var analysis = new BpmnTimeRelationAnalysis(elements, elementOfChild);
+        var hosts = elements.Values
+            .Where(element => element.ElementType == BpmnElementTypes.BoundaryEvent && element.AttachedToRef is not null)
+            .GroupBy(element => element.AttachedToRef!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+
+        string EntryOf(string target) => hosts.ContainsKey(target) ? HostEntryPrefix + target : target;
+
+        foreach (var flow in structure.SequenceFlows)
+        {
+            if (flow is null || !elements.TryGetValue(flow.SourceRef, out var source) || !elements.ContainsKey(flow.TargetRef))
+                return null;
+            var choice = source.ElementType == BpmnElementTypes.ExclusiveGateway ? flow.FlowId : null;
+            analysis.AddEdge(flow.SourceRef, EntryOf(flow.TargetRef), choice);
+        }
+
+        // A boundary arms when its host starts: the host and each boundary follow a pseudo entry in front of the host.
+        foreach (var (host, boundaries) in hosts)
+        {
+            var entry = HostEntryPrefix + host;
+            analysis.AddEdge(entry, host, boundaries.Any(boundary => boundary.CancelActivity) ? "normal" : null);
+            foreach (var boundary in boundaries)
+                analysis.AddEdge(entry, boundary.ElementId, boundary.CancelActivity ? boundary.ElementId : null);
+        }
+
+        // The virtual root starts the process: each start event is an alternative; other elements without incoming
+        // flows start with it. Flow-less event subprocesses and compensation handlers stay out of the graph.
+        foreach (var element in elements.Values)
+        {
+            var id = EntryOf(element.ElementId);
+            if (element.TriggeredByEvent || element.IsForCompensation || element.ElementType == BpmnElementTypes.BoundaryEvent)
+                continue;
+            if (analysis._inbound.TryGetValue(id, out var inbound) && inbound.Count > 0)
+                continue;
+            analysis.AddEdge(Root, id, element.ElementType == BpmnElementTypes.StartEvent ? element.ElementId : null);
+        }
+
+        foreach (var (node, sources) in analysis._inbound)
+        {
+            if (sources.Count < 2)
+                continue;
+            var type = elements.TryGetValue(node.StartsWith(HostEntryPrefix, StringComparison.Ordinal) ? node[HostEntryPrefix.Length..] : node, out var element)
+                ? element.ElementType
+                : null;
+            if (type is not BpmnElementTypes.ParallelGateway and not BpmnElementTypes.InclusiveGateway)
+                analysis._nonWaitingJoins.Add(node);
+        }
+
+        return analysis;
+    }
+
+    private sealed record Edge(string Target, string? Choice);
+}
