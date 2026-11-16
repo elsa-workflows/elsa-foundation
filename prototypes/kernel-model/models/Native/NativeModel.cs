@@ -32,6 +32,15 @@ public enum NativeFlaw
     NoRoundReset = 1 << 6,      // a loop-closing connection opens no new round
     DeadPathRunsNode = 1 << 7,  // a node whose every inbound arrived dead is run
     CancelLeavesPaths = 1 << 8, // a first-wins race completes without cancelling its losers
+    // Round 5 C, the effect key (N7): minted per turn instead of derived from committed facts, so a resend carries another
+    // key; without the node, so two activities in one scope share a key; without the iteration path, so two iterations
+    // of one activity do.
+    UnstableEffectKey = 1 << 9,
+    NodelessEffectKey = 1 << 10,
+    PathlessEffectKey = 1 << 11,
+    TurnLocalJoinOrdinal = 1 << 12, // a Flowchart join's firing ordinal counted per turn in memory instead of from the committed firings
+    FlatRetryGeneration = 1 << 13,  // every retry successor is generation 1, so the second retry of one activation shares its key with the first
+    FreshTurnSwapsLoopKeys = 1 << 14, // a turn that is not a redelivery swaps a While's first two iterations in the key, so a lost first attempt sends another activation's valid key
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
@@ -41,7 +50,11 @@ public sealed record TimerFired(string Wait);
 
 public sealed record ResumeStimulus(string Event, JsonNode? Payload = null);
 
-public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs);
+/// <summary>A background job's ticket. Its iteration path and effect key are computed in the turn that starts it and committed with it (round 5 C).</summary>
+public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs, string? IterationPath = null, string? EffectKey = null);
+
+/// <summary>What the host's transport is handed for an outbound effect (round 5 C): where it comes from and the effect with its key.</summary>
+public sealed record OutboundSending(InstanceInfo Instance, string Frame, string Node, string IterationPath, int Attempt, string EffectKey, OutboundEffect Effect);
 
 public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, string Outcome, ActivityFault? Fault);
 
@@ -55,6 +68,12 @@ public sealed class NativeOptions
     /// turn may have run before (the kernel's <see cref="ITurn.Redelivered"/>, friction F-N6).
     /// </summary>
     public Action<InstanceRef, string, string, int, bool>? OnExternal { get; init; }
+    /// <summary>
+    /// The host's transport for an outbound effect (round 5 C): the instance, frame, node, iteration path and attempt it
+    /// belongs to, and the effect with the key the activity put in it. Called where the effect would be sent, inside the
+    /// turn, before its commit: at least once.
+    /// </summary>
+    public Action<OutboundSending>? OnOutbound { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
@@ -170,7 +189,10 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         var args = Json.Read<BackgroundArgs>(job.Arguments!);
         var node = registry.Get(args.Workflow).Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
-        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken, job.Creation));
+        // The key was derived in the turn that wrote the ticket; a ticket without one is not this model's.
+        var path = args.IterationPath ?? throw new InvalidOperationException("a background job ticket without an iteration path");
+        var key = args.EffectKey ?? throw new InvalidOperationException("a background job ticket without an effect key");
+        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken, job.Creation, path, key));
         return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
     }
 }
@@ -328,7 +350,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             _s.Frames[frame.Id] = frame;
             var wait = NewId("w");
             _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait);
-            turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
+            var path = IterationPath(frame);
+            turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path)));
             return;
         }
         var pinned = frame.RecoveryInputs is { } saved ? (JsonObject)saved.DeepClone() : PinRecoveryInputs(frame, node, scope);
@@ -400,7 +423,65 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         Apply(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource);
+    private ActivityContext Context(Frame frame)
+    {
+        var path = IterationPath(frame);
+        return new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path));
+    }
+
+    // ---- the effect key (round 5 C) ----------------------------------------------------------------------------------
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, CompositeActivity> IterationProbes = new();
+    private static long _unstableKeys;
+    private readonly long _unstableStamp = Interlocked.Increment(ref _unstableKeys);   // MUTATION: one value per turn, so a resend in another turn carries another key
+
+    /// <summary>
+    /// Which activation of its node this frame is, within the instance: for every frame on the way from the root to it,
+    /// what its parent says the child's iteration is (<see cref="CompositeActivity.IterationOf"/>, from the parent's
+    /// committed state: a ForEach index, a While pass, a Flowchart round) and, for a retried activity, its retry
+    /// generation. Root first, <c>parent=iteration</c> segments joined by dots; <see cref="EffectKey.RootPath"/> when
+    /// nothing repeats it. Frame numbers are not in it: a replay over a longer inbox mints them in another order
+    /// (the owner's decision of 16 November).
+    /// </summary>
+    internal string IterationPath(Frame frame)
+    {
+        var segments = new List<string>();
+        for (Frame? f = frame; f is not null; f = f.Parent is { } id ? _s.Frames.GetValueOrDefault(id) : null)
+        {
+            if (f.RetrySource is not null) segments.Add($"{f.Node}=retry{RetryGeneration(f)}");
+            if (f.Parent is not { } parentId || !_s.Frames.TryGetValue(parentId, out var parent)) continue;
+            var probe = IterationProbes.GetOrAdd(_wf.Nodes[parent.Node].Type, static t => (CompositeActivity)Activator.CreateInstance(t)!);
+            if (probe.IterationOf(parent.State, f.Tag, f.Scope ?? f.LiveScope, f.LexicalScope) is { } iteration) segments.Add($"{parent.Node}={iteration}");
+        }
+        if (segments.Count == 0) return EffectKey.RootPath;
+        segments.Reverse();
+        return string.Join('.', segments);
+    }
+
+    /// <summary>
+    /// How many retries lie between the original activation and this successor frame, from the committed lineage: the
+    /// receipt that made this frame the successor of its source, then the receipt that made that source a successor, and
+    /// so on (receipts are only ever added). The MUTATION gives every successor generation 1.
+    /// </summary>
+    private int RetryGeneration(Frame frame)
+    {
+        if (Has(NativeFlaw.FlatRetryGeneration)) return 1;
+        var generation = 0;
+        for (var current = frame.Id; _s.Retries is { } retries && retries.Values.FirstOrDefault(r => r.Successor == current) is { } receipt; current = receipt.Source.Id) generation++;
+        return generation;
+    }
+
+    /// <summary>The key from committed facts (<see cref="EffectKey.For"/>); only the three MUTATIONS derive anything else.</summary>
+    private string EffectKeyOf(Frame frame, string path)
+    {
+        if (Has(NativeFlaw.NodelessEffectKey)) return EffectKey.For(turn.Instance, "node", path, frame.Attempt);
+        if (Has(NativeFlaw.PathlessEffectKey)) return EffectKey.For(turn.Instance, frame.Node, EffectKey.RootPath, frame.Attempt);
+        // MUTATION: on a first attempt (no redelivery hint) iteration 1 takes iteration 2's key and 2 takes 1's; the replay
+        // after a lost first attempt derives the right keys, so the wrong ones live only in turns that never landed.
+        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !turn.Inbox.Any(turn.Redelivered)) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
+        var key = EffectKey.For(turn.Instance, frame.Node, path, frame.Attempt);
+        return Has(NativeFlaw.UnstableEffectKey) ? key + "." + _unstableStamp : key;
+    }
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -477,6 +558,12 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 // The kernel's live output: it knows who waits (the reply addresses of the messages this instance
                 // consumed), releases it after this turn's commit, and a request takes only its first response.
                 turn.Emit(e.Channel, e.Item);
+                break;
+            case OutboundEffect o:
+                // Round 5 C: the host sends it now, with the key the activity put in it. Nothing is recorded for it: the
+                // key is derived from the node, iteration path and attempt the commit already carries, so a replay re-derives it.
+                var path = IterationPath(frame);
+                model.Options.OnOutbound?.Invoke(new OutboundSending(turn.Instance, frame.Id, frame.Node, path, frame.Attempt, EffectKeyOf(frame, path), o));
                 break;
         }
     }

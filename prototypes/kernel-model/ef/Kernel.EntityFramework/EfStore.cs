@@ -211,23 +211,27 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 }
 
 /// <summary>
-/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL. A commit is: the fence, checked; then
-/// one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
+/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL.
+/// Since round 5 B the commit is the store's own SQL by default (EfStore.Owned.cs, COMMIT-SQL.md): the fence first, then every
+/// row with its count checked, in one command per round trip; <see cref="CommitSql"/> chooses, and
+/// <c>CommitSql.EntityFramework</c> keeps the path described here as the reference. On that path a commit is: the fence,
+/// checked; then one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
 /// concurrency tokens on epoch and position, which saves a round trip and takes the lease time from this machine's
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
     /// <summary>
-    /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
-    /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
+    /// Whether the fence rides in the batch. The default is in the batch on every engine (decided 12 November; SQL Server
+    /// 16 November, for the owned commit: ENGINES.md E9; with <c>CommitSql.EntityFramework</c> SQL Server keeps the checked
+    /// fence). The checked fence stays selectable.
     /// </summary>
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
 
-    public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault ?? true;
+    public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
@@ -409,7 +413,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                     }
                 }
                 // A key violation may be a subscription that is there already; the batch was rolled back whole.
-                if (!careful && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
+                if (!careful && !OwnedCommit && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
                 throw failure;
             }
         }
@@ -432,6 +436,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
     {
+        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {

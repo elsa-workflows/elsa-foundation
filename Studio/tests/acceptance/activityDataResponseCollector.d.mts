@@ -9,4 +9,4 @@ export function createActivityDataResponseCollector<TRequest, TResponse>(
   contextUrl: string,
   contexts: { request: TRequest; response: TResponse }[],
   transportControls: { kind: "cancelled" | "cancelled-context-response"; request: unknown; failure: string }[]
-): { observe(response: ContextResponse): void; requestFailed(request: ContextRequest): void; settle(): Promise<void> };
+): { observe(response: ContextResponse): void; requestFailed(request: ContextRequest): void; drain(): Promise<void>; settle(): Promise<void> };

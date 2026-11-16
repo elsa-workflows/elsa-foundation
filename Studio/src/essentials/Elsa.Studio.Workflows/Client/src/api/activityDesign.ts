@@ -265,9 +265,9 @@ export async function getActivityAuthoringCapabilities(context: StudioEndpointCo
   return context.http.getJson<ActivityAuthoringCapabilities>(path, { signal });
 }
 
-export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest) {
+export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definitions");
-  return context.http.postJson<CreateActivityDefinitionResponse>(path, request);
+  return signal ? context.http.postJson<CreateActivityDefinitionResponse>(path, request, { signal }) : context.http.postJson<CreateActivityDefinitionResponse>(path, request);
 }
 
 export async function createActivityDefinitionDraft(

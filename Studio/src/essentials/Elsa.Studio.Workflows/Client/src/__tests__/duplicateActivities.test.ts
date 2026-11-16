@@ -10,6 +10,7 @@ import {
 } from "../workflow-editor/duplicateActivities";
 import {
   flowchartActivity,
+  collectionActivity,
   flowchartNode,
   forEachActivity,
   forEachNode,
@@ -19,6 +20,9 @@ import {
   writeLine
 } from "./fixtures";
 import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { collectActivityNodeIds } from "../workflowAdapter";
+import { buildDraftFromJson } from "../workflowSerialization";
 
 const catalog = new Map([
   [writeLine.activityVersionId, writeLine],
@@ -71,6 +75,271 @@ describe("activity clipboard shortcuts", () => {
   });
 });
 
+describe("reference-aware activity copies", () => {
+  const result = (kind = "ActivityResult", producerNodeId = "producer") => ({
+    expressionType: kind,
+    value: { producerNodeId, projectionKey: "$result", ...(kind.endsWith("Member") ? { memberPath: ["a.b", ""] } : {}) }
+  });
+  const portable = (parameters: Record<string, unknown>, language = "MissingLanguage") => ({
+    expressionType: language, value: { language, source: 'producer["a.b"][""]', parameters,
+      resultType: { alias: "String", collectionKind: "Single" }, options: { producerNodeId: "producer" },
+      capabilityProfile: "binding-pure-v1", metadata: { producerNodeId: "producer" } }
+  });
+  const argument = (value: unknown, referenceKey = "text") => ({ referenceKey, value, policy: { producerNodeId: "producer" } });
+  const variable = (scope: string, kind = "Variable") => ({ expressionType: kind, value: {
+    referenceKey: "producer", declaringScopeId: scope, ...(kind.endsWith("Member") ? { memberPath: ["a.b", ""] } : {}) } });
+  const propertyCatalog = new Map(catalog).set(writeLine.activityVersionId, { ...writeLine,
+    inputs: [{ name: "Text", referenceKey: "text", typeName: "String", isWrapped: true }],
+    outputs: [{ name: "Result", referenceKey: "result", typeName: "String" }] });
+  function copy(children: ActivityNode[], selected = children.map(node => node.nodeId), lookup = propertyCatalog, resourceKind: "workflow" | "activity-definition" = "workflow") {
+    const root = sequenceNode("root", children);
+    const draft = draftOf(root);
+    const before = structuredClone(draft);
+    const snapshot = snapshotSelectedActivities({ selectedNodeIds: selected, scopeActivities: children, scopeOwner: root,
+      catalog: lookup, layout: [], presentation: [] })!;
+    const pasted = pasteActivitiesIntoDraft({ draft, frames: [], snapshot, catalog: lookup, resourceKind, allocateId: sequentialIds() })!;
+    expect(draft).toEqual(before);
+    expect(snapshot.activities).toEqual(children.filter(node => selected.includes(node.nodeId)));
+    const copies = (pasted.draft.state.rootActivity!.structure!.payload.activities as ActivityNode[]).slice(children.length);
+    return { ...pasted, copies, snapshot };
+  }
+
+  it.each(["ActivityResult", "ActivityResultMember", "portable"])('remaps %s siblings in either selected-tree order', kind => {
+    for (const reverse of [false, true]) {
+      const producer = leafNode("producer");
+      const consumer = leafNode("consumer");
+      const binding = kind === "portable" ? portable({ producer: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }) : result(kind);
+      consumer.inputs = [argument(binding)];
+      const copied = copy(reverse ? [consumer, producer] : [producer, consumer]);
+      const copiedConsumer = copied.copies.find(node => node.nodeId === copied.idMap.get("consumer"))!;
+      const expected = structuredClone(binding);
+      if (kind === "portable") (expected.value as Record<string, unknown>).parameters = {
+        producer: { kind: "ActivityResult", producerNodeId: copied.idMap.get("producer"), projectionKey: "$result" }
+      };
+      else (expected.value as Record<string, unknown>).producerNodeId = copied.idMap.get("producer");
+      expect(copiedConsumer.inputs).toEqual([argument(expected)]);
+    }
+  });
+
+  it.each([false, true])('remaps actual expanded input properties and legacy scopes (expanded: %s)', expanded => {
+    const producer = leafNode("producer"), consumer = leafNode("consumer");
+    consumer.inputs = [argument({ ...result(), value: { ...result().value, producerScopeId: "scope" } })];
+    const scope = sequenceNode("scope", [producer, consumer]);
+    const node = expanded ? expandStateFromWire({ rootActivity: scope }).rootActivity! : scope;
+    const copied = copy([node]);
+    const wire = canonicalizeStateForWire(copied.draft.state);
+    const copiedScope = (wire.rootActivity!.structure!.payload.activities as ActivityNode[])[1];
+    const copiedConsumer = (copiedScope.structure!.payload.activities as ActivityNode[])[1];
+    expect(copiedConsumer.inputs).toEqual([argument({ ...result(), value: { ...result().value,
+      producerNodeId: copied.idMap.get("producer"), producerScopeId: copied.idMap.get("scope") } })]);
+  });
+
+  it.each(["Variable", "VariableMember", "portable", "capture", "intrinsic"])('moves only the owned %s lexical identity', role => {
+    const reader = leafNode("reader");
+    reader.inputs = [argument(role === "portable" ? portable({ producer: { kind: "Variable", declaringScopeNodeId: "scope", variableKey: "producer" } }) : variable("scope", role === "VariableMember" ? role : "Variable")),
+      argument(variable("workflow"), "workflow"), argument(variable("activity-graph"), "reusable-root"), argument(variable("external"), "external")];
+    reader.outputs = [argument(variable("scope"), "result")];
+    reader.intrinsic = { kind: "Set", valueType: { alias: "String", collectionKind: "Single" }, variable: { referenceKey: "producer", declaringScopeId: "scope" } };
+    const scope = sequenceNode("scope", [reader]);
+    scope.structure!.payload.variables = [{ referenceKey: "producer", name: "Same label", type: { alias: "String" } }];
+    const copied = copy([scope]);
+    const node = (copied.copies[0].structure!.payload.activities as ActivityNode[])[0];
+    const expected = role === "portable" ? portable({ producer: { kind: "Variable", declaringScopeNodeId: copied.idMap.get("scope"), variableKey: "producer" } })
+      : variable(copied.idMap.get("scope")!, role === "VariableMember" ? role : "Variable");
+    expect(node.inputs).toEqual([argument(expected), ...reader.inputs.slice(1)]);
+    expect(node.outputs).toEqual([argument(variable(copied.idMap.get("scope")!), "result")]);
+    expect(node.intrinsic).toEqual({ ...reader.intrinsic, variable: { referenceKey: "producer", declaringScopeId: copied.idMap.get("scope") } });
+  });
+
+  it.each(["Set", "Merge", "Reduce"])('remaps imported %s variable-write scopes and preserves external writes', kind => {
+    const local = { ...leafNode("local"), intrinsic: { kind, valueType: { alias: "String", collectionKind: "Single" as const }, variable: { referenceKey: "producer", declaringScopeId: "scope" }, source: "scope" } };
+    const external = { ...leafNode("external-write"), intrinsic: { ...local.intrinsic, variable: { referenceKey: "producer", declaringScopeId: "external" } } };
+    const scope = sequenceNode("scope", [local, external]);
+    scope.structure!.payload.variables = [{ referenceKey: "producer", name: "Total", type: { alias: "String" } }];
+    const imported = buildDraftFromJson(JSON.stringify({ state: { rootActivity: scope } }), draftOf(scope))!;
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) throw new Error(imported.error);
+    const copied = copy([imported.draft.state.rootActivity!]);
+    const children = copied.copies[0].structure!.payload.activities as ActivityNode[];
+    expect(children[0].intrinsic).toEqual({ ...local.intrinsic, variable: { referenceKey: "producer", declaringScopeId: copied.idMap.get("scope") } });
+    expect(children[1].intrinsic).toEqual(external.intrinsic);
+  });
+
+  it.each([false, true, undefined])('respects declared raw versus wrapped expanded inputs (isWrapped: %s)', isWrapped => {
+    const consumer = leafNode("consumer");
+    const binding = result();
+    consumer.text = { expression: { type: binding.expressionType, value: binding.value }, metadata: { producerNodeId: "producer" } };
+    consumer.inputs = [argument(binding)];
+    const lookup = new Map(propertyCatalog).set(writeLine.activityVersionId, { ...writeLine,
+      inputs: [{ name: "Text", referenceKey: "text", typeName: "Object", isWrapped }] });
+    const copied = copy([leafNode("producer"), consumer], undefined, lookup);
+    expect(copied.copies[1].text).toEqual(isWrapped === false ? consumer.text : { ...consumer.text as object,
+      expression: { type: binding.expressionType, value: { ...binding.value, producerNodeId: copied.idMap.get("producer") } } });
+    expect(copied.copies[1].inputs).toEqual([argument({ ...binding, value: { ...binding.value, producerNodeId: copied.idMap.get("producer") } })]);
+  });
+
+  it.each(["workflow", "activity-definition"] as const)('uses the actual %s resource contract for activity-graph lexical identity', resourceKind => {
+    const reader = leafNode("reader");
+    reader.inputs = [argument(variable("activity-graph")), argument(variable("activity-graph", "VariableMember"), "member"),
+      argument(portable({ item: { kind: "Variable", declaringScopeNodeId: "activity-graph", variableKey: "producer" } }), "portable"),
+      argument(variable("workflow"), "workflow")];
+    reader.outputs = [argument(variable("activity-graph"), "result")];
+    reader.intrinsic = { kind: "Merge", valueType: { alias: "String", collectionKind: "Single" }, variable: { referenceKey: "producer", declaringScopeId: "activity-graph" } };
+    const scope = sequenceNode("activity-graph", [reader]);
+    scope.structure!.payload.variables = [{ referenceKey: "producer", name: "Payload", type: { alias: "String" } }];
+    const copied = copy([scope], undefined, propertyCatalog, resourceKind);
+    const child = (copied.copies[0].structure!.payload.activities as ActivityNode[])[0];
+    const target = resourceKind === "activity-definition" ? "activity-graph" : copied.idMap.get("activity-graph")!;
+    expect(child.inputs).toEqual([argument(variable(target)), argument(variable(target, "VariableMember"), "member"),
+      argument(portable({ item: { kind: "Variable", declaringScopeNodeId: target, variableKey: "producer" } }), "portable"), reader.inputs[3]]);
+    expect(child.outputs).toEqual([argument(variable(target), "result")]);
+    expect(child.intrinsic).toEqual({ ...reader.intrinsic, variable: { referenceKey: "producer", declaringScopeId: target } });
+  });
+
+  it("remaps expanded captures without changing their public output keys or extras", () => {
+    const reader = leafNode("reader");
+    reader.outputs = [argument(variable("scope"), "result")];
+    const scope = expandStateFromWire({ rootActivity: sequenceNode("scope", [reader]) }).rootActivity!;
+    const copied = copy([scope]);
+    const node = (copied.copies[0].structure!.payload.activities as ActivityNode[])[0];
+    expect(node.result).toEqual({ target: { referenceKey: "producer", declaringScopeId: copied.idMap.get("scope") },
+      argumentExtras: { policy: { producerNodeId: "producer" } } });
+  });
+
+  it("follows collection-owned Switch children and projected predicates, preserving case identity", () => {
+    const item = collectionActivity("switch");
+    const facet = item.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result("ActivityResultMember"))];
+    const branch = sequenceNode("branch", [leafNode("producer"), consumer]);
+    const node: ActivityNode = { nodeId: "switch", activityVersionId: item.activityVersionId, inputs: [], outputs: [],
+      structure: { kind: "elsa.switch.structure", schemaVersion: "2.0.0", payload: { cases: [{ caseId: "producer", match: "Same label", annotation: { producerNodeId: "producer" },
+        activity: branch, condition: argument(result(), "Case:producer:Condition") }], default: leafNode("default") } } };
+    const copied = copy([node], [node.nodeId], new Map(propertyCatalog).set(item.activityVersionId, item));
+    const cases = copied.copies[0].structure!.payload.cases as Record<string, unknown>[];
+    const copiedBranch = cases[0].activity as ActivityNode;
+    expect(copiedBranch.nodeId).toBe(copied.idMap.get("branch"));
+    expect(cases[0]).toMatchObject({ caseId: "producer", match: "Same label", annotation: { producerNodeId: "producer" },
+      condition: argument({ ...result(), value: { ...result().value, producerNodeId: copied.idMap.get("producer") } }, "Case:producer:Condition") });
+    expect((copiedBranch.structure!.payload.activities as ActivityNode[])[1].inputs).toEqual([
+      argument({ ...result("ActivityResultMember"), value: { ...result("ActivityResultMember").value, producerNodeId: copied.idMap.get("producer") } })]);
+    expect(collectActivityNodeIds(copied.copies[0], new Map(propertyCatalog).set(item.activityVersionId, item)).size).toBe(5);
+  });
+
+  it.each(["producer", "missing"])('keeps consumer-only external identity %s and does not match display labels', identity => {
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result("ActivityResultMember", identity))];
+    const copied = copy([leafNode("producer"), consumer], ["consumer"]);
+    expect(copied.copies[0].inputs).toEqual(consumer.inputs);
+  });
+
+  it("uses a fresh complete map for repeated paste and keeps every earlier copy untouched", () => {
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
+    const first = copy([leafNode("producer"), consumer]);
+    const before = structuredClone(first.draft);
+    const second = pasteActivitiesIntoDraft({ resourceKind: "workflow", draft: first.draft, frames: [], snapshot: first.snapshot, catalog: propertyCatalog, allocateId: sequentialIds() })!;
+    expect(first.draft).toEqual(before);
+    const nodes = second.draft.state.rootActivity!.structure!.payload.activities as ActivityNode[];
+    expect(nodes[5].inputs).toEqual([argument({ ...result(), value: { ...result().value, producerNodeId: second.idMap.get("producer") } })]);
+    expect(second.idMap.get("producer")).not.toBe(first.idMap.get("producer"));
+  });
+
+  it("preserves literal, unknown and malformed lookalikes, member segments, aliases, source and metadata", () => {
+    const consumer = leafNode("consumer");
+    const lookalike = portable({ producer: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }).value;
+    consumer.inputs = [argument({ expressionType: "Object", value: lookalike }), argument({ expressionType: "Literal", value: lookalike }),
+      argument({ expressionType: "FutureReference", value: result().value }), argument({ expressionType: "ActivityResult", value: { producerNodeId: "producer" } }),
+      argument({ expressionType: "ActivityResultMember", value: { ...result().value, memberPath: [] } }),
+      argument({ expressionType: "MissingLanguage", value: { language: "MissingLanguage", source: "producer", parameters: lookalike.parameters } }),
+      argument(portable({ producer: { kind: "Literal", value: result().value }, unknown: { kind: "FutureReference", producerNodeId: "producer" } }))];
+    consumer.metadata = { expression: { type: "ActivityResult", value: result().value }, producerNodeId: "producer" };
+    consumer.opaqueResult = { target: { referenceKey: "producer", declaringScopeId: "producer" }, extra: "opaque undeclared property" };
+    const copied = copy([leafNode("producer"), consumer]);
+    expect(copied.copies[1]).toEqual({ ...consumer, nodeId: copied.idMap.get("consumer") });
+  });
+
+  it.each(["activityresult", "aCtIvItYrEsUlTmEmBeR", "variable", "vArIaBlEmEmBeR"])("remaps backend-valid discriminator casing %s without changing its spelling", spelling => {
+    for (const expanded of [false, true]) {
+      const consumer = leafNode("consumer");
+      const canonical = spelling.toLowerCase().startsWith("activityresult")
+        ? result(spelling.toLowerCase().endsWith("member") ? "ActivityResultMember" : "ActivityResult")
+        : variable("scope", spelling.toLowerCase().endsWith("member") ? "VariableMember" : "Variable");
+      const binding = { ...canonical, expressionType: spelling };
+      consumer.inputs = [argument(binding)];
+      const scope = sequenceNode("scope", [leafNode("producer"), consumer]);
+      const copied = copy([expanded ? expandStateFromWire({ rootActivity: scope }).rootActivity! : scope]);
+      const wire = canonicalizeStateForWire(copied.draft.state);
+      const child = ((wire.rootActivity!.structure!.payload.activities as ActivityNode[])[1].structure!.payload.activities as ActivityNode[])[1];
+      const expected = { ...binding, value: { ...binding.value,
+        ...(spelling.toLowerCase().startsWith("activityresult") ? { producerNodeId: copied.idMap.get("producer") } : { declaringScopeId: copied.idMap.get("scope") }) } };
+      expect(child.inputs).toEqual([argument(expected)]);
+    }
+  });
+
+  it.each([false, true])("remaps a backend-valid mixed-case output Variable capture (expanded: %s)", expanded => {
+    const reader = leafNode("reader");
+    const capture = { ...variable("scope"), expressionType: "vArIaBlE" };
+    reader.outputs = [argument(capture, "result")];
+    const scope = sequenceNode("scope", [reader]);
+    const copied = copy([expanded ? expandStateFromWire({ rootActivity: scope }).rootActivity! : scope]);
+    const wire = canonicalizeStateForWire(copied.draft.state);
+    const child = ((wire.rootActivity!.structure!.payload.activities as ActivityNode[])[1].structure!.payload.activities as ActivityNode[])[0];
+    expect(child.outputs).toEqual([argument({ ...capture, value: { ...capture.value, declaringScopeId: copied.idMap.get("scope") } }, "result")]);
+  });
+
+  it("keeps opaque entries in a mixed Sequence array while remapping the recognized children", () => {
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
+    const scope = sequenceNode("scope", [leafNode("producer"), consumer]);
+    const opaque = { kind: "future-child", payload: { nodeId: "producer" } };
+    scope.structure!.payload.activities = [null, opaque, leafNode("producer"), "future", consumer, 42];
+    const copied = copy([scope]);
+    const children = copied.copies[0].structure!.payload.activities as unknown[];
+    expect(children).toHaveLength(6);
+    expect([children[0], children[1], children[3], children[5]]).toEqual([null, opaque, "future", 42]);
+    expect(children[2]).toMatchObject({ nodeId: copied.idMap.get("producer") });
+    expect((children[4] as ActivityNode).inputs).toEqual([argument({ ...result(), value: { ...result().value, producerNodeId: copied.idMap.get("producer") } })]);
+  });
+
+  it.each([{ kind: "future-body", data: ["producer"] }, ["future-body"], "future-body"])("keeps an unrecognized single-child body opaque: %s", body => {
+    const each = forEachNode("each", null);
+    each.structure!.payload.body = body;
+    const copied = copy([each]);
+    expect(copied.copies[0].structure!.payload.body).toEqual(body);
+  });
+
+  it.each([{}, { kind: null }, { kind: 7 }, { kind: [] }])("preserves malformed intrinsic metadata reachable through Code Apply: %s", intrinsic => {
+    const authored = draftOf(sequenceNode("root", [leafNode("reader")]));
+    const imported = buildDraftFromJson(JSON.stringify({ state: { rootActivity: { ...leafNode("reader"), intrinsic } } }), authored);
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) throw new Error(imported.error);
+    const copied = copy([imported.draft.state.rootActivity!]);
+    expect(copied.copies[0].intrinsic).toEqual(intrinsic);
+  });
+
+  it("uses raw compensation step addresses after opaque rows without losing children or metadata", () => {
+    const producer = leafNode("producer"), consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
+    const rows = [null, { name: "Work", activity: producer, compensation: consumer,
+      future: { producerNodeId: "producer" } }, "opaque"];
+    const scope: ActivityNode = { nodeId: "scope", activityVersionId: "compensation@1", inputs: [], outputs: [],
+      structure: { kind: "elsa.compensation-scope.structure", schemaVersion: "1.0.0", payload: { steps: rows } } };
+    const copied = copy([scope]);
+    const steps = copied.copies[0].structure!.payload.steps as unknown[];
+    expect([steps[0], steps[2]]).toEqual([rows[0], rows[2]]);
+    expect(steps[1]).toEqual({ name: "Work", activity: { ...producer, nodeId: copied.idMap.get("producer") },
+      compensation: { ...consumer, nodeId: copied.idMap.get("consumer"), inputs: [argument({ ...result(), value: {
+        ...result().value, producerNodeId: copied.idMap.get("producer") } })] }, future: { producerNodeId: "producer" } });
+  });
+
+  it("does not treat a structural connection ID as an activity producer or lexical scope", () => {
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result("ActivityResult", "edge-only")), argument(variable("edge-only"), "other")];
+    const nested = connectedFlowchart([leafNode("producer"), consumer], [{ from: "producer", to: "consumer", id: "edge-only" }]);
+    const copied = copy([nested]);
+    const node = (copied.copies[0].structure!.payload.activities as ActivityNode[])[1];
+    expect(node.inputs).toEqual(consumer.inputs);
+    expect((copied.copies[0].structure!.payload.connections as Record<string, unknown>[])[0].id).not.toBe("edge-only");
+  });
+});
+
 describe("copied display names", () => {
   it("assigns (copy) then increments", () => {
     const taken = new Set(["write line"]);
@@ -93,7 +362,7 @@ describe("in-workflow activity duplicate remapping", () => {
     });
     expect(snapshot).not.toBeNull();
 
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root, { layout: [{ nodeId: "write-one", x: 80, y: 40 }] }),
       frames: [],
       snapshot: snapshot!,
@@ -137,7 +406,7 @@ describe("in-workflow activity duplicate remapping", () => {
       target: { nodeId: "right" }
     });
 
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root),
       frames: [],
       snapshot: snapshot!,
@@ -178,7 +447,7 @@ describe("in-workflow activity duplicate remapping", () => {
       presentation: [{ nodeId: "inner-start", displayName: "Start here" }]
     });
 
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root, {
         layout: [
           { nodeId: "inner-flow", x: 10, y: 10 },
@@ -241,7 +510,7 @@ describe("in-workflow activity duplicate remapping", () => {
       presentation: []
     });
 
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root),
       frames: [],
       snapshot: snapshot!,
@@ -269,7 +538,7 @@ describe("in-workflow activity duplicate remapping", () => {
       presentation: []
     });
     const original = draftOf(root);
-    const plan = planActivityDuplicate({
+    const plan = planActivityDuplicate({ resourceKind: "workflow",
       snapshot: snapshot!,
       draft: original,
       frames: [],
@@ -290,7 +559,7 @@ describe("in-workflow activity duplicate remapping", () => {
     const root = sequenceNode("sequence-root", [source, leafNode("last")]);
     const layout = [{ nodeId: "first", x: 600, y: 80 }];
     const snapshot = snapshotSelectedActivities({ selectedNodeIds: ["first"], scopeActivities: [source], scopeOwner: root, catalog, layout, presentation: [] });
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root, { layout }), frames: [], snapshot: snapshot!, catalog,
       allocateId: sequentialIds(), insertAfterNodeId: "first"
     });
@@ -316,7 +585,7 @@ describe("in-workflow activity duplicate remapping", () => {
     expect(snapshot?.siblingConnections).toHaveLength(1);
 
     const sequence = sequenceNode("sequence-root", [leafNode("existing")]);
-    const result = pasteActivitiesIntoDraft({
+    const result = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(sequence),
       frames: [],
       snapshot: snapshot!,
@@ -340,14 +609,14 @@ describe("in-workflow activity duplicate remapping", () => {
       layout: [],
       presentation: []
     });
-    const first = pasteActivitiesIntoDraft({
+    const first = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: draftOf(root),
       frames: [],
       snapshot: snapshot!,
       catalog,
       allocateId: sequentialIds()
     });
-    const second = pasteActivitiesIntoDraft({
+    const second = pasteActivitiesIntoDraft({ resourceKind: "workflow",
       draft: first!.draft,
       frames: [],
       snapshot: snapshot!,

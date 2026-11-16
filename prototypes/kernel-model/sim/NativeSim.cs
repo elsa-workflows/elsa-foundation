@@ -22,6 +22,15 @@ public sealed class NativeOracle
     public readonly Dictionary<string, string> ChildOf = new(StringComparer.Ordinal);                // child -> parent|frame (waited)
     public readonly Dictionary<string, int> Resumes = new(StringComparer.Ordinal);                   // child -> resumes of its parent
     public readonly Dictionary<string, int> Effects = new(StringComparer.Ordinal);                   // instance|frame -> side effects run
+    // Round 5 C (N7): what each instance sent, by node/path (the key without its instance and attempt), for the comparison
+    // with the fault-free reference run at the end; every (instance, key) seen, to count the resends; which key first went
+    // out under each frame number, to count the frame numbers a replay handed on; and a record of every activation's key.
+    public readonly Dictionary<string, HashSet<string>> Sent = new(StringComparer.Ordinal);         // instance -> node/path sent
+    public readonly HashSet<string> KeysSeen = new(StringComparer.Ordinal);                          // instance|key
+    public readonly HashSet<string> LandedKeys = new(StringComparer.Ordinal);                        // instance|key whose turn's commit the store landed
+    public readonly Dictionary<string, string> ContentKeys = new(StringComparer.Ordinal);           // instance|node|content -> key, every sending, lost turns included
+    public readonly Dictionary<string, string> FrameOwners = new(StringComparer.Ordinal);           // instance|frame:attempt -> node/path
+    public readonly Dictionary<string, (string Key, string Content)> Outbound = new(StringComparer.Ordinal); // instance|node|path:attempt -> first key and content (a record for the witnesses)
     // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
     public readonly HashSet<string> Fired = new(StringComparer.Ordinal);                             // instance|frame|node|round
     public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame|round -> nodes of cancelled paths
@@ -36,6 +45,9 @@ public sealed partial class World
     public static long NativeReruns;        // External effects that ran again under the same committed attempt, over all runs
     public static long NativeRerunsFlagged; // of those, the ones whose turn the kernel said may have run before (ITurn.Redelivered)
     public static long NativeInstances;     // native instances compared with a run without faults, over all runs
+    public static long NativeSameKeyReruns; // outbound effects (HTTP, email) sent again with the key of their first sending, over all runs
+    public static long NativeReusedFrames;  // outbound effects whose frame number another activation had already sent under (a Balanced or Ephemeral replay over a longer inbox), over all runs
+    public static long NativeRevisits;      // outbound effects from a node that had already sent under another iteration path in the same instance, over all runs
 
     private NativeModel NativeModelFor(Actor actor) => new(NativeWorkflows.Registry, new NativeOptions
     {
@@ -43,6 +55,7 @@ public sealed partial class World
         AdmissionFlaws = Config.AdmissionFlaws,
         Gate = async (job, cancel) => await Work(actor, job, cancel),
         OnExternal = (instance, frame, _, attempt, again) => External(actor, instance.Id, frame, attempt, again),
+        OnOutbound = s => Outbound(actor, s),
     });
 
     // ---- the generator's part ------------------------------------------------------------------------------------------
@@ -252,6 +265,88 @@ public sealed partial class World
             Faults.Add($"N4 {instance}: the External activity of frame {frame} ran in Durable mode without a committed attempt");
     }
 
+    /// <summary>
+    /// N7 (round 5 C), the part seen at the host's transport: an outbound effect carries its effect key where its receiver
+    /// looks (the HTTP header, the Message-ID). The identity checks are at the end (<see cref="NativeEnd"/>), against the
+    /// fault-free reference run, so that they do not read the key's own components. Here the sweep also counts the resends
+    /// (the same instance sending one key again: a lost turn result, a takeover), the frame numbers a replay handed to
+    /// another activation and the nodes sent from twice, so that the mix is shown to produce the cases the key exists for.
+    /// </summary>
+    private void Outbound(Actor actor, OutboundSending s)
+    {
+        var (node, frame, path, attempt, key, effect) = (s.Node, s.Frame, s.IterationPath, s.Attempt, s.EffectKey, s.Effect);
+        actor.PendingSendings.Add((s.Instance.Ref.Id, key));
+        // The lost-turn half: an activation is named here by its node and the content it alone determines (the mix's rule:
+        // bodies name the iteration), and that name has one key in every sending, in a turn that lands or in one that is
+        // lost. A lost turn that sent another activation's valid key is seen here and nowhere else.
+        if (NativeWorkflows.ContentNamesActivation.Contains(s.Node))
+        {
+            var named = $"{s.Instance.Ref.Id}|{s.Node}|{(effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" })}";
+            if (!Native.ContentKeys.TryAdd(named, key) && Native.ContentKeys[named] != key)
+                Faults.Add($"N7 {s.Instance.Ref.Id}: {s.Node} with '{named.Split('|', 3)[2]}' was sent under two keys, {Native.ContentKeys[named]} and {key}: a sending used another activation's key");
+        }
+        var what = effect switch
+        {
+            HttpSendEffect h => h.Request.Headers.TryGetValue(SendHttpRequest.IdempotencyKeyHeader, out var header) && header == key ? null
+                : $"the HTTP request of {node} does not carry its effect key {key} in {SendHttpRequest.IdempotencyKeyHeader}",
+            EmailSendEffect e => e.Mail.MessageId == SendEmail.MessageId(key) ? null
+                : $"the email of {node} does not carry its effect key {key} as its Message-ID: '{e.Mail.MessageId}'",
+            _ => $"an unknown outbound effect {effect.GetType().Name}",
+        };
+        var id = s.Instance.Ref.Id;
+        if (what is not null) Faults.Add($"N7 {id}: {what}");
+        var sent = Native.Sent.TryGetValue(id, out var set) ? set : Native.Sent[id] = new(StringComparer.Ordinal);
+        var local = NativeReference.NodeAndPath(key);
+        if (!Native.KeysSeen.Add($"{id}|{key}")) Interlocked.Increment(ref NativeSameKeyReruns);
+        else if (sent.Any(k => k.StartsWith(node + "/", StringComparison.Ordinal))) Interlocked.Increment(ref NativeRevisits);
+        sent.Add(local);
+        if (!Native.FrameOwners.TryAdd($"{id}|{frame}:{attempt}", local) && Native.FrameOwners[$"{id}|{frame}:{attempt}"] != local) Interlocked.Increment(ref NativeReusedFrames);
+        var content = effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" };
+        Native.Outbound.TryAdd($"{CreationProtocol.Origin(id, s.Instance.Creation)}|{node}|{path}:{attempt}", (key, content));
+    }
+
+    /// <summary>
+    /// N7 (round 5 C), the landed half: a second sending of a key is a redelivery only while the first one's turn did not
+    /// land (its commit was lost, refused, or never made because its owner died). When both turns landed, the key left in
+    /// two turns that are not a redelivery of each other: two activations under one key, whatever the reference run says
+    /// (its one run takes every available event in one turn, so a collision that needs two turns hides from it). Called by
+    /// the wire at the moment the store lands the commit, so a commit whose answer is then lost still counts.
+    /// </summary>
+    public void Landed((string Instance, string Key)[] sendings)
+    {
+        foreach (var group in sendings.GroupBy(s => $"{s.Instance}|{s.Key}"))
+        {
+            var (instance, key) = group.First();
+            if (group.Count() > 1) Faults.Add($"N7 {instance}: the key {key} left twice in one landed turn");
+            if (!Native.LandedKeys.Add(group.Key) && group.Count() == 1) Faults.Add($"N7 {instance}: the key {key} left in two turns that both landed and are not a redelivery of each other");
+        }
+    }
+
+    /// <summary>
+    /// N7 (round 5 C), the identity half, against the fault-free reference run of the same definition and input: the
+    /// oracle takes no identity from the sending's own node, path or frame fields; it compares the key string, stripped of
+    /// its instance origin and attempt, with the keys the reference run minted on its own. The reference sends every key
+    /// once, so two activations never share one; and every key an instance sent here is one the reference sends, so one
+    /// logical activation keeps its key across a lost turn and its replay, on whichever owner. What a resend carries as
+    /// content is not compared: the receiver keeps the first sending (the owner's rule). The mix must hold to this: a
+    /// workflow whose key set depends on event or timer order (a join whose outside inbound may arrive last, a While whose
+    /// limit a sibling raises, a ForEach over a collection a sibling grows) would be a false red here, as n-join2 and
+    /// n-graph would be for N5; those two are excepted, and none of them sends. An instance without a row at the end (an
+    /// Ephemeral one that finished in memory) is not compared; the smoke's and the variants' Ephemeral runs cover it.
+    /// </summary>
+    private string? NativeKeys()
+    {
+        foreach (var (id, sent) in Native.Sent)
+        {
+            if (Store.Instances.GetValueOrDefault(id) is not { Model: NativeModel.ModelKey } row || row.Definition is "n-join2" or "n-graph") continue;
+            var expected = NativeReference.Of(row.Definition, Json.Read<NativeState>(row.State).Variables.GetValueOrDefault("input"));
+            if (expected.DuplicateKeys.Count > 0) return $"N7 {row.Definition}: a run without faults sends {expected.DuplicateKeys[0]} twice: two activations share one key";
+            foreach (var local in sent)
+                if (!expected.Keys.Contains(local)) return $"N7 {id} ({row.Definition}) sent {local}, which a run without faults never sends: an activation's key moved";
+        }
+        return null;
+    }
+
     private string? NativeCheck()
     {
         ScanJournal();
@@ -280,6 +375,7 @@ public sealed partial class World
     {
         ScanJournal();
         if (Faults.FirstOrDefault() is { } fault) return fault;
+        if (NativeKeys() is { } keys) return keys;
         foreach (var (id, (_, mode, posted)) in Native.Started)
         {
             var row = Store.Instances.GetValueOrDefault(id);
@@ -321,13 +417,28 @@ public static class NativeSwitch
     public static readonly Dictionary<NativeFlaw, string> ExpectedCheck = new()
     {
         [NativeFlaw.NoDeadPaths] = "G3", [NativeFlaw.NoRoundReset] = "G2", [NativeFlaw.DeadPathRunsNode] = "G1", [NativeFlaw.CancelLeavesPaths] = "G5",
+        [NativeFlaw.UnstableEffectKey] = "N7", [NativeFlaw.NodelessEffectKey] = "N7", [NativeFlaw.PathlessEffectKey] = "N7", [NativeFlaw.TurnLocalJoinOrdinal] = "N7",
+        [NativeFlaw.FlatRetryGeneration] = "N7",   // the sweep's mix has no retry; the smoke's double-retry shape shows it bites (NATIVE.md)
+        [NativeFlaw.FreshTurnSwapsLoopKeys] = "N7",
     };
 }
+
+/// <summary>What a run without faults ends with: its variables, the types it completed, the effect keys it sent (by node/path) and any key it sent twice.</summary>
+public sealed record Reference(string Variables, string Types, HashSet<string> Keys, List<string> DuplicateKeys);
 
 /// <summary>The same workflow and input, run alone on one worker with no faults: what a faulty run must end with.</summary>
 public static class NativeReference
 {
-    private static readonly ConcurrentDictionary<string, (string Variables, string Types)> Cache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Reference> Cache = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The key without its instance origin and attempt: <c>node/path</c>, the same for every instance of a definition and
+    /// in every mode. Whatever follows the attempt's digits stays (a mutation's suffix), so that a key minted outside the
+    /// committed facts is judged as what it is.
+    /// </summary>
+    public static string NodeAndPath(string key) => key.Split('/') is { Length: >= 3 } parts ? parts[^3] + "/" + parts[^2] + parts[^1].TrimStart("0123456789".ToCharArray()) : key;
+
+    private static NativeFlaw KeyFlaws => NativeSwitch.Flaws & (NativeFlaw.UnstableEffectKey | NativeFlaw.NodelessEffectKey | NativeFlaw.PathlessEffectKey);
 
     public static string Describe(Dictionary<string, JsonNode?> variables) =>
         string.Join(", ", variables.OrderBy(v => v.Key, StringComparer.Ordinal).Select(v => $"{v.Key}={v.Value?.ToJsonString() ?? "null"}"));
@@ -338,14 +449,31 @@ public static class NativeReference
         return string.Join(", ", nodes.Select(n => all[n].Type.Name).GroupBy(t => t).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}"));
     }
 
-    public static (string Variables, string Types) Of(string workflow, JsonNode? input) =>
-        Cache.GetOrAdd(workflow + "|" + input?.ToJsonString(), _ => Run(workflow, input as JsonObject));
+    public static Reference Of(string workflow, JsonNode? input) =>
+        Cache.GetOrAdd(workflow + "|" + input?.ToJsonString() + "|" + (int)KeyFlaws, _ => Run(workflow, input as JsonObject));   // the mutation check runs every flaw in one process
 
-    private static (string, string) Run(string workflow, JsonObject? input)
+    private static Reference Run(string workflow, JsonObject? input)
     {
         var time = 1_000_000L;
         var store = new InMemoryStore(1, () => time);
-        var worker = new Worker("reference", 0, store, new WorkflowInstance([new NativeModel(NativeWorkflows.Registry)]), new WorkerOptions { Monotonic = () => time });
+        // The reference carries the effect-key mutations (and only those), so that a mutated key is judged against itself:
+        // a key the reference sends twice is a collision, a key the run sends and the reference never does has moved.
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var duplicates = new List<string>();
+        var bodies = new HashSet<string>(StringComparer.Ordinal);
+        var model = new NativeModel(NativeWorkflows.Registry, new NativeOptions
+        {
+            Flaws = KeyFlaws,     // the join-ordinal and retry flaws are left out: the reference must stay the fault-free truth about them
+            OnOutbound = s =>
+            {
+                var local = NodeAndPath(s.EffectKey); if (!keys.Add(local)) duplicates.Add(local);
+                // The lost-turn half's rule enforces itself: a node listed in ContentNamesActivation sends every body once here.
+                var body = s.Effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" };
+                if (NativeWorkflows.ContentNamesActivation.Contains(s.Node) && !bodies.Add(s.Node + "|" + body))
+                    throw new InvalidOperationException($"{workflow}: node {s.Node} is listed in ContentNamesActivation and sends '{body}' twice in a run without faults; its body does not name its activation");
+            },
+        });
+        var worker = new Worker("reference", 0, store, new WorkflowInstance([model]), new WorkerOptions { Monotonic = () => time });
         new DurableHost([worker]).ActivateAsync(0).AsTask().Wait();
         worker.PollAsync().Wait();
         var id = InstanceRef.In(0, "reference");
@@ -363,6 +491,6 @@ public static class NativeReference
         if (row.Status != InstanceStatus.Finished) throw new InvalidOperationException($"the reference run of {workflow} ended as {row.Status}");
         var nodes = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position)
             .SelectMany(j => Json.Read<List<string>>(j.Entries)).Where(e => e.StartsWith("c:", StringComparison.Ordinal)).Select(e => e.Split(':')[2]);
-        return (Describe(Json.Read<NativeState>(row.State).Variables), Types(workflow, nodes));
+        return new(Describe(Json.Read<NativeState>(row.State).Variables), Types(workflow, nodes), keys, duplicates);
     }
 }

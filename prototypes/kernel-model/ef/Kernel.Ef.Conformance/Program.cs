@@ -13,10 +13,12 @@ using Npgsql;
 //   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch|--checked-fence] [--m5] semantic|stress|cost ...
 //   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic ...
 //   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic ...
-// Without a fence flag the engine's default: the fence in the batch, but the checked fence on SQL Server (ENGINES.md E9).
+// Without a fence flag the engine's default: the fence in the batch on every engine (SQL Server since 16 November, for the owned commit; with --ef-commit it keeps the checked fence, ENGINES.md E9).
+// --ef-commit | --owned-commit: who writes the commit, EF's SaveChanges or the store's own SQL (COMMIT-SQL.md); no flag: the engine's default.
 // --m5: the mutation that lets a definite error beat a fence that did not match (ENGINES.md E1, MONGO.md M5).
+// --fence-ignores-count: the mutation that lets the owned fence pass whatever it matched (COMMIT-SQL.md); semantic-broken must fail with it.
 
-string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc"];
+string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
     case ["sqlite", .. var rest]:
@@ -24,7 +26,7 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
         return await Cli.RunAsync(new EfProvider(engine, connection, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     default:
-        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>");
+        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] [--m5] [--fence-ignores-count] [--rcsi-off] [--rc] <suite command>");
         return 2;
 }
 
@@ -32,10 +34,12 @@ switch (args)
 sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
     // The fence flag, else the engine's default (EfStore.FenceInBatch).
-    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault ?? true);
+    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault(Commit != CommitSql.EntityFramework) ?? true);
 
-    public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}"
-        + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
+    private CommitSql? Commit => flags.Contains("--owned-commit") ? CommitSql.Owned : flags.Contains("--ef-commit") ? CommitSql.EntityFramework : null;
+
+    public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}, {(Store(() => null!, FenceInBatch).OwnedCommit ? "owned SQL" : "EF SaveChanges")}"
+        + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (flags.Contains("--fence-ignores-count") ? ", FENCE-COUNT MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
         + (engine == "mysql" ? flags.Contains("--rc") ? ", READ COMMITTED" : ", REPEATABLE READ" : "");
 
     private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
@@ -60,6 +64,8 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         Unfenced = unfenced,
         DefiniteBeatsFence = flags.Contains("--m5"),
+        FenceIgnoresCount = flags.Contains("--fence-ignores-count"),
+        CommitSql = Commit,
         Engine = Dialect(),
     };
 

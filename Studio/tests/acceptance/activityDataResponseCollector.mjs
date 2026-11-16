@@ -49,13 +49,18 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
     pending.push(task);
   }
 
-  async function settle() {
+  // Waits for every started observation and keeps its failures for settle().
+  async function drain() {
     let consumed = 0;
     while (consumed < pending.length) {
       const batch = pending.slice(consumed);
       consumed += batch.length;
       await Promise.all(batch);
     }
+  }
+
+  async function settle() {
+    await drain();
     if (failures.length) throw new AggregateError(failures, "Activity data response evidence incomplete");
   }
 
@@ -64,5 +69,5 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
     failedRequests.get(request)?.(true);
   }
 
-  return { observe, requestFailed, settle };
+  return { observe, requestFailed, drain, settle };
 }

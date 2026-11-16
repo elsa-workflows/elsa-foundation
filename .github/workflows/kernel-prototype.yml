@@ -77,7 +77,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in sim conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
+          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -88,6 +88,10 @@ jobs:
           $SIM --seeds 10000
           $SIM --native --seeds 10000
           $SIM --lease-check
+          $SIM --landed-check
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 6946, a seed that has drifted before, so a smaller
@@ -97,7 +101,7 @@ jobs:
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
 
       - name: Store conformance, in memory
@@ -137,7 +141,7 @@ jobs:
 
       - name: Build
         run: |
-          for p in sim models/Native.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance models/Graph.Tests; do
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -151,12 +155,16 @@ jobs:
           $SIM --native --seeds 200000
           $SIM --native --seeds 20000 --actions 1000
           $SIM --lease-check
+          $SIM --landed-check
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       - name: Mutation checks, full size
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes

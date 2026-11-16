@@ -9,7 +9,7 @@ public sealed class Owner
     public Owner(string node, int partition, IKernelStore store, WorkflowRegistry registry, Network network, Func<long>? monotonic = null, NativeOptions? native = null, TimeSpan? lease = null)
     {
         Requests = network.Node(node);
-        Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal });
+        Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal, OnOutbound = native?.OnOutbound });
         Worker = new Worker(node, partition, store, new WorkflowInstance([Model, new Kernel.Sim.Sequence()]), new WorkerOptions
         {
             Monotonic = monotonic ?? (static () => Environment.TickCount64),

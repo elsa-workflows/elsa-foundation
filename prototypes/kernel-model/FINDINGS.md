@@ -957,7 +957,7 @@ only by the `jobs` rename).
 The items the owner decided on 12 and 13 November (the sketch's "Decisions taken so far"), built one pull request
 each. Each subsection says what changed, what was run, and what it did not change.
 
-### 25.1 SQL Server's default fence (E9, decided 13 November). Run
+### 25.1 SQL Server's default fence (E9, decided 13 November; superseded 16 November, see ENGINES.md E9 and section 29). Run
 
 **What changed.** The EF store's fence mode is the engine's default when it is not told: the fence in the batch on
 PostgreSQL, SQLite and MySQL, the checked fence on SQL Server (`Engine.FenceInBatchByDefault`, false only in
@@ -1850,3 +1850,71 @@ split. The recommendation was the fence per virtual partition, conditional on a 
 **Decided by the owner on 16 November 2026: (i) the fence per virtual partition, the multi-row checked fence in round
 5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stays in code until the Worker refactor,
 which will use 1,024).
+
+## 29. Round 5 B: the owned commit, hand-written commit SQL on four engines. Run
+
+The owner's decision of 16 November: the EF store writes its commit with its own statements on PostgreSQL, SQL Server,
+SQLite and MySQL; EF keeps the schema, the migrations and the cold paths. The commit's semantics are unchanged and the
+whole commit edge is replaced per engine, never a piece of it; nothing above the store changed. The design, the
+per-engine shapes, the defaults and the evidence are in [COMMIT-SQL.md](COMMIT-SQL.md); ENGINES.md's "Round 5 B" section
+says what it does to the engine findings. In one line: the same 87 or 88 conformance cases pass per engine and fence
+mode as before, every round-trip budget of the cost runs holds or drops (PostgreSQL, 1,000 instances arriving by poll,
+fence in the batch: 13 → 8 round trips; SQL Server 22 → 13; MySQL 24 → 18; SQLite 4,008 → 8 engine calls), statements
+fall from 3n to a handful per flush (2,001 → 3 for 1,000 new instances), bytes per commit do not move, the fence is one
+multi-row statement shaped for k virtual partitions (`EfStore.FenceAsync`, probe `x fence`, all four engines), and on
+SQL Server the in-batch fence is the first lock of the batch, so the E9 take deadlocks are gone: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). On that evidence the owner moved SQL Server's default fence to the batch on 16 November (the checked fence stays selectable); the flip and its gates are their own pull request (ENGINES.md E9).
+
+Delivered as five pull requests on branches `agent/claude/4229-r5b-1` to `-5`: the seam and PostgreSQL (`2c5d0f5fa`),
+SQL Server (`e308e8a34`), SQLite (`def75ba81`), MySQL (`3e7169f14`, and `8c5e944a5` for the mutation of F-B7), and this
+documentation.
+
+What this round found, beyond COMMIT-SQL.md:
+
+- **F-B1. The stress harnesses had stopped starting children in partition 1.** Since #4532 (14 November) a child
+  start checks its destination against `WorkerOptions.Partitions`, which `EngineRun`'s stress and cost runs and the
+  store conformance suite's stress left at its default of 1, so every parent in partition 1 of a two-partition run
+  faulted at its first turn (`ArgumentOutOfRangeException: destination`), on the EF path as on the owned one: 301
+  parents of a 40 s run ended Faulted, the same 301 on every engine and fence. Fixed in the harnesses (B1). The
+  ENGINES.md stress results recorded before 14 November predate the check.
+- **F-B2. The broken-fence stress no longer breaks on PostgreSQL.** With the fence broken on purpose (`unfenced=1`),
+  40 s and 5,000 messages hold on PostgreSQL on both commit paths and in both fence modes (fenced commits: 0 to 3 per
+  run). The Worker's local lease check (LEASE.md: a late acknowledgement cannot revive an old deadline) keeps a stale
+  owner from committing at all on an engine this fast, so the fence is never asked. The semantic suite's three fence
+  cases are the pin that holds (`semantic-broken fence`: 3 of 3 fail with the checked fence on every engine; with the
+  fence in the batch 1 of 3, "a take beside a commit in flight", fails on the owned path, 0 of 3 on EF's, where the
+  journal's primary key is the backstop). On SQLite the stress still fences (128 to 283 fenced commits per clean run: stalls, no
+  kills) and the broken fence is caught in both modes (2,110 and 2,135 violations); on SQL Server with the fence in the
+  batch (2,017 violations), where commits are slow enough for a stale owner to reach the fence; on MySQL it holds as on
+  PostgreSQL.
+- **F-B3. E1 does not arise in the owned commit.** The fence is the first statement, and its result is the first the
+  client reads (SQL Server: the server stops the batch at the fence's THROW). A stale owner's key violation on a later
+  statement is consumed with the reader, never classified; `--m5`/`m5=1` changes nothing (3 of 3 fence cases pass with
+  it on every engine; `KeyViolationsAsFence` 0 in the stress). The partition-row read after a failure (`HoldsAsync`)
+  stays for the failures that remain.
+- **F-B4. The fence-count mutation.** `FenceIgnoresCount` (the owned fence does not compare its matched rows with the
+  rows it fenced; `--fence-ignores-count`, `fencecount=0`) is caught by the semantic fence cases exactly as the broken
+  fence is (3 of 3 checked, 1 of 3 in the batch, on every engine): **`semantic fence --fence-ignores-count` must exit 1**,
+  and that is the gate. The stress is a pin on SQLite and SQL Server (both modes fail). On PostgreSQL and MySQL the
+  recorded in-batch runs failed once (PostgreSQL I6 on both partitions, I3/I4, 1,708 violations, 58,206 definite errors
+  after 17 stale commits reached the fence; MySQL 686 violations) and the reviewers' reruns held with 0 fenced commits
+  (F-B2: a stale commit rarely reaches the fence there), so those are single-run results, not pins.
+- **F-B5. Connector/NET steps over the statements that return no rows.** A MySQL command of many statements yields one
+  result set per SELECT; the owned commit follows every statement with a `SELECT ROW_COUNT()` and registers exactly
+  those. Found when the k-row fence probe read "fewer result sets than statements".
+- **F-B6. Grouping rows removes the proxy's extra read.** With one statement per row (the first shape of B1), a
+  1,000-instance flush on PostgreSQL read one TCP round trip more than EF's (5 against 4): the server answers each small
+  statement as it arrives and the client is still sending, which the proxy counts as a second trip. With the rows of one
+  kind as one multi-row statement the server has nothing to answer until the statement is complete: 3 round trips. The
+  same mechanism makes the PostgreSQL cells of the 1,000-instance rows vary by one or two between runs on both paths
+  (the tables carry a note); the Execute-frame and command columns do not vary.
+- **F-B7. A server-side check masks a client-side mutation.** On SQL Server the fence's count is checked by the server
+  (`THROW 51010`) and read back by the client; `FenceIgnoresCount` skipped the client's check only, and 3 of 3 fence
+  cases passed with it. The mutation now drops both (`8c5e944a5`), and the cases fail as on the other engines. A
+  mutation must switch off every copy of the rule it names.
+- **F-B8. With the lease check off, the stress pins the fence on every engine.** `stalelease=1` in `EngineRun` passes
+  `Flaw.IgnoreLeaseDeadline` (the simulation's mutation) to the stress workers, so a stalled owner commits past its local
+  deadline and the fence is asked (F-B2's gap). Clean, the stress holds in both modes on every engine with hundreds of
+  fenced commits; with the fence broken (`unfenced=1`) and with the fence count ignored (`fencecount=0`) it fails in both
+  modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-7` adds the option and these runs.
+
+Not done, unverified: COMMIT-SQL.md's last section.

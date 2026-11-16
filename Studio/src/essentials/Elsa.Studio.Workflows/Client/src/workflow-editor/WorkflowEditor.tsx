@@ -6,6 +6,9 @@ import { presentationScopeFrames } from "../graph-authoring/presentationScopeFra
 import { NativeBlockCommands } from "../graph-authoring/NativeBlockCommands";
 import { nextNativeBlockPosition } from "../graph-authoring/nativeBlockPlacement";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
+import { composePromotionExpressionSupport } from "../graph-authoring/promotionExpressionSupport";
+import type { BlockPromotionHost } from "../graph-authoring/BlockPromotionDialog";
+import { workflowPromotionState } from "../graph-authoring/blockPromotionHostDocuments";
 import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
@@ -13,7 +16,7 @@ import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInCo
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDraft, WorkflowInput } from "../workflowTypes";
 import {
   collectActivityNodeIds,
   createActivityNode,
@@ -139,7 +142,7 @@ import { exportBpmnDocument, withDiagramFromLayout } from "../api/bpmnInterchang
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
-import { useFullActivityDefinitionVersion } from "../api/activityDesign";
+import { useActivityAuthoringCapabilities, useFullActivityDefinitionVersion } from "../api/activityDesign";
 import { isHttpEndpointType } from "./httpTestRequest";
 import { useWorkflowEditorSaveCommands } from "./useWorkflowEditorSaveCommands";
 import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
@@ -298,6 +301,7 @@ export function WorkflowEditor({
   const {
     details,
     setDetails,
+    refreshCatalog,
     catalog,
     paletteCatalog: availablePaletteCatalog,
     recommendedDefinitions,
@@ -346,6 +350,8 @@ export function WorkflowEditor({
     canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
+  const promotionCapabilities = useActivityAuthoringCapabilities(context);
+  const promotionExpressionSupport = useMemo(() => composePromotionExpressionSupport(expressionEditors), [expressionEditors]);
   const directBpmnRoot = directPublisherAvailable && !documentAdapter && frames.length === 0
     && draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
   const elements = useMemo(() => isBpmnDesigner
@@ -583,6 +589,7 @@ export function WorkflowEditor({
     openContextMenu: openActivityContextMenu,
     closeContextMenu: closeActivityContextMenu
   } = useActivityClipboard({
+    resourceKind: "workflow",
     draft,
     frames,
     catalogByVersion,
@@ -1394,6 +1401,32 @@ export function WorkflowEditor({
     { id: "versions", title: "Versions", order: 6, icon: <History size={14} />, render: () => null }
   ];
 
+  // Promotion replaces the block and the workflow-owned references the planner rewrote (outputs reading block
+  // results) in the same single history edit that native block commands use.
+  const blockPromotion: BlockPromotionHost = {
+    resourceKind: "workflow-definition",
+    publicInputs: (draft.state.inputs ?? []).filter((input): input is WorkflowInput => Boolean(input) && typeof input === "object")
+      .map(input => ({ referenceKey: input.referenceKey, name: input.name, type: input.type, isRequired: input.isRequired, isNullable: input.isNullable })),
+    capabilities: promotionCapabilities.data ?? null,
+    capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
+    expressionBoundary: promotionExpressionSupport,
+    refreshCatalog,
+    validate: async (document, referenceContext) => {
+      if (!editorDoc.canEdit() || editorDoc.pinned || (!documentAdapter && !persistedDraft)) return { state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] };
+      const candidate = { ...draft, state: workflowPromotionState(draft.state, document, referenceContext), layout: document.layout, activityPresentation: document.activityPresentation };
+      if (documentAdapter) return documentAdapter.validateCandidate?.(context, candidate) ?? { state: "unavailable", messages: ["This resource does not provide candidate validation."] };
+      return validateWorkflowCandidate(context, persistedDraft!, candidate);
+    },
+    apply: async (document, referenceContext, selection, isCurrent) => {
+      const next = { ...draft, state: workflowPromotionState(draft.state, document, referenceContext), layout: document.layout, activityPresentation: document.activityPresentation };
+      if (!editorDoc.canEdit()) throw new Error("The resource is no longer editable.");
+      const applied = await commitNativeBlock(draft, frames, selectedNodeId, next, selection, () => isCurrent() && editorDoc.canEdit());
+      if (!applied) throw new Error("The source changed before the edit could be committed.");
+      canvas.selectNodes(selection);
+      if (selection[0]) queueCanvasNodeFocus(selection[0]);
+    }
+  };
+
   return (
     <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="" inert={templateNavigationPending} aria-busy={templateNavigationPending}>
       <WorkflowEditorToolbar
@@ -1643,6 +1676,7 @@ export function WorkflowEditor({
               canvas.selectNodes(selection);
               if (selection[0]) queueCanvasNodeFocus(selection[0]);
             }}
+            promotion={blockPromotion}
             open={nodeId => {
               const node = scope?.slot.activities.find(item => item.nodeId === nodeId);
               const slot = node && getChildSlots(node, catalogByVersion).find(item => item.property === "activities");

@@ -27,7 +27,9 @@ vi.mock("../api/activityDesign", () => ({
     data: { activities: catalogItems },
     isPending: false,
     isError: false
-  })
+  }),
+  // Reusable activity authoring is unavailable in these editor-only tests.
+  useActivityAuthoringCapabilities: () => ({ data: undefined, isPending: false, isError: true })
 }));
 vi.mock("../api/expressions", () => ({
   listExpressionDescriptors: async () => expressionDescriptors,
@@ -157,6 +159,40 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     expect(next.activityPresentation[0]).toMatchObject({ nodeId: "write-line-1", displayName: "Named step" });
     expect(next.activityPresentation[1]).toMatchObject({ displayName: "Named step (copy)", description: "Useful context" });
     expect(next.activityPresentation[1].nodeId).not.toBe("write-line-1");
+  });
+
+  it.each(["ActivityResultMember", "portable"])("duplicates recognized %s references inside the editable reusable body as one edit", role => {
+    catalogItems = [sequenceCatalogItem(), inputLeafCatalogItem("Literal")];
+    const binding = role === "portable" ? { expressionType: "MissingLanguage", value: {
+      language: "MissingLanguage", source: 'customer["a.b"][""]', resultType: { alias: "String" }, options: {}, capabilityProfile: "binding-pure-v1",
+      parameters: { customer: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "Customer" } }
+    } } : { expressionType: role, value: { producerNodeId: "producer", projectionKey: "Customer", memberPath: ["a.b", ""] } };
+    const group = sequenceImplementationValue([
+      { nodeId: "producer", activityVersionId: "write-line-v1", inputs: [], outputs: [] },
+      { nodeId: "consumer", activityVersionId: "write-line-v1", inputs: [{ referenceKey: "message", value: binding }], outputs: [] }
+    ]).payload.rootActivity;
+    group.nodeId = "group";
+    const value = { ...sequenceImplementationValue([group]), payload: { ...sequenceImplementationValue([group]).payload,
+      outputMappings: [{ outputReferenceKey: "public-output", value: binding }] } };
+    const before = structuredClone(value);
+    const rendered = renderControlledDesigner(value);
+    click(rendered.container.querySelector("[data-graph-node-id='group']")!);
+    click(rendered.container.querySelector("button[aria-label='Duplicate Sequence']")!);
+    expect(rendered.onChange).toHaveBeenCalledTimes(1);
+    const after = rendered.onChange.mock.calls.at(-1)![0];
+    const copied = after.payload.rootActivity.structure.payload.activities[1];
+    const [producer, consumer] = copied.structure.payload.activities;
+    expect(producer.nodeId).not.toBe("producer");
+    const expected = structuredClone(binding);
+    if (role === "portable") (expected.value as { parameters: { customer: { producerNodeId: string } } }).parameters.customer.producerNodeId = producer.nodeId;
+    else (expected.value as { producerNodeId: string }).producerNodeId = producer.nodeId;
+    expect(consumer.inputs).toEqual([{ referenceKey: "message", value: expected }]);
+    expect(after.payload.outputMappings).toEqual(before.payload.outputMappings);
+    expect(value).toEqual(before);
+    click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0]).toEqual(before);
+    click(rendered.container.querySelector("button[aria-label='Redo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0]).toEqual(after);
   });
 
   it("adds a stable root-outcome mapping and preserves existing mappings", () => {

@@ -20,3 +20,11 @@ declare module "node:fs" {
   export function existsSync(path: string): boolean;
   export function unlinkSync(path: string): void;
 }
+
+// Owned acceptance uses a read-only Python store oracle; no shell interpolation or store mutation.
+declare module "node:child_process" {
+  export function execFileSync(file: string, args: string[], options: { encoding: "utf8" }): string;
+}
+declare module "node:path" {
+  export function resolve(...paths: string[]): string;
+}

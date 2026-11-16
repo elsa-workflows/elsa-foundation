@@ -2,6 +2,7 @@ import { activityValidationReportingJourney } from "./activityValidationReportin
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { setOutputJourney } from "./setOutputJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
+import { blockPromotionJourney } from "./blockPromotionJourney";
 import { bpmnNamedBlocksJourney } from "./bpmnNamedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
@@ -23,6 +24,7 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { structuredLogsJourney } from "./structuredLogsJourney";
+import { activityDataCopyJourney } from "./activityDataCopyJourney";
 import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { activityExpressionInsertionJourney, expressionModulePreservationJourney } from "./activityExpressionInsertionJourney";
@@ -154,7 +156,7 @@ test.afterEach(async ({ page, playwright }, info) => {
 
 test.beforeEach(async ({ page }, info) => {
   const reportedAppearance = info.title === "feature filtering and settings dialogs";
-  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results"].includes(info.title)
+  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results", "named blocks promote to reusable activities"].includes(info.title)
     ? info.project.use.colorScheme === "dark" ? "builtin:graphite" : "builtin:porcelain"
     : undefined;
   await page.addInitScript(({ mode, reportedAppearance, authoredNamesTheme }) => {
@@ -1030,6 +1032,15 @@ test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });
 
+for (const [title, mode] of [
+  ["copy activity data pairs", "pairs"],
+  ["copy sequence activity data pairs", "sequence-pairs"],
+  ["copy scoped and portable activity data", "scopes"],
+  ["preserve external activity references on copy", "external"]
+] as const) test(title, async ({ page }, info) => {
+  await activityDataCopyJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, mode);
+});
+
 test("choose nested activity data", async ({ page }, info) => {
   await activityDataMembersJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
@@ -1079,6 +1090,11 @@ test("explicit authored activity names survive publication and execution", async
 test("named blocks across graph authoring", async ({ page }, info) => {
   test.setTimeout(240_000);
   await namedBlocksJourney(page, info, capture);
+});
+
+test("named blocks promote to reusable activities", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  await blockPromotionJourney(page, info, capture);
 });
 
 test("named blocks preserve declared expression results", async ({ page }, info) => {

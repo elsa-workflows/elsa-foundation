@@ -21,20 +21,22 @@ export function isCompensationScope(activity: ActivityNode | null | undefined): 
 export function readCompensationSteps(activity: ActivityNode | null | undefined): CompensationStep[] {
   const steps = activity?.structure?.payload?.steps;
   if (!Array.isArray(steps)) return [];
-  return steps.flatMap(step => {
-    if (!isRecord(step)) return [];
-    return [{
-      name: typeof step.name === "string" ? step.name : "",
-      activity: isActivityNode(step.activity) ? step.activity : null,
-      compensation: isActivityNode(step.compensation) ? step.compensation : null
-    }];
+  return steps.flatMap(value => {
+    const step = readCompensationStep(value);
+    return step ? [step] : [];
   });
 }
 
 // The "Steps" slot first, so a scope opened at the root or from a badge shows its designer, then a forward and a
 // compensation slot per step. Per-step slots are collection slots, so writes through them touch only their item.
 export function compensationScopeChildSlots(structure: ActivityNodeStructure): ChildSlot[] {
-  const steps = readCompensationStepsFromStructure(structure);
+  // Collection addresses refer to authored rows, including gaps that the designer cannot render.
+  const raw = structure.payload.steps;
+  const rows = Array.isArray(raw) ? raw.flatMap((value, index) => {
+    const step = readCompensationStep(value);
+    return step ? [{ step, index }] : [];
+  }) : [];
+  const steps = rows.map(row => row.step);
   const stepsSlot: ChildSlot = {
     id: compensationStepsSlotId,
     label: "Steps",
@@ -44,7 +46,7 @@ export function compensationScopeChildSlots(structure: ActivityNodeStructure): C
     activities: steps.flatMap(step => [step.activity, step.compensation].filter((activity): activity is ActivityNode => activity !== null))
   };
 
-  const perStep = steps.flatMap((step, index): ChildSlot[] => [
+  const perStep = rows.flatMap(({ step, index }): ChildSlot[] => [
     stepSlot(index, step, "activity", step.name || `Step ${index + 1}`),
     stepSlot(index, step, "compensation", `${step.name || `Step ${index + 1}`} (compensation)`)
   ]);
@@ -193,8 +195,13 @@ function stepSlot(index: number, step: CompensationStep, childProperty: "activit
   };
 }
 
-function readCompensationStepsFromStructure(structure: ActivityNodeStructure): CompensationStep[] {
-  return readCompensationSteps({ nodeId: "", activityVersionId: "", inputs: [], outputs: [], structure });
+function readCompensationStep(value: unknown): CompensationStep | null {
+  if (!isRecord(value)) return null;
+  return {
+    name: typeof value.name === "string" ? value.name : "",
+    activity: isActivityNode(value.activity) ? value.activity : null,
+    compensation: isActivityNode(value.compensation) ? value.compensation : null
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

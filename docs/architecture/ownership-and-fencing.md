@@ -103,6 +103,42 @@ interval with a deferred database constraint; other physical providers refuse it
 fencing or make external effects exactly once. Its schema and check cost must be qualified separately from the
 ordinary checkpoint shapes above.
 
+## Side effects
+
+The fence decides which commit lands. It does not reach the systems an activity talks to. An HTTP request sent, an
+email handed to a mail server or a message put on a broker before the turn's commit stays sent when that commit is
+refused, and the replacement owner, the redelivery or the replayed burst sends it again. Side effects therefore run
+**at least once**, in every persistence mode. Durable mode narrows the window by committing an External activity's
+attempt before it runs; no mode closes it, and the kernel makes no exactly-once claim for anything outside its store.
+
+What the kernel gives instead is a **stable effect key** per activity attempt, derived from committed facts only, in
+the shape the owner decided on 16 November: `{instance origin}/{node}/{iteration path}/{attempt}` (`EffectKey.For` in
+the prototype's `src/Kernel.Workflows`). The instance origin is the instance's id, fixed at creation, with its creation;
+the key never reads partitions or positions. The node is the activity's stable id in the definition. The iteration path
+is the iteration numbers of the repeating scopes that enclose the activation (a loop index, a loop pass, a flowchart
+round, the merge and source a flowchart token passed, a flowchart join's firing ordinal in its round, a statechart
+visit serial, a retry generation), root first, each taken from the enclosing activity's committed state. The attempt is
+0, or 1 for an activity whose attempt Durable mode commits before it runs; it takes no other value. One logical
+activation re-derives one key on whichever owner replays it; two activations of one activity never share one; a retry
+is a new generation in the path, so a new key. What a replayed activation carries as content may differ from its first
+sending; the key says they are one activation, and the receiver keeps the first.
+
+The frame number of the activation is deliberately absent (the owner's reason): in Balanced and Ephemeral mode a
+replayed burst mints its frame numbers from the committed state in agenda order, and a replay over a longer inbox (a
+timer that became due meanwhile) orders the agenda differently, so a frame number can land on another activity, or on
+another iteration of the same one. A key that named the frame would then name two different effects, and a receiver
+that deduplicates by it would drop a genuine effect as a repeat. The iteration path does not move with the agenda, and
+no extra commit is paid for it. The activity hands the key to the receiver where the receiver looks for a repeat: the
+built-in HTTP activity sends it as the `Idempotency-Key` header, the email activity as the local part of the
+`Message-ID`. **Deduplication is the receiving side's job**, and conditional: a receiver that keeps the keys it has seen
+drops the repeat, one that does not sees the effect twice. The kernel records no key and drops no repeat. The
+prototype's simulation (NATIVE.md, N7) checks that an outbound effect carries its key, that a resend after a lost turn
+result or a takeover carries the same key, that one key belongs to one activation, and that a key never leaves in two
+turns that both landed; a resend's content is not compared, since the receiver keeps the first. Its smoke replays one
+committed state over a shorter and a longer inbox and asserts the same; six mutations (`UnstableEffectKey`,
+`NodelessEffectKey`, `PathlessEffectKey`, `TurnLocalJoinOrdinal`, `FreshTurnSwapsLoopKeys` and, in the retry witness,
+`FlatRetryGeneration`) show the checks bite.
+
 ## Alternatives considered
 
 | Alternative | Why the kernel does not use it as the ownership fence |
