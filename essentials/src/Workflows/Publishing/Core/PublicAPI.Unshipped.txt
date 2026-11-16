@@ -1403,3 +1403,5 @@ Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.init 
 Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException
 Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationRecordAlreadyExistsException(string! publicationId) -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
