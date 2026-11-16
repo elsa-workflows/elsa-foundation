@@ -38,6 +38,10 @@ or are refused at import, never at publish. .NET objects stay out of scripts.
 - **D-17, precision.** One replaceable policy, provided by a feature, host-wide, at the .NET → Jint boundary. The
   default refuses. Elsa ships only that policy, with no options. No per-workflow or per-node override; a host that
   wants other handling installs its own policy.
+- **When a number is lossy (ADR 0046 V9).** A number has lost precision when the JavaScript number, written as JSON,
+  differs in value from the stored one. `10.50` → `10.5` and `2.0` → `2` are the same value and no loss;
+  `9007199254740993` → `9007199254740992` is. The engine knows it when the value crosses into JavaScript, before the
+  script runs.
 - **Host argument.** A lossy value passed to a host function is not a write: a warning is logged.
 - **D-15.** A JavaScript input expression takes the same input as a script in Run JavaScript. One .NET switch for
   both (built in #4103).
@@ -298,7 +302,7 @@ sensitive and redacted where the variable is.
 - **FR-006a**: A JavaScript input expression MUST NOT write. An assignment to `variables`, or to a member of a value
   read from it, MUST be refused at publish where the expression shows it, and MUST fail the evaluation at run time
   when the bridge reports any change. The diagnostic names the node, the input, the variable and the path, and says
-  input expressions only read; it suggests a script activity for writes. A change is never dropped silently (Q7).
+  input expressions only read; it suggests a script activity for writes. A change is never dropped silently (Q6).
 - **FR-007**: A member change without a whole assignment MUST produce the visibility warning of ADR 0090 C2.
 - **FR-008**: No .NET object, CLR type or CLR member MUST be reachable from a script or a JavaScript input expression
   (D-16).
@@ -309,7 +313,7 @@ sensitive and redacted where the variable is.
 
 **Precision (V9, D-17)**
 
-- **FR-011**: The bridge MUST know, when a number enters, whether JavaScript holds it exactly (Q3).
+- **FR-011**: The bridge MUST know, when a number enters, whether JavaScript holds it exactly (ADR 0046 V9).
 - **FR-012**: Precision handling MUST be one replaceable host-wide policy, provided by a feature, at the .NET → Jint
   boundary. There MUST be no per-workflow or per-node override.
 - **FR-013**: Elsa MUST ship one policy, with no options, that refuses a write that carries a precision loss. The
@@ -339,12 +343,12 @@ sensitive and redacted where the variable is.
   the same kind when it checks an expression's declared type against an input's. `JsonObject` accepts `Any` and
   checks the shape at run time.
 - **FR-022**: A type MUST be able to describe nested collections, such as a dictionary of string arrays, and
-  diagnostics MUST show the whole type (Q4).
+  diagnostics MUST show the whole type (Q3).
 
 **Elsa 3 conversion (#3196)**
 
 - **FR-023**: An Elsa 3 untyped result bound to a typed input MUST convert only where Elsa 4 produces the same typed
-  value Elsa 3 did, per JSON kind. The rule per kind is recorded from the Elsa 3 3.6.3 source (Q5).
+  value Elsa 3 did, per JSON kind. The rule per kind is recorded from the Elsa 3 3.6.3 source (Q4).
 - **FR-024**: Where FR-023 does not hold, the converter MUST refuse at import with one stable code naming the
   activity, the input and what to change. An untyped result MUST NOT count as compatible on its own.
 - **FR-025**: A JSON value whose kind matches a scalar target (boolean, number in range, string) MUST convert to that
@@ -353,7 +357,7 @@ sensitive and redacted where the variable is.
 **Protection**
 
 - **FR-026**: A script result MUST carry the strongest protection policy of the values the script read, taken from
-  its read set (Q6).
+  its read set (Q5).
 
 **Contracts**
 
@@ -366,7 +370,7 @@ sensitive and redacted where the variable is.
 
 - **Core value**: type (alias, collection kind, optional JSON Schema), presence, JSON content or a reference,
   protection policy.
-- **Type reference**: an alias and a collection kind, whose element may itself be a type reference (Q4).
+- **Type reference**: an alias and a collection kind, whose element may itself be a type reference (Q3).
 - **Script value bridge**: the replaceable contract that enters values and reports changes.
 - **Entry record**: per evaluation, the original JSON of each value read and its lossy numbers.
 - **Change**: per value, unchanged, member change or whole assignment, with the lossy paths it carries.
@@ -406,17 +410,15 @@ the requirements follow it.
   JavaScript (ADR 0090 C2); report only changed paths. A later implementation, for example one built on proxies, may
   replace it if it behaves identically. Rejected for now: proxies (more complex, deferred), and reporting every read
   value as a change (breaks FR-002).
-- **Q3 — When is a number lossy?** **Recommended:** when the decimal value of the stored JSON number differs from the
-  decimal value of the double it becomes. `10.50` and `2.0` are no loss; `9007199254740993` is. Checked once at entry.
-- **Q4 — How does a type describe a dictionary of arrays?** **Recommended:** a type reference's element may itself be
+- **Q3 — How does a type describe a dictionary of arrays?** **Recommended:** a type reference's element may itself be
   a type reference, so `IDictionary<string, string[]>` is a dictionary of arrays of `String`. Rejected: describing it
   only by JSON Schema (the binding checks would not see it).
-- **Q5 — Elsa 3 result into a typed input.** **Recommended:** convert per JSON kind where Elsa 3's coercion is
+- **Q4 — Elsa 3 result into a typed input.** **Recommended:** convert per JSON kind where Elsa 3's coercion is
   reproduced exactly, refuse at import otherwise. Fix #3167 first and measure again, as it may make more bindings
   convert.
-- **Q6 — Is protection inheritance in S-8?** **Recommended: yes, P3,** on the read set ADR 0092 provides. It is a
+- **Q5 — Is protection inheritance in S-8?** **Recommended: yes, P3,** on the read set ADR 0092 provides. It is a
   value-model rule and has no other spec.
-- **Q7 — Where does an attempted write from an input expression fail?** **Recommended: both.** At publish, a static
+- **Q6 — Where does an attempted write from an input expression fail?** **Recommended: both.** At publish, a static
   check refuses a direct assignment to `variables.x` or to a member of `variables.x`, so most cases fail before the
   workflow runs. At run time, the bridge's change report catches what the static check cannot see (aliases, computed
   paths) and fails the evaluation. Rejected: run time only (fails late, maybe only on a rare branch), and freezing

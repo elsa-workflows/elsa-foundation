@@ -44,7 +44,7 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Cost tracking**: a per-evaluation metric (enter and collect durations, bytes converted) and the SC-007 benchmark
   on 1 KB, 100 KB and 1 MB inputs. The same numbers judge a replacement.
 
-## R-2 When a number is lossy (Q3)
+## R-2 Checking a number for loss (ADR 0046 V9, settled)
 
 - **Decision**: parse the JSON number text as a decimal (or as a big integer when it has no fraction or exponent),
   convert the double back to the shortest round-trip text, and compare values. Different value → lossy.
@@ -71,7 +71,7 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
   An attempted write fails loudly (R-8).
 - **Dependency**: User Story 3's end-to-end test needs S-7's write path; until then it is tested at the bridge level.
 
-## R-5 Elsa 3 coercion of an untyped result (Q5)
+## R-5 Elsa 3 coercion of an untyped result (Q4)
 
 - **Decision**: record, per JSON kind and per typed target, what Elsa 3.6.3's `ObjectConverter.ConvertTo` produced.
   Convert where Elsa 4 gives the same value; refuse at import otherwise.
@@ -85,13 +85,13 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Rationale**: one name for one kind. `object` as a variable type opens the door V10 keeps closed. Agreed by the
   approvers in the initiative meetings (#3422 Q5).
 
-## R-7 Nested types (Q4)
+## R-7 Nested types (Q3)
 
 - **Decision**: `TypeReference` gets an optional `Element` reference, so a collection's element can be a collection.
 - **Alternatives considered**: JSON Schema only (binding checks do not read it); a special alias for
   dictionary-of-arrays (does not generalise).
 
-## R-8 An attempted write from an input expression (Q7)
+## R-8 An attempted write from an input expression (Q6)
 
 - **Decision**: refuse at publish where the expression shows the write; fail the evaluation at run time when the
   bridge reports a change. One stable code, one diagnostic: node, input, variable, path, "input expressions only
