@@ -25,6 +25,7 @@ import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacement
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
+import { numericBindingJourney } from "./numericBindingJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
 import { phoneContentJourney } from "./phoneContentJourney";
@@ -1033,6 +1034,10 @@ test("choose nested activity data", async ({ page }, info) => {
 });
 test("choose declared and scoped activity data", async ({ page }, info) => {
   await activityDataSourcesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("Double activity output binds to text", async ({ page }, info) => {
+  await numericBindingJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("choose data for activity outputs", async ({ page }, info) => {

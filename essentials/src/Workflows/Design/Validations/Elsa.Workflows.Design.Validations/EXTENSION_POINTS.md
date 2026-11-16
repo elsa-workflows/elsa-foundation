@@ -24,6 +24,10 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - **Compiled boundaries:** Publishing supplies `ActivityDataSelectionDocument.CompiledBoundaryInputs` only for exact resolved closed invocations. Each immutable entry is the complete selected authored/default input set, including an empty set; those invocation nodes are opaque to ignored caller structures. The analyzer rejects malformed, unknown, ambiguous, intrinsic or child-bearing entries and never invokes structure writers. Ancestor ordering and variable visibility keep their existing owners. This server-only init property is ignored by JSON; the existing constructor and deconstruction stay unchanged. This Core project has not opted into domain-wide PublicAPI baselining; the additive contract is pinned by owning compatibility tests.
 - **Composition:** `WorkflowDesignValidations` depends on `Events`. The required `IInlineEventPublisher` dispatches constraint collection through the canonical Sequential pipeline; missing publisher is a composition failure, not permission to ignore contributors.
 
+### `IActivityBindingConversionPreviewer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+
+The optional scoped Publishing implementation resolves a selected whole activity result against the consuming input's type and authored mode through `ValueConversionPlanResolver`. Draft validators use rejections for input findings. A target-only activity-data query with `previewBindingConversion: true` receives the operation or refusal for the snapshot's stored binding. Design-only hosts omit the preview by default. Shell preparation requires at most one scoped registration. Publishing registers the default and checks that exactly one implementation is present at startup.
+
 ### `ICredentialLiteralValidator` *(Core, `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (returns findings), a single-implementation **replacement contract** (framework §2.6.2), declared by `[CredentialLiteralValidatorReplacementContract]`.
 - **Signature:** `ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken);`

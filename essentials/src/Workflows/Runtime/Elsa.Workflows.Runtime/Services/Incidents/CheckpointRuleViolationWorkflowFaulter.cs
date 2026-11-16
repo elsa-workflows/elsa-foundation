@@ -211,6 +211,10 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
                 operational: [],
                 activityExecutionInspections: []),
             PostCommitIntents: [],
-            Metadata: metadata);
+            Metadata: metadata)
+        {
+            HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(workflow.HistoryCapturePolicy,
+                () => [RuntimeHistoryIncidentFacts.Created(incident)])
+        };
     }
 }

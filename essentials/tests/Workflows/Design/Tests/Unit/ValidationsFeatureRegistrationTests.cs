@@ -142,6 +142,25 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task A_design_shell_accepts_at_most_one_conversion_preview_replacement(int count)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            for (var i = 0; i < count; i++)
+                services.AddScoped<IActivityBindingConversionPreviewer>(_ => throw new InvalidOperationException("Do not activate during registration checks."));
+        });
+        if (count < 2)
+            await InitializeShellAsync(provider);
+        else
+        {
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+            Assert.Contains(nameof(IActivityBindingConversionPreviewer), failure.Message);
+        }
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task A_second_source_authority_fails_activation_in_either_registration_order(bool registeredBefore)

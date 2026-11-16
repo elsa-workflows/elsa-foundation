@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -111,6 +112,55 @@ public sealed class ValueConversionPlanTests
 
         Assert.Equal(targetType, converted.Type);
         Assert.Equal(42, converted.InlineValue!.Value.GetInt32());
+    }
+
+    [Theory]
+    [InlineData(19.25, "19.25")]
+    [InlineData(0.1, "0.1")]
+    [InlineData(-0.0, "-0")]
+    [InlineData(double.Epsilon, "5E-324")]
+    public void Numeric_text_round_trips_independently_of_worker_culture(double value, string expected)
+    {
+        var plan = Plan(new("Double"), new("String"), ValueRepresentation.TypedValue, ValueConversionOperation.NumericToString);
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+        var source = ValueEnvelope.Inline(plan.SourceType, JsonSerializer.SerializeToElement(value), policy);
+        var previousCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("nl-NL");
+            var result = new RuntimeValueConversionExecutor().Convert(source, plan);
+            Assert.Equal(expected, result.InlineValue!.Value.GetString());
+            Assert.Equal(plan.TargetType, result.Type);
+            Assert.Equal(policy, result.Policy);
+            Assert.Equal(JsonValueKind.Number, source.InlineValue!.Value.ValueKind);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
+
+    [Theory]
+    [InlineData(ValuePresence.Absent)]
+    [InlineData(ValuePresence.ExplicitNull)]
+    public void Numeric_text_preserves_presence(ValuePresence presence)
+    {
+        var plan = Plan(new("Double"), new("String"), ValueRepresentation.TypedValue, ValueConversionOperation.NumericToString);
+        var source = new ValueEnvelope(plan.SourceType, presence, null, null, ValueProtectionPolicy.InstanceInline);
+        var result = new RuntimeValueConversionExecutor().Convert(source, plan);
+        Assert.Equal(presence, result.Presence);
+        Assert.Null(result.InlineValue);
+    }
+
+    [Theory]
+    [InlineData("1e999")]
+    [InlineData("\"19.25\"")]
+    public void Numeric_text_rejects_invalid_double_payloads(string json)
+    {
+        var plan = Plan(new("Double"), new("String"), ValueRepresentation.TypedValue, ValueConversionOperation.NumericToString);
+        using var document = JsonDocument.Parse(json);
+        var source = ValueEnvelope.Inline(plan.SourceType, document.RootElement, ValueProtectionPolicy.InstanceInline);
+        Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(source, plan));
     }
 
     [Fact]
