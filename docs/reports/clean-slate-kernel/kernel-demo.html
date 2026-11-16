@@ -334,19 +334,19 @@ marker path.n { fill: var(--muted); }
 <section class="slide title" id="s1" aria-label="Slide 1: Elsa's new kernel">
   <div class="eyebrow tech">Elsa · team demo · 16 November 2026</div>
   <h1>Elsa's new kernel</h1>
-  <p class="lede">A clean-slate core for running workflows: correct under failure, few database calls, any execution model.</p>
+  <p class="lede">A new engine for running your business processes: it keeps going when a server fails, asks far less of the database, and can run many kinds of process.</p>
   <div class="flow" id="s1flow" aria-label="One way in, one way out">
     <h2 class="flow-h">One way in, one way out</h2>
     <div class="flow-row">
-      <div class="flow-in"><span>a request</span><span>a timer</span><span>an event</span><span>a job's result</span></div>
+      <div class="flow-in"><span>a customer request</span><span>a reminder going off</span><span>an outside event</span><span>a finished task</span></div>
       <div class="flow-arrow" aria-hidden="true">→</div>
-      <div class="flow-box"><b>Inbox</b><span>everything arrives as a message</span></div>
+      <div class="flow-box"><b>Mailbox</b><span>everything arrives here as a note</span></div>
       <div class="flow-arrow" aria-hidden="true">→</div>
-      <div class="flow-box"><b>Turn</b><span>runs in memory, reads nothing</span></div>
+      <div class="flow-box"><b>Do the work</b><span>quickly, without stopping to look things up</span></div>
       <div class="flow-arrow" aria-hidden="true">→</div>
-      <div class="flow-box out"><b>One save</b><span>new state, messages and history: all or nothing</span></div>
+      <div class="flow-box out"><b>Save once</b><span>everything together, or nothing at all</span></div>
     </div>
-    <p class="flow-sub">Three layers, one job each: <b>where it runs</b> · <b>what it guarantees</b> · <b>what runs</b>.</p>
+    <p class="flow-sub">Three parts, each with one job: <b>where it runs</b> · <b>keeping it safe</b> · <b>your processes</b>.</p>
   </div>
   <div class="cards" id="s1cards">
     <div class="card c1"><h3>Correct</h3><p>If a server dies, its workflows carry on from their last save on another server, and a server that is no longer the owner can never write.</p><p class="tech">one writer per partition, fenced in the database</p></div>
