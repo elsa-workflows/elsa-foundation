@@ -136,8 +136,9 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
 
 1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows. Their `keep_until` follows
    the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's time plus that window, or no expiry when it
-   is null (the default: kept until recovered or discarded). Recover in either mode, discard and delete give the kept
-   rows the ordinary outside-command window from that moment, or remove them in the same commit. A child completion
+   is null (the default: kept until recovered or discarded). Recover in either mode sets every kept row's `keep_until`,
+   restored or not, to the ordinary outside-command window from that moment; discard and delete do the same or remove
+   the rows in the same commit, as the data lifecycle page says. A child completion
    that arrives while parked is kept with the rest, and its entry stays in the parent's child registry; today such a
    notice closes the entry without the model.
 2. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
@@ -175,16 +176,28 @@ one commit, and calls one new model hook.
   kernel maps the generation back. A result from the old generation matches no live ticket and is dropped.
 - **Deliveries are restored, never copied** (under decision 2). Both modes restore every kept arrival from while
   parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition fence,
-  clears each kept row's done mark and marks it seen at the current epoch, so the owner hands the rows to the instance
-  in memory after the commit, in their original `seq` order. A restored row keeps its id, sender, kind, payload and
+  updates each row to be restored by its key with the predicate `Done` (the row is still there and still done):
+  it clears `Done`, resets `Attempts` to 0 and `Trial` to none, sets `Seen` to the current epoch and `KeepUntil` to the
+  ordinary outside-command window from now. Resetting the poison counters matters: the owner parks any delivery whose
+  attempts reached the threshold (the `MaxAttempts` check in
+  [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs)), so a retried poison message or job ticket
+  would otherwise park the instance again at once. Each row's update has its count checked; a row that matched nothing
+  (the sweep removed it first) goes on the "could not deliver" list and does not fail the commit. Only rows whose update
+  landed are handed to the instance in memory after the commit, in their original `seq` order, so nothing is in memory
+  that is not on disk (invariant 9). A restored row keeps its id, sender, kind, payload and
   creations. That matters because the kernel authenticates some kinds: a child completion to a creation-qualified
   parent must carry a terminal-notice id, `Sender` equal to the finished child and matching creations
   (`WorkflowInstance.cs`, the `ChildFinished` check), and a copy under a new id would be refused by
   `CreationProtocol.Refuse` and consumed ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)).
-  Job, meet and publish tickets keep their kernel-issued ids the same way. A restored outside message keeps its own
-  `keep_until`, and is marked done again when consumed.
-- **Expired kept rows.** When a non-null `Parked` window has passed and the sweep removed kept rows, recover delivers
-  what remains and its answer lists the ids it could not deliver. `retry` of a Park whose consumed deliveries are all
+  Job, meet and publish tickets keep their kernel-issued ids the same way. A restored row is marked done again when
+  consumed, and the sweep removes it after its new window.
+- **A store contract change.** Clearing `Done` is a new message transition: today a row goes from pending to seen,
+  trial and done, and never back. It is kernel behaviour, and every provider and the store conformance suite need it.
+- **Expired kept rows.** A row whose `Parked` window has passed but that the sweep has not yet removed still matches,
+  and is restored under the ordinary window set above. The sweep's delete and the restore update meet on the row: the
+  one that runs second finds nothing, and the restore's count says which happened. A row the sweep removed goes on the
+  list. So when a non-null `Parked` window has passed, recover delivers what remains and its answer lists the ids it
+  could not deliver. `retry` of a Park whose consumed deliveries are all
   gone is refused; `resume` stays possible.
 - **Side effects** of the retried turn may repeat, with the same effect keys.
 
@@ -256,8 +269,8 @@ record PendingDelivery(string Id, string Kind, string? Sender, DateTimeOffset? D
 - That `RestoreWaits` covers every model's waits: Native, Flowchart and StateMachine each need it shown, with kept
   events in the gap, timers that came due while parked, and jobs still in flight.
 - The byte cost of the trace column, against WRITES.md's cost run.
-- That restoring a kept row (done mark cleared, seen at the current epoch) passes every provider's consume and
-  authentication paths unchanged.
+- That restoring a kept row (done mark cleared, poison counters reset, seen at the current epoch) passes every
+  provider's consume and authentication paths unchanged, and that the new transition keeps invariants 9 and 14.
 
 ## Decisions for the owner
 
