@@ -1,18 +1,24 @@
 import type { ActivityDefinitionVersionView } from "../activityDefinitionTypes";
 import type { ReadyBlockPromotion } from "./blockPromotionTypes";
 
-/** Key-sorted JSON. An absent and a null member are the same: the server's records write omitted optional members as null. */
+/**
+ * Key-sorted JSON of reusable-activity material as the server stores it. Its records write an omitted optional member
+ * as null and a contract member's omitted order as 0, and its enums are camel-cased. Identity values (keys, names,
+ * aliases, expressions) are compared exactly.
+ */
 export function promotionMaterialJson(value: unknown): string {
   return JSON.stringify(normalize(value));
 }
+
+const enumMembers = new Set(["durability", "collectionKind"]);
 
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter(([, member]) => member !== null && member !== undefined)
+    .filter(([key, member]) => member !== null && member !== undefined && !(key === "order" && member === 0))
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .map(([key, member]) => [key, normalize(member)]));
+    .map(([key, member]) => [key, enumMembers.has(key) && typeof member === "string" ? member.toLowerCase() : normalize(member)]));
 }
 
 export type PromotionTargetReview = { status: "matches" } | { status: "refused"; reasons: string[] };
@@ -26,7 +32,7 @@ export function reviewPromotionTarget(plan: ReadyBlockPromotion, versionId: stri
   const reasons: string[] = [];
   const provider = plan.candidate.provider;
   if (version.versionId !== versionId) reasons.push("The server returned a different version than the one selected.");
-  if (version.lifecycle !== "Active") reasons.push(`This version is ${version.lifecycle.toLowerCase()}. Choose an active published version.`);
+  if (version.lifecycle.toLowerCase() !== "active") reasons.push(`This version is ${version.lifecycle.toLowerCase()}. Choose an active published version.`);
   if (version.provider.providerKey !== provider.providerKey || version.provider.schemaVersion !== provider.schemaVersion)
     reasons.push("This version uses a different implementation provider than the proposed reusable activity.");
   else if (version.provider.payload === undefined)

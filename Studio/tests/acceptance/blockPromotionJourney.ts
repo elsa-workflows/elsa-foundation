@@ -89,6 +89,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await publish.click();
     await expect(dialog).toContainText("Replace the block with this exact version.");
     await capture(page, info, `${host}-promotion-published`);
+    await recordMaterial(host, name, dialog);
     await dialog.getByRole("button", { name: "Replace block with this version", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole("status").filter({ hasText: "Undo restores the block; the reusable activity stays published." })).toBeVisible();
@@ -176,6 +177,14 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
   if (failures.length === 1) throw failures[0];
   if (failures.length) throw new AggregateError(failures, "Block promotion journey or owned fixture cleanup failed");
 
+  // The reviewed candidate as Studio shows it, beside the exact published version the server returns.
+  async function recordMaterial(host: string, name: string, dialog: ReturnType<Page["getByRole"]>) {
+    const definition = (await api<{ items: { definition: { headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(name)}`)).items[0]?.definition;
+    const published = definition ? await api<unknown>(`/design/activities/versions/${definition.headVersionId}`) : null;
+    const candidate = await dialog.locator("details").filter({ hasText: "Reusable activity material" }).locator("pre").textContent();
+    proof[`${host}Material`] = { candidate: candidate ? JSON.parse(candidate) : null, published };
+  }
+
   async function promoteWithoutInputs(name: string) {
     const dialog = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
     await row("block").click();
@@ -189,6 +198,8 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     const publish = dialog.getByRole("button", { name: /^Publish \d+\.\d+\.\d+$/ });
     await expect(publish).toBeEnabled();
     await publish.click();
+    await expect(dialog).toContainText("Replace the block with this exact version.");
+    await recordMaterial("activity", name, dialog);
     await dialog.getByRole("button", { name: "Replace block with this version", exact: true }).click();
     await expect(dialog).toBeHidden();
     await capture(page, info, "activity-promotion-replaced");

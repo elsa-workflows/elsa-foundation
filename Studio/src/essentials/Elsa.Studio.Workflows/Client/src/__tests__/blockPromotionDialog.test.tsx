@@ -59,7 +59,7 @@ function reviewed() {
 function publishedView(change: Partial<ActivityDefinitionVersionView> = {}): ActivityDefinitionVersionView {
   const plan = reviewed();
   return { definition: { definitionId: "definition-1", activityTypeKey: "Reusable.Prepare", category: "Reusable activities", displayName: "Prepare shipment", contentAuthority: "Design" as never },
-    versionId: "published-version", version: "1.0.0", lifecycle: "Active", publishedAt: "", contract: structuredClone(plan.candidate.contract),
+    versionId: "published-version", version: "1.0.0", lifecycle: "active", publishedAt: "", contract: structuredClone(plan.candidate.contract),
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "x", payload: structuredClone(plan.candidate.provider.payload) }, ...change };
 }
 function button(label: string) {
@@ -114,7 +114,7 @@ it("does not create again when the create outcome is unknown", async () => {
 
 it.each([
   ["a different implementation", () => publishedView({ provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "x", payload: { rootActivity: { nodeId: "other" } } } }), "implementation differs"],
-  ["a retired version", () => publishedView({ lifecycle: "Retired" }), "retired"]
+  ["a retired version", () => publishedView({ lifecycle: "retired" }), "retired"]
 ])("refuses to replace with %s and keeps the block", async (_, view, reason) => {
   api.getActivityDefinitionVersion.mockImplementation(async () => view());
   await createAndPublish();
