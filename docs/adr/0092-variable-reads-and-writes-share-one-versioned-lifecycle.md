@@ -327,8 +327,8 @@ supersession lineage. That is not what this decision is for. In this decision, a
   current committed state, and it gets a new input read set.
 - **Recovery** (redelivery, resume) stays on the same row, as before.
 - The row id stays the key of the row: lineage (`SupersededBy…`), inspection, cleanup and scheduling keep using it.
-  Activity code that needs a stable idempotency key reads the logical `InvocationId` or an operation key, never the
-  row id.
+  Activity code that needs a stable idempotency key reads the logical `InvocationId` (the activity context's
+  `LogicalInvocationId`) or an operation key, never the row id (the context's `InvocationId`).
 
 The *Why* above is unchanged. The implementing spec (1221) carries this split.
 

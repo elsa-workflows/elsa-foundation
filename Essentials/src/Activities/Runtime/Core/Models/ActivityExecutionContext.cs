@@ -41,7 +41,8 @@ public sealed record ActivityExecutionContext
         JsonElement? triggerPayload,
         string? triggerNodeId,
         string? operationKey,
-        string? targetOperationKey)
+        string? targetOperationKey,
+        string? logicalInvocationId = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
@@ -57,10 +58,24 @@ public sealed record ActivityExecutionContext
         TriggerNodeId = string.IsNullOrWhiteSpace(triggerNodeId) ? null : triggerNodeId;
         OperationKey = string.IsNullOrWhiteSpace(operationKey) ? invocationId : operationKey;
         TargetOperationKey = string.IsNullOrWhiteSpace(targetOperationKey) ? null : targetOperationKey;
+        LogicalInvocationId = string.IsNullOrWhiteSpace(logicalInvocationId) ? invocationId : logicalInvocationId;
     }
 
     public string WorkflowExecutionId { get; }
+
+    /// <summary>
+    /// This activity execution's row id. An operator retry or re-execution runs on a new row, so this changes then; use
+    /// <see cref="LogicalInvocationId"/> for the identity a retry keeps.
+    /// </summary>
     public string InvocationId { get; }
+
+    /// <summary>
+    /// The logical invocation identity (ADR 0092 decision 8, amended 2026-11-16): stable across crash re-attempts and
+    /// operator retries, new for a re-execution or reschedule. An activity that deduplicates an external effect on one
+    /// identity per invocation keys it on this (or on <see cref="OperationKey"/>). It defaults to
+    /// <see cref="InvocationId"/>; the runtime sets it from the execution's attempt lineage.
+    /// </summary>
+    public string LogicalInvocationId { get; }
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
@@ -86,7 +101,7 @@ public sealed record ActivityExecutionContext
     /// Returns a copy that carries <paramref name="operationKey"/> and <paramref name="targetOperationKey"/>. A blank
     /// operation key falls back to <see cref="InvocationId"/>.
     /// </summary>
-    public ActivityExecutionContext WithOperationKeys(string? operationKey, string? targetOperationKey) =>
+    public ActivityExecutionContext WithOperationKeys(string? operationKey, string? targetOperationKey, string? logicalInvocationId = null) =>
         new(
             WorkflowExecutionId,
             InvocationId,
@@ -96,7 +111,8 @@ public sealed record ActivityExecutionContext
             TriggerPayload,
             TriggerNodeId,
             operationKey,
-            targetOperationKey);
+            targetOperationKey,
+            logicalInvocationId ?? LogicalInvocationId);
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

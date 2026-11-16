@@ -97,8 +97,8 @@ An operator recovers a faulted step that waits for intervention in one of two wa
 
 A retry suits a transient failure, where an external service deduplicates on the same key. Its write is judged against
 the base it read before, so a variable an operator changed meanwhile is overwritten with a lost-update warning that
-keeps the operator's value. A re-execution sees the corrected value. Activity code reads the stable identity through
-`context.OperationKey`.
+keeps the operator's value. A re-execution sees the corrected value. Activity code reads the logical identity as
+`context.LogicalInvocationId` (stable across retries, new for a re-execution), or the operation key.
 
 ## What is not covered yet
 

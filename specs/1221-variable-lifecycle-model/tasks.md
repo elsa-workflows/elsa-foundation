@@ -23,10 +23,11 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   the attempt lineage; `OperationKey` already falls back to it). A retry successor joins the source's lineage and keeps
   its snapshot and read set; `RescheduleActivity/1` and the new `ReExecuteFaultedActivity/1` create a re-execution
   successor that re-enters through `ScheduleActivity` with no snapshot and no activated frames, so its Start activates
-  them once and materializes fresh inputs. Activity code reads the stable identity through `context.OperationKey`; the
-  activity context does not expose the logical id itself yet.
-- **T020 (partly):** the re-execution successor carries no activated frames and re-requests its loop iteration, so
-  frames are activated once by construction; no loop-body re-execution drive yet.
+  them once and materializes fresh inputs. Activity code reads the logical identity as `context.LogicalInvocationId`
+  (also on the start and resume contexts), or the operation key.
+- **T020:** the re-execution successor carries no activated frames and re-requests its loop iteration; a drive
+  re-executes a `ForEach` body and shows one iteration frame, activated by the successor for the same item, with the
+  source's frame untouched (red when the successor keeps the source's frame).
 - **T021 (accept recorded completion):** held until S-3 (spec 1208, #4314) lands. It must record and re-apply a whole
   rejected completion (outcome, outputs and every capture), and S-3 is reshaping the completion record
   (`ActivityCompletion.OutcomeKey` → `Selection`). Today a `Fault` refusal keeps only the refused variable write.
@@ -104,7 +105,7 @@ default of FR-011 depends on it (FR-013a).
 - [x] T017 [US2] **(test-first)** Drive: `ModifyVariable` then re-execute uses the corrected value; retry keeps `InvocationId` + snapshot. In `.../Tests/VariableLifecycle/OperatorActionsTests.cs`.
 - [x] T018 [US2] Split the three actions in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/ActivitySuccessorStaging.cs`: retry (same id + snapshot), re-execute/reschedule (new id + fresh inputs + new input read set), accept recorded completion.
 - [x] T019 [US2] Fix the current bug where an operator retry gets a new id with a copied snapshot; amend ADR 0045 §3 behavior (re-execute materializes fresh inputs).
-- [ ] T020 [P] [US2] Add the owned-frame re-activation guard on the successor `Start` re-entry path in `WorkflowStartActivitySchedulerWorkHandler.cs`.
+- [x] T020 [P] [US2] Add the owned-frame re-activation guard on the successor `Start` re-entry path in `WorkflowStartActivitySchedulerWorkHandler.cs`.
 - [ ] T021 [US2] Implement accept-recorded-completion: revalidate state/scope/contracts/policies, apply the recorded transition atomically + duplicate-safely, refuse a faulted body, keep the conflict in history, no silent input refresh; test repeated acceptance does not double-schedule downstream.
 
 **Checkpoint**: the three operator actions are distinct and tested; corrections reach re-executed steps.

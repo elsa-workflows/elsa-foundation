@@ -51,6 +51,9 @@ public sealed class OperatorActionsTests
         Assert.Equal(10, successor.InputSnapshot!.Values["Count"].InlineValue!.Value.GetInt32());
         Assert.Equal(successor.InvocationId, successor.LogicalInvocationId);
         Assert.NotEqual(source.LogicalInvocationId, successor.LogicalInvocationId);
+        // The activity sees its logical identity on the context: the source's for the first run, the new row's now.
+        Assert.Equal(source.InvocationId, fixture.Reads.Observed[0].LogicalInvocationId);
+        Assert.Equal(successor.InvocationId, fixture.Reads.Observed[1].LogicalInvocationId);
         Assert.NotEqual(fixture.Reads.Observed[0].OperationKey, fixture.Reads.Observed[1].OperationKey);
         Assert.Equal(1, Assert.Single(successor.InputSnapshot.InputReadSet!.Entries).Version);
         Assert.Equal(11, VariableLifecycleTestGraph.ReadCount(run));
@@ -75,6 +78,9 @@ public sealed class OperatorActionsTests
         // Same logical invocation, same operation key and committed inputs; a new row and attempt.
         Assert.NotEqual(source.InvocationId, successor.InvocationId);
         Assert.Equal(source.LogicalInvocationId, successor.LogicalInvocationId);
+        // ...and the activity sees the same logical identity on both runs, though its row id changed.
+        Assert.Equal(source.InvocationId, fixture.Reads.Observed[0].LogicalInvocationId);
+        Assert.Equal(source.InvocationId, fixture.Reads.Observed[1].LogicalInvocationId);
         Assert.Equal(2, successor.Attempt!.AttemptNumber);
         Assert.Equal(fixture.Reads.Observed[0].OperationKey, fixture.Reads.Observed[1].OperationKey);
         Assert.Equal(5, fixture.Reads.Observed[1].Count);
@@ -85,6 +91,101 @@ public sealed class OperatorActionsTests
         Assert.Equal(VariableCommitOutcome.LostUpdateWarning, record.Outcome);
         Assert.Equal(VariableWriteSource.Alteration, record.OverwrittenWriter!.Source);
         Assert.Equal(10, record.OverwrittenValue!.InlineValue!.Value.GetInt32());
+    }
+
+    // T020 / FR-016: a re-executed loop body owns exactly one iteration frame, activated once by its own Start for the
+    // same iteration, and reads the loop item from it again. The source's activated frame is not carried over and not
+    // activated a second time.
+    [Fact]
+    public async Task A_re_executed_loop_body_activates_its_iteration_frame_once_and_reads_the_item_again()
+    {
+        await using var fixture = await Fixture.StartAsync(LoopExecutable(), "actexec-foreach", "actexec-body");
+        var source = fixture.Run.State(LoopBodyNodeId);
+        Assert.Equal(ActivityExecutionStatus.Suspended, source.Status);
+        var sourceFrame = source.IterationVariableFrame!;
+
+        var job = await fixture.ApplyAsync("RescheduleActivity", source.Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        var run = await fixture.ReadRunAsync();
+        var successor = Assert.Single(run.States(LoopBodyNodeId), state => state.Status == ActivityExecutionStatus.Suspended);
+        Assert.NotEqual(source.InvocationId, successor.InvocationId);
+        // One iteration frame, activated by the successor's own Start for the same iteration and item.
+        var frame = successor.IterationVariableFrame!;
+        Assert.Null(successor.IterationFrameRequest);
+        Assert.NotEqual(sourceFrame.FrameId, frame.FrameId);
+        Assert.Equal(sourceFrame.ScopeId, frame.ScopeId);
+        Assert.StartsWith($"{successor.InvocationId}:iteration:", frame.ActivationId, StringComparison.Ordinal);
+        Assert.Equal(source.IterationId, successor.IterationId);
+        Assert.Equal("first", frame.Values[ForEachCurrentItem].InlineValue!.Value.GetString());
+        Assert.Equal(["first", "first"], fixture.Reads.Items);
+        // The source's frame is untouched: it was not activated again or moved to the successor.
+        var superseded = Assert.Single(run.States(LoopBodyNodeId), state => state.Status == ActivityExecutionStatus.Superseded);
+        Assert.Equal(sourceFrame, superseded.IterationVariableFrame);
+    }
+
+    private const string LoopBodyNodeId = "node-body";
+    private const string ForEachCurrentItem = Elsa.Activities.ForEach.Activities.ForEach.CurrentItemVariableName;
+    private static readonly string LoopResumeTargetId = $"resume:{LoopBodyNodeId}:{LoopItemWaitingActivity.ResumeTargetKey}";
+
+    private static WorkflowExecutable LoopExecutable()
+    {
+        var itemType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        var listType = new Elsa.Primitives.Models.ValueTypeDescriptor("String", Elsa.Primitives.Models.CollectionKind.List);
+        var body = new ExecutableNode(
+            executableNodeId: LoopBodyNodeId,
+            authoredActivityId: $"authored-{LoopBodyNodeId}",
+            activityType: typeof(LoopItemWaitingActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [nameof(LoopItemWaitingActivity.Item)] = new(
+                    nameof(LoopItemWaitingActivity.Item),
+                    itemType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference(ForEachCurrentItem, "node-foreach"))
+            },
+            metadata: new Dictionary<string, string>());
+        var forEach = new ExecutableNode(
+            executableNodeId: "node-foreach",
+            authoredActivityId: "authored-node-foreach",
+            activityType: typeof(Elsa.Activities.ForEach.Activities.ForEach).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [nameof(Elsa.Activities.ForEach.Activities.ForEach.Collection)] = new(
+                    nameof(Elsa.Activities.ForEach.Activities.ForEach.Collection),
+                    listType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(listType, JsonSerializer.SerializeToElement(new[] { "first", "second" }), ValueProtectionPolicy.InstanceInline))
+            },
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(Elsa.Activities.ForEach.Activities.ForEach.BodySlotName, [body])],
+            structure: new ExecutableActivityStructure(
+                Elsa.Activities.ForEach.Activities.ForEach.StructureKind,
+                Elsa.Activities.ForEach.Activities.ForEach.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { body = LoopBodyNodeId })));
+        return new WorkflowExecutable(
+            identity: WorkflowExecutionHarness.Identity,
+            rootActivity: forEach,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
+            {
+                [LoopResumeTargetId] = new(LoopResumeTargetId, LoopBodyNodeId, "ResumeAsync", new Dictionary<string, string>(),
+                    LocalResumeTargetId: LoopItemWaitingActivity.ResumeTargetKey)
+            },
+            createdAt: WorkflowExecutionHarness.Timestamp,
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     /// <summary>A structural parent that waits for intervention over a leaf that reads <c>count</c> and faults once.</summary>
@@ -104,8 +205,21 @@ public sealed class OperatorActionsTests
 
         public static async Task<Fixture> StartAsync()
         {
+            var fixture = await StartAsync(
+                WorkflowExecutionHarness.NewExecutable(
+                    StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(InterventionParentActivity),
+                        VariableLifecycleTestGraph.Increment("node-f", typeof(FlakyIncrementActivity))),
+                    VariableLifecycleTestGraph.CountDeclaration(initial: 5)),
+                "actexec-parent", "actexec-f");
+            Assert.Equal(ActivityExecutionStatus.Faulted, fixture.Run.State("node-f").Status);
+            return fixture;
+        }
+
+        public static async Task<Fixture> StartAsync(WorkflowExecutable executable, params string[] activityExecutionIds)
+        {
             var reads = new CountReadLog();
             var harness = WorkflowExecutionHarness.Create()
+                .WithFeature(services => new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services))
                 .ConfigureServices(services =>
                 {
                     // The parent assigns no operation keys, so each invocation derives its own (a parent-assigned key stays the parent's).
@@ -116,16 +230,10 @@ public sealed class OperatorActionsTests
                     services.AddSingleton(reads);
                     services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
                 })
-                .Build("actexec-parent", "actexec-f");
-            var executable = WorkflowExecutionHarness.NewExecutable(
-                StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(InterventionParentActivity),
-                    VariableLifecycleTestGraph.Increment("node-f", typeof(FlakyIncrementActivity))),
-                VariableLifecycleTestGraph.CountDeclaration(initial: 5));
+                .Build(activityExecutionIds);
             var reference = await harness.PublishAsync(executable, "operator-actions");
             await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
-            var run = await harness.ReadRunAsync(harness.ExecutionId);
-            Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-f").Status);
-            return new Fixture(harness, reads, run);
+            return new Fixture(harness, reads, await harness.ReadRunAsync(harness.ExecutionId));
         }
 
         public Task<WorkflowAlterationJobState> ModifyCountAsync(int value) =>
@@ -177,12 +285,35 @@ public sealed class OperatorActionsTests
     }
 }
 
-/// <summary>What each run of the flaky leaf saw.</summary>
+/// <summary>What each run of the test leaves saw.</summary>
 public sealed class CountReadLog
 {
-    private readonly List<(int Count, string OperationKey)> _observed = [];
-    public IReadOnlyList<(int Count, string OperationKey)> Observed { get { lock (_observed) return _observed.ToArray(); } }
-    internal void Add(int count, string operationKey) { lock (_observed) _observed.Add((count, operationKey)); }
+    private readonly List<(int Count, string OperationKey, string LogicalInvocationId)> _observed = [];
+    private readonly List<string> _items = [];
+    public IReadOnlyList<(int Count, string OperationKey, string LogicalInvocationId)> Observed { get { lock (_observed) return _observed.ToArray(); } }
+    public IReadOnlyList<string> Items { get { lock (_items) return _items.ToArray(); } }
+    internal void Add(int count, string operationKey, string logicalInvocationId) { lock (_observed) _observed.Add((count, operationKey, logicalInvocationId)); }
+    internal void AddItem(string item) { lock (_items) _items.Add(item); }
+}
+
+/// <summary>A loop body that reads the loop item, records it and waits.</summary>
+public sealed class LoopItemWaitingActivity(CountReadLog reads) : StatefulActivity<ActivityUnit, WaitState, WaitTrigger>
+{
+    public const string ResumeTargetKey = "wait-loop-item";
+
+    [ActivityInput]
+    public string Item { get; set; } = string.Empty;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        reads.AddItem(Item);
+        return ValueTask.FromResult(Suspend(
+            new WaitState("waiting"),
+            [new ActivityTriggerRegistration<WaitTrigger>(ResumeTargetKey, "TestWaitLoopItem", "wait:loop-item")]));
+    }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
+        ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
 }
 
 /// <summary>An External leaf that reads <c>Count</c>, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>
@@ -193,7 +324,7 @@ public sealed class FlakyIncrementActivity(FailureBudget budget, CountReadLog re
 
     protected override ValueTask<ActivityTransition<Incremented>> ExecuteAsync(ActivityExecutionContext context)
     {
-        reads.Add(Count, context.OperationKey);
+        reads.Add(Count, context.OperationKey, context.LogicalInvocationId);
         return ValueTask.FromResult(budget.TakeFailure()
             ? ActivityTransition.Fault<Incremented>(new ActivityFault(OutcomeUnknownActivity.Code, "The response was lost.", category: OutcomeUnknownActivity.Category))
             : ActivityTransition.Complete(new Incremented(Count + 1), ActivityOutcomes.Done));
