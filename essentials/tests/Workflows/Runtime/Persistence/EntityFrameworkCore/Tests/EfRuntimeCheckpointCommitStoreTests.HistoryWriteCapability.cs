@@ -74,7 +74,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         {
             base.OnModelCreating(builder);
             var history = builder.Entity<RuntimeHistoryEventEntity>();
-            history.Property(row => row.Name).Metadata.SetFieldInfo(null);
+            history.Property(row => row.Name).Metadata.FieldInfo = null;
             history.Property(row => row.Name).UsePropertyAccessMode(PropertyAccessMode.Property);
             history.Property(row => row.ContentJson).HasField("<Name>k__BackingField").UsePropertyAccessMode(PropertyAccessMode.Field);
         }
