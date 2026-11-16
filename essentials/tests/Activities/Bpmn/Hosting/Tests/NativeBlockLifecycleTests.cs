@@ -81,20 +81,25 @@ public sealed class NativeBlockLifecycleTests
         Assert.Equal((0, 0), (late["startedCount"]!.GetValue<int>(), late["resumedCount"]!.GetValue<int>()));
         Assert.Equal(0, Count(await host.GetAsync("/runtime/workflows/instances/" + cancelled), "after"));
 
-        // 3. Break inside a block ends the nearest enclosing loop. The loop condition is always true, so only that
-        // Break can end the run.
-        var loop = new JsonObject
+        // 3. Break inside a block ends only its nearest loop. Both loop conditions are always true: the inner Break
+        // must end the inner loop and let the outer body continue to its own Break; if it ended the outer loop
+        // instead, "after-inner" would never run.
+        JsonObject WhileTrue(string id, JsonNode body) => new()
         {
-            ["nodeId"] = "loop", ["activityVersionId"] = versions["while"], ["outputs"] = new JsonArray(),
+            ["nodeId"] = id, ["activityVersionId"] = versions["while"], ["outputs"] = new JsonArray(),
             ["inputs"] = new JsonArray(new JsonObject { ["referenceKey"] = "Condition", ["value"] = Literal(true) }),
-            ["structure"] = new JsonObject { ["kind"] = "elsa.while.structure", ["schemaVersion"] = "1.0.0",
-                ["payload"] = new JsonObject { ["body"] = Sequence("body", Sequence("block", Set("count", "counter", 1), Node("break", versions["break"]))) } }
+            ["structure"] = new JsonObject { ["kind"] = "elsa.while.structure", ["schemaVersion"] = "1.0.0", ["payload"] = new JsonObject { ["body"] = body } }
         };
-        var broken = await Start(Sequence("root", loop, Output("expose-counter", "counter", Variable("counter"))), "Balanced", ("counter", "Int32", 0));
+        var inner = WhileTrue("inner", Sequence("inner-body", Sequence("block", Set("count", "counter", 1), Node("break", versions["break"]))));
+        var outer = WhileTrue("outer", Sequence("outer-body", inner, Set("after-inner", "after", "inner loop ended"), Node("outer-break", versions["break"])));
+        var broken = await Start(Sequence("root", outer, Output("expose-counter", "counter", Variable("counter")), Output("expose-after", "after", Variable("after"))),
+            "Balanced", ("counter", "Int32", 0));
         var ended = await AwaitView(broken, view => view["instance"]!["status"]!.GetValue<string>() == "Completed");
         Assert.Empty(ended["incidents"]!.AsArray());
-        Assert.Equal(1, Count(ended, "count"));
-        Assert.Equal(1, Count(ended, "break"));
+        foreach (var node in new[] { "count", "break", "after-inner", "outer-break", "expose-counter" })
+            Assert.True(Count(ended, node) == 1, $"{node} ran {Count(ended, node)} times");
+        Assert.Equal("1", Preview(ended, "counter"));
+        Assert.Equal("inner loop ended", Preview(ended, "after"));
 
         async Task<string> Start(JsonNode root, string mode, params (string Key, string Alias, object Default)[] extra)
         {

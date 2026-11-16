@@ -83,8 +83,11 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await expect(trigger).toBeFocused();
     expect((await api<{ items: unknown[] }>(`/design/activities/definitions?search=${encodeURIComponent(name)}`)).items).toHaveLength(0);
 
-    // The completing pass uses the keyboard only: focus and Enter, typing, no pointer.
+    // The completing pass activates everything from the keyboard: the block is selected with Enter on its focused row,
+    // fields are typed and each command is focused and pressed with Enter. No pointer is used in this pass.
     const press = async (locator: ReturnType<Page["getByRole"]>) => { await locator.focus(); await locator.press("Enter"); };
+    await row("block").focus(); await row("block").press("Enter");
+    await expect(row("block")).toHaveAttribute("aria-pressed", "true");
     await press(trigger);
     await dialog.getByRole("textbox", { name: "Name", exact: true }).focus();
     await page.keyboard.press("ControlOrMeta+A");
@@ -191,6 +194,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
     const refused = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
     await expect(refused.getByRole("alert")).toContainText("This block cannot become a reusable activity");
+    await expect(refused.getByRole("alert")).toContainText("This expression has no language-owned proof of closed explicit parameter reads.");
     await expect(refused.getByRole("button", { name: "Create reusable activity draft", exact: true })).toBeDisabled();
     await capture(page, info, "workflow-promotion-refused");
     await refused.getByRole("button", { name: "Cancel", exact: true }).click();
