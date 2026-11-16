@@ -1,4 +1,5 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { graphPublicationValidationFailure } from "./activityPublicationValidationFailure";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -56,6 +57,7 @@ export function ActivityDefinitionPublicationReview({
   const queryClient = useQueryClient();
   const blockedReasonId = useId();
   const [phase, setPhase] = useState<ReviewPhase>("idle");
+  const [rejectedDiagnostics, setRejectedDiagnostics] = useState<StudioActivityDiagnostic[]>([]);
   const [preflight, setPreflight] = useState<ActivityPublicationPreflight | null>(null);
   const [binding, setBinding] = useState<ExactDraftBinding | null>(null);
   const [version, setVersion] = useState("");
@@ -63,39 +65,48 @@ export function ActivityDefinitionPublicationReview({
   const [failure, setFailure] = useState<string | null>(null);
   const [recommendationEvidence, setRecommendationEvidence] = useState<"first" | "unchanged" | "unconfirmed" | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const localTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const reviewTriggerRef = triggerRef ?? localTriggerRef;
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
   const recommendationVerificationRef = useRef(0);
 
   useEffect(() => {
-    if (!preflight || !binding || phase === "publishing" || phase === "success") return;
+    if ((!preflight && !rejectedDiagnostics.length) || !binding || phase === "publishing" || phase === "success") return;
     if (binding.revision === currentRevision && binding.signature === currentSignature) return;
     setPreflight(null);
+    setRejectedDiagnostics([]);
     setBinding(null);
     setPhase("stale");
     setFailure("The draft changed after review. Studio discarded the review without publishing.");
     operationKeyRef.current = null;
-  }, [binding, currentRevision, currentSignature, phase, preflight]);
+  }, [binding, currentRevision, currentSignature, phase, preflight, rejectedDiagnostics]);
 
   const prepare = async () => {
     if (disabled || phase === "preparing" || phase === "publishing" || phase === "unknown" || mode === "toolbar" && phase === "success") return;
     setPhase("preparing");
+    setRejectedDiagnostics([]);
     setFailure(null);
     setReceipt(null);
     setRecommendationEvidence(null);
     recommendationVerificationRef.current += 1;
     setPreflight(null);
     operationKeyRef.current = null;
+    let reviewed: ExactDraftBinding | null = null;
+    let preflightRequested = false;
     try {
       const exact = await flushExactSavedRevision();
+      reviewed = exact;
       if (!exact) {
         setPhase("failed");
         setFailure("Studio could not confirm an exact saved draft revision. Publication review was not opened.");
         return;
       }
+      setBinding(exact);
       const definition = await getActivityDefinition(context, definitionId);
       const expectedHead = definition.definition.headVersionId ?? definition.lifecycle.head?.versionId ?? null;
       reviewedRecommendationRef.current = definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? null;
+      preflightRequested = true;
       const review = await preflightActivityDraftPublication(context, draftId, exact.revision, expectedHead);
       if (review.draftId !== draftId || review.definitionId !== definitionId || review.draftRevision !== exact.revision) {
         setPhase("failed");
@@ -108,7 +119,9 @@ export function ActivityDefinitionPublicationReview({
       setPhase("review");
     } catch (error) {
       setPhase("failed");
-      setFailure(publicationFailureMessage(error, "Publication preflight could not be confirmed. Nothing was published."));
+      const diagnostics = reviewed && preflightRequested ? graphPublicationValidationFailure(error, draftId, reviewed.revision) : null;
+      setRejectedDiagnostics(diagnostics ?? []);
+      setFailure(diagnostics ? null : publicationFailureMessage(error, "Publication preflight could not be confirmed. Nothing was published."));
     }
   };
 
@@ -226,9 +239,17 @@ export function ActivityDefinitionPublicationReview({
   const versionError = preflight && !isExactVersionAtLeast(version, preflight.minimumVersion)
     ? `Enter an exact semantic version at or above ${preflight.minimumVersion}.`
     : null;
-  const diagnosticSource = uniquePublicationDiagnostics(receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? []);
+  const diagnosticSource = uniquePublicationDiagnostics(receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? rejectedDiagnostics);
   const hasBlockingDiagnostics = diagnosticSource.some(item => diagnosticSeverity(item.severity) === "Error");
-  const publicationBlocked = Boolean(preflight && phase !== "success" && (!preflight.isPublishable || phase === "failed" && (receipt?.status === "Rejected" || receipt?.status === "Failed")));
+  const diagnosticCounts = ["Error", "Warning", "Info"].flatMap(severity => {
+    const count = diagnosticSource.filter(item => diagnosticSeverity(item.severity) === severity).length;
+    return count ? [`${count} ${severity.toLowerCase()}${count === 1 || severity === "Info" ? "" : "s"}`] : [];
+  }).join(" · ");
+  const publicationBlocked = Boolean(rejectedDiagnostics.length || preflight && phase !== "success" && (!preflight.isPublishable || phase === "failed" && (receipt?.status === "Rejected" || receipt?.status === "Failed")));
+  const needsAttention = phase === "failed" || phase === "stale" || phase === "unknown" || publicationBlocked || hasBlockingDiagnostics;
+  const actionableStatus = needsAttention || phase === "review" && diagnosticSource.length > 0;
+  const attentionTitle = publicationBlocked && hasBlockingDiagnostics ? "Publication blocked" : phase === "failed" ? preflight ? "Publication did not complete" : "Review could not be prepared"
+    : publicationBlocked ? "Publication blocked" : publicationStatusLabel(phase, preflight?.isPublishable);
   const closeAllowed = phase !== "publishing" && phase !== "unknown";
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement) => {
     if (mode === "toolbar") {
@@ -242,20 +263,22 @@ export function ActivityDefinitionPublicationReview({
     return onFocusDiagnostic(diagnostic, trigger);
   };
 
-  const reviewDetails = preflight ? <>
-      {publicationBlocked ? <div className="ad-publication-blockers" id={blockedReasonId} role="alert">
+  const blockerPanel = publicationBlocked ? <div className="ad-publication-blockers" id={blockedReasonId} role="alert">
         <h3>Resolve these issues before publishing</h3>
-        <p>{phase === "failed"
-          ? "Publication did not complete. Review the notes below, correct the draft or resolve the service problem, then check again."
-          : hasBlockingDiagnostics
+        <p>{hasBlockingDiagnostics
           ? "Publication is blocked by the issues below. Correct the draft, then check again."
+          : phase === "failed"
+          ? "Publication did not complete. Review the notes below, correct the draft or resolve the service problem, then check again."
           : "The activity is not ready to publish. Review the readiness checks below or ask an administrator to resolve unavailable services, then check again."}</p>
         {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} embedded disabled={phase === "publishing" || phase === "unknown"} /> : null}
         <div className="ad-publication-blocker-actions">
           {mode === "toolbar" ? <button type="button" onClick={() => setDialogOpen(false)}>Return to editor</button> : null}
           <button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</button>
         </div>
-      </div> : null}
+      </div> : null;
+
+  const reviewDetails = preflight ? <>
+      {blockerPanel}
       <PublicationSummary preflight={preflight} blocked={publicationBlocked} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
       {mode === "toolbar" && !preflight.hasBaseline ? <>
         <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
@@ -290,7 +313,8 @@ export function ActivityDefinitionPublicationReview({
     </header>
     {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
-    {phase === "stale" || phase === "failed" || phase === "unknown" ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
+    {!preflight ? blockerPanel : null}
+    {failure && (phase === "stale" || phase === "failed" || phase === "unknown") ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">
       <CheckCircle2 size={20} aria-hidden />
       <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{recommendationMessage(recommendationEvidence, mode === "toolbar")}</span></div>
@@ -302,14 +326,18 @@ export function ActivityDefinitionPublicationReview({
 
   if (mode === "full") return reviewPanel;
   return <div className="ad-publication-toolbar">
-    <button ref={triggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
+    <button ref={reviewTriggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
       setDialogOpen(true);
-      if (phase === "idle" || phase === "stale" || phase === "failed") void prepare();
+      if (phase === "idle") void prepare();
     }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
       <GitCompareArrows size={16} aria-hidden /> {publicationTriggerLabel(phase, Boolean(preflight))}
     </button>
-    {phase !== "idle" && !dialogOpen ? <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
-    {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)}>{reviewPanel}</PublicationDialog> : null}
+    {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className="ad-publication-toolbar-status is-attention" role={needsAttention ? "alert" : "status"}>
+      <AlertTriangle size={18} aria-hidden />
+      <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
+      <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
+    </div> : <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
+    {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)} restoreFocus={() => reviewTriggerRef.current?.focus()}>{reviewPanel}</PublicationDialog> : null}
   </div>;
 }
 
@@ -383,9 +411,9 @@ function uniquePublicationDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
   }).sort((left, right) => ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(left.severity)) - ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(right.severity)));
 }
 
-function PublicationDialog({ canClose, onClose, children }: { canClose: boolean; onClose(): void; children: ReactNode }) {
+function PublicationDialog({ canClose, onClose, restoreFocus, children }: { canClose: boolean; onClose(): void; restoreFocus(): void; children: ReactNode }) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocus(dialogRef, canClose ? onClose : null);
+  useDialogFocus(dialogRef, canClose ? onClose : null, true, restoreFocus);
   return <div className="ad-dialog-backdrop ad-publication-dialog-backdrop" role="presentation" onMouseDown={event => {
     if (canClose && event.target === event.currentTarget) onClose();
   }}>

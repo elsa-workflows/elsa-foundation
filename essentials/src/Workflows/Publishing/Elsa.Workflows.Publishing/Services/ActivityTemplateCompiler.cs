@@ -296,7 +296,8 @@ public sealed class ActivityTemplateCompiler(
                 }));
         }
 
-        if (!ResolvedDependenciesMatch(compilation.DirectDependencies, resolved))
+        // A rejected provider compilation has no executable or dependency artifacts to admit.
+        if (compilation.ExecutableRoot is not null && !ResolvedDependenciesMatch(compilation.DirectDependencies, resolved))
         {
             diagnostics.Add(new(
                 "activity.provider.contract-invalid",

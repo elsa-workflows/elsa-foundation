@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
@@ -10,9 +11,22 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>The same selected Runtime and durable-storage readiness for draft, Agent and Workflow publication.</summary>
-public sealed class ActivityPublicationReadiness(IEnumerable<IActivityActivationStrategy>? strategies = null, IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null) : IActivityPublicationReadiness
+public sealed class ActivityPublicationReadiness(
+    IEnumerable<IActivityActivationStrategy>? strategies,
+    IRuntimeDurableValueStorageDriverRegistry? storageDrivers,
+    IEnumerable<IRuntimeActivityConsumerCapability> consumers) : IActivityPublicationReadiness
 {
-    private readonly IActivityActivationStrategy[] strategies = strategies?.ToArray() ?? [];
+    public ActivityPublicationReadiness(IEnumerable<IActivityActivationStrategy>? strategies = null, IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null)
+        : this(strategies, storageDrivers, [])
+    {
+    }
+
+    // Engine-owned operations advertise a consumer capability without activating a CLR activity.
+    private readonly ILookup<string, string> _schemasByConsumer = (strategies ?? [])
+        .SelectMany(s => s.SupportedSchemaVersions.Select(schema => (s.ConsumerKey, Schema: schema)))
+        .Concat(consumers.SelectMany(c => c.SupportedSchemaVersions.Select(schema => (c.ConsumerKey, Schema: schema))))
+        .Distinct().OrderBy(x => x.Schema, StringComparer.Ordinal)
+        .ToLookup(x => x.ConsumerKey, x => x.Schema, StringComparer.Ordinal);
 
     public IReadOnlyList<PublicationCapabilityReadiness> StorageReadiness(IEnumerable<RuntimeStorageDriverRequirement> requirements) => requirements
         .Distinct().OrderBy(x => x.DriverKey, StringComparer.Ordinal)
@@ -22,7 +36,7 @@ public sealed class ActivityPublicationReadiness(IEnumerable<IActivityActivation
         .Distinct().OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal)
         .Select(x =>
         {
-            var schemas = strategies.Where(s => s.ConsumerKey == x.ConsumerKey).SelectMany(s => s.SupportedSchemaVersions).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var schemas = _schemasByConsumer[x.ConsumerKey].ToArray();
             return new PublicationCapabilityReadiness("RuntimeConsumer", x.ConsumerKey, x.SchemaVersion,
                 schemas.Contains(x.SchemaVersion, StringComparer.Ordinal) ? "Available" : schemas.Length == 0 ? "Missing" : "UnsupportedSchema", schemas);
         }).ToArray();
