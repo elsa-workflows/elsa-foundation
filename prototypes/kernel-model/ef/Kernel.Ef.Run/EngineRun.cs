@@ -13,7 +13,7 @@ using Npgsql;
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock|fence postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
-/// Options: fence=checked|batch (default: the engine's, so batch but checked on SQL Server, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  seconds=40  messages=5000  partitions=2  nodes=3
+/// Options: fence=checked|batch (default: the engine's, so batch but checked on SQL Server, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -76,7 +76,7 @@ static class EngineRun
         var ef = target.Store(create);
         var tally = new Tally(ef);
         IKernelStore store = tally;
-        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.Has("unfenced") ? "BROKEN ON PURPOSE" : target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}; {nodes} nodes, {partitions} partitions{(workersOnly ? "; workers only, as " + name : "")}");
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.Has("unfenced") ? "BROKEN ON PURPOSE" : target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}{(target.Has("stalelease") ? "; lease check OFF (stale owners commit)" : "")}; {nodes} nodes, {partitions} partitions{(workersOnly ? "; workers only, as " + name : "")}");
 
         var (calm, stopped) = (false, false);
         bool Calm() => calm || (signal != "" && File.Exists(signal + ".calm"));
@@ -88,6 +88,11 @@ static class EngineRun
         {
             Lease = TimeSpan.FromMilliseconds(target.Int("lease", 150)), Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = partitions,
             OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
+            // stalelease=1: the Worker's local lease check is off (Flaw.IgnoreLeaseDeadline, the simulation's mutation), so an owner
+            // that stalled past its lease still commits and the fence is what refuses it. With the check on, a stale owner on a
+            // fast engine resets before it commits and the fence is never asked (FINDINGS 29 F-B2); the broken-fence and
+            // fence-count stress pins need the fence asked.
+            Flaws = target.Has("stalelease") ? Flaw.IgnoreLeaseDeadline : Flaw.None,
         };
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
@@ -302,7 +307,7 @@ static class EngineRun
         tally.Print();
         if (target.FenceInBatch) Console.WriteLine($"E1: {ef.KeyViolationsAsFence} key violations were the fence (counted in 'commit fenced')");
         Console.WriteLine($"deadlocks: the engine counted {await target.DeadlocksAsync(admin) - deadlocksBefore}, the store saw {tally.Sum(target.DeadlockCode)} (commit {tally.Sum("commit", target.DeadlockCode)}, poll {tally.Sum("poll", target.DeadlockCode)}, other {tally.Sum(target.DeadlockCode) - tally.Sum("commit", target.DeadlockCode) - tally.Sum("poll", target.DeadlockCode)})");
-        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {target.CommitWriter} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
+        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {target.CommitWriter}{(target.Has("stalelease") ? " | lease check off" : "")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
         Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
         if (writes is not null)
         {
