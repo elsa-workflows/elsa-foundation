@@ -556,14 +556,21 @@ public sealed class NativeStandaloneTriggerTargetTests
                 if (observationCheck is not null)
                 {
                     // Start and seal through the real native source before exercising the independent observation port.
-                    // These two corruptions supply negative retained-header controls; they grant no fresh admission authority.
+                    // A mismatched read adapter supplies ordinary, unsealed headers for negative controls; the accepted
+                    // native owner's continuation guard and retained state stay intact.
                     var owner = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
-                    if (observationCheck == "unsealed")
-                        await fixture.Executions.SaveAsync(owner with { StimulusDeliveryOrigin = null });
-                    else if (observationCheck == "foreign-partition")
-                        await fixture.Executions.SaveAsync(owner with { Partition = new("other-scope") });
+                    var observationExecutions = fixture.Executions;
+                    if (observationCheck != "none")
+                    {
+                        observationExecutions = new InMemoryWorkflowExecutionStateStore(fixture.Executions.CheckpointState, null);
+                        await observationExecutions.SaveAsync(owner with
+                        {
+                            StimulusDeliveryOrigin = null,
+                            Partition = observationCheck == "foreign-partition" ? new("other-scope") : owner.Partition
+                        });
+                    }
                     var writer = new InMemoryRuntimeHistoryObservationWriter(fixture.Executions.CheckpointState,
-                        historyAccess, fixture.Executions, fixture.Clock);
+                        historyAccess, observationExecutions, fixture.Clock);
                     Assert.True(writer.CanRecordHistory(reader));
                     var observation = new RuntimeHistoryObservation(required,
                         new RuntimeHistoryEvent("saved-scope-observation", key.WorkflowExecutionId, 0,
@@ -589,6 +596,7 @@ public sealed class NativeStandaloneTriggerTargetTests
                         Assert.Null(await reader.FindEventAsync(key.WorkflowExecutionId, observation.Event.HistoryEventId));
                     }
                     Assert.Equal(markerCount, fixture.CheckpointStore.ListCommits().Count);
+                    Assert.Equal(owner, await fixture.Executions.FindAsync(key.WorkflowExecutionId));
                 }
                 return;
             }
