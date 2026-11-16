@@ -64,7 +64,7 @@
 
 ## Phase 7: User Story 5 — built-in activities marked (P2)
 
-- [ ] T017 [US5] Fill the spec's *Built-in assessment* table from research R-4 and get the approvers' confirmation of
+- [ ] T017 [US5] Fill the spec's *Built-in assessment* table from research R-4 and get the approver's confirmation of
   C7 and C8 per marked activity (Q4).
 - [ ] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity.
 - [ ] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
@@ -95,5 +95,5 @@
 ## Dependencies
 
 - T002–T004 block every story. US1 (T005–T007a) before US2 and US3, which add criteria to the same component.
-- US4 is independent. US5 needs US1–US3 (the refusals its tests assert) and the approvers' C7/C8 confirmation.
+- US4 is independent. US5 needs US1–US3 (the refusals its tests assert) and the approver's C7/C8 confirmation.
 - US6 needs S-10's write history (PR #4316) on the initiative branch.

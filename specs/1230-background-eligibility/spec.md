@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft — **provisional**. Applies ADR 0093 and ADR 0092 as merged into the initiative branch; waits for the approvers' answers to the open questions below.
+**Status**: Draft — **provisional**. Applies ADR 0093 and ADR 0092 as merged into the initiative branch; waits for @j03y-nxxbz's answers to the open questions below.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-11**,
 analysis **A-2**.
@@ -28,8 +28,10 @@ qualify are marked.
 | **ADR 0093** (background execution eligibility is one set of criteria) | Decisions 1–6: criteria, not a list; C1–C10 with their check kind (E, R, D); one component for the enforced criteria; C7 and C8 on the attribute; the built-in assessment and marking; causal order, not one order, across providers | merged as `875aa14c7` | accepted 2026-11-12 |
 | **ADR 0092** (variable reads and writes share one versioned lifecycle) | The lost-update rule a background result meets (decision 6) and the refresh before background admission (decision 9). Both are built by S-10 (spec 1221), not here | merged as `f52a661df` | accepted 2026-11-12 |
 
-**Approvers**: @sfmskywalker and @FransVanEk, with @j03y-nxxbz as coordinator and author. Approval needs answers to
-the open questions; no ADR is pending.
+**Approval plan**: @j03y-nxxbz alone (coordinator decision of 2026-11-16: the ADRs were resolved together, so specs
+need no approval by the other architects). Approval needs answers to the open questions. This spec needs no new ADR
+and no ADR amendment; if one turns out to be needed, it goes in its own small PR reviewed by @sfmskywalker and
+@FransVanEk.
 
 ## Rule and boundary
 
@@ -241,9 +243,9 @@ read-modify-write) and that the recorded commit order matches the order applied.
 
 *To be completed from the code assessment before approval; see plan research R-4.*
 
-## Open questions for the approvers
+## Open questions for the approver
 
-Each question has a recommended answer. The requirements follow the recommendation until an approver answers
+Each question has a recommended answer. The requirements follow the recommendation until the approver answers
 otherwise.
 
 | # | Question | Recommendation |
@@ -251,7 +253,7 @@ otherwise.
 | Q1 | **Scope.** The board row names C7–C9; ADR 0093 now has C1–C10, with C10 added in review. Does S-11 enforce C10 too? | **Yes.** ADR 0093 decision 3 puts C10 in the component and its *Required evidence* lists the C10 tests. Leaving it out would recreate the drift this spec removes. The board row's wording predates C10. |
 | Q2 | **Diagnostic shape.** Keep one code `VF-BG-001` with the criterion in the message, or one code per criterion? | **One code, criterion as a structured field and in the message** (`VF-BG-001 (C9): …`). ADR 0093 decision 5 names `VF-BG-001`; a code per criterion would multiply codes without helping the author. |
 | Q3 | **C9's other signals.** ADR 0093 says C9 later also covers ADR 0090's `[AccessesUndeclaredVariables]` and a writable `VariableReference<T>` input. Neither exists on the branch. | **Enforce `IRuntimeScopedVariableReader` now**; the component exposes C9 as one predicate so the later signals are one change when ADR 0090's amendment lands. |
-| Q4 | **Who confirms C7 and C8 for a built-in activity?** No code can prove them. | **The spec author proposes per activity, the approvers confirm in this spec's assessment table**, and the module owner is named on each row. An activity nobody can vouch for stays unmarked. |
+| Q4 | **Who confirms C7 and C8 for a built-in activity?** No code can prove them. | **The spec author proposes per activity in this spec's assessment table, and the approver confirms it** when approving the spec. An activity nobody can vouch for stays unmarked. |
 | Q5 | **Already published executables.** A pinned background node that now fails a criterion at run time (for example C9): refuse, or let it run? | **Refuse with an incident naming the criterion.** No shipped activity is marked, so only custom activities can be affected, and running them would keep the silent wrong value C9 exists to stop. No migration. |
 | Q6 | **Inheritance.** `[BackgroundExecutionSafe]` is `Inherited = true`, so a subclass of a marked built-in is marked without its author promising C7/C8. | **Keep inheritance**, but document on the attribute that a subclass inherits the promise. Changing it would break custom activities that derive from marked bases on purpose. |
 | Q7 | **Commit-order evidence (FR-010).** Is S-10's write history (one record per applied write, in commit order, PR #4316) enough as "an inspectable record of the actual commit order", or is a separate record needed? | **S-10's write history plus the checkpoint sequence is enough**; no new store. The tests read it back on both providers. This makes US6 depend on PR #4316 being merged. |
