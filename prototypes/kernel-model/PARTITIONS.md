@@ -255,3 +255,6 @@ The decisions that were the owner's, with what the numbers said:
 - **Count: 1,024 virtual partitions.** The code keeps `VirtualPartitions.Provisional = 4096` as written on 15 November
   (no code changed in this round's documentation fix); the Worker refactor to range ownership will use 1,024.
 - Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) remain open.
+- **Delivered by round 5 B ([COMMIT-SQL.md](COMMIT-SQL.md)):** the checked fence over k rows is one statement with an
+  affected-row check on every engine (`EfStore.FenceAsync`, probe `x fence`), so F-A1's k + 2 round trips become 3; the
+  kernel still fences one row per commit until the Worker refactor.

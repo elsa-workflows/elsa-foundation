@@ -9,8 +9,9 @@ repository: the folder has its own `Directory.Build.*`, `Directory.Packages.prop
 What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
 section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;
 section 23: the merge of the four branches and its gates); what each database engine does to the EF store is in
-[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
-[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
+[ENGINES.md](ENGINES.md), the store's own commit SQL (round 5 B) in [COMMIT-SQL.md](COMMIT-SQL.md), MongoDB in
+[MONGO.md](MONGO.md), native workflows as an execution model in [NATIVE.md](NATIVE.md), virtual partitions and the fence
+granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
 
 ## Layout
 
@@ -24,7 +25,7 @@ section 23: the merge of the four branches and its gates); what each database en
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
-| `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs` |
+| `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
 | `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
@@ -110,8 +111,10 @@ $ORC stress 20 2000; $ORC stress-broken 10 1000
 ```
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic     # in memory
 EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
-$EFC sqlite [--fence-in-batch|--checked-fence] semantic               # no flag: the engine's default fence, below
-$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off, must fail the fence cases
+$EFC sqlite [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] semantic   # no flag: the engine's default fence, below; the owned commit (COMMIT-SQL.md)
+$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off; it changes nothing on the owned commit (COMMIT-SQL.md), and failed the fence cases on EF's
+$EFC <engine> ... --checked-fence semantic-broken fence                # the fence broken on purpose: the three fence cases must fail (exit 0)
+$EFC <engine> ... --checked-fence --fence-ignores-count semantic fence          # the owned fence's count ignored: the same three must fail (exit 1; semantic-broken would break the fence itself)
 $EFC sqlserver "$MS" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic
 $EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic
 MOR="dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll"
@@ -132,15 +135,18 @@ $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fe
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]   # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch] [isolation=rc]
 $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fence=checked|batch] [wal=0]
-$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail (ENGINES.md: batch on PostgreSQL, checked elsewhere)
-$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
+$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail on SQLite; on PostgreSQL it holds since the Worker's lease check (FINDINGS 29, F-B2)
+$EFR x stress <engine> "<same>" [commit=ef|owned] [fencecount=0]                   # the commit writer (default: owned, COMMIT-SQL.md); the owned fence's count ignored: a mutation
+$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch] [commit=ef|owned]   # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x fence <engine> "<connection;Database=kernel_fence>"                            # the k-row fence over eight partitions, one stale: COMMIT-SQL.md
 $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
 Without a fence option the EF store takes the engine's default: the fence in the batch on every engine (SQL Server since
 16 November, for the owned commit; ENGINES.md E9; `fence=checked` is the 13 November fallback and stays the default with
-`commit=ef`, whose batch still deadlocks takes). `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
+`commit=ef`, whose batch still deadlocks takes). Without a commit option it writes the commit with its own SQL on every
+engine (round 5 B, COMMIT-SQL.md); `commit=ef` is EF's SaveChanges, the reference. `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
 terminate, delete) and starts on events. Do not run the conformance suite on an engine while a stress test runs there:
 the stress test kills the suite's sessions too.
 
@@ -171,8 +177,9 @@ $EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
 dotnet test models/Graph.Tests -c Release
 mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
-$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch
+$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch; and commit=ef for the reference path
 $EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic
+$EFR x fence postgres "$PG;Database=kernel_fence"
 $NAT cost postgres "$PG;Database=kernel_native"
 ```
 
