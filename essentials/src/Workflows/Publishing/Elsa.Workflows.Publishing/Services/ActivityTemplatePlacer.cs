@@ -304,7 +304,22 @@ public sealed class ActivityTemplatePlacer(
                 continue;
             }
 
-            var childSlots = current.Node.ChildSlots
+            var isBoundary = ReferenceEquals(current.Node, frame.Template.Root);
+            var localSlot = isBoundary && closedScopeId is not null
+                ? current.Node.ChildSlots.SingleOrDefault(slot => slot.Name == "graph-local-nodes")
+                : null;
+            if (localSlot is not null)
+            {
+                foreach (var local in localSlot.Activities)
+                {
+                    var leaf = placedNodes[local.ExecutableNodeId];
+                    var placement = leaf.Descriptor.Payload;
+                    frame.Children.Add(new PlacementBuild(leaf, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [],
+                        frame.Origin, leaf.AuthoredActivityId, placement.GetProperty("parentOccurrenceId").GetString(),
+                        placement.GetProperty("childSlotName").GetString()!, placement.GetProperty("childIndex").GetInt32()));
+                }
+            }
+            var childSlots = current.Node.ChildSlots.Where(slot => slot != localSlot)
                 .Select(slot => new ExecutableChildSlot(
                     slot.Name,
                     slot.Activities.Select(child => placedNodes[child.ExecutableNodeId]).ToArray(),
@@ -318,7 +333,6 @@ public sealed class ActivityTemplatePlacer(
                     MergeChildSlot(childSlots, slot.Key, slot.OrderBy(x => x.ChildIndex).Select(x => x.Root));
             }
 
-            var isBoundary = ReferenceEquals(current.Node, frame.Template.Root);
             var descriptor = isBoundary
                 ? StampBoundaryDescriptor(current.Node.Descriptor, frame, frame.Children, nodeIds)
                 : current.Node.Descriptor;
@@ -403,7 +417,7 @@ public sealed class ActivityTemplatePlacer(
             frame.Origin,
             frame.Template.TemplateHash,
             records,
-            frame.Children.Select(x => x.Origin).ToArray()));
+            frame.Children.Where(x => x.LayoutSegments.Count > 0).Select(x => x.Origin).ToArray()));
         layoutSegments.AddRange(frame.Children.SelectMany(x => x.LayoutSegments));
 
         // Only this exact template's identities may be mapped. Unknown authored metadata must
