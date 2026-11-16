@@ -136,8 +136,7 @@ public sealed class SwitchMatchAnyTests
                 new ValueTypeDescriptor("Boolean"), false, false, false, null, ActivityValuePolicy.Default) { IsStructureInput = true }),
             prototype.Result,
             ["Approved", "Audit", "Notify", ActivityOutcomes.Default, ActivityOutcomes.Break],
-            prototype.Activation, prototype.SideEffectProfile, supportsBackgroundExecution: false,
-            allowsMultipleOutcomes: mode == SwitchModes.MatchAny);
+            prototype.Activation, prototype.SideEffectProfile, supportsBackgroundExecution: false);
         var node = new ExecutableNode("switch", "switch", typeof(SwitchActivity).FullName!, "4.1.0",
             descriptorType: prototype.DescriptorKind, descriptorPayload: prototype.DescriptorPayload,
             inputBindings: bindings, metadata: new Dictionary<string, string>(),

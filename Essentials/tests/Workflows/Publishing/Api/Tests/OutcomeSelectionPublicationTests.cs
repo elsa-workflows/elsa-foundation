@@ -112,14 +112,13 @@ public sealed class OutcomeSelectionPublicationTests
         Assert.DoesNotContain(ActivityOutcomes.Done, outcomes);
         Assert.Contains(ActivityOutcomes.True, outcomes);
         Assert.Contains(ActivityOutcomes.False, outcomes);
-        Assert.False(executable.RootActivity.ActivityContract.AllowsMultipleOutcomes);
     }
 
     [Theory]
-    [InlineData(null, false)]
-    [InlineData("MatchFirst", false)]
-    [InlineData("MatchAny", true)]
-    public async Task Switch_publishes_without_Done_and_pins_the_multi_outcome_flag_by_mode(string? mode, bool allowsMultiple)
+    [InlineData(null)]
+    [InlineData("MatchFirst")]
+    [InlineData("MatchAny")]
+    public async Task Switch_publishes_without_Done_in_every_mode(string? mode)
     {
         var executable = await Compile(Switch("switch", mode), typeof(SwitchActivity));
 
@@ -128,7 +127,6 @@ public sealed class OutcomeSelectionPublicationTests
         Assert.Contains("a", contract.Outcomes);
         Assert.Contains("b", contract.Outcomes);
         Assert.Contains(ActivityOutcomes.Default, contract.Outcomes);
-        Assert.Equal(allowsMultiple, contract.AllowsMultipleOutcomes);
     }
 
     [Fact]
@@ -149,7 +147,6 @@ public sealed class OutcomeSelectionPublicationTests
         Assert.Contains(HttpActivityOutcomes.UnmatchedStatusCode, outcomes);
         Assert.Contains(HttpActivityOutcomes.Failed, outcomes);
         Assert.Contains(HttpActivityOutcomes.Timeout, outcomes);
-        Assert.False(executable.RootActivity.ActivityContract.AllowsMultipleOutcomes);
     }
 
     [Fact]
@@ -166,7 +163,6 @@ public sealed class OutcomeSelectionPublicationTests
         var contract = executable.RootActivity.ActivityContract!;
         Assert.Equal(["A", "B", ActivityOutcomes.Done], contract.Outcomes.Order(StringComparer.Ordinal));
         Assert.DoesNotContain("Unmatched", contract.Outcomes);
-        Assert.True(contract.AllowsMultipleOutcomes);
     }
 
     [Fact]
@@ -178,7 +174,6 @@ public sealed class OutcomeSelectionPublicationTests
 
         var contract = executable.RootActivity.ActivityContract!;
         Assert.Equal([ActivityOutcomes.Done], contract.Outcomes);
-        Assert.True(contract.AllowsMultipleOutcomes);
     }
 
     private static Task<WorkflowExecutable> Compile(ActivityNode root, params Type[] activityTypes) =>

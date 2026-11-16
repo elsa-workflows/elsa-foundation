@@ -43,7 +43,6 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         {
             ports = Array.Empty<object>(),
             dynamicOutcomes = new { kind = "valuePerItem", source = "possibleOutcomes", selectsOnEveryCompletion = false },
-            multipleOutcomes = new { kind = "static" },
             scriptInput = ScriptInput
         }))]);
         _catalog.Add("av-step");

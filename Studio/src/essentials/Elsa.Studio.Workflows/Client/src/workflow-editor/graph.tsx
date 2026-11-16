@@ -114,9 +114,6 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           <Flag size={11} aria-hidden="true" /> Start
         </span>
       ) : null}
-      {nodeData.allowsMultipleOutcomes ? (
-        <span className="wf-node-multi-outcome-badge" title="A completion may select several outcomes">Multi</span>
-      ) : null}
       <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} position={ports.toolbarPosition} offset={ports.toolbarOffset} />
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>

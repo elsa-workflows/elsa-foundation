@@ -166,7 +166,6 @@ public sealed class FlowchartInclusiveForkTests
     [ActivityOutcome("A")]
     [ActivityOutcome("B")]
     [ActivityOutcome("C")]
-    [AllowsMultipleOutcomes]
     [SelectsOutcomeOnEveryCompletion]
     public sealed class SelectsAAndB : Activity<ActivityUnit>
     {

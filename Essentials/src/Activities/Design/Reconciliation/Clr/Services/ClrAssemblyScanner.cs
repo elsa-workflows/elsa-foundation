@@ -49,7 +49,6 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
-    private static readonly string AllowsMultipleOutcomesAttributeFullName = typeof(AllowsMultipleOutcomesAttribute).FullName!;
     private static readonly string ActivityScriptOutcomesAttributeFullName = typeof(ActivityScriptOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
@@ -355,7 +354,6 @@ public sealed class ClrAssemblyScanner(
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
-        CustomAttributeData? allowsMultiple = null;
         string? scriptInput = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
@@ -368,11 +366,6 @@ public sealed class ClrAssemblyScanner(
                     continue;
                 }
 
-                if (attribute.AttributeType.FullName == AllowsMultipleOutcomesAttributeFullName)
-                {
-                    allowsMultiple ??= attribute;
-                    continue;
-                }
 
                 if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
                 {
@@ -389,18 +382,13 @@ public sealed class ClrAssemblyScanner(
         }
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
-        var multipleOutcomes = BuildMultipleOutcomesDescriptor(allowsMultiple);
-        if (outcomes.Count == 0 && dynamicOutcomes is null && multipleOutcomes is null && scriptInput is null)
+        if (outcomes.Count == 0 && dynamicOutcomes is null && scriptInput is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
         var payload = new Dictionary<string, object> { ["ports"] = ports };
         if (dynamicOutcomes is not null)
             payload["dynamicOutcomes"] = dynamicOutcomes;
-        // The multi-outcome flag (ADR 0045 §6, spec 1208 FR-014): Studio marks such a node as an inclusive fork, with the
-        // same rule the publish compiler pins (static, or when an input equals a value).
-        if (multipleOutcomes is not null)
-            payload["multipleOutcomes"] = multipleOutcomes;
         // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
         if (!string.IsNullOrWhiteSpace(scriptInput))
             payload["scriptInput"] = scriptInput;
@@ -439,14 +427,6 @@ public sealed class ClrAssemblyScanner(
         return descriptor;
     }
 
-    private static object? BuildMultipleOutcomesDescriptor(CustomAttributeData? attribute)
-    {
-        if (attribute is null)
-            return null;
-        if (attribute.ConstructorArguments is [{ Value: string inputKey }, { Value: string equalsValue }])
-            return new Dictionary<string, object> { ["kind"] = "whenInputEquals", ["input"] = inputKey, ["value"] = equalsValue };
-        return new Dictionary<string, object> { ["kind"] = "always" };
-    }
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
         new(

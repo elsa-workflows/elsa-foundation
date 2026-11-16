@@ -608,8 +608,7 @@ public sealed class ExecutableNodeCompiler(
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
-            allowsMultipleOutcomes: outcomeSet.AllowsMultiple || outcomeProjection?.AllowsMultipleOutcomes == true);
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
     /// <summary>
@@ -700,10 +699,10 @@ public sealed class ExecutableNodeCompiler(
     }
 
     /// <summary>
-    /// A node's outcome set and multi-outcome flag, resolved at publication from the activity's static declarations and
-    /// its configuration (ADR 0045 §6; spec 1208 FR-010, FR-011, FR-014). The same rules drive Studio's ports.
+    /// A node's outcome set, resolved at publication from the activity's static declarations and its configuration
+    /// (ADR 0045 §6; spec 1208 FR-010, FR-011). The same rules drive Studio's ports.
     /// </summary>
-    internal sealed record NodeOutcomeSet(IReadOnlyCollection<string> Outcomes, bool AllowsMultiple);
+    internal sealed record NodeOutcomeSet(IReadOnlyCollection<string> Outcomes);
 
     internal static NodeOutcomeSet ResolveOutcomeSet(
         Type activityType,
@@ -731,31 +730,7 @@ public sealed class ExecutableNodeCompiler(
 
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
-        return new NodeOutcomeSet(outcomes.ToArray(), ResolveAllowsMultiple(activityType, structure, inputBindings));
-    }
-
-    /// <summary>
-    /// Reads <see cref="AllowsMultipleOutcomesAttribute"/>: static, or true when the node's authored literal input (or its
-    /// structure property of the same key) equals the declared value, such as a Switch in <c>MatchAny</c> mode (Q10).
-    /// </summary>
-    private static bool ResolveAllowsMultiple(
-        Type activityType,
-        ExecutableActivityStructure? structure,
-        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings)
-    {
-        var declaration = activityType.GetCustomAttribute<AllowsMultipleOutcomesAttribute>(inherit: true);
-        if (declaration is null)
-            return false;
-        if (declaration.InputKey is null)
-            return true;
-
-        if (inputBindings?.GetValueOrDefault(declaration.InputKey)?.LiteralValue is { ValueKind: JsonValueKind.String } literal)
-            return StringComparer.Ordinal.Equals(literal.GetString(), declaration.EqualsValue);
-        return structure is not null &&
-               structure.Payload.ValueKind == JsonValueKind.Object &&
-               structure.Payload.TryGetProperty(declaration.InputKey, out var configured) &&
-               configured.ValueKind == JsonValueKind.String &&
-               StringComparer.Ordinal.Equals(configured.GetString(), declaration.EqualsValue);
+        return new NodeOutcomeSet(outcomes.ToArray());
     }
 
     /// <summary>

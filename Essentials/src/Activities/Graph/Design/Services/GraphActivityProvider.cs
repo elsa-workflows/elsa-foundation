@@ -37,6 +37,7 @@ public sealed class GraphActivityProvider(
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
+    private const string CompleteOutcomesInputKey = "outcomes";
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
     private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -593,8 +594,8 @@ public sealed class GraphActivityProvider(
         }
     }
 
-    // Every Complete node names exactly one emitted boundary outcome by reference key, as a literal. Returns the
-    // reference keys the valid nodes name, which count as reaching those outcomes.
+    // Every Complete node names one emitted boundary outcome by reference key, or several (spec 1208 FR-032), as
+    // literals. Returns the reference keys the valid nodes name, which count as reaching those outcomes.
     private static IReadOnlySet<string> ValidateCompleteNodes(
         IReadOnlyList<GraphNode> completeNodes,
         IReadOnlyCollection<ActivityOutcomeContract> emittedOutcomes,
@@ -605,33 +606,77 @@ public sealed class GraphActivityProvider(
         var reached = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in completeNodes)
         {
-            var referenceKey = ReadCompleteOutcome(node);
-            if (referenceKey is null)
+            var referenceKeys = ReadCompleteOutcomes(node);
+            if (referenceKeys is null)
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.complete.outcome-literal-required",
-                    $"Complete node '{node.NodeId}' must set '{CompleteOutcomeInputKey}' to one literal boundary outcome reference key.",
+                    $"Complete node '{node.NodeId}' must set '{CompleteOutcomeInputKey}' to one literal boundary outcome reference key, or '{CompleteOutcomesInputKey}' to a literal list of them.",
                     subject,
                     $"{node.JsonPointer}/inputs",
                     node.NodeId));
                 continue;
             }
 
-            if (!emittedReferenceKeys.Contains(referenceKey))
+            foreach (var referenceKey in referenceKeys)
             {
-                diagnostics.Add(Diagnostic(
-                    "activity.graph.complete.outcome-unknown",
-                    $"Complete node '{node.NodeId}' names boundary outcome '{referenceKey}', which is not an emitted public outcome.",
-                    subject,
-                    $"{node.JsonPointer}/inputs",
-                    referenceKey));
-                continue;
-            }
+                if (!emittedReferenceKeys.Contains(referenceKey))
+                {
+                    diagnostics.Add(Diagnostic(
+                        "activity.graph.complete.outcome-unknown",
+                        $"Complete node '{node.NodeId}' names boundary outcome '{referenceKey}', which is not an emitted public outcome.",
+                        subject,
+                        $"{node.JsonPointer}/inputs",
+                        referenceKey));
+                    continue;
+                }
 
-            reached.Add(referenceKey);
+                reached.Add(referenceKey);
+            }
         }
 
         return reached;
+    }
+
+    /// <summary>
+    /// The literal reference keys a Complete node names: its <c>outcomes</c> list when set, else its one <c>outcome</c>;
+    /// null when neither is a literal. An outcome given by an expression stays refused.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadCompleteOutcomes(GraphNode node)
+    {
+        var list = node.Activity.Inputs
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, CompleteOutcomesInputKey) && x.Value.Value is not null)
+            .ToArray();
+        if (list.Length == 1)
+        {
+            if (!string.Equals(list[0].Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(list[0].Value.ExpressionType, "Object", StringComparison.OrdinalIgnoreCase))
+                return null;
+            try
+            {
+                var element = list[0].Value.Value switch
+                {
+                    JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
+                    JsonElement json => json,
+                    string text => JsonDocument.Parse(text).RootElement,
+                    var other => JsonSerializer.SerializeToElement(other)
+                };
+                if (element.ValueKind != JsonValueKind.Array)
+                    return null;
+                var keys = element.EnumerateArray()
+                    .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null)
+                    .ToArray();
+                return keys.Length == 0 || keys.Any(string.IsNullOrWhiteSpace)
+                    ? null
+                    : keys.Select(key => key!).Distinct(StringComparer.Ordinal).ToArray();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        return ReadCompleteOutcome(node) is { } single ? [single] : null;
     }
 
     private static string? ReadCompleteOutcome(GraphNode node)
@@ -1349,8 +1394,7 @@ public sealed class GraphActivityProvider(
         if (completeNodes.Count != 0)
         {
             var completeOutcomes = completeNodes
-                .Select(ReadCompleteOutcome)
-                .OfType<string>()
+                .SelectMany(node => ReadCompleteOutcomes(node) ?? [])
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .Select(referenceKey => new

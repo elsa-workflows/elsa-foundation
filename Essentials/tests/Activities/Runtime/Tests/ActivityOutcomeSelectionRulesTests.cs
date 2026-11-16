@@ -36,20 +36,12 @@ public sealed class ActivityOutcomeSelectionRulesTests
         Assert.Contains("'Approved'", exception.Message);
     }
 
-    /// <summary>US3 scenario 4 / FR-017.</summary>
+    /// <summary>Any activity may select several of its declared outcomes; there is no multi-outcome declaration.</summary>
     [Fact]
-    public void Several_names_on_a_node_that_allows_one_fault()
+    public void Several_declared_names_are_valid_on_any_node()
     {
-        var exception = Assert.Throws<ActivityOutcomeSelectionException>(() =>
-            ActivityOutcomeSelectionRules.Validate(Contract(["A", "B"]), OutcomeSelection.Named("A", "B")));
-
-        Assert.Contains("allows one outcome", exception.Message);
-    }
-
-    [Fact]
-    public void Several_names_on_a_node_that_allows_several_are_valid()
-    {
-        ActivityOutcomeSelectionRules.Validate(Contract(["Done", "A", "B", "C"], allowsMultiple: true), OutcomeSelection.Named("A", "B"));
+        ActivityOutcomeSelectionRules.Validate(Contract(["A", "B"]), OutcomeSelection.Named("A", "B"));
+        ActivityOutcomeSelectionRules.Validate(Contract(["Done", "A", "B", "C"]), OutcomeSelection.Named("A", "B"));
     }
 
     /// <summary>FR-002: Done is never selected together with a branch.</summary>
@@ -57,7 +49,7 @@ public sealed class ActivityOutcomeSelectionRulesTests
     public void Done_together_with_a_branch_faults()
     {
         Assert.Throws<ActivityOutcomeSelectionException>(() =>
-            ActivityOutcomeSelectionRules.Validate(Contract(["Done", "A"], allowsMultiple: true), OutcomeSelection.Named("Done", "A")));
+            ActivityOutcomeSelectionRules.Validate(Contract(["Done", "A"]), OutcomeSelection.Named("Done", "A")));
     }
 
     /// <summary>FR-002a: an unspecified selection on a node without Done points at the activity's code.</summary>
@@ -89,7 +81,7 @@ public sealed class ActivityOutcomeSelectionRulesTests
     public void The_projector_records_each_selection_state_on_the_completion()
     {
         var projector = new ActivityCompletionProjector();
-        var contract = Contract(["Done", "A", "B"], allowsMultiple: true);
+        var contract = Contract(["Done", "A", "B"]);
         foreach (var selection in new[] { OutcomeSelection.Unspecified, OutcomeSelection.Empty, OutcomeSelection.Named("A", "B") })
         {
             var projected = projector.Project(
@@ -103,15 +95,7 @@ public sealed class ActivityOutcomeSelectionRulesTests
         }
     }
 
-    [Fact]
-    public void The_flag_is_part_of_the_contract_fingerprint_only_when_set()
-    {
-        Assert.Equal(Contract(["A"]).SchemaFingerprint, Contract(["A"]).SchemaFingerprint);
-        Assert.NotEqual(Contract(["A"]).SchemaFingerprint, Contract(["A"], allowsMultiple: true).SchemaFingerprint);
-        Assert.DoesNotContain("allowsMultipleOutcomes", JsonSerializer.Serialize(Contract(["A"])), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static ActivityContract Contract(IReadOnlyCollection<string> outcomes, bool allowsMultiple = false) =>
+    private static ActivityContract Contract(IReadOnlyCollection<string> outcomes) =>
         new(
             "Test.Activity",
             "1.0.0",
@@ -122,6 +106,5 @@ public sealed class ActivityOutcomeSelectionRulesTests
             outcomes,
             new ActivityActivationRequirement("clr", "Test.Activity"),
             SideEffectProfile.External,
-            supportsBackgroundExecution: false,
-            allowsMultipleOutcomes: allowsMultiple);
+            supportsBackgroundExecution: false);
 }

@@ -25,9 +25,8 @@ public sealed class ActivityContract
         IReadOnlyCollection<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External,
-        bool supportsBackgroundExecution = false,
-        bool allowsMultipleOutcomes = false)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, allowsMultipleOutcomes)
+        bool supportsBackgroundExecution = false)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -67,8 +66,7 @@ public sealed class ActivityContract
         IEnumerable<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile,
-        bool supportsBackgroundExecution,
-        bool allowsMultipleOutcomes = false)
+        bool supportsBackgroundExecution)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -99,7 +97,6 @@ public sealed class ActivityContract
         Activation = activation;
         SideEffectProfile = sideEffectProfile;
         SupportsBackgroundExecution = supportsBackgroundExecution;
-        AllowsMultipleOutcomes = allowsMultipleOutcomes;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -131,15 +128,6 @@ public sealed class ActivityContract
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool SupportsBackgroundExecution { get; }
 
-    /// <summary>
-    /// Whether one completion of this node may select more than one of <see cref="Outcomes"/> (ADR 0045 §6, spec 1208
-    /// FR-014). Resolved per node at publication with the outcome set, from the activity's static declaration or a
-    /// provider over the node's configuration. A node that allows several is an inclusive fork for path analysis,
-    /// joins, inspection and the unordered-write analysis. The default false value is omitted from the serialized
-    /// contract and fingerprint to preserve existing artifacts.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool AllowsMultipleOutcomes { get; }
 
     private string ComputeFingerprint()
     {
@@ -170,11 +158,6 @@ public sealed class ActivityContract
         // shape byte-identical for existing contracts.
         if (SupportsBackgroundExecution)
             node[nameof(SupportsBackgroundExecution)] = true;
-
-        // Same rule for the multi-outcome flag: a node that allows several outcomes per completion has a different
-        // contract, while every single-outcome contract keeps its byte-identical shape.
-        if (AllowsMultipleOutcomes)
-            node[nameof(AllowsMultipleOutcomes)] = true;
 
         var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));

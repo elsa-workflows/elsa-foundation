@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import type { WorkflowDefinitionState } from "../workflowTypes";
-import { allowsMultipleOutcomes, buildCanvas, getActivitySourcePorts } from "../workflowAdapter";
+import { buildCanvas, getActivitySourcePorts } from "../workflowAdapter";
 import { flowchartStructureKind } from "../flowchartStartNode";
 import { writeLine } from "./fixtures";
 import type { ActivityNode } from "../workflowTypes";
@@ -37,14 +37,13 @@ describe("authored collection outcome ports", () => {
 const outcomePort = (name: string) => ({ name, type: "Flow" });
 const runJavaScript = { ...writeLine, activityVersionId: "js-v1", inputs: [{ referenceKey: "PossibleOutcomes", name: "PossibleOutcomes" }], designFacets: [{ kind: "elsa.outcomes", schemaVersion: "1", payload: {
   ports: [outcomePort("Done")],
-  dynamicOutcomes: { kind: "valuePerItem", source: "PossibleOutcomes", selectsOnEveryCompletion: false },
-  multipleOutcomes: { kind: "always" } } }] };
+  dynamicOutcomes: { kind: "valuePerItem", source: "PossibleOutcomes", selectsOnEveryCompletion: false } } }] };
 // Static ports reach the no-items path through the catalog item's own `ports`, as before this spec.
 const sendHttpRequest = { ...writeLine, activityVersionId: "http-v1", ports: [outcomePort("Done"), outcomePort("Failed"), outcomePort("Timeout")], inputs: [{ referenceKey: "ExpectedStatusCodes", name: "ExpectedStatusCodes" }], designFacets: [{ kind: "elsa.outcomes", schemaVersion: "1", payload: {
   ports: [outcomePort("Done"), outcomePort("Failed"), outcomePort("Timeout")],
   dynamicOutcomes: { kind: "valuePerItem", source: "ExpectedStatusCodes", selectsOnEveryCompletion: true, unmatched: "Unmatched status code" } } }] };
 const switchActivity = { ...writeLine, activityVersionId: "switch-v1", designFacets: [{ kind: "elsa.outcomes", schemaVersion: "1", payload: {
-  ports: [], multipleOutcomes: { kind: "whenInputEquals", input: "mode", value: "MatchAny" } } }] };
+  ports: [] } }] };
 const literal = (nodeId: string, activityVersionId: string, key: string, value: unknown): ActivityNode =>
   ({ nodeId, activityVersionId, inputs: [], outputs: [], [key]: { expression: { type: "Literal", value } } });
 
@@ -66,17 +65,6 @@ describe("outcome sets resolved at design time (spec 1208)", () => {
       ports: [outcomePort("Done"), outcomePort("Failed")], dynamicOutcomes: { kind: "valuePerItem", source: "ExpectedStatusCodes" } } }] };
     expect(getActivitySourcePorts(literal("http", "http-v1", "ExpectedStatusCodes", [200]), legacy).map(x => x.name)).toEqual(["Done", "Failed", "200", "Unmatched"]);
   });
-  it("records whether a completion may select several outcomes (FR-014)", () => {
-    expect(allowsMultipleOutcomes(literal("js", "js-v1", "PossibleOutcomes", []), runJavaScript)).toBe(true);
-    expect(allowsMultipleOutcomes(literal("http", "http-v1", "ExpectedStatusCodes", [200]), sendHttpRequest)).toBe(false);
-    const switchNode = (mode?: string): ActivityNode => ({ nodeId: "switch", activityVersionId: "switch-v1", inputs: [], outputs: [],
-      structure: { kind: "elsa.switch.structure", schemaVersion: "1", payload: mode ? { mode, cases: [] } : { cases: [] } } });
-    expect(allowsMultipleOutcomes(switchNode("MatchAny"), switchActivity)).toBe(true);
-    expect(allowsMultipleOutcomes(switchNode("MatchFirst"), switchActivity)).toBe(false);
-    expect(allowsMultipleOutcomes(switchNode(), switchActivity)).toBe(false);
-    expect(allowsMultipleOutcomes(literal("switch", "switch-v1", "mode", "MatchAny"), switchActivity)).toBe(true);
-    expect(allowsMultipleOutcomes({ ...literal("switch", "switch-v1", "mode", "MatchAny"), mode: { expression: { type: "JavaScript", value: "'MatchAny'" } } }, switchActivity)).toBe(false);
-  });
   it("keeps a connection on a vanished port visible and flags it (US6 scenario 3)", () => {
     const js = literal("js", "js-v1", "PossibleOutcomes", ["Approved"]);
     const target: ActivityNode = { nodeId: "next", activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] };
@@ -95,6 +83,5 @@ describe("outcome sets resolved at design time (spec 1208)", () => {
     expect(gone.className).toContain("wf-edge-missing-port");
     const ports = canvas.nodes.find(node => node.id === "js")!.data.sourcePorts;
     expect(ports.map(port => [port.name, !!port.missing])).toEqual([["Done", false], ["Approved", false], ["Rejected", true]]);
-    expect(canvas.nodes.find(node => node.id === "js")!.data.allowsMultipleOutcomes).toBe(true);
   });
 });

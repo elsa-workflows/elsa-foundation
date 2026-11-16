@@ -31,28 +31,44 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
     /// <summary>The fault code when <see cref="Outcome"/> is blank at run time.</summary>
     public const string OutcomeRequiredFaultCode = "activity.graph.complete.outcome-required";
 
-    /// <summary>The reference key of the enclosing reusable activity's boundary outcome to complete with.</summary>
+    /// <summary>
+    /// The reference key of the enclosing reusable activity's boundary outcome to complete with. Leave it empty and set
+    /// <see cref="Outcomes"/> to complete with several.
+    /// </summary>
     [ActivityInput(Key = "outcome")]
-    [Required]
-    public string Outcome { get; set; } = null!;
+    public string? Outcome { get; set; }
+
+    /// <summary>
+    /// The reference keys of several boundary outcomes to complete with at once, each a literal (spec 1208 FR-032). The
+    /// boundary passes every one to its parent; how the paths after it join is the default join's concern.
+    /// </summary>
+    [ActivityInput(Key = "outcomes")]
+    public ICollection<string>? Outcomes { get; set; }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         ArgumentNullException.ThrowIfNull(runtimeContext);
-        if (string.IsNullOrWhiteSpace(Outcome))
+        var outcomes = (Outcomes is { Count: > 0 } several ? several : string.IsNullOrWhiteSpace(Outcome) ? [] : [Outcome])
+            .Where(outcome => !string.IsNullOrWhiteSpace(outcome))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (outcomes.Length == 0)
         {
             return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
                 OutcomeRequiredFaultCode,
                 $"Complete node '{runtimeContext.ExecutableNode.ExecutableNodeId}' has no boundary outcome.")));
         }
 
+        var payload = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            [GraphCompleteNotification.OutcomePayloadKey] = outcomes[0]
+        };
+        if (outcomes.Length > 1)
+            payload[GraphCompleteNotification.OutcomesPayloadKey] = outcomes;
         runtimeContext.RequestAncestorNotification(
             WellKnownRuntimeActivityConsumers.GraphActivity,
             GraphCompleteNotification.Code,
-            JsonSerializer.SerializeToElement(new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [GraphCompleteNotification.OutcomePayloadKey] = Outcome
-            }));
+            JsonSerializer.SerializeToElement(payload));
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 }

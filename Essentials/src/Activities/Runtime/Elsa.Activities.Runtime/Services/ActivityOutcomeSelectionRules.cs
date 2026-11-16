@@ -4,8 +4,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// The run-time check of an outcome selection against the node's pinned outcome set and multi-outcome flag
-/// (ADR 0045 §6; spec 1208 FR-002, FR-002a, FR-016, FR-017). Every completion path — the value-flow projector and
+/// The run-time check of an outcome selection against the node's pinned outcome set (ADR 0045 §6; spec 1208 FR-002,
+/// FR-002a, FR-016). Any activity may select several of its declared outcomes; how the paths taken join is the
+/// default join's concern (initiative #4193), not the activity's. Every completion path — the value-flow projector and
 /// the background receipt — checks through here, so a selection follows one set of rules wherever it comes from.
 /// There is no node-level fallback: an unknown name faults (FR-018).
 /// </summary>
@@ -45,11 +46,6 @@ public static class ActivityOutcomeSelectionRules
 
         if (selection.Names.Count <= 1)
             return;
-
-        if (!contract.AllowsMultipleOutcomes)
-            throw new ActivityOutcomeSelectionException(
-                $"Activity '{contract.ActivityTypeKey}' selected several outcomes [{Describe(selection.Names)}], but its outcome set " +
-                "allows one outcome per completion.");
 
         if (selection.Names.Contains(OutcomeSelection.DefaultOutcome, StringComparer.Ordinal))
             throw new ActivityOutcomeSelectionException(

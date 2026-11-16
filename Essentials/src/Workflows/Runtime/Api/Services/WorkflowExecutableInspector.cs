@@ -319,8 +319,7 @@ public sealed class WorkflowExecutableInspector(
                 .Select(OutputCapture)
                 .ToArray(),
             ProjectBpmnStructure(node),
-            node.ActivityContract?.Outcomes.ToArray(),
-            node.ActivityContract?.AllowsMultipleOutcomes == true ? true : null);
+            node.ActivityContract?.Outcomes.ToArray());
 
     private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
         new(

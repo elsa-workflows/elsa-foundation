@@ -297,22 +297,6 @@ button.wf-node-slot-badge:focus-visible {
   stroke-dasharray: 6 4;
 }
 
-/* The node may select several outcomes per completion (an inclusive fork, FR-014). */
-.wf-node-multi-outcome-badge {
-  position: absolute;
-  top: -9px;
-  right: 18px;
-  padding: 1px 6px;
-  border: 1px solid var(--wf-border);
-  border-radius: 999px;
-  background: var(--wf-panel);
-  color: var(--wf-muted-text);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  z-index: 2;
-}
 
 .wf-node-port-label[data-side="right"] {
   left: calc(100% + 10px);

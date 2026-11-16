@@ -27,7 +27,6 @@ namespace Elsa.Activities.Switch.Activities;
 [ActivityOutcome(ActivityOutcomes.Default)]
 [ActivityOutcome(ActivityOutcomes.Break)]
 [SelectsOutcomeOnEveryCompletion]
-[AllowsMultipleOutcomes(SwitchModes.ModeKey, SwitchModes.MatchAny)]
 [ActivityChildSlot(
     "Switch.Case",
     "cases",

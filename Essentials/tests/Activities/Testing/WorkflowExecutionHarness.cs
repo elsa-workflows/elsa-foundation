@@ -617,8 +617,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             candidate => candidate.Attribute!.Key ?? candidate.Property.Name,
             candidate => NormalizeBinding(node, candidate.Property, candidate.Attribute!),
             StringComparer.Ordinal);
-        var (outcomes, allowsMultiple) = ResolveOutcomes(node, activityType, bindings);
-        var contract = NewActivityContract(activityType, descriptor, inputs, outcomes, allowsMultiple);
+        var outcomes = ResolveOutcomes(node, activityType, bindings);
+        var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
         return CopyNode(node, childSlots, descriptor.Payload, bindings, contract, WithStructuralFaultHandling(node.Metadata, activityType));
     }
@@ -764,8 +764,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     }
 
     // Mirrors ExecutableNodeCompiler.ResolveOutcomeSet (spec 1208): static outcomes, Switch case labels, the BPMN
-    // transaction outcome and value-derived outcomes with the Done rule, plus the multi-outcome flag.
-    private static (IReadOnlyCollection<string> Outcomes, bool AllowsMultiple) ResolveOutcomes(
+    // transaction outcome and value-derived outcomes with the Done rule.
+    private static IReadOnlyCollection<string> ResolveOutcomes(
         ExecutableNode node,
         Type activityType,
         IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
@@ -797,7 +797,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
-        return (outcomes.ToArray(), ResolveAllowsMultiple(node, activityType, bindings));
+        return outcomes.ToArray();
     }
 
     private static void AddValueDerivedOutcomes(Type activityType, IReadOnlyDictionary<string, RuntimeInputBinding> bindings, HashSet<string> outcomes)
@@ -830,21 +830,6 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             outcomes.Add(ActivityOutcomes.Done);
     }
 
-    private static bool ResolveAllowsMultiple(ExecutableNode node, Type activityType, IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
-    {
-        var declaration = activityType.GetCustomAttribute<AllowsMultipleOutcomesAttribute>(inherit: true);
-        if (declaration is null)
-            return false;
-        if (declaration.InputKey is null)
-            return true;
-        if (bindings.GetValueOrDefault(declaration.InputKey)?.LiteralValue is { ValueKind: JsonValueKind.String } literal)
-            return StringComparer.Ordinal.Equals(literal.GetString(), declaration.EqualsValue);
-        return node.Structure is { Payload.ValueKind: JsonValueKind.Object } structure &&
-               structure.Payload.TryGetProperty(declaration.InputKey, out var configured) &&
-               configured.ValueKind == JsonValueKind.String &&
-               StringComparer.Ordinal.Equals(configured.GetString(), declaration.EqualsValue);
-    }
-
     private static RuntimeInputBinding NewLiteralBinding(string key, ValueTypeDescriptor type, object? value)
     {
         var envelope = value switch
@@ -865,8 +850,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         Type activityType,
         (string Kind, JsonElement Payload) descriptor,
         IEnumerable<ActivityInputContract> inputs,
-        IReadOnlyCollection<string> outcomes,
-        bool allowsMultipleOutcomes = false)
+        IReadOnlyCollection<string> outcomes)
     {
         var resultTypes = activityType.GetInterfaces()
             .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
@@ -899,8 +883,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External,
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
-            allowsMultipleOutcomes: allowsMultipleOutcomes);
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)

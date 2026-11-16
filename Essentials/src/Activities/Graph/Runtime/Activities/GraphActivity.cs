@@ -53,6 +53,7 @@ public sealed class GraphActivity(
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
 
     private string? _selectedOutcomeName;
+    private OutcomeSelection? _completeSelection;
     private readonly IPortableExpressionEvaluator? _portableExpressionEvaluator = portableExpressionEvaluator;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry = wellKnownTypeRegistry;
     private static readonly JsonSerializerOptions ExpressionJsonOptions = new(JsonSerializerDefaults.Web);
@@ -63,6 +64,7 @@ public sealed class GraphActivity(
     {
         ArgumentNullException.ThrowIfNull(runtimeContext);
         _selectedOutcomeName = null;
+        _completeSelection = null;
         ValidatePinnedDescriptor(runtimeContext);
         EnsureEntryIsDirectChild(runtimeContext.ExecutableNode, Descriptor.EntryNodeId);
 
@@ -149,22 +151,32 @@ public sealed class GraphActivity(
         if (!StringComparer.Ordinal.Equals(notification.Code, GraphCompleteNotification.Code))
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
 
-        var referenceKey = ReadCompleteOutcomeReferenceKey(notification);
-        var completeOutcome = referenceKey is null
-            ? null
-            : Descriptor.CompleteOutcomes.FirstOrDefault(x => StringComparer.Ordinal.Equals(x.ReferenceKey, referenceKey));
-        if (completeOutcome is null)
+        var referenceKeys = ReadCompleteOutcomeReferenceKeys(notification);
+        if (referenceKeys.Count == 0)
+            referenceKeys = [null!];
+        var boundaryOutcomeNames = new List<string>(referenceKeys.Count);
+        foreach (var referenceKey in referenceKeys)
         {
-            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
-                CompleteOutcomeUnknownFaultCode,
-                $"Complete node '{notification.NotifyingChildExecutableNodeId}' names boundary outcome '{referenceKey}', which graph activity '{context.ExecutableNode.ExecutableNodeId}' does not declare.")));
+            var completeOutcome = referenceKey is null
+                ? null
+                : Descriptor.CompleteOutcomes.FirstOrDefault(x => StringComparer.Ordinal.Equals(x.ReferenceKey, referenceKey));
+            if (completeOutcome is null)
+            {
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                    CompleteOutcomeUnknownFaultCode,
+                    $"Complete node '{notification.NotifyingChildExecutableNodeId}' names boundary outcome '{referenceKey}', which graph activity '{context.ExecutableNode.ExecutableNodeId}' does not declare.")));
+            }
+
+            boundaryOutcomeNames.Add(completeOutcome.BoundaryOutcomeName);
         }
 
-        _selectedOutcomeName = completeOutcome.BoundaryOutcomeName;
+        // A Complete exit may name several boundary outcomes; the boundary passes every one to its parent (FR-032).
+        _completeSelection = OutcomeSelection.Named(boundaryOutcomeNames);
+        _selectedOutcomeName = boundaryOutcomeNames[0];
         foreach (var child in context.GetLiveChildActivities())
             context.RequestChildSubtreeCancellation(child.ActivityExecutionId, "graph-complete");
 
-        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_selectedOutcomeName));
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_completeSelection));
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
@@ -273,8 +285,8 @@ public sealed class GraphActivity(
         // A Complete exit selects its outcome even when the body has no outcome mappings. Without mappings and without a
         // Complete exit the boundary chose no branch: an unspecified selection, the same one its structural continuation
         // carries (spec 1208 FR-003).
-        var selection = _selectedOutcomeName is not null && Descriptor.CompleteOutcomes.Count != 0
-            ? OutcomeSelection.Named(_selectedOutcomeName)
+        var selection = _completeSelection is not null && Descriptor.CompleteOutcomes.Count != 0
+            ? _completeSelection
             : Descriptor.OutcomeMappings.Count == 0
             ? OutcomeSelection.Unspecified
             : OutcomeSelection.Named(_selectedOutcomeName ?? throw new InvalidOperationException(
@@ -463,12 +475,16 @@ public sealed class GraphActivity(
             $"Graph entry node '{entryNodeId}' is not a direct child of boundary node '{boundary.ExecutableNodeId}'.");
     }
 
-    private static string? ReadCompleteOutcomeReferenceKey(ActivityChildNotifiedContext notification) =>
-        notification.Payload is { ValueKind: JsonValueKind.Object } payload &&
-        payload.TryGetProperty(GraphCompleteNotification.OutcomePayloadKey, out var outcome) &&
-        outcome.ValueKind == JsonValueKind.String
-            ? outcome.GetString()
-            : null;
+    private static IReadOnlyList<string> ReadCompleteOutcomeReferenceKeys(ActivityChildNotifiedContext notification)
+    {
+        if (notification.Payload is not { ValueKind: JsonValueKind.Object } payload)
+            return [];
+        if (payload.TryGetProperty(GraphCompleteNotification.OutcomesPayloadKey, out var outcomes) && outcomes.ValueKind == JsonValueKind.Array)
+            return outcomes.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()! : null!).ToArray();
+        return payload.TryGetProperty(GraphCompleteNotification.OutcomePayloadKey, out var outcome) && outcome.ValueKind == JsonValueKind.String
+            ? [outcome.GetString()!]
+            : [];
+    }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context) =>
         context as IRuntimeActivityExecutionContext

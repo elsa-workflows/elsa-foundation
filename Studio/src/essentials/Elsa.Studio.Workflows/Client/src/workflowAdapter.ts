@@ -52,8 +52,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
-  /** A completion may select several outcomes, so the node is an inclusive fork (FR-014). */
-  allowsMultipleOutcomes?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
   /** Short presentation cues derived only from confirmed occurrence evidence. */
   executionPulse?: string;
@@ -1027,7 +1025,6 @@ function createWorkflowNode(
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts,
-      allowsMultipleOutcomes: !options.suppressFlowPorts && allowsMultipleOutcomes(activity, catalogItem) ? true : undefined,
       isStartNode: options.isStartNode,
       canStartWorkflow: activityCanStartWorkflow(activity),
       httpEndpointResponseMode: getHttpEndpointResponseMode(activity, catalogItem) ?? undefined
@@ -1285,24 +1282,6 @@ function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalog
       : [{ name: "Done", displayName: "Done" }, ...fixed];
   return uniquePorts([...statics, ...ports.map(name => ({ name, displayName: name })),
     ...(unmatched ? [{ name: unmatched, displayName: unmatched }] : [])]);
-}
-
-/**
- * Whether one completion of the node may select several outcomes (an inclusive fork), from the catalog's
- * `multipleOutcomes` rule evaluated over the node's authored literal input; a node without that input is read
- * from its structure payload (Switch keeps its mode there).
- */
-export function allowsMultipleOutcomes(activity: ActivityNode, catalogItem?: ActivityCatalogItem): boolean {
-  // Executable inspection supplies the pinned flag; never recompute it from today's catalog.
-  if (Array.isArray(activity.executableOutcomes)) return activity.executableAllowsMultipleOutcomes === true;
-  const rule = readOutcomesFacet(catalogItem)?.multipleOutcomes;
-  if (!isRecord(rule)) return false;
-  if (rule.kind === "always") return true;
-  if (rule.kind !== "whenInputEquals" || typeof rule.input !== "string") return false;
-  const input = readLiteralInput(activity, catalogItem, rule.input);
-  if (input.kind === "expression") return false;
-  const value = input.kind === "literal" ? input.value : activity.structure?.payload?.[rule.input];
-  return value !== undefined && value !== null && String(value) === String(rule.value);
 }
 
 function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {
