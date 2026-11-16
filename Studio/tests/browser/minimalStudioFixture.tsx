@@ -10,7 +10,7 @@ import { AuthContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { SettingsShell } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsShell";
 import { WorkflowInstancesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
-import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
+import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowTemplatesFixture } from "./workflowTemplatesFixture";

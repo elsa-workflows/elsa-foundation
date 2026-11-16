@@ -27,7 +27,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(EfOpenTelemetryModule.SchemaFamily, "Diagnostics.OpenTelemetry", EfOpenTelemetryModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // A trace summary's service and workflow memberships restate its payload, but each is deserialized and merged or
 // compared with the upcast payload, so each is content too (#2140).
 [assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryResourceEntity), nameof(OpenTelemetryResourceEntity.PayloadJson))]

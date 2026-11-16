@@ -20,9 +20,9 @@
     <ProjectReference Include="../../../src/Elsa.Weaver/Elsa.Weaver.csproj" />
     <ProjectReference Include="../../../src/Core/Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="../../../src/Api/Elsa.Weaver.Api.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
-    <ProjectReference Include="../../../../../Essentials/tests/Testing/Elsa.Testing.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../../essentials/tests/Testing/Elsa.Testing.csproj" />
   </ItemGroup>
 
   <!-- The Weaver restart scenarios (T009-T014), compiled unchanged and run over the EF store on SQLite. -->

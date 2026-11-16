@@ -129,7 +129,7 @@ public sealed class ConnectionsLifecycleTests
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "Elsa.Server.slnx"))) root = root.Parent;
         Assert.NotNull(root);
         var configuration = typeof(ConnectionsLifecycleTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
-        var assembly = Path.Combine(root!.FullName, "Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/bin", configuration,
+        var assembly = Path.Combine(root!.FullName, "essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/bin", configuration,
             "net10.0/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.dll");
         Assert.True(File.Exists(assembly), "The restart probe must be built through the test project's build-only reference.");
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

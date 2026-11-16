@@ -279,9 +279,9 @@ jobs:
           if not isinstance(runs, list):
               raise RuntimeError("Expected the shard's recorded run list")
           projects = {
-              "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
-              "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
-              "Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+              "essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+              "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+              "essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
           }
           seen = set()
           failed = False
@@ -601,12 +601,12 @@ jobs:
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Build the architecture guards
-        run: dotnet build Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: dotnet build essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       # Through the shard runner, so a failure gets the same single retry and quarantine as every PR-tier test (FR-004).
       - name: Run the architecture guards
         run: |
-          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
+          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
           python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the outcome
@@ -1311,7 +1311,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'Extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
+          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-studio-nuget-
 
@@ -1427,12 +1427,12 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
-          dotnet restore Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+        run: dotnet build apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
@@ -1440,7 +1440,7 @@ jobs:
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey

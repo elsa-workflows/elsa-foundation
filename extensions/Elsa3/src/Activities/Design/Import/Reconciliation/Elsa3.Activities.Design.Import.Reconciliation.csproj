@@ -17,12 +17,12 @@
     <ProjectReference Include="..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <!-- The feature depends on Elsa3ImportActivitiesPublishing; its package comes with this one. -->
     <ProjectReference Include="..\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <!-- The startup grant decorates the activity publisher's authorization context, which Publishing's API owns. -->
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>
 
 </Project>

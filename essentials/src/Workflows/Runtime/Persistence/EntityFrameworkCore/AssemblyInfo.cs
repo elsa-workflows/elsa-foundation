@@ -44,7 +44,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(RuntimeModelStateEfModule.SchemaFamily, typeof(RuntimeModelInputEntity), nameof(RuntimeModelInputEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeWorkflowTestScopeEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowTestScopeEfModule.SchemaVersion, Entities = [typeof(WorkflowTestScopeEntity)])]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // BookmarkState's payload and metadata, and the checkpoint marker's and the recurring-schedule projection's id sets,
 // restate parts of the row's content document, but each is deserialized and returned or compared with the upcast
 // content, so each is content too (#2140).

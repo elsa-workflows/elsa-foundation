@@ -33,7 +33,7 @@ public sealed partial class RetiredTermEnforcementGuardTests
     /// <summary>The analyzer's rule ids, read from its release notes so a new rule is covered without editing this guard.</summary>
     private static IReadOnlyList<string> DiagnosticIds { get; } =
     [
-        .. RuleId().Matches(File.ReadAllText(Path.Join(RepoRoot, "Essentials", "build", "Analyzers", "AnalyzerReleases.Unshipped.md")))
+        .. RuleId().Matches(File.ReadAllText(Path.Join(RepoRoot, "essentials", "build", "Analyzers", "AnalyzerReleases.Unshipped.md")))
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
     ];
@@ -115,10 +115,10 @@ public sealed partial class RetiredTermEnforcementGuardTests
     public void Each_way_to_weaken_the_analyzer_is_flagged_and_an_honest_config_is_not()
     {
         using var sandbox = new Sandbox();
-        sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Worker.cs", "namespace Elsa.Tasks; internal sealed class Worker { }");
-        sandbox.File("Essentials/src/Events/Elsa.Events/Thing.cs", "namespace Elsa.Events; internal sealed class Thing { }");
-        sandbox.File("Essentials/src/Persistence/Migrations/Initial.cs", "namespace Elsa.Persistence.Migrations; internal sealed class Initial { }");
-        sandbox.File("Essentials/tests/Tasks/Tests/WorkerTests.cs", "namespace Elsa.Tasks.Tests; public sealed class WorkerTests { }");
+        sandbox.File("essentials/src/Tasks/Elsa.Tasks/Worker.cs", "namespace Elsa.Tasks; internal sealed class Worker { }");
+        sandbox.File("essentials/src/Events/Elsa.Events/Thing.cs", "namespace Elsa.Events; internal sealed class Thing { }");
+        sandbox.File("essentials/src/Persistence/Migrations/Initial.cs", "namespace Elsa.Persistence.Migrations; internal sealed class Initial { }");
+        sandbox.File("essentials/tests/Tasks/Tests/WorkerTests.cs", "namespace Elsa.Tasks.Tests; public sealed class WorkerTests { }");
         sandbox.File(".editorconfig",
             """
             root = true
@@ -130,29 +130,29 @@ public sealed partial class RetiredTermEnforcementGuardTests
             generated_code = true
             dotnet_analyzer_diagnostic.severity = none
 
-            [Essentials/src/Tasks/**.cs]
+            [essentials/src/Tasks/**.cs]
             dotnet_diagnostic.ELSANAME001.severity = warning
             elsa_naming.retired_terms = Pump=Worker
 
-            [Essentials/src/Taskz/**.cs]
+            [essentials/src/Taskz/**.cs]
             elsa_naming.retired_terms = Pump=Worker
 
-            [Essentials/tests/Tasks/**.cs]
+            [essentials/tests/Tasks/**.cs]
             elsa_naming.retired_terms = Pump=Worker
 
-            [Essentials/src/Events/**.cs]
+            [essentials/src/Events/**.cs]
             dotnet_analyzer_diagnostic.category-Naming.severity = suggestion
             generated_code = true
             """);
-        sandbox.File("Essentials/build/naming.globalconfig",
+        sandbox.File("essentials/build/naming.globalconfig",
             """
             is_global = true
             elsa_naming.retired_terms = Stimulus=Signal
             """);
-        sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Suppressed.cs", "#pragma warning disable ELSANAME001\nnamespace Elsa.Tasks;");
-        sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
+        sandbox.File("essentials/src/Tasks/Elsa.Tasks/Suppressed.cs", "#pragma warning disable ELSANAME001\nnamespace Elsa.Tasks;");
+        sandbox.File("essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
             """<Project><PropertyGroup><NoWarn>$(NoWarn);ELSANAME002</NoWarn><RunAnalyzers>false</RunAnalyzers></PropertyGroup></Project>""");
-        sandbox.File("Essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+        sandbox.File("essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
             """<Project><PropertyGroup><ElsaIsProductionProject>false</ElsaIsProductionProject></PropertyGroup></Project>""");
         sandbox.File("Directory.Build.props", """<Project><PropertyGroup><ElsaIsProductionProject>true</ElsaIsProductionProject></PropertyGroup></Project>""");
 
@@ -161,27 +161,27 @@ public sealed partial class RetiredTermEnforcementGuardTests
 
         Assert.Equal(
         [
-            "ELSANAME001 is lowered to Warn on 2 production file(s), for example Essentials/src/Tasks/Elsa.Tasks/Suppressed.cs",
-            "dotnet_analyzer_diagnostic.category-naming.severity = suggestion lowers a retired-term diagnostic below error on 1 production file(s), for example Essentials/src/Events/Elsa.Events/Thing.cs",
+            "ELSANAME001 is lowered to Warn on 2 production file(s), for example essentials/src/Tasks/Elsa.Tasks/Suppressed.cs",
+            "dotnet_analyzer_diagnostic.category-naming.severity = suggestion lowers a retired-term diagnostic below error on 1 production file(s), for example essentials/src/Events/Elsa.Events/Thing.cs",
             "elsa_naming.retired_terms is set in a global config, so it applies to every file; activate retired terms per domain in an .editorconfig section",
-            "generated_code = true marks ordinary source as generated, which analyzers skip, on 1 production file(s), for example Essentials/src/Events/Elsa.Events/Thing.cs",
+            "generated_code = true marks ordinary source as generated, which analyzers skip, on 1 production file(s), for example essentials/src/Events/Elsa.Events/Thing.cs",
         ],
             SeverityViolations(sandbox.Root, configs, sources, ["ELSANAME001", "ELSANAME002", "ELSANAME003"]));
         Assert.Equal(
         [
-            ".editorconfig [Essentials/src/Taskz/**.cs] matches no production source file",
-            ".editorconfig [Essentials/tests/Tasks/**.cs] matches no production source file",
+            ".editorconfig [essentials/src/Taskz/**.cs] matches no production source file",
+            ".editorconfig [essentials/tests/Tasks/**.cs] matches no production source file",
         ],
             UnmatchedSections(sandbox.Root, configs, sources));
         Assert.Equal(
         [
-            "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj names ELSANAME, which suppresses the retired-term diagnostics there",
-            "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj sets RunAnalyzers to false, which turns the retired-term analyzer off",
-            "Essentials/src/Tasks/Elsa.Tasks/Suppressed.cs names ELSANAME, which suppresses the retired-term diagnostics there",
+            "essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj names ELSANAME, which suppresses the retired-term diagnostics there",
+            "essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj sets RunAnalyzers to false, which turns the retired-term analyzer off",
+            "essentials/src/Tasks/Elsa.Tasks/Suppressed.cs names ELSANAME, which suppresses the retired-term diagnostics there",
         ],
             SuppressionViolations(sandbox.Root));
         Assert.Equal(
-            ["Essentials/src/Events/Elsa.Events/Elsa.Events.csproj sets ElsaIsProductionProject, which only the root Directory.Build.props may decide"],
+            ["essentials/src/Events/Elsa.Events/Elsa.Events.csproj sets ElsaIsProductionProject, which only the root Directory.Build.props may decide"],
             WiringOverrides(sandbox.Root));
     }
 
@@ -383,10 +383,10 @@ public sealed partial class RetiredTermEnforcementGuardTests
     private static IEnumerable<string> SweptFiles(string repoRoot, bool exemptAnalyzerAndGuards = true)
     {
         string[] extensions = [".cs", ".csproj", ".props", ".targets", ".ruleset"];
-        string[] exempt = exemptAnalyzerAndGuards ? ["Essentials/build/Analyzers/", "Essentials/tests/Architecture/"] : [];
+        string[] exempt = exemptAnalyzerAndGuards ? ["essentials/build/Analyzers/", "essentials/tests/Architecture/"] : [];
 
         return Directory.EnumerateFiles(repoRoot, "*.*", SearchOption.TopDirectoryOnly)
-            .Concat(new[] { "Essentials", "Extensions" }
+            .Concat(new[] { "essentials", "extensions", "apps" }
                 .Select(root => Path.Join(repoRoot, root))
                 .Where(Directory.Exists)
                 .SelectMany(root => Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)))
