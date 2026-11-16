@@ -1,4 +1,6 @@
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
+import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
+import { activityGraphDocumentAdapter } from "./activityGraphDocumentAdapter";
 import { NativeBlockAuthorityProvider } from "./graph-authoring/nativeBlockAuthority";
 import { validateActivityDefinitionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -52,6 +54,7 @@ type ActivityDefinitionAuthoringView = "designer" | "inputs" | "outputs" | "outc
 const authoringViewTabIndices: Record<ActivityDefinitionAuthoringView, number> = { designer: 0, inputs: 1, outputs: 2, outcomes: 3, variables: 4, code: 5 };
 
 const ActivityDefinitionTestRunDialog = lazy(() => import("./ActivityDefinitionTestRunDialog").then(module => ({ default: module.ActivityDefinitionTestRunDialog })));
+const ActivityGraphOutputValueEditor = lazy(() => import("./ActivityGraphOutputValueEditor").then(module => ({ default: module.ActivityGraphOutputValueEditor })));
 const ActivityGraphVariablesEditor = lazy(() => import("./ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphVariablesEditor })));
 
 export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
@@ -478,6 +481,30 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
     }
   };
 
+  const [outputNavigationFailure, setOutputNavigationFailure] = useState<string | null>(null);
+  const revealOutputStep = async (nodeId: string): Promise<StudioActivityDiagnosticFocusResult> => {
+    setOutputNavigationFailure(null);
+    setActiveView("designer");
+    await waitForAuthoringView();
+    let result = unsupportedDiagnosticFocus();
+    try {
+      if (providerEditorRef.current && contribution?.focusDiagnosticLocation) result = await contribution.focusDiagnosticLocation({
+        location: { providerKey: draft.provider.providerKey, jsonPointer: "/rootActivity", referenceKey: nodeId },
+        subject: { kind: "ActivityDraft", id: draft.draftId }, editorElement: providerEditorRef.current
+      });
+    } catch { /* Preserve the graph and explain unsupported or stale navigation. */ }
+    if (result.kind === "focused") {
+      const editor = providerEditorRef.current;
+      editor?.querySelector<HTMLButtonElement>('button[aria-label="Expand inspector panel"]')?.click();
+      [...(editor?.querySelectorAll<HTMLButtonElement>('.wf-inspector [role="tab"]') ?? [])].find(tab => tab.textContent === "Inputs")?.click();
+      setFocusAnnouncement("Opened the Set Output step in the designer.");
+    } else {
+      setActiveView("outputs");
+      setOutputNavigationFailure("This step could not be opened. The graph is unchanged. Open Designer to find the step or reload this draft if it changed elsewhere.");
+    }
+    return result;
+  };
+
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult> => {
     const request = ++diagnosticFocusRequestRef.current;
     diagnosticReturnRef.current = trigger;
@@ -507,10 +534,26 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
       setActiveView(location.jsonPointer?.startsWith("/outputMappings") ? "outputs" : "outcomes");
       await waitForAuthoringView();
       if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
-      await waitForSettingTarget(() => providerPublicInterfaceRef.current?.querySelector<HTMLElement>("[data-output-source], .ad-graph-outcome-mappings") ?? null,
-        () => request === diagnosticFocusRequestRef.current);
-      if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
-      result = focusBoundaryMappingDiagnostic(providerPublicInterfaceRef.current, location.jsonPointer, draft.provider.payload);
+      if (draft.provider.providerKey === "elsa.activity-graph" && location.jsonPointer?.startsWith("/outputMappings")) {
+        const index = Number(location.jsonPointer.split("/")[2]);
+        const mappings = (draft.provider.payload as { outputMappings?: { outputReferenceKey: string }[] }).outputMappings;
+        let key = location.referenceKey || (Number.isInteger(index) ? mappings?.[index]?.outputReferenceKey : null);
+        if (!key && diagnostic.code === "activity.graph.set-output-mapping-conflict") {
+          const root = activityGraphDocumentAdapter.readRoot({ payload: draft.provider.payload, layout: draft.layout });
+          const setters = getActivityGraphOutputSetters(root, new Map());
+          const conflicts = draft.contract.outputs.filter(output => mappings?.some(mapping => mapping.outputReferenceKey === output.referenceKey) && setters.some(setter => setter.outputName === output.name));
+          if (conflicts.length === 1) key = conflicts[0].referenceKey;
+        }
+        if (key) contractEditorHandle.current?.revealMember("output", key);
+        await waitForAuthoringView();
+        const target = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
+        if (target) { target.tabIndex = -1; target.focus(); target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
+        else result = unsupportedDiagnosticFocus();
+      } else {
+        await waitForSettingTarget(() => providerPublicInterfaceRef.current?.querySelector<HTMLElement>("[data-output-source], .ad-graph-outcome-mappings") ?? null, () => request === diagnosticFocusRequestRef.current);
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+        result = focusBoundaryMappingDiagnostic(providerPublicInterfaceRef.current, location.jsonPointer, draft.provider.payload);
+      }
     } else if (
       location.providerKey === draft.provider.providerKey &&
       contribution?.focusDiagnosticLocation
@@ -709,6 +752,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}
     {status === "conflict" ? <section className="ad-conflict-card" role="alert"><AlertTriangle size={20} /><div><h2>Local work preserved</h2><p>The server draft advanced to revision {conflictRevision}. Studio paused autosave and will not force overwrite or merge opaque provider state.</p><button type="button" onClick={() => void createConflictCopy()} disabled={copying}><CopyPlus size={16} /> {copying ? "Creating recovery draft…" : "Create parallel recovery draft"}</button>{copyError ? <span>Recovery could not be confirmed. The local work remains in this editor.</span> : null}</div></section> : null}
     <section id={tabElementIds(authoringTabsId, 1).panelId} className="ad-public-interface-view" role="tabpanel" aria-label={activeView === "outputs" ? "Outputs" : activeView === "outcomes" ? "Outcomes" : "Inputs"} aria-labelledby={tabElementIds(authoringTabsId, isContractView(activeView) ? authoringViewTabIndices[activeView] : 1).tabId} hidden={!isContractView(activeView)}>
+    {activeView === "outputs" && outputNavigationFailure ? <p role="alert">{outputNavigationFailure}</p> : null}
     {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading available input and output types…</div> : <div ref={contractEditorRef}><ActivityDefinitionContractEditor
       ref={contractEditorHandle}
       memberKind={activeView === "outputs" ? "output" : activeView === "outcomes" ? "outcome" : "input"}
@@ -721,10 +765,11 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
       baselineUnavailable={baselineQuery.isError}
       readOnly={providerReadOnly}
       capabilitiesUnavailable={capabilitiesQuery.isError || !capabilitiesQuery.data}
+      renderOutputValue={draft.provider.providerKey === "elsa.activity-graph" ? output => <Suspense fallback={<p role="status">Loading value source…</p>}><ActivityGraphOutputValueEditor output={output} onRevealStep={revealOutputStep} context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} expressionEditors={expressionEditors} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense> : undefined}
       onChange={updateContract}
       onLocalValidityChange={updateLocalContractValidity}
     /></div>}
-    {PublicInterfaceEditor && (boundaryMappingsRequested || hasBoundaryMappings(draft.provider.payload) || draft.contract.outputs.length > 0 || draft.contract.outcomes.some(outcome => outcome.isEmitted)) ? <section ref={providerPublicInterfaceRef} className="ad-provider-public-interface" aria-label="Provider boundary mappings" hidden={activeView !== "outputs" && activeView !== "outcomes"}>
+    {PublicInterfaceEditor && !(draft.provider.providerKey === "elsa.activity-graph" && activeView === "outputs") && (boundaryMappingsRequested || hasBoundaryMappings(draft.provider.payload) || draft.contract.outputs.length > 0 || draft.contract.outcomes.some(outcome => outcome.isEmitted)) ? <section ref={providerPublicInterfaceRef} className="ad-provider-public-interface" aria-label="Provider boundary mappings" hidden={activeView !== "outputs" && activeView !== "outcomes"}>
       <Suspense fallback={<div className="ad-inline-status" role="status" data-boundary-mappings-loading>Loading provider boundary mappings…</div>}>
         <PublicInterfaceEditor
           contractSection={activeView === "outputs" ? "outputs" : "outcomes"}

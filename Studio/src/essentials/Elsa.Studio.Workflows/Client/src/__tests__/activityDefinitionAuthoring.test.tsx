@@ -661,7 +661,9 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
+    expect(resultPane.querySelector(".ad-member-tabs")).toBeNull();
+    expect([...resultPane.querySelectorAll("details > summary")].map(summary => summary.textContent)).toEqual(["Presentation", "Advanced"]);
+    expect([...resultPane.querySelectorAll<HTMLDetailsElement>("details")].every(details => !details.open)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");

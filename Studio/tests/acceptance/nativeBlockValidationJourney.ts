@@ -17,6 +17,7 @@ export async function nativeBlockValidationJourney(page: Page, info: TestInfo, c
   const rootContract = await api<{ contract: { outcomes: { name: string; referenceKey: string; isEmitted: boolean }[] } }>(`/design/activities/versions/${sequence}`);
   const done = rootContract.contract.outcomes.find(item => item.isEmitted && (item.name || item.referenceKey).toLowerCase() === "done")!;
   const member = { type: { alias: "Decimal", collectionKind: "Single", supportsDurability: true }, isRequired: false, isNullable: false, durability: "Required", storageDriverKey: "elsa.json" };
+  // Missing required Set Output inputs is invalid even though current main supports the intrinsic.
   const created = await api<{ definition: { definitionId: string }; draft: { draftId: string } }>("/design/activities/definitions", "POST", {
     category: "Qualification", displayName: `Validation ${info.project.name} ${Date.now()}`, description: null,
     contract: { contractSchemaVersion: "1", inputs: [{ ...member, referenceKey: "amount", name: "Amount" }], outputs: [{ ...member, referenceKey: "total", name: "Total" }], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
@@ -38,7 +39,7 @@ export async function nativeBlockValidationJourney(page: Page, info: TestInfo, c
   const invalid = await invalidResponse;
   expect(invalid.status()).toBe(200);
   expect((await invalid.json()).state).toBe("invalid");
-  await expect(dialog.getByRole("alert")).toContainText("activity.graph.intrinsic-unsupported");
+  await expect(dialog.getByRole("alert")).toContainText("activity.graph.set-output-invalid");
   await expect(dialog.getByRole("button", { name: "Apply change", exact: true })).toBeDisabled();
   expect(await api(draftPath)).toEqual(beforeInvalid);
   await capture(page, info, "block-validation-invalid");

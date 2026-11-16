@@ -71,8 +71,9 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   await capture(page, info, "output-blocker");
   await page.getByRole("button", { name: "Edit output value source", exact: true }).press("Enter");
   await expect(page.getByRole("tab", { name: "Outputs (2)", exact: true })).toHaveAttribute("aria-selected", "true");
-  const source = page.locator('[data-output-reference-key="second"] [data-output-source]');
-  await expect(source.getByRole("button", { name: "Set value", exact: true })).toBeFocused();
+  const source = page.locator('.ad-output-value-source[data-output-reference-key="second"]');
+  await expect(source).toBeFocused();
+  await expect(source.getByRole("button", { name: "Choose value", exact: true })).toBeVisible();
   await capture(page, info, "output-focused");
 
   let reviews = 0;
