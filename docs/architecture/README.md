@@ -12,7 +12,8 @@ These pages describe the proposed clean-slate execution kernel. They are design 
 4. [Ownership and fencing](ownership-and-fencing.md) — **Proposed**: why leases need a fence, how take and commit interact, and the costs and alternatives.
 5. [Fairness and backpressure](fairness-and-backpressure.md) — **Proposed**: admission at the edge, per-tenant limits, fair turn selection within a pass, and the bound on inbox growth.
 6. [Large fan-out and fan-in](large-fan-out.md) — **Proposed**: the combiner tree with credits, its costs against a single parent, and release 1's cap on a parallel ForEach.
-7. [Migrating running instances](migrating-running-instances.md) — **Proposed**: state versions per model and per activity, the migration command and each container's hook, what in-flight work does, and release 1's simple cases.
+7. [Data lifecycle](data-lifecycle.md) — **Proposed**: where payloads live, retention and deletion of finished instances, erasure, encryption at rest, and what the journal format must fix now.
+8. [Migrating running instances](migrating-running-instances.md) — **Proposed**: state versions per model and per activity, the migration command and each container's hook, what in-flight work does, and release 1's simple cases.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 
