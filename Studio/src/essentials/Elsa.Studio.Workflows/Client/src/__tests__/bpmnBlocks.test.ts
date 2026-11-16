@@ -69,12 +69,16 @@ describe("BPMN resource proposals", () => {
     const persisted = nativeBlockPlannerContext({ ...source, document: nativeBlockEditorDocument(proposal.document, source.catalog) }, { x: 0, y: 0 });
     const block = children(persisted.document.rootActivity).find(child => child.nodeId === request.nodeId)!;
     Object.assign(block.inputs[0] as object, { autoEvaluate: null, evaluatorType: null, storageDriverType: null, isSensitive: null, conversion: null });
+    block.structure!.payload.isTransaction = false;
     expect(planUngroupBpmnBlock(persisted, proposal.selection[0]).status).toBe("ready");
     (block.inputs[0] as Record<string, unknown>).autoEvaluate = true;
     refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
     (block.inputs[0] as Record<string, unknown>).autoEvaluate = null;
     (block.inputs[0] as Record<string, unknown>).futureSetting = null;
     refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
+    delete (block.inputs[0] as Record<string, unknown>).futureSetting;
+    block.structure!.payload.isTransaction = true;
+    expect(planUngroupBpmnBlock(persisted, proposal.selection[0]).status).toBe("refused");
   });
   it("does not normalize away a duplicate invocation binding before Ungroup", () => {
     const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));

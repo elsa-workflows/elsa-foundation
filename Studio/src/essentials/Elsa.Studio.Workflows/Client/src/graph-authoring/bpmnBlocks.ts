@@ -104,6 +104,7 @@ export function planUngroupBpmnBlock(context: NativeBlockContext, elementId: str
     }
     for (const [key, value] of Object.entries(block.structure!.payload)) {
       if (["activities", "elements", "sequenceFlows", "diagram"].includes(key)) continue;
+      if (key === "isTransaction" && value === false && defaults.structure!.payload[key] == null) continue;
       if (!empty(value) && JSON.stringify(value) !== JSON.stringify(defaults.structure!.payload[key]))
         refuse("boundary-declarations", `nodes.${block.nodeId}.structure.payload.${key}`, "Ungroup would discard local declarations, lanes, pools or process settings.");
     }

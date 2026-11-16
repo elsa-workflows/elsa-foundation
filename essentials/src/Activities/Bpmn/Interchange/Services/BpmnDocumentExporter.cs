@@ -360,11 +360,10 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
 
     private static IReadOnlyList<LibModel.BpmnDiagram> BuildLocalDiagrams(BpmnAuthoredStructure structure, string processId)
     {
-        if (structure.Diagram is not { } diagram || diagram.ValueKind != JsonValueKind.Object)
-            return [];
+        var diagram = structure.Diagram;
 
         var shapes = new List<LibModel.BpmnShape>();
-        if (diagram.TryGetProperty("shapes", out var shapeMap) && shapeMap.ValueKind == JsonValueKind.Object)
+        if (diagram is { ValueKind: JsonValueKind.Object } authoredDiagram && authoredDiagram.TryGetProperty("shapes", out var shapeMap) && shapeMap.ValueKind == JsonValueKind.Object)
             foreach (var shape in shapeMap.EnumerateObject().Where(entry => entry.Value.ValueKind == JsonValueKind.Object))
                 shapes.Add(new LibModel.BpmnShape(null, shape.Name, new LibModel.BpmnBounds(
                     ReadNumber(shape.Value, "x"),
@@ -373,7 +372,7 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
                     ReadNumber(shape.Value, "height", LibModel.BpmnLayoutDefaults.TaskHeight))));
 
         var edges = new List<LibModel.BpmnEdge>();
-        if (diagram.TryGetProperty("edges", out var edgeMap) && edgeMap.ValueKind == JsonValueKind.Object)
+        if (diagram is { ValueKind: JsonValueKind.Object } authoredEdges && authoredEdges.TryGetProperty("edges", out var edgeMap) && edgeMap.ValueKind == JsonValueKind.Object)
             foreach (var edge in edgeMap.EnumerateObject().Where(entry => entry.Value.ValueKind == JsonValueKind.Object))
             {
                 if (!edge.Value.TryGetProperty("waypoints", out var waypoints) || waypoints.ValueKind != JsonValueKind.Array)
@@ -384,6 +383,30 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
                     .Select(waypoint => new LibModel.BpmnPoint(ReadNumber(waypoint, "x"), ReadNumber(waypoint, "y")))
                     .ToArray()));
             }
+
+        // Complete each process's plane here. The writer's document-wide fallback otherwise
+        // puts missing nested shapes and routes in the first (outer) plane.
+        var boundsByElement = shapes.ToDictionary(shape => shape.BpmnElementRef, shape => shape.Bounds, StringComparer.Ordinal);
+        foreach (var (element, index) in structure.Elements.Select((element, index) => (element, index)))
+        {
+            if (boundsByElement.ContainsKey(element.ElementId)) continue;
+            var eventElement = element.ElementType.EndsWith("Event", StringComparison.Ordinal);
+            var gatewayElement = element.ElementType.EndsWith("Gateway", StringComparison.Ordinal);
+            var width = eventElement ? LibModel.BpmnLayoutDefaults.EventSize : gatewayElement ? LibModel.BpmnLayoutDefaults.GatewaySize : LibModel.BpmnLayoutDefaults.TaskWidth;
+            var height = eventElement ? LibModel.BpmnLayoutDefaults.EventSize : gatewayElement ? LibModel.BpmnLayoutDefaults.GatewaySize : LibModel.BpmnLayoutDefaults.TaskHeight;
+            var bounds = new LibModel.BpmnBounds(index * LibModel.BpmnLayoutDefaults.HorizontalPitch, 0, width, height);
+            boundsByElement.Add(element.ElementId, bounds);
+            shapes.Add(new LibModel.BpmnShape(null, element.ElementId, bounds));
+        }
+        var routedFlows = edges.Select(edge => edge.BpmnElementRef).ToHashSet(StringComparer.Ordinal);
+        foreach (var flow in structure.SequenceFlows)
+        {
+            if (routedFlows.Contains(flow.FlowId)) continue;
+            if (!boundsByElement.TryGetValue(flow.SourceRef, out var source) || !boundsByElement.TryGetValue(flow.TargetRef, out var target))
+                throw new BpmnInterchangeException($"Flow '{flow.FlowId}' cannot be placed in process '{processId}' because an endpoint is outside that process.");
+            edges.Add(new LibModel.BpmnEdge(null, flow.FlowId,
+                [new(source.X + source.Width, source.Y + source.Height / 2), new(target.X, target.Y + target.Height / 2)]));
+        }
 
         if (shapes.Count == 0 && edges.Count == 0)
             return [];

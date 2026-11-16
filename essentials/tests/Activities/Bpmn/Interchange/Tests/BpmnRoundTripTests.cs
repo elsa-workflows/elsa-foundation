@@ -177,6 +177,38 @@ public sealed class BpmnRoundTripTests
     }
 
     [Fact]
+    public void Generated_subprocess_routes_and_missing_shapes_stay_in_their_own_DI_plane()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements: [new("inner-start", BpmnElementTypes.StartEvent), new("inner-task", BpmnElementTypes.Task), new("inner-end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("inner-entry", "inner-start", "inner-task"), new("inner-exit", "inner-task", "inner-end")],
+            diagram: JsonSerializer.SerializeToElement(new {
+                shapes = new Dictionary<string, object> { ["inner-start"] = new { x = 10.25, y = 20.75, width = 36.5, height = 35.25 } },
+                edges = new Dictionary<string, object>()
+            }, SerializerOptions));
+        var nested = ProcessNode(inner) with { NodeId = "native-subprocess" };
+        var outer = new BpmnAuthoredStructure(activities: [nested],
+            elements: [new("start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("entry", "start", "sub"), new("exit", "sub", "end")]);
+        var result = ExportImport(outer);
+        var body = Assert.Single(result.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var shapes = body.Diagram!.Value.GetProperty("shapes");
+        var edges = body.Diagram.Value.GetProperty("edges");
+        foreach (var id in new[] { "inner-start", "inner-task", "inner-end" })
+        {
+            Assert.True(shapes.TryGetProperty(id, out _), $"Missing local shape {id}");
+            Assert.False(result.Diagram!.Value.GetProperty("shapes").TryGetProperty(id, out _));
+        }
+        foreach (var id in new[] { "inner-entry", "inner-exit" })
+        {
+            Assert.Equal(2, edges.GetProperty(id).GetProperty("waypoints").GetArrayLength());
+            Assert.False(result.Diagram!.Value.GetProperty("edges").TryGetProperty(id, out _));
+        }
+        Assert.Equal(10.25, shapes.GetProperty("inner-start").GetProperty("x").GetDouble());
+        Assert.Equal(20.75, shapes.GetProperty("inner-start").GetProperty("y").GetDouble());
+    }
+
+    [Fact]
     public void Native_scalar_variable_type_survives_XML_without_an_unrepresentable_default()
     {
         var authored = new BpmnAuthoredStructure(variables: [new("counter", "counter", new TypeReference("Int32"), null, null)]);
