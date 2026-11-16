@@ -10,6 +10,8 @@ public static class LeaseChecks
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
         await StarterContextChecks.Run(Check, CaseInsensitive);
+        await ChildCompletionChecks.Run(Check);
+        await ChildCompletionRecoveryChecks.Run(Check);
         await CheckLoadAfterEviction(Check);
         await CheckLoadDuringUnrelatedEvictions(Check);
         await CheckMissingAliasDuringLoad(Check);
