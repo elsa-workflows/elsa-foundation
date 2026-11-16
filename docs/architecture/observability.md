@@ -145,7 +145,9 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
    time plus that window, or no expiry when it is null (the default: kept until recovered or discarded). Recover in
    either mode sets the `keep_until` of every row this Park kept, restored or not, to the ordinary outside-command
    window from that moment; discard and delete do the same or remove the rows in the same commit, as the data
-   lifecycle page says. A child completion that arrives while parked is kept with the rest, and its entry stays in
+   lifecycle page says. A delete that keeps the rows also clears their `KeptBy` in that commit: revisions start again
+   for a new creation under the same id, so a later Park of a new run at the same revision must never find its
+   predecessor's rows. A child completion that arrives while parked is kept with the rest, and its entry stays in
    the parent's child registry; today such a notice closes the entry without the model.
 2. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
    Minimal. If the data lifecycle page's format item 4 (lifecycle transitions journalled at every level) is adopted, this
@@ -200,8 +202,9 @@ one commit, and calls one new model hook.
   Job, meet and publish tickets keep their kernel-issued ids the same way. A restored row is marked done again when
   consumed, and the sweep removes it after its new window.
 - **A store contract change.** Clearing `Done` is a new message transition: today a row goes from pending to seen,
-  trial and done, and never back. The `KeptBy` column is new too, written only by Park and by a parked instance's
-  consuming commits. Both are kernel behaviour, and every provider and the store conformance suite need them.
+  trial and done, and never back. The `KeptBy` column is new too, set only by Park and by a parked instance's
+  consuming commits, and cleared by recover's restore and by a delete that keeps the rows. Both are kernel behaviour,
+  and every provider and the store conformance suite need them.
 - **Expired kept rows.** A row whose `Parked` window has passed but that the sweep has not yet removed still matches,
   and is restored under the ordinary window set above. The sweep's delete and the restore update meet on the row: the
   one that runs second finds nothing, and the restore's count says which happened. A row the sweep removed goes on the
