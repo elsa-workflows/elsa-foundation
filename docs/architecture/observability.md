@@ -120,7 +120,7 @@ answer was lost counts as an unknown outcome.
 |---|---|---|
 | Inspect parked work | The parked-work read model: instance, actor type, model, definition and version, fault, reason, when, and what the Park kept (decision 2). Payloads need a separate permission | Yes |
 | Retry parked work | A `kernel.recover` message in `retry` mode: as `resume`, and the deliveries the Park consumed are delivered again | Yes, under decisions 1 and 2 |
-| Recover without retry | `kernel.recover` in `resume` mode: waits restored, and the arrivals kept while parked (decision 2) delivered; the deliveries the Park consumed are not delivered again. Under decision 2b nothing was kept, so a wait for a child completion, a reply or a direct resume that arrived while parked never ends | Yes, under decision 1 |
+| Recover without retry | `kernel.recover` in `resume` mode: waits restored, and the arrivals kept while parked (decision 2) delivered; the deliveries the Park consumed, timers among them, are neither delivered again nor re-armed, so a wait whose message the Park consumed (the poison among them) keeps waiting, which is what `retry` is for. Under decision 2b nothing was kept, so a wait for a child completion, a reply or a direct resume that arrived while parked never ends | Yes, under decision 1 |
 | Discard parked work | A `kernel.discard` message | Yes |
 | Inspect an inbox | Pending deliveries of one instance, in delivery order: id, kind, sender, due, state (pending, held or on trial), attempts, size; paged | Metadata only |
 | Suspend, resume, terminate, delete | The built control kinds | Yes |
@@ -162,19 +162,27 @@ one commit, and calls one new model hook.
   events published while it was parked, within their keep window; a wait that did not misses them, as the owner
   decided.
 - **Timers.** The owner reads the instance's inbox rows (one read by target) and passes the ids of timers still pending.
-  A pending timer stays as it is. A timer that came due while parked (its row is gone, or kept as a done row under
-  decision 2) is armed again with its original due time, so it fires at once when that time has passed. Timers are
-  never among the redelivered rows below, so no timer fires twice.
-- **Jobs.** A job still in the row's jobs with a live ticket keeps it. A job whose ticket is gone starts again under a
-  new ticket generation: the kernel derives the ticket id from instance, key, creation and the recovery's ordinal `n`
+  A pending timer stays as it is. A timer that came due while parked and was kept (decision 2a) is restored as its own
+  row, below, which arms it with its original id and due time, so it fires at once. A timer whose row is gone
+  (decision 2b) is armed again by the plan with its original due time. A timer the Park itself consumed is restored
+  only in `retry`, as one of the consumed deliveries; `resume` neither restores nor re-arms it, so it cannot fire the
+  poison again. No timer is armed twice.
+- **Jobs.** A job still in the row's jobs with a live ticket keeps it. A kept ticket row is restored like any kept
+  delivery, below, with its original id. A job whose ticket is gone (decision 2b, or a ticket the Park consumed under
+  `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation and the recovery's ordinal `n`
   (`Worker.TicketId` takes the first three today), so it collides with neither the old ticket nor its kept done row.
   The model never sees the generation: the job context and the `job-finished` result carry the model's own key, and the
-  kernel maps the generation back. A result from the old generation (a kept arrival) matches no live ticket and is
-  dropped.
-- **Deliveries** (under decision 2). Both modes deliver every kept arrival from while parked; `retry` also delivers the
-  selected deliveries the Park consumed. They are sent in their original order, as new messages whose ids derive from
-  the operation id and the original id. Timers and kernel tickets (job, meet, publish) are never copied: the plan
-  re-arms the timers and issues fresh tickets, as the kernel refuses an application send of those kinds.
+  kernel maps the generation back. A result from the old generation matches no live ticket and is dropped.
+- **Deliveries are restored, never copied** (under decision 2). Both modes restore every kept arrival from while
+  parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition fence,
+  clears each kept row's done mark and marks it seen at the current epoch, so the owner hands the rows to the instance
+  in memory after the commit, in their original `seq` order. A restored row keeps its id, sender, kind, payload and
+  creations. That matters because the kernel authenticates some kinds: a child completion to a creation-qualified
+  parent must carry a terminal-notice id, `Sender` equal to the finished child and matching creations
+  (`WorkflowInstance.cs`, the `ChildFinished` check), and a copy under a new id would be refused by
+  `CreationProtocol.Refuse` and consumed ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)).
+  Job, meet and publish tickets keep their kernel-issued ids the same way. A restored outside message keeps its own
+  `keep_until`, and is marked done again when consumed.
 - **Expired kept rows.** When a non-null `Parked` window has passed and the sweep removed kept rows, recover delivers
   what remains and its answer lists the ids it could not deliver. `retry` of a Park whose consumed deliveries are all
   gone is refused; `resume` stays possible.
@@ -248,6 +256,8 @@ record PendingDelivery(string Id, string Kind, string? Sender, DateTimeOffset? D
 - That `RestoreWaits` covers every model's waits: Native, Flowchart and StateMachine each need it shown, with kept
   events in the gap, timers that came due while parked, and jobs still in flight.
 - The byte cost of the trace column, against WRITES.md's cost run.
+- That restoring a kept row (done mark cleared, seen at the current epoch) passes every provider's consume and
+  authentication paths unchanged.
 
 ## Decisions for the owner
 
