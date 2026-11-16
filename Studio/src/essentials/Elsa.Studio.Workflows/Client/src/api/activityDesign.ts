@@ -604,3 +604,12 @@ export async function listActivityAvailabilityDiagnostics(context: StudioEndpoin
   const response = await context.http.getJson<ActivityAvailabilityDiagnostics>(path);
   return normalizeActivityAvailabilityDiagnostics(response);
 }
+
+export async function validateActivityDefinitionCandidate(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: ReplaceActivityDefinitionDraftRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-candidate-validation", { draftId });
+  return context.http.postJson<{ state: string; validation?: ActivityDraftValidationView | null }>(path, request);
+}
