@@ -6,8 +6,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\..\..\Essentials\src\Events\Core\Elsa.Events.Core.csproj" />
-		<ProjectReference Include="..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\..\..\essentials\src\Events\Core\Elsa.Events.Core.csproj" />
+		<ProjectReference Include="..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
 	</ItemGroup>
 
 </Project>

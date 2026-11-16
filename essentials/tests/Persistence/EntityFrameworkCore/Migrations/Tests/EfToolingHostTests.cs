@@ -57,7 +57,7 @@ public sealed class EfToolingHostTests : IDisposable
 
     /// <summary>
     /// Clears the connection pools of this fixture's databases before removing the directory, for the reasons
-    /// recorded on <c>TemporarySqliteDatabase</c> in <c>Essentials/tests/Persistence/EntityFramework/Tests</c>
+    /// recorded on <c>TemporarySqliteDatabase</c> in <c>essentials/tests/Persistence/EntityFramework/Tests</c>
     /// (#1884, #2185): Microsoft.Data.Sqlite pools connections, so a bare delete can still find the file handle
     /// held — harmless on macOS/Linux, an <see cref="IOException"/> on Windows — and clearing every pool instead
     /// can dispose the handle of a connection another test is opening. This fixture owns a whole temp

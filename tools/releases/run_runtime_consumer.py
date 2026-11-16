@@ -55,7 +55,7 @@ def main() -> None:
     feed, consumer = output / "feed", output / "consumer"
     feed.mkdir()
     consumer.mkdir()
-    root_project = repo / "Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj"
+    root_project = repo / "essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj"
     projects: list[Path] = []
     visited: set[Path] = set()
     def visit(project: Path) -> None:
@@ -71,10 +71,10 @@ def main() -> None:
             visit(project.parent / reference.attrib["Include"].replace("\\", "/"))
         projects.append(project)
     visit(root_project)
-    graph_project = repo / "Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj"
+    graph_project = repo / "essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj"
     if args.graph_owner:
         visit(graph_project)
-    primitive_project = repo / "Essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj"
+    primitive_project = repo / "essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj"
     if args.primitive_owner:
         visit(primitive_project)
     for project in projects:

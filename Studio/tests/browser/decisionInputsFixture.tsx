@@ -3,17 +3,17 @@ import { ActivityPropertiesPanel } from "../../src/essentials/Elsa.Studio.Workfl
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { createObjectExpressionEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/objectExpressionEditor";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
-import { collectEvaluateDecisionValidation } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionDraftValidation";
-import { createDecisionInputsEditorContribution } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionInputsEditor";
-import { DecisionVersionEditor } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionVersionEditor";
-import { decisionsCapability } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi";
+import { collectEvaluateDecisionValidation } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionDraftValidation";
+import { createDecisionInputsEditorContribution } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionInputsEditor";
+import { DecisionVersionEditor } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionVersionEditor";
+import { decisionsCapability } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { collectContributionDraftValidation, contributionDraftValidationCollectors } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/contributionDraftValidation";
 import { useContributionDraftValidation } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/useContributionDraftValidation";
 import { withLocalValidationErrors } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
 import { ValidationPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
-import "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
+import "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
 
 const approvalXml = `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="approval_definitions" name="Approval" namespace="urn:elsa:decisions"><decision id="approval" name="Approval"><decisionTable id="approval_table" hitPolicy="UNIQUE"><input id="approval_amount"><inputExpression id="approval_amount_expression" typeRef="number"><text>amount</text></inputExpression></input><input id="approval_category"><inputExpression id="approval_category_expression" typeRef="string"><text>customerCategory</text></inputExpression></input><output id="approval_result" label="result" typeRef="string"/><rule id="approval_rule"><inputEntry id="approval_c1"><text>&lt;= 1000</text></inputEntry><inputEntry id="approval_c2"><text>"Standard"</text></inputEntry><outputEntry id="approval_o1"><text>"Automatic"</text></outputEntry></rule></decisionTable></decision></definitions>`;
 

@@ -43,8 +43,8 @@ database connection string, or `RuntimeConnectionToken`.
 - `IConnectionTypeProvider`: a kind of external system (`http`, `google-drive`, …). Must declare
   supported schemes, non-secret settings, an allowed-hosts policy, and `TestAsync`.
   Known implementations include the built-in HTTP contribution (intra-domain) and the stateless
-  [Anthropic](../../../../Extensions/Agent/src/Anthropic/README.md) and
-  [Azure OpenAI](../../../../Extensions/Agent/src/AzureOpenAI/README.md) agent
+  [Anthropic](../../../../extensions/Agent/src/Anthropic/README.md) and
+  [Azure OpenAI](../../../../extensions/Agent/src/AzureOpenAI/README.md) agent
   connection types (cross-domain), registered by their optional features through
   `AgentModelConnectionTypeProvider`. The Connections type registry is a singleton immutable
   lookup; contributors must not capture scoped runtime factories/resolvers.

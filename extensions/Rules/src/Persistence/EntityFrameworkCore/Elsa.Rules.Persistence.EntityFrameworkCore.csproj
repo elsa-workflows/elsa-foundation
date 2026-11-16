@@ -11,6 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Rules.Persistence.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
 </Project>

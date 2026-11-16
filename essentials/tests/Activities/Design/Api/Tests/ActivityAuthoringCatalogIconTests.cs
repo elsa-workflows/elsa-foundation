@@ -58,7 +58,7 @@ public sealed class ActivityAuthoringCatalogIconTests
         {
             Id = "def-slack",
             ActivityTypeKey = "Acme.Activities.NotifySlack",
-            Category = "Extensions",
+            Category = "extensions",
             DisplayName = "Notify Slack",
         };
         var version = new ActivityDefinitionVersion("1.0.0", definition.Id)

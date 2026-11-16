@@ -1,6 +1,6 @@
 # External sign-in Studio module
 
-Optional `ExternalAuthenticationStudio` feature. It contributes **Security → External sign-in** when the selected backend advertises `elsa.api.identity.external-authentication` contract 1 and the user has provider read/manage access. It consumes the public Studio SDK/UI and the backend [managed authentication API](../../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md).
+Optional `ExternalAuthenticationStudio` feature. It contributes **Security → External sign-in** when the selected backend advertises `elsa.api.identity.external-authentication` contract 1 and the user has provider read/manage access. It consumes the public Studio SDK/UI and the backend [managed authentication API](../../../../essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md).
 
 **Security → User access** requires user-read permission on that backend. Its bounded user directory does not require provider-management access. Link and session panels independently require their dedicated read permissions; each action follows current server permissions, ownership capabilities and module availability. Link attachment selects a configured connection and its exact external subject. Removal checks remaining user and administrator recovery paths. Selected-session revocation invalidates its cookie, access and refresh credentials while preserving other sessions. These actions preserve saved Elsa roles.
 
