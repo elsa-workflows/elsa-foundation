@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
 
@@ -27,5 +28,5 @@ public sealed class IntrinsicActivityConsumerCapability : IRuntimeActivityConsum
     public string ConsumerKey => WellKnownRuntimeActivityConsumers.Intrinsic;
 
     /// <inheritdoc />
-    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [RuntimeActivityDescriptor.InitialSchemaVersion];
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [RuntimeActivityDescriptor.InitialSchemaVersion, WorkflowIntrinsicDescriptorSchemas.ActivityOutput];
 }
