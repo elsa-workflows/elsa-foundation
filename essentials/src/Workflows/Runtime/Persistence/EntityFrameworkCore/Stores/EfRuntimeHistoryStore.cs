@@ -107,12 +107,13 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
                 if (owned is not null) await owned.CommitAsync(token);
             }
             finally { if (owned is not null) await owned.DisposeAsync(); }
-            token.ThrowIfCancellationRequested(); Recheck(bound); return result;
+            return result;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (InvalidDataException error) { throw new RuntimeHistoryIntegrityException(run, "retained history data could not be interpreted", error); }
         catch (Exception error) when (error is OperationCanceledException or TimeoutException or IOException || EfRelationalExceptionClassifier.IsProviderFailure(error))
         { throw new RuntimeHistoryUnavailableException(run, operation, error); }
+        finally { token.ThrowIfCancellationRequested(); Recheck(bound); }
     }
     private async Task<RuntimeHistoryHead?> Head(string scope, string run, RuntimeHistoryCapturePolicy policy, CancellationToken token)
     {
