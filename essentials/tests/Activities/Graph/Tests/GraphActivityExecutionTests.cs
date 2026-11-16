@@ -525,6 +525,103 @@ public sealed class GraphActivityExecutionTests : IDisposable
         Assert.Equal(42, Assert.IsType<JsonElement>(result["copy"]).GetInt32());
     }
 
+    [Theory]
+    [InlineData("workflow")]
+    [InlineData("activity-graph")]
+    [InlineData(null)]
+    public async Task VariableOutputMapping_ReturnsOnlyTheCurrentInvocationFinalValue(string? scopeId)
+    {
+        var variable = new GraphActivityVariableDescriptor(
+            "running-total", "RenamedTotal", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json,
+            new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(9)));
+        var descriptor = Descriptor(
+            variables: [variable],
+            outputs: [Output("result") with { Type = Type("Int32") }],
+            outputMappings: [Mapping("result", VariableRead(variable.ReferenceKey, scopeId))],
+            requiredOutputReferenceKeys: ["result"]);
+        var factory = new GraphActivityScopeFactory(Registry());
+        var now = DateTimeOffset.UnixEpoch;
+        var persisted = new List<DurableValueState>();
+        foreach (var (executionId, value) in new[] { ("outer-call", 17), ("inner-call", 42) })
+        {
+            var graph = NewGraph(descriptor);
+            var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State(executionId));
+            var entry = await graph.PrepareEntryCheckpointAsync(context, new Dictionary<string, object?>(), now);
+            var scope = factory.Rehydrate(descriptor, context.WorkflowExecutionId, executionId, entry.Select(change => change.State).ToArray());
+            persisted.Add(await scope.SetVariableAsync(variable, value, now.AddMinutes(1)));
+        }
+
+        foreach (var (executionId, expected) in new[] { ("inner-call", 42), ("outer-call", 17) })
+        {
+            var resumed = NewGraph(descriptor);
+            var context = Context(resumed, BoundaryNode(descriptor, [Node("entry")]), State(executionId));
+            var prepared = await resumed.PrepareCompletionCheckpointAsync(context, persisted, now.AddMinutes(2));
+            var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                Assert.IsAssignableFrom<IActivityCompletionTransition>(prepared.Transition).Result);
+            var output = Assert.Single(result);
+            Assert.Equal("result", output.Key);
+            Assert.Equal(expected, Assert.IsType<JsonElement>(output.Value).GetInt32());
+        }
+    }
+
+    [Theory]
+    [InlineData("running-total", "foreign", "not visible")]
+    [InlineData("DisplayName", "workflow", "undeclared")]
+    [InlineData("running-total", "workflow", "returned null")]
+    public async Task VariableOutputMapping_RejectsForeignScopesDisplayNamesAndNullForNumericOutput(string key, string scopeId, string expectedError)
+    {
+        var descriptor = Descriptor(
+            variables: [Variable("running-total", null) with { Name = "DisplayName" }],
+            outputs: [Output("result") with { Type = Type("Int32") }],
+            outputMappings: [Mapping("result", VariableRead(key, scopeId))]);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>()));
+        Assert.Contains(expectedError, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task VariableOutputMapping_RequiresTheReferencedCheckpointRow()
+    {
+        var descriptor = Descriptor(
+            variables: [Variable("key", Default("initial"))],
+            outputs: [Output("result")],
+            outputMappings: [Mapping("result", VariableRead("key", "workflow"))]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("resumed-call"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch).AsTask());
+        Assert.Contains("no captured value", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Array", true)]
+    [InlineData("Single", false)]
+    public async Task VariableOutputMapping_UsesTheDeclaredOutputCollectionShape(string collectionKind, bool acceptsArray)
+    {
+        var array = JsonSerializer.SerializeToElement(new[] { 2, 4 });
+        var arrayType = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind = "Array" });
+        var descriptor = Descriptor(
+            variables: [Variable("numbers", new GraphActivityExpression("Literal", array)) with { Type = arrayType }],
+            outputs: [Output("result") with { Type = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind }) }],
+            outputMappings: [Mapping("result", VariableRead("numbers", "workflow"))]);
+
+        var completion = PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
+        if (!acceptsArray)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
+            Assert.Contains("does not match declared type", error.Message, StringComparison.Ordinal);
+            return;
+        }
+
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>((await completion).Transition).Result);
+        Assert.True(JsonElement.DeepEquals(array, Assert.IsType<JsonElement>(result["result"])));
+    }
+
+    private static GraphActivityExpression VariableRead(string referenceKey, string? declaringScopeId) =>
+        new("Variable", JsonSerializer.SerializeToElement(new { referenceKey, declaringScopeId }));
+
     [Fact]
     public async Task PrepareCompletion_DoesNotRequireAnUnreferencedOptionalInput()
     {

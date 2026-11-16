@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; intrinsic?: unknown; structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables: unknown[] } } };
-type Draft = { draftId: string; definitionId: string; revision: number; contract: { outputs: { referenceKey: string; name: string; type: { alias: string }; isRequired: boolean }[] }; provider: { payload: { rootActivity: Node; outputMappings: unknown[] } } };
+type Draft = { draftId: string; definitionId: string; revision: number; contract: { outputs: { referenceKey: string; name: string; type: { alias: string }; isRequired: boolean }[] }; layout: unknown[]; activityPresentation?: unknown[]; provider: { payload: { rootActivity: Node; outputMappings: unknown[] } } };
 
 /** Actual composed UI authoring plus real publication/runtime, scoped to runner-owned disposable stores. */
 export async function setOutputJourney(page: Page, info: TestInfo, capture: Capture, registerWorkflow: (id: string) => void) {
@@ -99,10 +99,20 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await target().scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-reopened");
   await views.getByRole("tab", { name: /^Outputs/ }).click();
-  await page.locator(".ad-graph-output-mapping").scrollIntoViewIfNeeded();
+  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-connections");
-  await expect(page.getByText("Assigned in the designer with Set Output.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Set value", exact: true }).click();
+  await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
+  const unchanged = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
+  await page.getByRole("button", { name: "Change value source", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Choose value", exact: true })).toBeDisabled();
+  expect((await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`)).provider.payload).toEqual(unchanged.provider.payload);
+  // Existing conflicting drafts still need a recovery path; the new UI does not create a conflict.
+  await api(`/design/activities/drafts/${unchanged.draftId}`, "PUT", {
+    expectedRevision: unchanged.revision, contract: unchanged.contract,
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { ...unchanged.provider.payload, outputMappings: [{ outputReferenceKey: unchanged.contract.outputs[0].referenceKey, source: { syntax: "Literal", value: 42.5 } }] } },
+    layout: unchanged.layout, activityPresentation: unchanged.activityPresentation ?? []
+  });
+  await page.reload(); await views.getByRole("tab", { name: /^Outputs/ }).click();
   await expect(page.getByText("This output also has a Set Output assignment. Remove this connection or the assignment before publishing.", { exact: true })).toBeVisible();
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   const rejectedReview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publication-preflight"));
@@ -118,9 +128,9 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await capture(page, info, "set-output-conflict-review");
   await review.getByRole("button", { name: "Return to editor", exact: true }).click();
   await page.getByRole("button", { name: "Remove connection", exact: true }).click();
-  await expect(page.getByText("Assigned in the designer with Set Output.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
-  await page.locator(".ad-graph-output-mapping").scrollIntoViewIfNeeded();
+  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-conflict-repaired");
   const saved = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
   expect(saved.contract.outputs).toHaveLength(1);

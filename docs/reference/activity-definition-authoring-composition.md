@@ -61,6 +61,9 @@ sees the activity's variables by name (`variables.x`, `getVariable('x')`, `get<X
 request parameters, as in a workflow. For example, to calculate `args.A + args.B` in Set Output, bind the parameters `A` and `B` to their declared activity inputs. A graph published before graph compiler `3.0.0` and used inside a newer one
 reads the newer graph as its caller.
 
+An output mapped directly to a graph variable reads its final value when that invocation completes. The mapping
+stores the variable's reference key, so renaming the variable preserves the connection.
+
 Publishing the activity refuses a body reference the activity does not declare or contain:
 
 | Code | Refused when |

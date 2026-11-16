@@ -703,6 +703,20 @@ describe("ActivityGraphImplementationEditor editorial layout", () => {
 describe("ActivityGraphImplementationEditor BPMN slots", () => {
   // A BPMN scope renders from its process ELEMENTS, so an activity placed without a bound element has
   // no representation on the canvas and is dropped by the next syncBpmnCanvasToScope.
+  it("reveals a BPMN-bound Set Output by its activity identity and focuses the actual element", async () => {
+    catalogItems = [bpmnCatalogItem(), setOutputActivity];
+    const rendered = renderDesigner({ value: bpmnImplementationValue([
+      { elementId: "start", elementType: "startEvent" }, { elementId: "sum-task", elementType: "task", childNodeId: "set-sum" }
+    ], [{ nodeId: "set-sum", activityVersionId: setOutputActivity.activityVersionId, inputs: [], outputs: [], intrinsic: { kind: "SetOutput" } }]), readOnly: true });
+    const complete = vi.fn();
+    flushSync(() => rendered.container.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
+      cancelable: true, detail: { location: { referenceKey: "set-sum" }, complete }
+    })));
+    await vi.waitFor(() => expect(complete).toHaveBeenCalledWith(expect.objectContaining({ kind: "focused" })));
+    expect(document.activeElement?.getAttribute("data-graph-node-id")).toBe("sum-task");
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Set Output");
+  });
+
   it("binds a palette placement to a BPMN element", () => {
     catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
     const onChange = vi.fn();

@@ -1,4 +1,4 @@
-import { readWrappedInput } from "./activityProperties";
+import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
@@ -661,7 +661,7 @@ export function ActivityGraphImplementationEditor({
     const present = isBpmnSlot
       ? nodes.some(node => node.id === selectedNodeId)
       : activities.some(activity => activity.nodeId === selectedNodeId);
-    if (present) return;
+    if (present || pendingDiagnosticFocusRef.current?.target === selectedNodeId) return;
     setSelectedNodeId(null);
   }, [activities, isBpmnSlot, nodes, selectedNodeId]);
 
@@ -686,10 +686,15 @@ export function ActivityGraphImplementationEditor({
       const targetPath = findNodeScopePath(root, nodeId, activity => nodeLabel(activity, catalogByVersion), catalogByVersion);
       if (!targetPath) return;
       event.preventDefault();
+      const targetScope = resolveScope(root, targetPath, catalogByVersion);
+      const selectionId = targetScope?.slot.mode === "bpmn"
+        ? readBpmnElements(targetScope.owner).find(element => element.childNodeId === nodeId)?.elementId
+        : nodeId;
+      if (!selectionId) return;
       setScopePath(targetPath);
-      setSelectedNodeId(nodeId);
+      setSelectedNodeId(selectionId);
       pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
-      pendingDiagnosticFocusRef.current = { target: nodeId, complete: event.detail.complete };
+      pendingDiagnosticFocusRef.current = { target: selectionId, complete: event.detail.complete };
       setDiagnosticFocusVersion(version => version + 1);
     };
     editor.addEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
@@ -1123,22 +1128,16 @@ export function ActivityGraphImplementationEditor({
 }
 
 function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<string, ActivityCatalogItem>): Set<string> {
-  const names = new Set<string>();
-  const visit = (node: ActivityNode) => {
-    if (node.intrinsic?.kind.toLowerCase() === "setoutput") {
-      const name = readWrappedInput(node, { name: "Name", referenceKey: "name", typeName: "String" });
-      if (name.expression.type === "Literal" && typeof name.expression.value === "string") names.add(name.expression.value);
-    }
-    for (const slot of getChildSlots(node, catalog)) for (const child of slot.activities) visit(child);
-  };
-  visit(root);
-  return names;
+  return new Set(getActivityGraphOutputSetters(root, catalog).flatMap(setter => setter.outputName === null ? [] : [setter.outputName]));
 }
 
-function ActivityGraphOutputMappingEditor({
+export function ActivityGraphOutputMappingEditor({
   output,
   mapping,
   assignedBySetOutput,
+  embedded = false,
+  changingSource = true,
+  preserveValue = false,
   expressionDescriptors,
   expressionDescriptorStatus,
   expressionEditors,
@@ -1149,6 +1148,9 @@ function ActivityGraphOutputMappingEditor({
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
   assignedBySetOutput: boolean;
+  embedded?: boolean;
+  changingSource?: boolean;
+  preserveValue?: boolean;
   expressionDescriptors: StudioExpressionDescriptor[];
   expressionDescriptorStatus: "loading" | "ready" | "failed";
   expressionEditors: StudioExpressionEditorContribution[];
@@ -1156,6 +1158,7 @@ function ActivityGraphOutputMappingEditor({
   readOnly: boolean;
   onChange(source: ActivityGraphOutputMapping["source"] | null): void;
 }) {
+  const valueReadOnly = readOnly || preserveValue;
   const descriptor = useMemo<StudioActivityInputDescriptor>(() => ({
     name: output.name,
     referenceKey: output.referenceKey,
@@ -1189,8 +1192,11 @@ function ActivityGraphOutputMappingEditor({
   };
   const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
 
+  const defaultSource = embedded
+    ? ["Literal", "Input", "Variable"].map(type => available.find(item => item.descriptor.type === type)).find(Boolean) ?? available.find(item => item.descriptor.type !== "ActivityResult")
+    : available[0];
   const add = () => {
-    const first = available[0];
+    const first = defaultSource;
     if (!first) return;
     const nextContext = { ...context, syntax: first.descriptor.type };
     onChange({
@@ -1210,32 +1216,32 @@ function ActivityGraphOutputMappingEditor({
   };
 
   return (
-    <article className="ad-graph-output-mapping">
-      <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header>
+    <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`}>
+      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
       {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
       {!mapping ? <>
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
-        <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
+        <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        <StudioField label={<><span>Value source</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField>
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type} disabled={embedded && item.descriptor.type === "ActivityResult"}>{item.descriptor.displayName || item.descriptor.type}{embedded && item.descriptor.type === "ActivityResult" ? " · browsing unavailable here" : ""}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
         {Editor ? <Editor
           descriptor={descriptor}
           syntax={currentSyntax}
           value={mapping.source.value}
-          disabled={readOnly}
+          disabled={valueReadOnly}
           context={context}
           onChange={nextValue => onChange({ ...mapping.source, value: nextValue })}
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}
         {diagnostics.map((diagnostic, index) => <span key={`${diagnostic.code ?? "diagnostic"}:${index}`} role={diagnostic.severity === "error" ? "alert" : "status"}>{diagnostic.message}</span>)}
       </>}
-      <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details>
+      {!embedded ? <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details> : null}
       {expressionDescriptorStatus === "loading" ? <span role="status">Loading value sources…</span> : null}
       {expressionDescriptorStatus === "failed" ? <span role="alert">Expression types could not be loaded. Existing mappings remain unchanged.</span> : null}
     </article>
   );
 }
 
-function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
+export function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{
     descriptors: StudioExpressionDescriptor[];
@@ -1264,7 +1270,7 @@ function useActivityGraphExpressionDescriptors(context: StudioActivityDefinition
   };
 }
 
-function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
+export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
   const type = isRecord(input.type) ? input.type : {};
   return {
     ...input,
@@ -1283,7 +1289,7 @@ function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["in
   };
 }
 
-function toVisibleGraphVariable(value: unknown) {
+export function toVisibleGraphVariable(value: unknown) {
   if (!isRecord(value)) return [];
   const referenceKey = typeof value.referenceKey === "string" ? value.referenceKey.trim() : "";
   const name = typeof value.name === "string" ? value.name.trim() : "";
@@ -1307,7 +1313,7 @@ function toVariableEditorRecords(values: unknown[]) {
   });
 }
 
-function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
+export function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
   return toVariableEditorRecords(values).flatMap(value => {
     if (!isRecord(value) ||
         typeof value.referenceKey !== "string" ||
