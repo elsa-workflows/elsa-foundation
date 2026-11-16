@@ -147,10 +147,63 @@ public sealed class RuntimeHistoryCleanupOwnerTests
     {
         Exception failure = new InvalidOperationException("native context", malformed ? new InvalidDataException("corrupt") : new IOException("unavailable"));
         var cleanup = new ActivityScopeCleanupStore(new InMemoryBookmarkStateStore(), new InMemoryDurableTimerStore(),
-            new InMemoryWorkflowSchedulerWorkQueue(), new FailedRead(failure));
+            new InMemoryWorkflowSchedulerWorkQueue(), new PolicyRead(_ => throw failure));
         var caught = await Record.ExceptionAsync(async () => await cleanup.CaptureAsync("run", "activity", new HashSet<string> { "activity" }));
         if (malformed) Assert.Same(failure, Assert.IsType<RuntimeHistoryIntegrityException>(caught).InnerException);
         else Assert.Same(failure, Assert.IsType<RuntimeSchedulerWorkUnavailableException>(caught).InnerException);
+    }
+
+    [Theory]
+    [InlineData("success", false)]
+    [InlineData("success", true)]
+    [InlineData("io", false)]
+    [InlineData("io", true)]
+    [InlineData("malformed", false)]
+    [InlineData("malformed", true)]
+    [InlineData("provider-cancellation", false)]
+    [InlineData("provider-cancellation", true)]
+    public async Task Caller_cancellation_during_policy_read_takes_precedence_without_deleting_resources(string outcome, bool cancelCaller)
+    {
+        using var caller = new CancellationTokenSource();
+        Exception? failure = outcome switch
+        {
+            "io" => new IOException("provider unavailable"),
+            "malformed" => new JsonException("malformed admitted policy"),
+            "provider-cancellation" => new InvalidOperationException("provider context", new OperationCanceledException("provider deadline")),
+            _ => null
+        };
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["BookmarkRemoved"]);
+        var executions = new PolicyRead(async token =>
+        {
+            Assert.Equal(caller.Token, token);
+            Assert.False(token.IsCancellationRequested);
+            await Task.Yield();
+            if (cancelCaller) caller.Cancel();
+            if (failure is not null) throw failure;
+            return Workflow(policy);
+        });
+        var bookmarks = new InMemoryBookmarkStateStore();
+        await bookmarks.SaveAsync(Bookmark("owned", "activity"));
+        var cleanup = new ActivityScopeCleanupStore(bookmarks, new InMemoryDurableTimerStore(),
+            new InMemoryWorkflowSchedulerWorkQueue(), executions);
+        ActivityScopeCleanupRequest? inventory = null;
+        var caught = await Record.ExceptionAsync(async () =>
+            inventory = await cleanup.CaptureAsync("run", "activity", new HashSet<string> { "activity" }, caller.Token));
+        Assert.NotNull(await bookmarks.FindAsync("run", "owned"));
+        if (cancelCaller)
+        {
+            Assert.Equal(caller.Token, Assert.IsAssignableFrom<OperationCanceledException>(caught).CancellationToken);
+            Assert.Null(inventory);
+        }
+        else if (failure is null)
+        {
+            Assert.Null(caught);
+            Assert.Equal("owned", Assert.Single(inventory!.HistoryBookmarks!).Identity.BookmarkId);
+        }
+        else if (outcome == "malformed")
+            Assert.Same(failure, Assert.IsType<RuntimeHistoryIntegrityException>(caught).InnerException);
+        else
+            Assert.Same(failure, Assert.IsType<RuntimeSchedulerWorkUnavailableException>(caught).InnerException);
     }
 
     private static ServiceCollection Services()
@@ -171,9 +224,9 @@ public sealed class RuntimeHistoryCleanupOwnerTests
     private static ActivityExecutionState Activity() => new(new("activity", "run", "node", "authored", "test", "1"), ActivityExecutionStatus.Suspended,
         null, 1, At, At, null, null, null, null, null, ActivitySchedulingProvenance.From("run", null, null, null, null, null, "activity", "test"),
         0, [], [], 0, 0, new Dictionary<string, string>(), ExecutionScopeId: "activity");
-    private sealed class FailedRead(Exception failure) : IWorkflowExecutionStateStore
+    private sealed class PolicyRead(Func<CancellationToken, ValueTask<WorkflowExecutionState?>> read) : IWorkflowExecutionStateStore
     {
-        public ValueTask<WorkflowExecutionState?> FindAsync(string id, CancellationToken cancellationToken = default) => throw failure;
+        public ValueTask<WorkflowExecutionState?> FindAsync(string id, CancellationToken cancellationToken = default) => read(cancellationToken);
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
