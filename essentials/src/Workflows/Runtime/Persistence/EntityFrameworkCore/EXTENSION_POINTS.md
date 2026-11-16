@@ -15,7 +15,7 @@ Frozen legacy upgrades retain original table digests/history IDs and create empt
 schema installation fabricates no capture or occurrence evidence.
 
 `RuntimeHistoryEfModule` owns the actual declared chain. Its metadata-only pairing check requires the
-complete owned CLR/member/write mappings, faithful effective member and change-comparer access,
+complete owned CLR/member/write mappings, faithful effective member and change-comparer access, declared and actual store conversions,
 concurrency and required indexes. Additional unique constraints must be redundant with an owned
 unique key. These checks read no journal rows and activate no execution. Model/schema presence alone
 enrolls no capture policy or payload authority.

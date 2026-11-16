@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -35,9 +36,9 @@ internal static class RuntimeHistoryEfModule
                     !HasOwnedMemberAccess(property, member)) return false;
                 // Keep the sealed first-party content codec; unknown conversions/comparers may alter or suppress writes.
                 var declared = (IReadOnlyProperty)property;
-                if ((declared.GetValueConverter() is { } converter &&
-                    !(member.Name == "ContentJson" && converter is EfPayloadValueConverter)) ||
-                    declared.GetValueComparer() is { } comparer && !HasDefaultComparer(comparer)) return false;
+                if (!HasOwnedConversion(declared.GetValueConverter(), member.Name) ||
+                    !HasOwnedConversion(property.GetTypeMapping().Converter, member.Name) ||
+                    !HasDefaultComparer(property.GetValueComparer())) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
@@ -55,6 +56,9 @@ internal static class RuntimeHistoryEfModule
         }
         return Shapes.Length > 0;
     }
+
+    private static bool HasOwnedConversion(ValueConverter? converter, string member) => converter is null ||
+        member == "ContentJson" && converter is EfPayloadValueConverter;
 
     private static bool HasDefaultComparer(ValueComparer comparer) => comparer.IsDefault() ||
         comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
