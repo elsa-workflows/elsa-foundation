@@ -21,6 +21,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'set output assigns reusable activity output': ['reference', 'set-output-empty', 'set-output-declaration', 'set-output-expression', 'set-output-removed-target', 'set-output-readonly', 'set-output-reopened', 'set-output-connections', 'set-output-conflict-review', 'set-output-conflict-repaired', 'set-output-caller-result'],
     'named blocks preserve declared expression results': ['reference'] + [f'workflow-sequence-{state}' for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')],
     'named blocks across graph authoring': ['reference'] + [f'{host}-{kind}-{state}' for host in ('workflow', 'activity') for kind in ('sequence', 'flowchart') for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')] + ['workflow-flowchart-created-repeat', 'activity-flowchart-created-repeat', 'activity-flowchart-terminal-readonly', 'workflow-terminal-refusal'],
     "explicit authored activity names survive publication and execution": ["reference", "authored-definition", "authored-executable", "authored-run"],
@@ -98,6 +99,7 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    'set output assigns reusable activity output': {'set-output-proof.json'},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},

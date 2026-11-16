@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Reconciliation;
@@ -31,14 +32,17 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
+    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector, IActivityProviderDiagnosticCatalog
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
-    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     /// <summary>
     /// The catalog definition id of <see cref="CompleteActivityTypeKey"/>: CLR catalog rows derive it from the type key, so
@@ -47,7 +51,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/4.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/5.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -56,6 +60,18 @@ public sealed class GraphActivityProvider(
         ActivityGraphManifest.SchemaVersion,
         ActivityGraphManifest.MultipleOutcomesSchemaVersion
     };
+
+    IReadOnlyList<ActivityProviderDiagnosticDescriptor> IActivityProviderDiagnosticCatalog.DiagnosticDescriptors { get; } =
+    [
+        new("activity.graph.set-output-mapping-conflict", "An output has both a mapped value and a Set Output assignment.",
+            "Remove the connection in Outputs or remove the Set Output assignment in the designer.", "/outputMappings"),
+        new("activity.graph.set-output-unknown", "Set Output targets an output this activity does not declare.",
+            "Select a declared activity output in the Set Output inspector."),
+        new("activity.graph.set-output-invalid", "Set Output requires an output name and a value that can be stored.",
+            "Select a declared output and provide its value in the Set Output inspector."),
+        new("activity.graph.set-output-binding-invalid", "The Set Output value could not be bound to its declared output.",
+            "Review the value expression and the selected output's type.")
+    ];
 
     public string ProviderKey => Key;
     public string CompilerFingerprint => Fingerprint;
@@ -183,7 +199,7 @@ public sealed class GraphActivityProvider(
             nodes = EnumerateNodes(graph.RootActivity);
             completeNodes = FindCompleteNodes(nodes, request.ResolvedDirectDependencies);
             ValidateGraph(graph, request.Contract, subject, diagnostics, completeNodes);
-            ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateDependencies(nodes.Where(x => !x.IsSetOutput).ToArray(), request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateBodyReferences(
@@ -207,6 +223,26 @@ public sealed class GraphActivityProvider(
             .ToArray();
         var descriptorPayload = BuildBoundaryPayload(graph, request.Contract, nodes, directDependencies, completeNodes);
         var runtimeContract = BuildRuntimeContract(request, descriptorPayload);
+        var localNodes = new List<ExecutableNode>();
+        if (nodes.Any(x => x.IsSetOutput))
+        {
+            using var scope = (scopeFactory ?? throw new InvalidOperationException("Compiling Set Output requires the publishing input binding compiler.")).CreateScope();
+            var compiler = scope.ServiceProvider.GetRequiredService<IActivityTemplateInputBindingCompiler>();
+            foreach (var node in nodes.Where(x => x.IsSetOutput))
+            {
+                var output = request.Contract.Outputs.Single(x => x.Name == ReadLiteralInput(node, WorkflowIntrinsicInputKeys.Name));
+                try
+                {
+                    localNodes.Add(CompileSetOutput(node, output, compiler));
+                }
+                catch (ArgumentException exception)
+                {
+                    diagnostics.Add(Diagnostic("activity.graph.set-output-binding-invalid", exception.Message, subject, node.JsonPointer, node.NodeId));
+                }
+            }
+            if (diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+                return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics)));
+        }
         var executableRoot = new ExecutableNode(
             "graph-boundary",
             "graph-boundary",
@@ -216,6 +252,7 @@ public sealed class GraphActivityProvider(
             new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
             new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
             new Dictionary<string, string>(StringComparer.Ordinal),
+            childSlots: localNodes.Count == 0 ? [] : [new ExecutableChildSlot("graph-local-nodes", localNodes)],
             activityContract: runtimeContract);
         var descriptorBytes = Encoding.UTF8.GetByteCount(descriptorPayload.GetRawText());
         var maximumDepth = nodes.Count == 0 ? 0 : nodes.Max(x => x.Depth);
@@ -227,7 +264,7 @@ public sealed class GraphActivityProvider(
             descriptorBytes,
             0,
             request.Contract.Inputs.Count + request.Contract.Outputs.Count + graph.Variables.Count);
-        var occurrences = nodes
+        var occurrences = nodes.Where(x => !x.IsSetOutput)
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
@@ -242,7 +279,7 @@ public sealed class GraphActivityProvider(
             executableRoot,
             new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal),
             directDependencies,
-            [new RuntimeRequirement(RuntimeConsumerKey, RuntimeDescriptorSchemaVersion)],
+            executableRoot.DescendantsAndSelf().Select(x => new RuntimeRequirement(x.Descriptor.ConsumerKey, x.Descriptor.SchemaVersion)).Distinct().ToArray(),
             request.Contract.Inputs.Select(x => x.StorageDriverKey)
                 .Concat(request.Contract.Outputs.Select(x => x.StorageDriverKey))
                 .Concat(graph.Variables.Select(x => x.StorageDriverKey))
@@ -266,7 +303,7 @@ public sealed class GraphActivityProvider(
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         if (graph is null)
             return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], ActivityDiagnosticOrderer.Order(diagnostics)));
-        var dependencies = EnumerateNodes(graph.RootActivity)
+        var dependencies = EnumerateNodes(graph.RootActivity).Where(x => !x.IsSetOutput)
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(x => new ActivityTemplateDependencyDeclaration(
                 x.ActivityVersionId,
@@ -449,13 +486,15 @@ public sealed class GraphActivityProvider(
                 }
             }
 
-            // A graph body runs published activities only; engine intrinsics need graph-scope support first.
+            // Set Output is the engine operation implemented for a closed graph body.
             if (TryGetPropertyIgnoreCase(candidate.Element, "intrinsic", out var intrinsic) &&
-                intrinsic.Value.ValueKind != JsonValueKind.Null)
+                intrinsic.Value.ValueKind != JsonValueKind.Null &&
+                !(TryReadRootNode(candidate.Element, out var activity) && activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput &&
+                  activity.ActivityVersionId == "elsa.intrinsic.set-output@1"))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.intrinsic-unsupported",
-                    "A graph activity cannot hold an engine intrinsic (Set variable, Set output, Correlate, Set name) yet.",
+                    "Only Set Output is supported as an engine intrinsic inside a graph activity.",
                     subject,
                     $"{candidate.JsonPointer}/{EscapePointer(intrinsic.Name)}"));
             }
@@ -548,13 +587,33 @@ public sealed class GraphActivityProvider(
             }
         }
 
-        foreach (var output in contract.Outputs.Where(x => x.IsRequired))
+        var assignedKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in nodes.Where(x => x.IsSetOutput))
+        {
+            var name = ReadLiteralInput(node, WorkflowIntrinsicInputKeys.Name);
+            var output = contract.Outputs.FirstOrDefault(x => x.Name == name);
+            if (output is null)
+                diagnostics.Add(Diagnostic("activity.graph.set-output-unknown", $"Set Output '{node.NodeId}' must name a declared output of this activity.", subject, node.JsonPointer, node.NodeId));
+            else
+                assignedKeys.Add(output.ReferenceKey);
+            if (node.Activity.Inputs.Count() != 2 || node.Activity.Inputs.Count(x => x.ReferenceKey == WorkflowIntrinsicInputKeys.Value && x.Value is not null) != 1 ||
+                node.Activity.Outputs.Any() || node.Activity.Structure is not null || node.Activity.ExecutionPlacement != default ||
+                node.Activity.Inputs.Any(x => string.Equals(x.Value?.ExpressionType, "Secret", StringComparison.OrdinalIgnoreCase)))
+                diagnostics.Add(Diagnostic("activity.graph.set-output-invalid", $"Set Output '{node.NodeId}' requires a literal output name and a value that can be stored.", subject, node.JsonPointer, node.NodeId));
+        }
+
+        foreach (var mapping in graph.OutputMappings.Where(x => assignedKeys.Contains(x.OutputReferenceKey)))
+            diagnostics.Add(Diagnostic("activity.graph.set-output-mapping-conflict",
+                $"Output '{mapping.OutputReferenceKey}' has both a mapped value and a Set Output assignment. Choose one source.",
+                subject, "/outputMappings", mapping.OutputReferenceKey));
+
+        foreach (var output in contract.Outputs.Where(x => x.IsRequired && !assignedKeys.Contains(x.ReferenceKey)))
         {
             if (graph.OutputMappings.Count(x => string.Equals(x.OutputReferenceKey, output.ReferenceKey, StringComparison.Ordinal)) != 1)
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.output-mapping-required",
-                    $"Required public output '{output.ReferenceKey}' must have exactly one boundary mapping.",
+                    $"Required public output '{output.ReferenceKey}' must have a boundary mapping or a Set Output assignment.",
                     subject,
                     "/outputMappings",
                     output.ReferenceKey));
@@ -634,12 +693,14 @@ public sealed class GraphActivityProvider(
         return reached;
     }
 
-    private static string? ReadCompleteOutcome(GraphNode node)
+    private static string? ReadCompleteOutcome(GraphNode node) => ReadLiteralInput(node, CompleteOutcomeInputKey);
+
+    private static string? ReadLiteralInput(GraphNode node, string key)
     {
         var inputs = node.Activity.Inputs
-            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, CompleteOutcomeInputKey))
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, key))
             .ToArray();
-        if (inputs.Length != 1 || !string.Equals(inputs[0].Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase))
+        if (inputs.Length != 1 || !string.Equals(inputs[0].Value?.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase))
             return null;
 
         var value = inputs[0].Value.Value switch
@@ -758,16 +819,10 @@ public sealed class GraphActivityProvider(
             return;
 
         var entry = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First();
-        var entryDependencies = dependencies
-            .Where(x => StringComparer.Ordinal.Equals(x.OccurrenceId, entry.NodeId))
-            .ToArray();
-        if (entryDependencies.Length != 1)
-            return;
-        var entryDependency = entryDependencies[0];
-
-        var emittedEntryOutcomes = entryDependency.Contract.Outcomes
-            .Where(x => x.IsEmitted)
+        var emittedEntryOutcomes = EntryOutcomes(entry, dependencies).Where(x => x.IsEmitted)
             .ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        if (!entry.IsSetOutput && !dependencies.Any(x => x.OccurrenceId == entry.NodeId))
+            return;
         foreach (var mapping in graph.OutcomeMappings)
         {
             if (!emittedEntryOutcomes.ContainsKey(mapping.SourceOutcomeReferenceKey))
@@ -780,6 +835,28 @@ public sealed class GraphActivityProvider(
                     mapping.SourceOutcomeReferenceKey));
             }
         }
+    }
+
+    private static IReadOnlyCollection<ActivityOutcomeContract> EntryOutcomes(GraphNode entry, IReadOnlyList<ActivityResolvedDependency> dependencies) =>
+        entry.IsSetOutput ? [new("done", "Done", true)] :
+            dependencies.FirstOrDefault(x => x.OccurrenceId == entry.NodeId)?.Contract.Outcomes ?? [];
+
+    private static ExecutableNode CompileSetOutput(GraphNode node, ActivityOutputContract output, IActivityTemplateInputBindingCompiler compiler)
+    {
+        InputDefinition Input(string key, TypeReference type, bool nullable) =>
+            new(key, key, type, null, key, null, IsNullable: nullable, IsRequired: true);
+        var bindings = compiler.CompileGraphInputs(node.NodeId,
+            [Input(WorkflowIntrinsicInputKeys.Name, new TypeReference("String"), false), Input(WorkflowIntrinsicInputKeys.Value, output.Type, output.IsNullable)],
+            node.Activity.Inputs);
+        // Parent, slot and index let placement attach this local leaf alongside exact catalog dependencies.
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            kind = "SetOutput", output.ReferenceKey, output.Type, output.StorageDriverKey,
+            isNullable = output.IsNullable, node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        return new ExecutableNode($"set-output:{node.NodeId}", node.NodeId, "elsa.intrinsic.setoutput", "1.0.0",
+            WellKnownRuntimeActivityConsumers.Intrinsic, payload, bindings, new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.SetOutput, descriptorSchemaVersion: WorkflowIntrinsicDescriptorSchemas.ActivityOutput);
     }
 
     private static void ValidateDependencies(
@@ -1160,7 +1237,7 @@ public sealed class GraphActivityProvider(
         {
             node = root.Deserialize<ActivityNode>(NodeSerializerOptions);
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
         {
             node = null;
         }
@@ -1269,8 +1346,7 @@ public sealed class GraphActivityProvider(
     {
         var nodesByOccurrence = nodes.ToDictionary(x => x.NodeId, StringComparer.Ordinal);
         var entryOccurrenceId = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First().NodeId;
-        var entryContract = dependencies.Single(x => StringComparer.Ordinal.Equals(x.OccurrenceId, entryOccurrenceId)).Contract;
-        var entryOutcomes = entryContract.Outcomes.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        var entryOutcomes = EntryOutcomes(nodesByOccurrence[entryOccurrenceId], dependencies).ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var boundaryOutcomes = contract.Outcomes.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var outcomeMappings = graph.OutcomeMappings
             .Select(mapping => new
@@ -1482,6 +1558,9 @@ public sealed class GraphActivityProvider(
         string? ParentOccurrenceId,
         string ChildSlotName,
         int ChildIndex,
-        IReadOnlyList<ActivityContractMemberUsage> MemberUsage);
+        IReadOnlyList<ActivityContractMemberUsage> MemberUsage)
+    {
+        public bool IsSetOutput => Activity.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput;
+    }
     private sealed record NodeCandidate(JsonElement Element, string JsonPointer);
 }
