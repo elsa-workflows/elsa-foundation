@@ -81,7 +81,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             .SelectMany(entity => entity.GetProperties()).Where(property => ((Microsoft.EntityFrameworkCore.Metadata.IReadOnlyProperty)property).GetValueComparer() is { } comparer &&
                 !ReferenceEquals(comparer, property.GetTypeMapping().Comparer))
             .Select(property => $"{property.DeclaringType.Name}.{property.Name}: {property.GetValueComparer().GetType().FullName} vs {property.GetTypeMapping().Comparer.GetType().FullName}; inner={(property.GetValueComparer() as IInfrastructure<ValueComparer>)?.Instance.GetType().FullName}; annotations={string.Join(",", property.GetAnnotations().Select(annotation => annotation.Name))}");
-        Assert.True(independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader), string.Join("; ", comparers));
+        var paired = independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader);
+        if (!paired) Assert.True(RuntimeHistoryEfModule.HasProjectionModel(context), "The actual owned model must qualify before its paired ports can qualify.");
+        Assert.True(paired, string.Join("; ", comparers));
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
