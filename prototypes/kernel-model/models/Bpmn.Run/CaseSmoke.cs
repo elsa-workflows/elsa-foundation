@@ -208,6 +208,39 @@ public static class CaseSmoke
             gates.Clear();
         }
 
+        Console.WriteLine("only the issued timer can complete its own live work");
+        foreach (var incoming in new[] { "copied timer payload", "timer naming a job" })
+        {
+            gates.Services.Add("slow");
+            Task? lateDriver = null;
+            var (state, _, id) = await Run("b-boundary", meanwhile: async target =>
+            {
+                lateDriver = await CaptureJob(target);
+                var due = CheckPendingBoundary(target);
+                var before = store.Instances[target.Id];
+                var waiting = Json.Read<BpmnState>(before.State);
+                var timer = waiting.Live.Single(w => w.Value.Kind == WorkKinds.Timer);
+                var named = incoming == "copied timer payload" ? timer : waiting.Live.Single(w => w.Value.Kind == WorkKinds.Job);
+                var input = new Message(incoming == "copied timer payload" ? timer.Value.Key : "ordinary-timer-" + _n,
+                    target, BpmnKinds.Timer, Json.Write(new TimerDue(named.Key)));
+                var added = await store.AddAsync(input);
+                await owner.PumpAsync(() => store.Instances[target.Id].Revision > before.Revision, poll: true);
+                var current = store.Instances[target.Id];
+                var actual = Json.Read<BpmnState>(current.State);
+                Check(added && now < due && input.InboxKey != InboxKey.Issued(timer.Value.Key) &&
+                    current.Status == InstanceStatus.Running && actual.Live.ContainsKey(named.Key) && actual.Live.ContainsKey(timer.Key),
+                    $"{incoming} is consumed without spending the persisted job or its future timer");
+                now = due;
+            });
+            Check(Var(state, "escalated") == "true" && Var(state, "slow-done") is null,
+                $"{incoming} leaves the real deadline to choose the timeout branch");
+            await FinishLateJob("slow", lateDriver!);
+            var completed = store.Instances[id.Id];
+            await owner.Worker.PollAsync(); await owner.PumpAsync(() => true);
+            Check(store.Instances[id.Id] == completed, "the cancelled body leaves the genuine timer result unchanged");
+            gates.Clear();
+        }
+
         Console.WriteLine("a message published before its catch subscribes is kept and still counts");
         {
             var order = $"o{++_n}";
