@@ -80,6 +80,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         state.EnsureValueFlowCompatible();
 
+        await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var checkpointCommitter = serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();

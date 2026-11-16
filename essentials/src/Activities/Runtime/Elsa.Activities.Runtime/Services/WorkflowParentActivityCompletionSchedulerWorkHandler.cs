@@ -165,6 +165,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         if (completedChildState.Status == ActivityExecutionStatus.Cancelled)
             return;
 
+        await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>();
