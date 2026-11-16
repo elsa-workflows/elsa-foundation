@@ -50,18 +50,20 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     try {
       await expect.poll(async () => (instance = await api<{ instance: { status: string }; incidents?: unknown[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
     } finally { proof[`run-${started.workflowExecutionId}`] = instance; }
-    const executions = await api<{ items: { execution: { activityExecutionId: string; executableNodeId: string; authoredActivityId: string; status: string } }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions`);
-    // The reusable body's WriteLine keeps its relative authored id; its placement names the call that ran it.
-    const inside: { call: string; text: string }[] = [];
-    for (const { execution } of executions.items.filter(item => item.execution.authoredActivityId === "inside" && item.execution.status === "Completed")) {
+    const executions = await api<{ items: { execution: { activityExecutionId: string; executableNodeId: string; authoredActivityId: string; activityType: string; status: string } }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions`);
+    // Placed template nodes carry template-relative authored ids; the layout's boundary origin names the workflow call
+    // (its first authored-node segment) and the occurrence path inside the reusable body.
+    const inside: { call: string; text: string; origin: { kind: string; id: string }[] }[] = [];
+    for (const { execution } of executions.items.filter(item => item.execution.status === "Completed" && item.execution.activityType === "Elsa.Activities.Primitives.Activities.WriteLine"
+      && item.execution.executableNodeId !== item.execution.authoredActivityId)) {
       const resource = `/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions/${execution.activityExecutionId}`;
       const layout = await api<{ boundaryOrigin: { kind: string; id: string }[] }>(`${resource}/layout`);
-      const placement = [...layout.boundaryOrigin].reverse().find(segment => segment.kind === "NestedPlacement");
+      const call = layout.boundaryOrigin.find(segment => segment.kind === "AuthoredNode")?.id ?? execution.executableNodeId;
       const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(resource);
       const evidence = detail.valueSnapshots.find(value => value.inputKey === "text");
       expect(evidence).toBeTruthy();
       const payload = await api<{ payload: { preview?: string } }>(`${resource}/value-evidence/${evidence!.evidenceId}/payload`);
-      inside.push({ call: placement?.id ?? execution.executableNodeId, text: payload.payload.preview ?? "" });
+      inside.push({ call, text: payload.payload.preview ?? "", origin: layout.boundaryOrigin });
     }
     return { runId: started.workflowExecutionId, inside: inside.sort((left, right) => left.call.localeCompare(right.call)) };
   }
@@ -138,7 +140,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     });
     workflowIds.push(callers.definition.id);
     const twoCalls = await runWorkflow(callers.draft.id);
-    expect(twoCalls.inside).toEqual([{ call: "call-one", text: "one" }, { call: "call-two", text: "two" }]);
+    expect(twoCalls.inside.map(({ call, text }) => ({ call, text }))).toEqual([{ call: "call-one", text: "one" }, { call: "call-two", text: "two" }]);
     proof.twoCalls = twoCalls;
 
     // One Undo restores the block; the reusable activity stays published.
