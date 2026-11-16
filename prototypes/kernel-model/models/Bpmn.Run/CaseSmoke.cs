@@ -74,6 +74,7 @@ public static class CaseSmoke
     private static async Task<int> RunOnOwnerAsync()
     {
         await RepeatedJoinChecks.Run(Check);
+        await RaceFaultChecks.Run(Check);
         var gates = new Gates();
         long now = 1000;
         var store = new InMemoryStore(1, () => now);
