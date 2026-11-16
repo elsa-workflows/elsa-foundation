@@ -47,8 +47,6 @@ internal static class EfRuntimeHistoryCheckpoint
         var nativeId = EfWorkflowExecutionStateStore.CreateId(scope, run);
         var nativeRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(row => row.Id == nativeId, cancellationToken);
         var native = nativeRow is null ? null : EfWorkflowExecutionStateStore.ReadChecked(nativeRow, scope, run);
-        if (native is not null) NativeIngressCheckpointAuthority.EnsureHistoryScope(accessSnapshot, native);
-        if (incoming is not null) NativeIngressCheckpointAuthority.EnsureHistoryScope(accessSnapshot, incoming);
         var policy = native is null ? incoming?.HistoryCapturePolicy : native.HistoryCapturePolicy;
         if (native is not null && (native.HistoryCaptureEnabledAtAdmission is { } retainedEnabled && retainedEnabled != (policy is not null) ||
             incoming is not null && (native.HistoryCaptureEnabledAtAdmission != incoming.HistoryCaptureEnabledAtAdmission ||
@@ -63,6 +61,8 @@ internal static class EfRuntimeHistoryCheckpoint
                 throw new InvalidOperationException("History cannot be enabled retroactively without a pinned native admission policy.");
             return [];
         }
+        if (native is not null) NativeIngressCheckpointAuthority.EnsureHistoryScope(accessSnapshot, native);
+        if (incoming is not null) NativeIngressCheckpointAuthority.EnsureHistoryScope(accessSnapshot, incoming);
         try
         {
             var mapping = new Mapping(chain);
