@@ -11,7 +11,8 @@ for (const theme of themes) {
       const capture = page.getByRole("combobox", { name: "Capture into", exact: true });
       const styles = await capture.evaluate(element => {
         const style = getComputedStyle(element);
-        return { appearance: style.appearance, height: element.getBoundingClientRect().height, background: style.backgroundColor, image: style.backgroundImage, padding: parseFloat(style.paddingInlineEnd) };
+        const surface = element.closest(".studio-form-control") ?? element;
+        return { appearance: style.appearance, height: element.getBoundingClientRect().height, background: getComputedStyle(surface).backgroundColor, image: style.backgroundImage, padding: parseFloat(style.paddingInlineEnd) };
       });
       expect(styles.appearance).toBe("none");
       expect(styles.height).toBeGreaterThanOrEqual(32);
@@ -21,7 +22,8 @@ for (const theme of themes) {
       await capture.selectOption("workflow::payload");
       await expect(capture).toHaveValue("workflow::payload");
       await capture.focus();
-      expect(await capture.evaluate(element => getComputedStyle(element).outlineStyle)).toBe("solid");
+      await expect(capture).toBeFocused();
+      expect(await capture.evaluate(element => getComputedStyle(element.closest(".studio-form-control") ?? element).outlineStyle)).toBe("solid");
       for (const name of ["Response mode", "Page size"]) {
         const select = page.getByRole("combobox", { name, exact: true });
         expect(await select.evaluate(element => getComputedStyle(element).appearance)).toBe("none");

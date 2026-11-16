@@ -166,23 +166,40 @@ describe("activity input wire adapter", () => {
 
   it.each([
     // A member read this client cannot author yet: its path segments are literal names, dots included.
-    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["VariableMember", { referenceKey: "customer", declaringScopeId: "scope:root", memberPath: ["a/b", 'quoted"key'] }],
+    ["WorkflowRequestMember", { memberKey: "request", memberPath: ["CustomerId"] }],
+    ["InputMember", { referenceKey: "input-key", memberPath: ["", "literal.dot"] }],
     ["WorkflowRequest", { memberKey: "order", path: null }],
     // A source kind a later server adds, and a definition under a known language that is not a portable one.
     ["FutureSource", { kind: "next", nested: { items: [1, "two", null] } }],
     ["JavaScript", { language: "JavaScript", source: "args.x", dialect: 2 }],
     ["FutureSource", ["a", { b: 1 }]]
-  ])("preserves an unknown %s definition as authored instead of turning it into JSON text", (expressionType, definition) => {
+  ])("keeps a structured %s definition through save, Code Apply and reopen", (expressionType, definition) => {
     const seeded = stateOf({
       ...writeLine("consumer", {}),
       inputs: [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }]
     });
+    const authored: WorkflowDraft = {
+      id: "draft-1", definitionId: "definition-1", state: expandStateFromWire(seeded), layout: [], validationErrors: []
+    };
+    const expected = [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }];
 
-    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+    // Save the editor's structured value, then pass that wire state through the real Code-view serializer/parser.
+    const saved = canonicalizeStateForWire(authored.state);
+    expect(saved.rootActivity?.inputs).toEqual(expected);
+    const applied = buildDraftFromJson(serializeDraftToJson({ ...authored, state: saved }), authored);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) throw new Error("Code Apply failed.");
+    const expectedEditorValue = { expression: { type: expressionType, value: definition }, argumentExtras: { futureField: "kept" } };
+    expect(applied.draft.state.rootActivity?.text).toMatchObject(expectedEditorValue);
+    const appliedWire = canonicalizeStateForWire(applied.draft.state);
+    expect(appliedWire.rootActivity?.inputs).toEqual(expected);
 
-    expect(resaved.rootActivity?.inputs).toEqual([
-      { referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }
-    ]);
+    // Reopen a serialized copy of the applied state; every literal segment and unknown field stays structured.
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(appliedWire)));
+    expect(reopened.rootActivity?.text).toMatchObject(expectedEditorValue);
+    expect(canonicalizeStateForWire(reopened).rootActivity?.inputs).toEqual(expected);
   });
 
   it("keeps Object and Secret values in the JSON-text form they are saved in", () => {

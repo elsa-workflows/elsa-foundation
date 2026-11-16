@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { ArrowDownAZ, Bookmark, Save, SlidersHorizontal, Star, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -130,19 +130,19 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       {support.favorites && support.queryOptions ? <StudioButton className="wf-library-favorites" aria-label="Favorites" title="Show favorite workflows" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}><Star size={16} aria-hidden="true" fill={location.favoritesOnly ? "currentColor" : "none"} /></StudioButton> : null}
       {support.tags || support.folders || support.queryOptions ? <StudioButton aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15} aria-hidden="true" />{support.queryOptions ? `Filters${activeCount ? ` (${activeCount})` : ""}` : "Columns"}</StudioButton> : null}
       {support.folders && support.queryOptions && typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
-      {support.queryOptions ? <label className="wf-library-toolbar-field"><ArrowDownAZ size={15} aria-hidden="true" /><span>Sort</span><select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
+      {support.queryOptions ? <StudioField className="wf-library-toolbar-field" label={<><ArrowDownAZ size={15} aria-hidden="true" /><span>Sort</span></>}><select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
         <option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="modified">Recently modified</option>
-      </select></label> : null}
+      </select></StudioField> : null}
       </div>
       <div className="wf-library-control-group wf-library-view-group" role="group" aria-label="Workflow views and tags">
       {support.views ? <>
-        <label className="wf-library-toolbar-field"><Bookmark size={15} aria-hidden="true" /><span>View</span><select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
+        <StudioField className="wf-library-toolbar-field" label={<><Bookmark size={15} aria-hidden="true" /><span>View</span></>}><select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
           const view = views.find(item => item.id === event.target.value);
           if (view) onChange(workflowBrowseLocationFromQuery(view.query, view.id, view.columns));
           else change({ viewId: undefined });
         }}><option value="">Unsaved view</option>{unknownView ? <option value={location.viewId}>Unavailable saved view</option> : null}
           {views.map(view => <option key={view.id} value={view.id}>{view.name}{view.shared ? " · Shared" : " · Private"}</option>)}
-        </select></label>
+        </select></StudioField>
         <StudioButton onClick={() => setViewDialogOpen(true)}><Save size={15} aria-hidden="true" />Save view</StudioButton>
       </> : null}
       {permissions.canManageTags === true ? <StudioLink className="studio-button" data-variant="default" href="/workflows/tags"><Tags size={15} aria-hidden="true" />Manage tags</StudioLink> : null}
@@ -154,21 +154,21 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     {error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</button></p> : null}
 
     {filtersOpen && (support.tags || support.folders || support.queryOptions) ? <div className="wf-library-filter-panel" id={filtersId}>
-      {support.queryOptions ? <label>Publication <select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
+      {support.queryOptions ? <StudioField label="Publication"><select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
         <option value="">Any publication state</option><option value="published">Published</option>{location.publicationState && location.publicationState !== "published" ? <option value={location.publicationState}>Unsupported state: {location.publicationState}</option> : null}
-      </select></label> : null}
+      </select></StudioField> : null}
       {support.tags && support.queryOptions ? <><div className="wf-library-control-row"><label>Find tag <input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></label><button type="button" disabled={catalogLoading} onClick={() => setCatalogTerm(catalogSearch)}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</div>
       {(location.tagFilters ?? []).map((filter, index) => {
         const tag = tags.find(item => item.id === filter.tagId);
         return <div className="wf-library-filter-clause" key={`${index}-${filter.tagId}`}>
-          <label>Tag <select aria-label={`Tag filter ${index + 1}`} value={filter.tagId} onChange={event => updateFilter(index, { tagId: event.target.value, operator: "exists", valueIds: [] })}>
+          <StudioField label="Tag"><select aria-label={`Tag filter ${index + 1}`} value={filter.tagId} onChange={event => updateFilter(index, { tagId: event.target.value, operator: "exists", valueIds: [] })}>
             {!tag ? <option value={filter.tagId}>{filter.tagId} (unavailable)</option> : null}
             {tags.map(item => <option key={item.id} value={item.id}>{item.name}{item.deprecated ? " (retired)" : ""}</option>)}
-          </select></label>
-          <label>Condition <select aria-label={`Condition for tag filter ${index + 1}`} value={filter.operator} onChange={event => updateFilter(index, { operator: event.target.value as WorkflowTagFilter["operator"], valueIds: [] })}>
+          </select></StudioField>
+          <StudioField label="Condition"><select aria-label={`Condition for tag filter ${index + 1}`} value={filter.operator} onChange={event => updateFilter(index, { operator: event.target.value as WorkflowTagFilter["operator"], valueIds: [] })}>
             <option value="exists">Has tag</option><option value="missing">Missing tag</option>
             {tag?.mode === "controlled" ? <><option value="any">Any selected value</option>{tag.cardinality === "multiple" ? <option value="all">Every selected value</option> : null}<option value="none">None of these values</option></> : null}
-          </select></label>
+          </select></StudioField>
           {["any", "all", "none"].includes(filter.operator) ? <fieldset className="wf-library-values"><legend>Values</legend>
             {(tag?.values ?? []).map(value => <label key={value.id}><input type="checkbox" checked={filter.valueIds?.includes(value.id) ?? false} onChange={event => updateFilter(index, { valueIds: event.target.checked ? [...(filter.valueIds ?? []), value.id] : filter.valueIds?.filter(id => id !== value.id) })} />{value.name}{value.deprecated ? " (retired)" : ""}</label>)}
             {filter.valueIds?.filter(id => !tag?.values.some(value => value.id === id)).map(id => <span key={id} role="alert">Unavailable value: {id}</span>)}
@@ -215,7 +215,7 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
   return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
     <form onSubmit={event => { event.preventDefault(); void save(false); }}>
       <h3 id={titleId}>Save workflow view</h3>
-      <label>View name<input aria-label="View name" required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} /></label>
+      <StudioField label="View name"><input aria-label="View name" required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} /></StudioField>
       <label className="wf-library-check"><input type="checkbox" checked={shared} disabled={busy || !canShare} onChange={event => setShared(event.target.checked)} /> Share within this tenant</label>
       {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
       <p className="wf-library-help">Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access.</p>

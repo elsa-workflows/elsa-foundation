@@ -6,7 +6,7 @@ public static class RepoLayoutContractTests
     public static void Run()
     {
         var repo = RepoContext.Discover();
-        var roots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests" }
+        var roots = new[] { "essentials/src", "apps", "essentials/tests" }
             .Concat(ExtensionRoots(repo.Root, "src", "tests"))
             .Where(root => Directory.Exists(repo.Absolute(root)))
             .ToArray();
@@ -22,8 +22,8 @@ public static class RepoLayoutContractTests
                 $"Missing: {string.Join(", ", expectedProjects.Except(actualProjects).Order(StringComparer.Ordinal))}; " +
                 $"unexpected: {string.Join(", ", actualProjects.Except(expectedProjects).Order(StringComparer.Ordinal))}.");
 
-        var studioProjects = Directory.Exists(repo.Absolute("Extensions"))
-            ? Directory.EnumerateFiles(repo.Absolute("Extensions"), "*.csproj", SearchOption.AllDirectories)
+        var studioProjects = Directory.Exists(repo.Absolute("extensions"))
+            ? Directory.EnumerateFiles(repo.Absolute("extensions"), "*.csproj", SearchOption.AllDirectories)
                 .Where(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/').Contains("/studio/", StringComparison.Ordinal))
                 .Select(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/'))
                 .ToArray()
@@ -34,9 +34,22 @@ public static class RepoLayoutContractTests
                 "Studio exclusion is not proven: the repository must contain Studio projects and no Studio project may enter backend maps. " +
                 $"Found {studioProjects.Length} Studio projects and included {includedStudio.Length}.");
 
+        var templateProjects = Directory.Exists(repo.Absolute("extensions"))
+            ? Directory.EnumerateFiles(repo.Absolute("extensions"), "*.csproj", SearchOption.AllDirectories)
+                .Where(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/').Contains("/templates/", StringComparison.Ordinal))
+                .Select(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/'))
+                .ToArray()
+            : [];
+        var includedTemplates = actualProjects.Where(path => path.Contains("/templates/", StringComparison.Ordinal)).ToArray();
+        if (templateProjects.Length == 0 || includedTemplates.Length > 0)
+            throw new InvalidOperationException(
+                "dotnet-new template exclusion is not proven: the repository must contain scaffold .csproj files under " +
+                "extensions/<capability>/templates/ and none of them may enter backend maps. " +
+                $"Found {templateProjects.Length} template projects and included {includedTemplates.Length}.");
+
         var sourceFiles = RepoLayout.SourceFiles(repo);
-        if (!sourceFiles.Any(path => path.StartsWith("Essentials/src/", StringComparison.Ordinal)) ||
-            !sourceFiles.Any(path => path.StartsWith("Essentials/apps/", StringComparison.Ordinal)) ||
+        if (!sourceFiles.Any(path => path.StartsWith("essentials/src/", StringComparison.Ordinal)) ||
+            !sourceFiles.Any(path => path.StartsWith("apps/", StringComparison.Ordinal)) ||
             !sourceFiles.Any(RepoLayout.IsExtensionSourcePath) ||
             sourceFiles.Any(path => !RepoLayout.IsModulePath(path) || path.Contains("/studio/", StringComparison.Ordinal)))
             throw new InvalidOperationException("Backend source pathspecs missed a product root or included a non-backend/Studio source path.");
@@ -49,23 +62,23 @@ public static class RepoLayoutContractTests
         if (expectedCatalogs.Count == 0 || !expectedCatalogs.SetEquals(actualCatalogs))
             throw new InvalidOperationException("Catalog selectors must cover exactly backend EXTENSION_POINTS.md files, never ordinary README or Studio files.");
 
-        if (!RepoLayout.IsTestPath("Essentials/tests/Architecture/Tests/Example.cs") ||
-            !RepoLayout.IsTestProjectPath("Extensions/Weaver/tests/Tests/Example.csproj") ||
-            !RepoLayout.IsTestPath("Extensions/Agent/src/tests/Example.cs") ||
-            RepoLayout.IsModulePath("Extensions/Agent/src/tests/Example.cs") ||
-            RepoLayout.IsModulePath("Essentials/tests/Architecture/Tests/Example.cs") ||
-            RepoLayout.IsModulePath("Extensions/Weaver/tests/Tests/Example.cs") ||
-            RepoLayout.IsTestProjectPath("Extensions/Agent/studio/tests/Example.Tests.csproj") ||
-            RepoLayout.IsModulePath("Extensions/Agent/studio/Elsa.Studio.Agent/Example.cs"))
+        if (!RepoLayout.IsTestPath("essentials/tests/Architecture/Tests/Example.cs") ||
+            !RepoLayout.IsTestProjectPath("extensions/Weaver/tests/Tests/Example.csproj") ||
+            !RepoLayout.IsTestPath("extensions/Agent/src/tests/Example.cs") ||
+            RepoLayout.IsModulePath("extensions/Agent/src/tests/Example.cs") ||
+            RepoLayout.IsModulePath("essentials/tests/Architecture/Tests/Example.cs") ||
+            RepoLayout.IsModulePath("extensions/Weaver/tests/Tests/Example.cs") ||
+            RepoLayout.IsTestProjectPath("extensions/Agent/studio/tests/Example.Tests.csproj") ||
+            RepoLayout.IsModulePath("extensions/Agent/studio/Elsa.Studio.Agent/Example.cs"))
             throw new InvalidOperationException("Backend path classification does not preserve test segments and Studio exclusion.");
 
         Console.WriteLine($"Backend path inventory passed: {actualProjects.Count} projects, {studioProjects.Length} Studio projects excluded.");
     }
 
     private static IEnumerable<string> ExtensionRoots(string repositoryRoot, params string[] subroots) =>
-        Directory.Exists(Path.Join(repositoryRoot, "Extensions"))
-            ? Directory.EnumerateDirectories(Path.Join(repositoryRoot, "Extensions"))
+        Directory.Exists(Path.Join(repositoryRoot, "extensions"))
+            ? Directory.EnumerateDirectories(Path.Join(repositoryRoot, "extensions"))
                 .SelectMany(extension => subroots.Select(subroot =>
-                    $"Extensions/{Path.GetFileName(extension)}/{subroot}"))
+                    $"extensions/{Path.GetFileName(extension)}/{subroot}"))
             : [];
 }

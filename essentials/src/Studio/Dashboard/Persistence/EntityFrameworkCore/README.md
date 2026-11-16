@@ -1,0 +1,27 @@
+# Dashboard definition persistence
+
+**Current slice:** built-in SQLite, SQL Server, PostgreSQL and MySQL composition/migrations are supplied. Generic consumer contexts own their provider/model/migrations. Provider-matrix qualification is recorded separately from migration/script tests.
+
+This package stores named question/dashboard definitions, audiences, bounded content history and keyed-create outcomes. It stores no result cache, model transcript or credential. Source records stay with their owning modules.
+
+`StudioDashboardEntityFrameworkCore` selects Sqlite, SqlServer, PostgreSql or MySql through the existing EF provider binding. Hosts supply the provider package and owned connection configuration. `Studio.Dashboard` owns its migration history and schema family `StudioDashboard`. Migrations are under `Migrations/DashboardResources/{provider}`.
+
+Hosts may call `AddDashboardResourcesEntityFrameworkCore(DashboardResourcePersistenceOptions)` directly to select the supplied module context. An ordinary existing `DbContext` can instead call `modelBuilder.AddDashboardResourcesModel(Database.ProviderName!)` from its model configuration and register through `AddDashboardResourcesEntityFrameworkCore<TContext>()`. It needs no Dashboard base class or marker interface. Configure exactly one store; conflicting registrations are diagnosed.
+
+The public model installer maps only the three Dashboard tables, their keys, concurrency tokens and schema-version index. It preserves unrelated model configuration, comparison and payload conventions. The consumer owns its combined EF migrations, schema and normal migration/finalization enrollment; the supplied module migrations remain tied to the supplied provider contexts. Missing mappings and unconfigured or unsupported providers fail closed when the store is used.
+
+Store operations construct fresh owned context instances using the registered context's connection-string options and host DI dependencies. They retain its provider, schema, model and configured interceptors, including the normal schema write gate. Writes commit independently in serializable transactions. They never flush, clear or enlist the caller's pending tracked changes or transaction. The consumer context must be constructible by DI with its own `DbContextOptions` and registered dependencies. Options holding a caller-owned `DbConnection`, and calls inside an ambient `TransactionScope`, are refused before a store operation; use independently constructed connection-string options outside that unit of work.
+
+Lookup keys hash exact tenant/resource and owner identities. Reads verify the original document scope/revision and its declared schema before using content. Operation fingerprints canonicalize object-member ordering while preserving array order and typed query meaning.
+
+Resources, keyed-create outcomes and quota fences each carry a required indexed schema stamp. Resource content uses its declared readable chain; scalar operation/fence metadata must match the current declared schema before its fingerprint, reference or fence revision is used. Unknown or future metadata is refused without restamping it or changing another row. New writes explicitly stamp the current version.
+
+Content and audience writes use one optimistic resource revision, so stale content cannot restore an earlier grant. A tenant fence and serializable transaction protect quotas and keyed-create races. Content/history, revision and operation-key association commit atomically. Deleted resources retain a protected tombstone and cannot be recreated by keyed retry.
+
+History records each revision's actual modifier. An old edited document lacking that fact reports unknown, rather than attributing it to the owner. Restore creates another validated revision and preserves current ownership/grants.
+
+Limits are 100 owned questions and 50 owned dashboards per actor/tenant; 5,000 questions and 2,000 dashboards per tenant; 50 tiles; 100 grants; and 20 prior revisions. Limit failures reject the whole write. Native services still evaluate current actor, ACL and disclosure on every operation.
+
+`Essentials/tests/Studio/Dashboard/ResourceTests` applies actual SQLite migrations and checks native resource-service behavior; HTTP tests follow with the API. Its ordinary consumer-context witness applies a combined migration with an unrelated table, verifies that the consumer's tracked changes and comparer survive resource CAS, reopens saved definitions in a new service provider and rejects unreadable schemas or missing capabilities. Relational migration/snapshot/script tests and the separately classified owned-container provider matrix cover the additional providers. Provider evidence remains separate from composed Studio, live-model and independent UX acceptance.
+
+Collection and reuse scans read at most16 records per database query and omit history from returned documents. Services retain only lightweight listing metadata while ordering/filtering, then re-read selected resources under current access. Find/write/history paths retain full revisions for atomic updates. Existing JSON storage still transfers historical bytes per row; this bounds materialization, not database-byte traffic.

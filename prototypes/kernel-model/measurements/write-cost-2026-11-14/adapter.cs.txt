@@ -1,0 +1,49 @@
+using System.Reflection;
+using System.Text.Json;
+using Npgsql;
+
+var connection = Environment.GetEnvironmentVariable("KERNEL_WRITES_CONNECTION") ?? throw new InvalidOperationException("Missing connection");
+var cb = new NpgsqlConnectionStringBuilder(connection);
+var target = cb.Database ?? throw new InvalidOperationException("Missing target");
+if (cb.Host != "127.0.0.1" || !target.StartsWith("kwr22_", StringComparison.Ordinal)) throw new InvalidOperationException("Not an owned measurement target");
+if (cb.Port != int.Parse(Environment.GetEnvironmentVariable("KERNEL_WRITES_PORT")!)) throw new InvalidOperationException("Unexpected measurement port");
+cb.Database = "postgres";
+await using (var admin = new NpgsqlConnection(cb.ConnectionString))
+{
+    await admin.OpenAsync();
+    await using var query = new NpgsqlCommand("SELECT count(*) FROM pg_database WHERE datname = @name", admin);
+    query.Parameters.AddWithValue("name", target);
+    if ((long)(await query.ExecuteScalarAsync())! != 0) throw new InvalidOperationException("Target exists; refusing invocation");
+    Console.WriteLine($"Fresh target {target}; PostgreSQL {admin.PostgreSqlVersion}; loopback port {cb.Port}. Calling exact EngineRun.RunAsync once; EnsureDeleted target is absent.");
+}
+var assembly = Assembly.Load("Kernel.Ef.Run");
+var run = assembly.GetType("EngineRun", throwOnError: true)!.GetMethod("RunAsync", BindingFlags.Public | BindingFlags.Static)!;
+var task = (Task<int>)run.Invoke(null, new object[] { new[] { "cost", "postgres", connection, "writes=1", "sizes=1", "many=100,1000" }.Concat(args).ToArray() })!;
+var code = await task;
+Console.WriteLine($"Exact cost exit {code}");
+NpgsqlConnection.ClearAllPools();
+await using var c = new NpgsqlConnection(connection);
+await c.OpenAsync();
+async Task<List<Dictionary<string,object?>>> Rows(string sql)
+{
+    await using var cmd = new NpgsqlCommand(sql, c);
+    await using var reader = await cmd.ExecuteReaderAsync();
+    var rows = new List<Dictionary<string,object?>>();
+    while (await reader.ReadAsync()) rows.Add(Enumerable.Range(0,reader.FieldCount).ToDictionary(reader.GetName, i => reader.IsDBNull(i) ? null : reader.GetValue(i)));
+    return rows;
+}
+async Task<object> Snapshot() => new {
+    at = DateTimeOffset.UtcNow,
+    tables = await Rows("SELECT relname, n_tup_ins, n_tup_upd, n_tup_hot_upd, n_tup_del, n_live_tup, n_dead_tup, vacuum_count, autovacuum_count, pg_relation_size(relid) AS heap, pg_indexes_size(relid) AS indexes, pg_total_relation_size(relid) AS total FROM pg_stat_user_tables ORDER BY relname"),
+    exact = await Rows("SELECT n.name, t.* FROM (VALUES ('Instances'),('Journal'),('Messages'),('Partitions')) n(name) CROSS JOIN LATERAL pgstattuple(format('%I',n.name)::regclass) t"),
+    toast = await Rows("SELECT c.relname, t.* FROM pg_class c CROSS JOIN LATERAL pgstattuple(c.reltoastrelid) t WHERE c.relname='Instances'")
+};
+var end = await Snapshot();
+Console.WriteLine("Captured end tuples; waiting 70 seconds for a second snapshot, without forced vacuum.");
+await Task.Delay(TimeSpan.FromSeconds(70));
+await using (var clear = new NpgsqlCommand("SELECT pg_stat_clear_snapshot()", c)) await clear.ExecuteNonQueryAsync();
+var after = await Snapshot();
+var output = Environment.GetEnvironmentVariable("KERNEL_WRITES_SNAPSHOT") ?? throw new InvalidOperationException("Missing evidence path");
+await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { target, source = "1b101defd87ae0275f0e2c2762ee317315a881e3", options = args, exit = code, end, after }, new JsonSerializerOptions { WriteIndented=true }));
+Console.WriteLine("Retained tuple snapshots. No database or resource cleanup was requested.");
+return code;
