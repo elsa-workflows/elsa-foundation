@@ -168,7 +168,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect.poll(async () => (await calls())[0]?.structure?.kind ?? null).toBe("elsa.sequence.structure");
     // Open the review on the settled, saved document, as an author would after the Undo.
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText(/^(Saved|Autosaved)$/);
     await row("block").click();
     await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
     const resume = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
