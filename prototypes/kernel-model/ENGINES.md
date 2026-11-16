@@ -322,6 +322,88 @@ Plain fresh batches of 125, 420, 500 and 850 took two, three, three and three EF
 default-fence before/after TCP counts matched on every cost-harness row, including 100 and 1,000 balanced
 starts on the owner (6 and 8) and arriving by poll (19 and 22).
 
+## Round 5 B: the commit as the store's own SQL. Run
+
+Since round 5 B (16 November, [COMMIT-SQL.md](COMMIT-SQL.md)) the store writes its commit itself on every engine and EF
+keeps the schema and the cold paths; `commit=ef` (`--ef-commit`) is the reference path the tables above were run with.
+What the owned commit changes in the findings above:
+
+| Finding | On the owned commit |
+|---|---|
+| E1 (a stale owner is told "duplicate key") | Does not arise: the fence is the first statement and the first result the client reads (SQL Server: the server stops the batch at the fence's THROW). `m5=1` changes nothing. |
+| E3, E10 (Connector/NET's round trips per transaction) | Unchanged: the driver's, not the commit's. MySQL stays 6 round trips per in-batch commit. |
+| E4 (EF's savepoints) | Not on this path: no SaveChanges. |
+| E7 (42 statements per command; 2,100 parameters) | No command count; the owned commit chunks at 2,000 parameters on SQL Server (1,000 instances: 6 commands where EF sent 8 in the batch mode, 12 → 10 round trips of 16... see the table) and at 1,000 rows per multi-row statement. |
+| E8 (the take's index) | Unchanged: the take is the same statement. |
+| E9 (SQL Server, fence in the batch: take deadlocks) | **Gone.** The owned in-batch fence is the first lock of the commit, as the take's partition row is the take's: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). SQL Server's default stays the checked fence until the owner moves it. |
+| E11 (Oracle's provider acknowledges a partial batch) | Not on this path: the store's own statements and counts; `MySqlCommandBatchPreparer` serves the `commit=ef` reference only. |
+
+The cost table of "What it costs" on the owned commit, round trips on the TCP stream (EF → owned; SQLite: calls into
+the engine):
+
+| Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ten no-ops, ephemeral, started on the owner | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
+| ten no-ops, balanced, started on the owner | 3 → 3 | 2 → 2 | 4 → 4 | 3 → 3 | 5 → 4 | 5 → 3 | 7 → 7 | 6 → 6 |
+| ten no-ops, durable, started on the owner | 30 → 30 | 20 → 20 | 40 → 40 | 30 → 30 | 77 → 40 | 77 → 30 | 70 → 70 | 60 → 60 |
+| ten no-ops, ephemeral, started from another node | 9 → 9 | 7 → 7 | 11 → 11 | 9 → 9 | 11 → 11 | 11 → 9 | 23 → 23 | 21 → 21 |
+| ten no-ops, balanced, started from another node | 9 → 9 | 7 → 7 | 11 → 11 | 9 → 9 | 13 → 11 | 13 → 9 | 23 → 23 | 21 → 21 |
+| ten no-ops, durable, started from another node | 36 → 36 | 25 → 25 | 47 → 47 | 36 → 36 | 85 → 47 | 85 → 36 | 86 → 86 | 75 → 75 |
+| parent with three children, same partition | 12 → 12 | 8 → 8 | 21 → 21 | 16 → 16 | 57 → 16 | 57 → 12 | 38 → 38 | 33 → 33 |
+| terminate a parent with three waiting children, from another node | 17 → 13 | 13 → 9 | 21 → 17 | 17 → 13 | 41 → 17 | 41 → 13 | 35 → 31 | 31 → 27 |
+| delete that parent, from another node | 9 → 7 | 7 → 5 | 11 → 9 | 9 → 7 | 13 → 9 | 13 → 7 | 19 → 17 | 17 → 15 |
+| a start subscription, then an event that starts an instance | 13 → 13 | 11 → 11 | 15 → 15 | 13 → 13 | 17 → 15 | 17 → 13 | 35 → 35 | 33 → 33 |
+| a projector round over the journal so far | 3 → 3 | 3 → 3 | 6 → 6 | 6 → 6 | 7 → 7 | 7 → 7 | 13 → 13 | 13 → 13 |
+| a heartbeat | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 9 → 9 | 9 → 9 |
+| 100 balanced instances started at once | 3 → 3 | 3 → 3 | 9 → 9 | 7 → 7 | 203 → 4 | 203 → 3 | 17 → 17 | 15 → 15 |
+| 1000 balanced instances started at once | 4 → 3 | 5 → 3 | 18 → 12 | 16 → 10 | 2003 → 4 | 2003 → 3 | 18 → 17 | 17 → 15 |
+| 100 balanced instances, their starts arriving by poll | 8 → 8 | 7 → 6 | 11 → 10 | 9 → 8 | 408 → 10 | 408 → 8 | 21 → 20 | 19 → 18 |
+| 1000 balanced instances, their starts arriving by poll | 10 → 9 | 13 → 8 | 24 → 15 | 22 → 13 | 4008 → 10 | 4008 → 8 | 26 → 20 | 24 → 18 |
+
+The stress test of "Results on the merged kernel" on the owned commit (40 s, 5,000 messages; the harness fix of
+FINDINGS 29 F-B1 applied to both paths):
+
+| Engine | Fence | Commit | Mutation | Deadlocks | Resets | Definite | Result |
+|---|---|---|---|---|---|---|---|
+| postgres | batch | EF SaveChanges | fence broken (unfenced) | 0 | 335 (fenced 0, unknown 335) | 0 | holds |
+| postgres | batch | EF SaveChanges |  | 0 | 321 (fenced 3, unknown 318) | 0 | holds |
+| postgres | checked | EF SaveChanges | fence broken (unfenced) | 0 | 533 (fenced 0, unknown 533) | 0 | holds |
+| postgres | checked | EF SaveChanges |  | 0 | 272 (fenced 0, unknown 272) | 0 | holds |
+| postgres | batch | owned SQL | fence count ignored | 0 | 343 (fenced 17, unknown 326) | 58206 | 1708 violations |
+| postgres | batch | owned SQL | E1 off (m5) | 0 | 250 (fenced 0, unknown 250) | 0 | holds |
+| postgres | batch | owned SQL | fence broken (unfenced) | 0 | 189 (fenced 0, unknown 189) | 0 | holds |
+| postgres | batch | owned SQL |  | 0 | 374 (fenced 0, unknown 374) | 0 | holds |
+| postgres | checked | owned SQL | fence count ignored | 0 | 297 (fenced 0, unknown 297) | 0 | holds |
+| postgres | checked | owned SQL | fence broken (unfenced) | 0 | 298 (fenced 0, unknown 298) | 0 | holds |
+| postgres | checked | owned SQL |  | 0 | 469 (fenced 0, unknown 469) | 0 | holds |
+| sqlserver | batch | EF SaveChanges |  | 74 | 1224 (fenced 91, unknown 1133) | 0 | 727 violations |
+| sqlserver | checked | EF SaveChanges |  | 0 | 721 (fenced 4, unknown 717) | 0 | holds |
+| sqlserver | batch | owned SQL | fence count ignored | 0 | 1028 (fenced 15, unknown 1013) | 8177 | 2191 violations |
+| sqlserver | batch | owned SQL | E1 off (m5) | 0 | 1048 (fenced 16, unknown 1032) | 0 | holds |
+| sqlserver | batch | owned SQL | fence broken (unfenced) | 0 | 1356 (fenced 13, unknown 1343) | 12458 | 2017 violations |
+| sqlserver | batch | owned SQL |  | 0 | 1021 (fenced 45, unknown 976) | 0 | holds |
+| sqlserver | checked | owned SQL | fence count ignored | 0 | 903 (fenced 1, unknown 902) | 13174 | 2157 violations |
+| sqlserver | checked | owned SQL | fence broken (unfenced) | 0 | 811 (fenced 0, unknown 811) | 0 | holds |
+| sqlserver | checked | owned SQL |  | 0 | 1009 (fenced 1, unknown 1008) | 0 | holds |
+| sqlite | batch | EF SaveChanges |  | 0 | 280 (fenced 280, unknown 0) | 0 | holds |
+| sqlite | checked | EF SaveChanges |  | 0 | 128 (fenced 128, unknown 0) | 0 | holds |
+| sqlite | batch | owned SQL | fence count ignored | 0 | 420 (fenced 420, unknown 0) | 63441 | 2215 violations |
+| sqlite | batch | owned SQL | E1 off (m5) | 0 | 158 (fenced 158, unknown 0) | 0 | holds |
+| sqlite | batch | owned SQL | fence broken (unfenced) | 0 | 405 (fenced 405, unknown 0) | 51111 | 2135 violations |
+| sqlite | batch | owned SQL |  | 0 | 283 (fenced 283, unknown 0) | 0 | holds |
+| sqlite | checked | owned SQL | fence count ignored | 0 | 3 (fenced 3, unknown 0) | 54760 | 2196 violations |
+| sqlite | checked | owned SQL | fence broken (unfenced) | 0 | 5 (fenced 5, unknown 0) | 59496 | 2110 violations |
+| sqlite | checked | owned SQL |  | 0 | 212 (fenced 212, unknown 0) | 0 | holds |
+| mysql | batch | EF SaveChanges |  | 0 | 457 (fenced 0, unknown 457) | 0 | holds |
+| mysql | checked | EF SaveChanges |  | 0 | 437 (fenced 2, unknown 435) | 0 | holds |
+| mysql | batch | owned SQL | fence count ignored | 0 | 589 (fenced 1, unknown 588) | 12471 | 686 violations |
+| mysql | batch | owned SQL | E1 off (m5) | 0 | 437 (fenced 0, unknown 437) | 0 | holds |
+| mysql | batch | owned SQL | fence broken (unfenced) | 0 | 487 (fenced 0, unknown 487) | 0 | holds |
+| mysql | batch | owned SQL |  | 0 | 477 (fenced 0, unknown 477) | 0 | holds |
+| mysql | checked | owned SQL | fence count ignored | 0 | 487 (fenced 0, unknown 487) | 0 | holds |
+| mysql | checked | owned SQL | fence broken (unfenced) | 0 | 531 (fenced 0, unknown 531) | 0 | holds |
+| mysql | checked | owned SQL |  | 0 | 736 (fenced 3, unknown 733) | 0 | holds |
+
 ### Not a finding of the engines: a batch that names one message twice. Run
 
 Before the merge, 1 or 2 times per run on PostgreSQL, SQL Server and MySQL, a commit carried the same message id in
