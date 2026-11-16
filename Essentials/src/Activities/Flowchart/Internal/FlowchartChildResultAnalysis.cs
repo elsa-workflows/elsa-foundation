@@ -15,14 +15,15 @@ internal sealed class FlowchartChildResultAnalysis(
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> predecessors,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? inboundSources = null,
     IReadOnlySet<string>? nonWaitingJoins = null,
-    IReadOnlySet<string>? definiteForks = null,
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>>? forkBranches = null,
     IReadOnlySet<string>? raceJoins = null)
 {
     private readonly IReadOnlySet<string> _raceJoins = raceJoins ?? new HashSet<string>(StringComparer.Ordinal);
-    private readonly IReadOnlySet<string> _definiteForks = definiteForks ?? new HashSet<string>(StringComparer.Ordinal);
+    private readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> _forkBranches =
+        forkBranches ?? new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
     private readonly Dictionary<(string, string, bool), bool> _reachable = [];
     private Dictionary<string, HashSet<string>>? _dominators;
-    private HashSet<string>? _forkCycleRuns;
+    private Dictionary<string, HashSet<string>>? _forkCycleRuns;
 
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _inboundSources =
         inboundSources ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -87,19 +88,31 @@ internal sealed class FlowchartChildResultAnalysis(
         return firstEarlier ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
     }
 
-    // A branch that a fork on a cycle sends off the cycle can still run while the next pass of the cycle runs.
+    // A branch that a fork on a cycle sends off the cycle can still run while the next pass of that cycle runs.
     private bool OverlapsALaterPass(string earlier, string later) =>
-        ForkCycleRuns().Contains(later) && IsReachable(earlier, earlier, requireEdge: true);
+        ForkCycleRuns().TryGetValue(later, out var forks) &&
+        forks.Any(fork => IsReachable(earlier, fork) && IsReachable(fork, earlier));
 
-    // Nodes reachable from a branch that leaves a cycle through a definite fork: every pass starts another run of them.
-    private HashSet<string> ForkCycleRuns()
+    // For each node on a branch that a definite fork on a cycle sends off the cycle, the forks that start a run of it
+    // on every pass. Only the fanned-out targets of a port count; a policy fork counts all its targets.
+    private Dictionary<string, HashSet<string>> ForkCycleRuns()
     {
         if (_forkCycleRuns is not null)
             return _forkCycleRuns;
-        var runs = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var fork in _definiteForks.Where(fork => IsReachable(fork, fork, requireEdge: true)))
-        foreach (var branch in successors.GetValueOrDefault(fork, []).Where(branch => !IsReachable(branch, fork)))
-            runs.UnionWith(nodeIds.Where(node => StringComparer.Ordinal.Equals(node, branch) || IsReachable(branch, node)));
+        var runs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (fork, branches) in _forkBranches)
+        {
+            if (!IsReachable(fork, fork, requireEdge: true))
+                continue;
+            foreach (var branch in branches.Where(branch => !IsReachable(branch, fork)))
+            foreach (var node in nodeIds.Where(node => StringComparer.Ordinal.Equals(node, branch) || IsReachable(branch, node)))
+            {
+                if (!runs.TryGetValue(node, out var forks))
+                    runs[node] = forks = new HashSet<string>(StringComparer.Ordinal);
+                forks.Add(fork);
+            }
+        }
+
         return _forkCycleRuns = runs;
     }
 
@@ -123,7 +136,7 @@ internal sealed class FlowchartChildResultAnalysis(
     // connections come from one node (it may select several outcomes) or from two nodes that are neither ordered nor
     // exclusive. Every node reachable from such a join runs once per join run.
     private bool SelfOverlaps(string node) =>
-        ForkCycleRuns().Contains(node) ||
+        ForkCycleRuns().ContainsKey(node) ||
         _nonWaitingJoins.Any(join =>
             (StringComparer.Ordinal.Equals(join, node) || IsReachable(join, node)) && ArrivalsCanOverlap(join));
 
@@ -237,14 +250,14 @@ internal sealed class FlowchartChildResultAnalysis(
             return null;
 
         var edges = new List<(string Source, string Target)>();
-        var ports = new List<(string Source, string Port)>();
+        var ports = new List<(string Source, string Port, string Target)>();
         foreach (var connection in structure.Connections)
         {
             if (connection?.Source is null || connection.Target is null ||
                 !childNodeIds.Contains(connection.Source.NodeId) || !childNodeIds.Contains(connection.Target.NodeId))
                 return null;
             edges.Add((connection.Source.NodeId, connection.Target.NodeId));
-            ports.Add((connection.Source.NodeId, connection.Source.Port ?? string.Empty));
+            ports.Add((connection.Source.NodeId, connection.Source.Port ?? string.Empty, connection.Target.NodeId));
         }
 
         var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
@@ -303,12 +316,23 @@ internal sealed class FlowchartChildResultAnalysis(
                 inboundSources[id].Where(owner.ContainsKey).Select(source => owner[source]).Distinct(StringComparer.Ordinal).Count() > 1));
         }
 
-        // Definite forks: several connections leave one port, or the node's policy schedules all of them.
-        var definiteForks = nodeIds
-            .Where(id => ports.Where(port => StringComparer.Ordinal.Equals(port.Source, id)).GroupBy(port => port.Port, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
-                         PolicyOf(id) is FlowchartPolicyKinds.ParallelFork or FlowchartPolicyKinds.InclusiveFork)
-            .ToHashSet(StringComparer.Ordinal);
-        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins, definiteForks, raceJoins);
+        // Definite forks: several connections leave one port (those targets), or the node's policy schedules all of them.
+        var forkBranches = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        foreach (var id in nodeIds)
+        {
+            var targets = PolicyOf(id) is FlowchartPolicyKinds.ParallelFork or FlowchartPolicyKinds.InclusiveFork
+                ? successors[id].ToArray()
+                : ports.Where(port => StringComparer.Ordinal.Equals(port.Source, id))
+                    .GroupBy(port => port.Port, StringComparer.Ordinal)
+                    .Where(group => group.Count() > 1)
+                    .SelectMany(group => group.Select(port => port.Target))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+            if (targets.Length > 1)
+                forkBranches[id] = targets;
+        }
+
+        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins, forkBranches, raceJoins);
     }
 
 }

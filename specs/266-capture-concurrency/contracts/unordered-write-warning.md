@@ -31,6 +31,7 @@ Duplicate capture target on one node: `Type` `ValueFlow/DuplicateCaptureTarget`,
 Variable '{key}' in scope '{scope}' is written by {n} nodes whose order the definition does not fix: '{a}', '{b}'.
 [Node '{x}' can run more than once at the same time.]
 [Structure '{kind}' (node '{id}') does not declare how its children are ordered, so they are treated as unordered.]
+[Structure '{kind}' (node '{id}') does not declare whether it completes only after its children, so its children's writes are treated as unordered with what follows it.]
 The last successfully committed write wins, so the final value can differ between runs. To make it deterministic,
 order the branches, capture into separate variables, or combine them with one write after the join. A step that reads
 the variable and writes it back is a read-modify-write: opt it in to the Fault lost-update mode where an overwrite

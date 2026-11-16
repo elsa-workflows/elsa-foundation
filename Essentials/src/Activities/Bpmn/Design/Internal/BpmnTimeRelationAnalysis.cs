@@ -30,7 +30,7 @@ internal sealed class BpmnTimeRelationAnalysis
     private readonly HashSet<string> _nonWaitingJoins = new(StringComparer.Ordinal);
     private readonly Dictionary<(string, string), bool> _reachable = [];
     private Dictionary<string, HashSet<string>>? _dominators;
-    private HashSet<string>? _forkCycleRuns;
+    private Dictionary<string, HashSet<string>>? _forkCycleRuns;
     private HashSet<string>? _overlappingNodes;
     private bool _computingOverlap;
 
@@ -65,26 +65,28 @@ internal sealed class BpmnTimeRelationAnalysis
 
         var firstEarlier = forward && (!backward || !Dominates(second, first));
         var (earlier, later) = firstEarlier ? (first, second) : (second, first);
-        if (!OrderedThroughJoins(earlier, later) || (ForkCycleRuns().Contains(later) && IsReachable(earlier, earlier)))
+        if (!OrderedThroughJoins(earlier, later) || (ForkCycleRuns().TryGetValue(later, out var forks) && forks.Any(fork => IsReachable(earlier, fork) && IsReachable(fork, earlier))))
             return ActivityChildTimeRelation.Unordered;
         return firstEarlier ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
     }
 
     // A branch that an unordered split on a cycle sends off the cycle can still run while the next pass runs, so every
     // node reachable from it overlaps itself and the next pass of the cycle.
-    private HashSet<string> ForkCycleRuns()
+    private Dictionary<string, HashSet<string>> ForkCycleRuns()
     {
         if (_forkCycleRuns is not null)
             return _forkCycleRuns;
-        var runs = new HashSet<string>(StringComparer.Ordinal);
+        var runs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var (fork, edges) in _outgoing)
         {
             if (edges.Count(edge => edge.Choice is null) < 2 || !IsReachable(fork, fork))
                 continue;
             foreach (var edge in edges.Where(edge => edge.Choice is null && !IsReachable(edge.Target, fork)))
+            foreach (var node in _inbound.Keys.Where(node => StringComparer.Ordinal.Equals(node, edge.Target) || IsReachable(edge.Target, node)))
             {
-                runs.Add(edge.Target);
-                runs.UnionWith(_inbound.Keys.Where(node => IsReachable(edge.Target, node)));
+                if (!runs.TryGetValue(node, out var forks))
+                    runs[node] = forks = new HashSet<string>(StringComparer.Ordinal);
+                forks.Add(fork);
             }
         }
 
@@ -96,7 +98,7 @@ internal sealed class BpmnTimeRelationAnalysis
     private bool OverlapsItself(string node)
     {
         if (_elements.TryGetValue(node, out var element) && element.LoopCharacteristics is { IsSequential: false } ||
-            ForkCycleRuns().Contains(node))
+            ForkCycleRuns().ContainsKey(node))
             return true;
         return InGraph(node) && _nonWaitingJoins.Any(join =>
             (StringComparer.Ordinal.Equals(join, node) || IsReachable(join, node)) && ArrivalsCanOverlap(join));

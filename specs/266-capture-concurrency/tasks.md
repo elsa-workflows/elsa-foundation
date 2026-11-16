@@ -4,7 +4,7 @@
 [contracts/unordered-write-warning.md](contracts/unordered-write-warning.md)
 
 **Tests**: xunit only. Risk-based behaviour tests per framework §2.23 for the new analysis and every built-in
-declaration; no feature-registration test (no wiring changes). No TDD cadence is declared; tests follow
+declaration, and feature-registration tests for the analyzer's composition (review round 2). No TDD cadence is declared; tests follow
 implementation within each phase.
 
 ## Phase 1: Setup
@@ -19,8 +19,10 @@ implementation within each phase.
   `Essentials/src/Workflows/Design/Core/Contracts/IActivityStructureHandler.cs` and forwarding members (with
   defaults) to `Essentials/src/Workflows/Design/Core/Contracts/IActivityStructureService.cs`
 - [X] T004 Forward both members in `Essentials/src/Workflows/Design/Core/Services/DefaultActivityStructureService.cs`
-- [X] T005 Implement `UnorderedVariableWriteAnalysis` (writes, rules of data-model.md, findings, message) in
-  `Essentials/src/Workflows/Design/Core/Services/UnorderedVariableWriteAnalysis.cs`
+- [X] T005 Implement the analysis (writes, rules of data-model.md, findings, message): contract
+  `IUnorderedVariableWriteAnalyzer` and findings in `Essentials/src/Workflows/Design/Validations/Core/`, internal
+  `UnorderedVariableWriteAnalyzer` in `Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Services/`,
+  registered by `WorkflowDesignValidationsFeature` (moved out of Design.Core in review round 1)
 - [X] T006 [P] Analysis tests over a test-only structure service (ordered, unordered, exclusive, undeclared,
   self-overlap, early release, three writers, duplicate capture target) in
   `Essentials/tests/Workflows/Design/Tests/UnorderedVariableWriteAnalysisTests.cs`
@@ -86,6 +88,9 @@ implementation within each phase.
 - [X] T021 [P] Write `docs/reference/variable-write-order.md` (FR-004, FR-014) and link it from
   `docs/reference/activity-definition-authoring-composition.md`
 - [X] T022 SC-005: confirm the shared-ancestor Parallel capture test fails with the rule removed
+- [X] T024 Review rounds 1-2: the composition check for exactly one singleton analyzer
+  (`DataSelectionAnalyzerCompositionCheck`), `GraphActivitiesDesignFeature` requiring it, kept constructor overloads,
+  and registration tests in `Essentials/tests/Workflows/Design/Tests/Unit/ValidationsFeatureRegistrationTests.cs`
 - [X] T023 Build the touched projects and run their tests; set the spec's Status to Implemented
 
 ## Dependencies

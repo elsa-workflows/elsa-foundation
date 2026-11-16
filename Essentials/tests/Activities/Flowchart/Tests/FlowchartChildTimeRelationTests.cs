@@ -160,6 +160,28 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "j"));
     }
 
+    // A writer on an earlier, unrelated retry loop is not on the forking cycle, so it stays ordered before the branch.
+    [Fact]
+    public void A_writer_on_an_unrelated_earlier_loop_stays_ordered_before_a_fork_cycle_branch()
+    {
+        var flow = Flowchart(["p", "a", "loop", "b"],
+            [("p", "p", "Retry"), ("p", "a", "Done"), ("a", "loop", null), ("loop", "a", null), ("a", "b", null)], "p");
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "p", "b"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
+    }
+
+    // Fanning out the repeat port of a loop does not make the exit-port branch run on every pass.
+    [Fact]
+    public void A_fan_out_on_a_loops_repeat_port_keeps_its_exit_sequential()
+    {
+        var flow = Flowchart(["start", "check", "body1", "body2", "after"],
+            [("start", "check", null), ("check", "body1", "Continue"), ("check", "body2", "Continue"),
+             ("body1", "check", null), ("body2", "check", null), ("check", "after", "Exit")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "after", "after"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

@@ -13,6 +13,11 @@ namespace Elsa.Workflows.Design.Validations.Core.Contracts;
 /// (<see cref="IActivityStructureHandler.RelateChildren"/> and <see cref="IActivityStructureHandler.CompletesAfterItsChildren"/>);
 /// the analyzer knows no structure kind. A declared write is an output capture into a variable and, when
 /// <paramref name="includeIntrinsics"/> is set on <see cref="Analyze"/>, a Set, Merge or Reduce intrinsic.
+/// <para>
+/// A single-implementation replacement contract (framework §2.6.2): exactly one singleton is composed. A missing,
+/// duplicate or non-singleton registration is a composition error that fails shell Prepare
+/// (<c>DataSelectionAnalyzerCompositionCheck</c>); a host replaces the default by replacing that one registration.
+/// </para>
 /// </remarks>
 public interface IUnorderedVariableWriteAnalyzer
 {

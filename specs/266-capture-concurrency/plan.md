@@ -16,8 +16,8 @@ validation and compilation report the same warning as an activity diagnostic. No
 
 **Language/Version**: C# / .NET 10
 
-**Primary Dependencies**: `Elsa.Workflows.Design.Core` (structure contract, new analysis),
-`Elsa.Workflows.Design.Validations` (workflow validator), `Elsa.Activities.Graph.Design` (graph provider), the
+**Primary Dependencies**: `Elsa.Workflows.Design.Core` (structure contract), `Elsa.Workflows.Design.Validations.Core`
+(analyzer contract and findings), `Elsa.Workflows.Design.Validations` (analyzer implementation, workflow validator), `Elsa.Activities.Graph.Design` (graph provider), the
 structure handlers in `Elsa.Activities.{Sequence,Flowchart,Parallel,If,Switch,Loops,Compensation,Bpmn}`
 
 **Storage**: N/A (design time only)
@@ -62,7 +62,7 @@ reachability is computed once per structure node and cached for the pass
 | P-1 | Declaration | `ActivityChildTimeRelation` and `IActivityStructureHandler.RelateChildren` / `CompletesAfterItsChildren`, forwarded by `IActivityStructureService` ([data-model.md](data-model.md)). |
 | P-2 | Analysis | `IUnorderedVariableWriteAnalyzer` (contract and finding models in `Elsa.Workflows.Design.Validations.Core`), implemented by the internal `UnorderedVariableWriteAnalyzer` in `Elsa.Workflows.Design.Validations` and registered by its feature (the `IActivityDataSelectionAnalyzer` pattern), applying the rules in the data model. `.Core` stays thin (framework §2.1, §2.17). |
 | P-3 | Workflow validator | `ValueFlowValidator` replaces its concurrency code with P-2; writes are captures plus Set/Merge/Reduce (and legacy `elsa.intrinsic.set@1`); severity `Warning`. The hard-coded kinds stay only for Parallel branch identities, which are not ordering (FR-009). |
-| P-4 | Graph provider | `ValidateAsync` and `CompileAsync` run the optional analyzer (P-2) over the body with captures as writes and add warnings, alongside any errors ([contract](contracts/unordered-write-warning.md)). |
+| P-4 | Graph provider | `ValidateAsync` and `CompileAsync` run the analyzer (P-2, required by `GraphActivitiesDesignFeature`) over the body with captures as writes and add warnings, alongside any errors ([contract](contracts/unordered-write-warning.md)). |
 | P-5 | Built-in declarations | Sequence: index order. If, Switch: exclusive. Loops: one child, never overlapping. Parallel: unordered; completes after children unless threshold < branches. Flowchart: reachability with waiting joins, `merge` exceptions, trigger-entry exclusivity, port-blind (R-2, R-4); completes after children unless a `firstWins` node exists. BPMN: element-graph analysis (R-6), multi-instance self-overlap, completes after children. CompensationScope: step before its handlers; handlers per its replay order, otherwise `Unordered`; completes after children. |
 | P-6 | Message | One finding per variable, all writers, last-commit-wins, the three fixes, the ADR 0092 `Fault` pointer, and the undeclared-structure sentence when D-2b applied. |
 | P-7 | Docs | `docs/reference/variable-write-order.md` (new) holds FR-004/FR-014 text; `activity-definition-authoring-composition.md` links it instead of saying the check is not built. |
