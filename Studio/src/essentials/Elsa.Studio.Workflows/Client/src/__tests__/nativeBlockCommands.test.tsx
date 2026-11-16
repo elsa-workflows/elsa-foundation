@@ -158,3 +158,65 @@ it("creates at the host's free position and refuses a changed placement before c
   expect(button("Apply change").disabled).toBe(true);
   expect(container.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
 });
+
+it("shows safe request details, focuses Retry and validates again without duplicate commits", async () => {
+  const before = structuredClone(context.document);
+  validate.mockRejectedValueOnce(Object.assign(new Error("The validation service is restarting."), {
+    status: 503, payload: { detail: "The validation service is restarting.", errorCode: "validation.unavailable", traceId: "request-123", credentials: "must-not-render" }
+  }));
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  const alert = container.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain("The validation service is restarting.");
+  expect(alert.textContent?.match(/The validation service is restarting\./g)).toHaveLength(1);
+  expect(alert.textContent).toContain("HTTP 503");
+  expect(alert.textContent).toContain("validation.unavailable");
+  expect(alert.textContent).toContain("request-123");
+  expect(alert.textContent).not.toContain("must-not-render");
+  expect(document.activeElement).toBe(button("Retry validation"));
+  expect(button("Apply change").disabled).toBe(true);
+  expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(before);
+  const retry = button("Retry validation");
+  flushSync(() => { retry.click(); retry.click(); }); await settle();
+  expect(validate).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(button("Apply change").disabled).toBe(false);
+  const confirm = button("Apply change");
+  flushSync(() => { confirm.click(); confirm.click(); }); await settle();
+  expect(validate).toHaveBeenCalledTimes(3); expect(apply).toHaveBeenCalledTimes(1);
+});
+
+it("clears the failed request and validates edited fields as a new proposal", async () => {
+  validate.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  click("Extract block…"); name("Old name"); click("Preview change"); await settle();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("Failed to fetch");
+  name("New name");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(button("Apply change").disabled).toBe(true);
+  click("Preview change"); await settle();
+  expect(validate.mock.calls.at(-1)![0].activityPresentation[0].displayName).toBe("New name");
+  expect(apply).not.toHaveBeenCalled();
+});
+
+it("discards a previously validated plan when confirmation validation throws", async () => {
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  validate.mockRejectedValueOnce(Object.assign(new Error("Draft revision changed"), { status: 409, payload: { errorCode: "activity.draft.stale-revision" } }));
+  click("Apply change"); await settle();
+  expect(button("Apply change").disabled).toBe(true);
+  expect(container.querySelector(".wf-block-preview")).toBeNull();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("current revision");
+  expect(apply).not.toHaveBeenCalled();
+  click("Retry validation"); await settle();
+  expect(apply).not.toHaveBeenCalled();
+  expect(button("Apply change").disabled).toBe(false);
+});
+
+it("retries an unavailable owner without treating normal invalid findings as an outage", async () => {
+  validate.mockResolvedValueOnce({ state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] });
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  expect(button("Retry validation").disabled).toBe(false);
+  validate.mockResolvedValueOnce({ state: "invalid", messages: ["activity.graph.intrinsic-unsupported: Engine intrinsics are unsupported."] });
+  click("Retry validation"); await settle();
+  expect(button("Preview change").disabled).toBe(false);
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("intrinsic-unsupported");
+  expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
+});

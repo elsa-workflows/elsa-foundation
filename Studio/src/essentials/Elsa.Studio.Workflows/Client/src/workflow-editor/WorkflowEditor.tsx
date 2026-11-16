@@ -539,9 +539,16 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
+  const showEditorRunData = () => {
+    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+  };
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+    showEditorRunData();
+  };
+  const selectEditorNodes = (nodeIds: string[], primaryNodeId?: string | null) => {
+    canvas.selectNodes(nodeIds, primaryNodeId);
+    if (nodeIds.length) showEditorRunData();
   };
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
@@ -1665,7 +1672,7 @@ export function WorkflowEditor({
               canvasRef={canvasRef}
               availabilityLookup={availabilityLookup}
               onSelect={selectEditorNode}
-              onSelectMany={canvas.selectNodes}
+              onSelectMany={selectEditorNodes}
               onInsert={openSequenceInsertMenu}
               onDropActivity={(versionId, index) => {
                 const activity = paletteCatalog.find(item => item.activityVersionId === versionId);

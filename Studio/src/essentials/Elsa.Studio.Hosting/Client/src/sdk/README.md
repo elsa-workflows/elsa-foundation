@@ -112,9 +112,12 @@ api.navigation.add({
   id: "acme-slack",
   label: "Slack",
   path: "/acme/slack",
+  placement: "integrations",
   icon: SlackIcon
 });
 ```
+
+Every top-level entry needs a `placement`; see [Navigation](../../../../../../docs/module-ui.md#navigation).
 
 Both forms keep icon code and assets in the contributing module; neither needs a Studio
 source change. Use `currentColor` and accept the `size` prop on navigation components too.

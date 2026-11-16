@@ -1595,10 +1595,19 @@ plan's aims at it), so that it bites is not shown.
 - **Park subscriptions, resolved 13 November:** this round initially kept them and exempted parked instances in I8.
   The owner subsequently chose atomic removal of active subscriptions while retaining the checkpoint and fault
   evidence. Section 25.9 records the new behavior and checks; the old exemption is removed.
-- **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
-  arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
-  twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A
-  corpus case on main would settle it.
+- **Same-target Decision join, confirmed and corrected in the prototype:** #4367 records the product defect.
+  A targeted run of the extracted Graph engine also confirmed the duplicate downstream join: source-only accounting
+  fired the shared target on its live edge before its dead edge arrived, then carried false deadness through it.
+  Graph now matches answers by source/normalized-port/target and the unchanged wire ID, so accepted string-ID
+  collisions do not alias distinct inbound answers, and consumes both together. The permanent
+  `FlowchartSameTargetDecisionTests` cover both outcomes, edge orders, gateway metadata, explicit IDs, all-dead
+  propagation, loop iterations and invalid duplicate taken targets. `FlowchartConnectionAnswerTests` also cover
+  accepted derived/authored ID collisions for live forks and Merge deadness before a downstream barrier.
+  Selected/untaken accounting also retains actual graph edges, including a nonserialized built-in command hint;
+  `FlowchartSelectedEdgeTests` check immediate scheduling while a sibling is active, real live/dead port facts,
+  same-source colliding IDs, and the preserved custom-command first-match fallback. `FlowchartRoutingBoundaryTests`
+  cover public command redirection, copied contexts, repeated dead-path waves and the coordinator's wire-ID entry point.
+  The product fix remains separate; this does not expand the simulation mix or certify the product runtime.
 - **State size** of a Flowchart, above. Paths and arrivals by reference, or a smaller encoding, are the levers.
 - **Not covered by the mix:** merges, inclusive gateways, a race inside a loop, a trigger inside a Flowchart under
   the faults (smoke covers the trigger entry). The BPMN spike (its own session) does not use this engine; comparing

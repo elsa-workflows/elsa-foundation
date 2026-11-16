@@ -132,7 +132,7 @@ class Graph:
     references: dict[str, set[str]]
     # (path, consuming project, places): a consumer reads that file, or the files under that directory, from outside
     # its own directory. A claim on a file, or on a directory that holds no project, places the paths it covers: they
-    # select the consumer instead of everything. A broader claim (`Essentials/src`, `specs`) adds the consumer but never
+    # select the consumer instead of everything. A broader claim (`essentials/src`, `specs`) adds the consumer but never
     # stops a path it covers from selecting everything.
     claims: list[tuple[str, str, bool]]
     shared_imports: set[str]

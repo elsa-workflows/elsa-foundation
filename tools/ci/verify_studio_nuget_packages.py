@@ -34,7 +34,7 @@ def _child_text(parent: ElementTree.Element, name: str) -> str | None:
 
 def _studio_projects(root: Path) -> set[str]:
     paths = set((root / "Studio").rglob("*.csproj"))
-    paths.update(path for extension in (root / "Extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
+    paths.update(path for extension in (root / "extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
     return {path.relative_to(root).as_posix() for path in paths}
 
 
@@ -56,6 +56,13 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
         raise ValueError(f"{wrapper.relative_to(root)} overrides shared Studio package metadata.")
 
 
+def _normalize_layout_target(target: str) -> str:
+    root, separator, remainder = target.partition("/")
+    if root in {"Essentials", "Extensions"}:
+        root = root.lower()
+    return root + separator + remainder
+
+
 def _verify_pinned_layout(root: Path, inventory: dict) -> None:
     manifest_path = root / inventory["layout_manifest"]
     if not manifest_path.is_file():
@@ -63,11 +70,14 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
     manifest = json.loads(manifest_path.read_text())
     if manifest.get("studio_source") != inventory["studio_source_commit"]:
         raise ValueError("Studio package identity list is not pinned to the layout manifest source commit.")
-    actual = {
-        item["target"]: (item["package_id"], item["explicit_is_packable"])
+    projected = [
+        (_normalize_layout_target(item["target"]), (item["package_id"], item["explicit_is_packable"]))
         for item in manifest["projects"]
         if item.get("product") == "studio"
-    }
+    ]
+    actual = dict(projected)
+    if len(actual) != len(projected):
+        raise ValueError("Duplicate projected Studio project paths in the pinned layout manifest.")
     # The consolidation manifest is historical. New modules belong in the current
     # inventory without inventing source paths in that frozen snapshot.
     additions = {
@@ -144,7 +154,7 @@ def verify_project_inventory(root: Path) -> dict:
     ):
         raise ValueError("Studio/Directory.Build.props must pack its shared icon.png at the package root.")
     for item in packable:
-        if item["project"].startswith("Extensions/"):
+        if item["project"].startswith("extensions/"):
             _verify_extension_studio_props(root, Path(item["project"]))
     icon = root / "Studio" / inventory["package_icon"]
     if not icon.is_file():
@@ -396,8 +406,57 @@ def _payload_self_test() -> None:
             _verify_payload(package, {resource: source}, contract)
 
 
+def _pinned_layout_self_test(root: Path, inventory: dict) -> None:
+    manifest = json.loads((root / inventory["layout_manifest"]).read_text())
+    studio_index = next(index for index, item in enumerate(manifest["projects"])
+                        if item.get("product") == "studio" and item["target"].startswith("Extensions/")
+                        and item["explicit_is_packable"] != "false")
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture_root = Path(temporary)
+        target = fixture_root / inventory["layout_manifest"]
+        target.parent.mkdir(parents=True)
+
+        def verify(candidate: dict, expected_error: str | None = None) -> None:
+            target.write_text(json.dumps(candidate))
+            try:
+                _verify_pinned_layout(fixture_root, inventory)
+            except ValueError as error:
+                if expected_error is None or expected_error not in str(error):
+                    raise AssertionError(f"Pinned layout failed for the wrong reason: {error}") from error
+            else:
+                if expected_error is not None:
+                    raise AssertionError(f"Pinned layout corruption was accepted: {expected_error}")
+
+        verify(manifest)
+        current = json.loads(json.dumps(manifest))
+        for item in current["projects"]:
+            if item.get("product") == "studio":
+                item["target"] = _normalize_layout_target(item["target"])
+        verify(current)
+
+        wrong_source = json.loads(json.dumps(manifest))
+        wrong_source["studio_source"] = "unexpected-source"
+        verify(wrong_source, "not pinned to the layout manifest source commit")
+        for field, value in [("package_id", "Unexpected.Package.Identity"), ("explicit_is_packable", "false")]:
+            changed = json.loads(json.dumps(manifest))
+            changed["projects"][studio_index][field] = value
+            verify(changed, "Pinned Studio project identity mismatch")
+        missing = json.loads(json.dumps(manifest))
+        missing["projects"].pop(studio_index)
+        verify(missing, "Pinned Studio project identity mismatch")
+        unexpected = json.loads(json.dumps(manifest))
+        unexpected["projects"][studio_index]["target"] += ".unexpected"
+        verify(unexpected, "Pinned Studio project identity mismatch")
+        collision = json.loads(json.dumps(manifest))
+        alias = dict(collision["projects"][studio_index])
+        alias["target"] = _normalize_layout_target(alias["target"])
+        collision["projects"].append(alias)
+        verify(collision, "Duplicate projected Studio project paths")
+
+
 def self_test(root: Path) -> None:
     inventory = json.loads(IDENTITY_FILE.read_text())
+    _pinned_layout_self_test(root, inventory)
     ids = [item["id"] for item in inventory["packable_projects"]]
     for index, item in enumerate(inventory["packable_projects"]):
         changed = json.loads(json.dumps(inventory))

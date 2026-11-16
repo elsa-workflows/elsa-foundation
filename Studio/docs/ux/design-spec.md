@@ -56,7 +56,7 @@ code.
 | Region | Status | Rule |
 |---|---|---|
 | Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions, the theme control (`ThemeSwitcher`) and, when sign-in is on, the user menu. |
-| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
+| Navigation placement | `exists` | Home is direct; initially open Build, Operate and Integrations groups hold purpose-specific destinations. Settings stays separate. Module placement, inherited child views, permissions and disclosure behavior follow [module UI guidance](../module-ui.md#navigation). Library owns activity/template views; Workflows owns definition/executable views; Diagnostics owns its routed diagnostic views. Existing URLs remain valid. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
 | User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is collapsed on desktop and narrow screens. Default chrome values stay represented by absent keys; explicit nondefault choices persist. |
@@ -81,7 +81,9 @@ The [module UI guide](../module-ui.md) owns public imports and composition examp
 Collections share a flat page, a 20px page title, 13px description/body, 12px
 sentence-case table headers, search before filters, 32px default controls, and a
 48px minimum row height. Longer content may grow a row. Use the shared footer for
-counts and pagination. The host owns the outer gutter; a module does not add a
+counts and pagination. The host's horizontal gutter scales with the viewport
+from 16px to 36px, preserving room for desktop tables beside folder navigation.
+A module does not add a
 second whole-page border or another page inset. Small row actions may use the
 shared small button size.
 

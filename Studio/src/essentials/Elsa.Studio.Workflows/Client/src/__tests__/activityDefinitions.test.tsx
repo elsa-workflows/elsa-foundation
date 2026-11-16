@@ -911,6 +911,29 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it.each(["Error", "error"])("blocks applying a fork with migration errors (%s)", async severity => {
+    const source = definition({ contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" } }, [{ action: "fork-definition", allowed: true }]);
+    const candidate = { ...forkPreview(), providerMigration: { ...forkPreview().providerMigration,
+      diagnostics: [{ code: "activity.test.invalid", severity, message: "Correct the conversion.", subject: { kind: "ActivityDefinition", id: "definition-1" }, metadata: {} }]
+    } };
+    const postJson = vi.fn(async () => candidate);
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true, true);
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1", postJson, [graphContribution()]);
+    await waitForText(rendered.container, "Fork recommended version");
+    click(buttonByText(rendered.container, "Fork recommended version"));
+    await waitForText(rendered.container, "Recommended version");
+    click(await enabledButton(rendered.container, "Create fork preview"));
+    await waitForText(rendered.container, "Correct the conversion.");
+    expect((buttonByText(rendered.container, "Apply reviewed fork") as HTMLButtonElement).disabled).toBe(true);
+    expect(postJson).toHaveBeenCalledTimes(1);
+    await rendered.unmount();
+  });
+
   it("reviews and atomically applies the recommended active version without offering an explicit version picker", async () => {
     const source = definition({
       contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }

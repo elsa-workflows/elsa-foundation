@@ -85,7 +85,7 @@ def main():
             bundle.extractall(producer, filter="data")
         report["sourceArchiveSha256"] = sha(archive)
         fixtures = producer / "tools/agents/conformance"
-        projects = {p.stem: p for area in ["Essentials/src", "Extensions"] for p in (producer / area).rglob("*.csproj")}
+        projects = {p.stem: p for area in ["essentials/src", "extensions"] for p in (producer / area).rglob("*.csproj")}
         selected, seen = [], set()
 
         def visit(project):
@@ -191,7 +191,7 @@ def main():
             if name in ["BpmnConsumer", "BpmnCombined"]:
                 shutil.copy2(fixtures / "Consumer/Program.cs.template", directory / "Program.cs")
             if name == "Author":
-                test_source = producer / "Extensions/Agent/tests/Tests/Publication/AgentPublicationTests.cs"
+                test_source = producer / "extensions/Agent/tests/Tests/Publication/AgentPublicationTests.cs"
                 shutil.copy2(test_source, directory / test_source.name)
                 report["authorPublicApiFixtureSha256"] = sha(test_source)
             configure(directory)

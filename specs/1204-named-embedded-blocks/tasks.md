@@ -6,6 +6,8 @@
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
 
+T003 selection/history follow-through [#4604](https://github.com/elsa-workflows/elsa-foundation/pull/4604) landed with [#4630](https://github.com/elsa-workflows/elsa-foundation/pull/4630) in main `c32bca382dfc9a5ed7bc33fbfd825f052fb24e83`. The [current-tree eight-case repair acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4630#issuecomment-6905374188) covers the two bounded repair contracts. Phone toolbar overlap UX-OBS-1 remains a T004/T007 acceptance obligation; it is not a full-program or GitHub CI pass.
+
 Owner triage on 9 November folded duplicate T004/#3753 into Feature #3745 and T007/#3756 into Program #3610. Their closure as not planned removes duplicate tracking, not the original acceptance obligations. The T004 and T007 identifiers and serial dependencies below remain in force.
 
 ## Phase 1 — Establishment and prototype

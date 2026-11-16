@@ -10,6 +10,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly Random _random = new(seed);
     private long _before, _after;
@@ -70,6 +71,7 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 

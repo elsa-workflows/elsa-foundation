@@ -13,7 +13,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-PROJECT = "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj"
+PROJECT = "extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj"
 REQUIRE = "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
 PROVIDERS = ("Sqlite", "PostgreSql", "SqlServer", "MySql")
 

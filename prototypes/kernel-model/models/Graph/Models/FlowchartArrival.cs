@@ -38,6 +38,10 @@ public sealed record FlowchartArrival
         IterationKey = iterationKey;
     }
 
+    // SourcePort is the normalized endpoint port recorded when this arrival is emitted.
+    internal (string Source, string Port, string Target, string Connection) GetAnswerKey() =>
+        (SourceNodeId, SourcePort, TargetNodeId, ConnectionId);
+
     public string ArrivalId { get; init; }
     public string ExecutionPathId { get; init; }
     public string ExecutionScopeId { get; init; }
