@@ -195,6 +195,36 @@ public sealed partial class World
     public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+    private readonly Dictionary<Request, long> _requestedCreations = [];
+
+    private bool AdmitCaller(string process, Request caller, Func<bool> admit)
+    {
+        try { if (admit()) return true; }
+        catch { Processes[process].Disconnect(caller); throw; }
+        Processes[process].Disconnect(caller);
+        return false;
+    }
+
+    private void AddDistinct(Message stimulus)
+    {
+        for (long suffix = 0; ; suffix = checked(suffix + 1))
+            if (Store.AddAsync(suffix == 0 ? stimulus : stimulus with { Id = stimulus.Id + "." + suffix }).Result) return;
+    }
+
+    private (string Process, Request Request, string Instance)? OpenCaller(string name)
+    {
+        (string Process, Request Request, string Instance)? byName = null;
+        var ambiguous = false;
+        foreach (var caller in Asked)
+        {
+            if (caller.Request.Done || !Running(caller.Process) || !Processes[caller.Process].IsOpen(caller.Request)) continue;
+            if (caller.Request.Registration == name) return caller;
+            if (caller.Request.Id != name) continue;
+            ambiguous |= byName is not null;
+            byName = caller;
+        }
+        return ambiguous ? null : byName;
+    }
 
     /// <summary>
     /// A request's deadline, which its reply address carries (decision 6): the route's timeout, 30 s; one request in four
@@ -262,7 +292,7 @@ public sealed partial class World
     // One balancer per process: the workers of the node's current incarnation. Its heartbeat window spans two rounds of the settling loop.
     private void Balance(int node)
     {
-        Processes[Of(node, 0).Worker.Node] = new Requests(Config.Flaws);
+        Processes[Of(node, 0).Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
         var runtime = Runtimes[node] = new PartitionRuntime(Of(node, 0).Worker.Node, Store, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
         runtime.StartAsync(new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker))).AsTask().Wait();
         for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
@@ -515,11 +545,14 @@ public sealed partial class World
                 return $"{Store.SweepAsync().Result} rows deleted";
             case "request":
             {
-                if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
-                var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
-                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request, Deadline(request)) };
-                if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
-                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Deadline(request)), asked.Target.Id));
+                if (Live(act.A) is not { } actor || !actor.Worker.Owns || act.M is not { ReplyTo: { } reply, Start: not null } message) return null;
+                var request = reply[(reply.IndexOf('|') + 1)..];
+                var process = actor.Worker.Node;
+                var caller = Processes[process].Open(request, Deadline(request));
+                var asked = message.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
+                if (!AdmitCaller(process, caller, () => actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id))) return null;
+                Asked.Add((process, caller, asked.Target.Id));
+                if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
             }
@@ -528,18 +561,22 @@ public sealed partial class World
                 if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
                 var process = Of(act.A, 0).Worker.Node;
                 var request = act.M.ReplyTo!;
-                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request, Deadline(request)) };
-                var added = Store.AddAsync(asked).Result;
-                Asked.Add((process, Processes[process].Open(request, Deadline(request)), asked.Target.Id));
-                return added ? "added" : "duplicate key";
+                var caller = Processes[process].Open(request, Deadline(request));
+                var asked = act.M.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
+                if (!AdmitCaller(process, caller, () => Store.AddAsync(asked).Result)) return "duplicate key";
+                Asked.Add((process, caller, asked.Target.Id));
+                if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
+                return "added";
             }
             case "disconnect":
             {
-                if (Asked.Find(a => a.Request.Id == act.S) is not { Request: not null } asked || asked.Request.Done || !Running(asked.Process)) return null;
-                Processes[asked.Process].Disconnect(act.S);
+                if (OpenCaller(act.S) is not { } asked) return null;
+                Processes[asked.Process].Disconnect(asked.Request);
                 if (!act.Flag) return "";
                 Oracle.Https[asked.Instance] = Oracle.Https[asked.Instance] with { Cancel = true };
-                return Store.AddAsync(new Message("cancel-" + act.S, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000)).Result ? "cancel added" : "duplicate key";
+                AddDistinct(new Message("cancel-" + asked.Request.Registration, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000,
+                    TargetCreation: _requestedCreations.TryGetValue(asked.Request, out var generation) ? generation : null));
+                return "cancel added";
             }
             case "deliver" or "drop":
             {
@@ -701,7 +738,7 @@ public sealed class Generator(int seed, World world)
             if (waiting.Count == 0) return new Act("tick", r.Next(50));
             return new Act("resume-request", r.Next(world.Config.Nodes), M: new Message($"x{n}", new InstanceRef(waiting[r.Next(waiting.Count)]), "resume", KeepUntil: world.Time + 3_600_000, ReplyTo: "q" + n));
         }
-        var open = world.Asked.Where(a => !a.Request.Done).Select(a => a.Request.Id).ToList();
+        var open = world.Asked.Where(a => !a.Request.Done && world.Running(a.Process) && world.Processes[a.Process].IsOpen(a.Request)).Select(a => a.Request.Registration).ToList();
         return open.Count == 0 ? new Act("tick", r.Next(50)) : new Act("disconnect", S: open[r.Next(open.Count)], Flag: r.Next(2) == 0);
     }
 

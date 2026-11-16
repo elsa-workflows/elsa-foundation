@@ -73,6 +73,8 @@
   <ItemGroup>
     <None Include="../../../../../../specs/1204-named-embedded-blocks/contracts/native-result-transfer-cases.json"
           Link="Fixtures/native-blocks/result-transfers.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1204-named-embedded-blocks/contracts/bpmn-result-transfer-cases.json"
+          Link="Fixtures/native-blocks/bpmn-result-transfers.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Build and launch the real host; never load its assembly or reproduce its composition in this test process. -->
   <Target Name="DescribeBpmnHostingWorkbench" BeforeTargets="GetAssemblyAttributes">

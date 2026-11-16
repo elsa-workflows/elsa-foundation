@@ -13,6 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Native history stories use public activity callbacks while internal history stays in its own test assembly. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <!-- Authoring composition exercises the real event publisher and startup aggregation. -->
     <ProjectReference Include="../Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
     <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
