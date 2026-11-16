@@ -375,6 +375,88 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public async Task SetOutput_checkpoints_only_the_nearest_invocations_value_and_rehydrates_it_for_the_caller()
+    {
+        var output = new GraphActivityOutputDescriptor("answer-key", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json, "Answer");
+        var descriptor = Descriptor(outputs: [output], requiredOutputReferenceKeys: [output.ReferenceKey]);
+        var boundaryNode = BoundaryNode(descriptor, [Node("entry")]);
+        var nearest = State("inner-call") with { Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed }, ParentActivityExecutionId = "outer-call" };
+        var enclosing = nearest with { Execution = nearest.Execution with { ActivityExecutionId = "outer-call" }, ParentActivityExecutionId = null };
+        var sibling = nearest with { Execution = nearest.Execution with { ActivityExecutionId = "second-call" } };
+        var activityStore = _serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        foreach (var owner in new[] { nearest, enclosing, sibling })
+            await activityStore.SaveAsync(owner);
+        var identity = new WorkflowExecutableIdentity("artifact", "workflow", "workflow-version", "1", "sha256:workflow");
+        var now = DateTimeOffset.UnixEpoch;
+        await _serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(new WorkflowExecutionState(
+            "workflow-execution", identity, WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, null, new Dictionary<string, string>()));
+        var store = _serviceProvider.GetRequiredService<IDurableValueStateStore>();
+
+        async Task Assign(string invocation, ActivityExecutionState? owner, int number)
+        {
+            var binding = new Dictionary<string, RuntimeInputBinding>
+            {
+                ["name"] = LiteralBinding("name", "String", "Answer"),
+                ["value"] = LiteralBinding("value", "Int32", number)
+            };
+            var target = owner is null ? JsonSerializer.SerializeToElement(new { }) : JsonSerializer.SerializeToElement(new
+            {
+                referenceKey = output.ReferenceKey, type = output.Type, storageDriverKey = output.StorageDriverKey, isNullable = false
+            });
+            var node = new ExecutableNode("set", "authored-set", "elsa.intrinsic.setoutput", "1.0.0",
+                WellKnownRuntimeActivityConsumers.Intrinsic, target, binding, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput,
+                descriptorSchemaVersion: owner is null ? RuntimeActivityDescriptor.InitialSchemaVersion : WorkflowIntrinsicDescriptorSchemas.ActivityOutput);
+            var scheduled = State(invocation) with
+            {
+                Execution = new ActivityExecution(invocation, "workflow-execution", "set", "authored-set", node.ActivityType, "1.0.0"),
+                ParentActivityExecutionId = owner?.InvocationId,
+                Status = ActivityExecutionStatus.Scheduled
+            };
+            await activityStore.SaveAsync(scheduled);
+            var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), now,
+                new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+            var payload = new RuntimeStartActivityCommandPayload(identity, "set", invocation, RuntimeStartActivityCommandPayload.ScheduledActivityReason);
+            var work = new RuntimeSchedulerWorkItem(invocation, "workflow-execution", invocation, WorkflowExecutionCommandKind.StartActivity,
+                invocation, invocation, now, now, 1, JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>(), new Dictionary<string, string>());
+            var commit = await _serviceProvider.GetRequiredService<WorkflowIntrinsicExecutor>().ExecuteAsync(work, payload, executable, node, scheduled);
+            var write = Assert.Single(commit.StateChanges.DurableValues);
+            Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(commit.StateChanges.ActivityExecutions).State.Status);
+            await store.SaveAsync(write.State);
+        }
+
+        await Assign("write-root", null, 3);
+        await Assign("write-outer", enclosing, 7);
+        await Assign("write-inner", nearest, 13);
+        await Assign("overwrite-inner", nearest, 23);
+        var persisted = await store.ListAllDurableValueStatesAsync("workflow-execution");
+        Assert.Equal(3, persisted.Count);
+        Assert.Equal(3, Assert.Single(persisted, x => x.ValueId == RuntimeWorkflowStateSeed.OutputValueIdPrefix + "Answer").InlineValue!.Value.GetInt32());
+
+        async Task<int> Complete(ActivityExecutionState owner)
+        {
+            // A fresh activation sees only the checkpointed rows for its own invocation.
+            var graph = NewGraph(descriptor);
+            var preparation = await graph.PrepareCompletionCheckpointAsync(Context(graph, boundaryNode, owner), persisted, now);
+            Assert.Empty(preparation.DurableValueChanges);
+            var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+            return Assert.IsType<JsonElement>(result[output.ReferenceKey]).GetInt32();
+        }
+
+        Assert.Equal(23, await Complete(nearest));
+        Assert.Equal(7, await Complete(enclosing));
+        var unassigned = await Assert.ThrowsAsync<InvalidOperationException>(() => Complete(sibling));
+        Assert.Contains("Required graph output", unassigned.Message);
+    }
+
+    private static RuntimeInputBinding LiteralBinding<T>(string key, string alias, T value)
+    {
+        var type = new ValueTypeDescriptor(alias);
+        return new RuntimeInputBinding(key, type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+    }
+
+    [Fact]
     public async Task PrepareCompletion_ReturnsTypedObjectResultForContractProjection()
     {
         var descriptor = Descriptor(
@@ -442,6 +524,103 @@ public sealed class GraphActivityExecutionTests : IDisposable
             Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
         Assert.Equal(42, Assert.IsType<JsonElement>(result["copy"]).GetInt32());
     }
+
+    [Theory]
+    [InlineData("workflow")]
+    [InlineData("activity-graph")]
+    [InlineData(null)]
+    public async Task VariableOutputMapping_ReturnsOnlyTheCurrentInvocationFinalValue(string? scopeId)
+    {
+        var variable = new GraphActivityVariableDescriptor(
+            "running-total", "RenamedTotal", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json,
+            new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(9)));
+        var descriptor = Descriptor(
+            variables: [variable],
+            outputs: [Output("result") with { Type = Type("Int32") }],
+            outputMappings: [Mapping("result", VariableRead(variable.ReferenceKey, scopeId))],
+            requiredOutputReferenceKeys: ["result"]);
+        var factory = new GraphActivityScopeFactory(Registry());
+        var now = DateTimeOffset.UnixEpoch;
+        var persisted = new List<DurableValueState>();
+        foreach (var (executionId, value) in new[] { ("outer-call", 17), ("inner-call", 42) })
+        {
+            var graph = NewGraph(descriptor);
+            var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State(executionId));
+            var entry = await graph.PrepareEntryCheckpointAsync(context, new Dictionary<string, object?>(), now);
+            var scope = factory.Rehydrate(descriptor, context.WorkflowExecutionId, executionId, entry.Select(change => change.State).ToArray());
+            persisted.Add(await scope.SetVariableAsync(variable, value, now.AddMinutes(1)));
+        }
+
+        foreach (var (executionId, expected) in new[] { ("inner-call", 42), ("outer-call", 17) })
+        {
+            var resumed = NewGraph(descriptor);
+            var context = Context(resumed, BoundaryNode(descriptor, [Node("entry")]), State(executionId));
+            var prepared = await resumed.PrepareCompletionCheckpointAsync(context, persisted, now.AddMinutes(2));
+            var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                Assert.IsAssignableFrom<IActivityCompletionTransition>(prepared.Transition).Result);
+            var output = Assert.Single(result);
+            Assert.Equal("result", output.Key);
+            Assert.Equal(expected, Assert.IsType<JsonElement>(output.Value).GetInt32());
+        }
+    }
+
+    [Theory]
+    [InlineData("running-total", "foreign", "not visible")]
+    [InlineData("DisplayName", "workflow", "undeclared")]
+    [InlineData("running-total", "workflow", "returned null")]
+    public async Task VariableOutputMapping_RejectsForeignScopesDisplayNamesAndNullForNumericOutput(string key, string scopeId, string expectedError)
+    {
+        var descriptor = Descriptor(
+            variables: [Variable("running-total", null) with { Name = "DisplayName" }],
+            outputs: [Output("result") with { Type = Type("Int32") }],
+            outputMappings: [Mapping("result", VariableRead(key, scopeId))]);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>()));
+        Assert.Contains(expectedError, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task VariableOutputMapping_RequiresTheReferencedCheckpointRow()
+    {
+        var descriptor = Descriptor(
+            variables: [Variable("key", Default("initial"))],
+            outputs: [Output("result")],
+            outputMappings: [Mapping("result", VariableRead("key", "workflow"))]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("resumed-call"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch).AsTask());
+        Assert.Contains("no captured value", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Array", true)]
+    [InlineData("Single", false)]
+    public async Task VariableOutputMapping_UsesTheDeclaredOutputCollectionShape(string collectionKind, bool acceptsArray)
+    {
+        var array = JsonSerializer.SerializeToElement(new[] { 2, 4 });
+        var arrayType = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind = "Array" });
+        var descriptor = Descriptor(
+            variables: [Variable("numbers", new GraphActivityExpression("Literal", array)) with { Type = arrayType }],
+            outputs: [Output("result") with { Type = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind }) }],
+            outputMappings: [Mapping("result", VariableRead("numbers", "workflow"))]);
+
+        var completion = PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
+        if (!acceptsArray)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
+            Assert.Contains("does not match declared type", error.Message, StringComparison.Ordinal);
+            return;
+        }
+
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>((await completion).Transition).Result);
+        Assert.True(JsonElement.DeepEquals(array, Assert.IsType<JsonElement>(result["result"])));
+    }
+
+    private static GraphActivityExpression VariableRead(string referenceKey, string? declaringScopeId) =>
+        new("Variable", JsonSerializer.SerializeToElement(new { referenceKey, declaringScopeId }));
 
     [Fact]
     public async Task PrepareCompletion_DoesNotRequireAnUnreferencedOptionalInput()

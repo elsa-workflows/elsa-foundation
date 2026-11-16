@@ -9,6 +9,7 @@ using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -116,6 +117,47 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetOutput_is_published_with_its_enclosing_output_contract_and_placed_in_its_authored_slot(bool root)
+    {
+        var executable = await PublishPlacedBodyAsync(Text("ready"), assignOutput: true, rootSetter: root);
+        var boundary = executable.RootActivity.DescendantsAndSelf().Single(x => x.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.GraphActivity);
+        var setter = Assert.Single(boundary.DescendantsAndSelf(), x => x.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+        Assert.Equal("output-key", setter.Descriptor.Payload.GetProperty("referenceKey").GetString());
+        Assert.Equal("String", setter.InputBindings["value"].TargetType.Alias);
+        Assert.Equal("2", setter.Descriptor.SchemaVersion);
+        Assert.Contains(new RuntimeRequirement("intrinsic", "2"), executable.RuntimeRequirements);
+        var entry = Assert.Single(Assert.Single(boundary.ChildSlots).Activities);
+        Assert.Equal(entry.ExecutableNodeId, boundary.Descriptor.Payload.GetProperty("entryNodeId").GetString());
+        if (root)
+            Assert.Same(setter, entry);
+        else
+            Assert.Equal(setter.ExecutableNodeId, entry.Structure!.Payload.GetProperty("activities")[1].GetString());
+    }
+
+    [Fact]
+    public async Task Placed_SetOutput_preserves_explicit_JavaScript_argument_names_and_activity_input_reference_keys()
+    {
+        var sum = new ExpressionDefinition("JavaScript", "args.A + args.B", new TypeReference("Double"),
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["A"] = new WorkflowRequestExpressionParameterBinding("a"),
+                ["B"] = new WorkflowRequestExpressionParameterBinding("b")
+            }, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        var value = new WorkflowArgumentState("value", new ArgumentValue(
+            JsonSerializer.SerializeToElement(sum, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript"), null, null, null, null);
+        var executable = await PublishPlacedBodyAsync(value, assignOutput: true, rootSetter: true, sumInputs: true);
+
+        var placed = executable.RootActivity.DescendantsAndSelf().Single(x => x.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+        var binding = placed.InputBindings["value"];
+        Assert.Equal("Double", binding.TargetType.Alias);
+        Assert.Equal("args.A + args.B", binding.Expression!.Expression);
+        Assert.Equal("a", Assert.IsType<WorkflowRequestExpressionParameterBinding>(binding.Expression.Parameters["A"]).MemberKey);
+        Assert.Equal("b", Assert.IsType<WorkflowRequestExpressionParameterBinding>(binding.Expression.Parameters["B"]).MemberKey);
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {
@@ -124,7 +166,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
     // Compiles a reusable activity whose body produces a customer and reads its typed customerId, places it in a
     // workflow and publishes that workflow, with member reads on in both analyses.
-    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null, bool declaresCustomerInput = false)
+    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null, bool declaresCustomerInput = false, bool assignOutput = false, bool rootSetter = false, bool sumInputs = false)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
@@ -141,12 +183,21 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             await PublishAuthorableAsync(dependency, root, dependencyVersions, registry, publications, templates, sources);
 
         // The body: a producer and a reader of one of its members, in a Sequence.
-        var body = new ActivityNode("body", _sequenceActivity.Id, [], [], new ActivityNodeStructure(
+        var reader = assignOutput
+            ? new ActivityNode("assign", "elsa.intrinsic.set-output@1", [Text("PublicResult") with { ReferenceKey = "name" }, read with { ReferenceKey = "value" }], [])
+            {
+                Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any"))
+            }
+            : Node("reader", read);
+        var body = rootSetter ? reader : new ActivityNode("body", _sequenceActivity.Id, [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
             JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
-                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", read)]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
-        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
-        var contract = new DesignContract("1", declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [], [], [new("done", "Done", true)]);
+                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+        using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
+        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()),
+            services.GetRequiredService<IServiceScopeFactory>());
+        var contract = new DesignContract("1", sumInputs ? [new("a", "A", new("Double"), false, true, null, "elsa.json"), new("b", "B", new("Double"), false, true, null, "elsa.json")] : declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [],
+            assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
         {
             rootActivity = body, variables = bodyVariables ?? [], outputMappings = Array.Empty<object>()
