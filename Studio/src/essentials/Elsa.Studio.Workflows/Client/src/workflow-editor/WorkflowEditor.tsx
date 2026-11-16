@@ -1,3 +1,4 @@
+import { captureCanvasFocusIntent, type CanvasFocusIntent } from "../graph-authoring/useGraphCanvasInteractions";
 import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
 import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
@@ -265,7 +266,9 @@ export function WorkflowEditor({
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
   const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
-  const pendingHistoryView = useRef<GraphAuthoringView | null>(null);
+  const pendingHistoryView = useRef<(GraphAuthoringView & { focusIntent: CanvasFocusIntent }) | null>(null);
+  const historyFocusIntent = useRef<CanvasFocusIntent | null>(null);
+  useEffect(() => () => historyFocusIntent.current?.dispose(), []);
   const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft, view?: GraphAuthoringView) => {
     const root = snapshot.state.rootActivity;
     let path = resolveScopeFrames(root, view?.frames ?? editableDoc.state.frames, historyCatalog.current);
@@ -279,7 +282,10 @@ export function WorkflowEditor({
       : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
     const selected = view?.selectedNodeIds.filter(id => visible.includes(id)) ?? [];
     const primary = view?.primaryNodeId && selected.includes(view.primaryNodeId) ? view.primaryNodeId : selected.at(-1) ?? null;
-    pendingHistoryView.current = view ? { frames: path, selectedNodeIds: selected, primaryNodeId: primary } : null;
+    historyFocusIntent.current?.dispose();
+    const focusIntent = view ? captureCanvasFocusIntent() : null;
+    historyFocusIntent.current = focusIntent;
+    pendingHistoryView.current = focusIntent ? { frames: path, selectedNodeIds: selected, primaryNodeId: primary, focusIntent } : null;
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path, primary);
   }, [editableDoc]);
@@ -564,7 +570,8 @@ export function WorkflowEditor({
     if (pending.selectedNodeIds.some(id => !authoringNodes.some(node => node.id === id))) return;
     pendingHistoryView.current = null;
     canvas.selectNodes(pending.selectedNodeIds, pending.primaryNodeId);
-    if (pending.primaryNodeId) queueCanvasNodeFocus(pending.primaryNodeId);
+    if (pending.primaryNodeId) queueCanvasNodeFocus(pending.primaryNodeId, pending.focusIntent);
+    else pending.focusIntent.dispose();
   }, [authoringNodes, canvas, frames, queueCanvasNodeFocus]);
 
   const {

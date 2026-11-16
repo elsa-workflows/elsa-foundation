@@ -495,6 +495,7 @@ async function workingDraft(name) {
       const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
       await expect(menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ })).toBeFocused();
       result.evidence.push(retain(name + "-menu-focus", { control: "Autosave", initialFocusObserved: true }));
+      if (["working-after-undo", "working-after-redo"].includes(name)) await screenshot(name + "-menu-focus");
       await nativeEnter(name + "-export", page.getByRole("menuitem", { name: "Export JSON", exact: true }), "Export JSON");
     })()
   ]);
