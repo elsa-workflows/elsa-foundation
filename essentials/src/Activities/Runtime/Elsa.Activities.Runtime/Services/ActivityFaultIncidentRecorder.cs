@@ -113,6 +113,9 @@ public sealed class ActivityFaultIncidentRecorder
             PostCommitIntents: activationFailure is null ? NewPostCommitIntents(request, occurredAt) : [],
             Metadata: metadata);
 
+        commit = await request.CheckpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => [RuntimeHistoryIncidentFacts.Created(incident,
+                new(CommandId: request.WorkItem.CommandId, SchedulerWorkItemId: request.WorkItem.WorkItemId))], cancellationToken);
         await request.CheckpointCommitter.CommitAsync(request.ChildControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 

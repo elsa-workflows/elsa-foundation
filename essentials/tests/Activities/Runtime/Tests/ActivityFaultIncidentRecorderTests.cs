@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -27,6 +28,41 @@ public sealed class ActivityFaultIncidentRecorderTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 9, 10, 0, 0, TimeSpan.Zero);
     private readonly CapturingCheckpointCommitStore _store = new();
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Actual_fault_recorder_contributes_creation_with_exact_command_and_work_origin_only_when_a_source_is_installed(bool installed)
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_store);
+        if (installed) services.AddSingleton<IRuntimeHistorySourceExtension, AcceptingSource>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var request = NewRequest(new InvalidOperationException("private failure")) with
+        {
+            CheckpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>()
+        };
+        await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(request);
+        var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
+        if (!installed) { Assert.Null(commit.HistorySourceFacts); return; }
+        var fact = Assert.Single(commit.HistorySourceFacts!);
+        Assert.Equal(RuntimeHistorySourceFactKind.IncidentCreated, fact.Kind);
+        Assert.Equal(CapturedIncident().IncidentId, fact.IncidentId);
+        Assert.Equal("actexec-1", fact.ActivityExecutionId);
+        Assert.Equal("command-1", fact.Causation!.CommandId);
+        Assert.Equal("work-1", fact.Causation.SchedulerWorkItemId);
+        Assert.Null(fact.ReasonCode);
+    }
+
+    // This records the actual owner handoff. Runtime tests independently qualify the native-policy source implementation.
+    private sealed class AcceptingSource : IRuntimeHistorySourceExtension
+    {
+        public ValueTask<RuntimeCheckpointCommit> AddFactsAsync(RuntimeCheckpointCommit commit,
+            Func<RuntimeHistoryCapturePolicy, IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(commit with { HistorySourceFacts = facts(new("runtime-history-v3", 3, false, ["IncidentRecorded"])).ToArray() });
+    }
 
     [Fact]
     public async Task CommitAsync_DoesNotCaptureStackTrace_ByDefault()

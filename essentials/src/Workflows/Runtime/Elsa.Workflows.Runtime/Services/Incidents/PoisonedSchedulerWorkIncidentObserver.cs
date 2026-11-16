@@ -370,6 +370,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 ? new RuntimeInitialStartFault(failedInitialWork, record) : null
         };
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => [RuntimeHistoryIncidentFacts.Created(incident, new(SchedulerWorkItemId: record.WorkItemId))], cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
@@ -570,6 +572,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             PostCommitIntents: [],
             Metadata: reconciledIncident.Metadata);
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => [RuntimeHistoryIncidentFacts.ProjectionReconciled(reconciledIncident, repairedAt)], cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
