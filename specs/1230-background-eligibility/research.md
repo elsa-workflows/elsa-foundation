@@ -63,8 +63,10 @@ this plan:
 
 - **Only `AgentModelTurn` is marked today** (`Extensions/Agent/src/Elsa.Agent/Activities/AgentModelTurn.cs:10`). Its
   node and contract are built by hand with `supportsBackgroundExecution: true` and `Background` placement
-  (`Extensions/Agent/src/Design/Services/AgentActivityProvider.cs:86-91`), so `ExecutableNodeCompiler` never checks it
-  (FR-012, Q9).
+  (`Extensions/Agent/src/Design/Services/AgentActivityProvider.cs:86-91`, unchanged on `main` apart from the folder
+  move). Template providers compile their own nodes, and `ActivityTemplatePlacer` copies `ExecutionPlacement` without
+  an eligibility check (`ActivityTemplatePlacer.cs:372, 554, 634`), so `ExecutableNodeCompiler` never checks it. The gap
+  is the template path, not the agent (FR-012, Q9).
 - **`BpmnProcess` is the only shipped `IRuntimeScopedVariableReader`** and it is structural, so C9 refuses no built-in
   today; it protects custom activities.
 - **`WriteHttpResponse`** is delivered only from a result committed during the synchronous inline drain

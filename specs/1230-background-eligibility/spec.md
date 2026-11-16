@@ -50,7 +50,8 @@ and no ADR amendment; if one turns out to be needed, it goes in its own small PR
 5. **C7 and C8 documented** on `[BackgroundExecutionSafe]`.
 6. **The built-in activities assessed** against C1–C10 (see *Built-in assessment*), the qualifying ones marked, and an
    issue filed for each candidate that falls short only because of how it is implemented.
-7. **No bypass.** The agent template's hand-built background node goes through the same publication check (Q9).
+7. **No bypass.** Background nodes that an activity template provider compiles itself (today the agent's model-turn
+   node) go through the same publication check when the template is placed (Q9).
 8. **Evidence for ADR 0093 decision 6**: on every persistence provider, applying a background result keeps causal
    order, is atomic, follows the conflict rules, and leaves the actual commit order inspectable.
 
@@ -234,9 +235,9 @@ read-modify-write) and that the recorded commit order matches the order applied.
   atomically, follow the agreed conflict rules and leave an inspectable record of the actual commit order. No order is
   imposed between unordered branches.
 - **FR-011**: Spec 241's background contract MUST point to ADR 0093 for eligibility.
-- **FR-012**: A background node built outside `ExecutableNodeCompiler` (today the agent template's model-turn node)
-  MUST pass the same publication check before its executable is pinned. No path may set `supportsBackgroundExecution`
-  or a background placement without it.
+- **FR-012**: Every background node an activity template provider returns from its own compilation (today the agent
+  template's model-turn node) MUST pass the same publication check when `ActivityTemplatePlacer` places it, before the
+  executable is pinned. No path may set `supportsBackgroundExecution` or a background placement without it.
 
 ### Key Entities
 
@@ -266,20 +267,20 @@ whether a large `DownloadFile` result hits the receipt size limit (`BG-ACT-006`)
 
 ## Open questions for the approver
 
-Each question has a recommended answer. The requirements follow the recommendation until the approver answers
-otherwise.
+Each question had a recommended answer. **@j03y-nxxbz accepted all ten on 2026-11-16**; the requirements follow
+them.
 
-| # | Question | Recommendation |
+| # | Question | Answer (accepted) |
 |---|---|---|
 | Q1 | **Scope.** The board row names C7–C9; ADR 0093 now has C1–C10, with C10 added in review. Does S-11 enforce C10 too? | **Yes.** ADR 0093 decision 3 puts C10 in the component and its *Required evidence* lists the C10 tests. Leaving it out would recreate the drift this spec removes. The board row's wording predates C10. |
 | Q2 | **Diagnostic shape.** Keep one code `VF-BG-001` with the criterion in the message, or one code per criterion? | **One code, criterion as a structured field and in the message** (`VF-BG-001 (C9): …`). ADR 0093 decision 5 names `VF-BG-001`; a code per criterion would multiply codes without helping the author. |
-| Q3 | **C9's other signals.** ADR 0093 says C9 later also covers ADR 0090's `[AccessesUndeclaredVariables]` and a writable `VariableReference<T>` input. Neither exists on the branch. | **Enforce `IRuntimeScopedVariableReader` now**; the component exposes C9 as one predicate so the later signals are one change when ADR 0090's amendment lands. |
+| Q3 | **C9's other signals.** ADR 0093 says C9 later also covers ADR 0090's `[AccessesUndeclaredVariables]` and a writable `VariableReference<T>` input. ADR 0090 is now accepted as amended, but neither signal exists in code yet. | **Enforce `IRuntimeScopedVariableReader` now**; the component exposes C9 as one predicate so the later signals are one change when ADR 0090 is implemented. |
 | Q4 | **Who confirms C7 and C8 for a built-in activity?** No code can prove them. | **The spec author proposes per activity in this spec's assessment table, and the approver confirms it** when approving the spec. An activity nobody can vouch for stays unmarked. |
 | Q5 | **Already published executables.** A pinned background node that now fails a criterion at run time (for example C9): refuse, or let it run? | **Refuse with an incident naming the criterion.** No shipped activity is marked, so only custom activities can be affected, and running them would keep the silent wrong value C9 exists to stop. No migration. |
 | Q6 | **Inheritance.** `[BackgroundExecutionSafe]` is `Inherited = true`, so a subclass of a marked built-in is marked without its author promising C7/C8. | **Keep inheritance**, but document on the attribute that a subclass inherits the promise. Changing it would break custom activities that derive from marked bases on purpose. |
 | Q7 | **Commit-order evidence (FR-010).** Is S-10's write history (one record per applied write, in commit order, PR #4316) enough as "an inspectable record of the actual commit order", or is a separate record needed? | **S-10's write history plus the checkpoint sequence is enough**; no new store. The tests read it back on both providers. This makes US6 depend on PR #4316 being merged. |
 | Q8 | **Two gaps no criterion catches.** `WriteHttpResponse` only works inline (its result is delivered during the inline drain), and a trigger activity (`Cron`, `Timer`) gets no trigger payload on the worker. Add criteria to ADR 0093, or only leave them unmarked? | **Leave them unmarked, no ADR change.** Only a marked type can be placed in the background, and marking is the author's declaration, so not marking closes both gaps for the built-ins. The attribute's documentation adds both as things an author checks before marking (FR-008). If a third-party activity hits them, a criterion is proposed then, in its own ADR 0093 amendment PR. |
-| Q9 | **The agent template builds its background node by hand.** Route it through the publication check (FR-012), or accept the bypass because the activity is internal? | **Route it through the check.** ADR 0093 decision 3 says no other code decides eligibility; the internal node is still a background node. |
+| Q9 | **Template providers build their own background nodes.** The agent template compiles its model-turn node itself (`AgentActivityProvider.CompileAsync`, current on `main`), and `ActivityTemplatePlacer` copies the placement without an eligibility check, so any template provider can bypass publication. Route these nodes through the check (FR-012), or accept the bypass because the agent activity is internal? | **Route them through the check, in the template placer**, so it holds for every template provider, not only the agent. ADR 0093 decision 3 says no other code decides eligibility. The run-time check at admission and on the worker already applies to these nodes. |
 | Q10 | **Which qualifying activities are marked?** 15 meet C1–C10 by reading; some (`Break`, `Fault`) have little use in the background. | **Mark all 15** once the unknowns are checked (T022): ADR 0093 decision 4 marks what qualifies, not what seems useful, and placement stays the workflow author's choice. A connector read whose partition does not resolve on a worker gets an issue instead. |
 
 ## Success Criteria *(mandatory)*

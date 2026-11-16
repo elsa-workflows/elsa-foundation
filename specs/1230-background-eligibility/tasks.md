@@ -75,9 +75,9 @@
   read resolves its connection's tenant partition on a worker; a secret-bound `RunJavaScript.Arguments` resolves on the
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
   activity that fails gets an issue instead of the mark (Q10).
-- [ ] T023 [US1] **(test-first)** Route the agent template's hand-built model-turn node
-  (`Extensions/Agent/src/Design/Services/AgentActivityProvider.cs:86-91`) through `CheckPublication` (FR-012, Q9); a test
-  shows a template node that fails a criterion is refused.
+- [ ] T023 [US1] **(test-first)** Call `CheckPublication` in `ActivityTemplatePlacer` for every background node a
+  template provider returns (FR-012, Q9). Tests: a template node that fails a criterion is refused naming it; the
+  agent's model-turn node (`AgentActivityProvider.CompileAsync`) passes.
 - [ ] T021 [US5] File one issue per candidate that falls short only because of its implementation (ADR 0093 decision 4):
   M365 `CreateEvent`, M365 `UploadFile`, Slack `AddReaction`, `EvaluateDecision`, and any T022 failure; as sub-issues
   of #3052, linked from the assessment table.
