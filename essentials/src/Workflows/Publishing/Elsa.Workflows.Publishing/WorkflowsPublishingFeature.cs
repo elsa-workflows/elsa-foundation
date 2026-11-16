@@ -129,6 +129,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<ValueConversionPlanResolver>();
         services.TryAddScoped<ActivityResultConversionPlanLinker>();
         services.TryAddScoped<RuntimeInputBindingCompiler>();
+        services.TryAddScoped<IActivityTemplateInputBindingCompiler>(sp => sp.GetRequiredService<RuntimeInputBindingCompiler>());
         services.TryAddScoped<RuntimeOutputCaptureCompiler>();
         services.TryAddScoped<Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher>();
         services.TryAddScoped<ActivityTreeProjector>();
