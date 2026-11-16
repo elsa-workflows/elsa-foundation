@@ -49,11 +49,13 @@ public sealed partial class RuntimeModelMigrationTests
         await using var upgraded = new RuntimeSqliteDbContext(options);
         await upgraded.Database.MigrateAsync();
         var history = await History(connection);
-        Assert.Equal(previousHistory, history.Take(previousHistory.Length)); Assert.EndsWith("_StandaloneTriggers", history[^1]);
-        Assert.Equal(previousHistory.Length + 1, history.Length);
+        Assert.Equal(previousHistory, history.Take(previousHistory.Length));
+        Assert.EndsWith("_StandaloneTriggers", history[previousHistory.Length]);
+        Assert.EndsWith("_RunHistoryTimeline", history[previousHistory.Length + 1]);
+        Assert.Equal(previousHistory.Length + 2, history.Length);
         var after = await LegacyRows(connection);
         foreach (var (table, bytes) in before) Assert.Equal(bytes, after[table]);
-        Assert.Equal(before.Count + 4, after.Count);
+        Assert.Equal(before.Count + 12, after.Count);
         var retained = await upgraded.RecurringTriggerSchedules.AsNoTracking().SingleAsync();
         Assert.Equal("1.0.0", retained.SchemaVersion); Assert.NotNull(retained.ClaimOwnerId); Assert.Equal(claim.FencingToken, retained.ClaimToken);
         var reader = new EfRecurringTriggerScheduleStore(upgraded, access, new MigrationCodec());
