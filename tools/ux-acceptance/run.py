@@ -29,7 +29,7 @@ TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode
 CAPTURES = {
     'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'native BPMN reusable blocks preserve reviewed XML bindings': ['reference'] + [f'activity-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
-    'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'readonly')],
+    'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'captured-input', 'readonly')],
     'native BPMN reusable blocks retain authoring boundaries': ['reference'] + [f'activity-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'readonly')] + ['activity-bpmn-stale'],
     'activity validation explains and locates graph settings': ['reference', 'variable-blocker', 'variable-focused', 'output-blocker', 'output-focused', 'review-retained', 'review-summary', 'review-focus-return'],
     "native block validation errors and retry": ["reference", "block-validation-invalid", "block-validation-outage-control", "block-validation-retried", "block-validation-persisted"],

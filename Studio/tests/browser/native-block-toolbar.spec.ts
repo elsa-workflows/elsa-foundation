@@ -58,7 +58,7 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
 for (const appearance of ["light", "dark"]) {
   test(`workflow BPMN history preserves element selection in ${appearance}`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto(`/?mode=activity-duplicate-editor&host=workflow&composition=bpmn&palette-context&bpmn-decision=legacy&appearance=${appearance}`);
+    await page.goto(`/?mode=activity-duplicate-editor&host=workflow&composition=bpmn&palette-context&bpmn-decision=legacy&palette-theme=classic&appearance=${appearance}`);
     const element = page.locator('.react-flow__node[data-id="decision-element"]');
     await element.click();
     const routing = page.getByRole("region", { name: "BPMN routing", exact: true });

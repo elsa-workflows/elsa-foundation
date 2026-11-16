@@ -179,8 +179,18 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
           await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); await page.getByRole("button", { name: "Test Run", exact: true }).click();
           const update = page.getByRole("button", { name: "Update test", exact: true }); if (await update.isVisible()) await update.click(); await page.getByRole("button", { name: "Start Test Run", exact: true }).click(); const summary = page.getByRole("region", { name: "Test run summary", exact: true }); await expect(summary.locator(".wf-runtime-heading .wf-status-badge")).toHaveText("Completed");
           await summary.getByRole("button", { name: "Technical details", exact: true }).click(); const run = await summary.locator('[aria-label^="Run ID: "]').getAttribute("title"); expect(run).toBeTruthy(); runs.push(run!);
-          await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click(); await page.getByRole("tab", { name: "Runtime", exact: true }).click(); await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
+          await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click();
+          await canvas(); await element("element-one").click(); await details();
+          await page.getByRole("tablist", { name: "Activity inspector sections", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
+          const changedText = page.getByRole("textbox", { name: "Text", exact: true });
+          await changedText.fill("Current draft changed after the captured run"); await changedText.press("Tab");
+          await expect.poll(async () => (findNode(body(await saved()), "one")!.inputs as { referenceKey: string; value: { value: unknown } }[]).find(input => input.referenceKey === "text")!.value.value).toBe("Current draft changed after the captured run");
+          await page.getByRole("tab", { name: "Runtime", exact: true }).click(); await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
           await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toContainText("Captured snapshot · read only");
+          await canvas(); await element("element-one").click(); await details();
+          await page.getByRole("tablist", { name: "Activity inspector sections", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
+          await expect(page.getByRole("textbox", { name: "Text", exact: true })).toHaveValue("one");
+          await capture(page, info, "workflow-bpmn-captured-input");
         }
         await canvas(); await expect(element(selected)).toBeVisible();
         for (const action of ["Create BPMN subprocess", "Extract block…", "Ungroup…", "Import BPMN body…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();

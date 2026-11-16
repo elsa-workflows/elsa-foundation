@@ -64,6 +64,18 @@ describe("BPMN resource proposals", () => {
     input.autoEvaluate = true;
     refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
   });
+  it("can Ungroup an unchanged subprocess after backend nullable argument metadata is serialized", () => {
+    const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));
+    const persisted = nativeBlockPlannerContext({ ...source, document: nativeBlockEditorDocument(proposal.document, source.catalog) }, { x: 0, y: 0 });
+    const block = children(persisted.document.rootActivity).find(child => child.nodeId === request.nodeId)!;
+    Object.assign(block.inputs[0] as object, { autoEvaluate: null, evaluatorType: null, storageDriverType: null, isSensitive: null, conversion: null });
+    expect(planUngroupBpmnBlock(persisted, proposal.selection[0]).status).toBe("ready");
+    (block.inputs[0] as Record<string, unknown>).autoEvaluate = true;
+    refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
+    (block.inputs[0] as Record<string, unknown>).autoEvaluate = null;
+    (block.inputs[0] as Record<string, unknown>).futureSetting = null;
+    refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
+  });
   it("does not normalize away a duplicate invocation binding before Ungroup", () => {
     const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));
     const block = children(proposal.document.rootActivity).find(child => child.nodeId === request.nodeId)!;

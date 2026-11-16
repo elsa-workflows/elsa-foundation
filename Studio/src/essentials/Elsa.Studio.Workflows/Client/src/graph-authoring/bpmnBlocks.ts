@@ -66,10 +66,18 @@ export function planExtractBpmnBlock(context: NativeBlockContext, request: Extra
 }
 
 // Compare the host's real wire representation, independent of JSON object insertion order.
-function stableBoundaryValue(value: unknown): string | undefined {
+function stableBoundaryValue(value: unknown, argumentCollection = false): string | undefined {
+  // The backend writes nullable ArgumentState defaults as null. Omission and null carry
+  // the same default; explicit values and unknown fields must still block a lossy Ungroup.
+  const nullableArgumentDefaults = new Set(["autoEvaluate", "evaluatorType", "storageDriverType", "isSensitive", "conversion"]);
+  const normalized = argumentCollection && Array.isArray(value)
+    ? value.map(argument => record(argument)
+      ? Object.fromEntries(Object.entries(argument).filter(([key, item]) => item !== null || !nullableArgumentDefaults.has(key)))
+      : argument)
+    : value;
   const ordered = (item: unknown): unknown => Array.isArray(item) ? item.map(ordered) : record(item)
     ? Object.fromEntries(Object.keys(item).sort().map(key => [key, ordered(item[key])])) : item;
-  return JSON.stringify(ordered(value));
+  return JSON.stringify(ordered(normalized));
 }
 
 export function planUngroupBpmnBlock(context: NativeBlockContext, elementId: string): NativeBlockPlan {
@@ -90,7 +98,8 @@ export function planUngroupBpmnBlock(context: NativeBlockContext, elementId: str
     const defaultBoundary = canonicalizeStateForWire(expandStateFromWire({ rootActivity: defaults })).rootActivity!;
     for (const [key, value] of Object.entries(currentBoundary)) {
       if (["nodeId", "activityVersionId", "structure"].includes(key)) continue;
-      if (stableBoundaryValue(value) !== stableBoundaryValue(defaultBoundary[key]))
+      const argumentCollection = key === "inputs" || key === "outputs";
+      if (stableBoundaryValue(value, argumentCollection) !== stableBoundaryValue(defaultBoundary[key], argumentCollection))
         refuse("boundary-settings", `nodes.${block.nodeId}.${key}`, "Ungroup would discard block inputs, outputs or execution settings.");
     }
     for (const [key, value] of Object.entries(block.structure!.payload)) {
