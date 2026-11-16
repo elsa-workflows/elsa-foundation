@@ -46,3 +46,8 @@ The isolated schema/mapping/checkpoint tests cover private projections and relat
 normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
 observation append, occurrence projection, retention/deletion, generated migrations and production qualification
 remain open.
+
+
+## Private history read adapter
+
+[EfRuntimeHistoryStore](Stores/EfRuntimeHistoryStore.cs) implements the selected bounded details/occurrence read contracts over the ordinary scoped Runtime context and declared chain. [EfRuntimeHistoryOccurrenceReader](Stores/EfRuntimeHistoryOccurrenceReader.cs) owns authenticated frozen membership and indexed ordinal/anchor reads. Reads retain caller transactions only at the supported isolation levels and check the same access snapshot before disclosure. Native writer/observation/retention pairing, production model/schema and public registration are supplied by the subsequent owner binding; these private implementations do not enroll capture.
