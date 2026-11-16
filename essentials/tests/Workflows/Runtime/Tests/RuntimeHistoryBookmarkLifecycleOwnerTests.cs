@@ -15,6 +15,7 @@ using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using ActivityTransitionKind = Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -202,7 +203,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         using var f = await Fixture.CreateAsync();
         var state = Activity() with
         {
-            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state", 1), JsonSerializer.SerializeToElement("private"),
+            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state"), JsonSerializer.SerializeToElement("private"),
                 ValueProtectionPolicy.InstanceInline), "initial-attempt", At),
             TriggerRegistrations = [Registration("first"), Registration("delayed")]
         };
@@ -218,7 +219,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         Assert.Equal(ActivityExecutionStatus.Running, (await f.Activities.FindAsync("run", "activity"))!.Status);
     }
 
-    private static ActivityTriggerRegistration Registration(string id) => new(id, "activity", "resume", new("test/task", 1),
+    private static ActivityTriggerRegistration Registration(string id) => new(id, "activity", "resume", new("test/task"),
         "task", "hash", ActivityTriggerDeduplicationPolicy.Once);
 
     private static ActivityExecutionState Activity() => new(new("activity", "run", "node", "authored", "test/activity", "1"),
@@ -272,7 +273,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
             var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "run")!;
             await f.Workflows.SaveAsync(new("run", Pin, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, null,
                 new Dictionary<string, string>()) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = true,
-                RunKind = WorkflowRunKind.PublishedRun, Partition = new("partition") });
+                RunKind = WorkflowRunKind.PublishedRun, Partition = new(PersistenceScope.DefaultValue) });
             await f.Activities.SaveAsync(Activity());
             await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(Pin,
                 new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }),
