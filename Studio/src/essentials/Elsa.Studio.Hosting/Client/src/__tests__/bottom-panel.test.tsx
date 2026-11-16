@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShellFrame } from "../app/App";
 import { ThemeProvider } from "../app/components/ThemeProvider";
 import { AppearancePage } from "../app/settings/AppearancePage";
@@ -24,6 +24,8 @@ beforeEach(() => {
 afterEach(() => {
   flushSync(() => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
   appearanceResetStorageKeys.forEach(key => window.localStorage.removeItem(key));
 });
@@ -37,7 +39,7 @@ const panels = [
   { id: "logs", title: "Structured Logs", component: DummyPanel }
 ];
 
-function renderShell(children: React.ReactNode = <div>page</div>) {
+function renderShell(children: React.ReactNode = <div>page</div>, toastHost?: React.ReactNode) {
   flushSync(() => root.render(
     <ThemeProvider>
       <ShellFrame
@@ -47,6 +49,7 @@ function renderShell(children: React.ReactNode = <div>page</div>) {
         title="Dashboard"
         backendBaseUrl="https://backend.example/"
         onNavigate={() => {}}
+        toastHost={toastHost}
       >
         {children}
       </ShellFrame>
@@ -59,6 +62,37 @@ function bottomPanel() {
 }
 
 describe("bottom panel default", () => {
+  it("publishes the live dock inset for toast placement and clears it on disposal", () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    let dockTop = 860;
+    const callbacks: (() => void)[] = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { callbacks.push(callback); }
+      observe() {}
+      disconnect() {}
+    });
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("bottom-panel")
+        ? { top: dockTop } as DOMRect
+        : originalRect.call(this);
+    });
+    renderShell();
+    const inset = () => document.documentElement.style.getPropertyValue("--studio-shell-bottom-inset");
+    expect(inset()).toBe("40px");
+
+    dockTop = 640;
+    callbacks.forEach(callback => callback());
+    expect(inset()).toBe("260px");
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 1000 });
+    window.dispatchEvent(new Event("resize"));
+    expect(inset()).toBe("360px");
+
+    flushSync(() => root.unmount());
+    root = createRoot(container);
+    expect(inset()).toBe("");
+  });
+
   it("starts collapsed on a wide viewport when the user has never stored a choice", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
     renderShell();
@@ -83,6 +117,15 @@ describe("bottom panel default", () => {
     renderShell();
 
     expect(bottomPanel()?.classList.contains("collapsed")).toBe(true);
+  });
+
+  it("keeps host feedback outside the workspace hidden by a maximized dock", () => {
+    window.localStorage.setItem(maximizedKey, "true");
+    renderShell(<div>page</div>, <div data-testid="host-feedback">Saved</div>);
+    const feedback = container.querySelector('[data-testid="host-feedback"]')!;
+    expect(container.querySelector(".main-frame")!.contains(feedback)).toBe(false);
+    expect(container.querySelector(".studio-shell")!.contains(feedback)).toBe(true);
+    expect(bottomPanel()?.classList.contains("maximized")).toBe(true);
   });
 
   it("opens when the stored maximized preference is set", () => {

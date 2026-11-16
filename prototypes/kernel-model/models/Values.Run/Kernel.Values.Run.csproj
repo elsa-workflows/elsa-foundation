@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Values/Kernel.Values.csproj" />
+    <!-- Reuse the existing provider command/transaction counter in this measurement host. -->
+    <ProjectReference Include="../Native.Run/Kernel.Native.Run.csproj" />
+  </ItemGroup>
+</Project>

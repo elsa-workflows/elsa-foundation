@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Layer 2, durable actors: the inbox, the fenced commit, timers, background jobs, events, poison, the journal, live output, and the store contract. -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Durable</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.Runtime/Kernel.Runtime.csproj" />
+  </ItemGroup>
+</Project>

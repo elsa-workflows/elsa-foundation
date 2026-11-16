@@ -893,7 +893,11 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
-  await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
+  await expect(page.locator("[data-contract-field='referenceKey']")).toBeDisabled();
+  const focusedContractContext = page.locator(":focus");
+  await expect(focusedContractContext).toHaveAccessibleName("Stable reference key");
+  await expect(focusedContractContext.locator("input, select, textarea")).toHaveCount(1);
+  await expect(focusedContractContext.locator("[data-contract-field='referenceKey']")).toHaveCount(1);
   await expect(page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();

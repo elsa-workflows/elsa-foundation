@@ -34,7 +34,7 @@ def _child_text(parent: ElementTree.Element, name: str) -> str | None:
 
 def _studio_projects(root: Path) -> set[str]:
     paths = set((root / "Studio").rglob("*.csproj"))
-    paths.update(path for extension in (root / "Extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
+    paths.update(path for extension in (root / "extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
     return {path.relative_to(root).as_posix() for path in paths}
 
 
@@ -144,7 +144,7 @@ def verify_project_inventory(root: Path) -> dict:
     ):
         raise ValueError("Studio/Directory.Build.props must pack its shared icon.png at the package root.")
     for item in packable:
-        if item["project"].startswith("Extensions/"):
+        if item["project"].startswith("extensions/"):
             _verify_extension_studio_props(root, Path(item["project"]))
     icon = root / "Studio" / inventory["package_icon"]
     if not icon.is_file():
