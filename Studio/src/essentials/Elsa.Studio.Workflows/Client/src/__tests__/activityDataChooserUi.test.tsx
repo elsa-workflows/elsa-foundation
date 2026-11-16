@@ -101,6 +101,7 @@ afterEach(() => {
     current.container.remove();
     mounted = null;
   }
+  vi.unstubAllGlobals();
 });
 
 function input(name: string, overrides: Partial<StudioActivityInputDescriptor> = {}): StudioActivityInputDescriptor {
@@ -866,6 +867,115 @@ function dataOption(text: string) {
 }
 
 describe("Choose data with member capability", () => {
+  function holdFocusFrames() {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      const id = ++nextFrame; frames.set(id, callback); return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+    return () => {
+      const pending = [...frames.values()]; frames.clear();
+      flushSync(() => pending.forEach(callback => callback(performance.now())));
+    };
+  }
+
+  it("initializes member browsing focus when the author has not chosen a source", async () => {
+    const flushFrames = holdFocusFrames();
+    const { dataHost } = nestedHost();
+    const changes = vi.fn();
+    const container = render({ dataHost, onChange: changes });
+    await openChooser(container);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    flushFrames();
+    expect(document.activeElement).toBe(dataOption("Get customer"));
+    expect(changes).not.toHaveBeenCalled();
+  });
+
+  it("keeps outer-variable focus across the deferred source frame and Enter with its exact binding", async () => {
+    const flushFrames = holdFocusFrames();
+    const requestBinding = { expressionType: "WorkflowRequest", value: { memberKey: "payload", path: null } };
+    const innerBinding = { expressionType: "Variable", value: { referenceKey: "inner-payload", declaringScopeId: "root" } };
+    const outerBinding = { expressionType: "Variable", value: { referenceKey: "outer-payload", declaringScopeId: "workflow" } };
+    const leaf = memberShape({ kind: "scalar", type: { alias: "String", collectionKind: "Single" } });
+    const shape = memberShape({ members: [{ serializedName: "customerId", displayName: "Customer ID", shape: leaf }] });
+    const listing: ActivityDataSourceFacts[] = [
+      { id: "input:payload", displayName: "Request payload", binding: requestBinding },
+      { id: "variable:root:inner-payload", displayName: "Payload", binding: innerBinding },
+      { id: "variable:workflow:outer-payload", displayName: "Payload", binding: outerBinding }
+    ].map(source => ({ ...source, reasonCode: null, availability: "definite", activityResultSource: null, type: shape.type, shape }));
+    const memberBinding = { expressionType: "VariableMember", value: { ...outerBinding.value, memberPath: ["customerId"] } };
+    // Isolated metadata responses exercise the real panel/chooser/member browser and its canonical checks.
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, query?: ActivityDataSourceQuery) => {
+      const focused = listing.filter(source => JSON.stringify(source.binding) === JSON.stringify(query?.source));
+      return answer("supported", { memberReadsEnabled: true, target: { displayName: "Customer ID", constraint: null }, sources: query?.source
+        ? focused.map(source => query.memberPath?.length ? { ...source, binding: memberBinding, shape: leaf } : source)
+        : listing });
+    });
+    const dataHost = host({ requestSources, describeActivity: id => ({ label: id === "root" ? "Sequence" : "Workflow", outputLabels: {} }) });
+    const changes = vi.fn();
+    const container = render({ dataHost, onChange: changes });
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Payload · Workflow (outer scope)", "Variables")).toBeDefined());
+    const outer = option("Payload · Workflow (outer scope)", "Variables")!;
+    expect(outer.getAttribute("aria-disabled")).not.toBe("true");
+    expect(outer).not.toBe(document.querySelector(".wf-data-members [role='option']"));
+    outer.focus();
+    flushFrames();
+    expect(document.activeElement).toBe(outer);
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    expect(requestSources.mock.calls[1]![3]).toEqual({ source: outerBinding, memberPath: [], includeMemberShapes: true });
+    expect(changes).not.toHaveBeenCalled();
+    flushFrames();
+    expect(document.activeElement).toBe(dataOption("customerId"));
+    const back = [...document.querySelectorAll<HTMLButtonElement>(".wf-data-members button")].find(button => button.textContent === "Back")!;
+    flushSync(() => back.click());
+    await vi.waitFor(() => expect(dataOption("Request payload")).toBeDefined());
+    flushFrames();
+    expect(document.activeElement).toBe(dataOption("Request payload"));
+    expect(changes).not.toHaveBeenCalled();
+    flushSync(() => { option("Payload · Workflow (outer scope)", "Variables")!.focus(); document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    flushFrames();
+    expect(document.activeElement).toBe(dataOption("customerId"));
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledTimes(1));
+    expect(requestSources.mock.calls[3]![3]).toEqual({ source: outerBinding, memberPath: ["customerId"], includeMemberShapes: true });
+    expect(changes.mock.calls[0]![0].customerId.expression).toEqual({ type: memberBinding.expressionType, value: memberBinding.value });
+  });
+
+  it("keeps focus the author moves to Use whole value before the deferred detail-view frame, then stores it once", async () => {
+    const flushFrames = holdFocusFrames();
+    // An unknown shape lists no members, so the detail view offers the Member name input before Use whole value.
+    const unknown = memberShape({ state: "unknown", kind: "unknown", type: { alias: "String", collectionKind: "Single" }, members: [],
+      reasonCode: "activity.shape.serialization-profile-unbound" });
+    const root = { ...sources[0]!, shape: unknown };
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, _query?: ActivityDataSourceQuery) =>
+      answer("supported", { memberReadsEnabled: true, target: { displayName: "Customer ID", constraint: null, type: { alias: "String", collectionKind: "Single" } }, sources: [root] }));
+    const changes = vi.fn();
+    const container = render({ dataHost: host({ requestSources }), onChange: changes });
+    await openChooser(container);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    flushFrames();
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    const use = () => [...document.querySelectorAll<HTMLButtonElement>(".wf-data-members button")].find(button => button.textContent === "Use whole value");
+    await vi.waitFor(() => expect(use()?.disabled).toBe(false));
+    expect(document.querySelector<HTMLInputElement>("input[aria-label='Member name']")?.disabled).toBe(false);
+    // The author focuses the action after the detail view commits and before its deferred focus frame runs.
+    use()!.focus();
+    flushFrames();
+    expect(document.activeElement).toBe(use());
+    // Enter on a focused button activates it.
+    flushSync(() => (document.activeElement as HTMLElement).click());
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledTimes(1));
+    expect(requestSources.mock.calls.map(call => call[3]).filter(query => query?.memberPath)).toEqual([
+      { source: customerBinding, memberPath: [], includeMemberShapes: true },
+      { source: customerBinding, memberPath: [], includeMemberShapes: true }
+    ]);
+    expect(changes.mock.calls[0]![0].customerId.expression).toEqual({ type: customerBinding.expressionType, value: customerBinding.value });
+  });
+
   it("browses Customer and stores the server's customerId member binding as one edit, then clears it", async () => {
     const changes = vi.fn();
     const { dataHost, memberBinding } = nestedHost();
