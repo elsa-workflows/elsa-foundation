@@ -39,7 +39,12 @@ internal static class NativeIngressStartLineage
             [], RuntimeCheckpointCommandPayload.WorkflowStartReason, [intent], payload.Variables, payload.Inputs, payload.StimulusInput,
             payload.TriggerNodeId, payload.RunKind, payload.PinnedSource, payload.ParentWorkflowExecutionId, payload.CorrelationId,
             payload.TenantId, payload.Partition, payload.Authority, payload.DispatchNestingDepth, payload.TestScope, payload.TriggerMetadata)
-        { IngressOrigin = payload.StartAuthority?.StandaloneTrigger, StimulusDeliveryOrigin = payload.StimulusDeliveryOrigin };
+        {
+            IngressOrigin = payload.StartAuthority?.StandaloneTrigger,
+            StimulusDeliveryOrigin = payload.StimulusDeliveryOrigin,
+            HistoryCapturePolicy = payload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = payload.HistoryCaptureEnabledAtAdmission
+        };
         var checkpointMetadata = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
         { [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory };
         if (payload.StimulusDeliveryOrigin is { } saved)

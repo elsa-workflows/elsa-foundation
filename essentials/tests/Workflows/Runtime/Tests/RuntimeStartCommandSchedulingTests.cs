@@ -27,6 +27,125 @@ public sealed class RuntimeStartCommandSchedulingTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Serialized_start_handoff_preserves_capture_choice_in_the_staged_first_checkpoint(bool? enabled)
+    {
+        var material = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await material.SaveAsync(executable);
+        var policy = enabled == true ? new RuntimeHistoryCapturePolicy("test-history", 3, true, ["WorkflowStarted"]) : null;
+        var payload = new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId)
+        {
+            HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
+        };
+        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload)));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var queued = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(enabled, queued.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(policy is null, queued.HistoryCapturePolicy is null);
+        if (policy is not null) Assert.True(policy.IsEquivalentTo(queued.HistoryCapturePolicy));
+
+        // Exercise the real handler's pipeline staging boundary without enabling an incomplete capture/store path.
+        var context = new WorkflowRuntimePipelineContext(checkpointWork);
+        await NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointCommitStore(), queue, material)
+            .HandleAsync(checkpointWork, context);
+        var state = Assert.Single(context.Workspace.PendingCheckpointCommits).StateChanges.WorkflowExecution!.State;
+        Assert.Equal(enabled, state.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(policy is null, state.HistoryCapturePolicy is null);
+        if (policy is not null) Assert.True(policy.IsEquivalentTo(state.HistoryCapturePolicy));
+
+        if (policy is { Required: true })
+        {
+            var writer = new InMemoryRuntimeCheckpointCommitStore();
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), writer,
+                new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+            var error = await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException>(async () =>
+                await committer.CommitAsync(context.Workspace.PendingCheckpointCommit!));
+            Assert.Equal("runtime.history.capture-unavailable", error.Code);
+            Assert.Empty(writer.ListCommits());
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prospective_first_fault_state_uses_the_queued_admission_choice(bool? enabled)
+    {
+        var policy = enabled == true ? new RuntimeHistoryCapturePolicy("test-history", 3, true, ["WorkflowStarted"]) : null;
+        var payload = new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1")
+        {
+            HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
+        };
+        var command = new WorkflowExecutionCommand("command", "wfexec-1", WorkflowExecutionCommandKind.Start, _now,
+            JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
+        var envelope = new WorkflowExecutionCommandEnvelope("envelope", "wfexec-1", command, "start",
+            WorkflowExecutionCommandDeliveryMode.AtLeastOnce, _now);
+        var unreadable = false;
+        var state = StartCommandExecution.Read(envelope, "wfexec-1", _now, _ => unreadable = true);
+
+        Assert.False(unreadable);
+        Assert.NotNull(state);
+        Assert.Equal(enabled, state.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(policy is null, state.HistoryCapturePolicy is null);
+        if (policy is not null) Assert.True(policy.IsEquivalentTo(state.HistoryCapturePolicy));
+    }
+
+    [Theory]
+    [InlineData(RuntimeCheckpointNames.WorkflowStarted, false)]
+    [InlineData(RuntimeCheckpointNames.WorkflowCompleted, false)]
+    [InlineData(RuntimeCheckpointNames.WorkflowStarted, true)]
+    [InlineData(RuntimeCheckpointNames.WorkflowCompleted, true)]
+    public async Task Retained_capture_policy_including_legacy_absence_wins_over_a_later_payload(string checkpointName, bool previouslyCaptured)
+    {
+        var material = new InMemoryWorkflowExecutableStore();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await material.SaveAsync(executable);
+        var states = new InMemoryWorkflowExecutionStateStore();
+        var originalPolicy = previouslyCaptured ? new RuntimeHistoryCapturePolicy("original", 3, true, ["WorkflowStarted"]) : null;
+        await states.SaveAsync(new("wfexec-1", executable.Identity, WorkflowExecutionStatus.Running, null,
+            _now, _now, _now, null, null, null, null, new Dictionary<string, string>())
+        {
+            HistoryCapturePolicy = originalPolicy,
+            HistoryCaptureEnabledAtAdmission = previouslyCaptured ? true : null
+        });
+        var replacement = new RuntimeCheckpointCommandPayload(executable.Identity, checkpointName, [], "test")
+        {
+            HistoryCapturePolicy = new("replacement", 3, true, ["WorkflowStarted", "WorkflowCompleted"]),
+            HistoryCaptureEnabledAtAdmission = true
+        };
+        var work = NewStartWorkItem(executable.Identity, WorkflowExecutionCommandKind.Checkpoint, JsonSerializer.SerializeToElement(replacement));
+        var context = new WorkflowRuntimePipelineContext(work);
+        var handler = new WorkflowCheckpointSchedulerWorkHandler(new InMemoryActivityExecutionStateStore(),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), new InMemoryRuntimeCheckpointCommitStore(),
+                new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []), null, new FakeTimeProvider(_now), states, material);
+        await handler.HandleAsync(work, context);
+
+        var updated = Assert.Single(context.Workspace.PendingCheckpointCommits).StateChanges.WorkflowExecution!.State;
+        Assert.Equal(previouslyCaptured ? true : (bool?)null, updated.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(originalPolicy is null, updated.HistoryCapturePolicy is null);
+        if (originalPolicy is not null) Assert.True(originalPolicy.IsEquivalentTo(updated.HistoryCapturePolicy));
+    }
+
+    [Fact]
+    public void Legacy_start_and_checkpoint_wire_omit_unknown_capture_choice()
+    {
+        var start = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1"));
+        var checkpoint = JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(NewIdentity(), "test", [], "test"));
+        Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCapturePolicy), out _));
+        Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
+        Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCapturePolicy), out _));
+        Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
+        var state = JsonSerializer.SerializeToElement(new WorkflowExecutionState("wfexec-1", NewIdentity(),
+            WorkflowExecutionStatus.Running, null, _now, _now, _now, null, null, null, null, new Dictionary<string, string>()));
+        Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCapturePolicy), out _));
+        Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCaptureEnabledAtAdmission), out _));
+    }
+
     [Fact]
     public async Task HandleAsync_EnqueuesWorkflowStartedCheckpointWithStartNodeSchedulingIntent()
     {

@@ -104,6 +104,10 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
 
+        if (commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy is { Required: true } &&
+            commit.HistoryBatches is not { Count: > 0 })
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The admitted execution requires its history contribution.");
+
         if (commit.HistoryBatches is { Count: > 0 } history)
         {
             var selectedHistory = HistoryStore ?? HistoryStoreResolver?.Invoke();

@@ -380,6 +380,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             testScope: startPayload.TestScope)
         {
             ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
+            HistoryCapturePolicy = startPayload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = startPayload.HistoryCaptureEnabledAtAdmission,
             IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger,
             StimulusDeliveryOrigin = startPayload.StimulusDeliveryOrigin
         };
