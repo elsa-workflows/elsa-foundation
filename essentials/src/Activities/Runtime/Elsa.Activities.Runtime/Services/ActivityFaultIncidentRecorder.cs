@@ -60,10 +60,11 @@ public sealed class ActivityFaultIncidentRecorder
         var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
         var inspection = _inspectionAccumulator is null
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 faultedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(request.WorkItem),
                 incidents: [ActivityExecutionIncidentSummary.From(incident)],
                 valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,

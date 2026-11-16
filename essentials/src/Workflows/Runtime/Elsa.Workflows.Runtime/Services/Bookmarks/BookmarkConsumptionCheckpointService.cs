@@ -108,10 +108,11 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         var metadata = RuntimeModelMetadata.Snapshot(commitMetadata);
         var inspection = _inspectionAccumulator is null
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 request.ActivityExecutionState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(request.ResumeWorkItem),
                 outcomeNames: ReadOutcomeNames(request.ActivityExecutionState),
                 valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,

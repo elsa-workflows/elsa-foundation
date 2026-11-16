@@ -26,6 +26,7 @@ using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Pipelines;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -229,7 +230,16 @@ public static class RuntimeCoreServiceCollectionExtensions
             services.AddSingleton<InMemoryActivityExecutionInspectionStore>();
         services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
-        services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
+        services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator>(serviceProvider =>
+        {
+            var inspections = serviceProvider.GetRequiredService<IActivityExecutionInspectionStore>();
+            // Module absence must not resolve native policy storage. Enabled controls new admissions;
+            // a configured but disabled module still reads the original policy of retained runs.
+            return serviceProvider.GetService<RuntimeHistoryOptions>() is { } history
+                ? new RuntimeActivityExecutionInspectionAccumulator(inspections,
+                    serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), history)
+                : new RuntimeActivityExecutionInspectionAccumulator(inspections);
+        });
         BookmarkStateStoreBackend.TryRegisterDefaultStateStore(
             services,
             ServiceDescriptor.Singleton<IBookmarkStateStore, InMemoryBookmarkStateStore>());

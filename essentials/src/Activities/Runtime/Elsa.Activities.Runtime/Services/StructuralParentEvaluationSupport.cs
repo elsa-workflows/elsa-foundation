@@ -339,8 +339,8 @@ internal static class StructuralParentEvaluationSupport
                 new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                     StateId: activityExecutionId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    State: await inspectionAccumulator.BuildProjectionAsync(
-                        parentState, checkpointId, occurredAt, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken),
+                    State: await inspectionAccumulator.BuildProjectionWithSourceAsync(
+                        parentState, checkpointId, occurredAt, () => ActivityValueCaptureOrigin.FromWorkItem(workItem), valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken),
                     Metadata: metadata)
             ];
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
@@ -470,8 +470,8 @@ internal static class StructuralParentEvaluationSupport
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:parent-activity-completed:{activityExecutionId}";
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
-                completedParentState, checkpointId, occurredAt, outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
+                completedParentState, checkpointId, occurredAt, () => ActivityValueCaptureOrigin.FromWorkItem(workItem), outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
         var completionWorkItem = SchedulerWorkItems.NewCompletionWorkItem(
             timeProvider, workItem, source.Payload.PinnedExecutable, source.Payload.ExecutableNodeId, activityExecutionId, completedParentState, commandMetadata: source.DerivedCommandMetadata);
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(

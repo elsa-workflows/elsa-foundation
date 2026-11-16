@@ -821,10 +821,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         };
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 suspendedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(invokeWorkItem),
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
@@ -1043,10 +1044,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 new(
                     StateId: invokePayload.ActivityExecutionId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    State: await inspectionAccumulator.BuildProjectionAsync(
+                    State: await inspectionAccumulator.BuildProjectionWithSourceAsync(
                         state,
                         checkpointId,
                         occurredAt,
+                        () => ActivityValueCaptureOrigin.FromWorkItem(invokeWorkItem),
                         valueSnapshots: valueSnapshots,
                         metadata: metadata,
                         cancellationToken: cancellationToken),
@@ -1220,10 +1222,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         };
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 completedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(invokeWorkItem),
                 outcomeNames: outcomeNames,
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
