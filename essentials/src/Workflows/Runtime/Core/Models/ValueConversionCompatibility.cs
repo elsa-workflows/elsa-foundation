@@ -6,6 +6,12 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Shared publication/runtime compatibility policy for pinned value conversion plans.</summary>
 public static class ValueConversionCompatibility
 {
+    private static readonly ValueTypeDescriptor DoubleType = new("Double");
+    private static readonly ValueTypeDescriptor StringType = new("String");
+
+    public static bool CanFormatNumericAsString(ValueTypeDescriptor source, ValueRepresentation representation, ValueTypeDescriptor target) =>
+        representation == ValueRepresentation.TypedValue && SameType(source, DoubleType) && SameType(target, StringType);
+
     public static bool SameType(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
         source.CollectionKind == target.CollectionKind &&
         SameElementType(source, target);

@@ -119,9 +119,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       activities, startNodeId: activities[0].nodeId, nodeMetadata: {}, connectionMetadata: {},
       connections: activities.slice(1).map((activity, index) => ({ id: `edge-${index}`, source: { nodeId: activities[index].nodeId, port: "Done" }, target: { nodeId: activity.nodeId } }))
     } } });
-  async function seed(name: string, rootActivity: Node, inputs: unknown[] = [], variables: unknown[] = []) {
+  async function seed(name: string, rootActivity: Node, inputs: unknown[] = [], variables: unknown[] = [], outputs: unknown[] = []) {
     const created = await api<Created>("/design/workflows/definitions/submit", "POST", {
-      name: `Activity data ${name} ${info.project.name} ${Date.now()}`, state: { rootActivity, inputs, variables, outputs: [] }
+      name: `Activity data ${name} ${info.project.name} ${Date.now()}`, state: { rootActivity, inputs, variables, outputs }
     }); definitions.push(created.definition.id); return created;
   }
   const saved = (created: Created) => api<Draft>(`/design/workflows/drafts/${created.draftId}`);
@@ -205,12 +205,13 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     expect(consumer.status).toBe("Completed");
     const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(`${instance}/activity-executions/${consumer.activityExecutionId}`);
     const evidence = detail.valueSnapshots.find(item => item.inputKey === "text"); expect(evidence).toBeTruthy();
-    const payload = await api<{ payload: { preview: string } }>(`${instance}/activity-executions/${consumer.activityExecutionId}/value-evidence/${evidence!.evidenceId}/payload`);
+    const payload = await api<{ payload: { kind: string; preview: string } }>(`${instance}/activity-executions/${consumer.activityExecutionId}/value-evidence/${evidence!.evidenceId}/payload`);
     expect(payload.payload.preview).toBe(expected);
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, expected, committed: payload.payload.preview, consumer, producers });
     // Publication returns the Inspector to the workflow root. Navigate back explicitly before the next input edit.
     await select(); await expect(replace()).toBeVisible();
     expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
+    return { instance, consumerInput: payload.payload, publication, run };
   }
   async function assertComposition(expectedNativeSyntax: "Activity output member" | "Variable member" | "Activity output…") {
     await contextResponses.settle();
