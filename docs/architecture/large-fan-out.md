@@ -119,8 +119,9 @@ one flush. The spike spreads every level; the mixed placement is **unmeasured**.
 
 **Where it lives.** In layer 3, as a reusable combiner library on the turn contract. It uses only `Start`, the child
 notice, `SetStatus` and the kernel's terminate. Layer 2 needs no change for the tree itself: no new message kind, no
-new table and no partition knowledge in the model; decision 5 below may change the workflow instance's registry. ETL
-uses it for its partitions of work. Native gets it as a distributed form of ForEach, below.
+new table and no partition knowledge in the model. Decision 5 below may change the child registry of
+`WorkflowInstance`, layer 3's workflow actor type, which is a layer 3 change. ETL uses it for its partitions of work.
+Native gets it as a distributed form of ForEach, below.
 
 **Other fan-in.** Many unrelated instances that send to one actor (counts, metrics, a shared aggregate) do not form a
 parent tree. The same idea applies as a sharded aggregator: senders address one of F shard actors by a hash of their
@@ -165,9 +166,11 @@ The spike implements neither policy: a child fault throws in the coordinator, an
 
 **Parked leaves.** A leaf whose turn throws is parked: it ends Faulted and sends a Faulted notice to its combiner
 (built: `WorkflowInstance.Park` sends it), and the combiner's registry drops it. Release 1 lets an operator retry parked
-work. If the leaf is retried and finishes, its later notice is refused as `UnknownChildCreation`: its effects happened
-and its result is lost. This holds for every parent in the kernel today, Native `DispatchWorkflow` included, so it is
-a decision for the owner below, for the whole kernel.
+work. If the leaf is retried and finishes, its later notice reaches a parent that no longer expects it: a
+generation-tracked parent refuses it as `UnknownChildCreation`; an untracked parent's model sees it, and Native drops it
+(no matching wait) while the spike's model throws and parks. Either way its effects happened and its result is lost.
+This holds for every waiting parent today, a Native `DispatchWorkflow` that waits for its child included (a
+fire-and-forget dispatch gets no notice), so it is a decision for the owner below, beyond the tree.
 
 **Retries.** A leaf's activity retries inside the leaf: each retry is a new generation in its iteration path, so a new
 effect key (the owner's rule of 16 November). A combiner may retry a failed child by starting a new child for the same
@@ -254,8 +257,8 @@ than its inputs, and returns its output through the reducer. That is why it stay
 5. **A parked child that an operator later retries.**
    - (a) A parked child's notice says it was parked. The parent keeps the child in its registry, and the combiner keeps
      it in `Outstanding`, with its credit, until a later notice or a discard. *Recommended:* no result is lost, and a
-     tree with parked leaves visibly waits. It is a change to `WorkflowInstance`'s registry and the notice, for every
-     parent.
+     tree with parked leaves visibly waits. It changes `WorkflowInstance`'s registry and the notice, in layer 3, for
+     every waiting parent.
    - (b) A parked child's fault is final for its parent. The operator tools refuse to retry a child whose parent
      consumed its fault, and the operator retries at the parent instead.
 
