@@ -49,7 +49,7 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         where phase == "transition" || p.Name is not ("internal" or "internal-preempts-container")
         from reverse in new[] { false, true } select (m, n, phase, reverse, p);
     private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
-    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile"];
+    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile", "automatic-profile", "completion-profile"];
     internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile))
         .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names)
         .Concat(from m in new[] { Modes.Balanced, Modes.Durable } from v in new[] { 1, 2 } select $"identity-consumption:literal-v{v},{m}");
@@ -193,7 +193,10 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
             if (_before is not null) Reload();
             var key = (reverse ? waits.OrderDescending(StringComparer.Ordinal) : waits.Order(StringComparer.Ordinal)).First();
             var wait = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == key);
-            Add(Events.Deliver(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait)); Drain();
+            var release = Events.Route(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait);
+            var accepted = _world.Store.AddEventAsync(release).Result;
+            Check(accepted.Added && accepted.Target == _target, "N5: native release missed its registered creation");
+            Drain();
         }
         throw new InvalidOperationException("N0: native graph phase exceeded its bounded work");
     }
@@ -206,10 +209,10 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         var native = Native; var frame = native.Frames.Values.Single(f => f.Node == "machine");
         Apply(new("crash", _owner));
         frame.State = JsonSerializer.SerializeToNode(new { Active = new[] { "Working" }, Pending = (object?)null, Version = version });
-        var row = _world.Store.Instances[_target.Id]; _world.Store.Instances[_target.Id] = row with { State = Json.Write(native) };
+        var row = _world.Store.Instances[_target.Id]; _world.Store.Instances[_target.Id] = row with { State = RemoveScopes(native) };
         Apply(new("tick", 20_000)); _owner = 1 - _owner; Apply(new("take", Actor.Id)); Drain(); _frame = frame.Id;
         Signal("old-unmatched", "unknown"); Drain();
-        Check(Machine?.Version == 3 && Machine.Visits is [{ State: "Working" }] && Machine.VisitSerial == 1,
+        Check(Machine?.Version == 4 && Machine.Visits is [{ State: "Working" }] && Machine.VisitSerial == 1,
             "N8: unhandled input did not persist the literal reader migration");
         var visits = Json.Write(Machine!.Visits); Reload();
         Signal("next-unmatched", "unknown"); Drain();
@@ -219,12 +222,23 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
             "N8: consumed reader visits were reallocated or its outcome repeated");
         Console.WriteLine($"PASS identity-consumption:literal-v{version},{mode}");
     }
+    // Seed a genuinely scope-less old shape rather than mixing the new writer resource graph into the fixture.
+    private static string RemoveScopes(NativeState state)
+    {
+        var json = JsonSerializer.SerializeToNode(state)!;
+        json.AsObject().Remove("LexicalScopes");
+        return json.ToJsonString();
+    }
     private void Refuse(string name)
     {
         _expectedRefusal = name switch { "missing-profile" or "both-profiles" => "Exactly one statechart definition profile",
-            "dynamic-profile" => "Statechart definition must be literal", _ => "Unknown statechart activity reference: absent" };
+            "dynamic-profile" => "Statechart definition must be literal",
+            "automatic-profile" or "completion-profile" => "Native internal-progress integration is not qualified.",
+            _ => "Unknown statechart activity reference: absent" };
         var nodes = Simple().Select(n => n.Id == "Review" ? n with { Entry = "proof" } : n).ToArray();
         var rules = new[] { R("rule", 0, "Checking", "Changes") };
+        if (name is "automatic-profile" or "completion-profile") rules = [new("internal", 0, "Review", "Done", VisitMode.Reenter, "",
+            Kind: name == "automatic-profile" ? TriggerKind.Automatic : TriggerKind.Completion)];
         if (name == "unknown-entry") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Entry = "absent" } : n).ToArray();
         if (name == "unknown-exit") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Exit = "absent" } : n).ToArray();
         if (name == "unknown-action") rules[0] = rules[0] with { Action = "absent" };

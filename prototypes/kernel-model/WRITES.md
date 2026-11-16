@@ -1,5 +1,9 @@
 # Write volume and bloat on PostgreSQL
 
+> **Historical scope (13 November 2026):** the original sections below describe earlier schema, cost and stress
+> experiments. Keep those observations separate from the [14 November scoped-inbox supplement](#14-november-scoped-inbox-foundation);
+> their stress, checkpoint, bloat and tuning conclusions are not requalified by the later finite cost run.
+
 Design-now question 7 of the sketch (`docs/reports/clean-slate-kernel/design-sketch-draft-5.md`, "Open questions"). A
 commit rewrites the instance's whole row, appends a journal row (at Full history), and inserts, then updates, then
 deletes inbox rows. The owner's direction of 12 November: keep snapshot plus journal as the default, measure bytes per
@@ -309,3 +313,141 @@ has:
 - the tuple and size table before, at the end and after the wait;
 - `pgstattuple`, including the Instances TOAST table;
 - the dead-tuple timeline.
+
+## 14 November: scoped-inbox foundation
+
+These are fresh, authored measurements of landed source `1b101defd87ae0275f0e2c2762ee317315a881e3`,
+complete tree `088cb73ed8b1279db0a1279d3902fbe882a08b94`, prototype tree
+`3070133d004df19cdc4a0fa2ddeb3d9085395a8a` (both trees identical to candidate `88cd3dec`). They use the
+actual generic `EngineRun.RunAsync` through an external reflection adapter, with no replacement workload.
+The earlier provisional R18 source had identical EF provider/schema/cost and conformance code; its Worker
+changed before landing. R18's numbers remain separate historical observations; no difference is assigned
+causally to that change. No independent evidence acceptance, architecture review, product qualification,
+provider capability or budget/default adoption is claimed here.
+
+PostgreSQL 17.11 ran in one newly owned isolated `postgres:17` container on a random loopback port,
+with batch fence and read committed isolation. `fsync`, `full_page_writes`, `synchronous_commit` and default
+autovacuum were on; autovacuum nap 60 s, checkpoint timeout 300 s, WAL retention 256 MB, max WAL 1024 MB,
+and table settings remained defaults. There was no hand-tuned index, fillfactor change, forced vacuum/checkpoint,
+session kill or chaos. The actual options were `cost postgres <private fresh connection> writes=1 sizes=1
+many=100,1000 fence=batch`, with Full, State, Minimal, or Full plus `pad=4096`.
+
+Every variant finished with **2,215 instances, zero unfinished instances and zero unconsumed messages**.
+The same 16 cases include owner/outside ephemeral, balanced and durable no-ops; a parent with three children;
+terminate/delete; an event that starts an instance; projector and heartbeat; and 100/1,000 owner/polled starts.
+Three additional 1 KB state trials per variant each verified ten landed revisions and expected history.
+Partition position was 2,272 for Full/State/padded Full and 1 for Minimal; it is not a commit count.
+This run does not qualify explicit commit windows, clock/creation facts, private Job stress/recovery, other
+providers, sustained turnover, checkpoint/vacuum capacity or physical-wire behavior.
+
+| Case: WAL bytes per landed instance commit (integer truncation) | Full | State | Minimal | Full + 4 kB pad |
+|---|---:|---:|---:|---:|
+| Ten durable no-ops started on owner | 919 | 911 | 655 | 5659 |
+| 1,000 balanced starts on owner | 711 | 583 | 292 | 5251 |
+| 1,000 balanced starts arriving by poll, commit window | 1953 | 1869 | 1528 | 6492 |
+
+Outside insertion setup for that last row is separate: 612,256 / 612,176 / 650,472 / 612,176 WAL bytes for
+Full / State / Minimal / padded Full. Full's combined observation is `(1,953,768 + 612,256) / 1,000 =
+2,566.024` bytes per start. The total is the actual harness's insert-LSN-window delta; its cost output does
+not print individual LSN boundary strings. Retained relation splits distinguish this database's relations.
+Catalog/background work, including another retained database's work, can enter the window: State poll and
+Minimal setup include `pg_statistic`/catalog WAL. Each variant is one finite window without repeated-window
+uncertainty bounds. These observations do not establish a causal ratio or universal storage/tuning rule.
+
+Commands and transaction ends are actual driver interception counters: durable no-ops use 10 + 10 = 20
+counted; 1,000 owner starts use 3 + 1 = 4 (Minimal 2 + 1 = 3); poll starts use 8 + 2 = 10 (Minimal 7 + 2 = 9).
+The harness's `sent` column is derived. No proxy/wire counter was enabled; none of these are observed physical
+wire counts. Incidental timing columns are not used as speed or throughput evidence.
+
+After closing workload pools, exact tuple scans were taken at end and after an unforced 70-second wait.
+Padded Full's TOAST live/dead/free tuple bytes were 9,496,302 / 141,939 / 2,535,372 at end and
+9,496,302 / 0 / 2,677,740 after. Its Instances total relation size stayed **12,877,824 bytes**: removing dead
+TOAST tuples did not shrink the files. Full's total grew 565,248 → 573,440 bytes; State and Minimal stayed
+565,248. This burst experiment does not establish steady-state bloat or guarantee vacuum at every relation.
+
+The [dated evidence folder](measurements/write-cost-2026-11-14/README.md) publishes all 64 cost cases, eight
+selected tuple snapshots, exact source/relevant binary/artifact hashes, settings/options and reproducible
+adapter text. Provenance also identifies all 38 retained local raw files by digest; it does not publish their
+contents. Each fresh random target was independently absent and passed the adapter's absence/loopback/port
+checks before the harness's existing `EnsureDeleted`. An existing populated target refused invocation;
+DDL logs recorded **zero DROP DATABASE**. Only the exact newly owned container was stopped after checking
+ID and labels; all four databases remain retained. Reproduction must refuse existing targets, preserve
+credentials privately, and retain databases. No earlier retained container or database was reset or deleted.
+
+
+## 15 November: Card4 physical identity experiment on landed Park
+
+The local Card4 experiment composes on actual main `76a15f71b59940299625ab7f7244f1d49ce57901`.
+These are authored prototype measurements, not architecture/product acceptance or a budget/default choice.
+[RECREATE.md](models/Recreate.Run/RECREATE.md) defines its explicit terminal profiles and supported boundary.
+The normal logical retirement marker is payload-free and permanent; the caller-key reuse window is separate.
+Markers, bindings and receipts are retained without expiry in this experiment. Storage therefore grows
+with retired physical runs and accepted operations; no erasure, tenant or production retention policy is selected.
+
+Relational storage adds a non-null Retired boolean (one-byte PostgreSQL datum). All accepted new rows are
+active, and normal INSERTs omit the known false value using a database false default, ValueGeneratedNever
+and BeforeSave Ignore. No generated-value SELECT is requested. Invalid first-retired inserts, including
+alias/creator/identity-only/keyed-Ephemeral forms, are atomically refused; retirement UPDATEs still persist
+true. A rejected variant sent the extra false INSERT parameter and crossed SQL Server batching thresholds:
+100/1000 owner starts measured 5/14 TCP edges against actual-main 4/13. The faithful omission restores all 16
+reference driver-command/TCP rows to main, including 1000 polled starts 24. The internal server-statement
+counter is separately +1 for one terminate-child case because of retirement enforcement; this is real
+additional database work even though driver commands and TCP boundaries match.
+
+An otherwise unwritten keyed terminal identity has logical State null (four UTF-8 bytes), but its active
+physical State-cell control envelope occupies 29 bytes. A typed value-metadata checkpoint sample uses 11 bytes.
+Ordinary reserved-prefix states escape losslessly; future controls refuse rather than being parsed as state.
+The isolated PostgreSQL 17.11 retirement sample used 4 observed TCP edges for raw delete and retirement each,
+with 512/656 WAL bytes; the actual final tip6 repeat measured 512/632. Both retained marker
+pg_column_size samples were 101 bytes. These are separate windows, not a causal ratio or fixed write cost.
+This excludes index/page overhead from tuple size.
+The owned isolation fixture disabled autovacuum only for the finite WAL sample, not as a provider default.
+
+Exact encoded UTF-16 key/operation storage uses full values plus fixed hash-bucket indexes. One 4096-unit
+sample used 11008/10924 encoded octets and pg_column_size(binding/receipt) 11096/22120 bytes.
+The preparation/final tip6 windows measured 36624/36648 WAL bytes respectively;
+its one observed TCP edge is a bounded sample. Cumulative relation allocations are reported separately
+from datum sizes. Padding, TOAST, WAL/page boundaries, retained receipts and repeated turnover affect costs.
+No production write-volume, sustained vacuum, failover or contended-latency qualification follows.
+
+MySQL's conditional alias-insert guard uses read-only DO/IF with actual indexed Id-column equality and
+no result set. The rejected same-value UPDATE alternative fired an extra update trigger; DO fires none.
+Both supported fence modes and default/non-strict/matched/changed-row profiles retain command/TCP
+boundaries. Those conditional indexed reads are real work. PostgreSQL bulk TCP-edge variation remains
+explicitly distinct from equal commands and Sync/Query/Flush/Execute frames; equal groups do not prove RTT.
+
+
+## 15 November: required metadata protocol and raw Delete repair
+
+The next author candidate composes actual main `dbc716f3994863b64c8344a33a45090d95398367`.
+The closed a991 review pair had two Major findings; a clean individual report did not make the pair clean.
+A required state-free metadata protocol now persists separately from plain keyed identity. The logical
+IdentityMetadataRequired discriminator uses the existing State cell: plain version-2 identity is 29 UTF-8
+bytes, required metadata identity is 33, and logical State remains null (4). There is no new column,
+normal INSERT parameter or lookup. The old ambiguous version-1 identity control refuses and retains
+its exact physical bytes; no automatic old-row conversion or migration guarantee is supplied.
+Ordinary opaque reserved-family values still escape losslessly, including those old control strings.
+
+Cold models missing either metadata interface refuse before query/control/drain and cannot retire a
+protected identity or release its key. Plain no-metadata keyed identity remains deletable. Row-bearing
+Delete is restricted to canonical retirement; trusted raw Delete has Row null and a present Expected
+matching an existing row. Actual stored revisions zero/negative remain exact authority; missing rows
+never become revision zero. Malformed mixed batches refuse without partial row/history/send/wait effects.
+
+Qualified preparation SQL Server actual-main/candidate measurements retain all 16 driver/TCP rows (owner100/1000
+4/13, polled1000 24). The terminate-child internal server-statement counter remains 22→23, real retirement
+enforcement work, not a new driver boundary. PostgreSQL retains commands and frontend frame counts;
+observed bulk TCP-edge differences are separately retained and are not hidden as equivalent RTTs.
+The expanded PostgreSQL proof's metadata terminal commit remains 2 observed TCP edges for typed state
+(11 physical bytes) and required state-free metadata (33). Its 172 client calls include additional
+protection-removal controls and intentional rollback, not a per-operation cost increase. A new isolated
+raw-delete/retirement window measured 4 TCP edges each and 512/656 WAL bytes; retained marker tuple101
+and bool datum1. The wide-key datum sizes remain11096/22120 with36624 WAL bytes in that window.
+These are separate bounded samples. Headers, escapes, retained rows/receipts/bindings/indexes/WAL still
+cost storage and retain indefinitely; no universal byte count, expiry/tenant/default/budget or architecture
+adoption follows. The hardening A-F proposal remains held for its separately authorized later stage.
+
+The actual repaired delivery prefix6 repeat is a separate window: raw delete/retirement measured
+536/632 WAL bytes, 4 observed TCP edges each, retained tuple101 and bool datum1. Required metadata
+was33 physical State bytes, typed state11, and wide-key WAL36624. Those samples do not replace the
+qualified preparation512/656 window or establish universal constants.

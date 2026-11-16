@@ -90,7 +90,9 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
@@ -135,11 +137,20 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         Send("load", $"load [{string.Join(", ", ids)}]", () => world.Store.LoadAsync(ids));
+    public bool HasActorAliases => ((IKernelStore)world.Store).HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        Send("load", $"load [{string.Join(", ", ids)}]", () => ((IKernelStore)world.Store).LoadActorsAsync(ids));
 
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) =>
         Send("events", $"events for [{string.Join(", ", keys)}]", () => world.Store.FindEventsAsync(keys));
 
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) =>
+        world.Store.PublishedMatchesAsync(published);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) =>
+        Send("events", $"events for {waits.Count} waits", () => world.Store.KeptMatchesAsync(waits));
+
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => world.Store.AddEventAsync(delivery);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
@@ -198,17 +209,31 @@ public sealed partial class World
     private readonly List<Task> _watched = [];
     public long Time = 1_000_000;
     public bool Auto, Deployed;
-    private int? _dying;
+    private readonly List<Actor> _dying = [];
     private CancellationTokenSource? _pass;     // the settling pass under way: a process that dies stops it at a turn boundary
 
     public int? Dying
     {
-        get => _dying;
-        set
+        get => _dying.Count == 0 ? null : _dying[0].Node;
+        set { if (value is { } node) MarkDying(Of(node, 0)); else _dying.Clear(); }
+    }
+
+    private void MarkDying(Actor actor)
+    {
+        if (actor.Dead || _dying.Exists(prior => prior.Runtime == actor.Runtime)) return;
+        _dying.Add(actor);
+        _pass?.Cancel();
+    }
+
+    private void FinishDeaths()
+    {
+        foreach (var actor in _dying)
         {
-            _dying = value;
-            if (value is not null) _pass?.Cancel();
+            if (actor.Dead) continue;
+            if (Runtimes[actor.Node] == actor.Runtime) Crash(actor.Node, zombie: false);
+            else foreach (var sibling in Actors.Where(a => a.Runtime == actor.Runtime)) sibling.Dead = true;
         }
+        _dying.Clear();
     }
     public Action<string>? Log;
 
@@ -269,7 +294,7 @@ public sealed partial class World
         IExecutionModel[] models =
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
+            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => MarkDying(actor)), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
             .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
@@ -366,12 +391,13 @@ public sealed partial class World
     /// <summary>Do it if it can be done now. Null means it was not enabled and nothing happened.</summary>
     public string? Apply(Act act)
     {
+        if (_dying.Count != 0) FinishDeaths();
         var outcome = Do(act);
         foreach (var requests in Processes.Values) requests.Expire(Time);     // a caller's own deadline
-        if (outcome is null || Dying is not { } node) return outcome;
-        Dying = null;
-        Crash(node, zombie: false);
-        return outcome + $"; the turn killed node {node}";
+        if (_dying.Count == 0) return outcome;
+        var nodes = string.Join(", ", _dying.Select(a => a.Node));
+        FinishDeaths();
+        return outcome is null ? null : outcome + $"; the turn killed node {nodes}";
     }
 
     private string? Do(Act act)

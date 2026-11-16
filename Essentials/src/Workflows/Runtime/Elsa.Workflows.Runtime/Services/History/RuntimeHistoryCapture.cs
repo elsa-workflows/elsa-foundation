@@ -3,13 +3,15 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Services.History;
 
 /// <summary>Captures immutable semantic candidates before coalescing; it never writes a store.</summary>
 internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executions,
-    IEnumerable<RuntimeHistorySourceSupport> sourceSupport, RuntimeHistoryCaptureCapabilities sourceAvailability)
+    IEnumerable<RuntimeHistorySourceSupport> sourceSupport, RuntimeHistoryCaptureCapabilities sourceAvailability,
+    IRuntimeCoalescingSessionAccessor? coalescing = null)
     : IRuntimeCheckpointCommitEnricher, IRuntimeHistoryCaptureSupport
 {
     internal static readonly string[] Kinds =
@@ -23,7 +25,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
     internal static readonly string[] Version2Kinds = ["BookmarkSuperseded", "DurableStateRecorded", "DurableStateRemoved"];
 
-    public int Order => 2000;
+    // Observe the completed semantic envelope after every native owner has contributed.
+    public int Order => int.MaxValue;
 
     public bool CanCapture(RuntimeHistoryCapturePolicy policy)
     {
@@ -126,7 +129,21 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         return true;
     }
 
-    private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
+    private bool IsFlush(RuntimeCheckpointCommit commit)
+    {
+        if (!commit.Checkpoint.Metadata.TryGetValue(RuntimeCoalescingMetadataKeys.CoalescedFlush, out var marker)) return false;
+        var session = coalescing?.Current;
+        if (marker != "true" || commit.Checkpoint.Name != RuntimeCoalescingMetadataKeys.FlushCheckpointName ||
+            session is null || !session.AppliesTo(commit.WorkflowExecutionId) || session.PreparedQuiescenceFlushCommitId != commit.CommitId)
+            throw new InvalidOperationException("History flush validation requires its actual prepared coalescing session.");
+        if (!session.MatchesPreparedQuiescenceFlush(commit))
+            throw new InvalidOperationException("The prepared flush no longer retains its original native payload and history groups.");
+        var expected = session.FoldHistoryBatchesWith();
+        if (RuntimeCheckpointCommitFingerprint.Compute(commit) !=
+            RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = expected }))
+            throw new InvalidOperationException("The prepared flush no longer retains its original logical history groups.");
+        return true;
+    }
 
     private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy)
     {
@@ -393,6 +410,6 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
-    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeCheckpointCommitFingerprint.Compute(
+    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeCheckpointCommitFingerprint.ComputeHistorySource(
         commit with { HistoryBatches = null });
 }

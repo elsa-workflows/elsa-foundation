@@ -24,7 +24,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 1. **Activity side effects:** at least once in Balanced; idempotency keys are documented. Durable mode narrows the window, but no mode prevents a repeat after a crash between an effect and its commit: effects that must not repeat need idempotency keys or reconciliation.
 2. **History level:** Full by default; a busy workflow may choose State only.
 3. **Lease:** 10 seconds, so failover takes about 10 seconds and idle load stays low.
-4. **Partitions:** 64 by default on server databases, 1 on SQLite.
+4. **Partitions (amended 15 November):** compare 1,024 and 4,096 fixed virtual partitions, provisionally 4,096. Both per-virtual-partition and owned-range fences must preserve a gapless ordered journal per virtual partition, stable placement and journal identity across range moves without rehashing. The owner selects final fence granularity after measurements. This round 5 A work is not implemented; the original prototype uses 64 on server databases and 1 on SQLite.
 5. **HTTP response:** released after the commit of the turn that wrote it; opt-out per route.
 6. **Reads across instances:** none; questions to another instance go as messages or through projections.
 7. **Events:** not kept by default. Keeping is switched on per subscription; BPMN message correlation uses it.
@@ -35,7 +35,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 1. **Orleans:** hosts each partition as a grain. One grain per instance, the per-actor fence and the sweep are dropped (see "The seam").
 2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option. **SQL Server (13 November):** the fence as its own statement is SQL Server's default, because the fence in the batch deadlocks takes there (E9, below).
 3. **Wake-ups between nodes:** a pluggable wake signal over the runtime's transport; polling remains the guarantee.
-4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Not built yet.
+4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Built in round 4 (the prototype's FINDINGS 25.6).
 5. **Events:** the subscription and event tables stay the kernel's one mechanism; a correlation instance per key remains a sample model.
 6. **Reply addresses:** expire at the route's timeout, carried as an absolute deadline; after it the owner drops the reply and unpins the instance.
 7. **Recreate after delete:** a rule per kind of id. A generated id never comes back (the start is dropped and journalled). A caller key refuses a repeat within `keep_until` and may start a fresh run after it.
@@ -56,6 +56,24 @@ The prototype's implementation coverage and limits are recorded in its [README](
 | 3. Actor types | What an actor does with its messages. **Workflow instance** is one actor type: it holds what all workflows share (definition and version, status, parent and children, cancel of a tree, the history envelope the viewer reads, what lists show) and runs an **execution model** (native, BPMN, ETL, agents, ...) for the rest. Other actor types: event correlation keys, durable entities | Persistence, placement | Extended by adding actor types and execution models |
 
 Why the durable layer is ours whatever the runtime: Orleans grain calls are at most once, a grain saves its state on its own with an ETag, and saving state and sending a message are never one atomic act; Orleans can also briefly run two activations of one grain when the network splits. Proto.Actor's persistence is event sourcing per actor, and its messages are not durable. So layer 1 only decides where an actor runs and wakes it up; every guarantee comes from layer 2, which works the same on any runtime.
+
+### Extensibility boundary (owner principle, 15 November)
+
+**“Replace whole layers and edges, never pieces of the commit.”** This is an input to the design proposal; it does not approve the design or implement adapters.
+
+Timers, messages, events and subscriptions remain inside the committed-append contract. A storage provider is replaced as a whole unit implementing the four logical contracts in the [round 5 H paper](log-profile-contract-sketch.md#extensibility-boundary); those contracts are not four independent systems of authoritative state. Commit-owned changes remain under the provider's fenced atomic batch in their owning partition, including correlation-key event/subscription state. Neither an external broker as the core inbox nor Quartz.NET or TickerQ as the kernel timer engine is a supported seam.
+
+| Seam | Allowed replacement or edge — adapter direction, not newly built |
+|---|---|
+| Storage unit | Replace the whole provider while preserving committed append, ownership, delivery and read-model guarantees. Log remains planned, not designed. |
+| Actor runtime | Replace placement, activation and transport through the runtime seam, while retaining the durable layer's authority checks. |
+| Execution models and actor types | Add or replace what actors do; their state changes and durable obligations still cross the commit boundary. |
+| Ingress | Brokers, webhooks, Quartz.NET or TickerQ may supply external events or schedules. Each event becomes an idempotent message insertion keyed by the source's event ID, scoped by source where needed; no new wire encoding is defined here. |
+| Egress | External delivery uses a job or outbox obligation recorded in the fenced commit before delivery. It is at least once with a stable effect key; round 5 C's effect-key propagation is planned, not implemented here. External exactly-once effects are not promised. |
+| Wake notification | A pluggable between-node notifier is only a hint. Current database profiles rely on store polling; planned Log relies on authoritative committed-log consumption, not notification. |
+| Test clock | Controlled clocks support tests. Injection does not replace the store's production ownership-time checks or atomic fence with untrusted wall-clock decisions. |
+
+Splitting authoritative timers, inboxes or subscriptions across external stores would leave them outside the commit's fence, reintroducing lost or ghost timers and coordination/outbox complexity. H's accepted outbox is different: the owning fenced batch atomically records the obligation, then delivery may follow with deduplication. It does not delegate timer, message or subscription authority to an external scheduler or broker. The held ADR proposal will carry this principle when the post-hardening design packet is prepared.
 
 ### The seam between layers 1 and 2
 
@@ -105,7 +123,11 @@ There is no fourth "runtime" plug-in. A **deployment profile** is a named preset
 | Embedded | Built-in, one node, no transport between nodes | Any provider, SQLite typically | Windows service, desktop, a single API |
 | Cluster | Built-in, partitions shared over nodes | PostgreSQL, SQL Server, MySQL, MongoDB, ... | Scaling out |
 | Orleans | An Orleans adapter (written by the integrator; one is kept in Elsa's tests) | Any provider | Hosts that already run Orleans |
-| Log (later) | Built-in, partitions as replicated-log groups | A Zeebe-like provider | Very high throughput |
+| Log (later; planned, not designed) | Built-in, leadership of replicated-log groups | A replicated-log provider (Zeebe-like analogy) | Explore higher throughput; unmeasured |
+
+**Log is planned, not designed.** Its mapping is a fenced batch appended to a Raft-replicated partition log; the fence maps to Raft term-based authority, lease/take to leader election, journal to the log, inbox to log plus local state without inbox polling, and projector to an exporter reading committed log records. It touches both **IKernelStore** and **ownership in IActorRuntime**. No one-to-one layout of virtual partitions and Raft groups is selected: a logical per-virtual-partition journal position is not a shared physical log index. The [round 5 H contract paper](log-profile-contract-sketch.md) separates these namespaces and records remaining design work.
+
+Release 1 adopts Embedded and Cluster with the same Native structured containers, Flowchart and StateMachine. Orleans requires proven demand; Log is later. Statements below about equivalent workflow behavior and synchronous HTTP are design requirements for later profiles, not implementation or qualification claims.
 
 A workflow behaves the same under every profile. The guarantees it gets come from its persistence mode, which its author chooses, not from the deployment. No capability flag makes a workflow fail on one profile: synchronous HTTP works on all of them.
 
@@ -125,9 +147,9 @@ This is the shape proven by Temporal (shard fencing; state, history and tasks in
 
 ## Persistence
 
-The kernel depends on one storage contract, `IKernelStore`, and nothing else. The contract is stated by what each operation guarantees, never by SQL. A provider is correct when it passes the kernel's store conformance suite: the same semantic tests and the same concurrent stress test, run against every provider.
+The prototype depends on `IKernelStore`; its persistence guarantee must remain expressible as **append a fenced batch**, independent of SQL. A provider must satisfy the same semantic guarantees and concurrent conformance checks; different mechanics do not waive those guarantees. Round 5 H proposes four contracts—committed append, ownership, delivery and read models—in the [contract paper](log-profile-contract-sketch.md), before any API split. The current operations below describe the existing shared-store shape.
 
-What a provider has to give:
+What the current shared-store provider has to give:
 
 - **An atomic commit** of everything a batch writes, across instances, messages, subscriptions and the journal, all of it or none of it.
 - **A fence** inside that commit: the commit lands only if the partition record still has the expected epoch and position, and two commits can never both land at the same position.
@@ -143,7 +165,7 @@ The prototype's `IKernelStore` also carries the node heartbeat (for fair share),
 
 A relational database meets these with one transaction, a conditional update of the partition row and an identity column. A document store such as MongoDB meets them with a multi-document transaction (which needs a replica set), a conditional update of the partition document, and an order key the store assigns (in the fenced update for sends, from a per-partition clock for outside adds). The prototype's MongoDB store meets them; MONGO.md has what it cost.
 
-The tables below are the relational shape. A document provider stores the same records as documents.
+The tables below are the shared-store shape. A document provider stores equivalent records as documents. A future Log profile need not reproduce these tables. Round 5 A's virtual partitions and B's explicit SQL/owned statement order must be checked for non-relational neutrality; they do not make relational queries, leases or cross-partition transactions mandatory for every provider.
 
 ## Data
 
@@ -151,7 +173,7 @@ The tables below are the relational shape. A document provider stores the same r
 |---|---|---|
 | `partition` | id, owner, epoch, lease_until, position | `position` counts the journal rows written in the partition; a turn at the Minimal history level writes none and does not move it. `epoch` changes only when ownership is taken. Times are in milliseconds; `lease_until` is written from the owner's clock under the default fence and compared with database time at a take |
 | `node` | id, seen_at | A heartbeat, so nodes can count each other for a fair share of partitions. Liveness only |
-| `instance` | id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated | `state` is opaque to the kernel and owned by the model. `jobs` is the kernel's list of background jobs in flight. The row is the truth about the present; lists and counts read it directly |
+| `instance` | id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated | `state` is opaque to the kernel and owned by the model. `jobs` is the kernel's list of background jobs in flight. The checkpoint is owner state; non-owner queries, including lists and counts, use read models |
 | `message` | seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done | The inbox. `seq` is assigned by the database and gives the order. `id` is unique and makes adding idempotent. `due` in the future makes it a timer or a retry. `start` is an optional spec for creating the target |
 | `subscription` | key, instance, wait, partition, kind | Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start) |
 | `event` | key, id, payload, keep_until | Published events. By default an event reaches only the waits committed before it is published, and a wait committed later misses it (default 7, as Elsa 4 behaves today). A wait that asks for kept events (`keep: true`; BPMN message correlation asks) also gets events published within their window before it |
@@ -160,7 +182,7 @@ The tables below are the relational shape. A document provider stores the same r
 
 This is the proposed shape, and the interfaces in this sketch are the proposed contract. The prototype already uses turn, job and pass; where its schema and contract still differ (a few columns not added yet, a few it keeps, some signatures), its DESIGN.md gives its schema in "Data" and most other differences in "Where the code and draft 5 differ".
 
-The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
+The viewer's tables are projections of the journal. The current shared-store shape has no separate outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table. The accepted recorded-send guarantee below permits an outbox when a future provider cannot transact across partitions.
 
 ## The commit
 
@@ -185,6 +207,8 @@ The ordinal in a derived message id has a fixed width. EF sends the inserts of o
 Rows per flush are capped (parameter limits, lock escalation). On the server engines 100 instance-commits cost the same round trips as one; SQLite's engine calls grow with the rows.
 
 **The outbox is the recipient's inbox.** A message to another instance is a row in `message`, inserted in the sender's transaction. Nothing is relayed afterwards. For a recipient in the same partition the owner also hands it over in memory right after the commit, but only once it has caught up: after a takeover it hands nothing over until a poll has come back short, or a new message would overtake older rows it has not read yet.
+
+**Provider-neutral send boundary (accepted 15 November): recorded, delivered later.** Every send is recorded atomically with the sender's state changes. The shared database may insert the recipient inbox in that transaction; a provider without cross-partition transactions uses a durable outbox plus delivery deduplication by derived message ID. Delivery can lag, with backlog and retry costs; sender-to-target order must survive recovery. The guarantee remains recorded sends and state changes once, not exactly-once external effects. The [round 5 H paper](log-profile-contract-sketch.md) is proposed, not an implemented contract split.
 
 **What a failed commit means.**
 - **Unknown outcome** (the connection broke): reset.
@@ -455,18 +479,18 @@ These are cheap to design in now and expensive to retrofit. The proposal must an
 
 The design gets a reference section in `docs/architecture/` (the engineering documentation, read on GitHub), not the GitHub wiki. Decided 13 November: the proposed pages go there now, and at the switch a shorter user-facing architecture section goes into `website/docs/`, which GitBook publishes. The section has a README with the overview, a reading order, the walkthrough link and each page's status, then one page per topic, landed one page per PR beside the design proposal. Terms are defined once in the glossary; decisions stay in ADRs. Pages carry a "Proposed" banner until the design is approved and "Current" from the switch. At the switch, the pages that describe the old core (the architecture tour, how a workflow executes, durable resumption, durable timers, bookmark expiration, runtime fault behaviour) are rewritten or retired, after the owner sees the list.
 
-### Release 1 scope (owner decision, 12 November)
+### Release 1 scope (owner decision, amended 15 November)
 
 The test: give Elsa 3 users a reason to move and nothing that stops them, and give new users one clear reason to pick Elsa (fast, durable .NET workflows with synchronous HTTP).
 
 - **In:** the kernel (actor runtime and durable layer) with the built-in runtime; the Embedded and Cluster profiles; the native model with its structured containers and the Flowchart on the extracted graph engine; synchronous HTTP; PostgreSQL, SQL Server and SQLite, tuned; Studio pointed at the new core, with the run viewer on the projector's tables; and, in a basic form, trace context and metrics, retention and delete, admission control with bounded inboxes, and migrating instances between definition versions for the simple cases.
-- **StateMachine:** in, unless #3815 has not passed its design milestone (M0) when the native model build starts; then it moves to 1.1. The release never waits on it.
+- **StateMachine:** in release 1 in both Embedded and Cluster, alongside Native structured containers and Flowchart; this supersedes the earlier conditional move to 1.1. Parked-work tooling must support inspect, retry and discard. Values by reference (decision 10) are a release 1 priority.
 - **MySQL:** supported, not tuned. The conformance suite and the stress test run on it in CI; the docs say it is slower (7 round trips per commit against PostgreSQL's 3 with the fence as its own statement; 6 against 2 with the fence in the batch, the default).
 - **MongoDB:** proven in CI against a replica set, so the store contract stays MongoDB-safe; production support in 1.1.
 - **Agents:** native activities with agent calls as background jobs; a dedicated agent execution model after the switch, checked by a spike first.
 - **Large fan-out:** the aggregating pattern is designed in the proposal and ships with ETL; release 1 caps a parallel ForEach at a documented size.
 - **Standalone jobs:** Elsa.Jobs rebuilt on the kernel as a job actor type; a spike now, release placement in the proposal.
-- **After, with a spike now:** BPMN, the Orleans adapter, ETL (its fan-out pattern), a dedicated agent model. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
+- **After, with a spike now:** BPMN, ETL (its fan-out pattern), a dedicated agent model. Orleans is behind proven demand, with no automatic product commitment. Log is planned, not designed, after release 1. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
 
 ### Decided 13 November
 

@@ -31,3 +31,8 @@ describe("authored collection outcome ports", () => {
     expect(getActivitySourcePorts(node([]), catalog).map(x => x.name)).toEqual(["Done"]);
   });
 });
+
+it("Complete has no authorable continuation even when historical catalog or pinned outcomes advertise Done", () => {
+  const complete = { ...writeLine, activityTypeKey: "Elsa.Activities.Graph.Runtime.Activities.Complete", ports: [{ name: "Done" }] };
+  expect(getActivitySourcePorts({ ...node([]), executableOutcomes: ["Done"] }, complete)).toEqual([]);
+});

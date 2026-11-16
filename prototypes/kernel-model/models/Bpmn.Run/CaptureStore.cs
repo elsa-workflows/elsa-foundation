@@ -3,7 +3,12 @@ namespace Kernel.Bpmn.Run;
 /// <summary>Captures actual committed sends before their normal consumption removes them.</summary>
 internal sealed class CaptureStore(IKernelStore inner) : IKernelStore
 {
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken token = default) => inner.AddEventAsync(delivery, token);
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken token = default) => inner.PublishedMatchesAsync(published, token);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken token = default) => inner.KeptMatchesAsync(waits, token);
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     internal List<Message> Sent { get; } = [];
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -19,6 +24,8 @@ internal sealed class CaptureStore(IKernelStore inner) : IKernelStore
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => inner.AddAsync(message, cancellationToken);
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadAsync(ids, cancellationToken);
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadActorsAsync(ids, cancellationToken);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => inner.PublishAsync(@event, cancellationToken);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => inner.SubscribeAsync(subscription, cancellationToken);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => inner.FindSubscriptionsAsync(key, cancellationToken);

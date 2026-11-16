@@ -56,13 +56,9 @@ internal sealed class Turn : ITurn
         if (Instance.Creation == 0 && spec.Creation is not null) throw new NotSupportedException("an unqualified parent cannot pin a qualified child");
         var stem = Instance.Creation > 0 ? CreationProtocol.Origin(Id, Instance.Creation) : Id[(Id.IndexOf('/') + 1)..];
         var name = $"{stem}~{_durable.Revision}.{_durable.Ordinal}";
-        var child = InstanceRef.In(placement == Placement.Spread ? InstanceRef.Spread(name, _input.Services.Partitions) : Instance.Ref.Partition, name);
-        var creation = Instance.Creation > 0 ? new CreationStart(1, 0,
-            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(child.Id)))) : null;
-        spec = spec with { Creation = creation, Parent = detached ? null : Id, ParentCreation = detached ? 0 : Instance.Creation };
-        _durable.Send(child, Kinds.Start, null, new SendOptions(Start: spec));
-        if (!detached) _children.Add(new(child.Id, creation?.Generation ?? 0));    // the exact child addressed even before its first commit
-        if (child.Partition == Instance.Ref.Partition) _durable.Fresh();   // minted and owned here, so it cannot exist: no read
+        var destination = placement == Placement.Spread ? InstanceRef.Spread(name, _input.Services.Partitions) : Instance.Ref.Partition;
+        var child = _durable.StartChild(spec with { Parent = detached ? null : Id, ParentCreation = detached ? 0 : Instance.Creation }, destination);
+        if (!detached) _children.Add(new(child.Id, Instance.Creation > 0 ? 1 : 0));
         return child;
     }
 
@@ -83,8 +79,9 @@ internal sealed class Turn : ITurn
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 
     /// <summary>The turn's end is its commit, and the only one.</summary>
-    internal TurnOutcome Seal(int version)
+    internal TurnOutcome Seal(IExecutionModel model)
     {
+        var version=model.StateVersion;
         var created = _input.Row is null;
         var history = _input.Row?.History ?? _input.Spec!.History;
         if (_status != InstanceStatus.Running || Has(Flaw.HoldLoses)) _durable.HoldNothing();     // nothing is held into an ended instance
@@ -93,15 +90,22 @@ internal sealed class Turn : ITurn
             StartIntent: _input.Row?.StartIntent ?? CreationProtocol.Fingerprint(_input.Spec, _input.Taken[_input.From].Message.Kind, _input.Taken[_input.From].Message.Payload),
             ParentCreation: _input.Row?.ParentCreation ?? _input.Spec?.ParentCreation ?? 0);
         if (_input.Row is { Status: not InstanceStatus.Running } ended)
-            row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version };
-        if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
-        var unit = _durable.Outcome(_status);
+            row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version, Jobs = _durable.Jobs() };
+        if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.AddTerminalNotice(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
+        var unit = _durable.Outcome(row.Status);
         // An ephemeral instance that ends in the turn that created it, or while it is still in memory, and leaves nothing
         // for anyone else, is never written.
         var unwritten = created ? Instance.Creation == 0 && _input.Spec!.Ephemeral : _input.Unwritten;
         // The history of its turns in memory comes with the commit that writes it (decision 4).
         List<object> entries = _input.Unwritten && _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
-        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0) return unit;
+        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0)
+        {
+            if (!Id.StartsWith($"g{Instance.Ref.Partition}/key/", StringComparison.Ordinal)) return unit;
+            // Metadata is a persistence obligation unless its model explicitly supplies a state-free terminal
+            // protocol. Both profiles share the existing durable start-consumption commit.
+            if (model is not IModelMetadata || model is IStateFreeTerminalMetadata metadata &&
+                metadata.CanUseIdentityOnly(State,_status,Clock)) row = row with { State = "null", IdentityOnly = true, IdentityMetadataRequired = model is IStateFreeTerminalMetadata };
+        }
         // Decision 4: one that waits only for its own short timers and jobs stays in memory, unwritten, up to its short wait.
         if (unwritten && _status == InstanceStatus.Running)
         {

@@ -15,20 +15,46 @@ public static class CreationProtocol
 
     public static string? Fingerprint(StartSpec? start, string kind = Kinds.Start, string? payload = null) => start?.Creation is null ? null
         : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(new { Start = start, Kind = kind, Payload = payload }))));
-    public static void RejectUnsupported(CommitBatch batch)
+    public static void RejectUnsupported(CommitBatch batch, bool physicalRetirement = false)
     {
-        if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null) ||
-            t.Sent.Any(Qualified) || t.Subscribed.Concat(t.Unsubscribed).Any(s => s.Creation != 0 || s.Start?.Creation is not null)))
+        if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired && !(physicalRetirement && IsPhysicalRetirement(t)) || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null) ||
+            t.Sent.Any(Qualified) || t.Subscribed.Concat(t.Unsubscribed).Any(Qualified)))
             throw new StoreException(Failure.Definite, "store has no qualified creation identity");
     }
 
-    public static bool Qualified(Message message) => message.TargetCreation is not null || message.Start?.Creation is not null || (message.Start?.ParentCreation ?? 0) != 0;
+    // A physical marker retains no executable state or positive-generation protocol. Caller named legacy
+    // addresses keep their explicit unqualified behavior; generated physical addresses are never recycled.
+    public static bool IsPhysicalAddress(string id)
+    {
+        var slash=id.IndexOf('/');
+        if(slash<2 || !int.TryParse(id.AsSpan(1,slash-1),out var partition) || partition<0 ||
+            id[1..slash]!=partition.ToString(System.Globalization.CultureInfo.InvariantCulture))return false;
+        var suffix=id[(slash+1)..];
+        static bool Positive(string value)=>long.TryParse(value,out var serial) && serial>0 &&
+            value==serial.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if(id[0]=='e')return Positive(suffix);
+        if(id[0]!='g')return false;
+        if(suffix.StartsWith("key/",StringComparison.Ordinal))return Positive(suffix[4..]);
+        if(!suffix.StartsWith("child/",StringComparison.Ordinal))return false;
+        var parts=suffix[6..].Split('.');
+        return parts.Length==3 && int.TryParse(parts[0],out var issuer) && issuer>=0 &&
+            parts[0]==issuer.ToString(System.Globalization.CultureInfo.InvariantCulture) && Positive(parts[1]) && Positive(parts[2]);
+    }
+
+    private static bool IsPhysicalRetirement(TurnCommit turn) => turn.Row is { Creation: 0, Retired: true } row &&
+        StringComparer.Ordinal.Equals(turn.Instance,row.Id) && IsPhysicalAddress(row.Id) && row.Status != InstanceStatus.Running && turn.Delete &&
+        turn.Expected is { } expected && expected < long.MaxValue && row.Revision == expected + 1 &&
+        row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+
+    private static bool Qualified(StartSpec? spec) => spec?.Creation is not null || (spec?.ParentCreation ?? 0) != 0;
+    public static bool Qualified(Message message) => message.SenderCreation != 0 || message.TargetCreation is not null || Qualified(message.Start);
+    public static bool Qualified(SubscriptionRow subscription) => subscription.Creation != 0 || Qualified(subscription.Start);
     public static void RejectUnsupported(Message message)
     { if (Qualified(message)) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
     public static void RejectUnsupported(SubscriptionRow subscription)
-    { if (subscription.Creation != 0 || subscription.Start?.Creation is not null) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
+    { if (Qualified(subscription)) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
 
-    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, string message)
+    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, InboxKey message)
     {
         if (start.Creation is not { } creation) return previous?.Creation > 0 ? "IdentityRequired" : null;
         if (creation.Intent is not { Length: > 0 and <= 128 } || creation.Generation < 1 || creation.Previous < 0)
@@ -54,9 +80,7 @@ public static class CreationProtocol
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status };
         foreach (var item in taken)
-            if (item.Message.ReplyTo is { } to)
-                outcome.Replied.Add(new(item.Message.Id, to, Request.Response,
-                    new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation)));
+            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation));
         return outcome;
     }
 
@@ -69,19 +93,20 @@ public static class CreationProtocol
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
         if (turn.Row is not { } row) return;
         if (row.Creation < 0 || row.ParentCreation < 0) RefuseWrite("negative creation identity");
-        if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) RefuseWrite("legacy row cannot carry a partial creation header");
+        if (row.Creation == 0 && (row.Retired && !IsPhysicalRetirement(turn) || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) RefuseWrite("incomplete exact parent address");
-        if (row.PendingStart is { } pending && (pending.Length == 0 || row.Status != InstanceStatus.Running ||
+        if (row.PendingStart is { } pending && (string.IsNullOrEmpty(pending.Id) || row.Status != InstanceStatus.Running ||
             previous is { Retired: false } && previous.PendingStart != pending ||
             previous?.PendingStart != pending && turn.Held?.Contains(pending) != true)) RefuseWrite("invalid held start continuation");
         if (previous?.PendingStart is { } retained && row.PendingStart is null && row.Status == InstanceStatus.Running &&
             !turn.Consumed.Concat(turn.Done).Contains(retained)) RefuseWrite("held start cleared without consuming its delivery");
         if (row.Retired)
         {
-            if (!turn.Delete || previous is not { Creation: > 0, Retired: false } || row.Status == InstanceStatus.Running || row != Retire(previous))
+            if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) || row.Status == InstanceStatus.Running || row != Retire(previous))
                 RefuseWrite("invalid lifecycle retirement");
             return;
         }
+        if (previous is { Retired: true, Creation: 0 }) RefuseWrite("physical run identity is retired");
         if (previous is { Retired: true })
         {
             if (previous.Creation == long.MaxValue || row.Creation != previous.Creation + 1 || string.IsNullOrEmpty(row.StartIntent))

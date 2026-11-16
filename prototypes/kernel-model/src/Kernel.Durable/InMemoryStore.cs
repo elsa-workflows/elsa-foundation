@@ -7,9 +7,10 @@ namespace Kernel.Durable;
 /// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
 /// seen from the one place that sees every write.
 /// </summary>
-public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
+public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
     public bool CommitClockAvailable { get; set; } = true;
+    public bool PhysicalRetirementAvailable => true;
     public bool CreationIdentityAvailable { get; set; } = true;
 
     public sealed class PartitionRow
@@ -31,8 +32,10 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public PartitionRow[] Partitions { get; } = Enumerable.Range(0, partitions).Select(_ => new PartitionRow()).ToArray();
     public Dictionary<string, InstanceRow> Instances { get; } = new(StringComparer.Ordinal);
-    public Dictionary<string, MessageRow> Messages { get; } = new(StringComparer.Ordinal);
-    public HashSet<SubscriptionRow> Subscriptions { get; } = [];
+    public Dictionary<InboxKey, MessageRow> Messages { get; } = [];
+    public HashSet<SubscriptionRow> Subscriptions { get; } = new(EqualityComparer<SubscriptionRow>.Create(
+        (a, b) => a is null || b is null ? a == b : (a.Key, a.Instance, a.Wait) == (b.Key, b.Instance, b.Wait),
+        row => HashCode.Combine(row.Key, row.Instance, row.Wait)));
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
@@ -61,9 +64,12 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         }
     }
 
+    public bool SupportsCommitWindow => true;
+
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+        StoreBatchRules.Validate(batch);
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
@@ -92,8 +98,14 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
-                        if (Messages.ContainsKey(message.Id)) Diverged($"sent message {message.Id} exists already");
+                        if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
                     if (turn.Journal is not null && Journal.ContainsKey((batch.Partition, ++at))) Diverged($"journal position {at} is written already");
+                }
+                if (batch.Window is { } window)
+                {
+                    var atCommit = clock();
+                    if (atCommit < now || atCommit < window.FromInclusive || atCommit >= window.UntilExclusive)
+                        throw new StoreException(Failure.WindowExpired, "The database clock left the decision's authority window.");
                 }
                 (p.Position, p.LeaseUntil) = (batch.Position + batch.Positions, now + (long)batch.Lease.TotalMilliseconds);
             }
@@ -121,7 +133,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
-                    Messages[message.Id] = new MessageRow(message, ++_seq, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0);
+                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0);
                     seqs.Add(_seq);
                 }
                 foreach (var subscription in turn.Subscribed) Subscriptions.Add(subscription);
@@ -180,10 +192,30 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
+        Kinds.RequireApplicationSend(message.Kind);
+        return InsertAsync(message.AsOrdinary(), cancellationToken);
+    }
+
+    private long _eventSerial;
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
+    {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(delivery.Message);
         lock (_gate)
         {
-            if (Messages.ContainsKey(message.Id)) return new(false);
-            Messages[message.Id] = new MessageRow(message, ++_seq, 0);
+            if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
+                return ValueTask.FromResult(new EventAcceptance(false, existing.Message.Target));
+            var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+            Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+            return ValueTask.FromResult(new EventAcceptance(true, message.Target));
+        }
+    }
+
+    private ValueTask<bool> InsertAsync(Message message, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (Messages.ContainsKey(message.InboxKey)) return new(false);
+            Messages[message.InboxKey] = new MessageRow(message, ++_seq, 0);
             return new(true);
         }
     }
@@ -209,6 +241,25 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
         lock (_gate) return new(Subscriptions.Where(s => s.Key == key).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
+    }
+
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(EventRows.TryGetValue((published.Key, published.Id), out var stored)
+            ? Subscriptions.Where(s => s.Key == stored.Key).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
+    }
+
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation)).ToHashSet();
+            return new((from e in EventRows.Values orderby e.Id
+                join s in Subscriptions on e.Key equals s.Key
+                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation))
+                select new EventRoute(e, s)).ToList());
+        }
     }
 
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
@@ -264,7 +315,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         lock (_gate)
         {
             var now = clock();
-            var messages = Messages.Values.Where(m => m.Done && m.Message.KeepUntil < now).Select(m => m.Message.Id).ToList();
+            var messages = Messages.Values.Where(m => m.Done && m.Message.KeepUntil < now).Select(m => m.Message.InboxKey).ToList();
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));
