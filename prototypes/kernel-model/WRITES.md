@@ -96,7 +96,9 @@ $EFR x cost postgres "$PG;Database=kernel_wcost" writes=1 fence=checked [history
 docker exec km-writes-pg-4229 psql -U postgres -d kernel_wcost -tAc "select relname, n_tup_ins, n_tup_upd, n_tup_hot_upd, n_tup_del from pg_stat_user_tables where relname in ('Messages','Instances')"
 ```
 
-Every run here used the checked fence, the default when they ran. Since #4334 the default on PostgreSQL is the fence
+Every run here used the checked fence, the default when they ran, and EF's SaveChanges as the commit writer; since round
+5 B the store writes its commit itself ([COMMIT-SQL.md](COMMIT-SQL.md)), and the bytes per commit of the cost run did
+not move (`commit=ef` reproduces the EF path). Since #4334 the default on PostgreSQL is the fence
 in the batch, so `fence=checked` reproduces them. The fence in the batch writes the same partition row in the same
 transaction and saves a round trip, so the bytes should barely move (not measured here).
 

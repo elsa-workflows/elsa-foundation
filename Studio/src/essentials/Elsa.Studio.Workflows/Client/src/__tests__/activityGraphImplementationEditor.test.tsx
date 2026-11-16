@@ -27,7 +27,9 @@ vi.mock("../api/activityDesign", () => ({
     data: { activities: catalogItems },
     isPending: false,
     isError: false
-  })
+  }),
+  // Reusable activity authoring is unavailable in these editor-only tests.
+  useActivityAuthoringCapabilities: () => ({ data: undefined, isPending: false, isError: true })
 }));
 vi.mock("../api/expressions", () => ({
   listExpressionDescriptors: async () => expressionDescriptors,

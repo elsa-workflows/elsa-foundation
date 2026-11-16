@@ -2,11 +2,11 @@
 
 **Program:** [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610).
 **Board:** [Project 67](https://github.com/orgs/elsa-workflows/projects/67).
-**Status:** establishment, S001 and T001–T003 delivered. T003 PR [#4561](https://github.com/elsa-workflows/elsa-foundation/pull/4561) merged as main `90beef1af3357c87011609bdbbae19e0dc35f546`; [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4561#issuecomment-6888638330) records equivalent shared authoring and retained source/evidence provenance. T004 is active in Feature #3745; BPMN, promotion and final program qualification remain outstanding.
+**Status:** establishment, S001 and T001–T005 delivered. T004/Feature #3745 is delivered by PR #4612 / main `4fd435eb3116d6542a8aa7a76415ebe46053480f`, with [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4612#issuecomment-6907523783). T005/#3754 is delivered by PR #4649 / main `bb0b859bc133f327299ca94fa3d2c5834f4c201d`, with [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4649#issuecomment-6920297143). T006/#3755 is active; final program qualification (T007) remains outstanding.
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
 
-T003 selection/history follow-through [#4604](https://github.com/elsa-workflows/elsa-foundation/pull/4604) landed with [#4630](https://github.com/elsa-workflows/elsa-foundation/pull/4630) in main `c32bca382dfc9a5ed7bc33fbfd825f052fb24e83`. The [current-tree eight-case repair acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4630#issuecomment-6905374188) covers the two bounded repair contracts. Phone toolbar overlap UX-OBS-1 remains a T004/T007 acceptance obligation; it is not a full-program or GitHub CI pass.
+T003 selection/history follow-through [#4604](https://github.com/elsa-workflows/elsa-foundation/pull/4604) landed with [#4630](https://github.com/elsa-workflows/elsa-foundation/pull/4630) in main `c32bca382dfc9a5ed7bc33fbfd825f052fb24e83`. The [current-tree eight-case repair acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4630#issuecomment-6905374188) covers the two bounded repair contracts. Phone toolbar overlap UX-OBS-1 passed the bounded T004 phone inspection; the broader T007 matrix remains outstanding; it is not a full-program or GitHub CI pass.
 
 Owner triage on 9 November folded duplicate T004/#3753 into Feature #3745 and T007/#3756 into Program #3610. Their closure as not planned removes duplicate tracking, not the original acceptance obligations. The T004 and T007 identifiers and serial dependencies below remain in force.
 
@@ -32,14 +32,14 @@ Owner triage on 9 November folded duplicate T004/#3753 into Feature #3745 and T0
 **Goal:** real BPMN subprocess extraction with preserved supported binding/interchange semantics.
 **Independent test:** same-lane native task extraction, nested edit/save/run and separately audited XML/DI/binding round trip; unsafe selections/exports refuse without silent degradation.
 
-- [ ] T004 [Feature #3745](https://github.com/elsa-workflows/elsa-foundation/issues/3745) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003.
+- [x] T004 [Feature #3745](https://github.com/elsa-workflows/elsa-foundation/issues/3745) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003. Delivered by PR #4612 / main `4fd435eb3116d6542a8aa7a76415ebe46053480f`, with the resulting-main acceptance linked above.
 
 ## Phase 4 — User Story 3
 
 **Goal:** reviewable ordinary reusable promotion without source loss.
 **Independent test:** review/create normal draft, validate/publish, resume/reanalyze/replace exact version, execute two independently bound calls and Undo replacement.
 
-- [ ] T005 [#3754](https://github.com/elsa-workflows/elsa-foundation/issues/3754) Add internal shared promotion analysis/rewrite over supported structured references/explicit parameters; propose graph/public contract/call-site mappings and diagnose opaque, external-write, timing and control-target cases. Validate candidate through existing graph authoring. Depends on T004.
+- [x] T005 [#3754](https://github.com/elsa-workflows/elsa-foundation/issues/3754) Add internal shared promotion analysis/rewrite over supported structured references/explicit parameters; propose graph/public contract/call-site mappings and diagnose opaque, external-write, timing and control-target cases. Validate candidate through existing graph authoring. Depends on T004. Delivered by PR #4649 / main `bb0b859bc133f327299ca94fa3d2c5834f4c201d`, with the resulting-main acceptance linked above.
 - [ ] T006 [#3755](https://github.com/elsa-workflows/elsa-foundation/issues/3755) Integrate review → draft → explicit ordinary publication → exact-version replacement with source/target freshness checks and one source Undo operation. Prove failure/cancellation preserves source and Undo retains shared reusable resources. Depends on T005.
 
 ## Phase 5 — Cross-cutting qualification and delivery

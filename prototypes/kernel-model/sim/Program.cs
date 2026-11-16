@@ -31,6 +31,8 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
+if (args.Contains("--landed-check")) return LandedChecks.Run();
+if (args.Contains("--placement-check")) return PlacementChecks.Run();
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
@@ -121,7 +123,7 @@ bool Sweep(int from, int seeds, Flaw flaws)
         if (violation is not null) failures.Add((seed, violation));
     });
     Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
-        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before)" : ""));
+        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before), {World.NativeSameKeyReruns} outbound effects were sent again with the key of their first sending, {World.NativeReusedFrames} under a frame number another activation had sent under, {World.NativeRevisits} from a node that had sent before under another iteration path" : ""));
     if (args.Contains("--coverage")) Console.WriteLine("  coverage (seeds that reached the end): " + string.Join("; ", World.Seen.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}")));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {

@@ -282,3 +282,9 @@ The built-in homes are:
 Sidebar groups start open and remember explicit choices in `elsa-studio.ui.nav.groups`; Appearance Reset clears them. Active destinations and search results reveal their group. Search can expose local view links without permanently duplicating them in the sidebar. Icon rail and top navigation use the same authorized contributions; top menus close on Escape, focus leaving, outside clicks and navigation. Keep links backend-qualified and preserve native/workspace new-tab intent.
 
 Use the shared page spacing tokens and restrained navigation surfaces in every theme. The default page gap is 24px; collection row density and domain workbench canvases retain their existing layout contracts. Do not introduce competing palette literals or module-local chrome scales.
+
+## Expression preservation contributions
+
+`StudioExpressionEditorContribution.variableAdditionPreservation` proves only the existing variable-addition operation. Promotion into a reusable graph asks the language owner separately through optional `reusableBoundaryPreservation` (`language`, `revision`, `allows`). Its verdict must prove that the unchanged source observes only explicit parameters and survives a closed value boundary. Workflows rewrites owned parameter identities, never language source. Missing, duplicate, faulting or unproved contributions refuse promotion; the revision and contribution identities participate in preview freshness.
+
+The JavaScript module currently admits the same finite direct `args.<declared parameter>`/numeric-operand grammar used by its existing preservation implementation. The separate contribution names the stronger closed-dependency guarantee explicitly. It does not authorize arbitrary scripts or replace ordinary backend validation/publication. T006 composes this contribution in both resource editors.

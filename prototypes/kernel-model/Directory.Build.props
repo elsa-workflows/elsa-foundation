@@ -7,5 +7,7 @@
     <LangVersion>latest</LangVersion>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Every project restores against a committed packages.lock.json; CI restores with locked mode (#2122). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 </Project>

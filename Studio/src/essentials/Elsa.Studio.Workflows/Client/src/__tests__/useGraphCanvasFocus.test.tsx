@@ -3,7 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Node } from "@xyflow/react";
-import { useGraphCanvasInteractions } from "../graph-authoring/useGraphCanvasInteractions";
+import { WorkflowEditorToolbar } from "../workflow-editor/WorkflowEditorToolbar";
+import { captureCanvasFocusIntent, useGraphCanvasInteractions } from "../graph-authoring/useGraphCanvasInteractions";
 import type { WorkflowNodeData } from "../workflowAdapter";
 import type { WorkflowEdge } from "../workflow-editor/editorTypes";
 
@@ -93,6 +94,105 @@ describe("useGraphCanvasInteractions focus", () => {
 
     expect(replacementFocus).not.toHaveBeenCalled();
     expect(document.activeElement).not.toBe(replacement);
+  });
+});
+
+describe("pending canvas focus ownership", () => {
+  it("does not let a superseded restoration steal focus before the newer node is queued", async () => {
+    const fixture = renderHook([node("first-node"), node("second-node")]);
+    const toolbar = renderFocusToolbar();
+    toolbar.undo.focus();
+    const first = captureCanvasFocusIntent();
+    fixture.result.current!.queueCanvasNodeFocus("first-node", first);
+    first.dispose();
+    const second = captureCanvasFocusIntent();
+    const firstTarget = fixture.container.querySelector<HTMLElement>('[data-id="first-node"]')!;
+    firstTarget.style.visibility = "visible";
+    firstTarget.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(toolbar.undo);
+    fixture.result.current!.queueCanvasNodeFocus("second-node", second);
+    const secondTarget = fixture.container.querySelector<HTMLElement>('[data-id="second-node"]')!;
+    secondTarget.style.visibility = "visible";
+    secondTarget.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(secondTarget);
+  });
+
+  it("keeps a newer queued focus when an expired history request arrives late", async () => {
+    const fixture = renderHook([]);
+    const toolbar = renderFocusToolbar();
+    toolbar.undo.focus();
+    const expired = captureCanvasFocusIntent();
+    toolbar.open();
+    fixture.render([node("newer-node"), node("restored-node")]);
+    fixture.result.current!.queueCanvasNodeFocus("newer-node");
+    fixture.result.current!.queueCanvasNodeFocus("restored-node", expired);
+    const target = fixture.container.querySelector<HTMLElement>('[data-id="newer-node"]')!;
+    target.style.visibility = "visible";
+    target.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(target);
+  });
+
+  it("retains the history action's intent while waiting to queue the restored node", async () => {
+    const fixture = renderHook([]);
+    const toolbar = renderFocusToolbar();
+    toolbar.undo.focus();
+    const intent = captureCanvasFocusIntent();
+    toolbar.open();
+    fixture.render([node("restored-node")]);
+    fixture.result.current!.queueCanvasNodeFocus("restored-node", intent);
+    const target = fixture.container.querySelector<HTMLElement>(".react-flow__node")!;
+    target.style.visibility = "visible";
+    target.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(toolbar.autosave());
+    toolbar.assertNavigation();
+  });
+
+  it("does not renew a cancelled intent when a node re-renders or focus returns to the origin", async () => {
+    const fixture = renderHook([]);
+    const toolbar = renderFocusToolbar();
+    toolbar.undo.focus();
+    fixture.result.current!.queueCanvasNodeFocus("restored-node");
+    toolbar.open();
+    flushSync(() => toolbar.autosave().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    toolbar.undo.focus();
+    fixture.render([node("restored-node")]);
+    const target = fixture.container.querySelector<HTMLElement>(".react-flow__node")!;
+    target.style.visibility = "visible";
+    target.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(toolbar.undo);
+  });
+
+  it("preserves the workflow menu when a queued node becomes measurable later", async () => {
+    const fixture = renderHook([]);
+    const toolbar = renderFocusToolbar();
+    toolbar.undo.focus();
+    fixture.result.current!.queueCanvasNodeFocus("new-node");
+    fixture.render([node("new-node")]);
+    const target = fixture.container.querySelector<HTMLElement>(".react-flow__node")!;
+    const focus = target.focus.bind(target);
+    vi.spyOn(target, "focus").mockImplementation(options => {
+      if (target.style.visibility !== "hidden") focus(options);
+    });
+    flushAnimationFrames();
+    await flushMutationObservers();
+    toolbar.open();
+    expect(document.activeElement).toBe(toolbar.autosave());
+    target.style.visibility = "visible";
+    target.tabIndex = 0;
+    await flushMutationObservers();
+    flushAnimationFrames();
+    expect(document.activeElement).toBe(toolbar.autosave());
+    toolbar.assertNavigation();
   });
 });
 
@@ -194,4 +294,27 @@ function flushAnimationFrames() {
 
 async function flushMutationObservers() {
   await Promise.resolve();
+}
+
+function renderFocusToolbar() {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 100, 100, 40));
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  mounted.push({ root, container });
+  flushSync(() => root.render(<WorkflowEditorToolbar name="Focus ownership" status="Autosaved" saving={false} busy={false}
+    autosaveEnabled onAutosaveChange={vi.fn()} canUndo canRedo canAutoLayout onUndo={vi.fn()} onRedo={vi.fn()}
+    onAutoLayout={vi.fn()} onBack={vi.fn()} onSave={vi.fn()} onPublish={vi.fn()} onRun={vi.fn()} canRun runTitle="Test Run"
+    moreActions={[{ label: "Import & export", actions: [{ label: "Export JSON", icon: null, onSelect: vi.fn() }] }]} />));
+  const trigger = container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!;
+  const undo = container.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!;
+  const menu = () => document.querySelector<HTMLElement>('[role="menu"][aria-label="More workflow actions"]')!;
+  const autosave = () => menu().querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')!;
+  return { undo, autosave, open: () => { trigger.focus(); flushSync(() => trigger.click()); }, assertNavigation: () => {
+    flushSync(() => autosave().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const item = menu().querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    expect(document.activeElement).toBe(item);
+    flushSync(() => item.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(trigger);
+  } };
 }

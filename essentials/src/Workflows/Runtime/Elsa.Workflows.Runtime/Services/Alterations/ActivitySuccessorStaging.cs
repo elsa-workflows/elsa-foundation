@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.History;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -241,8 +242,30 @@ internal static class ActivitySuccessorStaging
         ActivityExecutionInspectionProjection SupersededInspection,
         ActivityExecutionInspectionProjection SuccessorInspection,
         RuntimePostCommitIntent Continuation,
-        IReadOnlyCollection<IncidentState> Incidents) : IWorkflowAlterationRuntimeCheckpointStagedChange
+        IReadOnlyCollection<IncidentState> Incidents) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt)
+        {
+            yield return new(RuntimeHistorySourceFactKind.ControlApplied, Superseded.InvocationId, SupersededAt(),
+                activityExecutionId: Superseded.InvocationId, relatedActivityExecutionId: Successor.InvocationId,
+                reasonCode: Incidents.Count > 0 ? "operator-retry" : "operator-reschedule");
+            foreach (var descendant in CancelledDescendants)
+                yield return new(RuntimeHistorySourceFactKind.ControlApplied, descendant.InvocationId, descendant.CompletedAt!.Value,
+                    activityExecutionId: descendant.InvocationId, reasonCode: "superseded-descendant");
+            foreach (var incident in Incidents)
+                yield return RuntimeHistoryIncidentFacts.Resolved(incident);
+            if (Incidents.Count > 0)
+                yield return new(RuntimeHistorySourceFactKind.ActivityRetryScheduled, Superseded.InvocationId, SupersededAt(),
+                    Superseded.InvocationId, relatedActivityExecutionId: Successor.InvocationId, reasonCode: "operator-retry");
+            var started = Successor.Status == ActivityExecutionStatus.Running;
+            if (!started && Successor.Status != ActivityExecutionStatus.Scheduled)
+                throw new InvalidOperationException("A new successor must retain its actual scheduled or started transition.");
+            var createdAt = started ? Successor.StartedAt ?? throw new InvalidOperationException("A started successor requires its start time.") : Successor.ScheduledAt;
+            yield return new(RuntimeHistorySourceFactKind.ControlApplied, Successor.InvocationId, createdAt,
+                activityExecutionId: Successor.InvocationId, relatedActivityExecutionId: Superseded.InvocationId,
+                reasonCode: started ? "successor-started" : "successor-scheduled");
+        }
+
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
         {
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal);

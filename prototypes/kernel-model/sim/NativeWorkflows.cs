@@ -15,11 +15,17 @@ public static class NativeWorkflows
     /// <summary>The workflows the generator starts, with the events each waits for (by the key in its input).</summary>
     public static readonly (string Workflow, int Events)[] Mix =
     [
-        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1),
+        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1), ("n-out", 3),
     ];
 
+    /// <summary>
+    /// The outbound nodes whose content names their activation (the mix's rule: bodies name the iteration), so that N7's
+    /// lost-turn half can name an activation without the key; <c>hj</c> fires twice with one body and is left out.
+    /// </summary>
+    public static readonly HashSet<string> ContentNamesActivation = new(StringComparer.Ordinal) { "http", "mail", "h1", "h2", "m1" };
+
     /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
-    public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph" };
+    public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph", "n-out" };
 
     private static WorkflowRegistry Build()
     {
@@ -28,9 +34,30 @@ public static class NativeWorkflows
         registry.Add(Workflow("n-seq", Sequence("root",
                 WriteLine("w1", "one"), Set("s1", "count", Expr("count + 1")), WriteLine("w2", Expr("'count ' + count")),
                 Notify("notify", Expr("'hello ' + input.key")), Set("s2", "count", Expr("count + 1")),
+                // Round 5 C: the two outbound activities that carry the effect key (N7 reads it from the host's transport).
+                Http("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", Expr("'order ' + input.key"), "sent"),
                 If("if", Expr("count == 2"), Set("then", "branch", "then"), Set("else", "branch", "else")),
                 Set("out", "output", Expr("branch + ' ' + count"))),
             ("count", 0), ("branch", null), ("output", null)));
+        // Round 5 C: outbound effects where a replay can reorder the agenda (N7). A timer branch and an event branch run
+        // in parallel; the event branch sends twice from one node in a While loop and the timer branch sends after three
+        // writes; a ForEach then sends twice from one node. When a lost turn took the event alone and its replay takes the
+        // due timer too, the frame numbers shift between branches: the keys must not. The bodies name the iteration only,
+        // so one logical activation carries one body across the replay.
+        registry.Add(Workflow("n-out", Sequence("root",
+                Parallel("par", null,
+                    Sequence("b1", Event("e1", Expr("input.key + '-1'")),
+                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
+                    Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
+                ForEach("each", Expr("[1, 2]"), Http("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
+                // Two event branches meet at a Merge and fork again to a join: the join fires once per token, in one turn or
+                // in two, and the Http behind it twice, so the join's committed firing ordinal is what keeps the two keys apart.
+                Flowchart("mj",
+                    [WriteLine("f0", "fork"), Event("p", Expr("input.key + '-2'")), Event("q", Expr("input.key + '-3'")), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Http("hj", "https://partner.example/joined", "joined")],
+                    [new("f0", "p"), new("f0", "q"), new("p", "m"), new("q", "m"), new("m", "u"), new("m", "v"), new("u", "hj"), new("v", "hj")],
+                    ("m", Gateway.Merge), ("hj", Gateway.ParallelJoin)),
+                Set("out", "output", Expr("'out ' + i + ' ' + tag"))),
+            ("i", 0), ("tag", 0), ("output", null)));
         registry.Add(Workflow("n-join", Sequence("root", Parallel("par", null, Branch(1), Branch(2), Branch(3)), Set("out", "output", Expr("'joined ' + hits"))),
             ("hits", 0), ("hit1", false), ("hit2", false), ("hit3", false), ("output", null)));
         // Two of three: the third branch is cancelled. Which one depends on the order of events, so only the count is compared.

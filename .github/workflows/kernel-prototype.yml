@@ -1,0 +1,203 @@
+name: Kernel prototype
+
+# The standalone kernel model (prototypes/kernel-model, issue #4229) has its own solution-free projects and no server
+# consumer, so the server CI (ci.yml) selects no test shard for a change that stays under prototypes/ (see
+# tools/ci/affected_tests.py). This workflow is the prototype's own gate:
+#
+#   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
+#     store conformance and the graph engine corpus. Target: well under 10 minutes.
+#   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, Orleans adapter,
+#     EF on SQLite in both fence modes) and the native smoke and cost runs.
+#
+# The database engines that run in containers (PostgreSQL, SQL Server, MySQL and the document database) stay manual:
+# see the README.
+# Nothing here is a required check; the names below are new and do not replace any in ci.yml.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches:
+      - main
+      - 'initiative/**'
+    paths:
+      - 'prototypes/kernel-model/**'
+      - '.github/workflows/kernel-prototype.yml'
+      - 'tools/ci/kernel_prototype_gate.py'
+  schedule:
+    # 03:17 UTC daily, away from ci.yml's 02:41 run and the top of the hour.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which prototype suite to run
+        type: choice
+        options: [gate, nightly]
+        default: gate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-prototype-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  # Output folders of the prototype projects, relative to prototypes/kernel-model.
+  BIN: bin/Release/net10.0
+
+jobs:
+  gate:
+    name: Kernel prototype gate
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft || github.event_name == 'workflow_dispatch' && inputs.suite == 'gate' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      # One project at a time: they share obj/ folders through project references (README, Build). Every project
+      # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
+      - name: Build
+        run: |
+          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      - name: Simulation, kernel and native, plus the lease witness
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 10000
+          $SIM --native --seeds 10000
+          $SIM --lease-check
+          $SIM --landed-check
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
+      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 6946, a seed that has drifted before, so a smaller
+      # size would sit too close to it. Every kernel mutation is caught except the two FINDINGS documents as caught only
+      # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
+      - name: Mutation checks
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
+
+      - name: Store conformance, in memory
+        run: dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build
+
+      - name: Gate script self-test
+        working-directory: .
+        run: python3 tools/ci/kernel_prototype_gate.py --self-test
+
+  nightly:
+    name: Kernel prototype nightly
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      # The sizes of the README's refactor gates (The gates of a refactor).
+      - name: Simulation, full sizes
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 200000
+          $SIM --seeds 20000 --actions 1000
+          $SIM --native --seeds 200000
+          $SIM --native --seeds 20000 --actions 1000
+          $SIM --lease-check
+          $SIM --landed-check
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      - name: Mutation checks, full size
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+
+      - name: Store conformance, in memory and EF on SQLite in both fence modes
+        run: |
+          dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
+          EFC="dotnet ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll"
+          $EFC sqlite --checked-fence semantic
+          $EFC sqlite --fence-in-batch semantic
+
+      - name: Runtime conformance, built-in runtime and Orleans adapter
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
+          $RTC semantic
+          $RTC stress 20 2000
+          $ORC semantic
+          $ORC stress 20 2000
+
+      # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
+      - name: Fence broken on purpose
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
+          $RTC semantic-broken
+          $RTC stress-broken 10 1000
+          $ORC semantic-broken
+          $ORC stress-broken 10 1000
+
+      - name: Native model, smoke and cost
+        run: |
+          NAT="dotnet models/Native.Run/$BIN/Kernel.Native.Run.dll"
+          $NAT smoke
+          $NAT cost sqlite
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build

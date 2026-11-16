@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.VpExperiment</RootNamespace>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The TCP proxy that counts round trips on the PostgreSQL stream, verbatim from the cost runs. -->
+    <Compile Include="../../ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
+    <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.EntityFramework" />
+    <Using Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+</Project>

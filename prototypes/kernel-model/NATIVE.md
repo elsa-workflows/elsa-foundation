@@ -29,7 +29,7 @@ Every claim says how it is known: **run** means a command below produced it; **r
 | `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
 | `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
 | `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N6 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
+| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
 dotnet build models/Native.Run -c Release
@@ -67,7 +67,84 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
 If, Flowchart (on the graph engine of `models/Graph`: gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
 `CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
-HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`).
+HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`),
+and since round 5 C the two outbound activities that carry an effect key: SendHttpRequest (`[External]`; the key is the
+`Idempotency-Key` header) and SendEmail (`[External]`; the key is the local part of the `Message-ID`).
+
+**Effect keys (round 5 C).** `ActivityContext.EffectKey` is `EffectKey.For(instance, node, iterationPath, attempt)` of
+`src/Kernel.Workflows`: **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November,
+from committed facts only. The instance origin is the instance id (fixed at creation; the key never reads partitions
+or positions) with its creation. The node is the activity's stable id in the definition, the one the model already
+uses. The **iteration path** (`ActivityContext.IterationPath`, `Burst.IterationPath`) says which activation of the
+node this is: for every frame between the root and the activation, what its parent composite says the child's
+iteration is (`CompositeActivity.IterationOf`, from the parent's committed state), root first, as `parent=iteration`
+segments joined by dots, plus `node=retryN` for a retried activity's successor (its generation, from the committed
+retry lineage); `-` when nothing repeats the node. ForEach gives the body's `CurrentIndex`; While counts its passes in
+its own state (`WhileState.Iteration`, new in round 5 C); a Flowchart gives the engine's round (`head-2`) and the token
+(`^m-ea`: the merge and the source node of the arrival, chained through every merge passed in the round; `^j#2`: a
+join's firing ordinal in the round, from the Flowchart's committed `firings`), both carried on the child's tag; a
+StateMachine gives the state and its visit serial (`B-4`, from the committed
+`MachineState`, reached through the child's lexical scope); Sequence, If and Parallel run each child once and give
+nothing. The attempt is 0, or 1 for an
+External activity in Durable mode (committed before it runs, N4); it takes no other value, a Background job's is 0, and
+a retry is a new generation in the path, never attempt 2. A Background job's path and key are computed in the turn that
+writes its ticket and committed with it.
+
+Why the frame number is not in the key (the owner's reason): in Balanced and Ephemeral the frame numbers are minted
+from the committed `Next` in agenda order, and a replay over a longer inbox (a timer that became due meanwhile) orders
+the agenda differently, so a frame number can land on another activity, or on another iteration of the same one
+(the alias case of `models/Native.Run/AliasChecks.cs`: a While body sending twice beside a sibling branch with Sets;
+with the frame in the key, iteration 2 of the lost turn and iteration 1 of the replay shared one key). The iteration
+path is independent of agenda order: one logical activation keeps one key across the lost turn and its replay, on
+whichever owner, and two activations never share one. A renumbered frame therefore changes nothing: the key never named
+it. No extra commit is paid. An activity puts the key where its receiver
+looks for a repeat and returns the request as an `OutboundEffect` in its transition (`HttpSendEffect`,
+`EmailSendEffect`); the model hands the effect to the host's transport (`NativeOptions.OnOutbound`, an
+`OutboundSending`) inside the turn, before its commit, so it runs at least once. The kernel records no key and drops no
+repeat: deduplication is the receiver's, conditional on its keeping the keys it has seen.
+
+Three constructs repeat a node outside loops; each gets its number from committed state the same way (the owner's word
+of 16 November: the node plus its loop and branch iteration numbers, which replay cannot reorder, and different
+activations always get different keys). A Flowchart node forward of a **Merge** fires once per token within a round;
+each arrival is identified by its source: the merge's activation appends `^merge-source` to the token of the completing
+child that reached it, a plain successor inherits its predecessor's token, a new round starts afresh; the engine's path
+ids are not used, since they are minted in mutation order. A Flowchart **join** (several inbound connections, not a
+merge) fires once per round, or once per token when it lies forward of a merge, under whichever arrival releases it;
+its firing gets its ordinal in the round from the Flowchart's own committed count (`^j#1`, `^j#2`; `firings` beside the
+engine's state in the frame, as the While counts its passes), so the nth firing is the nth in the lost turn and in its
+replay, whatever arrivals made it up, and the nodes after the join inherit that token; what the nth firing carries as
+content may then differ between the lost turn and its replay, which the owner's rule accepts (the receiver keeps the
+first sending). `AliasChecks` proves both replay-stable in all three modes: two event branches meet at a merge and the
+Http behind it fires twice with `flow=^m-ea`, `flow=^m-eb`; a join forward of the merge, with both inbounds from the
+merge or one from outside it, fires twice with `flow=^j#1`, `flow=^j#2`; the lost turn and its replay over the longer
+inbox carry the same keys, and with the round alone each pair shared one. `n-out` carries the merge-join shape into the
+mix, its two tokens released by two events, so the join fires in one turn or in two. A **StateMachine** re-enters states
+on events; a state's activity is one activation per visit, named by the visit's committed serial (`machine=B-2`,
+`machine=B-4` for a state entered twice), which `Statecharts.Run --effect-keys` witnesses in all three modes (the sim's
+N7 runs underneath it). A **retry** is a new generation: `Burst.RetryGeneration` walks the committed lineage receipt by
+receipt (the receipt that made this frame a successor, then the one that made its source a successor), so a second retry
+of one activation is `leaf=retry2`, which `Native.Recovery.Run --effect-keys` (also in its default run) witnesses with a
+leaf that faults twice and is retried twice, in Balanced and Durable, and shows the `FlatRetryGeneration` mutation
+collapsing the second retry onto the first's key. `Native.Run variants <mode>`, `replay-variants`, `join-variants <mode>`
+and `join-replay-variants` run the second and third review rounds' shapes (nested loops, loops in both branches, a
+ForEach over a collection a sibling grows, a While whose limit a sibling raises, an exclusive split rejoining at a merge
+inside a loop, the two joins, a timer loop beside an event loop, a join inside a loop, two joins in series, a join whose
+outside inbound arrives last, a join whose arrivals a timer regroups) in all three modes.
+
+Rules for whoever writes activities, composites or mix workflows against the key:
+
+- **One key per activation.** `ActivityContext.EffectKey` is one key for one activation. An activity that sends in both
+  `StartAsync` and `ResumeAsync`, or sends twice in one execution, must derive its own sub-keys from it (`key + "/1"`,
+  `key + "/2"`); the built-in `SendHttpRequest` and `SendEmail` are leaves with one effect each.
+- **An authored composite that schedules a child more than once must override `IterationOf`** with a number from its
+  committed state; the default is null, and two activations of the child would then share a key. Sequence, If and
+  Parallel schedule each child once and need nothing; ForEach, While, Flowchart and StateMachine override it.
+- **A StateMachine's control children** (`StateMachineControl`, scheduled with a tag and no lexical scope) have no visit
+  segment; they are internal and authored activities do not run from them.
+- **The mix** must use workflows whose key set does not depend on event or timer order (a join whose outside inbound may
+  arrive last, a While whose limit a sibling raises, a ForEach over a collection a sibling grows are out), since N7's
+  identity half compares against one fault-free run that takes every available event in one turn; `n-join2` and
+  `n-graph` are excepted for the same reason, and none of them sends.
 
 What changed, and why:
 
@@ -236,6 +313,7 @@ Checks:
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
+| N7 (round 5 C) | An outbound effect carries a stable effect key; one key, one logical activation; a key never leaves in two turns that both landed | Four halves. At the host's transport (`OnOutbound`): the HTTP request carries the key in `Idempotency-Key`, the email as `<key@domain>` in its `Message-ID`. At the same place, the lost-turn half: an activation is named by its node and the content it alone determines (the mix's rule: bodies name the iteration; `NativeWorkflows.ContentNamesActivation` lists the nodes, `hj` fires twice with one body and is out), and that name has one key in every sending, in a turn that lands or in one that is lost, so a lost turn that sent another activation's valid key is seen here and nowhere else. At the commit (`Wire.Commit`, `World.Landed`): the sendings of the turns a batch writes ride on it, and the store records them the moment the commit lands, whatever becomes of the answer on the wire (an answer that arrives late, after the owner's lease ran out and it took the partition again, gives nothing back to the pending list: the landing is recorded and the take discarded the memory the call came from; a stale refusal, from a call that outlived a take, leaves the new incarnation's pending sendings alone, since the take is the one place that discards them; `Kernel.Sim --landed-check` replays the three cases); a second sending of a key is a redelivery only while the first one's turn did not land (its commit lost, refused, or never made because its owner died), so a key that left in two turns that both landed, or twice in one, is two activations under one key, whatever the reference run says. At the end, against the fault-free reference run of the same definition and input (an oracle that takes no identity from the sending's own node, path or frame fields; it compares the key string stripped of its instance origin and attempt with the keys the reference minted on its own): the reference sends every key once, and every key an instance sent is one the reference sends. What N7 cannot see: a collision whose two sendings never both land and whose node is not in the content list (an instance that ends in memory without a write, a turn lost before its commit); a resend's content, which is not compared (the receiver keeps the first); a moved key that equals another activation's reference key when that activation never sends in the same run and its content does not name it; and nothing at all for a mix workflow whose key set depends on event order, which is a false red and is kept out of the mix. The sweep counts the same-key resends, the frame numbers a replay handed to another activation and the nodes sent from under a second iteration path; none of the counters is a gate. `n-out` (a While and a ForEach sending twice from one node beside a timer branch, and two event branches meeting at a merge that forks again to a join) puts those cases in the mix |
 
 The graph invariants of the design sketch (round 4, `sim/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
 the native Flowchart's own journal entries, which ride in the turn's commit: `g|x` a path the step cancelled, `g|f` a
@@ -276,11 +354,25 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 | `NoRoundReset` (round 4) | A loop-closing connection opens no new round | G2, seed 2: `node a of graph fired twice in round -` |
 | `DeadPathRunsNode` (round 4) | An all-dead node is run instead of passing the deadness on | G1, seed 2: `a dead path ran node race of graph (round -)` |
 | `CancelLeavesPaths` (round 4) | A first-wins race completes without cancelling its losers | G5, seed 2: `path path:280 at r1 of graph lives on in the race scope scope:275, which is over` |
+| `UnstableEffectKey` (round 5 C) | The effect key is minted once per turn instead of derived from committed facts: consistent within the turn, so the carrying check passes, and another key on a resend | N7 (the key moved), seed 2: `1/j46 (n-out) sent m1/-.<n>, which a run without faults never sends: an activation's key moved` (the minted suffix differs from run to run) |
+| `NodelessEffectKey` (round 5 C) | The key names no node, so two activities in one scope share one | N7 (the landed half), seed 1: `1/j8: the key 1/j8/node/-/0 left twice in one landed turn` (the reference run's duplicate, `node/-` twice, catches it at seed 3 when the landed half is removed) |
+| `PathlessEffectKey` (round 5 C) | The key has no iteration path, so two iterations of one activity share one | N7 (the landed half), seed 2: `1/j46: the key 1/j46/h1/-/0 left twice in one landed turn` (the reference's duplicate `h1/-` catches it at seed 2 as well) |
+| `TurnLocalJoinOrdinal` (round 5 C) | A Flowchart join's firing ordinal is counted per turn in memory instead of from the committed `firings`, so the join's second token, arriving in a later turn, fires as `#1` again | N7 (the landed half), seed 2: `1/j46: the key 1/j46/hj/mj=^hj#1/0 left twice in one landed turn` (both tokens arrived in one turn, each fired `#1`); the reference run, which takes both events in one turn, sends `^hj#1` and `^hj#2` and cannot see it |
+| `FlatRetryGeneration` (round 5 C) | Every retry successor is generation 1, so the second retry of one activation shares the first's key | Not caught by the sweep: the mix has no retry, and the gate allows it (`--allow-uncaught FlatRetryGeneration`). `Native.Recovery.Run --effect-keys` shows it bite: `leaf=retry1` twice where the sound model gives `leaf=retry1`, `leaf=retry2` |
+| `FreshTurnSwapsLoopKeys` (round 5 C) | A turn that is not a redelivery swaps a While's first two iterations in the key; the replay after a lost first attempt derives the right keys, so the wrong, valid keys live only in turns that never landed | N7 (the lost-turn half), seed 269: `0/j17: h1 with '"i=1"' was sent under two keys, 0/j17/h1/loop=2/0 and 0/j17/h1/loop=1/0: a sending used another activation's key`; the first attempt was lost, its replay sent the right key, and no other half can see a key that lands once |
 
 The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`), the four the
 design sketch's plan names; the mutation check fails one that another check catches first. G4 has no mutation of its
 own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 seeds are those of the mix with `n-graph` in it, which
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
+Round 5 C put two more activities in `n-seq` and `n-out` in the mix, which moved them again (run, 10,000 seeds):
+`InFlightInMemory` N5 at seed 1, `JoinWithoutGuard` N2 at seed 1, `ResumeAnyChild` N3 at seed 1, `NoAttemptCommit` N4 at
+seed 4, `ScopeInMemory` N5 at seed 1; the four graph flaws at seed 1, each caught by its own check. The gate pins 15
+native mutations, one of them allowed to escape the sweep (`FlatRetryGeneration`, above); the two effect-key witnesses the
+sweep cannot reach (`Native.Recovery.Run --effect-keys`, `Statecharts.Run --effect-keys`) run in the workflow's sim step. The three key-shape flaws are
+judged against the fault-free reference run, which carries the same flaw: a key the reference sends twice is a collision,
+a key the run sends and the reference never does has moved; the join-ordinal flaw hides from that reference and is caught
+by the landed half.
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
 instance kept its subscriptions (seed 500963); at that stage the check skipped instances that did not run. Round 4 met the same

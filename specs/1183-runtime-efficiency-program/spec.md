@@ -1,6 +1,6 @@
 # Runtime Efficiency delivery
 
-**Status**: Draft
+**Status**: Implemented — acceptance 1 to 4 merged (#3598, #3601 and their leaves), and 7 except the run-command cleanup that waits on an owner decision; 5 delivered where it applied, with the rest superseded by the kernel #4229; 6 handed to #4229 gate 3 on 16 November. See the [charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026).
 **Issue**: #2531
 **Program route**: Runtime Efficiency
 
@@ -21,9 +21,13 @@ This specification covers the remaining integration; #3545 and #3598 retain thei
 5. Finish the applicable persistence/scheduling/diagnostics objectives linked by the charter. Preserve checkpoint
    atomicity, external-effect boundaries, replay identity and stale-writer rejection. Lower deterministic command
    budgets only after measuring the changed behavior.
+   *Disposition, 16 November:* delivered where it applied. The rest of epic #2564 was closed as superseded by the
+   kernel ([record](https://github.com/elsa-workflows/elsa-foundation/issues/2564#issuecomment-6917321380)).
 6. Qualify representative native, available BPMN and ETL execution with expressions/payloads, sustained work,
    duplicate delivery, owner failure and database interruption. Two- and four-node results use independent machines
    and name database placement. Record completion, errors, recovery, commands, allocation and throughput separately.
+   *Disposition, 16 November ([owner record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6917554545)):* not run on the current core. It is handed
+   to kernel release 1 qualification, #4229 gate 3 ([hand-off](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686)).
 7. All changes complete independent review, affected whole-suite accounting, rebuilt relevant backend e2e,
    architecture/maps and exact-head hosted gates. Verify the containing main and final fixture cleanup before closing.
 

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "kernel.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.graph": {
+        "type": "Project"
+      },
+      "kernel.runtime": {
+        "type": "Project"
+      },
+      "kernel.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

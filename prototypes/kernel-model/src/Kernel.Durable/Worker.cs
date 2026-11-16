@@ -3,6 +3,9 @@ using Kernel.Runtime;
 
 namespace Kernel.Durable;
 
+/// <summary>Where the worker released an emitted item relative to its own store operation. For test observation.</summary>
+public enum ReplyRelease { BeforeCommit, AfterCommit, WriteFree, EphemeralWriteFree }
+
 public sealed record WorkerOptions
 {
     /// <summary>The owner's default of 12 November: 10 s. A takeover waits for it to run out, so failover takes about one lease.</summary>
@@ -61,6 +64,16 @@ public sealed record WorkerOptions
     /// </summary>
     public TaskScheduler? JobScheduler { get; init; }
 
+    /// <summary>For tests: the destination, actual emitted carrier, turn revision and its release disposition.</summary>
+    public Action<string, Reply, long, ReplyRelease>? OnEmittedReply { get; init; }
+
+    /// <summary>For tests: associate a proposed physical checkpoint with the model state used by this activation.</summary>
+    public Action<TurnCommit, object?, Message?>? OnPreparedCheckpoint { get; init; }
+
+    /// <summary>For tests: the actual host refusal carrier sent to its request.</summary>
+    public Action<string, Reply, Message>? OnCreationRefused { get; init; }
+    public InMemoryStore.LifecycleObservation? Lifecycle { get; init; }
+
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
     /// <summary>Original stored metadata when a newly polled delivery is held; for the simulation's history oracle.</summary>
@@ -91,6 +104,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
 
+    private readonly InMemoryStore.LifecycleObservation? _lifecycle;
     private enum Outcome { Landed, Refused, Lost }
 
     private readonly IKernelStore _store;
@@ -123,6 +137,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Node = node;
         Partition = partition;
         _store = store;
+        _lifecycle = options?.Lifecycle ?? (store as InMemoryStore)?.Lifecycle;
         _type = type;
         _options = options ?? new WorkerOptions();
         _gate = Has(Flaw.TrialPerPartition) ? new TrialGate() : _options.Gate ?? new TrialGate();
@@ -532,10 +547,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
         message = message.AsOrdinary();
         if (_releasing || !LeaseUsable() || message.Target.Partition != Partition) return false;
-        Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh && !message.Target.GeneratedAddress && message.Kind != Kinds.JobFinished);
-        if (!LeaseUsable()) return false;
-        if (!message.SuppliedCreator && message.Kind != Kinds.JobFinished && _slots.TryGetValue(Canonical(message.Target.Id), out var slot)) slot.Ambient = ambient;     // lives with the instance in this memory, nowhere else
-        return true;
+        Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh && !message.Target.GeneratedAddress && message.Kind != Kinds.JobFinished,
+            starterAmbient: message.Start is not null && !message.SuppliedCreator && message.Kind != Kinds.JobFinished ? ambient : null);
+        return LeaseUsable();
     }
 
     /// <summary>
@@ -584,7 +598,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
             message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish))
@@ -618,7 +632,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // process. The process can rule out a death for trial accounting, not reconstruct its lost inbox.
         var item = new Delivery(message, seq)
         {
-            RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
+            StarterAmbient = starterAmbient, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
             Again = again, RecoveryOrdering = again, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
         };
@@ -956,7 +970,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         if (source.SelfReferences is { } references)
                             foreach (var (name, same) in references) (slot.SelfReferences ??= [])[name] = same;
                         slot.Replies.UnionWith(source.Replies);
-                        if (source.Ambient is not null) slot.Ambient = source.Ambient;
+                        if (source.Ambient is not null && source.CurrentRow is { } prior && match.Row is { Retired: false } actual &&
+                            prior.Id == actual.Id && prior.Creation == actual.Creation && prior.StartIntent == actual.StartIntent)
+                            slot.Ambient = source.Ambient;
                     }
                 }
             }
@@ -1041,6 +1057,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var creator = slot.Row is null or { Retired: true } ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
         slot.Starting = creator < 0 ? null : due[creator].Message;
+        if (creator >= 0) slot.Ambient = due[creator].StarterAmbient;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec);
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
@@ -1339,15 +1356,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         InvalidateAliasMisses(unit);
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true, cancellationToken);
-        if (Has(Flaw.EmitBeforeCommit)) Release(unit);
-        else Release(unit, early: true);    // to callers whose route opted out of waiting for the commit
-        if (EndsInMemory(unit)) Apply(unit, null, true, cancellationToken);     // decision 4: it ended in memory; nothing of it was ever a row
-        else if (unit.Durable)
+        var writeFree = EndsInMemory(unit) || !unit.Durable;
+        var release = ReplyRelease.BeforeCommit;
+        if (writeFree)
+            // Capture the actual birth profile or earlier in-memory turn before Apply clears the slot.
+            release = unit.Spec?.Ephemeral == true || unit.Slot is { Unwritten: true }
+                ? ReplyRelease.EphemeralWriteFree : ReplyRelease.WriteFree;
+        if (Has(Flaw.EmitBeforeCommit)) Release(unit, release);
+        else Release(unit, release, early: true);    // callers whose route opted out of waiting
+        if (writeFree) Apply(unit, null, true, cancellationToken, release);
+        else
         {
             Promote(unit);
             _queue.Add(unit);
         }
-        else Apply(unit, null, true, cancellationToken);   // nothing to write: an ephemeral run, or messages that were never rows
     }
 
     public Task FlushAsync(CancellationToken cancellationToken = default) => FlushAsync(false, cancellationToken);
@@ -1435,6 +1457,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var unit in units)
             if (unit.Window is { } window)
                 batch = batch with { Window = batch.Window?.Intersect(window) ?? window };
+        if (_options.OnPreparedCheckpoint is { } prepared)
+            for (var i = 0; i < units.Count; i++)
+            {
+                var unit = units[i];
+                if (unit.Row is null && !unit.Delete) continue;
+                var lifecycleInput = unit.Delete ? unit.Consumed.Find(d => d.Message.Kind == Kinds.Delete)?.Message :
+                    unit.Spec is not null ? unit.Slot?.Starting : unit.Slot?.UnwrittenCreator;
+                prepared(batch.Turns[i], unit.State ?? unit.Slot?.State, lifecycleInput);
+            }
+        if (_lifecycle is not null)
+            for (var i = 0; i < units.Count; i++) _lifecycle.Prepare(batch.Turns[i], units[i]);
         if (batch.Window is not null && !_store.SupportsCommitWindow)
         {
             Reset();
@@ -1500,7 +1533,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var unit in units)
             {
                 if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
-                Apply(unit, seqs, handOver, cancellationToken);
+                Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
             foreach (var item in marks.Concat(trial))
@@ -1583,8 +1616,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>The commit landed (or there was nothing to write): now, and only now, memory follows.</summary>
-    private void Apply(TurnOutcome unit, Queue<long>? seqs, bool handOver, CancellationToken cancellationToken)
+    private void Apply(TurnOutcome unit, Queue<long>? seqs, bool handOver, CancellationToken cancellationToken, ReplyRelease release)
     {
+        if (unit.CreationRefused && release is ReplyRelease.WriteFree or ReplyRelease.EphemeralWriteFree)
+            _lifecycle?.WriteFreeRefusal(unit.Consumed);
         // A command can mature while the last recovery checkpoint awaits acknowledgement. Capture
         // these boundaries before removing the selected member, exhausted error or previous command.
         if (unit.Slot is { } pending && (OnTrial(unit.Instance) || unit.Consumed.Exists(i => i.RecoveryOrdering)
@@ -1632,12 +1667,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Slot is not { } slot) return;
         if (unit.InMemory)       // decision 4: kept in memory, not written
         {
+            if (!slot.Unwritten && (_options.OnPreparedCheckpoint is not null || _lifecycle is not null)) slot.UnwrittenCreator = slot.Starting;
             (slot.Unwritten, slot.Until, slot.Pending) = (true, unit.Until, unit.Pending);
             _options.OnKeptInMemory?.Invoke(unit.Instance, unit.Revision);
         }
         else if (slot.Unwritten)
         {
-            (slot.Unwritten, slot.Pending) = (false, null);
+            (slot.Unwritten, slot.Pending, slot.UnwrittenCreator) = (false, null, null);
             if (unit.Row is null)       // it ended in memory: never written at all, and what it still waited for goes with it
             {
                 _options.OnLeftMemory?.Invoke(unit.Instance, unit.Status);
@@ -1645,17 +1681,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ForgetInMemory(unit.Instance);
             }
         }
+        if (slot.CurrentRow is not { Status: InstanceStatus.Running }) slot.Ambient = null;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         // Committed completion can be a new stimulus without requiring singleton selection. Revisit only after its
         // checkpoint lands; identity refusals have no row and must not activate that authored input.
         if (unit.Row is not null && unit.Consumed is [var completion] && _type.RevisitsHeld(unit.Row.Model, unit.Row, completion))
             foreach (var held in slot.Inbox.Where(i => i.Held && i.InboxOrder < completion.InboxOrder)) held.Held = false;
-        if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
+        if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
         for (var i = 0; i < unit.Replied.Count; i++)
         {
             var reply = unit.Replied[i];
-            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item); }
+            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput); }
             catch (Exception) when (reply.Rpc) { /* A lost RPC answer is recovered by replaying the logical operation. */ }
         }
         // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
@@ -1696,14 +1733,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Live output, released only now: the turn's commit has landed, or it had nothing to write. A message that carried a
     /// reply address joins the instance's callers; they get what the turn emitted, and the end when the instance ends.
     /// </summary>
-    private void Release(TurnOutcome unit, bool early = false)
+    private void Release(TurnOutcome unit, ReplyRelease release, bool early = false)
     {
         if (unit.Slot is not { } slot) return;
         foreach (var item in unit.Consumed)
             if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
-            foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
+            foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item, revision: unit.Revision, release: release);
         if (early || unit.Status == InstanceStatus.Running) return;
         foreach (var to in slot.Replies) Send(to, Origin(unit) + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
         slot.Replies.Clear();
@@ -1711,11 +1748,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private static string Origin(TurnOutcome unit) => CreationProtocol.Origin(unit.Instance, (unit.Row ?? unit.Slot?.Row)?.Creation ?? 0);
 
-    private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
+    private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null, long revision = 0, ReplyRelease? release = null, Message? refusedInput = null)
     {
         if (Expired(to)) return;        // decision 6: past its deadline the reply is dropped
         var (node, request, _, _) = ReplyTo.Parse(to);
-        _options.Transport?.Send(node, new Reply(request, key, channel, item, status, error));
+        if (_options.Transport is not { } transport) return;
+        var reply = new Reply(request, key, channel, item, status, error);
+        transport.Send(node, reply);
+        if (release is { } phase) _options.OnEmittedReply?.Invoke(node, reply, revision, phase);
+        if (refusedInput is not null) _options.OnCreationRefused?.Invoke(node, reply, refusedInput);
     }
 
     /// <summary>For a recipient in the same partition the owner hands the message over in memory; its row says seen already.</summary>
@@ -1835,6 +1876,7 @@ internal sealed class Slot
     public readonly List<Delivery> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
     public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
+    public Message? UnwrittenCreator;                // optional observer: selected birth until its first physical disposition
     public bool Unwritten;                          // decision 4: Row is in memory only, never written
     public long Until;                              // and may stay so until then
     public object? Pending;                         // the history its turns in memory left, the actor type's

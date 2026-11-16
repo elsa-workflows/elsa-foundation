@@ -5,6 +5,10 @@ import { presentationScopeFrames } from "./graph-authoring/presentationScopeFram
 import { NativeBlockCommands } from "./graph-authoring/NativeBlockCommands";
 import { useNativeBlockAuthority } from "./graph-authoring/nativeBlockAuthority";
 import { composeExpressionScopePreservation } from "./graph-authoring/expressionScopePreservation";
+import { composePromotionExpressionSupport } from "./graph-authoring/promotionExpressionSupport";
+import { activityGraphPromotionPayload } from "./graph-authoring/blockPromotionHostDocuments";
+import type { BlockPromotionHost } from "./graph-authoring/BlockPromotionDialog";
+import type { NativeBlockDocument } from "./graph-authoring/nativeBlocks";
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,7 +24,7 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
-import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ArgumentType, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
   collectActivityNodeIds,
@@ -41,7 +45,7 @@ import {
   type WorkflowNodeData
 } from "./workflowAdapter";
 import { createNodeId } from "./workflow-editor/editorHelpers";
-import { useWorkflowActivities } from "./api/activityDesign";
+import { useActivityAuthoringCapabilities, useWorkflowActivities } from "./api/activityDesign";
 import { activityGraphDiagnosticFocusEvent, type ActivityGraphDiagnosticFocusEventDetail } from "./activityGraphDiagnosticFocus";
 import { ActivityPalettePanel } from "./workflow-editor/ActivityPalettePanel";
 import { groupActivityPalette } from "./workflow-editor/editorHelpers";
@@ -302,6 +306,8 @@ export function ActivityGraphImplementationEditor({
   onChange
 }: StudioActivityDefinitionImplementationEditorProps) {
   const blockAuthority = useNativeBlockAuthority();
+  const promotionCapabilities = useActivityAuthoringCapabilities(context);
+  const promotionExpressionSupport = useMemo(() => composePromotionExpressionSupport(expressionEditors), [expressionEditors]);
   const catalogQuery = useWorkflowActivities(context);
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
@@ -422,6 +428,38 @@ export function ActivityGraphImplementationEditor({
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
   const payload = normalizePayload(value.payload);
+  // Promotion may rewrite graph-owned mappings outside the root (output mappings reading block results). The
+  // public contract belongs to the definition editor, so a proposal that would change it is refused here.
+  const promotionDocument = (document: NativeBlockDocument, referenceContext: unknown[]) => {
+    const replaced = activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout);
+    const promoted = activityGraphPromotionPayload(contract, (value.payload ?? {}) as Record<string, unknown>, normalizePayload(replaced.payload).rootActivity, referenceContext);
+    return promoted ? { ...replaced, payload: promoted, activityPresentation: document.activityPresentation } : null;
+  };
+  const blockPromotion: BlockPromotionHost = {
+    resourceKind: "activity-definition-graph",
+    publicInputs: (contract?.inputs ?? []).filter(input => input.type).map(input => ({ referenceKey: input.referenceKey, name: input.name,
+      type: input.type as unknown as ArgumentType, isRequired: input.isRequired === true, isNullable: input.isNullable === true, default: input.default })),
+    capabilities: promotionCapabilities.data ?? null,
+    capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
+    expressionBoundary: promotionExpressionSupport,
+    refreshCatalog: async () => {
+      const result = await catalogQuery.refetch();
+      if (result.isError) throw new Error("Studio could not reload the activity catalog. Try again when the service is available.");
+    },
+    validate: async (document, referenceContext) => {
+      const candidate = promotionDocument(document, referenceContext);
+      if (!candidate) return { state: "invalid", messages: ["This promotion would change this activity's own public contract. Change the contract first, then promote again."] };
+      return blockAuthority ? blockAuthority.validate(candidate) : { state: "unavailable", messages: [] };
+    },
+    apply: (document, referenceContext, selection, isCurrent) => {
+      const candidate = promotionDocument(document, referenceContext);
+      if (!candidate) throw new Error("This promotion would change this activity's own public contract.");
+      if (!isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+      commitDocument(candidate);
+      interactions.selectNodes(selection);
+      if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);
+    }
+  };
   const root = activityGraphDocumentAdapter.readRoot(value);
   const scopeFrames = resolveScopeFrames(root, scopePath, catalogByVersion);
   const scope = resolveScope(root, scopeFrames, catalogByVersion);
@@ -1009,6 +1047,7 @@ export function ActivityGraphImplementationEditor({
         />
         <NativeBlockCommands
           endpoint={context}
+          promotion={blockPromotion}
           context={{
             document: { rootActivity: root, layout: activityGraphLayoutToDesign(value.layout), activityPresentation: value.activityPresentation ?? [] },
             catalog, scope: scopeFrames, canEdit: !readOnly && blockAuthority?.canEdit === true && !catalogQuery.isPending && !catalogQuery.isError,

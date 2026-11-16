@@ -217,6 +217,7 @@
             "Mode": "Balanced",
             "MaxActivitiesPerCommit": 50
           },
+          "WorkflowsRuntimeHistory": {},
           "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {},
           "WorkflowsExecutionEvidence": {},

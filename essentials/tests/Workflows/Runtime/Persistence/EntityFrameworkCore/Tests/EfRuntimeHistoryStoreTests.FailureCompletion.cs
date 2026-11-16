@@ -33,7 +33,7 @@ public sealed partial class EfRuntimeHistoryStoreTests
         using var canceled = new CancellationTokenSource();
         var hook = new AfterHead(() =>
         {
-            if (retirement == "access") db.Access.Current = PersistenceAccessContext.Scoped(new("scope"));
+            if (retirement == "access") db.Access.Current = PersistenceAccessContext.Scoped(new("other"));
             else if (retirement == "cancel") canceled.Cancel();
             if (cause is not null) throw cause;
         });
