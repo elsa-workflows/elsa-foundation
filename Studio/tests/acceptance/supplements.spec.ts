@@ -103,7 +103,9 @@ async function activateSettingsSection(page: Page, label: "Appearance" | "Runtim
       await page.keyboard.press("Escape");
     }
     await keyboardTo(page, select);
-    await select.press(label === "Appearance" ? "Home" : "r");
+    // Native typeahead uses a unique prefix; Home can retain the disabled placeholder.
+    await select.press(label === "Appearance" ? "a" : "r");
+    if (label === "Appearance") await select.press("p");
     await select.press("Enter");
     await expect(select.locator("option:checked")).toHaveText(label);
   } else {

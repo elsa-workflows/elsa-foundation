@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Page, type Request, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { createActivityDataResponseCollector } from "./activityDataResponseCollector.mjs";
 
@@ -26,7 +26,7 @@ export function findActivityDataAdmission(contexts: Context[], before: Context["
     item.request.definitionId === before.definitionId && item.request.nodeId === before.nodeId && item.request.inputKey === before.inputKey &&
     item.request.documentRevision === before.documentRevision && item.response.documentRevision === before.documentRevision &&
     wireIdentity(item.request.snapshot) === wireIdentity(before.snapshot) && !!item.request.query?.source &&
-    wireIdentity(item.request.query.memberPath) === wireIdentity(memberPath) &&
+    wireIdentity(item.request.query.memberPath ?? []) === wireIdentity(memberPath ?? []) &&
     !!item.response.analysis?.sources.some(source => wireIdentity(source.binding) === wireIdentity(expected)));
 }
 
@@ -67,6 +67,8 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   expect(base, "Owned Workbench URL").toBeTruthy();
   const composition = process.env.UX_ACTIVITY_DATA_COMPOSITION ?? "normal";
   const contexts: Context[] = [], scripts: string[] = [], definitions: string[] = [];
+  const contextRequests = new Set<Request>();
+  const contextEndpoint = `${base}/design/workflows/activity-data/context`;
   const selections: { definitionId: string; binding: Binding; offered: Binding; admission: Context; before: Context["request"] }[] = [];
   const runtime: { definitionId: string; workflowExecutionId: string; expected: string; committed: string; consumer: Execution; producers: Execution[] }[] = [];
   const observations: string[] = [];
@@ -74,13 +76,18 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const contextResponses = createActivityDataResponseCollector(`${base}/design/workflows/activity-data/context`, contexts, transportControls);
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
-  page.on("requestfailed", request => contextResponses.requestFailed(request));
+  page.on("requestfailed", request => {
+    contextRequests.delete(request);
+    contextResponses.requestFailed(request);
+  });
+  page.on("requestfinished", request => contextRequests.delete(request));
   page.on("response", response => {
     if (response.url().includes("/design/workflows/activity-data/context") && response.ok()) {
       contextResponses.observe(response);
     }
   });
   page.on("request", request => {
+    if (request.method() === "POST" && request.url() === contextEndpoint) contextRequests.add(request);
     if (request.resourceType() === "script") scripts.push(request.url());
     if (request.method() === "PUT" && /\/design\/workflows\/drafts\//.test(request.url())) writes++;
   });
@@ -145,6 +152,12 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     if (nodeId === "consumer") await expect(page.locator(".wf-inspector-context h3")).toHaveText("Write Line");
   }
   async function open(created: Created) {
+    // Chromium can discard a completed response body when its document navigates.
+    // Track from request start, then drain both transport and captured bodies before leaving.
+    do {
+      await expect.poll(() => contextRequests.size, { message: "Owned activity-data requests finish before navigation" }).toBe(0);
+      await contextResponses.settle();
+    } while (contextRequests.size);
     await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`);
     await expect(page.locator('.wf-sequence-step[data-id="consumer"],.react-flow__node[data-id="consumer"]').first()).toBeAttached();
     await select(); await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });

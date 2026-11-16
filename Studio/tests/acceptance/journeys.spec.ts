@@ -588,14 +588,25 @@ test("agent authoring and navigation", async ({ page }, info) => {
       await member.getByRole("textbox", { name: "Value", exact: true }).fill("A retained topic");
     }
     await capture(page, info, `${kind}-general`);
-    await settings.getByRole("tab", { name: "General", exact: true }).focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    if (kind === "input") {
+      await settings.getByRole("tab", { name: "General", exact: true }).focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    } else {
+      const presentation = member.locator("summary", { hasText: /^Presentation$/ });
+      await presentation.press("Enter");
+      await expect(presentation.locator("..")).toHaveAttribute("open", "");
+    }
     await member.getByRole("textbox", { name: /^Display name/ }).fill(kind === "input" ? "Writing topic" : "Written result");
     await member.getByRole("combobox", { name: /^Category/ }).fill("Writing");
     await member.getByRole("spinbutton", { name: "Order", exact: true }).fill("2");
     await capture(page, info, `${kind}-presentation`);
-    await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    if (kind === "input") await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    else {
+      const advanced = member.locator("summary", { hasText: /^Advanced$/ });
+      await advanced.press("Enter");
+      await expect(advanced.locator("..")).toHaveAttribute("open", "");
+    }
     await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
     await expect(member.getByText("Type alias", { exact: true })).toHaveCount(0);
     const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
@@ -603,8 +614,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
     await member.getByRole("button", { name: "Apply key", exact: true }).click();
     await expect(member.getByRole("button", { name: "Apply key", exact: true })).toBeDisabled();
     await capture(page, info, `${kind}-advanced`);
-    await settings.getByRole("tab", { name: "General", exact: true }).click();
     if (kind === "input") {
+      await settings.getByRole("tab", { name: "General", exact: true }).click();
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
       await member.getByRole("button", { name: "Apply default", exact: true }).click();
     }
@@ -613,10 +624,12 @@ test("agent authoring and navigation", async ({ page }, info) => {
     await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: kind === "input" ? "Inputs (1)" : "Outputs (1)", exact: true }).click();
     const saved = page.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
     if (kind === "input") await expect(saved.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
-    await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    if (kind === "input") await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    else await saved.locator("summary", { hasText: /^Presentation$/ }).press("Enter");
     await expect(saved.getByRole("combobox", { name: /^Category/ })).toHaveValue("Writing");
     await expect(saved.getByRole("spinbutton", { name: "Order", exact: true })).toHaveValue("2");
-    await saved.getByRole("tab", { name: "Advanced", exact: true }).click();
+    if (kind === "input") await saved.getByRole("tab", { name: "Advanced", exact: true }).click();
+    else await saved.locator("summary", { hasText: /^Advanced$/ }).press("Enter");
     await expect(saved.getByRole("textbox", { name: "Stable reference key", exact: true })).toHaveValue(`${kind}-writing`);
   }
   await tabs.getByRole("tab", { name: "Outcomes (1)", exact: true }).click();
