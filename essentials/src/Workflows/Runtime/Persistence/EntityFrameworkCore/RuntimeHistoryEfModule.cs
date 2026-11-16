@@ -3,6 +3,8 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -34,7 +36,7 @@ internal static class RuntimeHistoryEfModule
                 // Configured conversions/comparers can silently change or suppress the owned scalar writes.
                 var declared = (IReadOnlyProperty)property;
                 if (declared.GetValueConverter() is not null ||
-                    declared.GetValueComparer() is { } comparer && !ReferenceEquals(comparer, property.GetTypeMapping().Comparer)) return false;
+                    declared.GetValueComparer() is { } comparer && !HasDefaultComparer(comparer)) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
@@ -52,6 +54,10 @@ internal static class RuntimeHistoryEfModule
         }
         return Shapes.Length > 0;
     }
+
+    private static bool HasDefaultComparer(ValueComparer comparer) => comparer.IsDefault() ||
+        comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
+        comparer is IInfrastructure<ValueComparer> wrapper && wrapper.Instance.IsDefault();
 
     private static bool HasOwnedMemberAccess(IProperty property, PropertyInfo owned)
     {
