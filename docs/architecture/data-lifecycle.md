@@ -47,10 +47,12 @@ There is no retention policy, no automatic removal and no archive.
 ```csharp
 public sealed record RetentionPolicy(
     TimeSpan? Finished, TimeSpan? Cancelled, TimeSpan? Faulted,   // null: keep until deleted by hand
+    TimeSpan? Parked,                                              // parked work; null: until recovered or discarded
     RetentionAction Action = RetentionAction.Delete);              // Delete; PurgePayloads, ArchiveThenDelete later
 ```
 
 - **`PurgePayloads`** carries over an idea from Elsa.Jobs (design sketch, "Standalone jobs"): remove the payload bytes and keep identities, digests, outcomes and attempts. With the envelope split of format item 1, a run's shape stays available for audit after its data is gone.
+- **Parked work has its own window.** A parked instance is Faulted, but it awaits recovery, so the `Faulted` window never applies to it. The retention worker tells the two apart through the parked-work read model of the observability page (PR #4710). `Parked` (by default null: kept until an operator recovers or discards it) is also the window that #4710's kept deliveries use. Their `keep_until` is the Park's time plus `Parked`, or no expiry when it is null. A recovered instance runs again; a discarded one ends and falls under `Faulted` from the discard.
 - **Where it is set.** On the definition, with a host default per tenant. Whether a shortened policy also applies to instances that have already ended is decision 2.
 - **How it runs (decision 1).** A retention worker in the host reads the instance-list read model for instances whose end time is past their policy, and adds a `kernel.delete` per instance. The worker uses read models and message adds only, so it is host-neutral layer-3 code. Every delete is the built delete, in the owner's fenced commit.
 - **Repeats.** The delete's id is derived from instance and end revision, and it is an outside command with `keep_until`. A repeat inside that window meets the duplicate id. After the window, read-model lag can make a later sweep add a delete for an instance that is already gone. That delete is dropped and journalled as a revision-0 row, which compaction (format item 5) removes. So the worker sets `keep_until` above its sweep interval plus the projector's expected lag.
@@ -76,7 +78,7 @@ public sealed record RetentionPolicy(
 
 An archive is written before the instance's delete and must not read the store directly, so layer 3 stays off positions:
 
-1. An `ArchiveThenDelete` policy sends a `kernel.archive` command to the ended instance. An ended instance takes only commands, so this kind needs the command-kind seam proposed on the migration page (`IActorType.IsCommand`, PR #4706). That seam is kernel behaviour. The instance's command turn sends its final checkpoint, in a message to an archiver actor in layer 3, in one commit. The instance itself does not change.
+1. An `ArchiveThenDelete` policy sends a `kernel.archive` command to the ended instance. An ended instance takes only commands, so this kind needs the command-kind seam proposed on the migration page (`IActorType.IsCommand`, PR #4706). That seam is kernel behaviour. The instance's command turn sends its final checkpoint, in a message to an archiver actor in layer 3, in one commit. That commit bumps the instance's revision with its state unchanged, as the built path for a late child result to an ended parent does, so each archive request derives its own message id. A repeat of the same command meets its own duplicate id within `keep_until`.
 2. The archiver reads the run's history through the viewer's read API (projected rows plus journal tail, by instance), writes one self-describing document to an `IArchiveSink`, and then adds the `kernel.delete`.
 
 The document carries the envelope (id, model, definition and version, state version, status, tenant, times), the final state, the history entries, and their codec headers. Its name derives from instance and revision, so a repeat overwrites it. An archive written under an instance key is erased by destroying that key.
@@ -126,7 +128,7 @@ public interface IInstanceKeyRing
 - **The commit principle.** "Replace whole layers and edges, never pieces of the commit." The codec is a property of the whole store edge. It applies to every value the provider writes and reads, adds no statement, and changes no statement's order or the transaction's atomicity. Key-ring calls happen while a flush is prepared, before its transaction opens, never inside it. It is still a layer-2 change, and kernel behaviour.
 - **Which key.**
   - **Instance data:** state, journal payloads, projected history, values and archives use the key of the instance's id and creation. Keying by creation matters: a caller key reused after its `keep_until` window starts a new instance with a new key, so destroying the old one does not touch the new run.
-  - **Messages:** a message is encrypted with its target's key. The ring is batched and idempotent, so a start message can be encrypted for an instance that does not exist yet.
+  - **Messages:** a message whose sender knows the target's creation (a generated child address, or a message carrying `TargetCreation`) is encrypted with the target's key; the ring is batched and idempotent, so this works before the child exists. Any other message, including a caller-key command, which resolves to a run only when it is accepted, is encrypted with a per-tenant inbox key. A sender cannot read another instance's creation. On consumption the payload becomes part of the receiver's state under the receiver's key.
   - **Events:** a published event reaches many receivers, so its payload, and the event-start deliveries that copy it, use a per-tenant event key rotated by keep window. On consumption the payload becomes part of the receiver's state, under the receiver's key.
 - **Where keys live.** In a key ring outside the kernel's database, for example a KMS that wraps per-instance data keys under a key-encryption key, or a separate key table with its own short backup retention. A wrapped key kept in the kernel's own database would come back with every restored backup, and crypto-shredding would fail.
 - **Order.** The key is created before the first commit that writes ciphertext. An orphan key from a commit that never landed is harmless and swept. Ephemeral instances that never commit need no key.
@@ -136,7 +138,7 @@ public interface IInstanceKeyRing
 
 Costs, all unmeasured:
 
-- **Key ring:** one batched call per flush that creates instances or sends to new targets, so a fan-out to 1,000 children costs one call. A node can also pre-create keys. Plus one key-ring read per cold load, batched with loads and held while the instance is in memory.
+- **Key ring:** one batched call per flush that creates instances or sends to targets whose keys this node does not hold, so a fan-out to 1,000 children costs one call. A node can also pre-create keys. Plus one key-ring read per cold load, batched with loads and held while the instance is in memory.
 - **CPU:** AES-GCM per payload.
 - **Bytes:** about 40 per payload, for nonce, tag and header.
 
@@ -225,7 +227,7 @@ Where values by reference live is decided on the write-volume page (PR #4711, de
    - **Recommendation: A,** because B brings key management into release 1 for a feature decision 4 A does not need.
 6. **A clear journal envelope against walkthrough decision 12** (the journal is model-agnostic, entries opaque).
    - **A:** adopt format item 1. The envelope's fields are generic opaque strings the model fills in, so layer 2 still interprets nothing, and the sketch's "common envelope" becomes a format rule.
-   - **B:** keep entries fully opaque. Encryption, erasure and `PurgePayloads` then lose the run's shape, and the projector needs every model's keys.
+   - **B:** keep entries fully opaque. Encryption, erasure and `PurgePayloads` then lose the run's shape, and the projector needs the instance keys to read them.
    - **Recommendation: A.**
 7. **Done markers without payloads** (format item 6, with Park's kept deliveries excepted). **Recommendation: adopt it,** after checking its readers. It is kernel behaviour and needs the two-review tier when built.
 8. **Compacting non-positive journal rows below the projector's cursor** (format item 5). Positive journal rows stay until their instance is deleted. **Recommendation: adopt it after release 1,** with the restated invariant 6 checked in the simulation. It is kernel behaviour.
