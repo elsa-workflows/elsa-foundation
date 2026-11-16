@@ -279,8 +279,7 @@ class SectionTests(unittest.TestCase):
         self.assertTrue(batch_manifest_gaps(None))
 
 
-if __name__ == "__main__":
-    unittest.main()
+
 
 
 class BatchBrowserFailureDiagnosticTests(unittest.TestCase):
@@ -334,3 +333,7 @@ class BatchBrowserFailureDiagnosticTests(unittest.TestCase):
         diagnostic.write_text('{"kind":"Error","frames":[]}')
         self.runtime.run.save.side_effect = RuntimeError("diagnostic persistence failed")
         self.invoke()
+
+
+if __name__ == "__main__":
+    unittest.main()
