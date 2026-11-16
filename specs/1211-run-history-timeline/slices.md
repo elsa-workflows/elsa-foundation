@@ -56,7 +56,8 @@ Each row names a coherent boundary, not permission to include every donor file m
 | S05c+ | T009–T010 | Actual captured run/wait/incident API story proof and remaining source/provider qualification. | Not started |
 | S06 | T011–T014 | Primary Timeline/Diagram workspace, stable observation/filter/selection and affected Workflows/browser behavior. Preserve delivered run-canvas changes. | Not started |
 | S07 | T015–T018 | Exact execution journal and Journal/Bookmarks/Data navigation over compact Inputs; preserve occurrence/attempt/descendant identity and exact links. | Not started |
-| S08 | T019–T022 | Actual bookmark creation/consumption/retirement, bounded inventory and lifecycle UI. Real claim/rearm/cancel/expiry controls; passive expiry is not a recorded transition. | Not started |
+| S08a | Supporting T019–T022 | Actual creation/typed claim checkpoint owners, paired memory history and inspection-service lifecycle controls. | [#4310](https://github.com/elsa-workflows/elsa-foundation/pull/4310): current backend parent reconciled; seven component controls awaiting current execution. Studio implementation and acceptance belong to #4368. |
+| S08 remaining | T019–T022 | Full callback/drainer, redelivery/competing/fault/cancel/native/provider and composed lifecycle qualification. | Open; proof must follow actual source and owner boundaries. |
 | S09 | T023–T024 | Independently authorized delivery observations and actual bookmark ingress/disposition. Duplicate/unmatched/faulting delivery controls without false continuation. | Not started |
 | S10 | T025–T027 | Other actual semantic owners and causal navigation. Split by timer/child/publication/recovery/compensation/value owner as needed, keeping each owner's source and tests together. | Not started |
 | S11 | T028–T029 | EF projections and atomic checkpoint participant/query implementation. Real scope, rollback, ambiguous acknowledgement, fence and replay controls. | Not started |
