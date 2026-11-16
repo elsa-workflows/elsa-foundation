@@ -1215,6 +1215,13 @@ export interface StudioExpressionEditorContribution extends StudioBackendAwareCo
     revision: string;
     allows(expression: Readonly<Record<string, unknown>>): boolean;
   };
+
+  /** Language-owned proof that all reads use explicit parameters and survive a closed reusable boundary. */
+  reusableBoundaryPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
   /** The inline editor presents its descriptor caption in its own shared field. */
   presentsField?: boolean;
   order?: number;

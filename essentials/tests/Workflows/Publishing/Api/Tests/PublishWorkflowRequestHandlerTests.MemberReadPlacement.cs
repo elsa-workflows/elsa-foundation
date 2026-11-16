@@ -495,13 +495,13 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null,
         bool declaresCustomerInput = false, IActivitySerializedShapeSource? shapeSource = null,
         Action<ExecutableActivityTemplate>? beforePlacement = null, int copies = 1, bool nested = false,
-        bool assignOutput = false, bool rootSetter = false, bool sumInputs = false)
+        bool assignOutput = false, bool rootSetter = false, bool sumInputs = false, string? outputAlias = null, ActivityNode? bodyOverride = null)
     {
         var shape = shapeSource ?? new CustomerIdShape();
         void Shape(IServiceCollection services) => services.AddSingleton<IActivitySerializedShapeSource>(shape);
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
-        var versions = new List<ActivityDefinitionVersion> { _writeLineActivity, _sequenceActivity, CustomerProducerVersion };
+        var versions = new List<ActivityDefinitionVersion> { _writeLineActivity, _sequenceActivity, _flowchartActivity, CustomerProducerVersion };
         var dependencyVersions = new FakeActivityVersionStore(versions);
         var publications = new DefaultPublications();
         var templates = new DefaultTemplates();
@@ -510,7 +510,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                  {
                      (_writeLineActivity, Node("write", Text("body"))),
                      (CustomerProducerVersion, new ActivityNode("produce", CustomerProducerVersion.Id, [], [])),
-                     (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))]))
+                     (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))])),
+                     (_flowchartActivity, FlowchartNode("chart", [Node("write", Text("body"))], [], "write"))
                  })
             await PublishAuthorableAsync(dependency, root, dependencyVersions, registry, publications, templates, sources);
         using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
@@ -555,10 +556,10 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                 Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any"))
             }
             : Node("reader", read);
-        var body = rootSetter ? reader : BodySequence("body",
-            [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]);
+        var body = bodyOverride ?? (rootSetter ? reader : BodySequence("body",
+            [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]));
         var contract = new DesignContract("1", sumInputs ? [new("a", "A", new("Double"), false, true, null, "elsa.json"), new("b", "B", new("Double"), false, true, null, "elsa.json")] : declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [],
-            assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
+            assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : outputAlias ?? "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
         var reusable = await PublishReusable("reusable-member-read", body, contract, bodyVariables ?? []);
         beforePlacement?.Invoke(frozen[0].Template);
         if (nested)
@@ -590,7 +591,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
     // Compiles a one-node workflow of the dependency and publishes it as an authorable activity a body can place.
     private async Task PublishAuthorableAsync(ActivityDefinitionVersion dependency, ActivityNode root, FakeActivityVersionStore versions,
-        IWellKnownTypeRegistry registry, DefaultPublications publications, DefaultTemplates templates, List<WorkflowExecutableSourceReference> sources)
+        IWellKnownTypeRegistry registry, DefaultPublications publications, DefaultTemplates templates, List<WorkflowExecutableSourceReference> sources,
+        bool emitsDone = false)
     {
         var executable = await TestCompiler.Create(new FakeVersionStore(WorkflowVersion(root)), versions, _activityStructureService, registry)
             .CompileAsync(new("version-1", WorkflowExecutableReferenceScope.Published, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null, dependency.Id + "-"));
@@ -599,7 +601,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var template = new ExecutableActivityTemplate(dependency.Id + "-template", hash, executable.RootActivity, executable.ResumeTargets, [], [],
             executable.RuntimeRequirements, dependency.Id, new Dictionary<string, string>(), DateTimeOffset.UnixEpoch, executable.StorageDriverRequirements);
         var contract = new DesignContract("1", dependency.Inputs.Select(input =>
-            new Elsa.Activities.Design.Core.Models.ActivityInputContract(input.ReferenceKey, input.Name, input.Type, false, true, null, "elsa.json")).ToArray(), [], []);
+            new Elsa.Activities.Design.Core.Models.ActivityInputContract(input.ReferenceKey, input.Name, input.Type, false, true, null, "elsa.json")).ToArray(), [],
+            emitsDone ? [new("Done", "Done", true)] : []);
         var publication = DefaultPublication(dependency.Id, dependency.DefinitionId, contract, template,
             new("clr", "1", JsonSerializer.SerializeToElement(new { })), ActivityDefinitionVersionResolutionKind.AuthorableActivity);
         publications.Add(publication);
