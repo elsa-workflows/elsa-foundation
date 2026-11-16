@@ -85,7 +85,7 @@ def snapshot(label):
   if active:os.kill(host.pid,signal.SIGCONT)
 
 try:
- for n in ['appsettings.json','appsettings.Development.json','shells.json']:shutil.copyfile(repo/'Essentials/apps/Elsa.Workbench'/n,root/n)
+ for n in ['appsettings.json','appsettings.Development.json','shells.json']:shutil.copyfile(repo/'apps/Elsa.Workbench'/n,root/n)
  inputs={}
  for n in ['elsa','etl-runtime','etl-design']:
   a=fixture/('waiting-'+n+'.sqlite.gz');item=capture['stores'][n];assert sha(a)==item['gzipSha256'];data=gzip.decompress(a.read_bytes());assert hashlib.sha256(data).hexdigest()==item['databaseSha256'];(root/(n+'.db')).write_bytes(data);inputs[n]=item

@@ -1,3 +1,4 @@
+import { resolveCapabilityLink, capabilityIds } from "../api/capabilities";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { templateAvailabilityReason, templateContent, type WorkflowTemplate } from "../workflowTemplates";
@@ -8,6 +9,7 @@ import { sequenceActivity, sequenceNode, leafNode, writeLine } from "./fixtures"
 import type { WorkflowDraft } from "../workflowTypes";
 
 vi.mock("../workflowTemplates", async original => ({ ...(await original<typeof import("../workflowTemplates")>()), getWorkflowTemplate: vi.fn(), saveWorkflowTemplate: vi.fn() }));
+vi.mock("../api/capabilities", async original => ({ ...(await original<typeof import("../api/capabilities")>()), resolveCapabilityLink: vi.fn(async () => "/templates/template-1/candidate-validation") }));
 const context = {} as StudioEndpointContext;
 const draft: WorkflowDraft = { id: "template-1", definitionId: "template-1", state: {
   rootActivity: sequenceNode("root", [leafNode("write")]),
@@ -18,6 +20,34 @@ const template: WorkflowTemplate = { id: draft.id, name: "Starter", description:
 beforeEach(() => { vi.mocked(getWorkflowTemplate).mockReset().mockResolvedValue(structuredClone(template)); vi.mocked(saveWorkflowTemplate).mockReset(); });
 
 describe("workflow templates", () => {
+  it("validates complete template content through its own revision and resource relation without saving", async () => {
+    const postJson = vi.fn(async () => ({ state: "validated", errors: [] }));
+    const endpoint = { http: { postJson } } as unknown as StudioEndpointContext;
+    const adapter = createTemplateDocumentAdapter(); await adapter.load(endpoint, template.id);
+    const changed = { ...structuredClone(draft), activityPresentation: [{ nodeId: "write", displayName: "New name" }] };
+    expect(await adapter.validateCandidate!(endpoint, changed)).toEqual({ state: "validated", messages: [] });
+    expect(resolveCapabilityLink).toHaveBeenLastCalledWith(endpoint, capabilityIds.workflowDesign, "workflow-template-candidate-validation", { templateId: template.id });
+    expect(postJson).toHaveBeenLastCalledWith("/templates/template-1/candidate-validation", { expectedRevision: "r1", candidate: templateContent(changed) });
+    expect(saveWorkflowTemplate).not.toHaveBeenCalled();
+  });
+  it.each(["revision", "identity"])("refuses an in-flight template verdict after its %s changes", async change => {
+    let resolve!: (value: { state: string; errors: unknown[] }) => void;
+    const postJson = vi.fn(() => new Promise<{ state: string; errors: unknown[] }>(done => { resolve = done; }));
+    const endpoint = { http: { postJson } } as unknown as StudioEndpointContext;
+    const adapter = createTemplateDocumentAdapter(); await adapter.load(endpoint, template.id);
+    const result = adapter.validateCandidate!(endpoint, draft);
+    await vi.waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    if (change === "revision") {
+      vi.mocked(saveWorkflowTemplate).mockResolvedValueOnce({ ...template, revision: "r2" });
+      await adapter.save(endpoint, draft);
+    } else {
+      vi.mocked(getWorkflowTemplate).mockResolvedValueOnce({ ...template, id: "other-template" });
+      await adapter.load(endpoint, "other-template");
+    }
+    resolve({ state: "validated", errors: [] });
+    expect(await result).toEqual({ state: "stale", messages: [] });
+  });
+
   it("copies authored content, layout and labels without changing the source", () => {
     const content = templateContent(draft);
     const created = getCreateInitialDocument({ name: "New workflow", description: "", rootActivityVersionId: null, templateId: template.id, templateContent: content }, []);

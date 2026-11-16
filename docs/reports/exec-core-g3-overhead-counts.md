@@ -215,3 +215,88 @@ Class wall clock for the three Facts together: run 1 **117.6 s**, run 2 **114.7 
 | kill-before-parent-consume | 56 · 63 · 0 · 63 · 0 · 0 · 0 | 62 · 113 · 7 · 107 · 1 · 0 · 1 | 48 · 0 · 0 · 0 · 0 · 0 · 0 |
 | restart-host | 7286 · 7398 · 113 · 6669 · 18 · 0 · 9 | 7319 · 6739 · 143 · 5999 · 28 · 0 · 13 | 7150 · 7304 · 117 · 6574 · 18 · 0 · 9 |
 | parent-consumes-Completed | 443 · 1824 · 100 · 1706 · 19 · 0 · 6 | 348 · 1272 · 69 · 1184 · 9 · 0 · 2 | 358 · 494 · 96 · 383 · 19 · 0 · 6 |
+
+## G-e — recorded #3993 post-restart timeout (causal)
+
+Docs only. No production change. Native and BPMN semantics are not merged. File:line citations below are on `origin/main` `a898bb87f2f9deda151de76738f7f0140d50c90d` unless a historical SHA is named.
+
+### Reconciliation
+
+The 8 November timeout recorded in [#3993](https://github.com/elsa-workflows/elsa-foundation/pull/3993) was **not** in `RunBpmnChildFaultHeldRetryTests`. That class is a native Root `RunBpmn` parent waiting on a direct BPMN `serviceTask` bound to a real native worker; it proves `HoldForRetry` / retry / `FinalFault` and **does not kill or restart** the host (`Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnChildFaultHeldRetryTests.cs`).
+
+The failing assertion in related-filter run 1 was `RunBpmnPendingParentResultCrashTests` ([#3992](https://github.com/elsa-workflows/elsa-foundation/pull/3992)): `"The restarted host did not deliver exactly one native parent continuation."` That journey is a native Root `RunBpmn` parent waiting on a **human** `userTask` child. The child is not a native worker. Do not read the timeout as a G2.2 held-retry failure.
+
+[#4044](https://github.com/elsa-workflows/elsa-foundation/pull/4044) later measured the same #3992 journey on the **hold-claim** tree: `parent-consumes-Completed` waited ~52–54 s on `ClaimVisibilityTimeout`. No 30 s timeout occurred there because the test no longer measures those 30 s from process startup.
+
+### Causal chain on current main (PROVEN)
+
+This is the path the current `#3992` Fact pins. It is the designed dead-deliverer claim fence, not a production defect.
+
+1. The model becomes terminal. `BpmnEmbeddingDelivery` handles `Elsa.Bpmn.ResumeNativeParent.v1` (`BpmnEmbeddingBoundary.cs:24`, `BpmnEmbeddingDelivery.cs:34–51`) and, when the native parent is not yet resumed, may take the test hold before `IBookmarkResumeDispatcher.DispatchAsync`.
+2. Delivery is not free: `RuntimePostCommitOutboxProcessor.ProcessAsync` claims first (`RuntimePostCommitOutboxProcessor.cs:160–173`) with `visibilityTimeout: ClaimVisibilityTimeout`. That constant is **one minute** (`RuntimePostCommitOutboxProcessContracts.cs:13`).
+3. `RuntimePostCommitOutboxClaimTransitions.Claim` writes status `Delivering` and `DeliveryVisibleAfter = now + VisibilityTimeout` (`RuntimePostCommitOutbox.cs:610–624`). EF persists that row in `EfRuntimePostCommitOutboxStore.ClaimAsync` (`EfRuntimePostCommitOutboxStore.cs:533–538`).
+4. Current test hold mode `"hold-claim"` (`OwnedWorkbench.HoldClaimedBpmnParentResume`, `OwnedWorkbench.cs:152`) then `Task.Delay(Infinite)` inside the already-claimed handler (`BpmnEmbeddingDelivery.cs:115–116`). `CompleteClaimAsync` never runs. `StopAsync` is `Process.Kill(entireProcessTree: true)` (`OwnedWorkbench.cs:309`).
+5. After kill the physical source is still `Delivering` with the same `deliveryVisibleAfter` (`RunBpmnPendingParentResultCrashTests.cs:106–111`). A later claim is refused while that stamp is in the future (`RuntimePostCommitOutbox.cs:593–594`: `Delivering` is claimable only when `visibleAfter <= now`).
+6. A 30 s wait **from restart** expires first: the remaining fence is up to one minute minus however long the predecessor held the claim. The current Fact therefore starts its 30 s bound at `recoveryEligibleAt = max(visibleAfter, restartedAt)` (`RunBpmnPendingParentResultCrashTests.cs:121–124`) and requires the witness to observe the parent still `Running` while `observedAt < visibleAfter` (`:134–137`).
+7. `ResumeNativeParent.v1` is registered `UntilAcknowledged(1s)` (`ActivitiesBpmnHostingFeature.cs:41–43`). That delay applies only after a completed claim is recorded `FailedRetryable` (`RuntimePostCommitOutbox.cs:707–721`; log `RuntimePostCommitRetryDeferred` / EventId 67901 at `RuntimePostCommitOutboxProcessor.cs:740–757`). The hold-claim path never reaches that recording, so the 1 s policy does not explain a 30 s wait.
+
+### 8 November #3993 related-filter run 1 (UNKNOWN which side of the then-current race)
+
+At #3993's base `eb4c6a616` the crash Fact used `HoldNativeParentResume()` (`"hold"`), waited only until model `TerminalPendingSettlement` + native parent `Running`, asserted the result source was **not** `Delivered` (`status != 2`), then measured 30 s from restart. `"hold"` throws `Pending()` after the claim (`BpmnEmbeddingDelivery.cs:117`) instead of delaying forever. If `CompleteClaimAsync` finished, the item became `FailedRetryable` with `AvailableAt = recordedAt + 1s` and `deliveryVisibleAfter: null`, which a 30 s wait would cover. If kill landed while the row was still `Delivering`, the one-minute fence remained and the 30 s wait expired.
+
+No retained Workbench or SQLite logs from that run exist here. The failure was timing-shaped (run 1 timed out; runs 2 and 3 passed). **UNKNOWN** which of those two post-kill statuses run 1 actually had. Do not infer it was `Delivering`.
+
+**Ruled out**
+
+- `#3993` held-retry Facts themselves (no restart; related-filter run 1 still passed those Facts).
+- `UntilAcknowledged(1s)` as a 30 s wait by itself (only after a completed `FailedRetryable` recording).
+- Merging this with native-worker `HoldForRetry` / `RetryServiceAsync` (G2.2 / G2.4 A3) or with callActivity → `DispatchWorkflow` resume (`#3995` uses the other hold site, `ParentResumeExecutor`).
+- A production defect: a dead deliverer's `Delivering` row remaining hidden until `ClaimVisibilityTimeout` is the documented claim rule (`RuntimePostCommitOutboxProcessContracts.cs:8–11`). Later the same day, `f96d6d0bb` pinned `hold-claim` so the crash Fact no longer depends on that race, and `9c67f6e35` moved the 30 s bound onto eligibility.
+
+### Local re-run on this slice
+
+Hosted Facts on this VM against `a898bb87f`, SQLite Owned Workbench, one process. SDK 10.0.404. Evidence directory `/tmp/g-e-evidence` (`ELSA_BPMN_HOST_EVIDENCE_DIRECTORY`). First `dotnet test` of the hosting project stopped at MSB3030 until `python3 tools/bpmn/restore_evidence.py` restored the gitignored spec 1017 fixtures; Workbench itself had already built. Then:
+
+| Class | Result | Wall clock |
+|---|---|---|
+| `RunBpmnPendingParentResultCrashTests` | pass | 1 m 26 s |
+| `RunBpmnChildFaultHeldRetryTests` (3 Facts) | pass | 16 s + 15 s + 15 s |
+| Filter total | **4/4 passed** | 2.23 min (plus incremental build) |
+
+`#3993` Facts still have no kill/restart. Receipt `root-pending-parent-result-crash/case.json` / `pending-checked.json` on this run:
+
+| Field | Value |
+|---|---|
+| `sourceRevision` | `a898bb87f2f9deda151de76738f7f0140d50c90d` |
+| predecessor exit | 137 (`SIGKILL`) |
+| `ResumeNativeParent.v1` after kill | `status` 1 (`Delivering`), `deliveryFencingToken` 1, `deliveryVisibleAfter` `2026-11-11T16:26:44.8358536Z`, owner `runtime-outbox-e6ab8fc5f5504d7d81e1d1d7b3e39d0d` |
+| `restartedAt` | `2026-11-11T16:25:54.4042752Z` |
+| `recoveryEligibleAt` | same as `visibleAfter` |
+| `claimWaitMilliseconds` | 50431.6 (~50.4 s) |
+| `settledAt` | `2026-11-11T16:26:47.4182387Z` |
+| `settlementAfterEligibilityMilliseconds` | 2582.4 |
+
+A 30 s wait measured from `restartedAt` would have expired at `16:26:24.4Z`, **20.4 s before** `visibleAfter`. That is the same shape as the recorded #3993 related-filter message, on the current hold-claim path. EventId 67901 was not expected and was not required: hold-claim never completes the claim as `FailedRetryable`. `StartEmbedded.v1` in the same pending snapshot is `FailedRetryable` (`status` 3) with `deliveryVisibleAfter: null` — that is the ordinary start-embedded `Pending()` after enqueue (`BpmnEmbeddingDelivery.cs:95`), not the parent-resume wait.
+
+### Runnable example
+
+There is no separate sample app for this milestone. The hosted Facts **are** the runnable example (SQLite Owned Workbench, one in-process host):
+
+| Journey | Class | What it runs |
+|---|---|---|
+| Held native-worker retry under `RunBpmn` | `RunBpmnChildFaultHeldRetryTests` | [#3993](https://github.com/elsa-workflows/elsa-foundation/pull/3993) / G2.4 A3. No restart. |
+| Post-restart pending-parent-result (human `userTask` child) | `RunBpmnPendingParentResultCrashTests` | [#3992](https://github.com/elsa-workflows/elsa-foundation/pull/3992). This timeout's class. |
+| Same #3992 journey with EF capture | `G3RemainingJourneyOverheadTests.RunBpmn_pending_parent_result_crash_records_overhead` | [#4044](https://github.com/elsa-workflows/elsa-foundation/pull/4044) slice 6. |
+| Wait / restart / consume | `RunBpmnWorkbenchTests` | Historical `#3410` happy path. |
+
+Project: `Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj`. Filter example: `FullyQualifiedName~RunBpmnPendingParentResultCrashTests`.
+
+### Supported profile
+
+No dedicated `supported-profile.md` exists among `docs/reports/exec-core-*`. The profile already stated for this milestone:
+
+- [Unified execution — Active milestone](../program-goals/unified-execution.md): SQLite, built-in host, root native parent, existing supported BPMN human/service-task paths. Completion leaves Program #2892 open.
+- [G2 Limit](exec-core-g2-child-outcome-mapping.md#limit-every-hosted-cell): SQLite Owned Workbench, one in-process host, Root unless a cited test says otherwise. No PostgreSQL / SQL Server / MySQL cell. Direct-plane `CallActivity` refused at publish.
+- [S8 unsupported / open](exec-core-migration-rollback.md#6-unsupported--open) and the operator note [native-bpmn-migration-and-rollback.md](native-bpmn-migration-and-rollback.md): no live native↔BPMN execution rewrite; publish pipelines stay separate; physical effects remain at-least-once.
+
+This G-e note does not enlarge that profile.
