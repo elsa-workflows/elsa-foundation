@@ -12,3 +12,6 @@ records each outcome.
 - [x] Review full integration; whole affected suites, accounting, architecture/maps and rebuilt backend e2e (#3601 and its leaves).
 - [x] Exact reviewed-head hosted gates; merge and qualify containing main (#3601 containing main `bd0749d86`).
 - [x] Remove owned fixtures, restore the existing runner state, publish results and complete program bookkeeping.
+  The task fixture groups were deleted by 3 November (#2531 [cleanup record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6615399245)).
+  Read on 16 November: every VM in the subscription is deallocated, including the shared Codex dev fleet that holds
+  `elsa-dev-09`. Its 21 run-command records all report Succeeded, and none is pending.
