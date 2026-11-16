@@ -471,7 +471,7 @@ public sealed class DurableTurn
     };
 
     /// <summary>The turn's end is its commit, and the only one: the row, the journal, and everything it sent.</summary>
-    public TurnOutcome Seal(TurnOutcome unit, InstanceRow row, object state, string? journal)
+    public TurnOutcome Seal(TurnOutcome unit, InstanceRow row, object? state, string? journal)
     {
         if (_kept.Count > 0)
         {

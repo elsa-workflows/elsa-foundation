@@ -11,6 +11,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;

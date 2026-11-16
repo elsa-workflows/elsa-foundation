@@ -850,11 +850,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (_loading || !Owns || !NeedsLoad) return;
         // Prefer live candidates whose address the database cannot supply, including an actor still waiting in memory.
-        var targets = _slots.Where(s => !s.Value.Loaded || s.Value.Row is null || (_store.HasActorAliases && s.Value.Unwritten) || s.Value.PendingReferences > 0)
-            .OrderByDescending(s => s.Value.Loaded).Select(s => s.Key).ToArray();
+        var requested = _slots.Where(s => !s.Value.Loaded || s.Value.Row is null || (_store.HasActorAliases && s.Value.Unwritten) || s.Value.PendingReferences > 0)
+            .OrderByDescending(s => s.Value.Loaded).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
+        var targets = requested.Keys;
         var pending = _slots.Where(s => s.Value.PendingReferences > 0)
             .SelectMany(s => s.Value.Inbox.Where(i => i.UncheckedReference is not null).Select(i => (Target: s.Key, Item: i, Reference: i.UncheckedReference!))).ToArray();
-        var ids = pending.Length == 0 ? targets : targets.Concat(pending.Select(p => p.Reference)).Distinct(StringComparer.Ordinal).ToArray();
+        IReadOnlyCollection<string> ids = pending.Length == 0 ? targets : targets.Concat(pending.Select(p => p.Reference)).Distinct(StringComparer.Ordinal).ToArray();
         var generation = _generation;
         _loading = true;
         IReadOnlyList<ActorLookup> rows;
@@ -867,11 +868,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (generation != _generation) return;
         _loading = false;
         var byName = pending.Length > 0 ? rows.ToDictionary(r => r.Requested, StringComparer.Ordinal) : null;
-        var targetSet = byName is null ? null : targets.ToHashSet(StringComparer.Ordinal);
         foreach (var match in rows)
         {
-            if (targetSet is not null && !targetSet.Contains(match.Requested)) continue;
-            if (!_slots.TryGetValue(match.Requested, out var source)) continue;
+            // A later delivery may replace an evicted slot within the same ownership generation.
+            if (!requested.TryGetValue(match.Requested, out var original) ||
+                !_slots.TryGetValue(match.Requested, out var source) || source != original) continue;
             var key = match.Canonical;
             if (!_slots.TryGetValue(key, out var slot)) _slots[key] = slot = source;
             if (match.Requested != key)
@@ -1365,7 +1366,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
-                if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+                StoreBatchRules.Validate(batch);
+                StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
+                if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
                 result = await _store.CommitAsync(batch, cancellationToken);
             }
