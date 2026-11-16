@@ -10,11 +10,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfRuntimeCheckpointCommitStoreTests
 {
     [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public void Nonunique_run_index_strengthened_to_unique_cannot_qualify_history_pairing(bool independent)
+    [InlineData(false, "replacement")] [InlineData(true, "replacement")]
+    [InlineData(false, "additional")] [InlineData(true, "additional")]
+    [InlineData(false, "alternate-key")] [InlineData(true, "alternate-key")]
+    public void Incompatible_history_uniqueness_cannot_qualify_history_pairing(bool independent, string constraint)
     {
-        using var context = new UniqueHistoryRunIndexContext(new DbContextOptionsBuilder<UniqueHistoryRunIndexContext>()
-            .UseSqlite("Data Source=:memory:").Options);
+        using RuntimeDbContext context = constraint switch
+        {
+            "replacement" => new UniqueHistoryRunIndexContext(new DbContextOptionsBuilder<UniqueHistoryRunIndexContext>().UseSqlite("Data Source=:memory:").Options),
+            "additional" => new AdditionalUniqueHistoryRunIndexContext(new DbContextOptionsBuilder<AdditionalUniqueHistoryRunIndexContext>().UseSqlite("Data Source=:memory:").Options),
+            _ => new AlternateHistoryRunKeyContext(new DbContextOptionsBuilder<AlternateHistoryRunKeyContext>().UseSqlite("Data Source=:memory:").Options)
+        };
         var access = new HistoryCapabilityAccess();
         var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
         IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
@@ -43,6 +49,26 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         ScopeOwnerId = owner, ActivityScopeId = activityScope, ActivityExecutionId = "activity-a",
         ActivityExecutionIdHash = new string('c', 64), FirstSequence = 1, Ordinal = 0
     };
+
+    private sealed class AdditionalUniqueHistoryRunIndexContext(DbContextOptions<AdditionalUniqueHistoryRunIndexContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<RuntimeHistoryOccurrenceMembershipEntity>().HasIndex(row => new { row.ScopeKey, row.WorkflowExecutionId }).IsUnique();
+        }
+    }
+
+    private sealed class AlternateHistoryRunKeyContext(DbContextOptions<AlternateHistoryRunKeyContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<RuntimeHistoryOccurrenceMembershipEntity>().HasAlternateKey(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash });
+        }
+    }
 
     private sealed class UniqueHistoryRunIndexContext(DbContextOptions<UniqueHistoryRunIndexContext> options) : RuntimeDbContext(options)
     {
