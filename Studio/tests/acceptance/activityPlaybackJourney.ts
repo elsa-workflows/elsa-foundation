@@ -402,8 +402,16 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   ] });
   const run = await h.start(await h.node("root", "sequence", {}, { activities: [choice, each, parallel] }));
   const observed = await h.settled(run.id); const sequence = await h.occurrences(run.id);
-  expect(sequence.state).toBe("partial"); expect(sequence.coverage.state).toBe("partial");
-  expect(sequence.coverage.limitation).toContain("cannot establish the source history settlement");
+  expect(sequence.state).toBe("available");
+  expect(sequence.coverage).toMatchObject({ state: "captured", capturedFromStart: true, hasGaps: false,
+    limitation: null, sourceHistoryPending: null, sourceHistoryLimitation: null });
+  expect(sequence.coverage.supportedKinds).toEqual(expect.arrayContaining([
+    "ActivityScheduled", "ActivityStarted", "ActivityCompleted", "ActivityContinuationReturned", "ActivityRetryScheduled"
+  ]));
+  // This qualified v3 profile captures the full activity lifecycle, while leaving optional
+  // asynchronous source settlement unknown and outside its advertised policy.
+  for (const kind of ["TimerScheduled", "TimerDispatched", "TimerRetired", "ChildWorkflowDispatchRequested",
+    "StimulusPublicationCommitted", "ChildWorkflowSettled"]) expect(sequence.coverage.supportedKinds).not.toContain(kind);
   expect(sequence.totalCount).toBe("9"); expect(sequence.items).toHaveLength(9);
   const repeated = observed.activities.filter(item => item.authoredActivityId === "repeated"); expect(repeated).toHaveLength(2);
   expect(sequence.items.filter(item => repeated.some(row => row.activityExecutionId === item.activityExecutionId))).toHaveLength(2);
