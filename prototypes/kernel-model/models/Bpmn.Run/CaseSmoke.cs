@@ -106,6 +106,19 @@ public static class CaseSmoke
             });
             return driver!;
         }
+        long CheckPendingBoundary(InstanceRef id)
+        {
+            var row = store.Instances[id.Id];
+            var state = Json.Read<BpmnState>(row.State);
+            var timer = state.Live.Single(entry => entry.Value.Kind == WorkKinds.Timer);
+            var job = state.Live.Single(entry => entry.Value.Kind == WorkKinds.Job);
+            var ticket = store.Messages[InboxKey.Issued(timer.Value.Key)].Message;
+            Check(row.Status == InstanceStatus.Running && state.Live.Count == 2 && job.Key != timer.Key &&
+                job.Value.Element == "slow" && timer.Value.Element == "deadline" &&
+                ticket.Target == id && ticket.Kind == BpmnKinds.Timer && ticket.Read<TimerDue>().Handle == timer.Key &&
+                ticket.Due == now + Deadline, "the persisted wait owns a distinct job and its exact future issued timer");
+            return ticket.Due!.Value;
+        }
         async Task FinishLateJob(string service, Task driver)
         {
             var results = gates.Results.GetValueOrDefault(service);
@@ -146,7 +159,18 @@ public static class CaseSmoke
         {
             gates.Services.Add("slow");
             Task? lateDriver = null;
-            var (s, journal, id) = await Run("b-boundary", meanwhile: async target => { lateDriver = await CaptureJob(target); now += Deadline; });
+            var (s, journal, id) = await Run("b-boundary", meanwhile: async target =>
+            {
+                lateDriver = await CaptureJob(target);
+                var due = CheckPendingBoundary(target);
+                var waiting = store.Instances[target.Id];
+                now = due - 1;
+                await owner.Worker.PollAsync();
+                await owner.PumpAsync(() => true);
+                Check(store.Instances[target.Id] == waiting && gates.Results.GetValueOrDefault("slow") == 0,
+                    "an early poll leaves the persisted job and timer intact until the deadline");
+                now = due;
+            });
             Check(Var(s, "escalated") == "true" && Var(s, "slow-done") is null, "the timer fired first: the timeout path ran, the task did not complete");
             Check(journal.Any(e => e == "x h1 slow"), "the job was stopped");
             Check(gates.Cancelled.ContainsKey("slow"), "the job was told to stop");
@@ -158,11 +182,30 @@ public static class CaseSmoke
                   && store.Instances[id.Id] == before && observed.Attempts(id.Id) == attempts,
                 "the late result leaves the complete persisted row unchanged and attempts no instance commit");
             gates.Clear();
-            (s, journal, id) = await Run("b-boundary");
+            gates.Services.Add("slow");
+            long recalledDue = 0;
+            (s, journal, id) = await Run("b-boundary", meanwhile: async target =>
+            {
+                var driver = await CaptureJob(target);
+                recalledDue = CheckPendingBoundary(target);
+                gates.Release("slow");
+                await gates.ReadyToReturn("slow").WaitAsync(TimeSpan.FromSeconds(10));
+                gates.AllowReturn("slow");
+                await driver.WaitAsync(TimeSpan.FromSeconds(10));
+            });
             Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null
                   && !store.Messages.Values.Any(m => m.Message.Target.Id == id.Id && m.Message.Kind == BpmnKinds.Timer),
                 "the job finished first: its future timer ticket was removed without advancing the clock");
             Check(journal.Any(e => e == "x h2 deadline"), "the timer was stopped");
+            var completed = store.Instances[id.Id];
+            var afterRecall = observed.Attempts(id.Id);
+            now = recalledDue + 1;
+            await owner.Worker.PollAsync();
+            await owner.PumpAsync(() => true);
+            Check(store.Instances[id.Id] == completed && observed.Attempts(id.Id) == afterRecall &&
+                Json.Read<BpmnState>(completed.State).Live.Count == 0 && Var(s, "escalated") is null,
+                "polling after the recalled deadline leaves the job branch and persisted checkpoint unchanged");
+            gates.Clear();
         }
 
         Console.WriteLine("a message published before its catch subscribes is kept and still counts");
