@@ -41,7 +41,7 @@ using System.Runtime.CompilerServices;
 [assembly: EfSchemaFamily(IdentityIamEfModule.SchemaFamily, "Identity.Iam", IdentityIamEfModule.SchemaVersion, Upcasters = [typeof(IdentityIamV1Upcaster), typeof(IdentityIamV2Upcaster)])]
 [assembly: EfSchemaFamily(IdentityProviderConfigurationEfModule.SchemaFamily, "Identity.ProviderConfiguration", IdentityProviderConfigurationEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // The child rows - claims, tokens, role links, external logins, reservations - carry no document column, so they
 // declare none (#2140).
 [assembly: EfSchemaContent(IdentityIamEfModule.SchemaFamily, typeof(UserEntity),

@@ -340,7 +340,7 @@ describe("extension builder page", () => {
     await waitForText(container, "Team Extensions");
 
     // Simplified vocabulary and a single create affordance on the home view.
-    expect(container.textContent).toContain("Extensions");
+    expect(container.textContent).toContain("extensions");
     expect(container.querySelector("[aria-label='Extension name']")).not.toBeNull();
 
     // Advanced-only create surfaces are hidden on the home view.

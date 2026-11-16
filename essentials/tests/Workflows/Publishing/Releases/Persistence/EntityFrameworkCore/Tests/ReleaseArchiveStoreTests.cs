@@ -586,7 +586,7 @@ public sealed class ReleaseArchiveStoreTests
         Assert.NotNull(root);
         var configuration = typeof(ReleaseArchiveStoreTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
         var assembly = System.IO.Path.Combine(root!.FullName,
-            "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/RestartProbe/bin", configuration,
+            "essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/RestartProbe/bin", configuration,
             "net10.0/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.RestartProbe.dll");
         Assert.True(File.Exists(assembly), "The process probe must be built by the test project's build-only reference.");
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

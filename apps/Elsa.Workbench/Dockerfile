@@ -16,7 +16,7 @@
 # repo-root configuration (Directory.Packages.props, NuGet.config) and the
 # project references reach across the whole src/ tree. Example:
 #
-#   docker build -f Essentials/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+#   docker build -f apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
 #
 # Runtime configuration is supplied via environment variables (standard .NET
 # double-underscore layering, e.g. Elsa__ModuleManagement__ApiKey) and an
@@ -65,7 +65,7 @@ COPY *.props *.targets .editorconfig NuGet.config Elsa.Server.slnx ./
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive
 # patterns cover the complete project graph without a manually maintained file list,
 # each project's committed NuGet lock file included (#2122).
-COPY --parents Essentials/**/*.csproj Essentials/**/*.targets Essentials/**/packages.lock.json Extensions/**/*.csproj Extensions/**/*.targets Extensions/**/packages.lock.json ./
+COPY --parents essentials/**/*.csproj essentials/**/*.targets essentials/**/packages.lock.json apps/**/*.csproj apps/**/*.targets apps/**/packages.lock.json extensions/**/*.csproj extensions/**/*.targets extensions/**/packages.lock.json ./
 
 # Locked, and without a runtime identifier (#2122): restores exactly the versions the
 # committed lock files name, and fails when one no longer matches its project or names a
@@ -76,7 +76,7 @@ COPY --parents Essentials/**/*.csproj Essentials/**/*.targets Essentials/**/pack
 # version each range admits, which is what the lock files recorded, so they land on the
 # versions this restore has just shown the feed still serves.
 # See docs/reference/nuget-lock-files.md.
-RUN dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+RUN dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
     --locked-mode \
     -p:WarningsNotAsErrors=NU1603
 
@@ -88,7 +88,7 @@ RUN dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj \
 # Map BuildKit's TARGETARCH (amd64/arm64) to the .NET RID (linux-x64/linux-arm64).
 # Restore is RID-specific because R2R needs the target's crossgen2 + runtime pack.
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
-    && dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
@@ -97,9 +97,10 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
 FROM restore AS build
 
 # Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
-# One root carries everything the Workbench composes: Essentials/src, Extensions and Essentials/apps (#1815).
-COPY Essentials/ ./Essentials/
-COPY Extensions/ ./Extensions/
+# One root carries everything the Workbench composes: essentials/src, Extensions and apps (#1815).
+COPY essentials/ ./essentials/
+COPY apps/ ./apps/
+COPY extensions/ ./extensions/
 
 # Package versions (ADR 0067, spec 150, #2084). The Docker Images workflow passes
 # ELSA_PACKAGE_VERSIONS: the pack-properties file the version calculator writes for
@@ -137,12 +138,12 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
             && printf '%s' "$ELSA_PACKAGE_VERSIONS" | base64 -d | gunzip > /tmp/elsa/package-versions.props \
             && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
     esac \
-    && dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603 \
         "$@" \
-    && dotnet publish Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet publish apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -c Release \
         -r "$RID" \
         --self-contained false \

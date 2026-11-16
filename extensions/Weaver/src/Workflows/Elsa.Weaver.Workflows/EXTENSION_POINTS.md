@@ -22,7 +22,7 @@ This is the accepted M1 workflow subset. The [76ec independent package witness](
 The module reads two owning domains through their `.Core` contracts only, and registers no fallback for either:
 
 - **Activity catalog.** `workflow.catalog` schema `1` (origin `AuthoritativeRead`, no target, no tool scopes) is the
-  [`IActivityAuthoringCatalog`](../../../../../Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md#iactivityauthoringcatalog-contract--elsaactivitiesdesigncore)
+  [`IActivityAuthoringCatalog`](../../../../../essentials/src/Activities/Design/Api/EXTENSION_POINTS.md#iactivityauthoringcatalog-contract--elsaactivitiesdesigncore)
   answer for the request actor and tenant: every entry the designer lists, addable or not, with its `available` flag and
   reason, activity type and exact version identity, and declared inputs with `isRequired`, `isSensitive`,
   `isCredential`, `uiHint` and `isMasked` (what the designer masks: sensitive, a credential or hinted `password`; slice D,
@@ -207,7 +207,7 @@ says so.
   references, withheld values and unavailable interpretation, and marks workflow content as untrusted.
 - **Registered references** (FR-019, SC-007). The composed server registrations (context source and kinds, capabilities,
   tools with their result kinds, renderers and execution locations) are recorded in
-  `Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/workflowWeaverRegistrations.json`.
+  `extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/workflowWeaverRegistrations.json`.
   `WorkflowExplainContextTests` holds it equal to the composed host and checks that the guidance, tool and capability
   texts name only registered tools and kinds; the Weaver Workflows Vitest `registeredReferences.test.tsx` composes both
   Workflows Studio packages and checks every prompt, starter, renderer, result control and client tool contract against
@@ -392,7 +392,7 @@ no save, publish or effect replay is introduced. Generic failure/deadline/proven
 [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
 
 Concrete context/history/results additionally require the owner domain's
-[`IWorkflowDefinitionAuthorizer`](../../../../../Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
+[`IWorkflowDefinitionAuthorizer`](../../../../../essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
 The workflow contribution references its Core contract; native API resource and identity implementation
 types remain in Workflow Design's API adapter. Missing or multiple owner implementations refuse access.
 Null-target supplemental caller metadata and public guidance retain their existing generic actor/read

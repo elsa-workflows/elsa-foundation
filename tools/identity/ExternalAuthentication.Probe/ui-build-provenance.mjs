@@ -9,7 +9,7 @@ import { absoluteToolPath, assertToolchain, captureToolchain, isExecutableIdenti
 const repo = resolve(import.meta.dirname, "../../..");
 const studioBin = "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0";
 const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj";
-const moduleRoot = "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
+const moduleRoot = "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
 // The retained 153 completed traces span 58m25s, after 6m24s of setup.
 // The full 171-case projection is about 73m; keep finite headroom for that same inventory.
 // Individual case, request, retry and owned-cleanup budgets stay unchanged.

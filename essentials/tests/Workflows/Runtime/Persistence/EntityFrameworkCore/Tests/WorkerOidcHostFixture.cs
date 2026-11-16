@@ -189,7 +189,7 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
         var repository = FindRepositoryRoot();
         var path = Path.Combine(
             repository,
-            "Essentials", "tests",
+            "essentials", "tests",
             "Workflows",
             "Runtime",
             "Persistence",

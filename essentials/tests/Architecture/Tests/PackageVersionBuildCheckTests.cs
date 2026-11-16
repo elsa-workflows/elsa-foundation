@@ -52,12 +52,12 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Essentials/src", true)]
-    [InlineData("Essentials/apps", true)]
-    [InlineData("Extensions/Agent/src", true)]
-    [InlineData("Essentials/tests", false)]
-    [InlineData("Extensions/Agent/tests", false)]
-    [InlineData("Extensions/Agent/studio", false)]
+    [InlineData("essentials/src", true)]
+    [InlineData("apps", true)]
+    [InlineData("extensions/Agent/src", true)]
+    [InlineData("essentials/tests", false)]
+    [InlineData("extensions/Agent/tests", false)]
+    [InlineData("extensions/Agent/studio", false)]
     public void Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(string projectRoot, bool versioned)
     {
         var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, repositoryRoot: root, projectRoot: projectRoot);

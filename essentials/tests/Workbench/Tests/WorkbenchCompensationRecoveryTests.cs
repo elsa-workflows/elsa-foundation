@@ -646,7 +646,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         File.WriteAllText(path, shells.ToJsonString());
 
         var configuration = typeof(WorkbenchBuild).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
-        var project = Path.Combine(WorkbenchBuild.RepositoryRoot, "Essentials/tests/Workbench/Fixtures/Reservations");
+        var project = Path.Combine(WorkbenchBuild.RepositoryRoot, "essentials/tests/Workbench/Fixtures/Reservations");
         var framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
         // Nuplane's acquisition cache can outlive the host's state directory, so each run packs a unique version.
         var packageVersion = "1.0.0-witness." + Guid.NewGuid().ToString("N");
