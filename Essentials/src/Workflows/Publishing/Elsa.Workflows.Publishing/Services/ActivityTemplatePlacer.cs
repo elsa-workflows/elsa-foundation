@@ -474,10 +474,11 @@ public sealed class ActivityTemplatePlacer(
         while (ready.TryDequeue(out var occurrenceId))
         {
             var occurrence = byId[occurrenceId];
+            var pinnedRoot = MemberReadSelectionPinner.PinOccurrence(occurrence.Root, occurrenceId, occurrence.OccurrenceOverlay?.MemberReads);
             var root = occurrenceNodeIds is null
-                ? occurrence.Root
+                ? pinnedRoot
                 : CompileGraphVariableCaptures(
-                    PlacedReferenceRemapper.Remap(occurrence.Root, occurrenceNodeIds, closedScopeId!),
+                    PlacedReferenceRemapper.Remap(pinnedRoot, occurrenceNodeIds, closedScopeId!),
                     occurrence,
                     graphVariables,
                     closedScopeId!);

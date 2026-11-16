@@ -69,6 +69,43 @@ public sealed class MemberReadSelectionPinnerTests
         Assert.Same(tree, pinned);
     }
 
+    [Fact]
+    public void Occurrence_pinning_uses_explicit_identity_and_never_enters_nested_children()
+    {
+        var original = Tree();
+        var root = new ExecutableNode("placed-root", "dependency-authored-id", "test", "1", original.Descriptor,
+            Consumer(original).InputBindings, original.OutputCaptures, original.Metadata, childSlots: original.ChildSlots);
+        var read = new ExecutableActivityTemplateMemberRead(new("producer", "$result", null),
+            new(1, Segments, RuntimeReadSelectionMode.Known, new("String", CollectionKind.List), true, true,
+                ValueRepresentation.StructuredValue, "elsa.activity-value-json/1"));
+        var pinned = MemberReadSelectionPinner.PinOccurrence(root, "body-reader", new Dictionary<string, ExecutableActivityTemplateMemberRead> { ["value"] = read });
+        Assert.Equal("dependency-authored-id", pinned.AuthoredActivityId);
+        Assert.Equal(RuntimeReadSelectionMode.Known, pinned.InputBindings["value"].Selection!.Mode);
+        Assert.Equal(CollectionKind.List, pinned.InputBindings["value"].Selection!.SelectedType!.CollectionKind);
+        Assert.True(pinned.InputBindings["value"].Selection!.MayBeAbsent);
+        Assert.True(pinned.InputBindings["value"].Selection!.MayBeNull);
+        Assert.Same(root.ChildSlots.Single(), pinned.ChildSlots.Single());
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, Consumer(pinned).InputBindings["value"].Selection!.Mode);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, root.InputBindings["value"].Selection!.Mode);
+    }
+
+    [Theory]
+    [InlineData("producer", "$result", false, "address,street", "missing")]
+    [InlineData("elsewhere", "$result", false, "address,street", "value")]
+    [InlineData("producer", "other", false, "address,street", "value")]
+    [InlineData("producer", "$result", true, "address,street", "value")]
+    [InlineData("producer", "$result", false, "address", "value")]
+    public void A_pinned_occurrence_contract_mismatch_is_refused_without_fallback(string producer, string projection, bool optional, string segments, string key)
+    {
+        var read = new ExecutableActivityTemplateMemberRead(new(producer, projection, null, optional),
+            new(1, segments.Split(','), RuntimeReadSelectionMode.Known, new("String"), false, false,
+                ValueRepresentation.TextValue, "elsa.activity-value-json/1"));
+        var error = Assert.Throws<ActivityDataSelectionRejectedException>(() => MemberReadSelectionPinner.PinOccurrence(Consumer(Tree()), "occurrence",
+            new Dictionary<string, ExecutableActivityTemplateMemberRead> { [key] = read }));
+        Assert.Equal($"occurrence/inputs/{key}", Assert.Single(error.Findings).Path);
+        Assert.Equal("ActivityDataSelection/MemberContractMismatch", error.Findings[0].Type);
+    }
+
     private static ActivityDataMemberReadFacts Fact() => new("consumer/inputs/value", "producer", "$result", [.. Segments], IsKnown: true,
         new TypeReference("String"), MayBeAbsent: true, MayBeNull: false, ValueRepresentation.TextValue, "elsa.activity-value-json/1");
 
