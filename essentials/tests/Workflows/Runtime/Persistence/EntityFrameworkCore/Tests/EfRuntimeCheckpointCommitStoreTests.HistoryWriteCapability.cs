@@ -67,6 +67,30 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal("{\"state\":\"active\"}", restored.ContentJson);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Owned_CLR_property_access_keeps_native_and_independent_history_pairing(bool independent)
+    {
+        using var context = new PropertyHistoryAccessContext(new DbContextOptionsBuilder<PropertyHistoryAccessContext>().UseSqlite("Data Source=:memory:").Options);
+        var access = new HistoryCapabilityAccess();
+        var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
+        IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
+        var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
+        Assert.True(independent ? observer.CanRecordHistory(reader) : writer.CanCommitHistory(reader));
+        Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
+    }
+
+    private sealed class PropertyHistoryAccessContext(DbContextOptions<PropertyHistoryAccessContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            foreach (var entity in RuntimeHistoryEfModule.Chain.ContentColumns.Select(column => column.Entity).Distinct())
+                builder.Entity(entity).UsePropertyAccessMode(PropertyAccessMode.Property);
+        }
+    }
+
     private sealed class AliasedHistoryContentContext(DbContextOptions<AliasedHistoryContentContext> options) : RuntimeDbContext(options)
     {
         protected override void ConfigureProvider(ModelBuilder builder) { }

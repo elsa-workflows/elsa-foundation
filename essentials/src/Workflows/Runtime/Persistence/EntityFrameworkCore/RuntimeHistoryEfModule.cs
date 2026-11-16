@@ -29,7 +29,12 @@ internal static class RuntimeHistoryEfModule
                 var binding = property?.PropertyInfo;
                 if (property is null || binding is null || property.ClrType != member.PropertyType || binding.DeclaringType != member.DeclaringType ||
                     binding.Name != member.Name || property.GetBeforeSaveBehavior() != required.BeforeSave ||
-                    property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated) return false;
+                    property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated ||
+                    !HasOwnedMemberAccess(property, member)) return false;
+                // Configured conversions/comparers can silently change or suppress the owned scalar writes.
+                var declared = (IReadOnlyProperty)property;
+                if (declared.GetValueConverter() is not null ||
+                    declared.GetValueComparer() is { } comparer && !ReferenceEquals(comparer, property.GetTypeMapping().Comparer)) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
@@ -46,6 +51,15 @@ internal static class RuntimeHistoryEfModule
                 entity.GetKeys().Any(actual => !IsCompatible(actual.Properties))) return false;
         }
         return Shapes.Length > 0;
+    }
+
+    private static bool HasOwnedMemberAccess(IProperty property, PropertyInfo owned)
+    {
+        var field = owned.DeclaringType!.GetField($"<{owned.Name}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+        bool Matches(MemberInfo actual) => actual.Equals(owned) || field is not null && actual.Equals(field);
+        return Matches(property.GetMemberInfo(forMaterialization: false, forSet: false)) &&
+            Matches(property.GetMemberInfo(forMaterialization: false, forSet: true)) &&
+            Matches(property.GetMemberInfo(forMaterialization: true, forSet: true));
     }
 
     private static RequiredShape[] RequiredShapes()
