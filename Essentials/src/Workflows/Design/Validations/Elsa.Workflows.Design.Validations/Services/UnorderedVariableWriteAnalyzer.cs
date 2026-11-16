@@ -1,11 +1,13 @@
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
-namespace Elsa.Workflows.Design.Core.Services;
+namespace Elsa.Workflows.Design.Validations.Services;
 
 /// <summary>The kind of a declared variable write (spec 266).</summary>
-public enum VariableWriteKind
+internal enum VariableWriteKind
 {
     Capture,
     Set,
@@ -17,62 +19,14 @@ public enum VariableWriteKind
 /// A write to a variable that a node declares: an output capture, or a Set, Merge or Reduce intrinsic. The target is
 /// normalized: a blank, <c>workflow</c>, <c>$workflow</c> or legacy <c>activity-graph</c> scope is the root scope.
 /// </summary>
-public sealed record VariableWrite(string NodeId, VariableWriteKind Kind, string ScopeId, string ReferenceKey, string? OutputKey = null);
-
-/// <summary>A structure that did not declare what the analysis needed, so its children were treated as unordered.</summary>
-public sealed record UndeclaredStructure(string NodeId, string Kind);
-
-/// <summary>
-/// One variable whose writes the definition does not order: every writer, the writers that can run more than once at
-/// the same time, and the structures that declared nothing.
-/// </summary>
-public sealed record UnorderedVariableWriteFinding(
-    string ScopeId,
-    string ReferenceKey,
-    IReadOnlyList<string> WriterNodeIds,
-    IReadOnlyList<string> SelfOverlappingNodeIds,
-    IReadOnlyList<UndeclaredStructure> UndeclaredStructures)
-{
-    /// <summary>The author-facing text: writers, last-commit-wins, the fixes and the read-modify-write pointer.</summary>
-    public string Message
-    {
-        get
-        {
-            var writers = string.Join(", ", WriterNodeIds.Select(id => $"'{id}'"));
-            var text = WriterNodeIds.Count == 1
-                ? $"Variable '{ReferenceKey}' in scope '{ScopeId}' is written by node {writers}, whose runs the definition does not order."
-                : $"Variable '{ReferenceKey}' in scope '{ScopeId}' is written by {WriterNodeIds.Count} nodes whose order the definition does not fix: {writers}.";
-            foreach (var node in SelfOverlappingNodeIds)
-                text += $" Node '{node}' can run more than once at the same time.";
-            foreach (var structure in UndeclaredStructures)
-                text += $" Structure '{structure.Kind}' (node '{structure.NodeId}') does not declare how its children are ordered, so they are treated as unordered.";
-            return text +
-                   " The last successfully committed write wins, so the final value can differ between runs." +
-                   " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join." +
-                   " A step that reads the variable and writes it back is a read-modify-write: opt it in to the Fault lost-update mode where an overwrite must stop the step (ADR 0092).";
-        }
-    }
-}
-
-/// <summary>Two or more outputs of one node capture into the same variable.</summary>
-public sealed record DuplicateCaptureTargetFinding(string NodeId, string ScopeId, string ReferenceKey, IReadOnlyList<string> OutputKeys)
-{
-    public string Message =>
-        $"Outputs {string.Join(", ", OutputKeys.Select(key => $"'{key}'"))} of node '{NodeId}' all capture into variable '{ReferenceKey}' in scope '{ScopeId}'." +
-        " They commit in one completion in a fixed order, so the last of them wins; capture each output into its own variable to keep every value.";
-}
-
-/// <summary>The result of <see cref="UnorderedVariableWriteAnalysis.Analyze"/>.</summary>
-public sealed record UnorderedVariableWriteAnalysisResult(
-    IReadOnlyList<UnorderedVariableWriteFinding> UnorderedWrites,
-    IReadOnlyList<DuplicateCaptureTargetFinding> DuplicateCaptureTargets);
+internal sealed record VariableWrite(string NodeId, VariableWriteKind Kind, string ScopeId, string ReferenceKey, string? OutputKey = null);
 
 /// <summary>
 /// Finds declared writes to one variable whose order the definition does not fix (spec 266). All ordering knowledge
 /// comes from the structures' own declarations (<see cref="IActivityStructureHandler.RelateChildren"/> and
 /// <see cref="IActivityStructureHandler.CompletesAfterItsChildren"/>); the analysis knows no structure kind.
 /// </summary>
-public static class UnorderedVariableWriteAnalysis
+internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAnalyzer
 {
     private const string VariableExpressionType = "Variable";
     private const string LegacySetActivityVersionId = "elsa.intrinsic.set@1";
@@ -81,7 +35,7 @@ public static class UnorderedVariableWriteAnalysis
     /// The writes a node declares: its output captures into variables and, when <paramref name="includeIntrinsics"/>,
     /// its Set, Merge or Reduce intrinsic (including the legacy <c>elsa.intrinsic.set@1</c> node).
     /// </summary>
-    public static IEnumerable<VariableWrite> DeclaredWrites(ActivityNode node, bool includeIntrinsics = true)
+    internal static IEnumerable<VariableWrite> DeclaredWrites(ActivityNode node, bool includeIntrinsics = true)
     {
         ArgumentNullException.ThrowIfNull(node);
         foreach (var output in node.Outputs ?? [])
@@ -116,7 +70,7 @@ public static class UnorderedVariableWriteAnalysis
     }
 
     /// <summary>The root scope id for a blank, <c>workflow</c>, <c>$workflow</c> or legacy <c>activity-graph</c> scope.</summary>
-    public static string NormalizeScopeId(string? scopeId) =>
+    internal static string NormalizeScopeId(string? scopeId) =>
         string.IsNullOrWhiteSpace(scopeId) ||
         StringComparer.Ordinal.Equals(scopeId, VariableReference.WorkflowScopeId) ||
         StringComparer.Ordinal.Equals(scopeId, "$workflow") ||
@@ -124,18 +78,39 @@ public static class UnorderedVariableWriteAnalysis
             ? VariableReference.WorkflowScopeId
             : scopeId;
 
-    /// <summary>Analyses the tree under <paramref name="root"/>, reading each node's writes through <paramref name="writesOf"/>.</summary>
-    public static UnorderedVariableWriteAnalysisResult Analyze(
+    public UnorderedVariableWriteAnalysis Analyze(
         ActivityNode root,
         IActivityStructureService structures,
-        Func<ActivityNode, IEnumerable<VariableWrite>> writesOf,
+        bool includeIntrinsics,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(structures);
-        ArgumentNullException.ThrowIfNull(writesOf);
-        return new Analysis(structures, cancellationToken).Run(root, writesOf);
+        return new Analysis(structures, cancellationToken).Run(root, node => DeclaredWrites(node, includeIntrinsics));
     }
+
+    private static string UnorderedMessage(string scopeId, string referenceKey, IReadOnlyList<string> writerNodeIds,
+        IReadOnlyList<string> selfOverlapping, IReadOnlyList<UndeclaredStructure> undeclared)
+    {
+        var writers = string.Join(", ", writerNodeIds.Select(id => $"'{id}'"));
+        var text = writerNodeIds.Count == 1
+            ? $"Variable '{referenceKey}' in scope '{scopeId}' is written by node {writers}, whose runs the definition does not order."
+            : $"Variable '{referenceKey}' in scope '{scopeId}' is written by {writerNodeIds.Count} nodes whose order the definition does not fix: {writers}.";
+        foreach (var node in selfOverlapping)
+            text += $" Node '{node}' can run more than once at the same time.";
+        foreach (var structure in undeclared)
+            text += structure.Fact == UndeclaredStructureFact.Completion
+                ? $" Structure '{structure.Kind}' (node '{structure.NodeId}') does not declare whether it completes only after its children, so its children's writes are treated as unordered with what follows it."
+                : $" Structure '{structure.Kind}' (node '{structure.NodeId}') does not declare how its children are ordered, so they are treated as unordered.";
+        return text +
+               " The last successfully committed write wins, so the final value can differ between runs." +
+               " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join." +
+               " A step that reads the variable and writes it back is a read-modify-write: opt it in to the Fault lost-update mode where an overwrite must stop the step (ADR 0092).";
+    }
+
+    private static string DuplicateMessage(string nodeId, string scopeId, string referenceKey, IReadOnlyList<string> outputKeys) =>
+        $"Outputs {string.Join(", ", outputKeys.Select(key => $"'{key}'"))} of node '{nodeId}' all capture into variable '{referenceKey}' in scope '{scopeId}'." +
+        " They commit in one completion in a fixed order, so the last of them wins; capture each output into its own variable to keep every value.";
 
     private sealed class Analysis(IActivityStructureService structures, CancellationToken cancellationToken)
     {
@@ -143,7 +118,7 @@ public static class UnorderedVariableWriteAnalysis
         private readonly Dictionary<(Node Parent, string First, string Second), ActivityChildTimeRelation> _relations = [];
         private readonly Dictionary<Node, bool?> _completes = [];
 
-        public UnorderedVariableWriteAnalysisResult Run(ActivityNode root, Func<ActivityNode, IEnumerable<VariableWrite>> writesOf)
+        public UnorderedVariableWriteAnalysis Run(ActivityNode root, Func<ActivityNode, IEnumerable<VariableWrite>> writesOf)
         {
             Build(root);
             var writes = new List<(Node Node, VariableWrite Write)>();
@@ -156,9 +131,12 @@ public static class UnorderedVariableWriteAnalysis
                     .Where(write => write.Kind == VariableWriteKind.Capture)
                     .GroupBy(write => (write.ScopeId, write.ReferenceKey))
                     .Where(group => group.Count() > 1)
-                    .Select(group => new DuplicateCaptureTargetFinding(
-                        node.Activity.NodeId, group.Key.ScopeId, group.Key.ReferenceKey,
-                        group.Select(write => write.OutputKey ?? string.Empty).ToArray())));
+                    .Select(group =>
+                    {
+                        var keys = group.Select(write => write.OutputKey ?? string.Empty).ToArray();
+                        return new DuplicateCaptureTargetFinding(node.Activity.NodeId, group.Key.ScopeId, group.Key.ReferenceKey, keys,
+                            DuplicateMessage(node.Activity.NodeId, group.Key.ScopeId, group.Key.ReferenceKey, keys));
+                    }));
             }
 
             var findings = new List<UnorderedVariableWriteFinding>();
@@ -188,12 +166,11 @@ public static class UnorderedVariableWriteAnalysis
 
                 if (reported.Count == 0)
                     continue;
-                findings.Add(new(
-                    variable.Key.ScopeId,
-                    variable.Key.ReferenceKey,
-                    reported.OrderBy(node => node.Order).Select(node => node.Activity.NodeId).ToArray(),
-                    selfOverlapping.Select(node => node.Activity.NodeId).ToArray(),
-                    undeclared.Distinct().ToArray()));
+                var writerIds = reported.OrderBy(node => node.Order).Select(node => node.Activity.NodeId).ToArray();
+                var overlappingIds = selfOverlapping.Select(node => node.Activity.NodeId).ToArray();
+                var undeclaredStructures = undeclared.Distinct().ToArray();
+                findings.Add(new(variable.Key.ScopeId, variable.Key.ReferenceKey, writerIds, overlappingIds, undeclaredStructures,
+                    UnorderedMessage(variable.Key.ScopeId, variable.Key.ReferenceKey, writerIds, overlappingIds, undeclaredStructures)));
             }
 
             return new(findings, duplicates);
@@ -244,6 +221,9 @@ public static class UnorderedVariableWriteAnalysis
 
             var firstChild = ChildBelow(first, common);
             var secondChild = ChildBelow(second, common);
+            // Two children with one node id cannot be told apart by their structure: never claim an order for them.
+            if (StringComparer.Ordinal.Equals(firstChild.Activity.NodeId, secondChild.Activity.NodeId))
+                return true;
             switch (Relate(common, firstChild, secondChild))
             {
                 case ActivityChildTimeRelation.MutuallyExclusive:
@@ -255,7 +235,7 @@ public static class UnorderedVariableWriteAnalysis
                 case ActivityChildTimeRelation.SecondBeforeFirst:
                     return !EarlierSideIsDone(common, second, secondChild, undeclared);
                 default:
-                    AddUndeclared(common, undeclared);
+                    AddUndeclared(common, UndeclaredStructureFact.ChildOrder, undeclared);
                     return true;
             }
         }
@@ -277,7 +257,7 @@ public static class UnorderedVariableWriteAnalysis
                 if (completes != true)
                 {
                     if (completes is null)
-                        AddUndeclared(structure, undeclared);
+                        AddUndeclared(structure, UndeclaredStructureFact.Completion, undeclared);
                     return false;
                 }
 
@@ -309,9 +289,9 @@ public static class UnorderedVariableWriteAnalysis
             return completes;
         }
 
-        private static void AddUndeclared(Node structure, List<UndeclaredStructure> undeclared)
+        private static void AddUndeclared(Node structure, UndeclaredStructureFact fact, List<UndeclaredStructure> undeclared)
         {
-            var entry = new UndeclaredStructure(structure.Activity.NodeId, structure.Activity.Structure?.Kind ?? "<none>");
+            var entry = new UndeclaredStructure(structure.Activity.NodeId, structure.Activity.Structure?.Kind ?? "<none>", fact);
             if (!undeclared.Contains(entry))
                 undeclared.Add(entry);
         }

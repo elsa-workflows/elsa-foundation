@@ -1,6 +1,10 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Services;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Publishing.Core.Models;
 using Xunit;
@@ -11,6 +15,19 @@ namespace Elsa.Activities.Graph.Tests;
 /// <summary>Spec 266, Story 3: unordered captures into a graph activity's own variables.</summary>
 public sealed partial class GraphActivityProviderTests
 {
+    // The provider the host composes: the workflow design validations feature supplies the analyzer.
+    private static readonly GraphActivityProvider WriteOrderProvider = new(
+        new TestActivityStructureService(),
+        new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()),
+        writeOrderAnalyzer: WriteOrderAnalyzer());
+
+    private static IUnorderedVariableWriteAnalyzer WriteOrderAnalyzer()
+    {
+        var services = new ServiceCollection();
+        new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        return services.BuildServiceProvider().GetRequiredService<IUnorderedVariableWriteAnalyzer>();
+    }
+
     private const string Capture = """[{ "referenceKey": "total", "value": { "expressionType": "Variable", "value": { "referenceKey": "running-total", "declaringScopeId": "workflow" } } }]""";
 
     // Scenarios 1 and 2.
@@ -26,8 +43,8 @@ public sealed partial class GraphActivityProviderTests
             """.Replace("CAPTURE", Capture, StringComparison.Ordinal);
         var manifest = TotalManifest(root);
 
-        var draft = await _provider.ValidateAsync(manifest, TotalContract());
-        var compilation = await _provider.CompileAsync(TotalRequest(manifest, new("elsa.parallel.structure", "1.0.0")));
+        var draft = await WriteOrderProvider.ValidateAsync(manifest, TotalContract());
+        var compilation = await WriteOrderProvider.CompileAsync(TotalRequest(manifest, new("elsa.parallel.structure", "1.0.0")));
 
         foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
         {
@@ -55,11 +72,25 @@ public sealed partial class GraphActivityProviderTests
             """.Replace("CAPTURE", Capture, StringComparison.Ordinal);
         var manifest = TotalManifest(root);
 
-        var draft = await _provider.ValidateAsync(manifest, TotalContract());
-        var compilation = await _provider.CompileAsync(TotalRequest(manifest, new("Sequence", "1")));
+        var draft = await WriteOrderProvider.ValidateAsync(manifest, TotalContract());
+        var compilation = await WriteOrderProvider.CompileAsync(TotalRequest(manifest, new("Sequence", "1")));
 
         Assert.DoesNotContain(draft, x => x.Code == "activity.graph.unordered-variable-write");
         Assert.DoesNotContain(compilation.Diagnostics, x => x.Code == "activity.graph.unordered-variable-write");
+    }
+
+    [Fact]
+    public async Task A_host_without_the_validations_feature_reports_no_write_order_warning()
+    {
+        var root = """
+            { "nodeId": "root", "activityVersionId": "activity-ver-root", "inputs": [], "outputs": [],
+              "structure": { "kind": "elsa.parallel.structure", "schemaVersion": "1.0.0", "payload": { "branches": [
+                { "name": "left", "activity": { "nodeId": "first", "activityVersionId": "activity-ver-step", "inputs": [], "outputs": CAPTURE, "structure": null } },
+                { "name": "right", "activity": { "nodeId": "second", "activityVersionId": "activity-ver-step", "inputs": [], "outputs": CAPTURE, "structure": null } }
+              ] } } }
+            """.Replace("CAPTURE", Capture, StringComparison.Ordinal);
+
+        Assert.DoesNotContain(await _provider.ValidateAsync(TotalManifest(root), TotalContract()), x => x.Code == "activity.graph.unordered-variable-write");
     }
 
     private static ActivityProviderManifest TotalManifest(string root) => new(

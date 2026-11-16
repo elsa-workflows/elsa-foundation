@@ -14,8 +14,16 @@ internal sealed class FlowchartChildResultAnalysis(
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> successors,
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> predecessors,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? inboundSources = null,
-    IReadOnlySet<string>? nonWaitingJoins = null)
+    IReadOnlySet<string>? nonWaitingJoins = null,
+    IReadOnlySet<string>? definiteForks = null,
+    IReadOnlySet<string>? raceJoins = null)
 {
+    private readonly IReadOnlySet<string> _raceJoins = raceJoins ?? new HashSet<string>(StringComparer.Ordinal);
+    private readonly IReadOnlySet<string> _definiteForks = definiteForks ?? new HashSet<string>(StringComparer.Ordinal);
+    private readonly Dictionary<(string, string, bool), bool> _reachable = [];
+    private Dictionary<string, HashSet<string>>? _dominators;
+    private HashSet<string>? _forkCycleRuns;
+
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _inboundSources =
         inboundSources ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
     private readonly IReadOnlySet<string> _nonWaitingJoins = nonWaitingJoins ?? new HashSet<string>(StringComparer.Ordinal);
@@ -55,6 +63,12 @@ internal sealed class FlowchartChildResultAnalysis(
     /// </summary>
     public ActivityChildTimeRelation Relate(string first, string second)
     {
+        lock (_reachable)
+            return RelateCore(first, second);
+    }
+
+    private ActivityChildTimeRelation RelateCore(string first, string second)
+    {
         if (!nodeIds.Contains(first) || !nodeIds.Contains(second))
             return ActivityChildTimeRelation.Unspecified;
         if (StringComparer.Ordinal.Equals(first, second))
@@ -67,15 +81,32 @@ internal sealed class FlowchartChildResultAnalysis(
 
         // In a cycle each child runs after the other's earlier pass; take the direction a dominator gives.
         var firstEarlier = forward && (!backward || !Dominates(second, first));
-        return firstEarlier
-            ? OrderedThroughJoins(first, second) ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.Unordered
-            : OrderedThroughJoins(second, first) ? ActivityChildTimeRelation.SecondBeforeFirst : ActivityChildTimeRelation.Unordered;
+        var (earlier, later) = firstEarlier ? (first, second) : (second, first);
+        if (!OrderedThroughJoins(earlier, later) || OverlapsALaterPass(earlier, later))
+            return ActivityChildTimeRelation.Unordered;
+        return firstEarlier ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
+    }
+
+    // A branch that a fork on a cycle sends off the cycle can still run while the next pass of the cycle runs.
+    private bool OverlapsALaterPass(string earlier, string later) =>
+        ForkCycleRuns().Contains(later) && IsReachable(earlier, earlier, requireEdge: true);
+
+    // Nodes reachable from a branch that leaves a cycle through a definite fork: every pass starts another run of them.
+    private HashSet<string> ForkCycleRuns()
+    {
+        if (_forkCycleRuns is not null)
+            return _forkCycleRuns;
+        var runs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var fork in _definiteForks.Where(fork => IsReachable(fork, fork, requireEdge: true)))
+        foreach (var branch in successors.GetValueOrDefault(fork, []).Where(branch => !IsReachable(branch, fork)))
+            runs.UnionWith(nodeIds.Where(node => StringComparer.Ordinal.Equals(node, branch) || IsReachable(branch, node)));
+        return _forkCycleRuns = runs;
     }
 
     // A non-waiting join between the two that another arrival can reach without the earlier child lets the later
     // child run while the earlier one is still in flight.
     private bool OrderedThroughJoins(string earlier, string later) =>
-        _nonWaitingJoins
+        _nonWaitingJoins.Concat(_raceJoins)
             .Where(join => !StringComparer.Ordinal.Equals(join, earlier))
             .Where(join => IsReachable(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || IsReachable(join, later)))
             .All(join => Dominates(earlier, join) || !OtherArrivalCanOverlap(join, earlier));
@@ -92,6 +123,7 @@ internal sealed class FlowchartChildResultAnalysis(
     // connections come from one node (it may select several outcomes) or from two nodes that are neither ordered nor
     // exclusive. Every node reachable from such a join runs once per join run.
     private bool SelfOverlaps(string node) =>
+        ForkCycleRuns().Contains(node) ||
         _nonWaitingJoins.Any(join =>
             (StringComparer.Ordinal.Equals(join, node) || IsReachable(join, node)) && ArrivalsCanOverlap(join));
 
@@ -112,6 +144,14 @@ internal sealed class FlowchartChildResultAnalysis(
     }
 
     private bool IsReachable(string source, string target, bool requireEdge = false)
+    {
+        var key = (source, target, requireEdge);
+        if (!_reachable.TryGetValue(key, out var reachable))
+            _reachable[key] = reachable = Search(source, target, requireEdge);
+        return reachable;
+    }
+
+    private bool Search(string source, string target, bool requireEdge)
     {
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>();
@@ -136,10 +176,15 @@ internal sealed class FlowchartChildResultAnalysis(
     /// <summary>Whether every path from every entry to the node passes the candidate.</summary>
     private bool Dominates(string candidate, string node)
     {
+        _dominators ??= ComputeDominators();
+        return _dominators.TryGetValue(node, out var dominators) && dominators.Contains(candidate);
+    }
+
+    // Computed once per analysis: a node's dominators over every legal entry; unreachable nodes have none.
+    private Dictionary<string, HashSet<string>> ComputeDominators()
+    {
         var entries = entryNodeIds.ToHashSet(StringComparer.Ordinal);
         var reachable = nodeIds.Where(id => entries.Any(entry => IsReachable(entry, id))).ToHashSet(StringComparer.Ordinal);
-        if (!reachable.Contains(candidate) || !reachable.Contains(node))
-            return false;
 
         var dominators = reachable.ToDictionary(
             id => id,
@@ -168,7 +213,7 @@ internal sealed class FlowchartChildResultAnalysis(
             }
         }
 
-        return dominators[node].Contains(candidate);
+        return dominators;
     }
 
     /// <summary>Whether each node has a legal entry and no entry can reach both nodes.</summary>
@@ -190,12 +235,14 @@ internal sealed class FlowchartChildResultAnalysis(
             return null;
 
         var edges = new List<(string Source, string Target)>();
+        var ports = new List<(string Source, string Port)>();
         foreach (var connection in structure.Connections)
         {
             if (connection?.Source is null || connection.Target is null ||
                 !childNodeIds.Contains(connection.Source.NodeId) || !childNodeIds.Contains(connection.Target.NodeId))
                 return null;
             edges.Add((connection.Source.NodeId, connection.Target.NodeId));
+            ports.Add((connection.Source.NodeId, connection.Source.Port ?? string.Empty));
         }
 
         var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
@@ -224,12 +271,24 @@ internal sealed class FlowchartChildResultAnalysis(
             id => (IReadOnlyList<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Target, id)).Select(edge => edge.Source).ToArray(),
             StringComparer.Ordinal);
         // FlowchartJoinCoordinator.ShouldWaitForTarget: only a merge node with several inbound connections does not wait.
+        string? PolicyOf(string id) => structure.NodeMetadata.TryGetValue(id, out var metadata) ? metadata?.PolicyKind : null;
         var nonWaitingJoins = nodeIds
-            .Where(id => inboundSources[id].Count > 1 &&
-                         structure.NodeMetadata.TryGetValue(id, out var metadata) &&
-                         StringComparer.Ordinal.Equals(metadata?.PolicyKind, FlowchartPolicyKinds.Merge))
+            .Where(id => inboundSources[id].Count > 1 && StringComparer.Ordinal.Equals(PolicyOf(id), FlowchartPolicyKinds.Merge))
             .ToHashSet(StringComparer.Ordinal);
-        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins);
+        // A first-wins race cancels its losing paths only in the Flowchart's state: their running activities still
+        // commit, while a join downstream of the race is released without them. Such a join does not order them.
+        var raceReach = new HashSet<string>(StringComparer.Ordinal);
+        var pendingReach = new Stack<string>(nodeIds.Where(id => StringComparer.Ordinal.Equals(PolicyOf(id), FlowchartPolicyKinds.FirstWins)));
+        while (pendingReach.Count > 0)
+            foreach (var next in successors[pendingReach.Pop()])
+                if (raceReach.Add(next)) pendingReach.Push(next);
+        var raceJoins = raceReach.Where(id => inboundSources[id].Count > 1).ToHashSet(StringComparer.Ordinal);
+        // Definite forks: several connections leave one port, or the node's policy schedules all of them.
+        var definiteForks = nodeIds
+            .Where(id => ports.Where(port => StringComparer.Ordinal.Equals(port.Source, id)).GroupBy(port => port.Port, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
+                         PolicyOf(id) is FlowchartPolicyKinds.ParallelFork or FlowchartPolicyKinds.InclusiveFork)
+            .ToHashSet(StringComparer.Ordinal);
+        return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins, definiteForks, raceJoins);
     }
 
 }

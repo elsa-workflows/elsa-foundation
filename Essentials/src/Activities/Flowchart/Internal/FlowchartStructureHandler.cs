@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Flowchart.Models;
@@ -47,9 +48,15 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
                ?? new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
     }
 
+    // One analysis per authored structure node: the unordered-write analysis asks about many pairs of one Flowchart.
+    private readonly ConditionalWeakTable<ActivityNode, TimeRelationHolder> _timeRelations = new();
+
     public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
-        FlowchartChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Relate(firstChildNodeId, secondChildNodeId)
+        _timeRelations.GetValue(activity, node => new(FlowchartChildResultAnalysis.TryCreate(ReadAuthoredStructure(node))))
+            .Analysis?.Relate(firstChildNodeId, secondChildNodeId)
         ?? ActivityChildTimeRelation.Unspecified;
+
+    private sealed record TimeRelationHolder(FlowchartChildResultAnalysis? Analysis);
 
     // A first-wins race marks the losing paths cancelled in the Flowchart's state, but their running activities are not
     // cancelled: the Flowchart can complete while they still run and commit. A Break does the same, but whether a child

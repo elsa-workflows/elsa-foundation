@@ -52,9 +52,13 @@ Each structure declares how its children relate in time; the warning has no list
   non-sequential BPMN multi-instance.
 - **Across a join**: a branch is ordered before the continuation only when the join waits for it. A Flowchart node
   with several inbound connections waits, except under the `merge` policy. A BPMN parallel or inclusive gateway waits;
-  an exclusive gateway or an implicit join does not. A Parallel with a threshold below its branch count completes
-  while the other branches still run, and so does a Flowchart that uses the `firstWins` policy: writes of those
-  branches stay unordered with what follows.
+  an exclusive gateway or an implicit join does not. A `firstWins` race leaves its losing branch running, so a join
+  after the race does not order it. A Parallel with a threshold below its branch count completes while the other
+  branches still run, and so does a Flowchart that uses the `firstWins` policy: writes of those branches stay
+  unordered with what follows.
+- **Loops that fork**: when a pass of a Flowchart or BPMN cycle forks off the cycle, the branch can still run while
+  the next pass runs, so it is unordered with itself and with the cycle. A loop whose decision repeats through one
+  port and leaves through another is not treated as a fork.
 - **A structure that declares nothing** is treated as unordered, and the warning says that it does not declare how
   its children are ordered.
 

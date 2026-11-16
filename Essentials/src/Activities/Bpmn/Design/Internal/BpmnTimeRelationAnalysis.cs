@@ -30,6 +30,7 @@ internal sealed class BpmnTimeRelationAnalysis
     private readonly HashSet<string> _nonWaitingJoins = new(StringComparer.Ordinal);
     private readonly Dictionary<(string, string), bool> _reachable = [];
     private Dictionary<string, HashSet<string>>? _dominators;
+    private HashSet<string>? _forkCycleRuns;
 
     private BpmnTimeRelationAnalysis(Dictionary<string, BpmnElement> elements, Dictionary<string, string> elementOfChild)
     {
@@ -38,6 +39,12 @@ internal sealed class BpmnTimeRelationAnalysis
     }
 
     public ActivityChildTimeRelation Relate(string firstChild, string secondChild)
+    {
+        lock (_elements)
+            return RelateCore(firstChild, secondChild);
+    }
+
+    private ActivityChildTimeRelation RelateCore(string firstChild, string secondChild)
     {
         if (!_elementOfChild.TryGetValue(firstChild, out var first) || !_elementOfChild.TryGetValue(secondChild, out var second))
             return ActivityChildTimeRelation.Unspecified;
@@ -55,16 +62,38 @@ internal sealed class BpmnTimeRelationAnalysis
             return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
 
         var firstEarlier = forward && (!backward || !Dominates(second, first));
-        return firstEarlier
-            ? OrderedThroughJoins(first, second) ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.Unordered
-            : OrderedThroughJoins(second, first) ? ActivityChildTimeRelation.SecondBeforeFirst : ActivityChildTimeRelation.Unordered;
+        var (earlier, later) = firstEarlier ? (first, second) : (second, first);
+        if (!OrderedThroughJoins(earlier, later) || (ForkCycleRuns().Contains(later) && IsReachable(earlier, earlier)))
+            return ActivityChildTimeRelation.Unordered;
+        return firstEarlier ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
+    }
+
+    // A branch that an unordered split on a cycle sends off the cycle can still run while the next pass runs, so every
+    // node reachable from it overlaps itself and the next pass of the cycle.
+    private HashSet<string> ForkCycleRuns()
+    {
+        if (_forkCycleRuns is not null)
+            return _forkCycleRuns;
+        var runs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (fork, edges) in _outgoing)
+        {
+            if (edges.Count(edge => edge.Choice is null) < 2 || !IsReachable(fork, fork))
+                continue;
+            foreach (var edge in edges.Where(edge => edge.Choice is null && !IsReachable(edge.Target, fork)))
+            {
+                runs.Add(edge.Target);
+                runs.UnionWith(_inbound.Keys.Where(node => IsReachable(edge.Target, node)));
+            }
+        }
+
+        return _forkCycleRuns = runs;
     }
 
     private bool InGraph(string node) => _inbound.ContainsKey(node);
 
     private bool OverlapsItself(string element)
     {
-        if (_elements[element].LoopCharacteristics is { IsSequential: false })
+        if (_elements[element].LoopCharacteristics is { IsSequential: false } || ForkCycleRuns().Contains(element))
             return true;
         return InGraph(element) && _nonWaitingJoins.Any(join =>
             (StringComparer.Ordinal.Equals(join, element) || IsReachable(join, element)) && ArrivalsCanOverlap(join));

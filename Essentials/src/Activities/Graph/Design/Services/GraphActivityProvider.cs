@@ -15,7 +15,6 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Expressions.Core.Models;
@@ -32,7 +31,8 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
+    IServiceScopeFactory? scopeFactory = null,
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
@@ -1461,17 +1461,17 @@ public sealed class GraphActivityProvider(
             diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));
     }
 
-    // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings;
-    // compilation still succeeds. A body that already has errors is not analysed.
+    // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings,
+    // alongside any errors; compilation still succeeds when there are no errors. A host without the workflow design
+    // validations feature has no analyzer to run.
     private void ValidateWriteOrder(IReadOnlyList<GraphNode> nodes, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
     {
-        if (diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error) ||
+        if (writeOrderAnalyzer is null ||
             nodes.FirstOrDefault(x => x.ParentOccurrenceId is null)?.Activity is not { } root)
             return;
 
         var pointers = nodes.GroupBy(x => x.NodeId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
-        var result = UnorderedVariableWriteAnalysis.Analyze(
-            root, activityStructureService, node => UnorderedVariableWriteAnalysis.DeclaredWrites(node, includeIntrinsics: false));
+        var result = writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: false);
         foreach (var finding in result.UnorderedWrites)
         {
             diagnostics.Add(Warning(
@@ -1480,7 +1480,7 @@ public sealed class GraphActivityProvider(
                 subject,
                 pointers.GetValueOrDefault(finding.WriterNodeIds[0]),
                 "ValueFlow/ConcurrentWrite",
-                $"$workflow/variables/{finding.ReferenceKey}"));
+                finding.ScopeId == "workflow" ? $"$workflow/variables/{finding.ReferenceKey}" : $"{finding.ScopeId}/variables/{finding.ReferenceKey}"));
         }
 
         foreach (var duplicate in result.DuplicateCaptureTargets)

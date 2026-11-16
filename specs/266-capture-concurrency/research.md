@@ -71,7 +71,9 @@ join sentence require across levels, for example a threshold Parallel inside a S
   reachable from X, X is ordered before Y unless a non-waiting join (a `merge` node with two or more inbound
   connections) on a path from X to Y is not dominated by X and has another inbound source that neither follows X nor
   excludes it: that arrival can run the join, and Y, while X is in flight. An exclusive merge after an exclusive split
-  therefore keeps its continuation ordered.
+  therefore keeps its continuation ordered. A join downstream of a `firstWins` race does not order the race's
+  branches either: the losing path is cancelled only in the Flowchart's state, its activity keeps running, and the
+  join is released without it.
   A merge node reached by unordered arrivals can itself run twice at once (R-5).
 - BPMN joins: parallel and inclusive gateways wait. An exclusive gateway, an event-based gateway and any other element
   with several incoming flows pass each token on (BPMN uncontrolled flow); they are treated like `merge`.
@@ -84,6 +86,10 @@ together. Then every write in its subtree is an unordered write, even a single n
 
 - BPMN non-sequential multi-instance (`LoopCharacteristics.IsSequential == false`).
 - A Flowchart or BPMN node reached from a non-waiting join whose inbound paths are not mutually exclusive.
+- A node on a branch that a definite fork on a cycle sends off the cycle (Flowchart: several connections from one
+  port, or the `parallelFork`/`inclusiveFork` policy; BPMN: any split that is not exclusive). Each pass starts another
+  run of the branch, which also overlaps the next pass of the cycle. A Flowchart loop that repeats through one port
+  and leaves through another is not counted: treating it as a fork would follow from finding F-1 and is left to #4193.
 
 For the self-pair, `Unspecified` is treated as "never overlaps": treating every child of an undeclared structure as
 self-overlapping would warn about every single write in it. D-2b's unordered default applies to pairs of different
@@ -112,8 +118,9 @@ The BPMN handler analyses the element graph (sequence flows) with a virtual root
   `ActivityDiagnostic` with severity `Warning`, code `activity.graph.unordered-variable-write`, and metadata
   `validationType = ValueFlow/ConcurrentWrite`. Compilation continues because only errors stop it.
 - Workflow executable compilation adds nothing (D-3).
-- One analysis serves all three: `UnorderedVariableWriteAnalysis` in `Elsa.Workflows.Design.Core`, which both callers
-  already reference. Each caller supplies how a node writes variables (captures, and intrinsics for workflows).
+- One analysis serves all three: the `IUnorderedVariableWriteAnalyzer` contract in `Elsa.Workflows.Design.Validations.Core`
+  (which Graph Design already references), implemented internally in `Elsa.Workflows.Design.Validations`. Each caller
+  says whether intrinsics count as writes (workflows) or only captures (graph bodies).
 
 ## R-8 Alternatives considered (design choices of this spec)
 

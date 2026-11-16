@@ -2,9 +2,9 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Services;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
 
@@ -14,8 +14,11 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </summary>
 public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
-    IActivityDataSelectionAnalyzer sourceAnalyzer) : IDraftValidator
+    IActivityDataSelectionAnalyzer sourceAnalyzer,
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer = null) : IDraftValidator
 {
+    private readonly IUnorderedVariableWriteAnalyzer _writeOrderAnalyzer = writeOrderAnalyzer ?? new UnorderedVariableWriteAnalyzer();
+
     /// <summary>Preserves the legacy call shape; validation fails closed until shared authority is supplied.</summary>
     public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!) { }
 
@@ -46,8 +49,7 @@ public sealed class ValueFlowValidator(
     // refusal. The ordering knowledge comes only from the structures' declarations.
     private void ValidateUnorderedWrites(ActivityNode root, ICollection<ValidationError> errors, CancellationToken cancellationToken)
     {
-        var result = UnorderedVariableWriteAnalysis.Analyze(
-            root, activityStructureService, node => UnorderedVariableWriteAnalysis.DeclaredWrites(node), cancellationToken);
+        var result = _writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: true, cancellationToken);
         foreach (var finding in result.UnorderedWrites)
         {
             AddOnce(errors, new ValidationError(

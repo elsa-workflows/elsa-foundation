@@ -2,7 +2,8 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests;
@@ -51,7 +52,7 @@ public sealed class UnorderedVariableWriteAnalysisTests
 
         Assert.Equal(warns, findings.Count == 1);
         if (completes is null)
-            Assert.Contains("Structure 'test.container' (node 'container') does not declare", Assert.Single(findings).Message, StringComparison.Ordinal);
+            Assert.Contains("Structure 'test.container' (node 'container') does not declare whether it completes only after its children", Assert.Single(findings).Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -90,8 +91,25 @@ public sealed class UnorderedVariableWriteAnalysisTests
         Assert.Equal(VariableReference.WorkflowScopeId, finding.ScopeId);
     }
 
-    private static UnorderedVariableWriteAnalysisResult Analyze(ActivityNode root, DeclaredStructures structures) =>
-        UnorderedVariableWriteAnalysis.Analyze(root, structures, node => UnorderedVariableWriteAnalysis.DeclaredWrites(node));
+    [Fact]
+    public void Two_children_with_one_node_id_are_never_claimed_ordered()
+    {
+        var root = Container("sequence", Capture("same", "total"), Capture("same", "total"));
+        var structures = new DeclaredStructures { Ordered = { "sequence" } };
+
+        Assert.Single(Analyze(root, structures).UnorderedWrites);
+    }
+
+    private static UnorderedVariableWriteAnalysis Analyze(ActivityNode root, DeclaredStructures structures) =>
+        WriteOrderAnalyzer().Analyze(root, structures, includeIntrinsics: true);
+
+    private static Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer WriteOrderAnalyzer()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        return services.BuildServiceProvider().GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer>();
+    }
+
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 

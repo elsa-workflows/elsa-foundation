@@ -16,6 +16,7 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   variables (`SupportsScopedVariables` defaults to `false`). Its `AssessChildResult` keeps availability
   `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: `Switch` schedules the one chosen branch
   itself, once per run.
+- `SwitchStructureHandler.RelateChildren` states the branches `MutuallyExclusive` and it completes after its children (spec 266).
 - `SwitchDuplicateCaseValidator` implements `IDraftValidator`
   (`Elsa.Workflows.Design.Validations.Core`). It walks the Draft activity tree and emits a
   `Switch/DuplicateCase` `ValidationError` for any `Switch` node that declares the same case match value
@@ -29,4 +30,3 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 The v2 handler projects each present `condition` container as a normal Boolean input at `Case:{caseId}:Condition`, including unbound containers. `caseId` is stable and unique; `match` remains the human label and outcome. Value is consumed from ordinary inputs and projected only if a legacy case remains. Child replacement retains arguments, identities and unknown payload fields. The v1 handler remains registered for existing definitions/artifacts.
 
 `SwitchStructureInputPolicy` contributes `IRuntimeStructureInputMaterializationPolicy` for this kind/schema. It reads conditions in case order through the constrained normal materializer, stopping at the first true condition or legacy match. Switch implements `IRuntimeStructureInputConsumer` to receive pinned activation values. These contracts are cataloged in [Workflows.Runtime](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputmaterializationpolicy-core--elsaworkflowsruntimecore) and [Workflows.Design](../../../Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandlerprojectinputs-core--elsaworkflowsdesigncore).
-- `SwitchStructureHandler.RelateChildren` states the branches `MutuallyExclusive` and it completes after its children (spec 266).

@@ -21,7 +21,7 @@ Duplicate capture target on one node: `Type` `ValueFlow/DuplicateCaptureTarget`,
 | Field | Value |
 |---|---|
 | `Code` | `activity.graph.unordered-variable-write` (duplicate: `activity.graph.duplicate-capture-target`) |
-| `Severity` | `Warning`; compilation still succeeds |
+| `Severity` | `Warning`; compilation still succeeds when there are no errors. Reported alongside other diagnostics, also when the body has errors |
 | `Metadata` | `validationType` = `ValueFlow/ConcurrentWrite` (or `ValueFlow/DuplicateCaptureTarget`), `validationPath` as above |
 | `Message` | See below |
 

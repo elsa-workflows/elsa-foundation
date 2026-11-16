@@ -47,7 +47,7 @@ reachability is computed once per structure node and cached for the pass
 |---|---|---|
 | §2.24.2 / §2.24.3 sanctioned patterns | PASS | No new pattern: two default-implemented members on the existing activity-owned structure handler contract (the same shape as `ChildrenCompletedBefore` and `AssessChildResult`). |
 | §E2.2 Runtime takes no Design reference | PASS | Design-time only; no Runtime project changes. |
-| §2.17 duplication beats dependency | PASS | The analysis lives once in `Elsa.Workflows.Design.Core`, which both callers already reference. Graph reachability helpers stay inside each structure module. |
+| §2.1 / §2.17 thin `.Core`, §2.23.3 visibility | PASS | Review round 1 moved the analysis out of `Elsa.Workflows.Design.Core`: the contract and its finding models (crossing the package boundary to Graph Design) are public in `Elsa.Workflows.Design.Validations.Core`; the implementation is internal in `Elsa.Workflows.Design.Validations`. Graph reachability helpers stay inside each structure module. |
 | Extension-point catalogs | ACTION | FR-012: `Elsa.Workflows.Design.Core` and every built-in structure module record the declaration (T014). |
 | §2.22 docs | ACTION | FR-004, FR-014: the authoring reference states the rule, last-commit-wins, the limits and the inspection gap (T021). |
 | §2.23.1–§2.23.2 tests | PASS | One test per acceptance scenario, plus the declaration of every built-in structure and the SC-005 evidence test. |
@@ -60,9 +60,9 @@ reachability is computed once per structure node and cached for the pass
 | # | Decision | Detail |
 |---|---|---|
 | P-1 | Declaration | `ActivityChildTimeRelation` and `IActivityStructureHandler.RelateChildren` / `CompletesAfterItsChildren`, forwarded by `IActivityStructureService` ([data-model.md](data-model.md)). |
-| P-2 | Analysis | `UnorderedVariableWriteAnalysis.Analyze(root, structures, writesOf)` in `Elsa.Workflows.Design.Core`, applying the rules in the data model; returns unordered-write and duplicate-capture findings. |
+| P-2 | Analysis | `IUnorderedVariableWriteAnalyzer` (contract and finding models in `Elsa.Workflows.Design.Validations.Core`), implemented by the internal `UnorderedVariableWriteAnalyzer` in `Elsa.Workflows.Design.Validations` and registered by its feature (the `IActivityDataSelectionAnalyzer` pattern), applying the rules in the data model. `.Core` stays thin (framework §2.1, §2.17). |
 | P-3 | Workflow validator | `ValueFlowValidator` replaces its concurrency code with P-2; writes are captures plus Set/Merge/Reduce (and legacy `elsa.intrinsic.set@1`); severity `Warning`. The hard-coded kinds stay only for Parallel branch identities, which are not ordering (FR-009). |
-| P-4 | Graph provider | `ValidateAsync` and `CompileAsync` run P-2 over the body with captures as writes and add warnings ([contract](contracts/unordered-write-warning.md)). |
+| P-4 | Graph provider | `ValidateAsync` and `CompileAsync` run the optional analyzer (P-2) over the body with captures as writes and add warnings, alongside any errors ([contract](contracts/unordered-write-warning.md)). |
 | P-5 | Built-in declarations | Sequence: index order. If, Switch: exclusive. Loops: one child, never overlapping. Parallel: unordered; completes after children unless threshold < branches. Flowchart: reachability with waiting joins, `merge` exceptions, trigger-entry exclusivity, port-blind (R-2, R-4); completes after children unless a `firstWins` node exists. BPMN: element-graph analysis (R-6), multi-instance self-overlap, completes after children. CompensationScope: step before its handlers; handlers per its replay order, otherwise `Unordered`; completes after children. |
 | P-6 | Message | One finding per variable, all writers, last-commit-wins, the three fixes, the ADR 0092 `Fault` pointer, and the undeclared-structure sentence when D-2b applied. |
 | P-7 | Docs | `docs/reference/variable-write-order.md` (new) holds FR-004/FR-014 text; `activity-definition-authoring-composition.md` links it instead of saying the check is not built. |
@@ -90,10 +90,13 @@ Essentials/src/Workflows/Design/Core/
 ├── Contracts/IActivityStructureHandler.cs        # + RelateChildren, CompletesAfterItsChildren
 ├── Contracts/IActivityStructureService.cs        # + forwarding members
 ├── Models/ActivityChildTimeRelation.cs           # new
-├── Services/DefaultActivityStructureService.cs   # forwarding
-├── Services/UnorderedVariableWriteAnalysis.cs    # new
-└── EXTENSION_POINTS.md
-Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Validators/ValueFlowValidator.cs
+└── Services/DefaultActivityStructureService.cs   # forwarding
+Essentials/src/Workflows/Design/Validations/Core/
+├── Contracts/IUnorderedVariableWriteAnalyzer.cs  # new
+└── Models/UnorderedVariableWriteAnalysis.cs      # new
+Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/
+├── Services/UnorderedVariableWriteAnalyzer.cs    # new, internal
+└── Validators/ValueFlowValidator.cs
 Essentials/src/Activities/Graph/Design/Services/GraphActivityProvider.cs
 Essentials/src/Activities/{Sequence,Flowchart,ControlFlow/Parallel,ControlFlow/If,ControlFlow/Switch,ControlFlow/Loops,Compensation,Bpmn/Design}/  # declarations + EXTENSION_POINTS.md
 Essentials/tests/Workflows/Design/Tests/        # analysis + validator tests

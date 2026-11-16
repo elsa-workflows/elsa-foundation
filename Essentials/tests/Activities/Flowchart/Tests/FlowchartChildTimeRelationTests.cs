@@ -102,6 +102,41 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(completesAfterChildren, _structures.CompletesAfterItsChildren(flow));
     }
 
+    // Each pass of a cycle that forks off the cycle starts another run of the branch, which can still be running when
+    // the next pass starts.
+    [Fact]
+    public void A_fork_on_a_cycle_makes_its_off_cycle_branch_overlap_itself_and_the_next_pass()
+    {
+        var flow = Flowchart(["start", "a", "loop", "b"],
+            [("start", "a", null), ("a", "loop", null), ("loop", "a", null), ("a", "b", null)]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "b"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
+    }
+
+    // A loop whose decision leaves through a different port than it repeats through is not a definite fork.
+    [Fact]
+    public void A_loop_with_an_exit_port_keeps_its_passes_and_exit_sequential()
+    {
+        var flow = Flowchart(["start", "check", "body", "after"],
+            [("start", "check", null), ("check", "body", "Continue"), ("body", "check", null), ("check", "after", "Exit")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "body", "body"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "after", "after"));
+    }
+
+    // A first-wins race cancels the losing path only in the Flowchart's state; the join downstream does not wait for it.
+    [Fact]
+    public void A_first_wins_race_does_not_order_a_losing_branch_before_the_shared_join()
+    {
+        var flow = Flowchart(["race", "a", "b", "join"],
+            [("race", "a", null), ("race", "b", null), ("a", "join", null), ("b", "join", null)],
+            "race", new Dictionary<string, FlowchartNodeMetadata> { ["race"] = new("firstWins") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "join"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "join", "join"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

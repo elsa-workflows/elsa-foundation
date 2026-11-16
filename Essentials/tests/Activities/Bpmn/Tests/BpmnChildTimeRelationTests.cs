@@ -4,6 +4,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -127,6 +128,20 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
     }
 
     [Fact]
+    public void A_parallel_split_on_a_cycle_makes_its_off_cycle_branch_overlap_itself()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("merge", BpmnElementTypes.ExclusiveGateway),
+                Element("split", BpmnElementTypes.ParallelGateway), Task("a", "branch"), Task("l", "loop")
+            ],
+            [Flow("start", "merge"), Flow("merge", "split"), Flow("split", "a"), Flow("split", "l"), Flow("l", "merge")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "branch", "branch"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "loop", "branch"));
+    }
+
+    [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {
         var process = Process(
@@ -148,9 +163,16 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "left", "not-a-child"));
     }
 
-    private UnorderedVariableWriteAnalysisResult Analyze(ActivityNode process) =>
-        UnorderedVariableWriteAnalysis.Analyze(process, new DefaultActivityStructureService([_handler]),
-            node => UnorderedVariableWriteAnalysis.DeclaredWrites(node));
+    private UnorderedVariableWriteAnalysis Analyze(ActivityNode process) =>
+        WriteOrderAnalyzer().Analyze(process, new DefaultActivityStructureService([_handler]), includeIntrinsics: true);
+
+    private static Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer WriteOrderAnalyzer()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        return services.BuildServiceProvider().GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer>();
+    }
+
 
     private static ActivityNode Split(string gatewayType) => Process(
         [Element("start", BpmnElementTypes.StartEvent), Element("split", gatewayType), Task("a", "left"), Task("b", "right"), Element("end", BpmnElementTypes.EndEvent)],

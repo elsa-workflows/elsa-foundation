@@ -1,6 +1,6 @@
 # Data model: unordered variable writes
 
-All types are design-time, in `Elsa.Workflows.Design.Core` unless noted. Nothing is persisted.
+All types are design-time. The structure contract is in `Elsa.Workflows.Design.Core`; the analyzer contract and its findings are in `Elsa.Workflows.Design.Validations.Core`. Nothing is persisted.
 
 ## ActivityChildTimeRelation (enum)
 
@@ -51,5 +51,8 @@ of C on their paths:
    parent up to and including L does not declare `CompletesAfterItsChildren == true`; otherwise ordered. The reverse
    for `SecondBeforeFirst`.
 3. A single write is unordered with itself when an ancestor declares the child on its path self-`Unordered`.
+4. Two different children with the same node id are never claimed ordered.
+
+A missing `CompletesAfterItsChildren` and a missing `RelateChildren` are named separately in the message.
 
 The finding for a variable names every writer in an unordered pair or self-unordered.
