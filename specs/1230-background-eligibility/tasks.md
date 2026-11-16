@@ -59,20 +59,28 @@
 
 ## Phase 6: User Story 4 — the promise on the attribute (P2)
 
-- [ ] T016 [US4] Document C7, C8, the engine-checked criteria and inheritance (Q6) on
-  `BackgroundExecutionSafeAttribute.cs`, pointing to ADR 0093.
+- [ ] T016 [US4] Document C7, C8, the engine-checked criteria, inheritance (Q6) and the two cases not to mark
+  (inline-drain results, triggers; Q8) on `BackgroundExecutionSafeAttribute.cs`, pointing to ADR 0093.
 
 ## Phase 7: User Story 5 — built-in activities marked (P2)
 
 - [ ] T017 [US5] Fill the spec's *Built-in assessment* table from research R-4 and get the approver's confirmation of
   C7 and C8 per marked activity (Q4).
-- [ ] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity.
+- [ ] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity that passed T022.
 - [ ] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
   test per assessed-but-unmarked category, naming its criterion.
 - [ ] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
   changes); regenerate the contract surface baselines.
-- [ ] T021 [US5] File one issue per candidate that falls short only because of its implementation (ADR 0093 decision 4),
-  as sub-issues of #3052, and link them from the assessment table.
+- [ ] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
+  read resolves its connection's tenant partition on a worker; a secret-bound `RunJavaScript.Arguments` resolves on the
+  worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
+  activity that fails gets an issue instead of the mark (Q10).
+- [ ] T023 [US1] **(test-first)** Route the agent template's hand-built model-turn node
+  (`Extensions/Agent/src/Design/Services/AgentActivityProvider.cs:86-91`) through `CheckPublication` (FR-012, Q9); a test
+  shows a template node that fails a criterion is refused.
+- [ ] T021 [US5] File one issue per candidate that falls short only because of its implementation (ADR 0093 decision 4):
+  M365 `CreateEvent`, M365 `UploadFile`, Slack `AddReaction`, `EvaluateDecision`, and any T022 failure; as sub-issues
+  of #3052, linked from the assessment table.
 
 ## Phase 8: User Story 6 — causal order on every provider (P3)
 
@@ -95,5 +103,6 @@
 ## Dependencies
 
 - T002–T004 block every story. US1 (T005–T007a) before US2 and US3, which add criteria to the same component.
+- T023 (agent template) needs T003 only and can run with US1.
 - US4 is independent. US5 needs US1–US3 (the refusals its tests assert) and the approver's C7/C8 confirmation.
 - US6 needs S-10's write history (PR #4316) on the initiative branch.

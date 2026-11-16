@@ -16,7 +16,8 @@ Put ADR 0093's enforced criteria in one place and close the gaps it names (resea
 - **Run time catches up.** C3 and the stream/transient part of C4 are checked at run time too.
 - **C9 and C10 are new checks.** `IRuntimeScopedVariableReader` is refused; worker-bound inputs without a durable,
   materializable, protected representation are refused before admission.
-- **C7 and C8 on the attribute**, plus the inheritance note (Q6).
+- **No bypass.** The agent template's hand-built background node goes through the publication check (FR-012, Q9).
+- **C7 and C8 on the attribute**, plus inheritance (Q6) and the two cases not to mark (Q8).
 - **Built-in activities assessed and marked** (R-4), with issues for implementation gaps.
 - **Causal-order evidence** on the in-memory and EF Core providers (R-6), using S-10's write history (Q7).
 
@@ -47,7 +48,7 @@ admission and worker activation, as today.
 - Publishing gains no new reference (R-2).
 - S-10's files: only one call line each in `ExecutableNodeCompiler.cs` and `BackgroundActivityCoordinator.cs` (R-7).
 
-**Scale/Scope**: one new class and its tests; three call sites; one attribute's documentation; the built-in marks
+**Scale/Scope**: one new class and its tests; four call sites; one attribute's documentation; the built-in marks
 (R-4); two provider tests; four documents.
 
 ## Constitution Check
@@ -108,6 +109,8 @@ Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/
 └── BackgroundActivityWorker.cs                    # calls the component; C6 reported through it
 Essentials/src/Activities/Runtime/Core/Attributes/
 └── BackgroundExecutionSafeAttribute.cs            # C7, C8, inheritance docs
+Extensions/Agent/src/Design/Services/
+└── AgentActivityProvider.cs                       # model-turn node checked by the component (FR-012)
 Essentials/src/Activities/**, Extensions/**/src/** # [BackgroundExecutionSafe] on qualifying built-ins (R-4)
 Essentials/tests/Workflows/Runtime/Tests/Background/BackgroundEligibilityTests.cs   # new
 Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs # extended

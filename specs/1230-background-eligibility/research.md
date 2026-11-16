@@ -57,7 +57,26 @@ publication; the activated object or the well-known type registry at run time).
 
 ## R-4 Built-in activity assessment
 
-*Filled from the code assessment; the verdicts go to the spec's *Built-in assessment* table.*
+Every activity type in `Essentials/src` and `Extensions/src` was read against C1–C10 (31 leaves, 16 structural types,
+9 intrinsics, 9 stateful activities). The verdicts are in the spec's *Built-in assessment* table. Findings that shape
+this plan:
+
+- **Only `AgentModelTurn` is marked today** (`Extensions/Agent/src/Elsa.Agent/Activities/AgentModelTurn.cs:10`). Its
+  node and contract are built by hand with `supportsBackgroundExecution: true` and `Background` placement
+  (`Extensions/Agent/src/Design/Services/AgentActivityProvider.cs:86-91`), so `ExecutableNodeCompiler` never checks it
+  (FR-012, Q9).
+- **`BpmnProcess` is the only shipped `IRuntimeScopedVariableReader`** and it is structural, so C9 refuses no built-in
+  today; it protects custom activities.
+- **`WriteHttpResponse`** is delivered only from a result committed during the synchronous inline drain
+  (`Essentials/src/Activities/Http/Services/HttpResponseInstructionDelivery.cs:15-16`). **Trigger activities** get
+  `triggerPayload: null` on the worker (`BackgroundActivityWorker.cs:178-179`). No criterion covers either (Q8).
+- **`PublishEvent`** stages through the same stager the worker inspects, so C6 refuses it after the body, by design.
+- **Unknowns** (T022): the connection tenant partition on a worker (`HttpConnectionApplicator.cs:40` reads
+  `IWorkflowExecutionPartitionAccessor.Current`); secret-bound inputs without `[RefusesSecretBinding]` (for example
+  `RunJavaScript.Arguments`) on the worker; `DownloadFile` results against `BG-ACT-006`.
+- **Issue candidates**: M365 `CreateEvent` (Graph `transactionId` from `InvocationId`), M365 `UploadFile` (conflict
+  behaviour and its `byte[]` input), Slack `AddReaction` (`already_reacted` as success), `EvaluateDecision` (pin
+  re-verification on a worker). Optional: an opt-in `Idempotency-Key` from `InvocationId` on `SendHttpRequest`.
 
 ## R-5 Diagnostic shape
 
