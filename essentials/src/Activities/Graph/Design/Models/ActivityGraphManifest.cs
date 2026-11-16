@@ -328,20 +328,16 @@ public sealed record ActivityGraphManifest(
         string pointer,
         ICollection<ActivityGraphManifestError> findings)
     {
-        if (!parent.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.Object)
+        if (!parent.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty("syntax", out var syntax) || syntax.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(syntax.GetString()) || !element.TryGetProperty("value", out var value))
         {
-            findings.Add(new("activity.graph.manifest.expression-required", pointer, $"'{propertyName}' must be an expression object."));
+            findings.Add(new(propertyName == "initialValue" ? "activity.graph.variable.initial-value-invalid" : "activity.graph.output.source-invalid",
+                pointer, $"'{propertyName}' must be an expression object with a syntax and value."));
             return null;
         }
 
-        var syntax = ReadRequiredString(element, "syntax", $"{pointer}/syntax", findings);
-        if (!element.TryGetProperty("value", out var value))
-        {
-            findings.Add(new("activity.graph.manifest.value-required", $"{pointer}/value", "Expression 'value' is required."));
-            return null;
-        }
-
-        return syntax is null ? null : new(syntax, value.Clone());
+        return new(syntax.GetString()!, value.Clone());
     }
 
     private static string? ReadRequiredString(

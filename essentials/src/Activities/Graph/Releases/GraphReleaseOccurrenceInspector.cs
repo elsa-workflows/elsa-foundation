@@ -14,7 +14,7 @@ namespace Elsa.Activities.Graph.Releases;
 internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader reader) : IReleaseOccurrenceInspector
 {
     private const string ProviderKey = "elsa.activity-graph";
-    private const string Fingerprint = "elsa.activity-graph/compiler/4.0.0";
+    private static bool SupportsCompiler(string fingerprint) => fingerprint is "elsa.activity-graph/compiler/4.0.0" or "elsa.activity-graph/compiler/5.0.0";
     private static readonly string[] PlanFields = ["planSchemaVersion", "entryOccurrenceId", "occurrences", "variables", "outputMappings", "inputs", "outputs",
         "inputReferenceKeys", "outputReferenceKeys", "requiredInputReferenceKeys", "requiredOutputReferenceKeys", "scopeModel", "outcomeMappings", "completeOutcomes"];
     private static readonly string[] PlacedFields = ["definitionId", "definitionVersionId", "version", "templateHash", "sourceReferenceId", "entryNodeId"];
@@ -114,7 +114,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
     }
     private void Provider(ReleaseActivityVersion activity, ExecutableActivityTemplate template, IReleaseContentReader content)
     {
-        if (activity.ProviderKey != ProviderKey || activity.ProviderSchemaVersion is not ("1" or "2") || activity.CompilerFingerprint != Fingerprint || activity.ResolutionKind != "ReusableTemplateBoundary")
+        if (activity.ProviderKey != ProviderKey || activity.ProviderSchemaVersion is not ("1" or "2") || !SupportsCompiler(activity.CompilerFingerprint) || activity.ResolutionKind != "ReusableTemplateBoundary")
             throw Refuse("graph_provider_profile_unsupported");
         Fields(activity.ProviderPayload, "rootActivity", "variables", "outputMappings", "outcomeMappings");
         Empty(activity.ProviderPayload, "variables"); Empty(activity.ProviderPayload, "outputMappings");
@@ -139,7 +139,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
     }
     private ExecutableActivityTemplateDependency ValidatePlan(ExecutableActivityTemplate template, IReleaseContentReader content)
     {
-        if (template.ProviderFingerprint != Fingerprint || template.Root.Descriptor.ConsumerKey != WellKnownRuntimeActivityConsumers.GraphActivity || template.Root.Descriptor.SchemaVersion != "1")
+        if (!SupportsCompiler(template.ProviderFingerprint) || template.Root.Descriptor.ConsumerKey != WellKnownRuntimeActivityConsumers.GraphActivity || template.Root.Descriptor.SchemaVersion != "1")
             throw Refuse("graph_template_profile_unsupported");
         var plan = template.Root.Descriptor.Payload; Fields(plan, PlanFields);
         if (Text(plan, "planSchemaVersion") != "1" || Text(plan, "scopeModel") != RuntimeMetadataKeys.ActivityExecutionScopeClosed) throw Refuse("graph_plan_scope_unsupported");
