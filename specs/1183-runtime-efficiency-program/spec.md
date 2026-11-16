@@ -1,6 +1,6 @@
 # Runtime Efficiency delivery
 
-**Status**: Draft
+**Status**: Closed 16 November 2026 (see the [charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026))
 **Issue**: #2531
 **Program route**: Runtime Efficiency
 
