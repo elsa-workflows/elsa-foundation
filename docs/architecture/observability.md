@@ -226,8 +226,9 @@ one commit, and calls one new model hook.
   gone is refused; `resume` stays possible.
 - **Side effects** of the retried turn may repeat, with the same effect keys.
 
-**Discard** `{operation, expected revision}` gives the kept deliveries the ordinary window and clears their `KeptBy`,
-or removes them, in the same commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
+**Discard** `{operation, expected revision}` checks, as recover does, that the instance is parked and that its Park's
+first revision (from the `ParkRecord`) equals the expected revision, and refuses otherwise. It then gives the kept
+deliveries the ordinary window and clears their `KeptBy`, or removes them, in the same commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
 
 **Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
 gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
