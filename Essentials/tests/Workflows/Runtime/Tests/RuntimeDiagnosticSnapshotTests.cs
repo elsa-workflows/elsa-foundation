@@ -51,6 +51,31 @@ public sealed class RuntimeDiagnosticSnapshotTests
         Assert.Equal(6, snapshot.GetProperty("length").GetInt32());
     }
 
+    // A number keeps its exact JSON text in the snapshot; it is never narrowed to a CLR double, and a
+    // number outside the double range is still captured instead of failing the snapshot (#3421).
+    [Theory]
+    [InlineData("9007199254740993")]
+    [InlineData("12345678901234567890")]
+    [InlineData("1234567890.123456789012345")]
+    [InlineData("1.0")]
+    [InlineData("0.10")]
+    [InlineData("-0.0")]
+    [InlineData("1e400")]
+    public void Capture_KeepsExactNumberText(string number)
+    {
+        using var document = JsonDocument.Parse($"{{\"amount\":{number}}}");
+
+        var snapshot = DefaultDiagnosticSnapshotFactory.Capture(document.RootElement);
+
+        var amount = snapshot
+            .GetProperty("properties")
+            .EnumerateArray()
+            .Single(property => property.GetProperty("name").GetString() == "amount")
+            .GetProperty("value");
+        Assert.Equal("number", amount.GetProperty("kind").GetString());
+        Assert.Equal(number, amount.GetProperty("value").GetRawText());
+    }
+
     [Fact]
     public void Capture_DoesNotEmitPayloadReferencesFromGenericSnapshotter()
     {

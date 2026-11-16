@@ -66,7 +66,7 @@ public abstract class BackoffSweepWorkerTask : IRecurringTask
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, Logger);
+    public virtual ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, Logger);
 
     /// <summary>Runs one bounded sweep. Cancellation propagates; any other exception feeds the backoff.</summary>
     protected abstract Task SweepAsync(CancellationToken cancellationToken);

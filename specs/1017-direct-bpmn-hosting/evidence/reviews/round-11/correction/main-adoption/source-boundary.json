@@ -1,0 +1,15 @@
+{
+  "main": "2a835125c754d75f5a13ec1d5b427417f8aed453",
+  "mergeSource": "7e51b512287bdc46adea639c29b9c9c5c048dcda",
+  "adoptedPaths": [
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExecutables.test.tsx",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/styles.css",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutables.tsx"
+  ],
+  "changedCssConsumers": [
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutables.tsx",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExecutables.test.tsx"
+  ],
+  "scope": "Incoming delta changes Executables component/tests and its scoped CSS. BPMN editor, exact-run inspection, backend/native/model/ETL and all bridge/lookup implementation paths remain unchanged; their actual6bd receipts retain executing source. Current affected frontend/browser/build qualification is separate."
+}

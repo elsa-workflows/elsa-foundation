@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Routing;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Etl.Runtime.Api;
 

@@ -140,6 +140,25 @@ public sealed class EtlConnectorOutputBudgetTests
             EtlArtifactJson.CreateArtifactId(EtlArtifactV2Json.FormatVersion, "orders", 1, contentHash),
             contentHash, "orders", 1, document);
 
+    [Theory]
+    [InlineData("single-page")]
+    [InlineData("zero-interval")]
+    [InlineData("long-interval")]
+    public void Runtime_admission_refuses_an_unsupported_continuous_policy(string variant)
+    {
+        var pipeline = EtlContinuousRunPolicyTests.Variant(variant);
+
+        Assert.Throws<ArgumentException>(() => EtlConnectorRecordCodec.ValidateBindings(pipeline, Bindings(pipeline), maximumPartitions: 32));
+    }
+
+    [Fact]
+    public void Runtime_admission_accepts_a_continuous_cursor_policy()
+    {
+        var pipeline = EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(15) };
+
+        Assert.NotEmpty(EtlConnectorRecordCodec.ValidateBindings(pipeline, Bindings(pipeline), maximumPartitions: 32));
+    }
+
     private static EtlConnectorRunBindings Bindings(EtlPipelineV2 pipeline) => new(
         Binding(EtlConnectorKind.Http, ((EtlHttpJsonSource)pipeline.Source).Binding),
         null,

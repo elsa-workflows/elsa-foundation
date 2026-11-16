@@ -11,5 +11,12 @@ namespace Elsa.Activities.Bpmn.Interchange.Contracts;
 /// <remarks>Scoped single-implementation replacement contract; shell startup rejects multiple registrations.</remarks>
 public interface IBpmnDocumentExporter
 {
+    /// <summary>Writes the document without any task binding: there is no catalog to say which bindings may travel.</summary>
     string Export(ActivityNode processNode, BpmnExportOptions? options = null);
+
+    /// <summary>
+    /// Writes the document, carrying each task's exact binding in <c>elsa:taskBinding</c> when the visible catalog declares
+    /// every bound input a portable literal, and reports every binding left out.
+    /// </summary>
+    Task<BpmnExportResult> ExportAsync(ActivityNode processNode, BpmnExportOptions? options = null, CancellationToken cancellationToken = default);
 }

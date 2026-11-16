@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "spec": "1196-etl-continuous-compaction",
+  "sourceRevision": "b97f1013de82d491ad1bb863b472e855ea05a902",
+  "workingTreeDirty": true,
+  "workbenchAssemblySha256": "9b5ea0c4a79fddfd291eb8c09341e1af24e285dbf002e0504929fa4a78d2a4a9",
+  "hostProcessId": 44457,
+  "cases": {
+    "complete": {
+      "definition": "continuous-complete-287dbb57",
+      "selection": "etl1:continuous-complete-287dbb57:1:ea983cd0567c0202960b3c561379bce2198ae7c6da0e7bc933825fe991459944",
+      "workflowStatus": "Completed",
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "statusWhileLive": "running",
+      "connectorWhileLive": {
+        "sourceKind": "http",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 60,
+        "acceptedErrorEffects": 0,
+        "mode": "continuous",
+        "completionRequestedAt": null
+      },
+      "afterBacklog": {
+        "pages": {
+          "0": 1,
+          "1": 1
+        },
+        "requests": {
+          "0": 2,
+          "1": 2
+        },
+        "batches": {
+          "0": 1,
+          "1": 1
+        },
+        "partitions": [
+          {
+            "ordinal": 0,
+            "pageCount": 30,
+            "compactedPageCount": 29,
+            "pollGeneration": 2,
+            "acceptedRecords": 30
+          },
+          {
+            "ordinal": 1,
+            "pageCount": 30,
+            "compactedPageCount": 29,
+            "pollGeneration": 1,
+            "acceptedRecords": 30
+          }
+        ],
+        "snapshotFiles": []
+      },
+      "afterAppend": {
+        "pages": {
+          "0": 1,
+          "1": 1
+        },
+        "requests": {
+          "0": 2,
+          "1": 2
+        },
+        "batches": {
+          "0": 1,
+          "1": 1
+        },
+        "partitions": [
+          {
+            "ordinal": 0,
+            "pageCount": 31,
+            "compactedPageCount": 30,
+            "pollGeneration": 3,
+            "acceptedRecords": 31
+          },
+          {
+            "ordinal": 1,
+            "pageCount": 31,
+            "compactedPageCount": 30,
+            "pollGeneration": 2,
+            "acceptedRecords": 31
+          }
+        ],
+        "snapshotFiles": []
+      },
+      "completion": {
+        "result": "accepted"
+      },
+      "run": {
+        "status": "succeeded",
+        "acceptedRecords": 62,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "http",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 62,
+        "acceptedErrorEffects": 0,
+        "mode": "continuous",
+        "completionRequestedAt": "2026-11-03T03:04:35.034804+00:00"
+      },
+      "mainNameCount": 62,
+      "mainNamesExact": true
+    }
+  },
+  "baseUrl": "http://127.0.0.1:55327",
+  "checks": {
+    "liveRunIsContinuousAndRunning": true,
+    "eachShardAcceptedTenTimesItsPageLimit": true,
+    "retainedWindowStayedBounded": true,
+    "historyWasCompacted": true,
+    "snapshotRootHeldNoEndedFiles": true,
+    "everyRecordDeliveredOnce": true,
+    "completedRunSucceededThroughDone": true,
+    "noAccountingLeft": true
+  },
+  "passed": true
+}

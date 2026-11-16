@@ -105,12 +105,28 @@ public sealed class EfCoreDependencyGuardTests
     };
 
     [Fact]
+    public void Every_admitted_Decisions_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0095DecisionsEf.ExpectedEfPackagesByProject, "business decisions");
+
+    [Fact]
     public void Every_admitted_Rules_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Adr0088FiniteRulesEf.ExpectedEfPackagesByProject, "finite Rules");
 
     [Fact]
     public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Adr0087FiniteEtlEf.ExpectedEfPackagesByProject, "finite ETL");
+
+    [Fact]
+    public void Every_admitted_Agent_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1179AgentEf.ExpectedEfPackagesByProject, "agent durable journal (#3523)");
+
+    [Fact]
+    public void Every_admitted_Weaver_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1189WeaverEf.ExpectedEfPackagesByProject, "Weaver session record store (#3441)");
+
+    [Fact]
+    public void Every_admitted_Connections_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1179ConnectionsEf.ExpectedEfPackagesByProject, "Connections metadata (#3578)");
 
     private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
     {
@@ -705,6 +721,9 @@ public sealed class EfCoreDependencyGuardTests
                         StringComparer.Ordinal),
                     Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
+                    Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
+                    Spec1179AgentEf.IsProjectPath(relativePath) ||
+                    Spec1189WeaverEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
@@ -717,6 +736,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
                     Adr0087FiniteEtlEf.IsProjectPath(relativePath) ||
                     Adr0088FiniteRulesEf.IsProjectPath(relativePath) ||
+                    Adr0095DecisionsEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
@@ -958,6 +978,56 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>Spec 1179 T018: the engine-free agent conditional journal under #3523.</summary>
+    internal static class Spec1179AgentEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"],
+                ["Extensions/Agent/tests/ProviderTests/Elsa.Agent.ProviderTests.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
+    /// <summary>Spec 1189 T026-T028: the opt-in durable Weaver session record store and audit under #3441.</summary>
+    internal static class Spec1189WeaverEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj"] =
+                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj"] =
+                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+        private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+    }
+
+    /// <summary>
+    /// Spec 1179 T014-T015, implemented by #3578 under the existing Connections owner #2854:
+    /// one provider-neutral metadata repository, SQLite behavior/restart tests and the native provider matrix.
+    /// </summary>
+    internal static class Spec1179ConnectionsEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"] = SqlitePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.csproj"] = SqlitePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+        private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+        private static string[] SqlitePackages() => [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"];
     }
 
     /// <summary>
@@ -1225,6 +1295,23 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
+    /// <summary>Exact Decisions provider/test/tooling EF closure admitted with ADR0095.</summary>
+    internal static class Adr0095DecisionsEf
+    {
+        private static string[] CorePackages() =>
+            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+        private static string[] SqlitePackages() => [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"];
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+            ["Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj"] = SqlitePackages(),
+            ["Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj"] = SqlitePackages(),
+            ["Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj"] =
+                [.. SqlitePackages(), "Microsoft.EntityFrameworkCore.Design", "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore"]
+        };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
     /// <summary>The narrow Rules runtime persistence admission for #3181 and ADR 0088.</summary>
     internal static class Adr0088FiniteRulesEf
     {
@@ -1260,7 +1347,12 @@ public sealed class EfCoreDependencyGuardTests
                 ["Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"] =
                 ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"],
                 ["Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj"] =
-                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                // the design-time startup project that scaffolds the server engines' design migrations, and their contract suite.
+                ["Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Design"],
+                ["Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL", "MySql.EntityFrameworkCore"]
             };
 
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);

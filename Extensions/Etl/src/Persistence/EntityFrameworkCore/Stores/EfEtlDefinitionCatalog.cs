@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 
-/// <summary>SQLite-backed, metadata-only listing for scoped ETL definitions and publications.</summary>
+/// <summary>Metadata-only listing for scoped ETL definitions and publications.</summary>
 internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEtlDefinitionCatalog
 {
     private const int MaximumPageSize = 1000;
@@ -20,10 +20,11 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
         var afterKey = afterDefinitionId is null ? null : EtlDefinitionRecordCodec.Definition(afterDefinitionId).Key;
         var query = dbContext.Drafts.AsNoTracking().Where(row => row.ScopeKey == scopeIdentity.Key);
         if (afterKey is not null)
-            query = query.Where(row => EF.Functions.Collate(row.DefinitionKey, "BINARY").CompareTo(afterKey) > 0);
+            // The key column's binary collation makes this seek, and the order below, ordinal on every engine.
+            query = query.Where(row => row.DefinitionKey.CompareTo(afterKey) > 0);
 
-        var rows = await query
-            .OrderBy(row => EF.Functions.Collate(row.DefinitionKey, "BINARY"))
+        var rows = await EtlDesignReadRetry.RunAsync(dbContext, () => query
+            .OrderBy(row => row.DefinitionKey)
             .Take(take)
             .Select(row => new DraftMetadata(
                 row.ScopeKey,
@@ -36,7 +37,7 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.SchemaVersion,
                 row.UpdatedAtUtcTicks,
                 row.FormatVersion))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken), cancellationToken);
 
         return rows.Select(row => EtlDefinitionRecordCodec.ReadDraftSummary(
                 row.ScopeKey,
@@ -71,7 +72,7 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
         if (throughVersion == 0)
             return Array.Empty<EtlPublishedVersionSummary>();
 
-        var rows = await dbContext.PublishedArtifacts.AsNoTracking()
+        var rows = await EtlDesignReadRetry.RunAsync(dbContext, () => dbContext.PublishedArtifacts.AsNoTracking()
             .Where(row => row.ScopeKey == scopeIdentity.Key &&
                           row.DefinitionKey == definitionIdentity.Key &&
                           row.DefinitionVersion > afterVersion &&
@@ -90,7 +91,7 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.PipelineHash,
                 row.PublishedAtUtcTicks,
                 row.FormatVersion))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken), cancellationToken);
 
         return rows.Select(row => EtlDefinitionRecordCodec.ReadPublishedVersionSummary(
                 row.ScopeKey,

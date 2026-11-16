@@ -10,7 +10,7 @@ import {
   getActivityExecutionLayout
 } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
-import { ReusableBoundaryInspector } from "../workflow-editor/ReusableBoundaryInspector";
+import { HistoricalBoundaryLayout, ReusableBoundaryInspector } from "../workflow-editor/ReusableBoundaryInspector";
 import { WorkflowActivityExecutionDetails } from "../workflow-editor/WorkflowInstances";
 import type {
   ActivityExecutionHierarchyItem,
@@ -51,6 +51,16 @@ afterEach(() => {
 });
 
 describe("ReusableBoundaryInspector", () => {
+  it.each([false, true])("renders frozen node names and descriptions with pinned geometry=%s", hasPinnedGeometry => {
+    const saved = layout("outer", [{ templateNodeId: "child", authoredActivityId: "child", executableNodeId: "placed-child", x: 0, y: 0, activityType: "Example.WriteLine", hasPinnedGeometry }]);
+    saved.activityPresentation = [{ executableNodeId: "placed-child", displayName: "Original review", description: "Published context" }];
+    const container = render(<HistoricalBoundaryLayout layout={saved} />);
+    expect(container.textContent).toContain("Original review");
+    expect(container.textContent).not.toContain("Write Line");
+    if (hasPinnedGeometry) expect(container.querySelector("svg title")?.textContent).toContain("Published context");
+    else expect(container.querySelector(".wf-boundary-layout-list-row")?.getAttribute("title")).toBe("Published context");
+  });
+
   it("names historical intrinsic steps without needing the live catalog", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [

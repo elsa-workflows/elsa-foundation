@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { SecretEditorPage } from "../SecretEditorPage";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { SecretsPage } from "../SecretsPage";
 
 const cleanup = new Set<() => void>();
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 afterEach(() => {
   for (const dispose of cleanup) dispose();
+  window.history.replaceState(null, "", "/security/secrets");
   if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
   else Reflect.deleteProperty(navigator, "clipboard");
 });
@@ -18,7 +21,7 @@ describe("secrets page", () => {
     const { container } = render();
     await waitForText(container, "Payments API");
 
-    const header = container.querySelector<HTMLElement>(".secrets-header")!;
+    const header = container.querySelector<HTMLElement>(".studio-page-header")!;
     const create = header.querySelector<HTMLButtonElement>("button[aria-label='Create secret']");
     expect(create).not.toBeNull();
     expect(create?.textContent).toContain("Create secret");
@@ -77,41 +80,31 @@ describe("secrets page", () => {
     expect([...deletedMenu.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].every(item => item.disabled)).toBe(true);
   });
 
-  it("opens details only on request, cancels edits and restores focus to the list", async () => {
-    const putJson = vi.fn();
-    const { container } = render({ putJson });
+  it("opens a separate editor and cancels to the original collection", async () => {
+    const putJson = vi.fn(); const { container } = render({ putJson });
     await waitForText(container, "Payments API");
-    expect(container.querySelector(".secrets-detail")).toBeNull();
-    expect(container.querySelector("[role=dialog]")).toBeNull();
-    const trigger = openEditor(container);
-    const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
-    expect(editor.getAttribute("aria-modal")).toBe("true");
-    expect(editor.contains(document.activeElement)).toBe(true);
-    change(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Unsaved edit");
-    flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    expect(container.querySelector("[role=dialog]")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    await openEditor(container);
+    expect(container.querySelector("table")).toBeNull();
+    expect(window.location.pathname).toBe("/security/secrets/payments.api/edit");
+    change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Unsaved edit");
+    clickButton(container, "Cancel");
+    await waitForText(container, "Payments API");
+    expect(container.querySelector(".secrets-editor-page")).toBeNull();
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
     expect(putJson).not.toHaveBeenCalled();
-    openEditor(container);
+    await openEditor(container);
     expect(container.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Payments API");
   });
 
-  it("keeps keyboard focus inside the editor and closes through Cancel", async () => {
-    const { container } = render();
-    await waitForText(container, "Payments API");
-    const trigger = openEditor(container);
-    const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
-    const buttons = [...editor.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-    const first = buttons[0];
-    const last = buttons[buttons.length - 1];
-    first.focus();
-    first.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(last);
-    last.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(first);
-    clickButton(container, "Cancel", "[role=dialog]");
-    await waitFor(() => !container.querySelector("[role=dialog]"));
-    expect(document.activeElement).toBe(trigger);
+  it("uses canonical keyboard tabs without trapping the standalone editor", async () => {
+    const { container } = render(); await waitForText(container, "Payments API"); await openEditor(container);
+    const selected = container.querySelector<HTMLButtonElement>("[role=tab][aria-selected=true]")!;
+    expect(selected.textContent).toBe("Details");
+    flushSync(() => { selected.focus(); selected.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })); });
+    expect(document.activeElement?.textContent).toBe("Storage & lifetime");
+    expect(container.querySelector("[role=tab][aria-selected=true]")?.textContent).toBe("Storage & lifetime");
+    clickButton(container, "Cancel"); await waitForText(container, "Payments API");
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
   });
 
   it("saves metadata and returns to the updated list", async () => {
@@ -122,54 +115,30 @@ describe("secrets page", () => {
     });
     const { container } = render({ getItems: () => [current], putJson });
     await waitForText(container, "Payments API");
-    openEditor(container);
+    await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
     await waitForText(container, "Secret metadata updated.");
-    expect(container.querySelector("[role=dialog]")).toBeNull();
-    expect(container.querySelector("table")?.textContent).toContain("Updated payments");
-    expect(document.activeElement?.getAttribute("data-secret-edit")).toBe("payments.api");
+    expect(container.querySelector(".secrets-editor-page")).toBeNull();
+    await waitFor(() => container.querySelector("table")?.textContent?.includes("Updated payments") === true);
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
   });
 
-  it("keeps Scope read-only and tucks secondary metadata behind native details", async () => {
-    const { container } = render({ getItems: () => [paymentSecret({
-      scope: "module.payments",
-      tags: ["billing"],
-      updatedAt: "2026-06-25T00:00:00Z",
-      expiresAt: "2026-12-31T00:00:00Z"
-    })] });
-    await waitForText(container, "Payments API");
-    openEditor(container);
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-
-    expect(dialog.querySelector("h3")?.textContent).toBe("Edit secret");
-    expect(dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")?.value).toBe("Payments API");
-    expect(document.activeElement?.getAttribute("data-dialog-initial-focus")).not.toBeNull();
-    const description = dialog.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!;
-    expect(description.id).toBeTruthy();
-    expect(description.labels?.[0]?.htmlFor).toBe(description.id);
-    expect(description.labels?.[0]?.textContent).toBe("Description");
-    expect(description.labels?.[0]?.contains(description)).toBe(false);
-    const scopeInput = dialog.querySelector<HTMLInputElement>(".secrets-editor-scope input")!;
-    expect(scopeInput.labels?.[0]?.textContent).toBe("Scope");
-    expect(scopeInput.readOnly).toBe(true);
-    expect(scopeInput.value).toBe("module.payments");
-    const scopeHelp = dialog.querySelector(`#${scopeInput.getAttribute("aria-describedby")}`)!;
-    expect(scopeHelp.textContent).toContain("match it (ignoring case)");
-    expect(scopeHelp.textContent).toContain("Scope does not grant access.");
-    expect(scopeHelp.textContent).toContain("Scope is read-only in this editor.");
-
-    const disclosure = dialog.querySelector<HTMLDetailsElement>("details")!;
-    expect(disclosure.open).toBe(false);
-    expect(disclosure.querySelector("summary")?.textContent).toBe("Details");
-    flushSync(() => disclosure.querySelector("summary")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(disclosure.open).toBe(true);
-    expect(disclosure.textContent).toContain("Created");
-    expect(disclosure.textContent).toContain("Updated");
-    expect(disclosure.textContent).toContain("Store capability");
-    expect(dialog.querySelector(".secrets-tags")?.textContent).toContain("billing");
-    expect([...dialog.querySelectorAll(".secrets-dialog-actions button")].map(button => button.textContent).join(" ")).toContain("Save changes");
+  it("keeps existing material and immutable metadata read-only in named sections", async () => {
+    const { container } = render({ getItems: () => [paymentSecret({ scope: "module.payments", tags: ["billing"], expiresAt: "2026-12-31T00:00:00Z" })] });
+    await waitForText(container, "Payments API"); await openEditor(container);
+    expect(container.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")?.value).toBe("Payments API");
+    const storage = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(t => t.textContent === "Storage & lifetime")!;
+    flushSync(() => storage.click());
+    const scope = [...container.querySelectorAll<HTMLInputElement>("input")].find(i => i.readOnly)!;
+    expect(scope.value).toBe("module.payments");
+    expect(document.getElementById(scope.getAttribute("aria-describedby")!)?.textContent).toContain("Scope does not grant access");
+    const secret = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(t => t.textContent === "Secret")!;
+    flushSync(() => secret.click());
+    expect(container.querySelector("[role=tabpanel]:not([hidden])")?.textContent).toContain("existing value stays hidden");
+    expect(container.querySelector("input[type=password]")).toBeNull();
+    expect(container.querySelector("details")).toBeNull();
   });
 
   it("waits for a pending save before allowing dismissal", async () => {
@@ -177,34 +146,34 @@ describe("secrets page", () => {
     const putJson = vi.fn(() => new Promise(resolve => { finishSave = resolve; }));
     const { container } = render({ putJson });
     await waitForText(container, "Payments API");
-    openEditor(container);
+    await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Pending save"));
     clickButton(container, "Save changes");
     await waitFor(() => putJson.mock.calls.length === 1);
-    const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const editor = container.querySelector<HTMLElement>(".secrets-editor-page")!;
     flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    expect(container.querySelector("[role=dialog]")).toBe(editor);
-    expect(editor.querySelector<HTMLButtonElement>("button[aria-label='Close editor']")?.disabled).toBe(true);
+    expect(container.querySelector(".secrets-editor-page")).toBe(editor);
+    await waitFor(() => [...editor.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Back to secrets"))?.disabled === true);
     finishSave(paymentSecret());
     await waitForText(container, "Secret metadata updated.");
-    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(container.querySelector(".secrets-editor-page")).toBeNull();
   });
 
   it("keeps failed metadata edits in the dialog for retry", async () => {
     const putJson = vi.fn().mockRejectedValueOnce(new Error("Metadata save unavailable.")).mockResolvedValue(paymentSecret());
     const { container } = render({ putJson });
     await waitForText(container, "Payments API");
-    openEditor(container);
+    await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Retry payments"));
     clickButton(container, "Save changes");
     await waitForText(container, "Metadata save unavailable.");
-    const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const editor = container.querySelector<HTMLElement>(".secrets-editor-page")!;
     expect(editor).not.toBeNull();
     expect(editor.querySelector("[role=alert]")?.textContent).toContain("Metadata save unavailable.");
     expect(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Retry payments");
     clickButton(container, "Save changes");
     await waitForText(container, "Secret metadata updated.");
-    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(container.querySelector(".secrets-editor-page")).toBeNull();
     expect(putJson).toHaveBeenCalledTimes(2);
   });
 
@@ -253,46 +222,25 @@ describe("secrets page", () => {
     expect(container.querySelector(".secrets-detail")).toBeNull();
     expect(container.textContent).not.toContain("Select a secret.");
     clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector("[role=dialog][aria-label='Create secret']"));
+    await waitFor(() => !!container.querySelector(".secrets-editor-page[aria-label='Create secret']"));
   });
 
-  it("keeps an open create form and loaded secrets when descriptor refresh fails, then retries in place", async () => {
-    let descriptorRequests = 0;
-    const descriptors = () => {
-      descriptorRequests++;
-      if (descriptorRequests === 2) throw new Error("private catalog failure");
-      return {
-        types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
-        stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }],
-        scopes: [{ name: "module.payments", displayName: "Payments module", description: "Payment credentials", source: "Payments module" }]
-      };
-    };
-    const { container } = render({ getDescriptors: descriptors });
-    await waitForText(container, "Payments API");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
-    clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret']"));
-    const dialog = container.querySelector<HTMLElement>("[role='dialog'][aria-label='Create secret']")!;
-    change(dialog.querySelector<HTMLInputElement>("input")!, "kept-secret");
-    change(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Keep this description during refresh.");
-    change(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!, "kept-value");
-    selectValue(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")!, "module.payments");
-
-    clickButton(dialog, "Refresh scope suggestions");
-    await waitForText(container, "Scope suggestions could not be refreshed.");
-    expect(container.textContent).toContain("Payments API");
-    expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
-    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
-    expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
-    expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
-    expect(container.textContent).not.toContain("private catalog failure");
-
-    clickButton(dialog, "Retry scope suggestions");
-    await waitFor(() => descriptorRequests === 3 && !dialog.querySelector("[role='alert']"));
-    expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
-    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
-    expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
-    expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
+  it("retains the standalone create form across option failure and retries in place", async () => {
+    let calls = 0;
+    const descriptors = { types: [{ name: "text", displayName: "Text", supportedStoreNames: ["encrypted"] }], stores: [{ name: "encrypted", displayName: "Encrypted", isReadOnly: false }], scopes: [] };
+    const { container } = render({ getDescriptors: () => { if (++calls === 3) throw new Error("private-options-error"); return descriptors; } });
+    await waitForText(container, "Payments API"); clickButton(container, "Create secret");
+    await waitFor(() => container.querySelector(".secrets-create-form") !== null);
+    const name = container.querySelector<HTMLInputElement>('[data-secret-field="name"]')!;
+    const value = container.querySelector<HTMLInputElement>('[data-secret-field="value"]')!;
+    change(name, "AuthoredSecret"); change(value, "material");
+    const storage = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(t => t.textContent?.startsWith("Storage & lifetime"))!;
+    flushSync(() => storage.click()); clickButton(container, "Refresh scope suggestions");
+    await waitForText(container, "Secret options could not be loaded.");
+    expect(container.querySelector("table")).toBeNull(); expect(name.value).toBe("AuthoredSecret"); expect(value.value).toBe("material");
+    clickButton(container, "Retry secret options"); await waitFor(() => calls === 4);
+    await waitFor(() => !container.textContent?.includes("Secret options could not be loaded."));
+    expect(name.value).toBe("AuthoredSecret"); expect(value.value).toBe("material");
   });
 
   it("ignores an older descriptor failure after the endpoint changes and a newer request succeeds", async () => {
@@ -315,10 +263,10 @@ describe("secrets page", () => {
 
     endpoint = "new";
     changeEndpoint("/new-endpoint");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".studio-page-actions button[aria-label='Create secret']")?.disabled);
     clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']"));
-    const scopeSelect = container.querySelector<HTMLSelectElement>("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']")!;
+    await waitFor(() => !!container.querySelector(".secrets-editor-page[aria-label='Create secret'] select[id^='scope-select-']"));
+    const scopeSelect = container.querySelector<HTMLSelectElement>(".secrets-editor-page[aria-label='Create secret'] select[id^='scope-select-']")!;
     await waitFor(() => [...scopeSelect.options].some(option => option.value === "module.current"));
 
     finishObsolete(new Error("old endpoint failed"));
@@ -461,15 +409,15 @@ describe("secrets page", () => {
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
 
     change(search, "draftB");
-    openEditor(container);
+    await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
     await waitForText(container, "Secret metadata updated.");
 
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
-    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryA”");
-    expect(search.value).toBe("draftB");
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")?.value).toBe("draftB");
   });
 
   it("retries the failed query instead of the later search draft", async () => {
@@ -545,7 +493,7 @@ describe("secrets page", () => {
     clickButton(container, "Search");
     await waitForText(container, "No results for “missing-secret”");
 
-    expect(container.querySelector(".secrets-empty-state button")?.textContent).toContain("Clear filters");
+    expect(container.querySelector(".studio-result-state button")?.textContent).toContain("Clear filters");
     expect(container.querySelector(".secrets-coverage")).toBeNull();
   });
 
@@ -565,7 +513,7 @@ describe("secrets page", () => {
     clickButton(container, "Search");
 
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "0 shown · 0 loaded · 0 results for “missing-secret”");
-    expect(container.querySelector(".secrets-empty-state strong")?.textContent).toBe("No results for “missing-secret”");
+    expect(container.querySelector(".studio-result-state h3")?.textContent).toBe("No results for “missing-secret”");
     expect(status.value).toBe("Revoked");
   });
 
@@ -678,7 +626,9 @@ describe("secrets page", () => {
       scope: "Integration:Later"
     });
     const firstPage = inventoryPage();
-    const { container, listRequests } = render({
+    const getSecret = vi.fn((name: string) => { expect(name).toBe(laterSecret.name); return laterSecret; });
+    const { container, listRequests, metadataRequests } = render({
+      getSecret,
       getItems: url => {
         const term = getSearchTerm(url);
         return term === laterSecret.name || term === laterSecret.displayName ? [laterSecret] : firstPage;
@@ -704,17 +654,22 @@ describe("secrets page", () => {
     const trigger = container.querySelector<HTMLButtonElement>("[data-secret-edit='known.later.secret']")!;
     trigger.focus();
     flushSync(() => trigger.click());
-    expect(container.querySelector("[role='dialog']")).not.toBeNull();
-    clickButton(container, "Cancel", "[role='dialog']");
-    await waitFor(() => !container.querySelector("[role='dialog']"));
-    expect(document.activeElement?.getAttribute("data-secret-edit")).toBe("known.later.secret");
+    expect(container.querySelector(".secrets-editor-page")).not.toBeNull();
+    await waitFor(() => metadataRequests.length === 1);
+    expect(metadataRequests).toEqual([`/secrets/${encodeURIComponent(laterSecret.name)}`]);
+    expect(getSecret).toHaveBeenCalledWith(laterSecret.name, "");
+    await waitFor(() => container.querySelector(".secrets-edit-form") !== null);
+    clickButton(container, "Cancel", ".secrets-editor-page");
+    await waitFor(() => !container.querySelector(".secrets-editor-page"));
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "known.later.secret");
     expect(container.querySelector("[data-secret-open='known.later.secret']")).not.toBeNull();
-    expect(scope.value).toBe(laterSecret.scope);
+    expect([...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")].find(s => s.labels?.[0]?.textContent === "Scope")?.value).toBe(laterSecret.scope);
     expect(container.querySelector(".secrets-count")?.textContent).toContain(`1 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
 
-    change(search, laterSecret.displayName);
-    flushSync(() => search.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-    await waitFor(() => listRequests.length === 3);
+    const returnedSearch = container.querySelector<HTMLInputElement>('input[aria-label="Search secrets"]')!;
+    change(returnedSearch, laterSecret.displayName);
+    flushSync(() => returnedSearch.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await waitFor(() => getSearchTerm(listRequests.at(-1)!) === laterSecret.displayName);
     await waitForText(container, `for “${laterSecret.displayName}”`);
     expect(getSearchTerm(listRequests.at(-1)!)).toBe(laterSecret.displayName);
     expect(container.querySelector("[data-secret-open='known.later.secret']")).not.toBeNull();
@@ -752,9 +707,12 @@ describe("secrets page", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const { container } = render();
     await waitForText(container, "Payments API");
-    openEditor(container);
+    const listCopy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy technical name payments.api"]')!;
+    flushSync(() => listCopy.click());
+    await waitFor(() => writeText.mock.calls.length === 1);
+    await openEditor(container);
     const buttons = [...container.querySelectorAll<HTMLButtonElement>("button[aria-label='Copy technical name payments.api']")];
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(1);
     for (const button of buttons) {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await waitFor(() => button.parentElement?.textContent === "Copied");
@@ -788,17 +746,17 @@ describe("secrets page", () => {
 
     await waitForText(container, "Payments API");
     clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector(".secrets-modal"));
-    const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-modal input"));
+    await waitFor(() => !!container.querySelector(".secrets-create-form"));
+    const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-create-form input"));
     change(inputs[0], "smtp-password");
-    change(inputs[1], "SMTP Password");
+    change([...container.querySelectorAll<HTMLInputElement>(".secrets-create-form input")].find(i => i.labels?.[0]?.textContent?.trim() === "Display name")!, "SMTP Password");
     change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "secret-value");
-    clickButton(container, "Create", ".secrets-modal");
+    clickButton(container, "Create", ".secrets-create-form");
 
     await waitForText(container, "Secret created.");
-    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(container.querySelector(".secrets-editor-page")).toBeNull();
     expect(container.querySelector(".secrets-detail")).toBeNull();
-    expect(container.textContent).toContain("smtp-password");
+    await waitForText(container, "smtp-password");
     expect(postJson).toHaveBeenCalledWith("/secrets", expect.objectContaining({ value: "secret-value" }));
     unmount();
   });
@@ -808,7 +766,7 @@ describe("secrets page", () => {
     const { container, unmount } = render({ putJson });
 
     await waitForText(container, "Payments API");
-    openEditor(container);
+    await openEditor(container);
     await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value === "Payments API");
     change(container.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!, "");
     clickButton(container, "Save changes");
@@ -821,6 +779,7 @@ describe("secrets page", () => {
 
 function render(options: {
   getItems?(url: string, baseUrl: string): unknown[] | Promise<unknown[]>;
+  getSecret?(name: string, baseUrl: string): unknown | Promise<unknown>;
   totalCount?: number;
   getTotalCount?(items: unknown[], url: string): number;
   getDescriptors?(): unknown | Promise<unknown>;
@@ -831,12 +790,15 @@ function render(options: {
   document.body.appendChild(host);
   const root = createRoot(host);
   const listRequests: string[] = [];
+  const metadataRequests: string[] = [];
   const dialogs = {
     confirm: vi.fn(async () => true),
     prompt: vi.fn(async () => null),
     alert: vi.fn(async () => {})
   };
-  const createContext = (baseUrl = ""): StudioEndpointContext => ({
+  const createContext = (baseUrl = ""): StudioEndpointContext => {
+    const metadataByName = new Map<string, unknown>();
+    return ({
     baseUrl,
     http: {
       requestJson: vi.fn(),
@@ -848,22 +810,47 @@ function render(options: {
             stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }]
           } as T;
         }
+        if (url.startsWith("/secrets/")) {
+          metadataRequests.push(url);
+          const name = decodeURIComponent(url.split("/").at(-1)!);
+          const record = options.getSecret ? await options.getSecret(name, baseUrl) : metadataByName.get(name.toLowerCase());
+          if (!record) throw Object.assign(new Error("Secret not found."), { status: 404 });
+          return record as T;
+        }
         listRequests.push(url);
         const items = await options.getItems?.(url, baseUrl) ?? [paymentSecret()];
+        for (const item of items) {
+          if (typeof item === "object" && item !== null && "name" in item) metadataByName.set(String(item.name).toLowerCase(), item);
+        }
         return {
           items,
           totalCount: options.getTotalCount?.(items, url) ?? options.totalCount ?? items.length,
           rawValue: "raw-secret-value"
         } as T;
       },
-      postJson: options.postJson ?? vi.fn(),
+      postJson: async <T,>(url: string, request: unknown) => {
+        const response = await (options.postJson ?? vi.fn())(url, request);
+        if (response !== undefined || url !== "/secrets") return response as T;
+        const created = request as { name: string; displayName: string };
+        return secret({ id: created.name, name: created.name, displayName: created.displayName }) as T;
+      },
       putJson: options.putJson ?? vi.fn(),
       deleteJson: vi.fn(),
       postForm: vi.fn()
     }
   });
+  };
+  function Harness({ context }: { context: StudioEndpointContext }) {
+    const [path, setPath] = useState("/security/secrets");
+    const navigate = (next: string) => { window.history.pushState(window.history.state, "", next); setPath(next); };
+    const pathname = new URL(path, window.location.origin).pathname;
+    const api = { backend: context, dialogs } as unknown as ElsaStudioModuleApi;
+    if (pathname.endsWith("/new")) return <SecretEditorPage api={api} navigate={navigate} />;
+    if (pathname.endsWith("/edit")) return <SecretEditorPage api={api} name={decodeURIComponent(pathname.split("/").at(-2)!)} navigate={navigate} />;
+    return <SecretsPage context={context} dialogs={dialogs} navigate={navigate} />;
+  }
   const renderPage = (context = createContext()) => {
-    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} />));
+    flushSync(() => root.render(<Harness context={context} />));
   };
   renderPage();
 
@@ -873,7 +860,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: host, unmount, listRequests, metadataRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {
@@ -962,10 +949,11 @@ function selectValue(element: HTMLSelectElement, value: string) {
   });
 }
 
-function openEditor(container: HTMLElement) {
+async function openEditor(container: HTMLElement) {
   const trigger = container.querySelector<HTMLButtonElement>("button[aria-label='Edit payments.api']")!;
   trigger.focus();
   flushSync(() => trigger.click());
+  await waitFor(() => container.querySelector(".secrets-edit-form") !== null);
   return trigger;
 }
 

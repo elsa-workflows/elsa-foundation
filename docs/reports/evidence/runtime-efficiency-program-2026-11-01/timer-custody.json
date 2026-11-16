@@ -1,0 +1,12 @@
+{
+  "host": "w2",
+  "series": "timer-pg-r1",
+  "status": "passed",
+  "blob": "w2-timer-pg-r1-final.tar.xz",
+  "bytes": 12340,
+  "sha256": "6a63d0e1e59ff543321e3aab85f9e07a4497afd700514c26dea79a1aa4ba7205",
+  "files": 74,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

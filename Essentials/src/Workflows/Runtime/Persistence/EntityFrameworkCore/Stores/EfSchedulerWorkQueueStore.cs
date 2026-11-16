@@ -21,7 +21,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfSchedulerWorkQueueStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IWorkflowSchedulerWorkVisibilityReader
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection,
+    IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
 {
     private const string CursorPurpose = "ef-runtime-scheduler-work-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
@@ -34,6 +35,8 @@ public sealed class EfSchedulerWorkQueueStore(
     private static readonly Func<SchedulerWorkItemEntity, long, bool> IsVisibleAt = VisibleAtTicks.Compile();
 
     public bool SupportsClaimTransitions => true;
+
+    public bool SupportsClaimValidation => true;
 
     public bool SupportsTargetedDeletion => true;
 
@@ -335,6 +338,8 @@ public sealed class EfSchedulerWorkQueueStore(
             if (row is null)
                 return null;
             var item = ReadChecked(row, scope.Value, request.WorkflowExecutionId);
+            if (request.ValidateBeforeClaim is { } validate)
+                await validate(item, cancellationToken);
             if (!IsVisibleAt(row, request.Now.UtcTicks))
                 return null;
 
@@ -479,6 +484,49 @@ public sealed class EfSchedulerWorkQueueStore(
         }
     }
 
+    public async ValueTask<bool> DeferAsync(
+        string workflowExecutionId,
+        string workItemId,
+        DateTimeOffset now,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(workflowExecutionId, workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, workItemId);
+        return await Transitions.RunAsync(context, async () =>
+        {
+            var row = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            if (row is null)
+                return false;
+            _ = ReadChecked(row, scope, workflowExecutionId, workItemId);
+            // A claim that has not lapsed keeps its row; its owner decides what happens to it.
+            if (row.ClaimOwnerId is not null && !IsVisibleAt(row, now.UtcTicks))
+                return false;
+
+            // The same end state as a claim and its release, with the token advanced once to fence a lapsed claimant.
+            var originalRevision = row.Revision;
+            row.ClaimOwnerId = null;
+            row.ClaimToken = checked(row.ClaimToken + 1);
+            (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+            (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
+            row.Revision = checked(row.Revision + 1);
+            AttachForUpdate(row, originalRevision);
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+                Detach(row);
+                return true;
+            }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
+            {
+                Detach(row);
+                throw;
+            }
+        }, _ => throw TransitionDidNotSettle("defer", workflowExecutionId, workItemId), cancellationToken);
+    }
+
     public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(
         ConsumedSchedulerWorkItem consumed,
         CancellationToken cancellationToken = default)
@@ -603,7 +651,7 @@ public sealed class EfSchedulerWorkQueueStore(
         return await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
     }
 
-    private static SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision) => new()
+    private SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision) => new()
     {
         Id = id,
         ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
@@ -619,7 +667,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
         RecordedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(item.RecordedAt),
         ContentJson = RuntimeArtifactJson.Serialize(item),
-        SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+        SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, item),
         Revision = revision
     };
 
@@ -670,7 +718,7 @@ public sealed class EfSchedulerWorkQueueStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedWorkItemId = null)
     {
-        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Revision <= 0 ||
+        if (EfSchemaVersion.NotReadable(RuntimeSchedulerWorkEfModule.Chain, row.SchemaVersion) || row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The scheduler-work row scope, schema, or revision projection is corrupt.");
@@ -678,7 +726,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RuntimeSchedulerWorkItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeOperationalStateEfModule.Chain.Upcast<SchedulerWorkItemEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
+            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeSchedulerWorkEfModule.Chain.Upcast<SchedulerWorkItemEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {
@@ -719,6 +767,7 @@ public sealed class EfSchedulerWorkQueueStore(
 
     private void AttachForUpdate(SchedulerWorkItemEntity row, long originalRevision)
     {
+        row.SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, ReadChecked(row, EfRuntimeOperationalStoreSupport.Decode(row.ScopeKey)), row.SchemaVersion);
         DetachTracked(row.Id);
         context.SchedulerWorkItems.Attach(row);
         context.Entry(row).Property(entity => entity.Revision).OriginalValue = originalRevision;

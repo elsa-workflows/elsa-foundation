@@ -125,6 +125,22 @@ describe("studio module loader", () => {
     expect(styles).toEqual(["/module.css?studioModuleVersion=1.0.0"]);
   });
 
+  it.each([undefined, false, true])("requires an explicit content-hash guarantee to keep exact CSS URLs (%s)", async stylesHaveContentHashes => {
+    const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
+    const loaded: string[] = [];
+    const style = "/custom/module-standard.css";
+    await loadStudioModules([{ ...manifest("custom", "/module.js"), styles: [style], stylesHaveContentHashes }], api, {
+      hostVersion: "1.0.0", sdkVersion: "1.0.0", loadStyle: async href => { loaded.push(href); },
+      importModule: async () => ({ register() {} })
+    });
+    expect(loaded).toEqual([stylesHaveContentHashes ? style : `${style}?studioModuleVersion=1.0.0`]);
+  });
+
+  it("versions custom stylesheet names without inferring immutability from their basename", () => {
+    expect(addModuleVersion("/custom/module-standard.css", "1.0.0")).toBe("/custom/module-standard.css?studioModuleVersion=1.0.0");
+    expect(addModuleVersion("/custom/module-standard.css", "2.0.0")).toBe("/custom/module-standard.css?studioModuleVersion=2.0.0");
+  });
+
   it("does not duplicate existing module version query parameters", () => {
     expect(addModuleVersion("/module.js?studioModuleVersion=1.0.0", "1.0.1")).toBe("/module.js?studioModuleVersion=1.0.0");
   });

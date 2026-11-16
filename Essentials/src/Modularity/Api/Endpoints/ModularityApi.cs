@@ -1,4 +1,4 @@
-using NativeEndpoints;
+using MinimalEndpoints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

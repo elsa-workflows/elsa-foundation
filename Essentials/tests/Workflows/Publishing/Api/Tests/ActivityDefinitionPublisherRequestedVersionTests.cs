@@ -1,4 +1,5 @@
 using Elsa.Primitives.Diagnostics;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Xunit;
@@ -14,6 +15,23 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// </summary>
 public sealed class ActivityDefinitionPublisherRequestedVersionTests
 {
+    [Fact]
+    public async Task Publication_freezes_typed_names_and_filters_unknown_source_identities()
+    {
+        var scenario = new Scenario(Candidate.Publishable,
+            [new("boundary", "Original name", "Original context"), new("outer-node", "Must not leak")]);
+        await scenario.PublishReviewedAsync("named-version", "named-publication");
+        var commit = Assert.Single(scenario.MaterialCommits);
+        var frozen = Assert.Single(commit.SourceReference.ActivityPresentation);
+        Assert.Equal("boundary", frozen.ExecutableNodeId);
+        Assert.Equal("Original name", frozen.DisplayName);
+        Assert.Equal("Original context", frozen.Description);
+        Assert.Equal(2, commit.Design.Layout.ActivityPresentation.Count);
+        scenario.Layout.ActivityPresentation = [new ActivityNodePresentationRecord("boundary", "Later draft name")];
+        Assert.Equal("Original name", Assert.Single(commit.SourceReference.ActivityPresentation).DisplayName);
+        Assert.Equal("Original name", Assert.Single(commit.Design.Layout.ActivityPresentation, record => record.NodeId == "boundary").DisplayName);
+    }
+
     [Fact]
     public async Task A_requested_version_id_is_the_id_every_committed_row_carries()
     {

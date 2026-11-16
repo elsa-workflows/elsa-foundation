@@ -43,3 +43,6 @@ A publisher picks how an event is dispatched by the contract it depends on. Each
 - Pipeline middleware shape: [`Pipelines/Core/EXTENSION_POINTS.md`](../../Pipelines/Core/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1 + §2.24.2.
+
+
+`EventsFeature.ConfigureServices` is idempotent: direct activity-runtime library composition and the shell's Events feature select the same canonical publisher/channel/pipeline and background dispatcher. Existing registrations and configured middleware are preserved; domain code does not invoke handler collections directly.

@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Contracts;

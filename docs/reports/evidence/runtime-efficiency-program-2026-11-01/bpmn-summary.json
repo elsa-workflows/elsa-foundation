@@ -1,0 +1,64 @@
+{
+  "status": "passed",
+  "libraryHead": "63e4c1fc48be2b99505f0c26eb2aae46ff2c5d26",
+  "scope": "Direct two-element BPMN via authenticated loopback HTTP, SQLite OS volume; separate fresh single-node host per sample",
+  "activeCase": "c1-r2",
+  "cases": [
+    {
+      "label": "c1-r1",
+      "exit": 0,
+      "correct": true,
+      "allTerminalSettled": true,
+      "exactStartReplay": true,
+      "rate": 5.023475287176424,
+      "count": 77,
+      "totalStarts": 143,
+      "hostCpuSeconds": 5.54,
+      "hostPeakWorkingSet": 471130112,
+      "p95Ms": 330.5182,
+      "loadBefore": "0.15 0.22 0.16 1/153 2831\n"
+    },
+    {
+      "label": "c4-r1",
+      "exit": 0,
+      "correct": true,
+      "allTerminalSettled": true,
+      "exactStartReplay": true,
+      "rate": 4.927318752851086,
+      "count": 77,
+      "totalStarts": 146,
+      "hostCpuSeconds": 5.06,
+      "hostPeakWorkingSet": 480825344,
+      "p95Ms": 3280.5529,
+      "loadBefore": "1.08 0.44 0.24 1/152 2879\n"
+    },
+    {
+      "label": "c4-r2",
+      "exit": 0,
+      "correct": true,
+      "allTerminalSettled": true,
+      "exactStartReplay": true,
+      "rate": 4.73630839809051,
+      "count": 74,
+      "totalStarts": 141,
+      "hostCpuSeconds": 4.62,
+      "hostPeakWorkingSet": 468152320,
+      "p95Ms": 3035.7655,
+      "loadBefore": "1.51 0.63 0.31 1/153 2933\n"
+    },
+    {
+      "label": "c1-r2",
+      "exit": 0,
+      "correct": true,
+      "allTerminalSettled": true,
+      "exactStartReplay": true,
+      "rate": 4.9857179787543,
+      "count": 75,
+      "totalStarts": 140,
+      "hostCpuSeconds": 4.68,
+      "hostPeakWorkingSet": 468037632,
+      "p95Ms": 310.7506,
+      "loadBefore": "1.78 0.82 0.39 2/151 2981\n"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Builder;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityPublications.GetReceipt;
 

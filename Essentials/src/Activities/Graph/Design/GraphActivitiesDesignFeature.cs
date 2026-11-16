@@ -24,6 +24,7 @@ public sealed class GraphActivitiesDesignFeature : IShellFeature
         services.AddSingleton<IActivityProvider>(sp => sp.GetRequiredService<GraphActivityProvider>());
         services.AddSingleton<IActivityTemplateProviderCompiler>(sp => sp.GetRequiredService<GraphActivityProvider>());
         services.AddSingleton<IActivityTemplateDependencyDiscoverer>(sp => sp.GetRequiredService<GraphActivityProvider>());
+        services.AddSingleton<IActivityDataSelectionDocumentProjector>(sp => sp.GetRequiredService<GraphActivityProvider>());
         services.AddSingleton<IActivityProviderReferenceRewriter, GraphActivityProviderReferenceRewriter>();
         services.AddScoped<IDraftValidator, CompleteOutsideGraphDraftValidator>();
     }

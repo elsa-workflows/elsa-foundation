@@ -55,6 +55,9 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max executions per sweep", Description = "Hard cap on executions re-driven per sweep after discovery, bounding dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxExecutionsPerSweep { get; set; } = 100;
 
+    [ManifestSetting(DisplayName = "Max concurrent dispatches", Description = "Maximum simultaneous pump dispatches across independent executions, using separate persistence scopes. Tune against provider capacity.", Category = "Runtime", DefaultValue = "1")]
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
     [ManifestSetting(DisplayName = "Lease timeout (minutes)", Description = "Lease-expiry threshold handed to the recovery scanner.", Category = "Runtime", DefaultValue = "5")]
     public double LeaseTimeoutMinutes { get; set; } = 5;
 
@@ -72,11 +75,13 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
             options.BacklogBatchSize = BacklogBatchSize;
             options.RecoveryScanBatchSize = RecoveryScanBatchSize;
             options.MaxExecutionsPerSweep = MaxExecutionsPerSweep;
+            options.MaxConcurrentDispatches = MaxConcurrentDispatches;
             options.LeaseTimeout = TimeSpan.FromMinutes(LeaseTimeoutMinutes);
             options.HeartbeatTimeout = TimeSpan.FromMinutes(HeartbeatTimeoutMinutes);
         });
 
-        services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+        services.TryAddScoped<RuntimeResumptionService>();
+        services.TryAddScoped<IRuntimeResumptionService>(sp => sp.GetRequiredService<RuntimeResumptionService>());
         // The sweep delivers outbox items once they are due, so this host can honour delayed child schedules (R-7).
         services.TryAddSingleton<IRuntimeDelayedScheduleCapability, OutboxSweepDelayedScheduleCapability>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, DurableResumptionEvidence>());

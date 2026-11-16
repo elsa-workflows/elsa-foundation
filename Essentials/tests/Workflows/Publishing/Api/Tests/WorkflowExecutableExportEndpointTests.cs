@@ -218,6 +218,20 @@ public sealed class WorkflowExecutableExportEndpointTests
     }
 
     [Fact]
+    public async Task An_exact_closure_resource_refusal_is_a_safe_403_before_target_delivery()
+    {
+        var closure = Fixture.Closure(); var target = new RecordingDownloadTarget();
+        var refusal = new ClosureDisclosureRefusal(closure);
+        await using var host = await StartAsync(new StubClosureFactory(closure), [target], services => services.AddSingleton<IPermissionResourceHandler>(refusal));
+        using var response = await ExportAsync(host, VersionId);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentDisposition);
+        Assert.Contains("cannot export", await Messages(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("artifacts", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, refusal.Calls); Assert.Equal(0, target.Calls);
+    }
+
+    [Fact]
     public async Task A_receipt_producing_target_can_never_answer_this_safe_method()
     {
         await using var host = await StartAsync(
@@ -277,7 +291,8 @@ public sealed class WorkflowExecutableExportEndpointTests
     /// </summary>
     private static Task<PublishingMinimalApiScenarioHost> StartAsync(
         IWorkflowArtifactClosureFactory closureFactory,
-        IWorkflowArtifactExportTarget[]? targets = null) =>
+        IWorkflowArtifactExportTarget[]? targets = null,
+        Action<IServiceCollection>? configure = null) =>
         PublishingMinimalApiScenarioHost.StartAsync(configureServices: services =>
         {
             services.RemoveAll<IWorkflowArtifactClosureFactory>();
@@ -285,6 +300,7 @@ public sealed class WorkflowExecutableExportEndpointTests
             services.RemoveAll<IWorkflowArtifactExportTarget>();
             foreach (var target in targets ?? [new DownloadWorkflowArtifactExportTarget(Fixture.Codec())])
                 services.AddSingleton(target);
+            configure?.Invoke(services);
         });
 
     private static async Task<HttpResponseMessage> ExportAsync(PublishingMinimalApiScenarioHost host, string versionId)
@@ -335,6 +351,24 @@ public sealed class WorkflowExecutableExportEndpointTests
     {
         public Task<WorkflowArtifactClosure> CreateAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException($"The closure factory must not be reached for '{definitionVersionId}'.");
+    }
+
+    private sealed class RecordingDownloadTarget : IWorkflowArtifactExportTarget
+    {
+        public int Calls { get; private set; }
+        public string TargetId => "download";
+        public Task<WorkflowArtifactExportDelivery> DeliverAsync(WorkflowArtifactClosure closure, CancellationToken cancellationToken = default)
+        { Calls++; return Task.FromResult(WorkflowArtifactExportDelivery.Inline("download", new byte[] { 1 })); }
+    }
+    private sealed class ClosureDisclosureRefusal(WorkflowArtifactClosure expected) : IPermissionResourceHandler
+    {
+        public int Calls { get; private set; }
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.Resource is not WorkflowArtifactClosure closure) return ValueTask.FromResult<PermissionEvaluationResult?>(null);
+            Assert.Same(expected, closure); Assert.Equal(WorkflowPublishingPermissions.Read, context.Permission); Calls++;
+            return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Denied("Private decision material cannot be exposed."));
+        }
     }
 
     /// <summary>A target that answers to "download" but delivers a receipt — the shape the GET must refuse.</summary>

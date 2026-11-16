@@ -1,0 +1,60 @@
+[
+  {
+    "nodes": 2,
+    "concurrency": 8,
+    "repeat": 1,
+    "count": 1816,
+    "seconds": 20.048926,
+    "WorkflowsPerSecond": 90.57841801600743,
+    "P95Ms": 116.7215,
+    "AllocatedBytesPerWorkflow": 9145463.044052863,
+    "database": "cluster_1e6b1529848e465ea81eed7e053e00c8",
+    "labels": [
+      "cluster-n2-c8-r1-node0",
+      "cluster-n2-c8-r1-node1"
+    ]
+  },
+  {
+    "nodes": 1,
+    "concurrency": 8,
+    "repeat": 1,
+    "count": 1810,
+    "seconds": 20.041734,
+    "WorkflowsPerSecond": 90.311546895094,
+    "P95Ms": 178.2185,
+    "AllocatedBytesPerWorkflow": 9131820.742541436,
+    "database": "cluster_e2e9fa99cdeb41a0b01a73fb80bedc23",
+    "labels": [
+      "cluster-n1-c8-r1-node0"
+    ]
+  },
+  {
+    "nodes": 2,
+    "concurrency": 8,
+    "repeat": 2,
+    "count": 1900,
+    "seconds": 20.056641,
+    "WorkflowsPerSecond": 94.73171504640284,
+    "P95Ms": 113.6966,
+    "AllocatedBytesPerWorkflow": 9164118.618947368,
+    "database": "cluster_9d3345b32c354f4ebd4fadc0958e7e11",
+    "labels": [
+      "cluster-n2-c8-r2-node0",
+      "cluster-n2-c8-r2-node1"
+    ]
+  },
+  {
+    "nodes": 1,
+    "concurrency": 8,
+    "repeat": 2,
+    "count": 1927,
+    "seconds": 20.060873,
+    "WorkflowsPerSecond": 96.05763418172279,
+    "P95Ms": 113.316,
+    "AllocatedBytesPerWorkflow": 9128306.428645562,
+    "database": "cluster_7fdcb472a395484998a109cddc28fe0a",
+    "labels": [
+      "cluster-n1-c8-r2-node0"
+    ]
+  }
+]

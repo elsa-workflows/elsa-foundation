@@ -13,10 +13,18 @@ database connection string, or `RuntimeConnectionToken`.
 ## Override
 
 - `IConnectionRepository`: persistence of connection definition and state. The default is in-memory;
-  a durable package replaces it.
+  [EF persistence](../Persistence/EntityFrameworkCore/README.md) replaces it. `GetCapabilitiesAsync`
+  returns the configured metadata provider and its durability; existing contributions default to
+  unspecified/non-durable until they explicitly supply `ConnectionRepositoryCapabilities`.
 - `IConnectionManager`: lifecycle facade (create, update, test, revoke, delete).
 - `IConnectionResolver`: point-of-use resolution. Tenant-scoped; owner/run-as is reserved and only
-  `tenant` is valid in v1.
+  `tenant` is valid in v1. `IResolvedConnection.Version` identifies the metadata revision captured
+  with that resolved settings snapshot. Its compatibility default is zero (unknown); consumers
+  requiring revision-bound access must refuse zero rather than separately reading a newer revision.
+  `IncarnationId` distinguishes delete/recreate of the same name even when versions repeat. The
+  compatibility default is null; new manager-created definitions retain their opaque creation ID
+  through saves. Revision-bound clients must require both identities and resolve credentials again
+  before use, since a referenced secret can be revoked independently of connection metadata.
 - `IConnectionCredentialSource` implementations, keyed by `Kind`: how a connection field's material
   is obtained. Built-ins are `secret` (`ISecretValueResolver`) and `named-credential`
   (`IAccessTokenSource`). Hosts add kinds without changing core.
@@ -30,6 +38,12 @@ database connection string, or `RuntimeConnectionToken`.
 
 - `IConnectionTypeProvider`: a kind of external system (`http`, `google-drive`, …). Must declare
   supported schemes, non-secret settings, an allowed-hosts policy, and `TestAsync`.
+  Known implementations include the built-in HTTP contribution (intra-domain) and the stateless
+  [Anthropic](../../../../Extensions/Agent/src/Anthropic/README.md) and
+  [Azure OpenAI](../../../../Extensions/Agent/src/AzureOpenAI/README.md) agent
+  connection types (cross-domain), registered by their optional features through
+  `AgentModelConnectionTypeProvider`. The Connections type registry is a singleton immutable
+  lookup; contributors must not capture scoped runtime factories/resolvers.
 - `IAuthenticationSchemeProvider`: an open auth-scheme plugin (`api-key`, `basic`, `bearer`,
   `oauth2`, …). Core never hard-codes a scheme list.
 - `IHttpRequestAuthenticator`: applies a scheme to an outbound `HttpRequestMessage`. Refuses to

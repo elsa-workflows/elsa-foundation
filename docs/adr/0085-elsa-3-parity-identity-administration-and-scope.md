@@ -110,13 +110,18 @@ revocable, authenticated into the normal principal pipeline. OAuth client creden
 ### D10: Non-identity scope
 
 - **Webhooks and User Tasks: yes**, after identity; User Tasks needs participants.
-- **StateMachine: deferred**; BPMN covers most state-driven flows. Revisit on demand.
+- **StateMachine: scoped owner-requested revisit, 4 November 2026**; the separate
+  [StateMachine program #3815](../program-goals/state-machine.md) owns design and delivery of hierarchical
+  and parallel state machines. [ADR 0080 D0](0080-elsa-4-simplification-decisions.md#d0--focus) records the
+  authorization and sequencing. This supersedes the earlier deferral for StateMachine only, without
+  activating other parity phases or approving its still-open detailed design.
 - **MQTT:** belongs to Elsa Integrations, not this program.
 - **LDAP: no.** Use an external IdP.
 
 *Why:* identity comes first because the other modules depend on it: User Tasks assigns work to participants, which
-needs users and roles, and Webhooks needs API keys and permissions to secure its endpoints. StateMachine is deferred
-because BPMN already models most state-driven flows. MQTT is a transport integration, which Elsa Integrations owns.
+needs users and roles, and Webhooks needs API keys and permissions to secure its endpoints. StateMachine was initially
+deferred because BPMN already models most state-driven flows; the owner's 4 November demand revisits that choice
+through its own named program. MQTT is a transport integration, which Elsa Integrations owns.
 LDAP is dropped because an external IdP (for example Active Directory through OIDC) covers it without Elsa owning a
 directory protocol.
 

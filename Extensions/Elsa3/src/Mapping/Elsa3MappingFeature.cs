@@ -58,6 +58,9 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddScoped<IReusableActivityImportMaterializer, Elsa3ReusableActivityImportMaterializer>();
         // Lets the import analyzer refuse only real start triggers in a reusable workflow (spec 246 D-6).
         services.TryAddSingleton<IReusableActivityTriggerClassifier, Elsa3ReusableActivityTriggerClassifier>();
+        // The converter's revision numbers and identifies imported versions ({n}.{R}.0, #3921); a host or test may
+        // register its own first.
+        services.TryAddSingleton<IElsa3ConverterRevision, Elsa3ConverterRevision>();
         services.AddScoped<IElsa3WorkflowDefinitionImporter, Elsa3WorkflowDefinitionImporter>();
     }
 }

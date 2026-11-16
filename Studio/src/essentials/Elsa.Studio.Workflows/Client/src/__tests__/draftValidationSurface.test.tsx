@@ -82,6 +82,14 @@ describe("combineValidationErrors", () => {
     expect(combined.filter(e => e.message === "server issue")).toHaveLength(1);
     expect(combined.map(e => e.message)).toEqual(["server issue", "draft issue", "dangling"]);
   });
+
+  it("appends designer-side local contribution errors after structural checks", () => {
+    const combined = combineValidationErrors({
+      structuralErrors: [{ type: STRUCTURAL_DANGLING_TYPE, message: "dangling", path: "n3" }],
+      localErrors: [{ type: "Decision/InputMembership", message: "notes is not in this table.", path: "eval-1/inputs/Inputs" }]
+    });
+    expect(combined.map(e => e.message)).toEqual(["dangling", "notes is not in this table."]);
+  });
 });
 
 describe("parsePromotionValidationErrors", () => {
@@ -259,5 +267,11 @@ describe("ValidationPanel", () => {
   it("notes when server validation is unavailable on the empty state", () => {
     flushSync(() => root.render(<ValidationPanel draft={draft} errors={[]} onRepair={() => {}} unavailable />));
     expect(container.querySelector(".wf-validation.ok")?.textContent).toContain("server validation unavailable");
+  });
+
+  it("does not claim no validation errors while local contribution checks are pending", () => {
+    flushSync(() => root.render(<ValidationPanel draft={draft} errors={[]} onRepair={() => {}} pending />));
+    expect(container.textContent).toContain("Checking validation");
+    expect(container.textContent).not.toContain("No validation errors");
   });
 });

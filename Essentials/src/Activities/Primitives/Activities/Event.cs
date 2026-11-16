@@ -62,7 +62,7 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
     /// catch node sets it to <c>false</c> so a direct invocation waits instead of completing and the
     /// publish-time trigger extractor skips it.
     /// </summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), DefaultValue = "true")]
+    [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow matching events to start new workflow instances. When off, this activity can still wait for events in an existing workflow.", DefaultValue = "true")]
     public bool CanStartWorkflow { get; set; } = true;
 
     protected override ValueTask<ActivityTransition<EventResult, EventWaitState>> ExecuteAsync(

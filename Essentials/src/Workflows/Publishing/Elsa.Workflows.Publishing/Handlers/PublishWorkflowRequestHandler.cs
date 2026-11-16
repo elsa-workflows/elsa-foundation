@@ -307,7 +307,8 @@ public sealed class PublishWorkflowRequestHandler(
             ActivityPresentation:
                 WorkflowExecutableActivityPresentationSidecar.CopyFrom(
                     layout?.ActivityPresentation,
-                    executable));
+                    executable,
+                    placementSidecars?.GetPresentation(identity.DefinitionVersionId)));
     }
 
 }

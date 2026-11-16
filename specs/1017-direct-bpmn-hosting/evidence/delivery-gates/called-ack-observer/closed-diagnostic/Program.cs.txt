@@ -1,0 +1,20 @@
+using System.Reflection;
+using System.Runtime.Loader;
+using System.Text.Json;
+var resolver = new AssemblyDependencyResolver(args[0]);
+AssemblyLoadContext.Default.Resolving += (context, name) => resolver.ResolveAssemblyToPath(name) is { } path ? context.LoadFromAssemblyPath(path) : null;
+AssemblyLoadContext.Default.ResolvingUnmanagedDll += (assembly, name) => resolver.ResolveUnmanagedDllToPath(name) is { } path ? NativeLibraryShim.Load(path) : IntPtr.Zero;
+try
+{
+    var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(args[0]);
+    var method = assembly.GetType("OptedCalledSnapshotReader", true)!.GetMethod("ReadAcknowledgmentAsync", BindingFlags.NonPublic | BindingFlags.Static)!;
+    var task = (Task<object>)method.Invoke(null, args.Skip(1).Cast<object>().ToArray())!;
+    await task;
+    Console.WriteLine(JsonSerializer.Serialize(new { checkedReadSucceeded = true }));
+}
+catch (Exception failure)
+{
+    var exception = failure is TargetInvocationException invoked ? invoked.InnerException! : failure;
+    Console.WriteLine(JsonSerializer.Serialize(new { checkedReadSucceeded = false, exceptionType = exception.GetType().FullName, reason = exception.Message, stack = exception.StackTrace }));
+}
+internal static class NativeLibraryShim { public static IntPtr Load(string path) => System.Runtime.InteropServices.NativeLibrary.Load(path); }

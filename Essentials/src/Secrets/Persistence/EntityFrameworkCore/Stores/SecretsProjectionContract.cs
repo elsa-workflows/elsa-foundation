@@ -110,7 +110,9 @@ public static class SecretsProjectionContract
                     if (Matches(record, stored, current))
                         continue;
 
+                    var writeVersion = SecretsWriteVersion.For(context, current.Secret, record.SchemaVersion);
                     current.CopyProjectionsTo(record);
+                    record.SchemaVersion = writeVersion;
                     updatedBatch++;
                 }
 
@@ -157,7 +159,9 @@ public static class SecretsProjectionContract
         CancellationToken cancellationToken)
     {
         context.Secrets.Remove(record);
-        context.Secrets.Add(current.ToRecord(record.ConcurrencyToken));
+        var moved = current.ToRecord(record.ConcurrencyToken);
+        moved.SchemaVersion = SecretsWriteVersion.For(context, current.Secret, record.SchemaVersion);
+        context.Secrets.Add(moved);
         try
         {
             await context.SaveProjectionChangesAsync(cancellationToken);

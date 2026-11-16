@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Exceptions;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;

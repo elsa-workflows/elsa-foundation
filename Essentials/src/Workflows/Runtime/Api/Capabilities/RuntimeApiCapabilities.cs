@@ -16,6 +16,7 @@ public static class RuntimeApiCapabilities
         CapabilityId,
         1,
         [
+            new("runtime-persistence-mode", "runtime/workflows/persistence-mode"),
             new("workflow-executables", "runtime/workflows/executables"),
             new("workflow-executable", "runtime/workflows/executables/{artifactId}", templated: true),
             new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),

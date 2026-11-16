@@ -1,0 +1,70 @@
+{
+  "source": "5618ed377594d6cd8428fdd3ff37cca357004722",
+  "hostTestPassed": true,
+  "allElsaProductsMatchSource": true,
+  "snapshots": [
+    {
+      "file": "authored-wait-runtime.sqlite.gz",
+      "revision": 1,
+      "lifecycle": 0,
+      "adapterFormatVersion": 1,
+      "sourceReferenceId": "bpmn-source:e79bde906da0d8d10e0368fc05311da42503d16accc832c162b980e737ccddfa",
+      "authoredVersionId": "14pqrlXXh43",
+      "authoredVersion": "2.0.0",
+      "inputReceipts": 1,
+      "nativeRows": 0,
+      "integrity": "ok"
+    },
+    {
+      "file": "authored-wait-design.sqlite.gz",
+      "integrity": "ok",
+      "bytes": 1351680
+    },
+    {
+      "file": "authored-completed-runtime.sqlite.gz",
+      "revision": 2,
+      "lifecycle": 3,
+      "adapterFormatVersion": 1,
+      "sourceReferenceId": "bpmn-source:e79bde906da0d8d10e0368fc05311da42503d16accc832c162b980e737ccddfa",
+      "authoredVersionId": "14pqrlXXh43",
+      "authoredVersion": "2.0.0",
+      "inputReceipts": 2,
+      "nativeRows": 0,
+      "integrity": "ok"
+    },
+    {
+      "file": "authored-completed-design.sqlite.gz",
+      "integrity": "ok",
+      "bytes": 1355776
+    },
+    {
+      "file": "authored-runtime-only-wait-runtime.sqlite.gz",
+      "revision": 1,
+      "lifecycle": 0,
+      "adapterFormatVersion": 1,
+      "sourceReferenceId": "bpmn-source:e79bde906da0d8d10e0368fc05311da42503d16accc832c162b980e737ccddfa",
+      "authoredVersionId": "14pqrlXXh43",
+      "authoredVersion": "2.0.0",
+      "inputReceipts": 1,
+      "nativeRows": 0,
+      "integrity": "ok"
+    },
+    {
+      "file": "authored-runtime-only-completed-runtime.sqlite.gz",
+      "revision": 2,
+      "lifecycle": 3,
+      "adapterFormatVersion": 1,
+      "sourceReferenceId": "bpmn-source:e79bde906da0d8d10e0368fc05311da42503d16accc832c162b980e737ccddfa",
+      "authoredVersionId": "14pqrlXXh43",
+      "authoredVersion": "2.0.0",
+      "inputReceipts": 2,
+      "nativeRows": 0,
+      "integrity": "ok"
+    }
+  ],
+  "immutablePinAuthorityIncarnationPreserved": true,
+  "nativeWrapperAbsent": true,
+  "studioBrowserProved": false,
+  "runtimeOnlyHostProvedByThisCase": true,
+  "runtimeOnlyAdmissionOffProved": true
+}

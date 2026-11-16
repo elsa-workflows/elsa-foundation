@@ -1,0 +1,527 @@
+
+## CLOSE-COMPLETED (56)
+- #674 | CLOSE-COMPLETED(19a51677ce, 4ee61f7c32) | - | none | Add a transport-neutral DispatchWorkflow activity | DispatchWorkflow activity with detached and WaitForCompletion modes shipped in Essentials/src/Activities/DispatchWorkflow.
+- #1144 | CLOSE-COMPLETED(a1b9ff8b93) | - | release | FR-1: Two version lines, selective publishing, and honest dependency floors | 12/13 children done, selective publishing/honest floors landed (27428f2e5a, a1b9ff8b93); two-line part superseded by ADR 0080 D4/#2576.
+- #1195 | CLOSE-COMPLETED(#2860 d9999e5f39) | - | none (maps) | Maps generator: spec Title column falls back to the folder id for hand-written architectur | PR #2860 "Fixes #1195" merged 2026-10-16; SpecFacts now reads hand-written H1 titles.
+- #1407 | CLOSE-COMPLETED(#2955) | - | studio-ux | Publication channel: unreadable conflict diagnostic, and a per-definition slot presented a | PR #2955 "Fixes #1407" merged (readable conflicts + declared channels); Studio side in #3308.
+- #1840 | CLOSE-COMPLETED(#2963) | - | runtime-efficiency | In-memory checkpoint store treats a missing execution store as "no child" when completing  | PR #2963 "Require child execution evidence in runtime checkpoint composition" merged 2026-10-18.
+- #2263 | CLOSE-COMPLETED(#3270) | - | none | Runtime EXTENSION_POINTS still calls EF row stores 'IDocumentStore-backed bridges' | PR #3270 "Describe runtime EF stores as EF Core row stores" merged.
+- #2286 | CLOSE-COMPLETED(#2539 f73d8555ad) | - | runtime-efficiency | Give each checkpoint commit attempt its own root-write lease | Spec 200 implementation delivered per-attempt checkpoint lease ids (#2286) with contract test.
+- #2498 | CLOSE-COMPLETED(7051f33016) | - | docs-website | Spike: qualify native GitBook sync from Foundation Markdown | Spike answered: GitBook mapping on main (gitbook-docs.yaml), v4.elsaworkflows.io serves Foundation Markdown. Merge or close draft PR #2655; update registry focus.
+- #2502 | CLOSE-COMPLETED(87d14dd2b0) | - | repo-consolidation | [Epic] M1: Architecture, ownership and migration rehearsal | M1 layout/history decided and executed: Essentials/Extensions/Studio relocation on main 2026-10-11; stale in-progress, no PR.
+- #2503 | CLOSE-COMPLETED(87d14dd2b0) | - | repo-consolidation | [Epic] M2: Integrated source and reproducible contributor tooling | M2 integrated source is on main (Studio/, Extensions/<cap>/{src,studio,tests}), CI consolidated (#3686); "blocked" label false.
+- #2510 | CLOSE-COMPLETED(87d14dd2b0) | - | repo-consolidation | [Spike] Qualify sibling-product layout and mapped history strategy | Spike answered: sibling-product layout adopted on main; Studio imported with history. Draft PR #2655 is a docs wording refresh, separate.
+- #2560 | CLOSE-COMPLETED(38b31c370d) | - | simplification | Epic: Phase 0, focus and decisions | ADR 0080/constitution 5.0.0 landed, programs parked, #2531 renamed; triage target now owned by repo-hygiene #2541. Stale in-progress 30d.
+- #2579 | CLOSE-COMPLETED(87d14dd2b0) | - | simplification | Move extension tests under tests/ and fix src/extensions/README.md | Extensions/<capability>/tests colocated and Extensions/README.md exist after relocation; src/extensions no longer exists.
+- #2661 | CLOSE-COMPLETED(#2832 16829f507a) | - | runtime-efficiency | A directly started Immediate run of about 15 or more activities fails with DrainCycleLimit | "Bound drain cycles without progress instead of all cycles (#2661)" delivers the fix.
+- #2696 | CLOSE-COMPLETED(#2835 16f835f6d6) | - | studio-ux | Workflow Definitions search never filters: Studio sends `search`, the list endpoint binds  | Studio now sends searchTerm.
+- #2697 | CLOSE-COMPLETED(#2712, #3251) | - | studio-ux | Designer opens cramped for newcomers: bottom console panel open by default and a minimap t | Console dock closed by default (#2712); minimap hidden until graph outgrows canvas (#3251).
+- #2698 | CLOSE-COMPLETED(#2837 ac6d97bed1) | - | studio-ux | Designer validation and test-run rejection messages name activities by internal node id, i | Validation and test-run rejection copy now name activities.
+- #2747 | CLOSE-COMPLETED(#3113, #3140 b555bd8460) | - | elsa3-parity | Operators cannot retry a faulted activity: no retry alteration and no Studio action for "N | Runtime RetryFaultedActivity/1 and Studio retry button both merged per owner comments.
+- #2748 | CLOSE-COMPLETED(#2749 7e2868b8c9) | - | studio-ux | Workflow designer has no copy, paste or duplicate for activities (Elsa 3 parity) | In-workflow copy/paste/duplicate shipped; cross-workflow clipboard can be a new issue if wanted.
+- #2758 | CLOSE-COMPLETED(#2759, #2760, #2802) | - | studio-ux | Studio: Classic theme rough edges (Home, Definitions, Runs names, nav highlight, inspector | All five Classic-theme items delivered across the three PRs.
+- #2764 | CLOSE-COMPLETED(#2767) | - | ci-flakes | Flaky Studio browser test: Ctrl+D duplicates while the code editor is focused | Ctrl+D guard fix PR #2767 merged.
+- #2768 | CLOSE-COMPLETED(#2770 95f6ac6b6d) | - | ci-flakes | Studio: flaky activity-upgrades.spec.ts:62 ('Activity draft unavailable' heading timeout a | "fixes #2768"; CI green on PR.
+- #2772 | CLOSE-COMPLETED(#2783 922ee7fb6c) | - | elsa3-parity | ADR 0085: Elsa 3.8/3.9 parity: identity administration and scope | ADR 0085 merged.
+- #2773 | CLOSE-COMPLETED(#2826 c358b4ab2e) | - | elsa3-parity | Identity: align permission names with Elsa 3.9's resource:verb shape and add trailing-* ma | resource:verb names and trailing-* matching merged.
+- #2784 | CLOSE-COMPLETED(#2836 8b66e56a00) | - | studio-ux | Studio: route remaining raw internal links in-app (shared studio link component) | Remaining raw internal links routed in-app.
+- #2785 | CLOSE-COMPLETED(#2847 4d131c6ff7) | - | simplification | Activities Design API: six legacy requests and commands have no endpoint and no sender; de | Six legacy requests/commands deleted.
+- #2800 | CLOSE-COMPLETED(#3248 b37a080594) | - | studio-ux | Studio: cap parallel workflow-name lookups beyond the first 100 definitions | Concurrency cap shipped; lookup-by-ids endpoint idea is a separate follow-up.
+- #2808 | CLOSE-COMPLETED(#2843, #3205, #3427) | - | none (docs) | Narrow '(or another newly hashed catalog field)' comments and spec 002 immutability wordin | Docs done; the "newly hashed catalog field" comment is gone, rewritten for presentation-only refresh in #3427.
+- #2893 | CLOSE-COMPLETED(#2894/#2897/#2899 witnesses) | - | unified-execution | Epic: Prove unified execution boundaries | M1 evidence epic. All research witnesses are delivered (#2895/#2896/#2898/#2900/#2901/#2913). Production acceptance is explicitly owned by #2905/#2907/#2908.
+- #2894 | CLOSE-COMPLETED(#2896) | - | unified-execution | Feature: Shared durable work for background activities and ETL partitions | Children 2/2 closed. Its own reconciliation comment says production acceptance stays with #2905/#2907/#2908, so the issue holds nothing actionable.
+- #2897 | CLOSE-COMPLETED(#2898, PR #3603 774b1e05c) | - | unified-execution | Feature: Operational BPMN hosting witness | The hosting witness #2898 closed completed on 1 Nov. #2907 records the hosting task as delivered and verified. Operational acceptance continues on #2907.
+- #2899 | CLOSE-COMPLETED(#2900/#2901) | - | unified-execution | Feature: Provider substitution and independent execution-model extension | Built-in, Orleans-probe and fourth-model (Rules #3181) witnesses delivered. Production Orleans is owner-deferred (#3101). No open work remains here.
+- #2909 | CLOSE-COMPLETED(#2911, PR #3055) | - | unified-execution | Epic: Evidence-backed architecture communication | Every acceptance box is checked. The pending presentation refresh is tracked on #2910 alone.
+- #3000 | CLOSE-COMPLETED(#3271 d0b9cb36a2) | - | studio-ux | Initialize valid request data for HTTP draft Test Runs | HTTP Test Run request initializes valid data.
+- #3035 | CLOSE-COMPLETED(#3163 a710adf26a) | - | native-compensation | Program: Elsa 4 Native Compensation and Saga Recovery | M0-M5 all merged, 4/4 children closed, live journeys pass on main; update registry entry when closing.
+- #3036 | CLOSE-COMPLETED(a710adf26) | - | native-compensation | PRD: Native compensation authoring, recovery and visualization | PRD outcome delivered through epics #3037-#3040, guide, sample and qualification record.
+- #3158 | CLOSE-COMPLETED(#3272) | - | studio-ux | Studio: publication review Publish button fails AA contrast (4.46:1) | fe2e827f82 raised Publish contrast to AA
+- #3160 | CLOSE-COMPLETED(#3302 719aa7e55b) | - | studio-ux | Studio: live Playwright specs (Studio/tests/live) are never typechecked | Live Playwright specs now typechecked.
+- #3183 | CLOSE-COMPLETED(#3307 19c2f48fc0) | - | studio-ux | Workflows library build emits TS2742 declaration errors while exiting successfully | TS2742 declaration errors fixed and gated.
+- #3235 | CLOSE-COMPLETED(#3269) | - | docs | Scheduler poison sample report: link it from the reports index and describe the RetryAfter | PR #3269 merged 2026-10-23; README index lists the poison report.
+- #3303 | CLOSE-COMPLETED(#3327 5d1f0c2362) | - | studio-ux | Studio Elsa 3 import receipt: show friendly publication state labels instead of raw status | Friendly import publication labels shipped.
+- #3305 | CLOSE-COMPLETED(#3326 31970e2ddd) | - | studio-ux | Studio instance inspector: show checkpoint cadence and inspection granularity read-only | Cadence and granularity shown on run details.
+- #3331 | CLOSE-COMPLETED(#3333 2b5789941d) | - | runtime | Executable fingerprint omits binding target types and reuses stale Set assignments | Fingerprint now covers compiled input contracts; post-merge verification posted.
+- #3336 | CLOSE-COMPLETED(#3337 17e1947dc0) | - | studio-ux | Studio runtime views show intrinsic keys instead of friendly activity names | Friendly intrinsic names in runtime views.
+- #3375 | CLOSE-COMPLETED(#3377 86ca6a171c) | - | studio-ux | Browse individual activity executions in Studio runs | Activity execution browsing shipped; provider smoke tests passed.
+- #3629 | CLOSE-COMPLETED(#3630) | - | studio-ux | Studio: style the saved-template Done action like dialog controls | PR #3630 "style saved template success action" merged.
+- #3635 | CLOSE-COMPLETED(#3637 9104a91194) | - | studio-ux | Studio browser baseline: appearance menu selectors and Meridian navigation checks fail | Browser baseline restored.
+- #3661 | CLOSE-COMPLETED(#3702 5c85bd20b6) | - | runtime-efficiency | A coalescing drain misses work another deliverer finished queuing before settlement | Commit title matches the ask exactly (foreign delivery before settlement). Self-merged PR #3702.
+- #3678 | CLOSE-COMPLETED(#3694 074259b356) | - | runtime-efficiency | A hand-off never finishes while the execution's drain keeps making progress | Running drain now yields to passivation so hand-off finishes.
+- #3683 | CLOSE-COMPLETED(PR #3696 be7dedd67) | - | runtime-efficiency | A temporarily unavailable release can re-run an effect an active coalescing segment buffer | "Never release temporarily unavailable work whose dispatch sent a checkpoint" implements the claimed plan. The follow-up is the separate #3698. landed.json missed it because the subject has no #3683.
+- #3852 | CLOSE-COMPLETED(#3854) | - | simplification | Studio: toast after saving a workflow template | PR #3854 "Toast after saving a workflow template" merged 2026-11-05.
+- #3887 | CLOSE-COMPLETED(#3889) | - | studio-ux | Use the approved P5 Pocket Orchestra login visual | PR #3889 "Use Pocket Orchestra as the default login visual" merged.
+- #3890 | CLOSE-COMPLETED(#3891 cfd85fb28a) | - | ci-flakes | Retry transient BPMN evidence archive gateway failures safely | Transient gateway retry merged.
+- #3894 | CLOSE-COMPLETED(#3895 e8476790d6) | - | weaver | Retain safe primary native Weaver failure diagnostics independently of full export | Primary native diagnostics retained; merged.
+- #3906 | CLOSE-COMPLETED(#3910 fd0fdb21ea) | - | entity-integrations | Establish entity-aware integration delivery and its bounded assessment | Establishment PR merged; drop status:in-review.
+- #3917 | CLOSE-COMPLETED(#3919 cdfc79a0c3) | - | entity-integrations | Preserve tenant ownership during source-owned activity publication | Merged; post-merge verification posted.
+
+## CLOSE-DUPLICATE (31)
+- #1976 | CLOSE-DUPLICATE(#2580) | - | simplification | Freeze module migrations as baselines when 4.0 ships as a stable release | ADR 0080 D4 replaces regenerated-Initial practice with squash at RC freeze (#2580); freeze-at-stable folds into that issue.
+- #2311 | CLOSE-DUPLICATE(#1891) | - | foundation-host | Run Studio against Foundation.Host: sign-in, CORS and workflow modules from a feed | Same Studio-against-Foundation.Host CORS and sign-in gap; carry the "modules from a feed" note to #1891.
+- #2769 | CLOSE-DUPLICATE(#2768) | - | ci-flakes | Flaky Studio browser test: activity-upgrades.spec.ts:62 (lost child-stage response) keeps  | Same activity-upgrades.spec.ts:62 flake, filed before #2770 fixed it.
+- #3141 | CLOSE-DUPLICATE(#2792) | - | none (workflow-design) | Workflow Design: versions/ingest and definitions/submit write versions without draft valid | Same draft-validator bypass; add the versions/ingest route to #2792/PR #3929 scope.
+- #3257 | CLOSE-DUPLICATE(#3210) | - | studio-ux | Studio Home: 'Continue editing' loads the full definitions catalog on every click | Same Home full-definitions-catalog read; fix server paging/filter once.
+- #3280 | CLOSE-DUPLICATE(#3172) | - | elsa3-parity | Elsa 4 intrinsics refuse an explicit null value, so an Elsa 3 SetVariable/SetOutput of nul | Same D-10 decision, same spec 1216 / PRs #3726, #3388. Explicit-null intrinsics become an acceptance row of S-2.
+- #3288 | CLOSE-DUPLICATE(#3172) | - | elsa3-parity | Elsa 3 converter: reading a declared workflow input that was not supplied fails at run tim | Unsupplied declared input read as null is a D-10 null/missing case. Same spec 1216 and PRs. Carry the repro (composition-bulk-dispatch-sub-workflow) into S-2 acceptance.
+- #3433 | CLOSE-DUPLICATE(#3443) | - | weaver | Epic: M4: Weaver support across current Studio modules | Fold: an epic whose only child is #3443, and it restates the same M4 acceptance. Make #3443 a direct child of #3428.
+- #3434 | CLOSE-DUPLICATE(#3444) | - | weaver | Epic: M5: Weaver extensibility and integrated qualification | Fold: a single-child epic wrapper around #3444. Reparent #3444 to #3428.
+- #3505 | CLOSE-DUPLICATE(#3263) | - | ci-flakes | Investigate intermittent Advanced expansion assertion in dynamic-input tests | Single observation, passed hosted; record on flake tracker until it repeats.
+- #3506 | CLOSE-DUPLICATE(#3263) | - | ci-flakes | Investigate intermittent element lookup in rejected folder-rename test | Single local observation, passed on rerun; belongs on tracker.
+- #3527 | CLOSE-DUPLICATE(#3519) | - | agents | Epic: M7: Qualify and deliver Elsa Agents end to end | Fold: "qualify and deliver end to end" is the program's own exit criterion. It has no work and no comments.
+- #3739 | CLOSE-DUPLICATE(#3610) | - | named-blocks | E1: Author named blocks and extract eligible selections | Fold the epic layer: reparent F2 #3744 and F3 #3745 to the program. Its only comment is a stale T001 block note.
+- #3740 | CLOSE-DUPLICATE(#3746) | - | named-blocks | E2: Promote eligible blocks to reusable Activity Graphs | Fold: a single-child epic wrapper around F4.
+- #3741 | CLOSE-DUPLICATE(#3610) | - | named-blocks | E3: Qualify embedded blocks across authoring and runtime | Fold: an E3 qualification epic whose only content is program closeout.
+- #3747 | CLOSE-DUPLICATE(#3610) | - | named-blocks | F5: Prove block behavior and complete program delivery | Fold: F5 "complete program delivery" is the program's exit criterion.
+- #3753 | CLOSE-DUPLICATE(#3745) | - | named-blocks | T004: Extract supported BPMN selections and preserve interchange | Fold: the only task of F3, with the same scope. Carry the T004 id into #3745.
+- #3756 | CLOSE-DUPLICATE(#3610) | - | named-blocks | T007: Qualify and deliver the complete embedded block experience | Fold: T007 is the only task of F5 and restates program qualification. Put it on the program checklist.
+- #3811 | CLOSE-DUPLICATE(#3263) | - | ci-flakes | Weaver idle restart witness snapshots history before message status settles | Single witness failure, identical tree passed on retry; record on flake tracker.
+- #3816 | CLOSE-DUPLICATE(#3820) | - | state-machine | StateMachine M0: agree product, engine and Studio design | Fold: a single-child M0 epic.
+- #3817 | CLOSE-DUPLICATE(#3815) | - | state-machine | StateMachine M1: deliver composable durable hierarchical execution | Fold the M1 epic layer. Reparent #3821/#3822 to the program.
+- #3818 | CLOSE-DUPLICATE(#3823) | - | state-machine | StateMachine M2: deliver durable parallel regions | Fold: a single-child M2 epic.
+- #3819 | CLOSE-DUPLICATE(#3815) | - | state-machine | StateMachine M0–M3: author, inspect and qualify the complete capability | Fold: its "M0–M3 author/inspect/qualify" scope overlaps the program and the M0 contract.
+- #3825 | CLOSE-DUPLICATE(#3815) | - | state-machine | Qualify the complete StateMachine capability across Studio and durable runtime | Fold: qualification is the program's exit criterion.
+- #3965 | CLOSE-DUPLICATE(#3962) | - | studio-ux | Studio polish (POLISH-013): Faulted run canvas badge uses enum jargon | Fold into the #3962 checklist: an enum-jargon copy change, low effort, no defect.
+- #3966 | CLOSE-DUPLICATE(#3962) | - | studio-ux | Studio polish (POLISH-014): Modules/Package feeds Server tab dumps config keys | Fold: banner copy polish. Related to #3735 (same BackendRegistry surface).
+- #3968 | CLOSE-DUPLICATE(#3962) | - | studio-ux | Studio polish (POLISH-016): Inspector Identity rail dumps version+hash | Fold: a Low residual of closed #3552 (version shows a hash). Related to open #3557 but not a duplicate of it.
+- #3983 | CLOSE-DUPLICATE(#3976) | - | decisions-ux | Decisions: Evaluate panel keeps showing the previous result while a new evaluation runs | Fold into the #3976 checklist: a stale-result loading-state polish.
+- #3984 | CLOSE-DUPLICATE(#3976) | - | decisions-ux | Workflow canvas: Evaluate Decision node subtitle shows a truncated raw decision id | Fold: the node subtitle shows a raw id (Low). Same pattern as #3557.
+- #3985 | CLOSE-DUPLICATE(#3967) | - | decisions-ux | Decisions: backend-unavailable state shows raw 'Failed to fetch' and leaves New decision e | Merge: another Decisions collection state (backend unavailable). One fix with the empty state.
+- #3986 | CLOSE-DUPLICATE(#3976) | - | decisions-ux | Decisions: module is only reachable under More tools (discoverability) | Fold: an information-architecture placement call (Low). Carry it as a checklist item for the owner/UX to decide.
+
+## CLOSE-NOT-PLANNED (48)
+- #792 | CLOSE-NOT-PLANNED | - | none | PRD: Tenant-scoped tagging for workflow definitions in Elsa Server and Studio | Parked Groundwork-era tagging PRD, no Active program owns it, untouched 25d.
+- #806 | CLOSE-NOT-PLANNED | - | elsa3-parity | PRD: Scoped role-based access for Elsa Server and Studio | Parked RBAC PRD superseded by #2771 Phase 1 (identity administration, users and roles).
+- #1137 | CLOSE-NOT-PLANNED | - | runtime-efficiency | Make Execution Evidence durable and distributed with EF Core | Parent #1132 closed; Groundwork scope superseded by ADR 0073; no EF evidence store planned; refile under #2531 if needed.
+- #1238 | CLOSE-NOT-PLANNED | - | runtime-efficiency | P1 (investigation): attribute the ~42 ms per-hop CLR activation cost | Aug backlog profiling spike; superseded by #2564 command-cost measurements; hygiene bot already warned.
+- #1240 | CLOSE-NOT-PLANNED | - | none | C4 (plan): finish ADR 0029 Move 2 for the invoke handler | Plan-only item from the Aug backlog; claim abandoned; no program.
+- #1241 | CLOSE-NOT-PLANNED | - | none | RB3 (investigation): what do poison records in a real deployment actually contain? | Asks about poison records in real deployments; Elsa 4 has none pre-GA.
+- #1322 | CLOSE-NOT-PLANNED | - | none | PR sweep 2026-08-12 | PR-sweep receipt; per hygiene policy, receipts belong on PRs.
+- #1527 | CLOSE-NOT-PLANNED | - | simplification | DRY: duplicated small helpers across Runtime/Activities (safe extraction candidates) | 2026-09-03 scan batch; speculative DRY extractions; RFA already removed.
+- #1528 | CLOSE-NOT-PLANNED | - | agents | DRY: Agent-provider duplication (session resume/create, context rendering, secret redactio | Same scan batch; Agent providers are being redesigned under #3519.
+- #1532 | CLOSE-NOT-PLANNED | - | none | Cleanup batch: misc perf/style nits (caching, O(n²) scan, raw Console usage, lock-on-colle | Same scan batch; low-priority nits.
+- #1533 | CLOSE-NOT-PLANNED | - | none | Tracking: automated code-quality scan (2026-09-03) — 14 findings, implementation sequencin | Tracking index for the scan batch: a log entry, not a commitment.
+- #1644 | CLOSE-NOT-PLANNED | - | foundation-host | Foundation Host cannot share unsigned CShells assemblies with Nuplane package graphs | 59d stale, Nuplane preview.78 era; host now declares CShells abstractions as HostProvidedPackages/SharedAssemblies. Refile with fresh repro if still failing.
+- #1653 | CLOSE-NOT-PLANNED | - | connections/secrets | Secrets EF: add a production-shaped HTTP CRUD and restart journey | Groundwork-era Secrets journey test; ADR 0080 risk-based tests; EF-only now.
+- #1793 | CLOSE-NOT-PLANNED | - | runtime-efficiency | PermissionAuthorizationService allocates a new ClaimsPrincipal per evaluation, twice per r | Unmeasured micro-allocation; needs-decision idle 53d.
+- #1868 | CLOSE-NOT-PLANNED | - | none | EF Core: 63 concurrency catches are keyed to DbUpdateConcurrencyException by type, so a wr | The experiment was answered: DbUpdateConcurrencyException arrives unwrapped, so the type filters hold.
+- #1902 | CLOSE-NOT-PLANNED | - | none | Composition connection guard: close the remaining holes review found | Guard-test holes with no live defect; ADR 0080 risk-based tests.
+- #2032 | CLOSE-NOT-PLANNED | - | ci-flakes | Pilot grouped EF CI jobs without dropping suite coverage | Grouped EF jobs pilot superseded by tiered CI spec 263 (#3265).
+- #2064 | CLOSE-NOT-PLANNED | - | runtime-composition | Spike: Validate runtime-builder concepts with developer and operator tasks | Blocked 41d on six real participants nobody is recruiting; parked program; prep packet already delivered and preserved in docs/reports.
+- #2092 | CLOSE-NOT-PLANNED | - | release | [Program] Independent module delivery: selective publishing through the 4.0 stable release | Premise (two version lines) replaced by ADR 0080 D4 (one line until GA, #2576); selective publishing landed; remaining release cut kept as #2085.
+- #2322 | CLOSE-NOT-PLANNED | - | runtime-efficiency | Retire activation references a pre-#2230 crash left live after their activation was replac | Repairs pre-#2230 crash data; Elsa 4 is unreleased, so no such data exists.
+- #2333 | CLOSE-NOT-PLANNED | - | simplification | Maps: feature-dependency map cannot see secrets a module takes outside its feature file (S | Option 1 shipped (#2358, #2377); remaining map-generator secret detection is meta tooling ADR 0080 deprioritizes; unclaimed 25d.
+- #2812 | CLOSE-NOT-PLANNED | - | security | Named credential contract and config-declared credential registry | Blocked child of unadopted epic; scope preserved in #2809 body; refile on adoption.
+- #2813 | CLOSE-NOT-PLANNED | - | security | Azure credential kinds: managed identity, workload identity, client certificate, developer | Blocked child of unadopted epic; refile on adoption.
+- #2814 | CLOSE-NOT-PLANNED | - | security | Persistence resources and EF bindings accept a Credential through a relational connection  | Blocked child of unadopted epic; refile on adoption.
+- #2815 | CLOSE-NOT-PLANNED | - | security | Database distributed lock uses the resource connection source (PostgreSQL data source, SQL | Blocked child of unadopted epic; refile on adoption.
+- #2816 | CLOSE-NOT-PLANNED | - | security | Host-composed stores (cluster membership, Data Protection keys) accept a Credential | Blocked child of unadopted epic; refile on adoption.
+- #2817 | CLOSE-NOT-PLANNED | - | security | dotnet-elsa tooling resolves config-declared credentials for apply and validate | Blocked child of unadopted epic; refile on adoption.
+- #2818 | CLOSE-NOT-PLANNED | - | security | SQL Server Entra authentication: SqlClient Azure extension, validation and docs | Blocked child; SQL Server keyword path may already work via connection string; refile on adoption.
+- #2819 | CLOSE-NOT-PLANNED | - | connections/secrets | Azure Key Vault secret store | Key Vault store; blocked; refile on adoption (or under Entity-aware Integrations).
+- #2820 | CLOSE-NOT-PLANNED | - | security | Data Protection keys protected with an Azure Key Vault key | Blocked child of unadopted epic; refile on adoption.
+- #2821 | CLOSE-NOT-PLANNED | - | security | Spike: MySQL Entra authentication across MySql.Data and MySqlConnector | MySQL Entra spike, lowest-value provider; strip RFA and close.
+- #2822 | CLOSE-NOT-PLANNED | - | connections/secrets | Spike: Service Bus integration shape and an admin-only managed-identity auth scheme for Co | Service Bus shape belongs to Entity-aware Integrations (#3608) design, not a standalone RFA spike.
+- #2823 | CLOSE-NOT-PLANNED | - | security | Docs: passwordless Azure deployment guide (PostgreSQL, SQL Server, Key Vault) | Docs for unbuilt features; blocked; refile on adoption.
+- #3211 | CLOSE-NOT-PLANNED | - | simplification | IConnectionRepository.IsSecretReferencedAsync is a source-breaking addition for custom rep | Pre-GA source-breaking concern; ADR 0080 pre-GA cleanup means no compat obligation yet.
+- #3213 | CLOSE-NOT-PLANNED | - | ci-flakes | DurableDrainCycleTests: bound the HTTP case with its own timeout and restore the default-l | Test-hardening nit (timeout/assertion); ADR 0080 risk-based tests, no failure observed.
+- #3214 | CLOSE-NOT-PLANNED | - | ci-flakes | HTTP deadline test hangs instead of failing if the Sync deadline is removed | Hypothetical hang-if-regressed test nits; risk-based tests, no observed failure.
+- #3217 | CLOSE-NOT-PLANNED | - | connections/secrets | Secrets inventory follow-ups from #3193: shared page-size constant, stale fixture counter, | Constant/fixture nits; item 3 called probably intentional.
+- #3224 | CLOSE-NOT-PLANNED | - | studio-ux | Palette version tooltips: row tooltip stays short when versions collide, and collision map | Tooltip/doc-comment nits on rare collisions.
+- #3226 | CLOSE-NOT-PLANNED | - | ci | Bundle budget checks: bind each deferred-chunk marker to its chunk and test the lazy-load  | Bundle-marker strictness nits; risk-based tests.
+- #3227 | CLOSE-NOT-PLANNED | - | studio-ux | Studio usability follow-ups from #2958: useDialogFocus options object, Home default write  | API-shape and rare admin race nits; no user report.
+- #3230 | CLOSE-NOT-PLANNED | - | studio-ux | Module management follow-ups from #2881: Workbench shape detection, contract test, eager p | Shape-detection/contract-test/bundle nits with no observed failure.
+- #3231 | CLOSE-NOT-PLANNED | - | studio-ux | Feed dialogs: scope the new CSS to a FeedDialog class and remove dead drawer rules | CSS scoping/dead-rule nit.
+- #3234 | CLOSE-NOT-PLANNED | - | bpmn-engine | BPMN inspector: test gateway header classes and disabled inputs on a locked host | Test-only additions for layout; risk-based tests.
+- #3239 | CLOSE-NOT-PLANNED | - | studio-ux | Diagram fit-on-open follow-ups from #2931: explicit ready signal, viewport key, onMoveEnd  | Speculative xyflow-upgrade hardening nits.
+- #3246 | CLOSE-NOT-PLANNED | - | studio-ux | Activity icon guard: lucide name check skips combined [Activity] attribute declarations | Guard-regex nit; no invalid icon observed.
+- #3247 | CLOSE-NOT-PLANNED | - | studio-ux | Workflow title Draft badge: hard-coded chevron offset and always-rendered Draft chip | Cosmetic offset and pre-existing chip nit.
+- #3550 | CLOSE-NOT-PLANNED | - | studio-ux | Studio visual QA pass (Oct 31, 2026) | QA-pass receipt/umbrella with no sub-issue links. Open findings #3557-#3568 each track their own fix; sweeps belong on PRs.
+- #3970 | CLOSE-NOT-PLANNED | - | studio-ux | Studio polish (POLISH-018): Login primary and error chrome off-brand | The teal Sign-in is the owner-approved P5 palette (#3887/PR #3889, merged 5 Nov). Add the error-box chrome note to the #3962 checklist.
+
+## PARK (31)
+- #1414 | PARK | P3 | foundation-host | Third-party modules cannot publish OpenAPI contracts without pinning their assembly | Collectible third-party module OpenAPI unload; decision recorded Aug, no work since; belongs with parked Foundation.Host program #2262.
+- #1959 | PARK | P3 | runtime-composition | Program: Runtime Composition & Configuration | Already parked, not in registry Active table; keep as record. Overlaps ADR 0080 D3 AddElsa presets (#2570); reconcile when unparked.
+- #1961 | PARK | P3 | runtime-composition | Epic: Compose runtimes from versioned profiles and feature groups | Stale status:in-progress 34d, no PR; reset to parked under parked program. Profiles overlap #2570 AddElsa presets.
+- #1962 | PARK | P3 | runtime-composition | Epic: Plan, explain, and export runtime composition for developers | Stale status:in-progress 34d, no PR; reset to parked.
+- #1963 | PARK | P3 | runtime-composition | Epic: Guide developers and operators through a runtime builder | Stale in-progress 45d, zero comments, no PR; builder UI is research-only; reset to parked.
+- #1964 | PARK | P3 | runtime-composition | Epic: Apply and evolve runtime compositions with recoverable operations | Stale in-progress 38d; last comment says no new slice justified; reset to parked.
+- #1970 | PARK | P3 | repo-consolidation | [Program] Repository evolution: maintained Elsa 1/2/3 homes and a version-neutral Elsa mon | Owner: rename elsa-core->elsa not before Elsa 4 near GA. Keep parked; detach active #2501 from parked parent (or note exception).
+- #2085 | PARK | P3 | none (release/versioning) | 4.0 release cut: full surface gate, release promotion and manifest | Release-cut work; parent chain #1144/#2092 parked; revisit at 2026-11-21 checkpoint.
+- #2253 | PARK | P3 | foundation-host | Start Foundation.Host from a pre-seeded shared package directory with no feed access | Package-image/emptyDir startup; program feature, not independently small. Strip RFA.
+- #2254 | PARK | P3 | foundation-host | Measure Foundation.Host cold start: packages built in vs installed from the shared cache | Cold-start measurement depends on #2354 flavours and demo; strip RFA.
+- #2255 | PARK | P3 | foundation-host | Connect Foundation.Host to the customer's authenticated feed via Kubernetes secrets | Authenticated feed via K8s secrets; program feature; strip RFA.
+- #2257 | PARK | P3 | foundation-host | Implement the package manifest: versioned package set, pins and defaults | Package manifest + MSBuild targets; large program feature; strip RFA.
+- #2258 | PARK | P3 | foundation-host | Per-package hot-reload policy: apply hot-reloadable packages live, stage others as pending | Per-package hot-reload policy depends on #2257; strip RFA.
+- #2259 | PARK | P3 | foundation-host | Enforce locked packages and features in the Modularity API and host management endpoints | Lock enforcement depends on #2257/#2360; strip RFA.
+- #2260 | PARK | P3 | foundation-host | Studio: show locked packages and features read-only (elsa-foundation-studio) | Studio read-only locks; body still targets elsa-foundation-studio (now Studio/ in monorepo); strip RFA.
+- #2261 | PARK | P3 | foundation-host | Demo: two Foundation.Host pods with a shared package cache, a versioned manifest, locked a | Demo of the whole program; meaningless while parked; strip RFA.
+- #2262 | PARK | P3 | foundation-host | [Program] Customer-controlled packages for Foundation.Host, and slot lifecycle | Parked program (hygiene sweep #2540); only ADR 0079 landed; no new children.
+- #2323 | PARK | P3 | foundation-host | Add an operator command to clear a publication slot that Publishing does not own | Operator slot-clear command; useful but not small; follows #2359. Strip RFA.
+- #2354 | PARK | P3 | foundation-host | Ship Foundation.Host's composition as a host library so base-image flavours are a csproj a | Host-library flavours only matter for program's base images; strip RFA.
+- #2360 | PARK | P3 | foundation-host | Cluster-wide feature management API on Foundation.Host with desired state in the shared da | Cluster-wide feature API; large, program-specific; strip RFA.
+- #2361 | PARK | P3 | release | Publish an Elsa release versions package for Central Package Management defaults | Release versions (CPM) package overlaps #2085's release manifest; fold into #2085 when the 4.0 cut is planned. Strip RFA.
+- #2362 | PARK | P3 | foundation-host | Unload retired package generations after a hot reload (Nuplane collectible load contexts) | Hot-reload unload blocked upstream on valence-works/nuplane#109; strip RFA.
+- #2461 | PARK | P3 | runtime-composition | Implementation: Transfer portable compositions with required private inputs | Stale in-progress 33d, last CLI verification red 102/105, no open PR; reset to parked, Spec194 kept as record.
+- #2467 | PARK | P3 | runtime-composition | Implementation: Deliver a durable Authoring-only publication API | Authoring-only API (Spec195) never started; parked program gets no implementation lane.
+- #2707 | PARK | P3 | elsa3-parity | Elsa3JsonReconciliation: convert Elsa 3 workflow JSON to Elsa 4 at engine start (spec 235) | Already parked/blocked. PR #2708 is a demo branch with 11 failing checks that also carries unmerged fixes (for example #3202). Close #2708 or keep it as the demo branch, but don't land it.
+- #2810 | PARK | P3 | security | ADR: named credentials and passwordless connections for infrastructure resources | ADR only worth writing if the program is adopted; strip RFA.
+- #2811 | PARK | P3 | security | Spike: one Npgsql type identity for host and feed modules (shared NpgsqlDataSource) | Npgsql type-identity spike is generic and small; park (relates to #1644 shared identities); strip RFA.
+- #2912 | PARK | P3 | agents | Feature: Precise agent-collaboration composition and hosting evidence | Native agent collaboration is deferred from the active milestone. #3519 (Elsa Agents M4 #3524, spec 1179 FR-012/013) carries the production work. Likely overlaps #3524.
+- #3101 | PARK | P3 | unified-execution | Prove atomic Orleans admission and displacement on PostgreSQL | Owner-deferred 20 Oct. The checkpoint is preserved in closed PR #3108 and nobody holds a claim. Give it `parked`, not todo.
+- #3325 | PARK | P3 | none (slack) | Slack connector: triggers (Events API / Socket Mode / slash commands) follow-up to v1 | Slack work parked by owner 2026-10-25; status still todo.
+- #3526 | PARK | P3 | agents | Epic: M6: Add authorized tools, knowledge and bounded agent teams | M6 is blocked on #2912 carry-forward obligations and has no MCP (T044) owner. Not actionable while the program is paused.
+
+## KEEP-RETRIAGE (26)
+- #410 | KEEP-RETRIAGE | P2 | runtime-efficiency | RuntimeContainerScopeService: lost-update race in container-scope variable write-back | Lost-update race; PersistScopeMutationsAsync is gone after the frame/Revision rewrite (ADR 0090), so re-verify before keeping.
+- #1154 | KEEP-RETRIAGE | P2 | none (inspection) | Root activity inputs are never captured as inspection value snapshots (valueSnapshotCount  | Root input snapshots; possibly covered by the #1130 projection work; claim abandoned, re-verify.
+- #1358 | KEEP-RETRIAGE | P2 | runtime-efficiency | Reference GC orphans trigger-binding and recurring-schedule rows of hard-deleted artifacts | GC orphans trigger/schedule rows; cited API renamed by spec 151, needs a refresh.
+- #1419 | KEEP-RETRIAGE | P2 | ci-flakes | Five backend e2e suites fail on main (SetOutput submit, alteration-plan shape, OpenTelemet | Five-suite umbrella from 79d ago; #2372 fixed part; re-run on current main, then close or narrow.
+- #1531 | KEEP-RETRIAGE | P3 | runtime-efficiency | Bug/hazard batch: memory leak, swallowed exception, undocumented mutable state, sync-over- | Same scan batch; first hazard (InMemoryStimulusStartDeduplicator) no longer exists; re-verify the rest.
+- #1860 | KEEP-RETRIAGE | P3 | runtime-efficiency | EF Core: six module contexts declare no ordinal comparison at all, Runtime's 30 key column | 20 of ~23 contexts now apply EfOrdinalCollation; re-verify the remainder, then close.
+- #1895 | KEEP-RETRIAGE | P3 | foundation-host | OpenIddict EF store hardcodes SQLite: make it a provider-configurable module | Workbench gained multi-engine OpenIddict; turning it into a module is still open; RFA idle 31d.
+- #2031 | KEEP-RETRIAGE | P3 | ci-flakes | Make native EF suite coverage fail closed in CI | EF fail-closed coverage; re-check against tiered CI (#3265).
+- #2269 | KEEP-RETRIAGE | P3 | runtime-efficiency | Classify deterministic EnqueueSchedulerWork dispatch failures as permanent | Classify deterministic failures as permanent; only a latency cost.
+- #2270 | KEEP-RETRIAGE | P3 | runtime-efficiency | A commit replayed across a deploy conflicts when an intent kind's retry policy changed | Replay across a deploy with a changed retry policy; narrow edge.
+- #2284 | KEEP-RETRIAGE | P3 | ci-flakes | Fix affected-EF selection fallback on literal Compile item lists | Affected-EF selector fallback; re-check after the tiered CI rewrite (#3265).
+- #2363 | KEEP-RETRIAGE | P3 | foundation-host | Fix Nuplane floating version ranges and Foundation.Host's bare-id comment | Floating-range misresolution is a Nuplane bug: transfer/refile upstream (Nuplane now 0.0.12, reconfirm); strip RFA, stale "picking this up" claim.
+- #2504 | KEEP-RETRIAGE | P2 | repo-consolidation | [Epic] M3: Package consumers and cross-product qualification | Strip false "blocked". Studio images publish from Foundation (#3033), but clean-consumer NuGet/npm qualification and Studio package publishing remain manual/open.
+- #2563 | KEEP-RETRIAGE | P3 | simplification | Epic: Phase 4, review and fix routines | Skills landed (#2596); routine scheduling and 4-week review unconfirmed; in-progress idle 30d with no PR. Update checklist or reset.
+- #2618 | KEEP-RETRIAGE | P3 | runtime-efficiency | GraphActivityProvider.EnumerateNodes is O(n²) and re-deserializes each node's subtree with | GraphActivityProvider O(n^2); auto-review finding over the RFA cap.
+- #2725 | KEEP-RETRIAGE | P3 | none | A background task skipped at start for dormancy still has StopAsync called at shutdown | Skipped background task still gets StopAsync; minor.
+- #2757 | KEEP-RETRIAGE | P3 | runtime-efficiency | AC1: Measure Elsa 4 shell memory footprint and cold start (Elsa Labs density) | Shell memory measurement; requester says low priority.
+- #2761 | KEEP-RETRIAGE | P2 | ci-flakes | Test classes implementing only IAsyncDisposable never run their teardown under xUnit v2 | in-progress with no PR for 26d; reset to todo; xUnit 2.9.3 still pinned.
+- #2779 | KEEP-RETRIAGE | P1 | elsa3-parity | Identity: no privilege escalation and a last-admin guard | Still really blocked on #2777/#2778. Strip ready-for-agent (it has both labels); RFA again once those merge.
+- #2780 | KEEP-RETRIAGE | P1 | elsa3-parity | Studio: Users pages | Studio Users pages, still blocked on #2777. Strip ready-for-agent while blocked.
+- #2781 | KEEP-RETRIAGE | P1 | elsa3-parity | Studio: Roles pages | Studio Roles pages, still blocked on #2778. Strip ready-for-agent while blocked.
+- #2789 | KEEP-RETRIAGE | P3 | none | Document monotonic timing for long cron waits and pin disposal during a pending re-arm | Docs-only remarks chore over the RFA cap.
+- #2801 | KEEP-RETRIAGE | P3 | studio-ux | Publishing EF: detect Retired definitions without an activation slot | Not fixed (landed commit is the origin PR); publication record model changed since; re-verify against EfPublicationRecordStore, strip RFA.
+- #2827 | KEEP-RETRIAGE | P3 | simplification | Permission cleanup after the resource:verb rename | Permission leftovers and DefaultIdentityPermissionKeys made internal.
+- #2834 | KEEP-RETRIAGE | P3 | none (publishing) | Publication-state lookup follow-ups from #2802 review | Code Review follow-ups from #2802.
+- #2855 | KEEP-RETRIAGE | P3 | connections/secrets | Connections: decide where connections:use is enforced, and close four connection-manager e | Item 1 (#3137) and hardening (#3134) landed; edge cases 2.1/2.2/2.4 open; in-progress idle 17d, no PR. Overlaps #3139.
+
+## NEEDS-OWNER-DECISION (9)
+- #1191 | NEEDS-OWNER-DECISION | - | simplification | RFC: Consumer contracts as a first-class build output — per-feature fragments, completenes | RFC with DO-NOT-MERGE PR #1192 idle 93d; ADR 0080's smaller meta footprint argues for closing both.
+- #2551 | NEEDS-OWNER-DECISION | - | connections/secrets | Spec 188 follow-ups (T090): deliberate leave-outs and gaps recorded during delivery | Spec 188 leave-outs index; open owner question on refusing plain-http credentialed requests; then split or close.
+- #2809 | NEEDS-OWNER-DECISION | P3 | security | Managed identity (Microsoft Entra) support across Elsa 4 | Community request, not a registry program; 14-child tree with 4 RFA. Keep only the epic (design D1-D5 in body) as a parked proposal unless Sipke adopts it.
+- #3026 | NEEDS-OWNER-DECISION | P2 | elsa3-parity | Elsa 4 expressions: an explicit capability for current time and unique values | needs-decision + RFH: clock/unique-value capability (S-1). Decided via D-1/2/5/6 and ADR 0045 §5 draft PR #3384, which awaits re-review.
+- #3190 | NEEDS-OWNER-DECISION | - | studio-ux | An Object variable's default value can only be text | needs:decision on the Object variable default editor.
+- #3194 | NEEDS-OWNER-DECISION | P2 | elsa3-parity | Elsa 3 resource variables (FormFile, Stream, byte[]) have no Elsa 4 counterpart: they need | needs-decision: resource variables (FormFile/Stream/byte[]) with no Elsa 4 counterpart. Waits on A-1 / ADR 0046 amendment PR #3422.
+- #3204 | NEEDS-OWNER-DECISION | P2 | elsa3-parity | Process the spec 247 review: JavaScript read model, statement bodies and naming (Elsa 3 Ja | needs-decision planning issue for the spec 247 review (D-7, A-4). Waits on the ADR 0089 amendment PR #3420.
+- #3281 | NEEDS-OWNER-DECISION | P2 | elsa3-parity | Elsa 3 converter: absent or blank members whose converted default differs from Elsa 3 | needs-decision: absent/blank member defaults. Codex doc draft PR #3945 awaits approval from j03y-nxxbz, Sipke and Frans. Codex has abandoned its claim.
+- #3901 | NEEDS-OWNER-DECISION | - | regression-testing | Program: Workflow and activity regression testing | Unregistered program. "Owner authorization, 5 Nov" was posted by codex on behalf; there is no registry row, goal doc or ADR D0 entry. Register it, or fold it into #3588.
+
+## KEEP (312)
+- #2631 | KEEP | - | studio-ux | UX QA routine ledger | Standing UX QA ledger (policy exception).
+- #2671 | KEEP | - | none | Product scout routine ledger | Standing product-scout ledger (policy exception).
+- #2840 | KEEP | P0 | security | Refresh tokens keep working for disabled and deleted users | Refresh tokens keep working for disabled and deleted users; #2841 RevokeSubjectAsync can be reused.
+- #2848 | KEEP | P0 | security | Token subject can collide across providers and tenants (issuance and revocation) | ga-blocker; token subject collision; PR #3806 open (partial).
+- #3138 | KEEP | P0 | security | Connections: reject credentials embedded in connection settings | ga-blocker: credentials embedded in connection settings.
+- #3707 | KEEP | P0 | security | [Claude] Pin System.Security.Cryptography.Pkcs to a patched version (CVE-2026-84008) | 42 lock files still resolve Pkcs 9.0.13 (CVE-2026-84008); no pin in Directory.Packages.props.
+- #3723 | KEEP | P0 | security | Version GET endpoint skips the owning workflow definition authorizer | Version GET has only RequirePermission(Read); bypasses definition authorizer (tenant/visibility leak).
+- #3735 | KEEP | P0 | security | [Claude] Studio host's module registry returns package feed credentials to the browser | ModuleManagementEndpoints still maps feed Credentials to browser response.
+- #3921 | KEEP | P0 | elsa3-parity | GA blocker: converter revision for Elsa 3 imported versions ({n}.{R}.0) | ga-blocker: converter revision for imported versions.
+- #2310 | KEEP | P1 | studio-expressions | Program: Studio expression developer experience | Active program; M1 host evidence PRs landing (#3989, #3990), 0/4 children closed, PR #3991 open.
+- #2312 | KEEP | P1 | runtime-efficiency | A node pinned to an exact activity version runs the newest loaded class, silently | A pinned activity version silently runs the newest class; correctness in shipped runtime.
+- #2343 | KEEP | P1 | studio-expressions | Epic: Prove normally composed expression editing | M1 epic, current focus; landed commits #3277/#3989/#3990 progress it.
+- #2347 | KEEP | P1 | studio-expressions | Feature: Normal-host persisted expression authoring | M1 feature on critical path.
+- #2351 | KEEP | P1 | studio-expressions | Task: Prove persisted expression tooling through a normal Foundation host | M1 task; delivery moved to #3277/#3989-#3991; close stale pre-relocation PR #2373 when M1 completes.
+- #2495 | KEEP | P1 | docs-website | Program: Elsa 4 Website and Documentation | Registry Active in parallel. Status in-progress but 28d idle; main-site preview delivered; next slice needs a fresh plan.
+- #2501 | KEEP | P1 | repo-consolidation | [Program] Elsa 4 monorepo consolidation: server, Studio and extensions | Registry Active priority one. Source consolidation landed (87d14dd2b0); remaining is M4 cutover. Registry "current focus" (#2510 rehearsal) is stale.
+- #2505 | KEEP | P1 | repo-consolidation | [Epic] M4: Source and publisher cutover with operational handover | Real residual: old elsa-foundation-studio still has Packages workflow active, 43 open issues, 9 PRs, not archived. Dual-publisher risk.
+- #2531 | KEEP | P1 | runtime-efficiency | Program: Runtime Efficiency (database access, persistence modes, throughput) | Active program, 11/19 children done, several open PRs.
+- #2559 | KEEP | P1 | simplification | [Program] Elsa 4 simplification | Active program (ADR 0080), 1/5 epics done.
+- #2665 | KEEP | P1 | studio-ux | Studio (published pair) console panel 401 after sign-in; Dashboard "Dashboard data incompl | Quickstart pair: console 401 and Dashboard incomplete after sign-in; re-verify on the current pair.
+- #2667 | KEEP | P1 | runtime-efficiency | Alterations commit without the run's ownership fence | Alterations commit without the ownership fence; concurrent correctness on the #2531 path.
+- #2771 | KEEP | P1 | elsa3-parity | Program: Elsa 3.8/3.9 parity | Active program. Phase 1 (users/roles) has not moved since ~15 Oct while effort went to OIDC #3579/PR #3806. Phase 1 leaves need a driver.
+- #2775 | KEEP | P1 | elsa3-parity | Identity: API keys and applications (create, rotate, revoke, authenticate) | API keys (ADR 0085 D9). PR #2852 is CONFLICTING with CHANGES_REQUESTED and idle since 24 Oct. It needs a rebase and the review fixes, or a new owner.
+- #2777 | KEEP | P1 | elsa3-parity | Identity API: users | Users API, Phase 1 critical path. Its blocker #2774 is closed, so strip `blocked`. Note: in-memory store paging gap (from #2839).
+- #2778 | KEEP | P1 | elsa3-parity | Identity API: roles and permissions | Roles/permissions API. Its blocker #2773 merged, so strip `blocked`. Phase 1 critical path.
+- #2782 | KEEP | P1 | elsa3-parity | Studio: gate menus, pages and actions by the session's permissions | Its blocker #2773 merged, so strip `blocked`; RFA is valid. Scope includes the Studio trailing-* / manage⊇read matching gap.
+- #2792 | KEEP | P1 | none (workflow-design) | Headless workflow submit bypasses every draft validator (validation runs only on draft pro | Headless submit bypasses draft validators; PR #3929 is ready; canonical for #3141.
+- #2846 | KEEP | P1 | security | Should reusable activity drafts refuse credential inputs? (guard removed with the legacy c | Owner decided 10-23: refuse credential inputs at the publish gate; not yet implemented.
+- #2892 | KEEP | P1 | unified-execution | Program: Elsa 4 unified execution foundation | Active program; SQLite native/BPMN milestone resumed 8 Nov; 1/5 children done.
+- #2902 | KEEP | P1 | unified-execution | Epic: Ratify and adopt the smallest proven foundation | Holds #2905 (production adoption), the current milestone's home.
+- #2905 | KEEP | P1 | unified-execution | Feature: Incremental production adoption and compatibility | 7/8 children done; production carry-forward ongoing under #2892.
+- #2907 | KEEP | P1 | unified-execution | Feature: First-class BPMN integration and operational extension contracts | Integration of BPMN with first-class hosting. #3603 merged 2 Nov. The remaining production criteria back the active SQLite native/BPMN milestone.
+- #2908 | KEEP | P1 | etl | Feature: Distributed ETL batch and continuous ingestion | Standing ETL delivery goal; children done but production acceptance incomplete; PRs #3951, #3804 open.
+- #3094 | KEEP | P1 | activity-data-selection | Author activity-output references in Studio | Named in registry current focus as the reuse feature, with no native blockers. Follows #3922.
+- #3195 | KEEP | P1 | elsa3-parity | Elsa 3 converted RunJavaScript without arguments faults at run time | Still on main: IJavaScriptScriptEvaluator throws "arguments must be one JSON object" when a converted script has no arguments. S-0, waits on nothing.
+- #3196 | KEEP | P1 | elsa3-parity | Elsa 3 RunJavaScript result bound to a typed input is refused at publish (VF-COER-001) | Converted JS result bound to a typed input is refused at publish (VF-COER-001). S-8, waits on A-1 / PR #3422.
+- #3201 | KEEP | P1 | elsa3-parity | Elsa 3 converter: a Variable expression is not lowered and fails at publish (no reference  | Variable expression not lowered, so publish fails. Draft PR #3930 has green CI, but Codex abandoned its claim and the issue carries `blocked`. Implementation conflicts with the initiative's spec-first rule; the coordinator should decide.
+- #3202 | KEEP | P1 | elsa3-parity | Imported WriteHttpResponse headers {} fail at publish: converted to System.String[] (VF-CO | Still on main: the converter has no HttpResponseHeaders handling, so {} → String[] fails at publish. The fix exists only on parked PR #2708 (3c1f95999). Port it to main.
+- #3295 | KEEP | P1 | elsa3-parity | Elsa 3 converter routes RunJavaScript's Done connection to Unmatched, which Elsa 4 never c | Real defect on main: map rule Outcome("Done","Unmatched") means converted Done connections never fire (16 corpus connections). The no-possible-outcomes case can get a narrow fix ahead of S-3.
+- #3296 | KEEP | P1 | elsa3-parity | Elsa 3 converter: a script that declares its own `args` captures the converted reads | Silent wrong read: a script declaring its own `args` captures the converted reads. Sipke decided the refusal rule (D-7) on 24 Oct, so it can be built.
+- #3428 | KEEP | P1 | weaver | Program: Weaver across Studio | Active program, M4 current.
+- #3443 | KEEP | P1 | weaver | Feature: Deliver module-owned Weaver support for the current Studio inventory | M4 feature; only docs/spec landed; draft PR #3845.
+- #3519 | KEEP | P1 | agents | Program: Elsa Agents — reusable agents and workflow collaboration | Active program, 5/9 children done; PRs open.
+- #3608 | KEEP | P1 | entity-integrations | Entity-aware orchestration and optional business-record modeling | Active program; design PRs #3923/#3949 are open.
+- #3610 | KEEP | P1 | named-blocks | Program: Named embedded blocks and reusable promotion | Active program. Establishment #3748, prototype #3749 and T001 #3750 are closed; production T002 is next.
+- #3650 | KEEP | P1 | unified-execution | Prove spec 1184's remaining partial rows (FR-012, FR-014, SC-005) on real hosts | Spec 1184 partial rows; latest BPMN browser witness attempt failed 7 Nov; on #2892 acceptance path.
+- #3698 | KEEP | P1 | runtime-efficiency | A native-admission commit that landed is reported unavailable and its retry hits a replay  | Committed native admission reported unavailable, then a replay conflict. Draft PR #3848: review round 2 clean, whole-project qualification pending.
+- #3700 | KEEP | P1 | runtime-efficiency | A coalescing flush still throws after its commit when a released item's durable copy was l | Remaining case after #3697; fix in draft PR #3868.
+- #3701 | KEEP | P1 | foundation-host (tenancy) | Packaged Workflows Design stores every definition under the default tenant | Packaged Design stores every definition under default tenant; other tenants get 403. Tenant isolation defect.
+- #3703 | KEEP | P1 | runtime-efficiency | A drain's take-back can re-deliver a continuation backstop its overlay already delivered | Duplicate dispatch of a continuation backstop. Draft PR #3905: source reviewed, uncompiled/unrun controls, CI runs cancelled.
+- #3721 | KEEP | P1 | etl | [Claude] ETL: serialise overlapping runs on one SQL watermark checkpoint | Overlapping runs can permanently overwrite newer destination rows (data corruption in preview ETL).
+- #3744 | KEEP | P1 | named-blocks | F2: Create and refactor Sequence and Flowchart blocks | F2 native Sequence/Flowchart blocks. It is the parent of the critical-path tasks T002/T003.
+- #3751 | KEEP | P1 | named-blocks | T002: Plan and apply safe native block transformations | T002, PR #3837 ready/in review. This is the immediate critical path.
+- #3752 | KEEP | P1 | named-blocks | T003: Integrate block commands into both graph authoring hosts | T003 host integration. Next after T002.
+- #3779 | KEEP | P1 | security | [Claude] Deleting an OAuth2 connection leaves its token secret for a same-named successor | Same-named successor connection inherits deleted OAuth grant; credential reuse. Scheduled under Weaver M4.
+- #3815 | KEEP | P1 | state-machine | Program: Elsa 4 StateMachine | Active program, design first. Status is todo even though M0 is active: set it to in-progress.
+- #3820 | KEEP | P1 | state-machine | Agree the StateMachine behavior, integration and Studio contract | M0 contract, draft PR #3840 active. This is the sole critical path. Label says todo; set it to in-progress.
+- #3831 | KEEP | P1 | weaver | Task: M4 leaf 0 — deliver generic Weaver effects and live module support | Critical-path leaf 0, draft PR #3845 active (client qual 1385/0); generic effects unblock leaves 1–3.
+- #3882 | KEEP | P1 | activity-data-selection | Program: Activity Data Selection | Active. Establishment, proof and contracts (#3883–#3885) are closed. Its last comment is off-topic main-recovery noise.
+- #3907 | KEEP | P1 | entity-integrations | Prove the real external-source boundary for entity-aware integrations | Source proof on Orchard Core is current focus ("source proof before production design agreement"). Partial evidence is posted.
+- #3908 | KEEP | P1 | entity-integrations | Agree production design for entity-aware integrations and optional-record scope | Production design. Plan PR #3923 is ready and catalog PR #3949 is stacked on it. Critical path after/with #3907.
+- #3922 | KEEP | P1 | activity-data-selection | Task: Deliver shared activity data analysis and admission | Next implementation leaf. Draft PR #3948 has CHANGES_REQUESTED. It also unblocks Decisions #3977.
+- #3939 | KEEP | P1 | runtime-efficiency | Join detached actor re-drives before graceful persistence teardown | Teardown race on detached re-drives. PR #3941 is ready but fails "Studio .NET build & test" and EF shard ef-3.
+- #3947 | KEEP | P1 | ci | Align Decisions CLI and Studio composition inventories | EF CLI acceptance cannot start Workbench with Decisions in default shell; blocks PRs; draft #3957.
+- #3977 | KEEP | P1 | decisions-ux | Decisions: Evaluate Decision's result, status and matched rules are not visible or consuma | High: the decision result cannot be bound downstream, so the shipped feature is unusable in flows. Depends on #3922.
+- #3979 | KEEP | P1 | decisions-ux | Decisions: Evaluate Decision Inputs require hand-written tagged DecisionValue JSON; select | High authoring blocker (hand-written tagged JSON). Owner PR #3994 is open, with CI failures.
+- #1127 | KEEP | P2 | runtime | Workflow root activity's completion outcome is missing from the inspection projection | PR #1130 explicitly does not address it; root completion outcome still missing
+- #1152 | KEEP | P2 | elsa3-parity | Elsa 3 → Elsa 4 parity gaps | Canonical parity record; should become a child of Program #2771.
+- #1256 | KEEP | P2 | runtime-efficiency | A budget-truncated drain reports Quiesced, so incident strategies resolve while work is st | Budget-truncated drain reports Quiesced; real latent correctness bug, bounded fix.
+- #1280 | KEEP | P2 | runtime-efficiency | Reference garbage collection cannot reclaim a stranded publication: phase one's source ref | Reference GC cannot reclaim a stranded publication; storage-leak correctness.
+- #1770 | KEEP | P2 | runtime-efficiency | Add workflow-execution retention | No production retention exists; landed commit only stopped documenting one. Unbounded history growth before GA.
+- #1844 | KEEP | P2 | runtime-efficiency | Forwarded child start: a rule that refuses the child's identity still strands its parent | Forwarded child refusal strands its parent; real correctness gap.
+- #1891 | KEEP | P2 | foundation-host | Foundation.Host cannot take a separately hosted Studio: the OpenIddict store and CORS live | Canonical: separately hosted Studio cannot sign in to Foundation.Host (OpenIddict store and CORS); no AddCors in src.
+- #2128 | KEEP | P2 | foundation-host | Workbench container hangs as PID 1 after a fatal startup error | Dockerfile still runs dotnet as PID 1; bounded fix (--init/tini).
+- #2226 | KEEP | P2 | ci-flakes | EfSchemaChainStoreTests: upgrading a row four versions behind sometimes fails under load | Load-dependent EfSchemaChainStoreTests flake.
+- #2229 | KEEP | P2 | runtime-efficiency | A failed poison write after ack-on-fault loses the handler fault | A failed poison write loses the handler fault; observability and data gap.
+- #2232 | KEEP | P2 | runtime-efficiency | A repeated CompleteActivity chain that arrives after it drained poisons the work item | CompleteActivity still has no state guard; #2233/#2271 only cite it as tracked limit. RFA idle 25d.
+- #2234 | KEEP | P2 | runtime-efficiency | Draft activity publication fails with 409 when it loses the global checkpoint race to an u | Draft publication 409 on an unrelated checkpoint race; user-visible publish failure.
+- #2278 | KEEP | P2 | runtime-efficiency | A leaked leftover activation's publication record stays Active for good | A leaked leftover publication record stays Active for good.
+- #2279 | KEEP | P2 | none (git-reconciliation) | A Studio rename on a Git Writer node is reverted at restart | Studio rename reverted at restart on a Git writer node; reproduced.
+- #2280 | KEEP | P2 | none (git-reconciliation) | Git workflow export never pushes its version tags | Git export never pushes version tags.
+- #2287 | KEEP | P2 | runtime-efficiency | Renew root-write leases on their own DbContext, not the one the write uses | Lease renewal shares the write's DbContext; concurrency hazard.
+- #2313 | KEEP | P2 | studio-ux | Recommended activity version stays on the old release after an in-place upgrade | Recommended version stays old after an in-place upgrade.
+- #2320 | KEEP | P2 | runtime-efficiency | Backfill completion is sometimes never recorded on main in a two-host cluster | Two-host backfill completion sometimes never recorded.
+- #2321 | KEEP | P2 | runtime-efficiency | Fence the EF activation repair on the slot row, not only the state revision | Fence the EF activation repair on the slot row.
+- #2344 | KEEP | P2 | studio-expressions | Epic: Enforce installed expression-syntax conformance | M2 epic; waits on #3204 read-model ADR (open) per registry.
+- #2345 | KEEP | P2 | studio-expressions | Epic: Deepen JavaScript and Liquid authoring assistance | M3 epic; waits on #3204.
+- #2346 | KEEP | P2 | studio-expressions | Epic: Complete the expression editing experience | M4 epic, after M3.
+- #2348 | KEEP | P2 | studio-expressions | Feature: Installed text-syntax and JavaScript runtime conformance | M2 feature; waits on #3204.
+- #2349 | KEEP | P2 | studio-expressions | Feature: Runtime-owned JavaScript and Liquid assistance | M3 feature; draft PR #2380 stale since Oct.
+- #2350 | KEEP | P2 | studio-expressions | Feature: Themed accessible expression editing and continuity | M4 feature; body is a copy of a program checkpoint (receipt in body), trim to acceptance.
+- #2352 | KEEP | P2 | studio-expressions | Task: Expose runtime-compatible JavaScript tooling metadata and conformance | M2 task; PR #2378 is from pre-relocation Oct era and likely needs rebase or replacement.
+- #2353 | KEEP | P2 | runtime | Log a trigger observer's failure after a committed activation instead of reverting it, and | Small, independently valuable: committed activation reverted by a throwing observer; also settles ADR 0043 amendment still "proposed". Keep RFA.
+- #2359 | KEEP | P2 | runtime | Deactivate an artifact's slot when it leaves the reconciler's mounted set | Real bug, verified on main: reconciler only activates, removed artifacts keep serving triggers. Small, independent. Keep RFA.
+- #2379 | KEEP | P2 | studio-expressions | Task: Effective Liquid profile and policy-filtered runtime assistance | M3 task; draft PR #2380 stale.
+- #2561 | KEEP | P2 | simplification | Epic: Phase 1, mechanical simplification | Phase 1 epic; children remain open.
+- #2562 | KEEP | P2 | simplification | Epic: Phase 3, developer experience | Phase 3 DX epic; none of its API children landed.
+- #2564 | KEEP | P2 | runtime-efficiency | Epic: Persistence modes and per-activity commit reduction (ADR 0080 D2) | 9/9 children done but DB-cost lane PR #3841 paused by owner 5 Nov; close when #3841 merges.
+- #2568 | KEEP | P2 | simplification | Merge micro-projects into their parents | None of the micro-project merges done (Caching.Memory, Locking.FileSystem, etc. still exist); landed commit unrelated.
+- #2570 | KEEP | P2 | simplification | AddElsa() entry point with presets and a 10-line hello-world sample | No AddElsa() on main. Overlaps parked #1961 profiles; this is the ADR 0080 direction.
+- #2575 | KEEP | P2 | simplification | Move docs/reports and closed specs out of main | Not done and worse: docs/reports 32 MB, specs 151 MB on main.
+- #2576 | KEEP | P2 | simplification | Retire Line A: one version line and simpler versioning MSBuild | VersionLines.props, PackageRanges.targets, PackageVersioning.props still on main; only groundwork landed.
+- #2580 | KEEP | P2 | simplification | Squash EF migrations to one initial migration per context at the RC freeze | Canonical for migration squash at RC (absorbs #1976). Blocked until RC freeze, correctly.
+- #2587 | KEEP | P2 | simplification | Register activities with AddActivity<T>() or an assembly scan, without reconciliation mode | No AddActivity<T>() on main.
+- #2588 | KEEP | P2 | simplification | Simple helpers for waiting activities: CreateBookmark and WaitForTimer | No WaitForTimer/CreateBookmark helper on main.
+- #2589 | KEEP | P2 | simplification | Typed child-scheduling API for composite activities | No ScheduleChild typed API on main.
+- #2590 | KEEP | P2 | simplification | IWorkflowRunner.RunAsync for code-first workflows with a typed result | No IWorkflowRunner.RunAsync for code-first on main.
+- #2591 | KEEP | P2 | simplification | Internal by default and plain-language renames, one domain at a time | Domains 1a/1b/2a/2b landed; remaining domains still to do.
+- #2592 | KEEP | P2 | simplification | CancellationToken on async APIs, no sync-over-async, split the 21-dependency service | CancellationToken/sync-over-async debt, bounded fix.
+- #2621 | KEEP | P2 | ci-flakes | Concurrent Workbench OpenIddict migration races on CREATE SCHEMA (PostgreSQL 42P06) | Concurrent OpenIddict PostgreSQL CREATE SCHEMA race.
+- #2658 | KEEP | P2 | runtime-efficiency | HttpEndpointMiddleware loads every waiting HttpEndpoint bookmark on each resume-only reque | HttpEndpointMiddleware still loads every waiting bookmark per resume request (FindWaitingByTypeAsync).
+- #2664 | KEEP | P2 | none (api) | POST design/workflows/definitions returns createdAt/lastModifiedAt 0001-01-01 | POST definitions returns 0001-01-01 timestamps; reproduced.
+- #2723 | KEEP | P2 | simplification | Delete dead code found by #2591 domain 1 (no production caller) | Dead-code deletion; ADR 0080 pre-GA cleanup.
+- #2736 | KEEP | P2 | bpmn | Refuse to import or publish BPMN whose meaning changed on import | Registry names #2736 as BPMN Engine's remaining open work; remove stale `status:parked` label. Landed commit was only program reactivation.
+- #2744 | KEEP | P2 | none (expressions) | VariableMapper.Map(IVariable) persists the variable's CLR type name instead of its default | VariableMapper.Map still passes the variable, not its default, to the formatter (line 50).
+- #2746 | KEEP | P2 | studio-expression | JavaScriptRenderingFeature ignores its FunctionDeclarations, TypeDeclarations and Variable | JavaScriptRenderingFeature still never copies its Declarations into options; bounded fix.
+- #2752 | KEEP | P2 | runtime-efficiency | Early composite completion leaves sibling bookmarks, timers and queued work in storage (Fl | Early composite completion leaves bookmarks, timers and work in storage.
+- #2830 | KEEP | P2 | none (attention) | Attention: a throwing permission check on one contributor fails the whole aggregation requ | IsAuthorizedAsync still sits outside the per-contributor try; one throw fails the whole request.
+- #2849 | KEEP | P2 | ci-flakes | Architecture guard fails on a local Windows checkout (pack-test cleanup, Claude worktrees) | Windows Architecture guard; PR #3936 is ready.
+- #2854 | KEEP | P2 | entity-aware-integrations | Connections phase 1 follow-ups: durable ConnectionRepository and the workflow Connections  | Durable repository done (#3591); the workflow Connections panel item remains.
+- #2859 | KEEP | P2 | studio-ux | Studio: show start-trigger placement refusals on the node, and recognise Timer/Cron as sta | Start-trigger placement refusals in Studio. Draft PR #3944 from Codex, 12 CI failures. Not really conversion work.
+- #2906 | KEEP | P2 | unified-execution | Epic: First-class BPMN and future ETL product journeys | Wrapper for the #2907 BPMN and #2908 ETL journeys. Close it when both children close.
+- #2923 | KEEP | P2 | studio-ux | Investigate missing pinned executable graph in local demo run | Executable graph 404 on a run canvas; investigate.
+- #2942 | KEEP | P2 | elsa3-parity | Restore a historical workflow version as a new draft and version | Restore a historical version as a draft (Elsa 3 feature).
+- #3003 | KEEP | P2 | studio-expression | Explain expression result type mismatches as activity input failures | Expression result type mismatch surfaces as a raw JSON exception and poison.
+- #3052 | KEEP | P2 | elsa3-parity | Epic: Convert Elsa 3 workflows to Elsa 4 | Epic 14/45 done; initiative branch active with many proposal PRs.
+- #3110 | KEEP | P2 | ci-flakes | Diagnose native-hosting conformance failure in final continuation process affinity | NativeHostingConformance continuation-affinity flake; separate test from #3147.
+- #3124 | KEEP | P2 | ci-flakes | Flaky in CI: CoalescingDurableValuePageReuseTests heartbeat test hits its 5 s xunit timeou | Heartbeat timeout flake; PR #3937 open.
+- #3144 | KEEP | P2 | connections/secrets | EF tooling: generate-module-migrations.sh would collapse the Secrets MySQL chain into a ne | Migration script would collapse the Secrets MySQL chain; bounded fix.
+- #3145 | KEEP | P2 | connections/secrets | Secrets: audit records carry the name but not the secret id | Owner decided: make SecretId required on the audit record.
+- #3147 | KEEP | P2 | ci-flakes | Flaky: NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_r | Quarantined in tools/ci/test-tiers.json by #3265; still needs a real fix.
+- #3159 | KEEP | P2 | studio-ux | Studio: repeated reloads of one tab end in net::ERR_INSUFFICIENT_RESOURCES and "No Studio  | Reload resource exhaustion; landed commit only filed it; reproduced user-facing bug.
+- #3167 | KEEP | P2 | elsa3-parity | ValueRepresentationDefaults.Infer misses System.Text.Json.JsonElement? aliases | Still on main: Infer strips only "System.", so "System.Text.Json.JsonElement?" falls to TypedValue. Bounded fix. The board says it waits on D-12.
+- #3170 | KEEP | P2 | elsa3-parity | JavaScript results drop object keys whose value is undefined; Elsa 3 kept them as null | Owner decided converter-only null-keeping (23 Oct); implementation in draft PRs #3726/#3388.
+- #3171 | KEEP | P2 | elsa3-parity | RunJavaScript fails to parse when the script ends with a line comment | Not fixed: PreparedJavaScript still wraps on one line, so trailing `//` breaks any author's script; 1-line fix.
+- #3172 | KEEP | P2 | elsa3-parity | A null value bound to a non-nullable activity input fails in Elsa 4; Elsa 3 used the type' | Waits on D-10/D-11; draft PRs #3726/#3388.
+- #3177 | KEEP | P2 | ci-flakes | CI: no gate catches Studio API clients drifting from the backend API | No gate for Studio API client drift.
+- #3186 | KEEP | P2 | foundation-host | Cookie-auth API forbids redirect to an unmapped Access Denied page | Cookie-auth API redirects to an unmapped Access Denied page.
+- #3187 | KEEP | P2 | native-compensation | Compensation: a handler attempt loses its due time (notBefore) once it runs | Handler attempt loses NotBefore after it runs.
+- #3191 | KEEP | P2 | studio-ux | Collection defaults are a JSON array: Studio list editor, no comma parsing | Maintainer design recorded; draft PR #3933.
+- #3197 | KEEP | P2 | studio-ux | Studio graph editor: offer earlier body results in pickers, add the Add-two-numbers browse | Graph editor pickers for earlier body results. Draft PR #3943 from Codex, 12 CI failures.
+- #3198 | KEEP | P2 | elsa3-parity | Warn about writes to one variable whose order is not defined (ADR 0048 §5 amended) | Reframed as warning; spec on draft PR #3286; landed commit only links it.
+- #3206 | KEEP | P2 | runtime-efficiency | Waiting-bookmark lookups read one workflow execution per waiting execution to exclude test | ExcludeTestRunsAsync still does one FindAsync per waiting execution (N+1) on main.
+- #3207 | KEEP | P2 | studio-ux (test-drive) | MemoryTestRunTargetStore never prunes expired targets, so Test Drive eventually fails with | MaximumTargets=2048 still present, CleanupExpiredAsync has no production caller; Test Drive eventually refuses.
+- #3210 | KEEP | P2 | studio-ux | Design definitions list endpoint ignores take, so Studio Home reads the full definition li | Definitions List endpoint still has no take/paging; Home reads full catalog ~5x per refresh. Canonical for #3257.
+- #3212 | KEEP | P2 | connections/secrets | Connection credentials: owned-Secret flag lost on rebind, picker cap assumes page size 50, | Owned-Secret flag dropped on rebind leaks Secrets; bounded fix.
+- #3215 | KEEP | P2 | elsa3-parity | Elsa 3 converter: collection starting values use default System.Text.Json while scalars us | Collection starting values refused while scalars convert; user-facing import inconsistency.
+- #3219 | KEEP | P2 | studio-expression-dx | Expression tooling: pin v1 enum ordinals on the server now that the client maps numeric va | Unpinned server enum ordinals silently change Studio meaning; pin with a test.
+- #3220 | KEEP | P2 | studio-ux | HTTP test dialog focus trap ignores the code editor body and includes the unfocusable chev | Dialog focus trap a11y defect (keyboard users cannot reach body editor).
+- #3236 | KEEP | P2 | connections/secrets | Secrets editor dialog: backdrop drag discards edits and Escape handler is not stack-safe | Backdrop drag discards typed secret edits; stack-unsafe Escape.
+- #3245 | KEEP | P2 | connections/secrets | Secrets value input and notifications: disable autocapitalize/autocorrect and restore focu | Secret value input lacks autoCapitalize/autoCorrect off; can corrupt secrets on mobile.
+- #3252 | KEEP | P2 | ci-flakes | Flaky: NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while | Quarantined by #3265; needs a fix.
+- #3253 | KEEP | P2 | ci-flakes | ETL V1 fixture fails its content hash on Windows checkouts (CRLF conversion, no .gitattrib | Real Windows CRLF fixture failure; PR #3927 open.
+- #3259 | KEEP | P2 | ci-flakes | Flaky in CI: NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_rea | Quarantined by #3265; draft fix PR #3946.
+- #3260 | KEEP | P2 | ci-flakes | Flaky in CI: WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_st | Quarantined; tracker for quarantine entry; no PR.
+- #3262 | KEEP | P2 | ci-flakes | Flaky in CI: StatementBindingTests.Statement_body_honors_cancellation_during_evaluation | Quarantined; PR #3928 open.
+- #3283 | KEEP | P2 | elsa3-parity | Reconciled workflow versions pass the full draft validation gate | Correctness: reconciled versions skip every draft validator except the credential-literal one before publish-on-reconcile.
+- #3285 | KEEP | P2 | elsa3-parity | Activities select their outcomes explicitly, several per completion (D-4) | Canonical S-3 design (D-4, explicit multi-outcome completion). ADR PR #3389 (approved), #3763, spec PR #3810. Not a duplicate of #3295.
+- #3287 | KEEP | P2 | elsa3-parity | Elsa 3 converter: a RunJavaScript that reads a variable or input is refused at publish (ar | Named as a blocker by spec 267, not fixed.
+- #3297 | KEEP | P2 | elsa3-parity | The Elsa 3 activity-map coverage test does not check that a "no binding" null row matches  | Test gap: the coverage test doesn't verify NoBinding rows against Elsa 4 defaults. S-0, waits on nothing.
+- #3421 | KEEP | P2 | elsa3-parity | Numbers lose digits on the value path: ForEach, JavaScript and diagnostic snapshots | ForEach and snapshot parts fixed (#3424); the JavaScript/Jint part remains. Its ADR blocker #3422 is now closed.
+- #3494 | KEEP | P2 | ci-flakes | Investigate intermittent Refused result in retained-generation package-maintenance test | Studio package-maintenance flake; draft diagnostic PR #3956.
+- #3524 | KEEP | P2 | agents | Epic: M4: Compose published agents in native and BPMN processes | M4 epic; T027/T028 landed, rest pending.
+- #3525 | KEEP | P2 | agents | Epic: M5: Deliver Studio agent authoring, playground and evaluations | M5 epic; multiple tasks landed, ADR 0094 replanning, not complete.
+- #3557 | KEEP | P2 | studio-ux | Studio: Executable Inspector header and page title show the artifact ID instead of the wor | Inspector shows artifact ID; PR #3606 open.
+- #3558 | KEEP | P2 | studio-ux | Studio: Executable Inspector toolbar has no focus ring and does not mark Run as the primar | Focus ring/primary action a11y; PR #3953 open.
+- #3559 | KEEP | P2 | studio-ux | Studio: run detail title is a generic "Run" and a suspended Event card shows a raw GUID | Generic Run title and raw GUID; PR #3954 open.
+- #3562 | KEEP | P2 | studio-ux | Studio: ETL pages offer "New definition" while showing "ETL API is unavailable" | Offers New definition while API unavailable; misleading action.
+- #3564 | KEEP | P2 | studio-ux | Studio: Add-activity connect menu fails axe (listbox children) and detaches from its trigg | Critical axe aria-required-children on Add-activity menu.
+- #3568 | KEEP | P2 | docs | Docs: "Try Elsa locally" is Docker-only; document the source-run path and its prerequisite | Newcomers cannot run main from docs; PR #3958 open.
+- #3575 | KEEP | P2 | ci-flakes | Studio: intermittent Organization menu dismissal interrupts Workflow Library browser tests | Repeating browser flake across three workflow-library tests; shared root cause.
+- #3579 | KEEP | P2 | elsa3-parity | Port Elsa 3 external authentication and OIDC connection management to Elsa 4 | Owner authorized end-to-end delivery 2026-11-04 (comment); PR #3806 at final gates.
+- #3582 | KEEP | P2 | unregistered (owner-authorized) | Standalone triggers with workflow subscriptions and independent management | Owner authorized delivery 2026-11-05 in comments; draft PR #3912; not in registry.
+- #3583 | KEEP | P2 | unregistered (owner-authorized) | Durable message inbox with business correlation and delivery per workflow definition | Owner authorized delivery 2026-11-05; draft PR #3904; not in registry.
+- #3586 | KEEP | P2 | unregistered (owner-authorized) | Durable background job runner with standalone hosting, workflow integration, and scoped pa | type:program; owner authorized 2026-11-05; draft #3909; registry lacks it.
+- #3588 | KEEP | P2 | regression-testing | Reusable workflow and activity regression test suites with Studio authoring, CI execution, | Canonical feature; PR #3903 has CHANGES_REQUESTED and failing CI. Keep regardless of the #3901 outcome, but implementation pace depends on the authorization.
+- #3590 | KEEP | P2 | unregistered (owner-authorized) | Immutable workflow releases and environment promotion through Studio and CI | type:program; owner authorized 2026-11-05; draft #3911 integration failed; registry lacks it.
+- #3597 | KEEP | P2 | bpmn-engine | Optional bpmn-js editor in Studio: feasibility and seamless editor switching | Owner authorized 2026-11-05; draft PR #3950.
+- #3649 | KEEP | P2 | bpmn | Release or reassign a claimed direct BPMN human task | Release/reassign of a claimed BPMN human task not built; #3603 is the origin.
+- #3663 | KEEP | P2 | studio-ux | Studio Structured Logs: restore valid table semantics | a11y table semantics; PR #3899 open.
+- #3664 | KEEP | P2 | studio-ux | Studio Settings: link selected host and inspector tabs to their panels | Critical axe tab/panel linkage; PR #3914 ready.
+- #3709 | KEEP | P2 | etl | [Claude] An older ETL worker retries forever on a v2 artifact kind it cannot read | Not fixed: all five ETL squash commits only list it as a known limit ("upgrade every worker first").
+- #3710 | KEEP | P2 | weaver | Weaver cannot disclose workflow drafts over about 125 activities (32 KiB attachment budget | 32 KiB attachment cap blocks drafts over ~125 activities.
+- #3719 | KEEP | P2 | etl | [Claude] Commit-ordered SQL watermarks for ETL incremental reads | Not fixed: commits only document the out-of-order watermark risk. Silent row skips under concurrent writers.
+- #3720 | KEEP | P2 | weaver | Weaver dock overlaps workflow library controls (Create workflow click intercepted) | Dock intercepts Create workflow clicks; reproduced in browser.
+- #3724 | KEEP | P2 | etl | [Claude] ETL: a run settled by a failed route delivery keeps its outstanding accounting | Not fixed: journey was changed to check accounting on the delivered run, which works around the terminal-run accounting bug.
+- #3733 | KEEP | P2 | runtime-efficiency | [Claude] Executable detail reads load every execution state to count retained executions | RetainedCountsAsync lists every execution state per detail read; O(all).
+- #3745 | KEEP | P2 | named-blocks | F3: Extract linear BPMN regions into subprocess blocks | F3 BPMN extraction. It absorbs its single task T004 (#3753).
+- #3746 | KEEP | P2 | named-blocks | F4: Review and apply safe block promotion | F4 promotion. Keep it as the parent of two sequential tasks.
+- #3754 | KEEP | P2 | named-blocks | T005: Analyze promotion dependencies and propose explicit graph contracts | T005 promotion dependency analysis. A distinct step.
+- #3755 | KEEP | P2 | named-blocks | T006: Review reusable drafts and replace blocks after publication | T006 review/replace after publication. Depends on T005.
+- #3758 | KEEP | P2 | etl | [Claude] ETL design store: wrap storage failures at the store boundary (§2.23.5) | #3803 explicitly names the store-boundary wrapping as follow-up #3758.
+- #3761 | KEEP | P2 | weaver | Studio's numeric Weaver proposal-status fallback disagrees with the server enum | Numeric fallback mismatch still on main; fix in progress in draft #3845.
+- #3768 | KEEP | P2 | agents | [Claude] Draft Test Run poisons at start when an optional input is not supplied | #3778 works around it (passes empty options); optional-input poison still reproduces.
+- #3784 | KEEP | P2 | ci | CI: split the 49-minute BPMN hosting suite out of integration-other | Owner-requested CI split; PR #3785 green.
+- #3786 | KEEP | P2 | ci | CI: support GitHub's merge queue (merge_group) for main | Owner decision for merge queue; PR #3788.
+- #3787 | KEEP | P2 | ci | CI: run only the PR-tier shards a PR affects | Owner decision for affected shards; PR #3791.
+- #3789 | KEEP | P2 | etl | ETL: SQL source key can follow the wrong column mid-rename; null SQL destination key entri | Verified CodeRabbit majors deferred after ETL stack; still unfixed.
+- #3809 | KEEP | P2 | publishing | A Flowchart connection on a port its source node does not declare publishes, and is never  | Undeclared-port connection publishes and is never followed; inferred, needs repro.
+- #3814 | KEEP | P2 | studio-ux | Studio: group run inspection actions and move Test Run controls into Runtime | Owner-requested toolbar; PR #3828 qualification incomplete.
+- #3832 | KEEP | P2 | weaver | Task: M4 leaf 1 — deliver module-owned Secrets read, metadata update and value test | Leaf 1 (Secrets read/metadata). Distinct deliverable, so keep it as a leaf. Starts after #3831.
+- #3833 | KEEP | P2 | weaver | Task: M4 leaf 2 — deliver Service connection journeys and bounded OAuth secret cleanup | Leaf 2 (Service connection journeys, OAuth secret capture). Sequential after #3831/#3832.
+- #3834 | KEEP | P2 | weaver | Task: M4 leaf 3 — deliver reviewed Secret revoke/delete with consumer observations | Leaf 3 (reviewed secret revoke/delete). Last M4 leaf.
+- #3844 | KEEP | P2 | simplification | Complete User Tasks authoring, output selection and run diagnostics quality pass | Owner-directed User Tasks quality pass; draft PR #3847.
+- #3849 | KEEP | P2 | studio-ux (free-flow) | Feature: Timeline workspace and durable run history | Owner authorized end-to-end delivery 2026-11-05; draft PR #3850.
+- #3853 | KEEP | P2 | simplification | Studio: use shared toasts for transient action confirmations | PR #3858 CI green, changes requested.
+- #3863 | KEEP | P2 | simplification | Studio: grouped navigation and calmer theme spacing | Owner-approved nav grouping; PR #3866 open.
+- #3872 | KEEP | P2 | simplification | Open User Tasks in separate collection and detail views | Owner-directed; draft PR #3873 stacked on #3847.
+- #3892 | KEEP | P2 | regression-testing | Test selected designer activities manually and through saved automated scenarios | Distinct Elsa 3 parity ask (test a single activity). It shares PR #3903; make it a child of #3588 if #3901 folds.
+- #3925 | KEEP | P2 | ci | CI: split the full Studio Chromium inventory into four guarded shards | Owner-authorized CI acceleration; PR #3926.
+- #3935 | KEEP | P2 | ci-flakes | Repair short-editor iteration test setup before selecting the canvas node | Setup flaw fails consumer PRs; PR #3938.
+- #3940 | KEEP | P2 | ci | Require a rooted published-pair fixture and correlate safe creation diagnostics | Published-image proof timeout; PR #3942 ready.
+- #3963 | KEEP | P2 | studio-ux | Studio polish (POLISH-011): Variables tab truncates mid-word | Reproduced usability defect: Variables fields clip mid-word, so names are unreadable.
+- #3964 | KEEP | P2 | studio-ux | Studio polish (POLISH-012): Http Endpoint methods look optional; test walls | Reproduced functional gap: methods are not marked required and the test request cannot build. Residual of #3555.
+- #3969 | KEEP | P2 | studio-ux | Studio polish (POLISH-017): Designer tab strip clips to Ver / Ti / Ve | Reproduced defect: designer tab labels clip to "Ver"/"Ti" at 1440×900 and hide navigation.
+- #3971 | KEEP | P2 | studio-ux | Studio polish (POLISH-019): Shell console dock expanded on cold load | Regression: PR #2712 (13 Oct) made the dock collapsed by default; QA sees it expanded again. Cross-link #2697.
+- #3976 | KEEP | P2 | decisions-ux | Decisions UX/E2E QA — first pass (e1afd483) | Umbrella for the reproduced Decisions findings and holder of the folded checklist. Close it when the kept children close.
+- #3978 | KEEP | P2 | decisions-ux | Decisions: Refused outcome does not explain which status caused it (HitPolicyViolation etc | Reproduced: Refused gives no reason (HitPolicyViolation is hidden in run inspection).
+- #3980 | KEEP | P2 | decisions-ux | Flowchart: activities added from a node's + menu on different ports stack on the same coor | Generic Flowchart bug: nodes added from + on different ports stack, which hides nodes. Related to #3564.
+- #3981 | KEEP | P2 | decisions-ux | Decisions: saved-case expected text fails when written with the table's FEEL double quotes | Functional: saved-case comparison rejects the table's own FEEL quoting (spec FR-008).
+- #3982 | KEEP | P2 | decisions-ux | Decisions: validation diagnostics show raw rule/column ids instead of Rule N / input names | Diagnostics name raw ids, so authors cannot locate the failing cell. Reproduced.
+- #1146 | KEEP | P3 | elsa3-parity | Workflow-definition import endpoint reusing the reconciliation pipeline | Import endpoint FR-3; FR-1 #1144 still open; fits the later Elsa 3 import phase.
+- #1155 | KEEP | P3 | none (inspection) | No operator control over captured activity values: previews are always capped and full val | Operator control of captured values; a feature with no owner or program.
+- #1231 | KEEP | P3 | contributor-experience | U1: make SideEffectProfile discoverable to activity authors | Still open: runtime README has no SideEffectProfile guidance. Human starter; unparent from closed #2424.
+- #1754 | KEEP | P3 | elsa3-parity | Decide global-row write authority and guard mixed Activities EF / Publishing Groundwork co | Part 2 dead; global-row write authority still needs a decision during the tenancy phase.
+- #1785 | KEEP | P3 | simplification | IRuntimeActivityConsumerCapability is keyed by value but registered by type, so a third ca | Capability keyed by value; PR #2891 has CHANGES_REQUESTED.
+- #1857 | KEEP | P3 | simplification | EF Core: decide whether the chunked by-id read helper belongs in the shared EF layer | Shared chunked by-id EF helper; bounded tech debt.
+- #1888 | KEEP | P3 | runtime | EF Core: six store boundaries normalize every InvalidOperationException, swallowing store- | IsStoreBoundaryFailure still swallows store-raised InvalidOperationException (documented over-reach); #1904 fixed one store only.
+- #1918 | KEEP | P3 | contributor-experience | Share tooling exit diagnostics across migration tests | Human starter tech-debt, small; unparent from closed #2424.
+- #2220 | KEEP | P3 | runtime | Remove the SQLite serial-open workaround once Microsoft.Data.Sqlite 10.0.13 ships | Still on Microsoft.Data.Sqlite 10.0.10; remove serial-open interceptor once 10.0.13 ships. Blocked on upstream.
+- #2415 | KEEP | P3 | none | Feature: Worker capability readiness and compatible dispatch during rolling module upgrade | Rolling-upgrade capability readiness; speculative feature.
+- #2445 | KEEP | P3 | contributor-experience | Task: Repair JavaScript rendering catalog navigation | Verified still wrong: "Repo-wide index" link points to Elsa.Expressions/EXTENSION_POINTS.md. One-line human starter.
+- #2541 | KEEP | P3 | none (hygiene ledger) | Repository hygiene report | Standing repo-hygiene report issue; exempt by policy.
+- #2593 | KEEP | P3 | simplification | First-activity, first-workflow and first-host guides, plus a 40-term user glossary | Blocked on #2570/#2588; correctly blocked.
+- #2598 | KEEP | P3 | simplification | Remove ActivityDefinitionVersion.DescriptorType in the pre-RC migration squash | Blocked on the pre-RC migration squash; ADR 0080 D4.
+- #2606 | KEEP | P3 | simplification | Restore the spec 180 schema-family rules as compiled-code checks | Schema-family rules still unenforced; #2607 only deleted text tests.
+- #2663 | KEEP | P3 | foundation-host | elsa-workbench image reports org.opencontainers.image.version "24.04" (base-image label le | Workbench image version label leak.
+- #2753 | KEEP | P3 | simplification | Feature classes discover handlers through GetType().Assembly, which breaks in a subclass | Only ActivitiesDesignApiFeature still uses GetType().Assembly.
+- #2786 | KEEP | P3 | simplification | DispatchWorkflowDeliveryOptions is configured but never read; delete it | DispatchWorkflowDeliveryOptions still Configure<>'d and never read.
+- #2787 | KEEP | P3 | simplification | HTTP workflow base path has two option owners: configuring HttpEndpointOptions.BasePath de | Base path still owned in three places (ActivitiesHttpFeature, HttpEndpointOptions, HttpRoutePublicationOptions).
+- #2877 | KEEP | P3 | studio-expression | Investigate sharing deferred CodeMirror chunks across Studio modules | CodeMirror chunk sharing; within budgets; optimization only.
+- #2910 | KEEP | P3 | unified-execution | Feature: Interactive HTML architecture presentation | Acceptance boxes are checked. Only the production-journey presentation refresh remains, and it is due at program close.
+- #2947 | KEEP | P3 | none (activities) | Refresh presentation-only activity facets when behavior is unchanged | Presentation-only facets not refreshed.
+- #3023 | KEEP | P3 | elsa3-parity | Support engine intrinsics in graph activities (SetVariable, SetOutput, Correlate, SetName) | Landed commits only refuse intrinsics at conversion (D-7); graph intrinsics support still waits on A-2/A-3.
+- #3139 | KEEP | P3 | connections/secrets | Connections: wrap store failures in Revoke, Delete, Test, Find and List | Find/List/Revoke/Delete/Test in DefaultConnectionManager still unwrapped; #3134 covered Create/Update only.
+- #3146 | KEEP | P3 | connections/secrets | Secrets EF: the substring-search row bound counts deleted rows | Search row bound counts deleted rows.
+- #3153 | KEEP | P3 | connections/secrets | Connections: three credential-rotation limits rooted in Secrets | Three Secrets rotation limits unchanged; #3134 is the origin, not a fix.
+- #3184 | KEEP | P3 | studio-ux | Studio: isolate persisted operator-plan tracking across endpoint contexts | Operator-plan tracking not isolated per endpoint context.
+- #3188 | KEEP | P3 | ci-flakes | Make the compensation occurrence keyboard test portable on macOS | macOS keyboard test portability.
+- #3203 | KEEP | P3 | publishing | Publishing reports only the first error: collect every publish error in one response | Real author-facing gap (first-error-only publish); no owner, no activity 18d; bounded feature.
+- #3209 | KEEP | P3 | runtime (http) | Test Drive: test-run HTTP ingress ignores the HTTP base path, and Stop cancels the root ex | Namespace const "/workflows/test-runs" still ignores BasePath; shadowing only on unusual base paths.
+- #3216 | KEEP | P3 | elsa3-parity | Elsa 3 converter: unknown-element refusal guidance only mentions FormFile | Misleading refusal guidance text for non-FormFile unknown elements; small copy fix.
+- #3218 | KEEP | P3 | runtime | Activation channels: AllowAdHocChannels=false with no declared channels validates but refu | Config that refuses every activation should fail validation; small bounded fix.
+- #3221 | KEEP | P3 | studio-ux | New CodeMirror highlight style applies to every Studio editor and drops colours in the JS  | Global studioHighlightStyle still applied in CodeMirrorStudioCodeEditor; JS/Liquid colour loss.
+- #3222 | KEEP | P3 | runtime (http) | HTTP usability follow-ups from #2861: log the BasePath warning once, initial path slicing, | Per-request BasePath warning floods logs; plus small docs drift.
+- #3223 | KEEP | P3 | studio-ux | Executable artifacts: resolve workflow names by id on the server instead of scanning up to | Server-side name resolution for executables; related #3557 identity work.
+- #3225 | KEEP | P3 | studio-ux | Designed activity authoring follow-ups from #2944: per-definition denial overwritten, mapp | Lost denial reason and two-click focus; small reproduced-by-review bugs.
+- #3228 | KEEP | P3 | none (repo hygiene) | Two specs share number 241 and .specify/feature.json points at the wrong one | specs/241-native-durable-offload and 241-workflow-test-drive both still exist; renumber one.
+- #3229 | KEEP | P3 | runtime (http) | HTTP tester route samples do not match some route constraints | Tester suggests samples its own route rejects; bounded fix.
+- #3232 | KEEP | P3 | publishing | Designed activity Test Run inputs should derive their literal policy from the boundary con | Test Run literal policy diverges from published compile path; bounded.
+- #3233 | KEEP | P3 | simplification | Runtime activity capabilities: mark unused named capability classes obsolete and check for | Unused public capability classes; ADR 0080 internal-by-default cleanup.
+- #3237 | KEEP | P3 | studio-ux | Incident details: Copy button label, dialog layering, and silent close when the incident d | Label-in-name a11y and silent dialog close.
+- #3238 | KEEP | P3 | runtime (http) | Published HTTP tests follow-ups from #2929: one source for the missing-response message, l | Duplicate message source and missed late fault.
+- #3240 | KEEP | P3 | studio-ux | HTTP endpoint node summaries: suffix match on .httpendpoint can hide summaries on custom a | endsWith(".httpendpoint") still in httpTestRequest.ts; custom activities affected.
+- #3241 | KEEP | P3 | studio-ux | HTTP tester header validation follow-ups from #2951: row indices, dropped test case, host- | Wrong row index and late host-header collision.
+- #3242 | KEEP | P3 | bpmn-engine | Decide whether Sequence should stay Running when its durable BPMN child faults the workflo | Semantic question (Sequence Running under faulted workflow) pinned by test; needs a decision.
+- #3249 | KEEP | P3 | simplification | Integrations SDK: move test fakes into an Elsa.Integrations.Sdk.Testing package before GA | ConnectorHarness etc. still public in Integrations SDK; pre-GA packaging cleanup.
+- #3255 | KEEP | P3 | studio-ux | Studio: move hasEffectivePermission from Dashboard into studio-sdk with a server parity te | Move permission matcher to SDK with parity test; bounded.
+- #3256 | KEEP | P3 | studio-ux | Studio Home: 'Needs attention' shows for users who cannot read workflow runs | Ungated Needs-attention link for users without run read; small.
+- #3263 | KEEP | P3 | ci-flakes | CI flake tracker | Standing CI flake record (spec 263 FR-004); do not close.
+- #3267 | KEEP | P3 | ci-flakes | Spec 263: measure the tiered-CI outcomes (SC-001, SC-002, SC-004) after the switch | Post-switch SC measurement still pending; draft PR #3931.
+- #3282 | KEEP | P3 | elsa3-parity | Value-flow ordering rules and the expression picker take ordering from structure handlers | Quality work: duplicated ordering logic in ValueFlowValidator vs the picker (S-5). Not needed for import parity.
+- #3284 | KEEP | P3 | elsa3-parity | Workflow executable compilation reports every error in one refusal | DX: report all compile errors in one refusal (S-5). Nice-to-have.
+- #3290 | KEEP | P3 | elsa3-parity | Inspection shows each variable's write history and the winning write | S-6 inspection feature (variable write history). Waits on ADR 0092 PR #3411. Speculative for import parity.
+- #3291 | KEEP | P3 | elsa3-parity | Inspection shows a commit-ordered journal and compares two instances | S-6 inspection feature (commit-ordered journal, compare instances). Waits on ADR 0092.
+- #3292 | KEEP | P3 | elsa3-parity | Runtime traces a write that overwrites another open branch's write | S-6 runtime trace of cross-branch overwrites. Waits on ADR 0092.
+- #3328 | KEEP | P3 | ci-flakes | CI: run Studio Workflows build:lib on pull requests (declaration-emit gate) | #3329 explicitly defers it; build:lib still only runs in studio-packages.yml. Small fix, good RFA candidate.
+- #3444 | KEEP | P3 | weaver | Feature: Qualify Weaver across providers and packaged custom hosts | M5 qualification/extensibility. Not actionable until M4 is done.
+- #3450 | KEEP | P3 | runtime (http) | Retain HTTP response delivery evidence and show undelivered response warnings | Free-flow feature; draft PR #3454 idle since 10-29.
+- #3457 | KEEP | P3 | studio-ux | Add consistent copy controls to Studio technical information fields | Free-flow; draft PR #3464 idle 10d.
+- #3465 | KEEP | P3 | studio-ux | Inset designer resize rails from rounded panel corners | Free-flow polish; draft PR #3466 idle 10d.
+- #3467 | KEEP | P3 | studio-ux | Activity draft Advanced disclosure clips actions in narrow graph editors | Reproduced narrow-viewport clipping; small.
+- #3507 | KEEP | P3 | ci-flakes | Make the scheduled-retry accessibility test stable across midnight | Deterministic midnight wall-clock bug; small bounded fix.
+- #3513 | KEEP | P3 | simplification | Retire legacy Studio module CSS aliases after the supported host cutoff | Retire CSS aliases once host cutoff set; pre-GA could drop now.
+- #3547 | KEEP | P3 | docs | Docs: Studio hosting follow-ups after #3423 (ledger proof, Nuplane UI package, nits) | Docs-fix PR #3952 open covering all items.
+- #3560 | KEEP | P3 | studio-ux | Studio: collection pages leave large empty bands, Runs clips its Actions header, Secrets w | Layout bands/clipped header; no PR.
+- #3561 | KEEP | P3 | studio-ux | Studio: 404 page and empty diagnostics widgets use a dashed box with no recovery action | 404/empty states lack recovery action.
+- #3563 | KEEP | P3 | studio-ux | Studio: Home add-widget dialog is sparse ghost pills with no descriptions | Sparse add-widget dialog.
+- #3565 | KEEP | P3 | studio-ux | Studio: secret, connection and JS-binding pickers use dashed field chrome unlike other ins | Picker chrome inconsistency.
+- #3566 | KEEP | P3 | studio-ux | Studio: Home shows onboarding above the fold even after workflows and runs exist | Onboarding above fold after use.
+- #3567 | KEEP | P3 | studio-ux | Studio: Features server tab renders 119 rows in one unvirtualized column | Unvirtualized 119-row list.
+- #3604 | KEEP | P3 | unregistered (owner-authorized) | AI-authored personal and shared dashboards with saved queries and configurable visuals | Owner authorized 2026-11-06 but blocked (three-failure stop, claim abandoned); needs-decision label.
+- #3613 | KEEP | P3 | studio-ux | Studio: Executable Inspector shows "Not available in this environment" for HttpEndpoint; s | "Not available in this environment" reads as a fault for HttpEndpoint; low.
+- #3614 | KEEP | P3 | studio-ux | Studio: HTTP test dialog response body sits below the fold at 1280×800 | Response body below fold at 1280x800.
+- #3633 | KEEP | P3 | agents | Diagnose duplicate registrations for Agent replacement contracts | Agent-wide duplicate-registration diagnosis still a gap; #3612 only records it.
+- #3665 | KEEP | P3 | studio-ux | Studio Structured Logs: prioritize message scanning beside selected details | Design proposal on Message width; folded into PR #3899.
+- #3666 | KEEP | P3 | studio-ux | Studio: give active content more room in narrow authoring and Settings | Narrow-layout proposal; qualification interrupted, no PR.
+- #3711 | KEEP | P3 | weaver | Route Weaver expression interpretation and edits to the owning Expression Module | Expression-module Weaver tool routing; design-level, no contract yet.
+- #3762 | KEEP | P3 | agents | [Claude] Move the draft Test Run contracts to Elsa.Workflows.Publishing.Core | #3766/#3778 only point at it; Publishing.Api coupling and source kind still to move.
+- #3821 | KEEP | P3 | state-machine | Execute a generic composable StateMachine with durable waits | M1 durable execution. Blocked until the #3820 contract is agreed, so it should not be picked up.
+- #3822 | KEEP | P3 | state-machine | Execute and inspect hierarchical state lifecycles | M1 hierarchical lifecycles. Blocked by #3820.
+- #3823 | KEEP | P3 | state-machine | Execute and inspect compatible transitions in parallel regions | M2 parallel regions. Blocked by #3820/#3821.
+- #3824 | KEEP | P3 | state-machine | Author and inspect root, hierarchical and parallel StateMachines in Studio | Studio authoring/inspection. Blocked by #3820.
+- #3851 | KEEP | P3 | simplification | Studio: prototype compact labeled fields in Create secret across themes and states | Owner-authorized prototype spike; PR #3857 ready.
+- #3876 | KEEP | P3 | simplification | Studio: separate and simplify Secrets creation and editing with tabs | Tabbed Secrets editor; WIP draft PR #3878.
+- #3880 | KEEP | P3 | studio-ux | Make runtime Inputs compact and value-first | Compact Inputs; draft PR #3881.
+- #3916 | KEEP | P3 | entity-aware-integrations | Optional business-record backend for process applications | Registry names it as explicit follow-on; no Ready state by design.
+- #3920 | KEEP | P3 | simplification | Publishing Core: move the startup publishing authorization contract and share the default- | Contract still in Publishing.Api; same pattern as #3762, merge candidates.
+- #3932 | KEEP | P3 | ci | CI: qualify an isolated ephemeral Azure Actions runner | Azure runner pilot; PR #3934.
+- #3962 | KEEP | P3 | studio-ux | Studio UX polish — standing weekly | Owner-authorized track and parent of the folded checklist. It is a recurring log, which is not a hygiene exception: move per-run logs to #2631 once the children close.
+- #3967 | KEEP | P3 | studio-ux | Studio polish (POLISH-015): Decisions empty state inconsistent with Agents | Decisions empty state, re-confirmed as DEC-001. Make it the canonical "Decisions collection states" issue and absorb #3985.
+- #3974 | KEEP | P3 | runtime (http) | Feature request: OpenAPI document for workflow HTTP endpoint triggers | Real OpenAPI gap for HTTP triggers; triaged as todo by lead.

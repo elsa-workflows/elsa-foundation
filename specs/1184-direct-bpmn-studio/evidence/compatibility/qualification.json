@@ -1,0 +1,44 @@
+{
+  "hostSource": "5618ed377594d6cd8428fdd3ff37cca357004722",
+  "studioSource": "358ec420eba311fbab3d0949eb445fa930914a19",
+  "containsMain": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3",
+  "applicationCodeDiffBetweenSources": [],
+  "wholeFrontendSource": "11437c0bd2c0ee9d1dbf0a6bcc926f2f4672cd1a",
+  "frontendCodeUnchangedSinceWholeRun": true,
+  "focusedTests": {
+    "actualHost": 16,
+    "domain": 87,
+    "interchange": 47,
+    "failed": 0,
+    "skipped": 0,
+    "verifierControls": 29
+  },
+  "backendWholeStores": 72,
+  "studio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "358ec420eba311fbab3d0949eb445fa930914a19",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false
+  },
+  "wholeStores": 84,
+  "originalFrozenAssetsUnchanged": 104,
+  "fullReviewRounds": 0,
+  "tasksComplete": 19,
+  "tasksTotal": 39,
+  "checksDeferredToStableCandidate": [
+    "full architecture/composition",
+    "API/ApiCompat/package magnitude",
+    "full affected final regression",
+    "independent full-PR review",
+    "exact-head required CI and resulting-main gates"
+  ],
+  "diagnostics": "Initial browser locators were corrected to use the definition link, Run executable label, Details tab and explicit Start Test Run. Functional pre-readiness runs are retained separately; final captures wait for visible evidence and friendly source labels. No product code changed during these corrections; host products were reused."
+}

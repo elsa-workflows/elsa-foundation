@@ -1,0 +1,148 @@
+[
+  {
+    "label": "baseline-ProviderPostgreSql-ModeDurable-Activities100-r2",
+    "commands": 163,
+    "queries": [
+      {
+        "Key": "SELECT _.\"Family\", _.\"DatabaseIdentity\", _.\"FinalizedVersion\", _.\"FinishHistoryJson\", _.\"FinishJson\", _.\"HistoryJson\", _.\"HoldsJson\", _.\"IntentJson\", _.\"Revision\", _.\"SchemaVersion\" FROM \"__ElsaSchemaFinalization_ElsaRuntime\" AS _ WHERE _.\"Family\" = @family LIMIT 2",
+        "Value": 78
+      },
+      {
+        "Key": "SELECT _.\"Family\", _.\"DatabaseIdentity\", _.\"FinalizedVersion\", _.\"FinishHistoryJson\", _.\"FinishJson\", _.\"HistoryJson\", _.\"HoldsJson\", _.\"IntentJson\", _.\"Revision\", _.\"SchemaVersion\" FROM \"__ElsaSchemaFinalization_ElsaRuntime\" AS _",
+        "Value": 27
+      },
+      {
+        "Key": "UPDATE \"__ElsaSchemaFinalization_ElsaRuntime\" SET \"FinishJson\" = @p0, \"Revision\" = @p1 WHERE \"Family\" = @p2 AND \"Revision\" = @p3;",
+        "Value": 26
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_scheduler_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_durable_value_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_activity_execution_hierarchy AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_hold_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_activation_slot AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_post_commit_outbox AS e WHERE e.\"SchemaVersion\" NOT IN ('1.0.0', '2.0.0')",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_run_health_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_alteration_job AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_trigger_binding AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_recurring_trigger_schedule AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_durable_timer AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_executable_source_reference AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_scheduler_poison AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_executable_coordination AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_activity_execution_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_background_activity_work AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_execution_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_bookmark_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_executable AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_execution_liveness_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_executable_activity_template_hash_claim AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_recurring_schedule_projection_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_activity_execution_inspection AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_incident_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_executable_root_write_lease AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_scheduler_work_item AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_checkpoint_commit AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_test_scope AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_executable_activity_template AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_alteration_plan AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_trigger_binding_projection_state AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      },
+      {
+        "Key": "SELECT count(*) FROM elsa_runtime_workflow_dispatch AS e WHERE e.\"SchemaVersion\" <> '1.0.0'",
+        "Value": 1
+      }
+    ]
+  }
+]

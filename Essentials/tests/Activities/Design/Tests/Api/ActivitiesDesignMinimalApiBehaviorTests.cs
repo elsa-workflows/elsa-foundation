@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Tests.Api.Support;
+using Elsa.Activities.Design.Api.Commands;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +10,49 @@ namespace Elsa.Activities.Design.Tests.Api;
 /// <summary>Executable HTTP behavior bites for the post-migration Minimal API owner.</summary>
 public sealed class ActivitiesDesignMinimalApiBehaviorTests
 {
+    [Theory]
+    [InlineData("Definitions.Add")]
+    [InlineData("Definitions.AddDraft")]
+    [InlineData("Drafts.ConflictCopy")]
+    public async Task Authoring_wire_envelopes_bind_node_presentation_and_refuse_duplicate_identities(string operation)
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == operation);
+        const string body = """{"category":"Tests","displayName":"Reusable","expectedSourceRevision":1,"contract":{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[]},"provider":{"providerKey":"test","schemaVersion":"1","payload":{}},"layout":[],"activityPresentation":[{"nodeId":"n","displayName":"  Review  "}]}""";
+        using var request = Request(route, "trusted-success", body);
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var payload = host.Seams.LastCommand switch
+        {
+            CreateReusableActivityDefinition command => command.ActivityPresentation,
+            CreateReusableActivityDraft command => command.ActivityPresentation,
+            CreateReusableActivityDraftConflictCopy command => command.ActivityPresentation,
+            _ => throw new InvalidOperationException("The expected authoring command was not dispatched.")
+        };
+        Assert.Equal("Review", Assert.Single(payload!.Records).DisplayName);
+        var dispatched = host.Seams.LastCommand;
+        using var invalidRequest = Request(route, "trusted-success", body.Replace("{\"nodeId\":\"n\",\"displayName\":\"  Review  \"}", "{\"nodeId\":\"n\",\"displayName\":\"A\"},{\"nodeId\":\"n\",\"displayName\":\"B\"}", StringComparison.Ordinal));
+        using var invalidResponse = await host.Client.SendAsync(invalidRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+        Assert.Same(dispatched, host.Seams.LastCommand);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Replacement_body_binding_preserves_omitted_versus_explicit_empty_node_presentation(bool explicitEmpty)
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == "Drafts.Replace");
+        const string body = """{"expectedRevision":1,"contract":{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[]},"provider":{"providerKey":"test","schemaVersion":"1","payload":{}},"layout":[]}""";
+        using var request = Request(route, "trusted-success", explicitEmpty ? body[..^1] + ",\"activityPresentation\":[]}" : body);
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var command = Assert.IsType<ReplaceReusableActivityDraft>(host.Seams.LastCommand);
+        if (explicitEmpty) Assert.Empty(command.ActivityPresentation!.Records);
+        else Assert.Null(command.ActivityPresentation);
+    }
+
     public static TheoryData<string, string> CreatedRoutes => new()
     {
         { "Definitions.Add", "/design/activities/definitions/capture" },
@@ -89,6 +133,25 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
         Assert.Contains("\"errorCode\":\"capture.domain-conflict\"", body, StringComparison.Ordinal);
         Assert.Contains("\"status\":409", body, StringComparison.Ordinal);
         Assert.Contains("\"title\":\"Capture domain conflict\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unavailable_usage_returns_a_typed_503_with_recovery_and_no_usage_rows()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == "Versions.Dependencies");
+        using var request = Request(route, "trusted-dependency-unavailable");
+
+        using var response = await host.Client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var problem = document.RootElement;
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(503, problem.GetProperty("status").GetInt32());
+        Assert.Equal("activity.dependency.unavailable", problem.GetProperty("errorCode").GetString());
+        Assert.Equal("retry", problem.GetProperty("recovery").GetProperty("relation").GetString());
+        Assert.False(problem.TryGetProperty("items", out _));
+        Assert.False(problem.TryGetProperty("count", out _));
     }
 
     [Fact]

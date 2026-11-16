@@ -28,6 +28,15 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSqlFixture fixture)
 {
     [SkippableFact]
+    public Task PostgreSql_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
+
+    [SkippableFact]
+    public Task PostgreSql_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "PostgreSql");
+
+    [SkippableFact]
+    public Task PostgreSql_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "PostgreSql");
+
+    [SkippableFact]
     public Task PostgreSql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
         CreateContext,
@@ -63,6 +72,15 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
 public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerFixture fixture)
 {
     [SkippableFact]
+    public Task SqlServer_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
+
+    [SkippableFact]
+    public Task SqlServer_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "SqlServer");
+
+    [SkippableFact]
+    public Task SqlServer_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "SqlServer");
+
+    [SkippableFact]
     public Task SqlServer_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
         CreateContext,
@@ -91,6 +109,15 @@ public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerF
 [Collection(WorkflowsDesignMySqlFixture.CollectionName)]
 public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture fixture)
 {
+    [SkippableFact]
+    public Task MySql_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
+
+    [SkippableFact]
+    public Task MySql_workflow_library_organization_is_durable_and_bounded() => WorkflowLibraryNativeWitness.RunAsync(fixture, "MySql");
+
+    [SkippableFact]
+    public Task MySql_workflow_library_operation_keys_resolve_to_exactly_one_tag_or_view() => WorkflowLibraryNativeWitness.RunOperationKeysAsync(fixture, "MySql");
+
     [SkippableFact]
     public Task MySql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,

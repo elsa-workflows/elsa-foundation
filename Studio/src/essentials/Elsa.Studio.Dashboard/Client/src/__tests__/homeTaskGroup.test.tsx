@@ -408,6 +408,12 @@ describe("Home workflow task group", () => {
     expect(moduleOff.container.querySelector("[aria-label='Workflow tasks']")).toBeNull();
     moduleOff.unmount();
   });
+  it("hides authoring tasks on a runtime-only backend",() => {
+    const base=stubApi();const api={...base,backendSession:{capabilities:{capabilities:[{id:"elsa.api.runtime",contractVersion:"1",links:[]}]}}} as unknown as typeof base;
+    const view=mount(<AnonymousAuthProvider><HomeTaskGroup api={api} /></AnonymousAuthProvider>);
+    expect(view.container.querySelector("[aria-label='Workflow tasks']")).toBeNull();view.unmount();
+  });
+
 });
 
 function mount(node: React.ReactElement) {

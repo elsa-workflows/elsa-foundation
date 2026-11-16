@@ -1,0 +1,135 @@
+{
+  "sourceRevision": "c51023ed8eb452f88533703f0ef8ea0430f03a95",
+  "method": "Each mutation replaces the exact original text with the mutated text, runs the focused filter, restores the file with git checkout, and reruns the filter.",
+  "mutations": [
+    {
+      "mutation": "indexer-blank-line-skip",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlJsonlLineIndexer.cs",
+      "filter": "FullyQualifiedName~EtlJsonlInputTests.Line_indexer",
+      "mutated": "Failed!  - Failed:     3, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Line_indexer_frames_records_and_skips_blank_lines(name: \"blank lines only\", input:",
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Line_indexer_frames_records_and_skips_blank_lines(name: \"bom and blank gap\", input:",
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Line_indexer_frames_records_and_skips_blank_lines(name: \"leading and trailing blanks\", input:"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:    11",
+      "original": "var record = _lineBlank ? ((long, long)?)null : (_lineStart, position + 1);",
+      "mutated_text": "var record = ((long, long)?)(_lineStart, position + 1);"
+    },
+    {
+      "mutation": "line-error-routing",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~EtlJsonlInputTests.Batch_routes",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_routes_each_bad_line_as_a_record_error_and_parses_the_rest"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            return JsonlError(\"etl.jsonl.record-invalid\");",
+      "mutated_text": "            throw Invalid(\"etl.jsonl.record-invalid\", ordinal);"
+    },
+    {
+      "mutation": "zero-record-settlement",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs",
+      "filter": "FullyQualifiedName~Empty_file_preparation_settles|FullyQualifiedName~Zero_record_file_runs",
+      "mutated": "Failed!  - Failed:     5, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Zero_record_file_runs_settle_as_success_through_the_worker(kind: \"csv\", content: \"id,name\\n\")",
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Zero_record_file_runs_settle_as_success_through_the_worker(kind: \"jsonl\", content: \"\")",
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Zero_record_file_runs_settle_as_success_through_the_worker(kind: \"jsonl\", content: \"\\n \\r\\n\")",
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_file_preparation_settles_terminal_success_with_the_commit(jsonl: False)",
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_file_preparation_settles_terminal_success_with_the_commit(jsonl: True)"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     5",
+      "original": "        if (partitions.Count == 0)\n            await CompleteConnectorRunIfReadyAsync",
+      "mutated_text": "        if (partitions.Count < 0)\n            await CompleteConnectorRunIfReadyAsync"
+    },
+    {
+      "mutation": "r10-span-check",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+      "mutated": "Failed!  - Failed:     2, Passed:     3",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_building_refuses_a_hash_valid_index_whose_framing_is_wrong(variant: \"blank-span\")",
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_building_refuses_a_hash_valid_index_whose_framing_is_wrong(variant: \"line-feed-inside-span\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     5",
+      "original": "public bool ValidSpan(bool endsFile) => !_lineFeedBeforeEnd && _nonBlank && (endsFile || _last == (byte)'\\n');",
+      "mutated_text": "public bool ValidSpan(bool endsFile) => true;"
+    },
+    {
+      "mutation": "r10-gap-check",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+      "mutated": "Failed!  - Failed:     1, Passed:     4",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_building_refuses_a_hash_valid_index_whose_framing_is_wrong(variant: \"content-in-gap\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     5",
+      "original": "public bool ValidGap => !_gapInvalid && (_seen == 0 || _last == (byte)'\\n');",
+      "mutated_text": "public bool ValidGap => true;"
+    },
+    {
+      "mutation": "r10-line-start-check",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+      "mutated": "Failed!  - Failed:     1, Passed:     4",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_building_refuses_a_hash_valid_index_whose_framing_is_wrong(variant: \"mid-line-start\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     5",
+      "original": "!await PrecededByLineFeedAsync(source, entry.StartByteOffset, cancellationToken))",
+      "mutated_text": "!true)"
+    },
+    {
+      "mutation": "record-size-boundary",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_classifies_boundary_values",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (contentLength > maxRecordBytes || content is null)",
+      "mutated_text": "        if (contentLength > maxRecordBytes + 1 || content is null)"
+    },
+    {
+      "mutation": "record-ceiling-boundary",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlJsonlLineIndexer.cs",
+      "filter": "FullyQualifiedName~Preparation_accepts_a_record_count_exactly_at_its_ceiling",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Preparation_accepts_a_record_count_exactly_at_its_ceiling"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            if (scanner.RecordCount > maxRecords)",
+      "mutated_text": "            if (scanner.RecordCount >= maxRecords)"
+    },
+    {
+      "mutation": "jsonl-trailing-commas",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_classifies_boundary_values",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "mutated_text": "                AllowTrailingCommas = true,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "round": 3
+    },
+    {
+      "mutation": "jsonl-comments",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_classifies_boundary_values",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "mutated_text": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Skip,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "round": 3
+    }
+  ]
+}

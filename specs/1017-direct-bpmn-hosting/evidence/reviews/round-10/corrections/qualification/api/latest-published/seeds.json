@@ -1,0 +1,17 @@
+[
+  {
+    "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+    "version": "4.0.25-preview",
+    "commit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb"
+  },
+  {
+    "package_id": "Elsa.Workflows.Runtime",
+    "version": "4.0.72-preview",
+    "commit": "3bd200c098ec8bd7d4816f17757cde9389ed854a"
+  },
+  {
+    "package_id": "Elsa.Workflows.Runtime.Core",
+    "version": "4.0.58-preview",
+    "commit": "3bd200c098ec8bd7d4816f17757cde9389ed854a"
+  }
+]

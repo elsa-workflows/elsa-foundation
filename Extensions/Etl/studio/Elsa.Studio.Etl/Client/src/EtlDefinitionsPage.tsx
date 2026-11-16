@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
@@ -603,22 +604,15 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
 
   const selectedVersion = artifactSelection ? versions.find(version => version.selection === artifactSelection) : null;
 
-  return <section className="etl-shell etl-definitions-page" aria-labelledby={`${pageId}-heading`}>
-    <header className="etl-toolbar">
-      <div>
-        <p className="etl-editor-eyebrow">Design</p>
-        <h1 id={`${pageId}-heading`}>{profile.title}</h1>
-        <p>{profile.description}</p>
-      </div>
-      <div className="etl-actions">
-        <button type="button" className="etl-primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
+  return <section className="studio-page etl-shell etl-definitions-page" aria-labelledby={`${pageId}-heading`}>
+    <StudioPageHeader headingLevel={1} title={<>{profile.title}</>} titleId={`${pageId}-heading`} description={<>Design</>} actions={<><div className="studio-page-actions">
+        <StudioButton type="button" variant="primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
           {mutation === "creating" ? "Creating draft…" : "New definition"}
-        </button>
-        <button type="button" disabled={!contextIsLoaded || definitionsLoading} onClick={refreshDefinitions}>
+        </StudioButton>
+        <StudioButton type="button" disabled={!contextIsLoaded || definitionsLoading} onClick={refreshDefinitions}>
           {definitionsLoading && visibleDefinitions.length > 0 ? "Refreshing…" : "Refresh definitions"}
-        </button>
-      </div>
-    </header>
+        </StudioButton>
+      </div></>} />
 
     <section className="etl-editor-section" aria-labelledby={`${pageId}-definitions`}>
       <div className="etl-editor-section-heading">

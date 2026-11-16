@@ -16,8 +16,15 @@ See the [Foundation validation guidance](https://github.com/elsa-workflows/elsa-
 - Failed:
 - Not run (why):
 
-## Screenshots
-<!-- Only for visible UI changes; include screenshots when useful. Remove this section when not applicable. -->
+## UX acceptance
+<!-- Required for UI/interaction changes. Remove for unrelated changes. Define the goal/reference/states in the issue before implementation. Follow docs/contributing/studio-ux-acceptance.md. -->
+- User goal and reference screen:
+- Observable states and risk-based coverage:
+- Reviewed PR head / tested source SHA:
+- Actions run and downloadable screenshots/ARIA/traces:
+- Independent UX reviewer and result (passed/failed/incomplete):
+- Findings, fixes and retest:
+- Not verified (why):
 
 ## Limitations
 <!-- Note known gaps or follow-up work, or write "None." -->

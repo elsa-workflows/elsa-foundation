@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "spec": "1200-etl-rabbitmq-delivery",
+  "sourceRevision": "1ac5c8e19b651daee3e5bbf931a96356a2653c4b",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "b93819bb5cf697fc3a5ca90609d1cd53a32b4d271d4c7e059e74aa6e1c960122",
+  "hostProcessId": 91543,
+  "cases": {
+    "delivered": {
+      "definition": "rabbitmq-delivered-524eac1a",
+      "selection": "etl1:rabbitmq-delivered-524eac1a:1:d0d4d67a21972cbac2f47f832613c621c6eb22a0759f3c6e3068d3fcb7bd4a5c",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 4,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "runId": "etl-cfa81226f49b6b033ba7a65fff63f4307f093375c0b6c800ebaf258636bbc1fa",
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "rabbitMq",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 4,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "diagnosticCode": null,
+      "messages": [
+        {
+          "payload": "{\"id\":3,\"name\":\"Cleo\"}",
+          "routingKey": "people.loaded",
+          "properties": {
+            "message_id": "b585426436041771710f721313b0fb51b55db1eeb3a82eb9b8d9ce53b1afc562:0",
+            "delivery_mode": 2,
+            "headers": {
+              "elsa-etl-batch-id": "3aea9f14f024cd1035e9b161aad2d31a856fe613fed0c7b829532a45df274351",
+              "elsa-etl-effect-id": "b585426436041771710f721313b0fb51b55db1eeb3a82eb9b8d9ce53b1afc562",
+              "elsa-etl-record-index": "0",
+              "elsa-etl-run-id": "etl-cfa81226f49b6b033ba7a65fff63f4307f093375c0b6c800ebaf258636bbc1fa",
+              "x-dotnet-pub-seq-no": 1
+            },
+            "content_type": "application/json"
+          }
+        },
+        {
+          "payload": "{\"id\":1,\"name\":\"Ada\"}",
+          "routingKey": "people.loaded",
+          "properties": {
+            "message_id": "5f4447e172b0a61092f5033f0b489bd272323f8962bb6efd47a78c04959eb06d:0",
+            "delivery_mode": 2,
+            "headers": {
+              "elsa-etl-batch-id": "2df26f2ed9035353ff7a9e5402e9db73bdb7af30323d46265f00f570a7d0d79f",
+              "elsa-etl-effect-id": "5f4447e172b0a61092f5033f0b489bd272323f8962bb6efd47a78c04959eb06d",
+              "elsa-etl-record-index": "0",
+              "elsa-etl-run-id": "etl-cfa81226f49b6b033ba7a65fff63f4307f093375c0b6c800ebaf258636bbc1fa",
+              "x-dotnet-pub-seq-no": 1
+            },
+            "content_type": "application/json"
+          }
+        },
+        {
+          "payload": "{\"id\":4,\"name\":\"Dee\"}",
+          "routingKey": "people.loaded",
+          "properties": {
+            "message_id": "ecc02cddac9112fb051e7220585f0eed93b5fb1b20c61af1320ad5f789b30e25:0",
+            "delivery_mode": 2,
+            "headers": {
+              "elsa-etl-batch-id": "8317b4f324859676558d239b1594d1f4409c6fb5f692b57fbae870a98f16406a",
+              "elsa-etl-effect-id": "ecc02cddac9112fb051e7220585f0eed93b5fb1b20c61af1320ad5f789b30e25",
+              "elsa-etl-record-index": "0",
+              "elsa-etl-run-id": "etl-cfa81226f49b6b033ba7a65fff63f4307f093375c0b6c800ebaf258636bbc1fa",
+              "x-dotnet-pub-seq-no": 1
+            },
+            "content_type": "application/json"
+          }
+        },
+        {
+          "payload": "{\"id\":2,\"name\":\"Bram\"}",
+          "routingKey": "people.loaded",
+          "properties": {
+            "message_id": "d6a8b4388912acdf4cde61693e2cb1bfeabf69de75632549b42348cf1e65ce34:0",
+            "delivery_mode": 2,
+            "headers": {
+              "elsa-etl-batch-id": "df4362a2be375c50c457ff4580cfb3c643083193bda424725d687810b1b05881",
+              "elsa-etl-effect-id": "d6a8b4388912acdf4cde61693e2cb1bfeabf69de75632549b42348cf1e65ce34",
+              "elsa-etl-record-index": "0",
+              "elsa-etl-run-id": "etl-cfa81226f49b6b033ba7a65fff63f4307f093375c0b6c800ebaf258636bbc1fa",
+              "x-dotnet-pub-seq-no": 1
+            },
+            "content_type": "application/json"
+          }
+        }
+      ],
+      "hostPathOrSecretInInspection": false
+    },
+    "unroutable": {
+      "definition": "rabbitmq-unroutable-ff852e3e",
+      "selection": "etl1:rabbitmq-unroutable-ff852e3e:1:233bd3ce46815a7cd3dafa959392bd8b03946194eceef39d9658e8d9b661c810",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-business-error",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "businessError",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 0,
+        "rejectedRecords": 0,
+        "outstandingRecords": 1,
+        "outstandingBytes": 177
+      },
+      "runId": "etl-7a5d401dfbbf0cbf633325fd64beae1756ef6567d75dd4321aed103735280c79",
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "rabbitMq",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 0,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "diagnosticCode": "etl.rabbitmq-unroutable",
+      "messages": [],
+      "hostPathOrSecretInInspection": false
+    }
+  },
+  "baseUrl": "http://127.0.0.1:65397",
+  "catalogRabbitMqBindings": [
+    [
+      "events",
+      "MainOutput",
+      "rabbitMq"
+    ]
+  ],
+  "checks": {
+    "catalogListsTheRabbitMqBinding": true,
+    "deliveredRunPublishedEveryRecordThroughDone": true,
+    "queueHoldsOneMessagePerRecord": true,
+    "messagesArePersistentJsonWithStableIdsAndHeaders": true,
+    "unroutableRunFailedWithItsCode": true,
+    "inspectionShowsTheRabbitMqRoute": true,
+    "noAccountingLeftAfterDelivery": true,
+    "noHostPathOrSecretInInspection": true
+  },
+  "passed": true
+}

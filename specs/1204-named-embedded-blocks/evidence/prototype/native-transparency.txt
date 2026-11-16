@@ -1,0 +1,26 @@
+seq-out-to-in-extracted-False answer=42; completed without incidents
+seq-in-to-out-extracted-False answer=42; completed without incidents
+seq-out-to-in-extracted-True answer=42; completed without incidents
+seq-in-to-out-extracted-True answer=42; completed without incidents
+flow-out-to-in-extracted-False answer=42; completed without incidents
+flow-in-to-out-extracted-False answer=42; completed without incidents
+flow-out-to-in-extracted-True answer=42; completed without incidents
+flow-in-to-out-extracted-True answer=42; completed without incidents
+bpmn-out-to-in-extracted-False answer=42; completed without incidents
+bpmn-in-to-out-extracted-False answer=42; completed without incidents
+bpmn-out-to-in-extracted-True answer=42; completed without incidents
+bpmn-in-to-out-extracted-True answer=42; completed without incidents
+loop-extracted-False counter=3; exact consumer values 1,2,3
+loop-extracted-True counter=3; exact consumer values 1,2,3
+Four genuine baseline/grouped runs held
+restart-Balanced-extracted-False resumed once after process restart; outputs intact
+restart-Balanced-extracted-True resumed once after process restart; outputs intact
+restart-Durable-extracted-False resumed once after process restart; outputs intact
+restart-Durable-extracted-True resumed once after process restart; outputs intact
+cancel-extracted-False cancelled; late delivery cannot continue
+cancel-extracted-True cancelled; late delivery cannot continue
+recover-extracted-False native dispatch fault committed; parent still waiting
+recover-extracted-True native dispatch fault committed; parent still waiting
+recover-extracted-False child and outer workflow completed; original fault retained
+recover-extracted-True child and outer workflow completed; original fault retained
+Native fault/recovery proof complete.

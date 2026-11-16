@@ -1,0 +1,262 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Nuplane": "Debug",
+      "CShells": "Information",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "Nuplane": {
+    "Setup": {
+      "AutomaticReconciliation": true,
+      "PollInterval": "00:10:00",
+      "StateFilePath": "/app/.nuplane/state.json",
+      "Feeds": [
+        {
+          "Name": "elsa-4",
+          "ServiceIndex": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json",
+          "IncludePatterns": [
+            "Elsa.Activities.Design.Api [4.0.31-preview]",
+            "Elsa.Activities.Design.Core [4.0.20-preview]",
+            "Elsa.Activities.Design.Persistence.Core [4.0.18-preview]",
+            "Elsa.Activities.Design.Persistence.EntityFrameworkCore [4.0.28-preview]",
+            "Elsa.Activities.Runtime [4.0.42-preview]",
+            "Elsa.Activities.Runtime.Core [4.0.29-preview]",
+            "Elsa.Api.AspNetCore [4.0.12-preview]",
+            "Elsa.Api.Capabilities [4.0.18-preview]",
+            "Elsa.Api.Capabilities.Core [4.0.1-preview]",
+            "Elsa.Caching.Memory [4.0.12-preview]",
+            "Elsa.Events [4.0.16-preview]",
+            "Elsa.Events.Strategies [4.0.11-preview]",
+            "Elsa.Expressions [4.0.16-preview]",
+            "Elsa.Foundation.Identity [4.0.19-preview]",
+            "Elsa.Foundation.Identity.Api [4.0.16-preview]",
+            "Elsa.Foundation.Identity.AspNetCoreIdentity [4.0.29-preview]",
+            "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore [4.0.22-preview]",
+            "Elsa.Foundation.Identity.Core [4.0.15-preview]",
+            "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore [4.0.23-preview]",
+            "Elsa.Locking.FileSystem [4.0.12-preview]",
+            "Elsa.Mediator [4.0.13-preview]",
+            "Elsa.Primitives.Hosting [4.0.12-preview]",
+            "Elsa.Serialization.SystemText [4.0.13-preview]",
+            "Elsa.Tasks [4.0.14-preview]",
+            "Elsa.Tasks.Schedules [4.0.13-preview]",
+            "Elsa.Workflows.Design.Api [4.0.35-preview]",
+            "Elsa.Workflows.Design.Core [4.0.22-preview]",
+            "Elsa.Workflows.Design.Persistence.Core [4.0.19-preview]",
+            "Elsa.Workflows.Design.Persistence.EntityFrameworkCore [4.0.32-preview]",
+            "Elsa.Workflows.Design.Reconciliation [4.0.19-preview]",
+            "Elsa.Workflows.Design.Validations [4.0.18-preview]",
+            "Elsa.Workflows.Design.Validations.Core [4.0.13-preview]",
+            "Elsa.Workflows.Publishing [4.0.47-preview]",
+            "Elsa.Workflows.Publishing.Api [4.0.32-preview]",
+            "Elsa.Workflows.Publishing.Core [4.0.23-preview]",
+            "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore [4.0.26-preview]",
+            "Elsa.Workflows.Runtime [4.0.91-preview]",
+            "Elsa.Workflows.Runtime.Api [4.0.42-preview]",
+            "Elsa.Workflows.Runtime.Core [4.0.74-preview]",
+            "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore [4.0.52-preview]",
+            "Elsa.Workflows.Runtime.Resumption [4.0.17-preview]",
+            "Elsa.Workflows.Runtime.Scheduling [4.0.19-preview]"
+          ]
+        },
+        {
+          "Name": "nuget.org",
+          "ServiceIndex": "https://api.nuget.org/v3/index.json",
+          "IncludePatterns": [
+            "Cronos [0.13.0]",
+            "DistributedLock.Core [1.0.8]",
+            "DistributedLock.FileSystem [1.0.3]",
+            "Microsoft.AspNetCore.OpenApi [10.0.10]",
+            "Microsoft.EntityFrameworkCore.Analyzers [10.0.10]",
+            "Microsoft.Extensions.Caching.Abstractions [10.0.12]",
+            "Microsoft.Extensions.Caching.Memory [10.0.10]",
+            "Microsoft.Extensions.Configuration [10.0.10]",
+            "Microsoft.Extensions.Configuration.Abstractions [10.0.10]",
+            "Microsoft.Extensions.Configuration.Binder [10.0.0]",
+            "Microsoft.Extensions.Configuration.EnvironmentVariables [10.0.10]",
+            "Microsoft.Extensions.Configuration.FileExtensions [10.0.10]",
+            "Microsoft.Extensions.Configuration.Json [10.0.10]",
+            "Microsoft.Extensions.DependencyInjection [10.0.10]",
+            "Microsoft.Extensions.DependencyInjection.Abstractions [10.0.12]",
+            "Microsoft.Extensions.Diagnostics.Abstractions [10.0.10]",
+            "Microsoft.Extensions.FileProviders.Abstractions [10.0.10]",
+            "Microsoft.Extensions.FileProviders.Physical [10.0.10]",
+            "Microsoft.Extensions.FileSystemGlobbing [10.0.10]",
+            "Microsoft.Extensions.Hosting.Abstractions [10.0.10]",
+            "Microsoft.Extensions.Logging [10.0.10]",
+            "Microsoft.Extensions.Logging.Abstractions [10.0.12]",
+            "Microsoft.Extensions.Options [10.0.10]",
+            "Microsoft.Extensions.Primitives [10.0.12]",
+            "Microsoft.OpenApi [2.7.5]",
+            "System.Text.Json [8.0.5]"
+          ]
+        },
+        {
+          "Name": "directory-witness",
+          "DirectoryPath": "/proof/packages",
+          "IncludePatterns": [
+            "Fr2Proof.*"
+          ],
+          "Directory": {
+            "Watch": true,
+            "DebounceWindow": "00:00:01"
+          }
+        }
+      ]
+    },
+    "HostProvidedPackages": [
+      "Nuplane.Abstractions",
+      "Nuplane.Loading.Abstractions",
+      "CShells.Abstractions",
+      "CShells.AspNetCore.Abstractions",
+      "CShells.FastEndpoints.Abstractions",
+      "Microsoft.EntityFrameworkCore",
+      "Microsoft.EntityFrameworkCore.Abstractions",
+      "Microsoft.EntityFrameworkCore.Relational"
+    ],
+    "Loading": {
+      "Enabled": true,
+      "SharedAssemblies": [
+        {
+          "Name": "CShells.Abstractions",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        },
+        {
+          "Name": "CShells.AspNetCore.Abstractions",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        },
+        {
+          "Name": "CShells.FastEndpoints.Abstractions",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        },
+        {
+          "Name": "Elsa.Attention.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Caching.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Cluster.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Events.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Expressions.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Locking.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Mediator.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Persistence.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Persistence.EntityFramework",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Persistence.Schema",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Pipelines.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Primitives",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Serialization.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Elsa.Tasks.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 4
+        },
+        {
+          "Name": "Microsoft.EntityFrameworkCore",
+          "PublicKeyToken": "adb9793829ddae60",
+          "MajorVersion": 10
+        },
+        {
+          "Name": "Microsoft.EntityFrameworkCore.Abstractions",
+          "PublicKeyToken": "adb9793829ddae60",
+          "MajorVersion": 10
+        },
+        {
+          "Name": "Microsoft.EntityFrameworkCore.Relational",
+          "PublicKeyToken": "adb9793829ddae60",
+          "MajorVersion": 10
+        }
+      ],
+      "DefaultLoadMode": "HostIntegrated"
+    },
+    "FeedResolution": {
+      "PackageInstallRoot": "/app/.nuplane/packages"
+    },
+    "Capabilities": {
+      "ef-provider": {
+        "Option": "Sqlite",
+        "Version": "[10.0.10]",
+        "Feed": "nuget.org"
+      }
+    },
+    "Convergence": {
+      "Manifest": {
+        "Enabled": true,
+        "Path": "/proof/config/desired.json",
+        "SchemaVersion": "1.0"
+      }
+    },
+    "LockFile": {
+      "Enabled": false
+    }
+  },
+  "Elsa": {
+    "Boot": {
+      "EagerShellActivation": {
+        "Enabled": true
+      }
+    },
+    "Shells": {
+      "ReloadOnPackageChange": true
+    },
+    "ModuleManagement": {
+      "Enabled": false,
+      "ApiKey": ""
+    }
+  }
+}

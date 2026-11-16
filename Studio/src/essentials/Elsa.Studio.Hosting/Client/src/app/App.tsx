@@ -1,10 +1,13 @@
-import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { StudioPageHeader } from "./ui";
+import { getStudioBranding } from "./runtime";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Activity,
   Blocks,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  CircleHelp,
   Ellipsis,
   ExternalLink,
   FileText,
@@ -25,6 +28,7 @@ import {
   RefreshCw,
   Search,
   Server,
+  Shield,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
@@ -37,15 +41,21 @@ import type {
   StudioNavigationContribution,
   StudioNavigationPlacement,
   StudioNavigationSection,
-  StudioPanelContribution
+  StudioWeaverPromptRequest,
+  StudioPanelContribution,
+  StudioFeatureAreaContribution,
+  StudioContributionAvailability
 } from "../sdk";
-import { isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation } from "../sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
-import { loadStudioModules } from "./loader";
-import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
+import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
+import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
+import {watchStudioModuleChanges} from "./moduleReset";
+import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
+import { ThemeProvider, useNavMode, useWorkspaceStyle } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { UserMenu } from "./components/UserMenu";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
@@ -53,6 +63,10 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { NotificationCenter } from "./ui/feedback/NotificationCenter";
+import { ToastHost } from "./ui/feedback/ToastHost";
+import { notificationController, notificationStorage } from "./notifications";
+import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
@@ -84,16 +98,24 @@ import {
 } from "./settings/settingsSections";
 import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
-import "./agent/agent.css";
+import "./themes/workspaceStyles.css";
+import { WeaverLauncher, createWeaverClient, type WeaverSessionIndicatorSession } from "./weaver";
+import "./weaver/weaverControls.css";
 import "./weaver/weaver.css";
+import { HostAuthContext } from "./auth/HostAuthContext";
+import { useWorkspaceTabs } from "./workspace/useWorkspaceTabs";
+import { WorkspaceTabStrip, type WorkspaceTabView } from "./workspace/WorkspaceTabStrip";
+import { WorkspaceTabPanels } from "./workspace/WorkspaceTabPanels";
+import { useWorkspaceShortcuts } from "./workspace/useWorkspaceShortcuts";
+import { locationPathname, resolveTabTitle, type WorkspaceTab } from "./workspace/model";
 
 const DevDisclosurePage = import.meta.env.DEV
   ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
   : null;
 const SettingsRoute = lazy(() => import("./settings/SettingsRoute").then(module => ({ default: module.SettingsRoute })));
+
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = StudioNavigationSection;
@@ -157,21 +179,30 @@ const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
 const minWorkspaceHeight = 280;
 
-function AppContent({ authManager }: { authManager: AuthProviderManager | null }) {
+type ConnectionApplicationProps = {authManager:AuthProviderManager|null;backendSession:StudioManagedBackendSession;connections:StudioConnectionController;modules:readonly StudioLoadedModule[];manifest:StudioModulesResponse};
+
+function ShellContributions({modules,api,placement,navigate}:{modules:readonly StudioLoadedModule[];api?:ElsaStudioModuleApi|null;placement:StudioShellContribution["placement"];navigate:(path:string)=>void}) {
+ const slots=api?.shell ? api.shell.compose().filter(item=>item.availability.state==="available").map(item=>item.contribution) : modules.flatMap(item=>item.instance.shell??[]).filter(item=>!item.requiresBackend?.length && (!item.availability || item.availability.state==="available"));
+ return <>{slots.filter(item=>item.placement===placement).sort((a,b)=>(a.order??500)-(b.order??500)).map(item=>{const Component=item.component;return <Component key={item.id} navigate={navigate}/>;})}</>;
+}
+
+function AppContent({ authManager,backendSession,connections,modules,manifest }: ConnectionApplicationProps) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
-  const [path, setPath] = useState(normalizePath(window.location.pathname));
+  const [registryGeneration,setRegistryGeneration]=useState(0);
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
-  const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string; requestId?: string } | null>(null);
-  const acceptedPathRef = useRef(normalizePath(window.location.pathname));
-  const acceptedLocationRef = useRef(currentRelativeLocation());
+  useNotificationScope(backendSession, notificationController, notificationStorage);
+  const [weaverSessions, setWeaverSessions] = useState<WeaverSessionIndicatorSession[]>([]);
+  const [incomingPrompt, setIncomingPrompt] = useState<(StudioWeaverPromptRequest & { id: string }) | null>(null);
+  const incomingPromptRef = useRef<(StudioWeaverPromptRequest & { id: string }) | null>(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const workspaceBaseId = useId();
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
-  const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
+  const backendBaseUrl = backendSession.profile.baseUrl;
   // The shell endpoint context (host origin) routed through the authenticated HTTP client: the manifest
   // query fetches `/_elsa/studio/modules` through this, so the boot document carries the bearer token
   // (when a user provider is configured). Anonymous boot — no provider — falls back to the plain SDK client.
@@ -181,54 +212,51 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     [authManager, shellBaseUrl]
   );
 
-  useEffect(() => {
-    const onPopState = () => {
-      const nextPath = normalizePath(window.location.pathname);
-      const nextLocation = currentRelativeLocation();
-      if (nextPath !== acceptedPathRef.current && !requestStudioNavigation(acceptedLocationRef.current, nextLocation)) {
-        window.history.pushState({}, "", acceptedLocationRef.current);
-        return;
-      }
-      acceptedPathRef.current = nextPath;
-      acceptedLocationRef.current = nextLocation;
-      setPath(nextPath);
-      if (isHomeRunDetailPath(nextPath)) recordHomeRunDetailOpened();
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const navigateTo = useCallback((nextPath: string) => {
-    if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
-    window.history.pushState({}, "", nextPath);
-    acceptedPathRef.current = normalizePath(window.location.pathname);
-    acceptedLocationRef.current = currentRelativeLocation();
-    setPath(acceptedPathRef.current);
-    if (isHomeRunDetailPath(acceptedPathRef.current)) recordHomeRunDetailOpened();
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, []);
-
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
     if (!api) return;
-    return api.ai.onPrompt(prompt => {
+    const unsubscribe = api.weaver.onPrompt(prompt => {
+      const pending = incomingPromptRef.current;
+      // React may batch synchronous dispatches before the dock consumes either. Explicitly
+      // settle the displaced intent; this transport slot is not a durable prompt queue.
+      const incoming = { ...prompt, id: `prompt-${Date.now()}-${Math.random()}` };
+      incomingPromptRef.current = incoming;
       setAssistantOpen(true);
-      setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message, requestId: prompt.requestId });
+      setIncomingPrompt(incoming);
+      if (pending?.requestId && pending.requestId !== prompt.requestId) api.weaver.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
     });
+    return () => {
+      unsubscribe();
+      const pending = incomingPromptRef.current;
+      incomingPromptRef.current = null;
+      setIncomingPrompt(null);
+      if (pending?.requestId) api.weaver.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
+    };
   }, [api]);
 
-  // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
+  const consumeIncomingPrompt = useCallback((id: string) => {
+    // The shell outlives dock and registry remounts. Retaining an attempted request here
+    // would submit it again as fresh intent when a new assistant lifetime becomes ready.
+    if (incomingPromptRef.current?.id === id) incomingPromptRef.current = null;
+    setIncomingPrompt(current => current?.id === id ? null : current);
+  }, []);
+
+  // Probe the Weaver provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
   // nothing; a failed probe is treated the same. The Weaver dock refreshes this on its own bootstrap.
   useEffect(() => {
     if (!api) return;
     let disposed = false;
-    void createAgentClient(api.backend).bootstrap()
+    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state !== "available") {
+      api.weaver.providerAvailability.set(false);
+      return;
+    }
+    void createWeaverClient(api.backend).bootstrap()
       .then(result => {
-        if (!disposed) api.ai.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
+        if (!disposed) api.weaver.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
       })
       .catch(() => {
-        if (!disposed) api.ai.providerAvailability.set(false);
+        if (!disposed) api.weaver.providerAvailability.set(false);
       });
     return () => { disposed = true; };
   }, [api]);
@@ -236,7 +264,17 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   // The boot manifest is fetched through TanStack Query, using the authenticated shell HTTP client so
   // the manifest request carries auth + management-key headers; the effect below turns manifest data
   // into a loaded registry (module loading + contribution registration are side effects, not cacheable data).
-  const manifestQuery = useStudioManifest(shellContext.http);
+  const manifestQuery = {data:manifest,isPending:false,isError:false,error:null as Error|null};
+  useEffect(() => {
+    const refresh = (event:Event) => {
+      const detail = (event as CustomEvent<{key:string;refreshed?:boolean}>).detail;
+      if (detail?.key !== backendSession.key) return;
+      if (detail.refreshed) {setModuleRegistryRevision(value => value+1);return;}
+      void backendSession.refreshCapabilities().catch(() => undefined).finally(() => setModuleRegistryRevision(value => value+1));
+    };
+    window.addEventListener(studioBackendCapabilitiesChangedEvent,refresh);
+    return () => window.removeEventListener(studioBackendCapabilitiesChangedEvent,refresh);
+  },[backendSession]);
 
   useEffect(() => {
     let disposed = false;
@@ -255,18 +293,6 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       window.removeEventListener(ModulesChangedEventName, loadThemeCapabilities);
     };
   }, [shellContext]);
-
-  // A modules-changed event re-fetches the manifest and bumps the revision so the loader effect re-runs
-  // even when the refetched manifest is structurally identical (a package may have been reconciled
-  // in place). Preserves the original "rebuild the registry on module changes" behavior.
-  useEffect(() => {
-    const onModulesChanged = () => {
-      void manifestQuery.refetch();
-      setModuleRegistryRevision(revision => revision + 1);
-    };
-    window.addEventListener(ModulesChangedEventName, onModulesChanged);
-    return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
-  }, [manifestQuery]);
 
   useEffect(() => {
     if (manifestQuery.isPending) {
@@ -294,7 +320,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         // header rides any request (ADR 0037 / #248). The manifest document itself was already fetched
         // (through the same authenticated shell context) by useStudioManifest; here we only turn it into
         // a loaded registry.
-        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager);
+        const backendContext = backendSession.context;
         const enabledFeatures = [...new Set((manifest.modules ?? []).flatMap(module => [module.id, ...(module.capabilities ?? [])]))];
         const registry = createStudioRegistry({
           hostVersion: manifest.hostVersion,
@@ -306,8 +332,12 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHttp: backendContext.http,
+          backendContext,
+          backendSession,
+          connection: connections,
+          hostSession: connections.hostIdentity,
           runtime: {
-            ...getStudioRuntimeSettings(runtimeConfig, authManager?.getSession()),
+            ...getStudioRuntimeSettings(runtimeConfig, backendSession.identity),
             enabledFeatures
           }
         });
@@ -317,14 +347,12 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           registry.diagnostics.add(diagnostic);
         }
 
-        await loadStudioModules(manifest.modules, registry, {
-          hostVersion: manifest.hostVersion,
-          sdkVersion: manifest.sdkVersion
-        });
-        registerBuiltInAgentContributions(registry);
+        await registerStudioModuleInstances(modules,registry);
+        registerBuiltInContributions(registry);
 
         if (!disposed) {
           setApi(registry);
+          setRegistryGeneration(value=>value+1);
           setState("ready");
         }
       } catch (e) {
@@ -343,9 +371,9 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authManager, backendBaseUrl, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl, modules]);
 
-  const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
+  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api, state]);
   const enabledFeatures = useMemo(() => {
     const features = new Set<string>();
     for (const module of manifestQuery.data?.modules ?? []) {
@@ -370,12 +398,84 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   );
   const access = useShellNavigationAccess(enabledFeatures);
   const settingsGroups = getSettingsSectionGroups(navigation, access);
+  const workspaceScope = useMemo(() => ({
+    origin: window.location.origin,
+    backendId: backendSession.profile.id,
+    backendBaseUrl: backendSession.profile.baseUrl,
+    subject: backendSession.identity.subject,
+    tenantId: backendSession.identity.tenantId
+  }), [backendSession]);
+  const resourceKeyOf = useCallback((location: string) => {
+    const route = findRouteForPath(routes, locationPathname(location));
+    try {
+      return route?.workspace?.resourceKey?.(new URL(location, window.location.origin)) ?? null;
+    } catch {
+      return null;
+    }
+  }, [routes]);
+  const defaultTitleOf = useCallback((location: string) => describeScreen(locationPathname(location), routes, navigation, featureAreas, settingsGroups), [featureAreas, navigation, routes, settingsGroups]);
+  const titleOfRef = useRef<(tab: WorkspaceTab) => string>(() => "Studio");
+  const workspace = useWorkspaceTabs({
+    scope: workspaceScope,
+    qualifyPath: path => connections.qualifyPath(path),
+    resourceKeyOf,
+    titleOf: tab => titleOfRef.current(tab),
+    contentRef
+  });
+  const { path, navigate: navigateTo } = workspace;
+  const tabTitleOf = useCallback((tab: WorkspaceTab) => {
+    const fallback = defaultTitleOf(tab.location);
+    return resolveTabTitle(tab, workspace.screenKeyOf(tab.location), fallback.title).title;
+  }, [defaultTitleOf, workspace]);
+  titleOfRef.current = tabTitleOf;
+  useWorkspaceShortcuts(state === "ready" ? workspace : null);
   const settingsSurface = isSettingsSurfacePath(path, navigation);
+
+  const renderScreen = useCallback((location: string) => {
+    const screenPath = locationPathname(location);
+    const screenSettingsSurface = isSettingsSurfacePath(screenPath, navigation);
+    const route = findRouteForPath(routes, screenPath);
+    const RouteComponent = route?.component;
+    const area = findFeatureAreaForPath(featureAreas, screenPath);
+    const builtIn = screenPath === "/diagnostics" || screenPath === "/diagnostics/modules" || Boolean(DevDisclosurePage && screenPath === "/dev/disclosure");
+    return (
+      <>
+        {screenSettingsSurface ? (
+          <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
+            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
+            <SettingsRoute
+              path={screenPath}
+              navigation={navigation}
+              enabledFeatures={enabledFeatures}
+              onNavigate={navigateTo}
+              renderSection={section => renderHostSettingsSection(section, api!, routes, navigateTo, themeCapabilities.managementEnabled)}
+            />
+          </Suspense>
+        ) : null}
+        {screenPath === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
+        {screenPath === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
+        {DevDisclosurePage && screenPath === "/dev/disclosure" ? (
+          <Suspense fallback={null}>
+            <DevDisclosurePage />
+          </Suspense>
+        ) : null}
+        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div> : null}
+        {!screenSettingsSurface && !RouteComponent && !builtIn ? (
+          <div className="empty-state" role="status">
+            {area
+              ? `${area.title} owns ${screenPath}, but no route component is registered for it.`
+              : `No Studio route is registered for ${screenPath}. Its module may be disabled or no longer installed; close this tab or navigate elsewhere.`}
+          </div>
+        ) : null}
+      </>
+    );
+  }, [access, api, enabledFeatures, featureAreas, navigateTo, navigation, routes, themeCapabilities.managementEnabled]);
 
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+          <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -385,15 +485,16 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <div className="error-state">{error}</div>
+          <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
+          <ShellContributions api={api} modules={modules} placement="recovery" navigate={navigateTo}/>
         </ShellFrame>
       </ThemeProvider>
     );
   }
 
   const activeRoute = findRouteForPath(routes, path);
-  const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
@@ -401,6 +502,18 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     ?? activeRoute?.label
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
+  const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
+    const fallback = defaultTitleOf(tab.location);
+    const title = resolveTabTitle(tab, workspace.screenKeyOf(tab.location), fallback.title);
+    return {
+      id: tab.id,
+      title: title.title,
+      detail: title.detail ?? (title.title === fallback.title ? fallback.detail : undefined),
+      icon: <ScreenIcon path={locationPathname(tab.location)} navigation={navigation} />,
+      pinned: tab.pinned,
+      guarded: Boolean(tab.guarded) && tab.id !== workspace.state.activeId
+    };
+  });
 
   return (
     <ThemeProvider storeContext={shellContext}>
@@ -411,44 +524,89 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
+        backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
-        assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
+        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <WeaverLauncher open={assistantOpen} sessions={weaverSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
+        contentRef={contentRef}
+        tabStrip={
+          <WorkspaceTabStrip
+            baseId={workspaceBaseId}
+            tabs={tabViews}
+            activeId={workspace.state.activeId}
+            notice={workspace.notice}
+            onDismissNotice={workspace.dismissNotice}
+            onActivate={workspace.activate}
+            onClose={workspace.close}
+            onCloseOthers={workspace.closeOthers}
+            onCloseAll={workspace.closeAll}
+            onNewTab={() => workspace.open("/", { newTab: true })}
+            onPin={workspace.setPinned}
+            onMove={workspace.move}
+          />
+        }
       >
-        {settingsSurface ? (
-          <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
-            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
-            <SettingsRoute
-              path={path}
-              navigation={navigation}
-              enabledFeatures={enabledFeatures}
-              onNavigate={navigateTo}
-              renderSection={section => renderHostSettingsSection(section, api!, routes, navigateTo, themeCapabilities.managementEnabled)}
-            />
-          </Suspense>
-        ) : null}
-        {path === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
-        {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
-        {DevDisclosurePage && path === "/dev/disclosure" ? (
-          <Suspense fallback={null}>
-            <DevDisclosurePage />
-          </Suspense>
-        ) : null}
-        {!settingsSurface && ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
-          <div className="empty-state">
-            {owningFeatureArea
-              ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
-              : `No Studio route is registered for ${path}.`}
-          </div>
-        ) : null}
+        <ToastHost navigate={navigateTo} />
+        <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
+        <WorkspaceTabPanels
+          baseId={workspaceBaseId}
+          tabs={workspace.state.tabs}
+          activeId={workspace.state.activeId}
+          renderScreen={renderScreen}
+          titleOf={tabTitleOf}
+          setTitle={workspace.setTitle}
+          isActive={workspace.isActive}
+          markPendingWork={workspace.markPendingWork}
+          onCloseTab={workspace.close}
+        />
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} />
+        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setWeaverSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );
+}
+
+/** The shell's default identity for a screen: its settings section, navigation entry or route, with a short id for resource routes. */
+export function describeScreen(
+  path: string,
+  routes: ReadonlyArray<{ path: string; label: string }>,
+  navigation: StudioNavigationContribution[],
+  featureAreas: StudioFeatureAreaContribution[],
+  settingsGroups: ReturnType<typeof getSettingsSectionGroups>
+): { title: string; detail?: string } {
+  if (isSettingsSurfacePath(path, navigation)) return { title: resolveSettingsSection(path, settingsGroups)?.label ?? "Settings" };
+  const route = findRouteForPath([...routes], path);
+  if (route && route.path.includes(":")) {
+    const segments = path.split("/").filter(Boolean);
+    const parameter = route.path.split("/").filter(Boolean).map((segment, index) => segment.startsWith(":") ? segments[index] : null).filter(Boolean).pop();
+    const value = parameter ? safeDecodeSegment(parameter) : undefined;
+    return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
+  }
+  return {
+    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
+      ?? route?.label
+      ?? findFeatureAreaForPath(featureAreas, path)?.title
+      ?? (path === "/" ? "Home" : "Studio")
+  };
+}
+
+/** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
+function safeDecodeSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function ScreenIcon({ path, navigation }: { path: string; navigation: StudioNavigationContribution[] }) {
+  if (isSettingsSurfacePath(path, navigation)) return <Settings size={14} style={{ color: navIconColors.themes }} />;
+  const item = [...navigation].reverse().find(candidate => isNavigationItemActive(candidate, path, navigation));
+  if (!item) return <FileText size={14} />;
+  return <span style={{ display: "inline-flex", color: item.iconColor ?? getDefaultNavIconColor(item.id) }}><NavIcon id={item.id} icon={item.icon} /></span>;
 }
 
 export function findRouteForPath<TRoute extends { path: string }>(routes: TRoute[], path: string) {
@@ -464,6 +622,33 @@ function routeMatchesPath(routePath: string, path: string) {
     segment.startsWith(":") || segment === pathSegments[index]);
 }
 
+/**
+ * Publishes the top bar's bottom edge as `--studio-shell-header-bottom` on the document root, so host
+ * overlays anchored below the header (toasts, the Notification Center) follow theme layouts and the
+ * stacked narrow-viewport layout instead of assuming a fixed header height. The shell itself never
+ * scrolls, so the edge only moves when the header or the main frame around it resizes.
+ */
+function useShellHeaderBottom(headerRef: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty("--studio-shell-header-bottom", `${Math.max(0, Math.round(header.getBoundingClientRect().bottom))}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(header);
+    if (header.parentElement) observer?.observe(header.parentElement);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--studio-shell-header-bottom");
+    };
+  }, [headerRef]);
+}
+
 export function ShellFrame({
   navigation,
   panels,
@@ -471,10 +656,14 @@ export function ShellFrame({
   title,
   backendBaseUrl,
   assistantAction,
+  notificationAction,
   themeAction,
   accountAction,
+  backendAction,
   enabledFeatures,
   onNavigate,
+  tabStrip,
+  contentRef,
   children
 }: {
   navigation: StudioNavigationContribution[];
@@ -483,19 +672,33 @@ export function ShellFrame({
   title: string;
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
+  notificationAction?: React.ReactNode;
   themeAction?: React.ReactNode;
   accountAction?: React.ReactNode;
+  backendAction?: React.ReactNode;
   enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
+  /** The workspace tab strip, shown between the top bar and the content area once Studio is ready. */
+  tabStrip?: React.ReactNode;
+  contentRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
-  const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+  const workspaceStyle = useWorkspaceStyle();
+  const [navCollapsedChoice, setNavCollapsedChoice] = useState<boolean | null>(() => {
+    try {
+      const saved = window.localStorage.getItem(sidebarCollapsedStorageKey);
+      return saved === "true" ? true : saved === "false" ? false : null;
+    } catch { return null; }
+  });
+  const navCollapsed = navCollapsedChoice ?? workspaceStyle === "focus";
   const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
   const [topMoreToolsOpen, setTopMoreToolsOpen] = useState(false);
   const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
   const moreToolsSectionRef = useRef<HTMLElement>(null);
   const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
+  useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
@@ -504,8 +707,12 @@ export function ShellFrame({
   const visibleNavigation = filterAccessibleNavigation(navigation, access);
 
   useEffect(() => {
-    if (navCollapsed) window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
-    else window.localStorage.removeItem(sidebarCollapsedStorageKey);
+    if (navCollapsedChoice === null) window.localStorage.removeItem(sidebarCollapsedStorageKey);
+    else window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsedChoice));
+  }, [navCollapsedChoice]);
+
+  useEffect(() => {
+    if (navCollapsed) setNavQuery("");
   }, [navCollapsed]);
 
   useEffect(() => {
@@ -513,14 +720,14 @@ export function ShellFrame({
   }, [moreToolsOpen]);
 
   useEffect(() => {
-    const onAppearanceReset = () => setNavCollapsed(false);
+    const onAppearanceReset = () => setNavCollapsedChoice(null);
     window.addEventListener(appearanceResetEventName, onAppearanceReset);
     return () => window.removeEventListener(appearanceResetEventName, onAppearanceReset);
   }, []);
 
   function toggleNavCollapsed() {
-    setNavCollapsed(current => {
-      const next = !current;
+    setNavCollapsedChoice(() => {
+      const next = !navCollapsed;
       if (next) {
         // The search box is hidden while collapsed, so drop any active filter rather than
         // leaving the nav invisibly filtered.
@@ -602,17 +809,18 @@ export function ShellFrame({
     };
   }, [dismissTopMoreTools, moreToolsExpanded, topNav]);
 
+  const branding = getStudioBranding();
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
+          <a className="brand" href={qualifyStudioBackendPath("/")} onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
-              <img src={elsaLogo} alt="" />
+              <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
             </span>
             <span className="nav-label">
-              <strong>Elsa Studio</strong>
-              <small>Foundation</small>
+              <strong>{branding.productName}</strong>
+              <small>{branding.subtitle}</small>
             </span>
           </a>
           <button
@@ -745,11 +953,16 @@ export function ShellFrame({
           <nav className="nav-section" aria-label="Settings">
             <a
               className={settingsActive ? "active" : ""}
-              href="/settings"
+              href={qualifyStudioBackendPath("/settings")}
               aria-current={settingsActive ? "page" : undefined}
               aria-label="Settings"
               title={navCollapsed ? "Settings" : undefined}
               onClick={event => {
+                if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab("/settings")) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 event.preventDefault();
                 navigateFromMainNavigation("/settings");
               }}
@@ -763,41 +976,43 @@ export function ShellFrame({
         ) : null}
 
         <div className="sidebar-footer" role="group" aria-label="Environment and account">
-          <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
+          {backendAction ?? <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
             <span className="sidebar-environment-icon" aria-hidden="true"><Server size={16} /></span>
             <span className="sidebar-environment-copy">
               <strong>Backend API</strong>
               <small>{backendHost}</small>
             </span>
-          </div>
+          </div>}
           <div className="sidebar-account">{topNav ? null : accountAction}</div>
         </div>
       </aside>
 
       <div className="main-frame">
-        <header className="topbar">
+        <header ref={topbarRef} className="topbar">
           <div>
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
+            {notificationAction}
             {assistantAction}
-            <a href="https://github.com/elsa-workflows/elsa-foundation-studio" aria-label="GitHub">
-              <Github size={18} />
-            </a>
-            <a href="https://github.com/elsa-workflows/elsa-foundation-designer" aria-label="Designer source">
-              <ExternalLink size={18} />
-            </a>
+            {branding.showHelpLink ? <a href={branding.helpUrl ?? "https://github.com/elsa-workflows/elsa-foundation"} aria-label={branding.helpUrl ? "Help" : "GitHub"}>
+              {branding.helpUrl ? <CircleHelp size={18} /> : <Github size={18} />}
+            </a> : null}
+            {branding.showPrivacyLink ? <a href={branding.privacyUrl ?? "https://docs.elsaworkflows.io"} aria-label={branding.privacyUrl ? "Privacy" : "Documentation"}>
+              {branding.privacyUrl ? <Shield size={18} /> : <ExternalLink size={18} />}
+            </a> : null}
             {themeAction}
             {accountAction}
           </div>
         </header>
-        <main className="content">{children}</main>
+        {tabStrip}
+        <main className="content" ref={contentRef}>{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
         <footer className="studio-statusbar" aria-label="Environment status">
-          <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+          {backendAction ?? <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>}
           <span>Studio / {title}</span>
         </footer>
       ) : null}
@@ -805,15 +1020,8 @@ export function ShellFrame({
   );
 }
 
-function registerBuiltInAgentContributions(api: ElsaStudioModuleApi) {
+function registerBuiltInContributions(api: ElsaStudioModuleApi) {
   registerBuiltInPropertyEditors(api);
-  api.agent.contextProviders.add(createWorkflowAgentContextProvider());
-  for (const capability of workflowAgentCapabilities) {
-    api.agent.capabilities.add(capability);
-  }
-  for (const promptStarter of workflowPromptStarters) {
-    api.agent.promptStarters.add(promptStarter);
-  }
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
@@ -1062,12 +1270,10 @@ export function Diagnostics({
   const destinations = getDiagnosticDestinations(navigation);
 
   return (
-    <section className="diagnostics-view">
+    <section className="studio-page diagnostics-view">
       <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
-        <header className="diagnostics-section-heading">
-          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
-          <p>Choose a tool for the task you need to complete.</p>
-        </header>
+        <StudioPageHeader headingLevel={2} title="Diagnostic tasks" titleId="diagnostics-index-heading"
+          description="Choose a tool for the task you need to complete." />
         {destinations.length === 0 ? (
           <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
         ) : (
@@ -1076,9 +1282,14 @@ export function Diagnostics({
               <li key={destination.id}>
                 <a
                   className="diagnostics-task-link"
-                  href={destination.path}
+                  href={qualifyStudioBackendPath(destination.path)}
                   onClick={event => {
-                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    if (event.defaultPrevented) return;
+                    if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(destination.path)) {
+                      event.preventDefault();
+                      return;
+                    }
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
                     onNavigate(destination.path);
                   }}
@@ -1296,11 +1507,16 @@ function NavItemGroup({
     <div className="nav-item-group">
       <a
         className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-        href={item.path}
+        href={qualifyStudioBackendPath(item.path)}
         aria-current={itemActive ? "page" : undefined}
         aria-label={item.label}
         title={collapsed ? item.label : undefined}
         onClick={event => {
+          if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(item.path)) {
+            event.preventDefault();
+            return;
+          }
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.path);
         }}
@@ -1316,9 +1532,14 @@ function NavItemGroup({
               <a
                 key={child.id}
                 className={childActive ? "active nav-child" : "nav-child"}
-                href={child.path}
+                href={qualifyStudioBackendPath(child.path)}
                 aria-current={childActive ? "page" : undefined}
                 onClick={event => {
+                  if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(child.path)) {
+                    event.preventDefault();
+                    return;
+                  }
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   onNavigate(child.path);
                 }}
@@ -1428,10 +1649,14 @@ export function getStudioNavigation(moduleNavigation: StudioNavigationContributi
 function renderHostSettingsSection(
   section: StudioNavigationContribution,
   api: ElsaStudioModuleApi,
-  routes: Array<{ path: string; component: React.ComponentType<{ navigate: (path: string) => void }> }>,
+  routes: Array<{ path: string; component: React.ComponentType<{ navigate: (path: string) => void }>; availability: StudioContributionAvailability }>,
   navigate: (path: string) => void,
   themeBuilderEnabled: boolean
 ) {
+  const route = findRouteForPath(routes, section.path);
+  if (route && route.availability.state !== "available") {
+    return <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div>;
+  }
   if (section.id === "modules" || section.path === "/modules") {
     return <ModuleManagementPage api={api} />;
   }
@@ -1441,7 +1666,6 @@ function renderHostSettingsSection(
   if (section.id === "package-feeds" || section.path === "/package-feeds") {
     return <PackageFeedsPage api={api} />;
   }
-  const route = findRouteForPath(routes, section.path);
   if (route?.component) {
     const Component = route.component;
     return <Component navigate={navigate} />;
@@ -1459,14 +1683,6 @@ export function getNavigationPlacementForItem(item: Pick<StudioNavigationContrib
 
 export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
   return resolveTopLevelNavigationItems(navigation, section);
-}
-
-function normalizePath(path: string) {
-  if (path.length > 1 && path.endsWith("/")) {
-    return path.slice(0, -1);
-  }
-
-  return path;
 }
 
 function currentRelativeLocation() {
@@ -1520,6 +1736,16 @@ function getInitialBoolean(storageKey: string, fallback: boolean) {
 }
 
 export function App() {
+  useEffect(() => {
+    const branding = getStudioBranding();
+    document.title = branding.productName;
+    if (branding.faviconUrl) {
+      const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]') ?? document.createElement("link");
+      icon.rel = "icon";
+      icon.href = branding.faviconUrl;
+      document.head.append(icon);
+    }
+  }, []);
   // Create the auth manager once per shell instance: null means no provider is configured, so the shell
   // boots anonymously (no login, no bearer token). When configured, the same manager instance backs both
   // the session provider (via StudioAuthBoundary) and the authenticated HTTP client passed to AppContent.
@@ -1536,10 +1762,79 @@ export function App() {
   // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
   return (
     <StudioAuthBoundary manager={authManager}>
-      <QueryProvider>
-        <AppContent authManager={authManager} />
-        <DialogHost />
-      </QueryProvider>
+      <StableHostApplication authManager={authManager} />
     </StudioAuthBoundary>
   );
+}
+
+function StableHostApplication({authManager}:{authManager:AuthProviderManager|null}) {
+  const {session} = useAuthContext();
+  const scope = JSON.stringify([session.status,session.subject,session.tenantId]);
+  const initial = useRef(scope);
+  useEffect(() => {if (initial.current !== scope) window.location.reload();},[scope]);
+  if (initial.current !== scope) return <p role="status">Your Studio identity changed. Reloading connections…</p>;
+  return <QueryProvider><BackendApplication authManager={authManager} /><DialogHost /></QueryProvider>;
+}
+
+function BackendApplication({authManager}:{authManager:AuthProviderManager|null}) {
+ const hostAuth=useAuthContext();
+ const [hostContext]=useState(()=>createStudioEndpointContext(window.location.origin,authManager));
+ const manifestQuery=useStudioManifest(hostContext.http);
+ const [boot,setBoot]=useState<{modules:StudioLoadedModule[];connection:StudioConnectionController;manifest:StudioModulesResponse}|null>(null);
+ const [error,setError]=useState<string|null>(null);
+ const [resetPending,setResetPending]=useState(false);
+ const [hostIdentity]=useState(hostAuth.session);
+ useEffect(()=>{
+  if(!manifestQuery.data)return;
+  let owned:typeof boot=null;
+  const abort=new AbortController();
+  const configuration=getStudioRuntimeConfig();
+  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
+   .then(result=>{
+    if(abort.signal.aborted){for(const {instance} of [...result.instances].reverse())disposeStudioModuleInstance(instance);return;}
+    const connection=result.instances.find(item=>item.instance.connection)?.instance.connection
+     ?? new ConfiguredBackendConnection(hostContext,hostIdentity,authManager,resolveRuntimeBaseUrl(configuration.backendBaseUrl,window.location.origin),configuration.backendId);
+    owned={modules:result.instances,connection,manifest:{...manifestQuery.data!,diagnostics:[...manifestQuery.data!.diagnostics,...result.diagnostics]}};
+    setBoot(owned);
+   }).catch(e=>{if(!abort.signal.aborted)setError(e instanceof Error?e.message:String(e));});
+  return ()=>{
+   abort.abort();
+   if(owned){
+    if(!owned.modules.some(item=>item.instance.connection===owned!.connection))owned.connection.dispose?.();
+    for(const {instance} of [...owned.modules].reverse())disposeStudioModuleInstance(instance);
+   }
+  };
+ },[manifestQuery.data,hostContext,hostIdentity,authManager]);
+ useEffect(()=>{
+  const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
+  return ()=>reset.dispose();
+ },[boot]);
+ return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{if(!boot?.connection.getSnapshot().active?.pendingWrites && requestStudioNavigation(currentRelativeLocation(),"/"))window.location.assign("/");}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
+}
+
+function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {
+ const hostAuth=useAuthContext();
+ const snapshot=useSyncExternalStore(connections.subscribe,connections.getSnapshot);
+ const [initializationError,setInitializationError]=useState<string|null>(null);
+ const [initialized,setInitialized]=useState(false);
+ useEffect(()=>{
+  let mounted=true;
+  void connections.initialize().then(()=>{if(mounted)setInitialized(true);}).catch(error=>{if(mounted)setInitializationError(error instanceof Error?error.message:String(error));});
+  const stopRestore=reloadConnectionOnPageRestore(connections);
+  return()=>{mounted=false;stopRestore();};
+ },[connections]);
+ const navigate=(path:string)=>window.location.assign(path);
+ if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
+ {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ </ShellFrame></ThemeProvider>;
+ const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
+ return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
+}
+
+function SelectedBackendApplication(props:ConnectionApplicationProps) {
+ const {session}=useAuthContext();const {backendSession}=props;
+ const changed=session.status!==backendSession.identity.status || session.subject!==backendSession.identity.subject || session.tenantId!==backendSession.identity.tenantId;
+ useEffect(()=>{if(changed)window.location.reload();},[changed]);
+ if(changed)return <p role="status">Your backend identity changed. Reloading the connection…</p>;
+ return <AppContent {...props}/>;
 }

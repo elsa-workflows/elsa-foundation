@@ -12,6 +12,7 @@ interface ActivityDefinitionDraftJsonProjection {
     payload: unknown;
   };
   layout: ActivityDefinitionLayoutRecord[];
+  activityPresentation: NonNullable<ActivityDefinitionDraftView["activityPresentation"]>;
 }
 
 export type ApplyActivityDefinitionDraftJsonResult =
@@ -56,6 +57,21 @@ export function applyActivityDefinitionDraftJson(
   }
   const layoutError = validateLayout(value.layout);
   if (layoutError) return { error: layoutError };
+  const presentation = value.activityPresentation ?? current.activityPresentation ?? [];
+  if (!Array.isArray(presentation)) return { error: "Activity presentation must be an array." };
+  const presentationIds = new Set<string>();
+  for (const record of presentation) {
+    if (!isRecord(record) || typeof record.nodeId !== "string" || !record.nodeId.trim() || presentationIds.has(record.nodeId)) {
+      return { error: "Activity presentation requires unique, non-blank nodeId values." };
+    }
+    presentationIds.add(record.nodeId);
+    for (const [field, limit] of [["displayName", 200], ["description", 2_000]] as const) {
+      const text = record[field];
+      if (text !== null && text !== undefined && (typeof text !== "string" || text.trim().length > limit)) {
+        return { error: `Activity ${field} must be text of at most ${limit} characters or null.` };
+      }
+    }
+  }
   if (value.presentationLabel !== null &&
       value.presentationLabel !== undefined &&
       typeof value.presentationLabel !== "string") {
@@ -67,10 +83,17 @@ export function applyActivityDefinitionDraftJson(
 
   const payload = structuredClone(implementation.payload);
   let layout = structuredClone(value.layout);
+  let activityPresentation = presentation.map(record => ({
+    nodeId: record.nodeId as string,
+    displayName: (record.displayName as string | null | undefined)?.trim() || null,
+    description: (record.description as string | null | undefined)?.trim() || null
+  })).filter(record => record.displayName || record.description);
   if (implementation.providerKey === "elsa.activity-graph") {
     const nodeInspection = inspectActivityNodeIds(payload);
     if (nodeInspection.error) return { error: nodeInspection.error };
     layout = reconcileActivityDefinitionLayout(current.layout, layout, nodeInspection.nodeIds);
+    const activityIds = new Set(nodeInspection.activityNodeIds);
+    activityPresentation = activityPresentation.filter(record => activityIds.has(record.nodeId));
   }
   return {
     draft: {
@@ -81,6 +104,7 @@ export function applyActivityDefinitionDraftJson(
         payload
       },
       layout,
+      activityPresentation,
       presentationLabel: value.presentationLabel ?? null,
       validation: null
     }
@@ -92,6 +116,7 @@ export function projectActivityDefinitionDraft(
 ): ActivityDefinitionDraftJsonProjection {
   return {
     presentationLabel: draft.presentationLabel ?? null,
+    activityPresentation: structuredClone(draft.activityPresentation ?? []),
     contract: structuredClone(draft.contract),
     implementation: {
       providerKey: draft.provider.providerKey,
@@ -131,7 +156,7 @@ export function reconcileActivityDefinitionLayout(
   });
 }
 
-function inspectActivityNodeIds(payload: unknown): { nodeIds: string[]; error?: string } {
+function inspectActivityNodeIds(payload: unknown): { nodeIds: string[]; activityNodeIds: string[]; error?: string } {
   const result: string[] = [];
   const seenObjects = new Set<object>();
   let error: string | undefined;
@@ -144,8 +169,8 @@ function inspectActivityNodeIds(payload: unknown): { nodeIds: string[]; error?: 
     }
     const record = value as Record<string, unknown>;
     if (typeof record.activityVersionId === "string") {
-      const nodeId = typeof record.nodeId === "string" ? record.nodeId.trim() : "";
-      if (!nodeId) {
+      const nodeId = typeof record.nodeId === "string" ? record.nodeId : "";
+      if (!nodeId.trim()) {
         error = "Every graph activity node must have a non-blank nodeId.";
         return;
       }
@@ -162,9 +187,10 @@ function inspectActivityNodeIds(payload: unknown): { nodeIds: string[]; error?: 
     ? payload.rootActivity
     : null;
   const rootNodeId = rootActivity && typeof rootActivity.nodeId === "string"
-    ? rootActivity.nodeId.trim()
+    ? rootActivity.nodeId
     : null;
   return {
+    activityNodeIds: result,
     nodeIds: rootNodeId ? result.filter(nodeId => nodeId !== rootNodeId) : result,
     ...(error ? { error } : {})
   };

@@ -55,6 +55,29 @@ public sealed class WorkbenchStudioCorsTests
     }
 
     /// <summary>
+    /// <c>Retry-After</c> is not safelisted either. The Agent API sets it on a retryable refusal (409
+    /// <c>agent.session.owned_elsewhere</c>, #3441) so Studio can say when to try again; without exposing it a
+    /// cross-origin Studio silently loses the hint and falls back to "try again shortly".
+    /// </summary>
+    [Fact]
+    public async Task Studio_origin_can_read_the_retry_after_hint()
+    {
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.Add("Origin", StudioOrigin);
+        using var response = await workbench.Client.SendAsync(request);
+
+        response.EnsureSuccessStatusCode();
+        Assert.True(
+            response.Headers.TryGetValues("Access-Control-Expose-Headers", out var exposed),
+            $"The response exposed no headers, so a cross-origin Studio cannot read a retry hint. Host output:{Environment.NewLine}{workbench.Output}");
+        Assert.Contains(
+            exposed,
+            value => value.Split(',').Any(header => header.Trim().Equals("Retry-After", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
     /// A request from an unlisted origin must not be granted the policy. Without this, a test asserting only the
     /// presence of the exposed header would still pass if the origin allow-list were widened to everything.
     /// </summary>

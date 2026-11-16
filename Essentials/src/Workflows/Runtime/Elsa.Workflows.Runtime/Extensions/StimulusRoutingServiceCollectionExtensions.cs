@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Extensions;
 
@@ -19,7 +20,8 @@ public static class StimulusRoutingServiceCollectionExtensions
         services.TryAddScoped<IStimulusRouter>(provider => new StimulusRouter(
             provider.GetRequiredService<IWorkflowTriggerBindingStore>(), provider.GetRequiredService<IGlobalBookmarkStimulusLookup>(),
             provider.GetRequiredService<IWorkflowStartDispatcher>(), provider.GetRequiredService<IBookmarkResumeDispatcher>(),
-            provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<StimulusDeliveryServices>()));
+            provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<StimulusDeliveryServices>(),
+            provider.GetService<ILogger<StimulusRouter>>()));
         return services;
     }
 }

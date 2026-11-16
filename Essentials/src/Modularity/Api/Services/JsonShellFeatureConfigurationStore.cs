@@ -8,6 +8,8 @@ using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Modularity.Api.Services;
@@ -15,7 +17,8 @@ namespace Elsa.Modularity.Api.Services;
 public sealed class JsonShellFeatureConfigurationStore(
     IWebHostEnvironment environment,
     ShellSettings shellSettings,
-    IOptions<FeatureManagementOptions> options) : IShellFeatureConfigurationStore
+    IOptions<FeatureManagementOptions> options,
+    HostBuilderContext hostContext) : IShellFeatureConfigurationStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -38,6 +41,11 @@ public sealed class JsonShellFeatureConfigurationStore(
         IReadOnlyList<FeatureConfigurationChange> features,
         CancellationToken cancellationToken = default)
     {
+        // Shell-scoped IConfiguration is CShells' read-only merged view. The standard host
+        // context retains the actual root that its configuration blueprint reads on reload.
+        if (hostContext.Configuration is not IConfigurationRoot hostConfiguration)
+            throw new InvalidOperationException("The host configuration must support reload before feature configuration can be saved.");
+
         var document = await ReadDocumentAsync(cancellationToken);
         var current = CreateSnapshot(document);
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
@@ -57,6 +65,15 @@ public sealed class JsonShellFeatureConfigurationStore(
 
         var json = document.Document.ToJsonString(JsonOptions);
         await File.WriteAllTextAsync(document.Path, json + Environment.NewLine, cancellationToken);
+        try
+        {
+            // Do not race the file watcher's asynchronous reload with the immediate shell reload.
+            hostConfiguration.Reload();
+        }
+        catch (Exception error)
+        {
+            throw new InvalidOperationException("Feature configuration was saved, but host configuration reload failed. Inspect the host configuration and reload or restart before applying further changes.", error);
+        }
 
         return CreateSnapshot(new ShellDocument(document.Path, json, document.Document));
     }

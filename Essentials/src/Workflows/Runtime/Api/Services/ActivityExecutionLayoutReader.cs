@@ -76,7 +76,12 @@ public sealed class ActivityExecutionLayoutReader(
             boundary.TemplateHash,
             nodes,
             connections,
-            nested));
+            nested)
+        {
+            ActivityPresentation = (sourceReference?.ActivityPresentation ?? [])
+                .Where(record => nodes.Any(node => StringComparer.Ordinal.Equals(node.ExecutableNodeId, record.ExecutableNodeId)))
+                .ToArray()
+        });
     }
 
     private async ValueTask<WorkflowExecutableSourceReference?> FindExecutedReferenceAsync(

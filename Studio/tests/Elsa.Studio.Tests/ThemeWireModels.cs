@@ -8,7 +8,11 @@ internal sealed record ThemeStoreResponse(StudioThemeDefinition[] Themes, string
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? DirectoryThemeIds = null);
 internal sealed record StudioThemeDefinition(string Id, string Name, string? Description, string Source, int Version,
     bool Enabled, bool Published, StudioThemeModes Modes, StudioThemeMaterial? Material,
-    string[]? SupportedModes = null, StudioThemeTypography? Typography = null, StudioThemeShape? Shape = null, string? Layout = null);
+    string[]? SupportedModes = null, StudioThemeTypography? Typography = null, StudioThemeShape? Shape = null, string? Layout = null)
+{
+    public string? WorkspaceStyle { get; init; }
+}
+internal sealed record ThemePack(int Version, StudioThemeDefinition[] Themes, object[]? Assets);
 internal sealed record StudioThemeModes(StudioThemeModeDefinition Light, StudioThemeModeDefinition Dark,
     StudioThemeModeDefinition? Dim = null, StudioThemeModeDefinition? HighContrast = null);
 internal sealed record StudioThemeTypography(string? Sans, string? Mono, string? Display);

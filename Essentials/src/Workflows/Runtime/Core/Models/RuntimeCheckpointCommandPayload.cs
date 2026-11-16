@@ -223,6 +223,10 @@ public sealed class RuntimeCheckpointCommandPayload
     public WorkflowExecutionPartition? Partition { get; }
     public WorkflowExecutionAuthoritySnapshot? Authority { get; }
 
+    /// <summary>Immutable model-owned work carried into initial native admission.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelNativeWorkOrigin? ModelWorkOrigin { get; init; }
+
     /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
     public int DispatchNestingDepth { get; }
 

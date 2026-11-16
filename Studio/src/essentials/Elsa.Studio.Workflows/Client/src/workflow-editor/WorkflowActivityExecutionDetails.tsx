@@ -1,6 +1,8 @@
-import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
+import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
+import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { ExecutableGraphNodeFacts } from "../executableGraph";
@@ -8,12 +10,13 @@ import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeA
 import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
 import { isCompensationHandlerExecution } from "../compensationRuntime";
-import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
+import { buildInputInspectionRows, evaluationPhase, evaluationSequence, inputRuntimeSnapshot, readDeclaredActivityInputs, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
 import { formatActivityVersion, formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { CopyValueButton } from "./executableShared";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -55,11 +58,15 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog,
   executableNodeFacts,
   expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
   focusInputKey = null,
   onSelectEvidence,
   refreshKey = 0,
-  compact = false
+  compact = false,
+  prepared
 }: {
+  prepared?: PreparedAttachedExecution;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -69,12 +76,16 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog: ActivityCatalogItem[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   focusInputKey?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
   const selectedContextIdentity = runtimeValueContextId(context);
+  const preparedInspection = prepared?.contextIdentity === selectedContextIdentity && prepared?.inspection?.workflowExecutionId === selectedWorkflowExecutionId
+    && prepared.inspection.activityExecutionId === selectedActivityExecutionId ? prepared.inspection : null;
   const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
     activityExecutionId: null,
     workflowExecutionId: null,
@@ -98,7 +109,8 @@ export function WorkflowActivityExecutionDetails({
     const activityExecutionId = selectedActivityExecutionId;
     const workflowExecutionId = selectedWorkflowExecutionId;
     let running = false;
-    let confirmed: number | null = null;
+    let confirmed: number | null = preparedInspection ? requestedRevision.current : null;
+    if (preparedInspection) setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" });
     const load = async () => {
       if (running || controller.signal.aborted || confirmed === requestedRevision.current) return;
       running = true;
@@ -126,7 +138,7 @@ export function WorkflowActivityExecutionDetails({
     };
     const start = () => { void load(); }; refreshInspection.current = start; start();
     return () => { controller.abort(); if (refreshInspection.current === start) refreshInspection.current = null; };
-  }, [context, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+  }, [context, preparedInspection, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
   // Live revisions coalesce behind the current exact read; identity changes still cancel it immediately.
   useEffect(() => { refreshInspection.current?.(); }, [refreshKey]);
 
@@ -135,14 +147,15 @@ export function WorkflowActivityExecutionDetails({
     inspectionState.workflowExecutionId === selectedWorkflowExecutionId &&
     inspectionState.contextIdentity === selectedContextIdentity
       ? inspectionState
+      : preparedInspection ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" }
       : selectedActivityExecutionId && selectedWorkflowExecutionId
         ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" }
         : { activityExecutionId: null, workflowExecutionId: null, contextIdentity: selectedContextIdentity, status: "idle", inspection: null, error: "" };
   const resolutionScope = useMemo(
     () => selectedActivityExecutionId && selectedWorkflowExecutionId
-      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId }
+      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, preparedValues: preparedInspection ? prepared?.values : undefined }
       : null,
-    [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
+    [context, prepared, preparedInspection, selectedActivityExecutionId, selectedWorkflowExecutionId]);
 
   if (!activity) {
     return (
@@ -251,6 +264,7 @@ export function WorkflowActivityExecutionDetails({
       </section>
       {executionNavigation}
       {childExecutions}
+      <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
       {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
         <h4>Incidents</h4>
         {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
@@ -371,14 +385,6 @@ function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionIn
   );
 }
 
-function readDeclaredActivityInputs(inputs: unknown[] | undefined): StudioActivityInputDescriptor[] {
-  return (inputs ?? []).filter((input): input is StudioActivityInputDescriptor => {
-    if (!input || typeof input !== "object") return false;
-    const record = input as Record<string, unknown>;
-    return typeof record.name === "string" && typeof record.typeName === "string";
-  });
-}
-
 function ActivityMetadataValue({
   label,
   value,
@@ -446,7 +452,7 @@ function WorkflowActivityInputEvidence({
           Inputs
           {rows.length > 0 ? <span className="wf-runtime-evidence-count" aria-label={`${rows.length} inputs`}>{rows.length}</span> : null}
         </h4>
-        <span className="wf-input-inspection-caption">Evaluated at runtime</span>
+        <span className="wf-input-inspection-caption">Runtime values</span>
       </header>
       {state.status === "loading" ? <p>Loading runtime input evidence...</p> : null}
       {state.status === "failed" ? (
@@ -488,7 +494,6 @@ function InputInspectionRowCard({
   inspectionStatus: ActivityExecutionInspectionState["status"];
 }) {
   const latest = row.latestEvaluation;
-  const sourceKind = row.authoredSource?.expressionType || row.compiledBinding?.source || "No source";
   // The input's declaration counts as much as the per-record flags: a masked input (a password hint, or declared
   // sensitive or secret-only) shows nothing of its authored source but the name of a Secret Reference it is bound
   // to, even when the backend did not flag the record. Any other source stays hidden, and so does a masked input's
@@ -499,31 +504,36 @@ function InputInspectionRowCard({
   const sourceProtected = isProtectedSourceAccess(sourceAccess) || isProtectedSourceAccess(row.authoredSource?.accessState ?? row.authoredSource?.access) || !!row.authoredSource?.isSensitive || !!row.compiledBinding?.isSensitive || !!latest?.isSensitive
     || (masked && !secretReference);
   const regionId = useId();
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  const summaryRef = useRef<HTMLElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const focusDetailsButton = () => rowRef.current?.querySelector<HTMLButtonElement>(".wf-input-inspection-info")?.focus();
+  const closeDetailsOnEscape = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape" || event.defaultPrevented || !detailsOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDetailsOpen(false);
+    focusDetailsButton();
+  };
 
   useEffect(() => {
     if (!focusInput) return;
-    const details = detailsRef.current;
-    const summary = summaryRef.current;
-    if (!details || !summary) return;
-    details.open = true;
+    setDetailsOpen(true);
     const frame = requestAnimationFrame(() => {
-      summary.focus();
-      summary.scrollIntoView?.({ block: "nearest" });
+      const button = rowRef.current?.querySelector<HTMLButtonElement>(".wf-input-inspection-info");
+      button?.focus();
+      button?.scrollIntoView?.({ block: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusInput, row.rowKey]);
 
-  const sensitiveInput = masked || row.authoredSource?.isSensitive || row.compiledBinding?.isSensitive;
-  const runtimeSnapshot = latest && sensitiveInput && !latest.isSensitive ? { ...latest, isSensitive: true } : latest;
+  const runtimeSnapshot = inputRuntimeSnapshot(row);
 
   return (
-    <div className="wf-runtime-input wf-input-inspection-row" role="listitem">
+    <div ref={rowRef} className="wf-runtime-input wf-input-inspection-row" role="listitem">
       <div className="wf-input-inspection-value-row">
         <div className="wf-input-inspection-identity">
           <strong className="wf-input-inspection-name">{row.name}</strong>
-          <small className="wf-input-inspection-type" title={row.declaredType}>{shortTypeName(row.declaredType) || "Unknown type"}</small>
         </div>
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
@@ -532,43 +542,57 @@ function InputInspectionRowCard({
             </p>
           )}
         </div>
+        <StudioButton
+          variant="ghost"
+          size="sm"
+          className="wf-input-inspection-info"
+          aria-label={`Technical details for ${row.name}`}
+          title={`Technical details for ${row.name}`}
+          aria-expanded={detailsOpen}
+          aria-controls={regionId}
+          onClick={() => setDetailsOpen(open => !open)}
+          onKeyDown={closeDetailsOnEscape}
+        >
+          <Info size={16} aria-hidden="true" />
+        </StudioButton>
       </div>
-      <details ref={detailsRef} className="wf-input-inspection-disclosure">
-        <summary ref={summaryRef} tabIndex={0} className="wf-input-inspection-summary" aria-controls={regionId}>
-          <ChevronRight size={14} aria-hidden="true" />
-          <span>Source &amp; diagnostics</span>
-          <small>{sourceProtected ? (isProtectedSourceAccess(sourceAccess) ? "Source hidden" : "Protected source") : sourceKind}</small>
-        </summary>
-        <div id={regionId} className="wf-input-inspection-content">
-          <section className="wf-input-inspection-detail wf-input-inspection-source" aria-label={`${row.name} authored source`}>
-            <h5>Authored source</h5>
-            <AuthoredInputSource
-              row={row}
-              source={shownSource}
-              compiledBindingShown={!masked}
-              sourceAccess={sourceAccess}
-              protectedSource={sourceProtected}
-              expressionEditors={expressionEditors}
-            />
-          </section>
-          <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
-            <h5>Capture details</h5>
-            {latest ? (
-              <dl className="wf-input-inspection-metadata">
-                {[
-                  ["Type", row.declaredType || "Unknown type"],
-                  ["Capture", formatCaptureMode(latest.captureMode)],
-                  ["Captured", formatDate(latest.capturedAt)],
-                  ...(evaluationPhase(latest) ? [["Phase", formatCaptureMode(evaluationPhase(latest)!)]] : []),
-                  ...(typeof evaluationSequence(latest) === "number" ? [["Sequence", String(evaluationSequence(latest))]] : [])
-                ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-              </dl>
-            ) : <p>No runtime evaluation was recorded.</p>}
-            {row.states.length > 0 ? <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p> : null}
-            {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
-          </section>
-        </div>
-      </details>
+      <div
+        id={regionId}
+        role="region"
+        aria-label={`${row.name} technical details`}
+        className="wf-input-inspection-content"
+        hidden={!detailsOpen}
+        onKeyDown={closeDetailsOnEscape}
+      >
+        <section className="wf-input-inspection-detail wf-input-inspection-source" aria-label={`${row.name} authored source`}>
+          <h5>Authored source</h5>
+          <AuthoredInputSource
+            row={row}
+            source={shownSource}
+            compiledBindingShown={!masked}
+            sourceAccess={sourceAccess}
+            protectedSource={sourceProtected}
+            expressionEditors={expressionEditors}
+          />
+        </section>
+        <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
+          <h5>Capture details</h5>
+          <dl className="wf-input-inspection-metadata">
+            {[
+              ["Type", row.declaredType || "Unknown type"],
+              ...(latest ? [
+                ["Capture", formatCaptureMode(latest.captureMode)],
+                ["Captured", formatDate(latest.capturedAt)],
+                ...(evaluationPhase(latest) ? [["Phase", formatCaptureMode(evaluationPhase(latest)!)]] : []),
+                ...(typeof evaluationSequence(latest) === "number" ? [["Sequence", String(evaluationSequence(latest))]] : [])
+              ] : [])
+            ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          </dl>
+          {!latest ? <p>No runtime evaluation was recorded.</p> : null}
+          {row.states.length > 0 ? <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p> : null}
+          {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
+        </section>
+      </div>
     </div>
   );
 }

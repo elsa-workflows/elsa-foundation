@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Upload;
 

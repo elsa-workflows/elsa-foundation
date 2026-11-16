@@ -227,7 +227,8 @@ describe("conversion disclosure on property rows", () => {
     });
 
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Method editor']")!.click());
-    const dialog = container.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
+    const dialog = document.body.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
+    expect(container.contains(dialog)).toBe(false);
     expect(dialog.querySelector(".wf-conversion-control")).not.toBeNull();
 
     const trigger = dialog.querySelector<HTMLButtonElement>(".wf-conversion-control .wf-syntax-picker-trigger")!;

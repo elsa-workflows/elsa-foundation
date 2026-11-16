@@ -1,0 +1,99 @@
+{
+  "libraryHead": "63e4c1fc48be2b99505f0c26eb2aae46ff2c5d26",
+  "valid60SecondWindows": 32,
+  "failedAttempts": 0,
+  "allSettled": true,
+  "series": [
+    {
+      "case": {
+        "label": "diag-durable-on-same-r1",
+        "database": "eff_i67_diag_durable_on_same_r1",
+        "mode": "Durable",
+        "diagnostics": "On",
+        "placement": "same-device"
+      },
+      "stopReason": "PlateauAtClients8",
+      "peakClients": 8,
+      "peakRate": 5.3,
+      "c1Rate": 2.75,
+      "requestAttemptsIncludingWarmup": 1354,
+      "samplerErrors": 0
+    },
+    {
+      "case": {
+        "label": "diag-durable-off-same-r1",
+        "database": "eff_i67_diag_durable_off_same_r1",
+        "mode": "Durable",
+        "diagnostics": "Off",
+        "placement": "same-device"
+      },
+      "stopReason": "PlateauAtClients16",
+      "peakClients": 16,
+      "peakRate": 11.35,
+      "c1Rate": 2.933,
+      "requestAttemptsIncludingWarmup": 3110,
+      "samplerErrors": 0
+    },
+    {
+      "case": {
+        "label": "diag-durable-on-separate-r2",
+        "database": "eff_i67_diag_durable_on_separate_r2",
+        "mode": "Durable",
+        "diagnostics": "On",
+        "placement": "separate-device"
+      },
+      "stopReason": "AllLevelsCompleted",
+      "peakClients": 32,
+      "peakRate": 12.733,
+      "c1Rate": 2.967,
+      "requestAttemptsIncludingWarmup": 4018,
+      "samplerErrors": 0
+    },
+    {
+      "case": {
+        "label": "diag-balanced-off-same-r2",
+        "database": "eff_i67_diag_balanced_off_same_r2",
+        "mode": "Balanced",
+        "diagnostics": "Off",
+        "placement": "same-device"
+      },
+      "stopReason": "PlateauAtClients32",
+      "peakClients": 32,
+      "peakRate": 22.95,
+      "c1Rate": 4.767,
+      "requestAttemptsIncludingWarmup": 7003,
+      "samplerErrors": 0
+    },
+    {
+      "case": {
+        "label": "diag-balanced-on-same-r2",
+        "database": "eff_i67_diag_balanced_on_same_r2",
+        "mode": "Balanced",
+        "diagnostics": "On",
+        "placement": "same-device"
+      },
+      "stopReason": "PlateauAtClients16",
+      "peakClients": 8,
+      "peakRate": 6.783,
+      "c1Rate": 4.25,
+      "requestAttemptsIncludingWarmup": 2334,
+      "samplerErrors": 0
+    },
+    {
+      "case": {
+        "label": "diag-balanced-on-separate-r2",
+        "database": "eff_i67_diag_balanced_on_separate_r2",
+        "mode": "Balanced",
+        "diagnostics": "On",
+        "placement": "separate-device"
+      },
+      "stopReason": "PlateauAtClients32",
+      "peakClients": 16,
+      "peakRate": 22.617,
+      "c1Rate": 4.883,
+      "requestAttemptsIncludingWarmup": 6994,
+      "samplerErrors": 0
+    }
+  ],
+  "caveat": "Single exploratory closed-loop ramp per configuration, not repeated estimates or an SLO. Separate placement also changes diagnostic device speed. WAL deltas cover driver windows and asynchronous statistics, not exact per-execution cost."
+}

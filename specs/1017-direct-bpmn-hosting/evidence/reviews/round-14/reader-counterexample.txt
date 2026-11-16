@@ -1,0 +1,9 @@
+state/io: System.IO.IOException; same-cause=True; inner=; message=injected authoritative read I/O
+state/unrequested-cancel: System.OperationCanceledException; same-cause=True; inner=; message=injected read cancellation
+state/requested-cancel: System.OperationCanceledException; same-cause=False; inner=; message=The operation was canceled.
+input/io: System.IO.IOException; same-cause=True; inner=; message=injected authoritative read I/O
+input/unrequested-cancel: System.OperationCanceledException; same-cause=True; inner=; message=injected read cancellation
+input/requested-cancel: System.OperationCanceledException; same-cause=False; inner=; message=The operation was canceled.
+page/io: System.IO.IOException; same-cause=True; inner=; message=injected authoritative read I/O
+page/unrequested-cancel: System.OperationCanceledException; same-cause=True; inner=; message=injected read cancellation
+page/requested-cancel: System.OperationCanceledException; same-cause=False; inner=; message=The operation was canceled.

@@ -55,6 +55,14 @@ are built as general Elsa modules that Flowchart can use too.
 Foundation consumes released0.5.0 semantics and removes the duplicate engine with compatibility
 and deletion guards. Broader BPMN import/production objectives below remain open.
 
+The general user-task/forms dependency is implemented by
+[Program #3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688) /
+[PR #3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
+[Resulting-main qualification](../../specs/1196-user-tasks/resulting-main-qualification.md)
+includes a published native User Task worker surviving a host restart and returning its selected
+action/data once through the existing BPMN child-result contract. This adds no BPMN token semantics
+and does not close the remaining import or production objectives.
+
 ## Active objectives
 
 - [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736): refuse to import or publish BPMN whose

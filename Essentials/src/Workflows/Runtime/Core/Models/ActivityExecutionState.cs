@@ -53,6 +53,20 @@ public sealed record ActivityExecutionState(
 {
     public string InvocationId => Execution.ActivityExecutionId;
 
+    /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
+    [JsonIgnore]
+    public string OperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.OperationKey)
+        ?? NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
+    /// <summary>The forward operation this occurrence acts on, when its structural parent assigned one.</summary>
+    [JsonIgnore]
+    public string? TargetOperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.TargetOperationKey);
+
+    private string? AssignedOperationKey(string key) =>
+        NonBlank(Provenance.Metadata.GetValueOrDefault(key)) ?? NonBlank(Metadata.GetValueOrDefault(key));
+
+    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
     /// <summary>
     /// The enclosing hierarchy scope that contains this activity when the activity opens its own scope.
     /// </summary>

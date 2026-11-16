@@ -1,0 +1,5 @@
+# Expected driver signal not yet handled by the observer
+
+At sourcefe8e77ce9 the real model drain correctly refused independent cancelled-worker result consumption with RuntimeSchedulerWorkUnavailableException, code bpmn.native-work-unavailable, safe summary Native downstream cancellation remains owed. The new SDK observer had not yet caught that expected dependency signal and therefore stopped before cold recovery. This is retained diagnostic evidence, not a completed recovery pass. The observer now catches only that precise code/summary and then checks unchanged model, absent accepted receipt, the original single queued input and still-Pending ETL cancel. The controller also compares both coupled ETL stores byte-for-byte before/after the probe. Full successful restart/recovery evidence must follow at its own exact source. No production change was needed after the five round1 repairs.
+
+failure.json captures process metadata before cleanup; all listed owned children were checked absent after the controller terminated. Temporary paths/ports are provenance, not portable inputs.

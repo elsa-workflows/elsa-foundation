@@ -22,8 +22,8 @@ export function normalizeActivityPresentation(
 ): ActivityPresentationRecord[] {
   const normalized = new Map<string, ActivityPresentationRecord>();
   for (const record of records ?? []) {
-    const nodeId = record.nodeId?.trim();
-    if (!nodeId) continue;
+    const nodeId = record.nodeId;
+    if (!nodeId?.trim()) continue;
     const displayName = normalizeActivityPresentationValue(
       record.displayName,
       activityDisplayNameMaxLength

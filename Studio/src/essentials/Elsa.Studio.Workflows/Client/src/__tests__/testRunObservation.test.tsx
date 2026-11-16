@@ -36,6 +36,25 @@ beforeEach(() => {
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
+it("preserves a compilation rejection without polling a missing execution, then observes a later accepted run", async () => {
+  const rejected = { ...view, testRunId: "rejected", artifactId: null, workflowExecutionId: null, status: "Rejected", reason: "The target must have an accessible published artifact." };
+  api.run.mockRejectedValue(new Error("Workflow test run was not found."));
+  render({ testRun: { view: rejected, draftSignature: "snapshot", endpointContext: context } });
+  await settle();
+  flushSync(() => current.refresh());
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(api.run).not.toHaveBeenCalled();
+  expect(api.waits).not.toHaveBeenCalled();
+  expect(api.instance).not.toHaveBeenCalled();
+  expect(props.testRun?.view.reason).toBe(rejected.reason);
+
+  api.run.mockResolvedValue(view);
+  render({ testRun: { view, draftSignature: "snapshot", endpointContext: context } });
+  await settle();
+  expect(current.details?.instance.status).toBe("Running");
+  expect(api.run).toHaveBeenCalledTimes(1);
+});
+
 it("shares confirmed runtime state and waits, polling serially while the run is active", async () => {
   render(); await settle();
   expect(current.details?.instance.status).toBe("Running"); expect(current.status).toBe("connected");

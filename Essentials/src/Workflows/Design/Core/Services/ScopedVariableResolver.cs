@@ -90,10 +90,21 @@ public sealed class ScopedVariablePicker(ScopedVariableResolver scopedVariableRe
     public IReadOnlyList<VisibleVariable> GetVisibleVariables(WorkflowDefinitionState state, string nodeId, int maxDepth = DefaultMaxDepth)
     {
         ArgumentNullException.ThrowIfNull(state);
+        return GetVisibleVariables(state.Variables, state.RootActivity, nodeId, maxDepth);
+    }
+
+    /// <summary>Returns visibility from an owner's request-only canonical boundary without constructing a draft.</summary>
+    public IReadOnlyList<VisibleVariable> GetVisibleVariables(
+        IEnumerable<VariableDefinition> variables,
+        ActivityNode? root,
+        string nodeId,
+        int maxDepth = DefaultMaxDepth)
+    {
+        ArgumentNullException.ThrowIfNull(variables);
         ArgumentException.ThrowIfNullOrEmpty(nodeId);
 
         return scopedVariableResolver
-            .Resolve(state.Variables, state.RootActivity, maxDepth)
+            .Resolve(variables, root, maxDepth)
             .GetVisibleVariables(nodeId);
     }
 }

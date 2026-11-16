@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../../../../Persistence/Core/Elsa.Persistence.Core.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />

@@ -25,6 +25,18 @@ internal sealed class NodeHarness
         FakeTimeProvider clock,
         IWorkflowExecutionCommandExecutor executor,
         TimeSpan leaseDuration)
+        : this(nodeId, placementStore, transport, clock, new InProcessWorkflowExecutionActorProvider(executor), leaseDuration)
+    {
+    }
+
+    /// <summary>A node whose local drains run on <paramref name="local"/>, such as a real workflow runtime's mailbox.</summary>
+    public NodeHarness(
+        string nodeId,
+        IExecutionPlacementStore placementStore,
+        IExecutionCommandTransport transport,
+        FakeTimeProvider clock,
+        InProcessWorkflowExecutionActorProvider local,
+        TimeSpan leaseDuration)
     {
         NodeId = nodeId;
         Transport = transport;
@@ -33,7 +45,6 @@ internal sealed class NodeHarness
         var placementOptions = new ExecutionPlacementOptions { NodeId = nodeId, LeaseDuration = leaseDuration };
         PlacementService = new ExecutionPlacementService(placementStore, clock, placementOptions);
 
-        var local = new InProcessWorkflowExecutionActorProvider(executor);
         Provider = new DistributedWorkflowExecutionActorProvider(local, PlacementService, transport, clock);
 
         var pumpOptions = new ExecutionPlacementPumpOptions

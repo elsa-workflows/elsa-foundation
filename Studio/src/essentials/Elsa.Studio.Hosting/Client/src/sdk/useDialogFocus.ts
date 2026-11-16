@@ -28,7 +28,8 @@ export function useDialogFocus(
   dialogRef: RefObject<HTMLElement | null>,
   onEscape: (() => void) | null,
   focusDialogOnOpen = true,
-  restoreFocusFallback?: () => void
+  restoreFocusFallback?: () => void,
+  active = true
 ) {
   const onEscapeRef = useRef(onEscape);
   const restoreFocusFallbackRef = useRef(restoreFocusFallback);
@@ -41,6 +42,9 @@ export function useDialogFocus(
     capturedPreviousFocusRef.current = true;
   }
   useLayoutEffect(() => {
+    // A replaced parent dialog must relinquish keyboard containment to its child.
+    // Keep its original opener in the refs so resuming does not lose final focus restoration.
+    if (!active) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     if (focusDialogOnOpen) {
@@ -92,5 +96,5 @@ export function useDialogFocus(
       if (previouslyFocused?.isConnected) previouslyFocused.focus();
       else restoreFocusFallbackRef.current?.();
     };
-  }, [dialogRef, focusDialogOnOpen]);
+  }, [dialogRef, focusDialogOnOpen, active]);
 }

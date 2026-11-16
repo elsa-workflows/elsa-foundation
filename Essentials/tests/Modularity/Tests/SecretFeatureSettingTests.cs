@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Api;
-using Elsa.Agent.Anthropic;
-using Elsa.Agent.GitHubCopilot;
+using Elsa.Weaver.Anthropic;
+using Elsa.Weaver.GitHubCopilot;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
@@ -33,9 +33,9 @@ public sealed class SecretFeatureSettingTests
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.SigningKey) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.EncryptionKey) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.ConnectionString) },
-        { typeof(AnthropicAgentFeature), nameof(AnthropicAgentFeature.ApiKey) },
-        { typeof(GitHubCopilotAgentFeature), nameof(GitHubCopilotAgentFeature.GitHubToken) },
-        { typeof(GitHubCopilotAgentFeature), nameof(GitHubCopilotAgentFeature.RuntimeConnectionToken) },
+        { typeof(WeaverAnthropicFeature), nameof(WeaverAnthropicFeature.ApiKey) },
+        { typeof(WeaverGitHubCopilotFeature), nameof(WeaverGitHubCopilotFeature.GitHubToken) },
+        { typeof(WeaverGitHubCopilotFeature), nameof(WeaverGitHubCopilotFeature.RuntimeConnectionToken) },
         { typeof(OpenTelemetryFeature), nameof(OpenTelemetryFeature.ApiKey) },
         { typeof(WorkflowsDesignGitReconciliationFeature), nameof(WorkflowsDesignGitReconciliationFeature.Token) },
         { typeof(SecretsEntityFrameworkCoreFeature), nameof(SecretsEntityFrameworkCoreFeature.ConnectionString) },

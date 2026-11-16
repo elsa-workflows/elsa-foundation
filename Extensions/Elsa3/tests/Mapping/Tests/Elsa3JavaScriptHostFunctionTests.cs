@@ -16,8 +16,8 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3JavaScriptHostFunctionTests
 {
     [Theory]
-    [InlineData("getCorrelationId()", "elsa3CorrelationId", WorkflowInstanceExpressionParameterBinding.Members.CorrelationId)]
-    [InlineData("getWorkflowInstanceId()", "elsa3WorkflowInstanceId", WorkflowInstanceExpressionParameterBinding.Members.InstanceId)]
+    [InlineData("getCorrelationId()", "workflowCorrelationId", WorkflowInstanceExpressionParameterBinding.Members.CorrelationId)]
+    [InlineData("getWorkflowInstanceId()", "workflowInstanceId", WorkflowInstanceExpressionParameterBinding.Members.InstanceId)]
     public async Task Instance_metadata_reads_become_a_workflow_instance_parameter(string expression, string parameter, string member)
     {
         var result = await ConvertTextAsync(expression);
@@ -36,7 +36,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var value = await PortableJavaScript.EvaluateAsync(ReadExpression(result), new Dictionary<string, JsonElement>
         {
-            ["elsa3CorrelationId"] = JsonSerializer.SerializeToElement("c-1"),
+            ["workflowCorrelationId"] = JsonSerializer.SerializeToElement("c-1"),
         });
         Assert.Equal("c-1", value.GetProperty("correlationId").GetString());
         Assert.Equal("c-1", value.GetProperty("again").GetString());
@@ -51,6 +51,18 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    /// <summary>A variable whose parameter name is the one a built-in becomes is refused, not overwritten.</summary>
+    [Theory]
+    [InlineData("workflowCorrelationId", "getCorrelationId()")]
+    [InlineData("workflowInstanceId", "getWorkflowInstanceId()")]
+    public async Task A_variable_named_like_a_built_in_parameter_is_refused(string variable, string call)
+    {
+        var result = await ConvertTextAsync($"getVariable('{variable}') + {call}", new Elsa3Variable { Id = "v", Name = variable, TypeName = "String" });
+
+        Assert.False(result.Succeeded, "The variable's parameter would overwrite the built-in's.");
+        Assert.NotEmpty(result.Diagnostics);
     }
 
     [Fact]
@@ -103,8 +115,8 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var source = ReadExpression(result).Source;
-        Assert.StartsWith("(function () {\nfunction __elsa3IsNullOrEmpty(v)", source, StringComparison.Ordinal);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(source, "function __elsa3IsNullOrEmpty"));
+        Assert.StartsWith("(function () {\nfunction __isNullOrEmpty(v)", source, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(source, "function __isNullOrEmpty"));
         Assert.True((await PortableJavaScript.EvaluateAsync(ReadExpression(result))).GetBoolean());
     }
 
@@ -126,7 +138,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal(
-            "function __elsa3IsNullOrEmpty(v) { return v == null || v === \"\"; }\nreturn __elsa3IsNullOrEmpty('')",
+            "function __isNullOrEmpty(v) { return v == null || v === \"\"; }\nreturn __isNullOrEmpty('')",
             Text(Input(Node(result.Value!.State, "node"), "script")));
     }
 
@@ -143,7 +155,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Fact]
     public async Task A_script_declaring_the_prelude_name_is_ambiguous()
     {
-        var result = await ConvertTextAsync("var __elsa3IsNullOrEmpty = 1; isNullOrEmpty('')");
+        var result = await ConvertTextAsync("var __isNullOrEmpty = 1; isNullOrEmpty('')");
 
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }

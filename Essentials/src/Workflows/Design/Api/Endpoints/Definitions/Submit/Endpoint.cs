@@ -9,7 +9,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
 

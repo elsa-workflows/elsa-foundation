@@ -18,6 +18,19 @@ namespace Elsa.Activities.Design.Tests.Api;
 /// </summary>
 public sealed class ActivitiesDesignApiContractCompatibilityTests
 {
+    [Theory]
+    [InlineData(typeof(CreateReusableActivityDefinition), 7)]
+    [InlineData(typeof(CreateReusableActivityDraft), 6)]
+    [InlineData(typeof(CreateReusableActivityDraftRequest), 6)]
+    [InlineData(typeof(CreateReusableActivityDraftConflictCopy), 6)]
+    [InlineData(typeof(ReplaceReusableActivityDraft), 6)]
+    public void Node_presentation_preserves_existing_positional_constructor_and_deconstructor(Type type, int count)
+    {
+        Assert.Equal(count, Assert.Single(type.GetConstructors()).GetParameters().Length);
+        Assert.Equal(count, type.GetMethod("Deconstruct")!.GetParameters().Length);
+        Assert.NotNull(type.GetProperty("ActivityPresentation")!.SetMethod);
+    }
+
     private static readonly Type[] ContractTypes =
     [
         typeof(ActivityActionAvailabilityView),
@@ -58,6 +71,11 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityInputDefaultView),
         typeof(ActivityInputDescriptorView),
         typeof(ActivityLayoutRecordsPayload),
+        typeof(ActivityNodePresentationPayload),
+        typeof(CreateReusableActivityDraftBody),
+        typeof(CreateReusableActivityDefinitionRequest),
+        typeof(ReplaceReusableActivityDraftRequest),
+        typeof(DraftConflictCopyRequest),
         typeof(ActivityManagementPageView<>),
         typeof(ActivityManagementSnapshotView),
         typeof(ActivityOutcomeContractView),
@@ -153,16 +171,21 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityVersionDiffViewMappings)
     ];
 
+    // Additive #3922 contracts have their own explicit surface below. Keep the legacy fingerprint
+    // intact so introducing the context cannot silently ratify a change to an existing contract.
+    private static readonly Type[] ActivityDataSelectionContractTypes =
+        [typeof(ActivityDataSelectionContextRequest), typeof(ActivityDataSelectionContextResponse)];
+
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(114, ContractTypes.Length);
+        Assert.Equal(119, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
         Assert.Equal("Elsa.Activities.Design.Api", apiAssembly.GetName().Name);
 
-        foreach (var contractType in ContractTypes)
+        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes))
         {
             Assert.Same(apiAssembly, contractType.Assembly);
             Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
@@ -181,8 +204,32 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
-            ContractTypes.Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
+            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
             exported);
+    }
+
+    [Fact]
+    public void Data_context_has_the_explicit_additive_record_surface()
+    {
+        AssertRecord(typeof(ActivityDataSelectionContextRequest),
+            ("DraftId", typeof(string)), ("ContractVersion", typeof(string)), ("ExpectedBaseRevision", typeof(long)),
+            ("DocumentRevision", typeof(string)), ("Target", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionTarget)),
+            ("Query", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery)),
+            ("CurrentSnapshot", typeof(System.Text.Json.JsonElement?)), ("SnapshotHash", typeof(string)));
+        AssertRecord(typeof(ActivityDataSelectionContextResponse),
+            ("ContractVersion", typeof(string)), ("State", typeof(string)), ("Code", typeof(string)),
+            ("ResourceKind", typeof(string)), ("ResourceId", typeof(string)), ("BaseRevision", typeof(string)),
+            ("DocumentRevision", typeof(string)), ("SnapshotHash", typeof(string)), ("ContextRevision", typeof(string)),
+            ("Analysis", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis)));
+
+        static void AssertRecord(Type type, params (string Name, Type Type)[] fields)
+        {
+            var parameters = Assert.Single(type.GetConstructors()).GetParameters();
+            Assert.Equal(fields.Select(x => (x.Name, x.Type)), parameters.Select(x => (x.Name!, x.ParameterType)));
+            Assert.Equal(fields.OrderBy(x => x.Name), type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Select(x => (x.Name, x.PropertyType)).OrderBy(x => x.Name));
+            Assert.NotNull(type.GetMethod("Deconstruct", fields.Select(x => x.Type.MakeByRefType()).ToArray()));
+        }
     }
 
     [Fact]
@@ -205,10 +252,52 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
         // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
-        // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
+        // contracts because MinimalEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
-        Assert.Equal("33b3cd367c3c09caa8fabcb895fb66179e03ad24b229055e1edcd9f692405755", PublicShapeHash(ContractTypes));
+        // It moved for PaletteHints as an additive body init property. The existing 17-parameter
+        // constructor and deconstructor remain covered separately; palette metadata stays on the JSON wire.
+        // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
+        // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
+        // command constructors/deconstructors are retained and explicitly covered above.
+        // It moved for RuntimeActivityType as an additive body init property on ActivityAuthoringDescriptorView: the declared
+        // runtime type (e.g. Elsa.HttpEndpoint) a compiled node carries for a CLR activity whose catalog key is its CLR full name.
+        Assert.Equal("6413fb85c748296145925fb4272cacb8e4da10f83844d05e05c5da391c93e2ee", PublicShapeHash(ContractTypes));
+    }
+
+    [Fact]
+    public void Descriptor_palette_hints_preserve_existing_constructor_deconstructor_and_json()
+    {
+        Type[] parameters =
+        [
+            typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+            typeof(bool), typeof(string), typeof(IReadOnlyCollection<ActivityInputDescriptorView>),
+            typeof(IReadOnlyCollection<ActivityOutputDescriptorView>), typeof(IReadOnlyCollection<ActivityPortDescriptorView>),
+            typeof(System.Text.Json.JsonElement?), typeof(ActivityAuthoringTemplateView), typeof(ActivityAuthoringIntrinsicView),
+            typeof(ActivityAuthoringProvenanceView), typeof(string)
+        ];
+        var type = typeof(ActivityAuthoringDescriptorView);
+        var constructor = type.GetConstructor(parameters);
+        Assert.NotNull(constructor);
+        Assert.All(constructor.GetParameters().Skip(14), parameter => Assert.True(parameter.IsOptional));
+        Assert.NotNull(type.GetMethod("Deconstruct", parameters.Select(parameter => parameter.MakeByRefType()).ToArray()));
+        var original = (ActivityAuthoringDescriptorView)constructor.Invoke(
+        [
+            "version", "activity", "1.0.0", "Activity", null, null, "Clr", true, null,
+            Array.Empty<ActivityInputDescriptorView>(), Array.Empty<ActivityOutputDescriptorView>(), Array.Empty<ActivityPortDescriptorView>(),
+            null, new ActivityAuthoringTemplateView("activity", "version", new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(),
+                new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(), null), null, null, "workflow"
+        ]);
+        Assert.Null(original.PaletteHints);
+        var hints = System.Text.Json.JsonSerializer.SerializeToElement(new { schemaVersion = "1", resourceKinds = new[] { "Workflow" } });
+        var updated = original with { PaletteHints = hints };
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var json = System.Text.Json.JsonSerializer.Serialize(updated, options);
+        var restored = System.Text.Json.JsonSerializer.Deserialize<ActivityAuthoringDescriptorView>(json, options)!;
+        Assert.Equal(original.ActivityVersionId, restored.ActivityVersionId);
+        Assert.Equal(original.IconName, restored.IconName);
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(hints, restored.PaletteHints!.Value));
+        Assert.Null(original.PaletteHints);
     }
 
     [Fact]

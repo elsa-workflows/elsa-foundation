@@ -1,7 +1,7 @@
 using Elsa.Etl.Api;
 using Elsa.Etl.Design.Api.Models;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions;
 

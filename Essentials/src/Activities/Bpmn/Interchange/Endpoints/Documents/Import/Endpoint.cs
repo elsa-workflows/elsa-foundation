@@ -2,7 +2,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Import;
 
@@ -21,6 +21,7 @@ public sealed class Endpoint(IBpmnDocumentImporter importer) : ApiEndpoint<Impor
         importer.ImportAsync(request.Xml, new BpmnImportOptions
         {
             ProcessId = request.ProcessId,
-            NodeIdPrefix = request.NodeIdPrefix
+            NodeIdPrefix = request.NodeIdPrefix,
+            ConfirmedBindings = request.ConfirmedBindings ?? []
         }, cancellationToken);
 }

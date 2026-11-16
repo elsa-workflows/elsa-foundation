@@ -32,7 +32,7 @@ Domain: `Elsa.Etl`
   Hosts replacing a compiler capability must preserve one selected implementation for that interface.
 - **Compatibility:** V1 canonical serialization and identity remain unchanged. V2 selects its own codec;
   artifact identity includes the format version. Shared scalar/schema/mapping validation does not turn
-  HTTP records into CSV records.
+  HTTP or JSON Lines records into CSV records. A CSV destination is a file route format only.
 
 ## Draft format capabilities
 

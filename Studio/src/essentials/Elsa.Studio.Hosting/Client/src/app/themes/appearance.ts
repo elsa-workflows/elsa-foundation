@@ -1,9 +1,12 @@
 import { isThemeMode, themeModeLabels, type ThemeMode } from "./presets";
 import { isNavModePreference, navModeStorageKey, type NavModePreference } from "./navMode";
+import { getStudioRuntimeConfig } from "../runtime";
+import { isWorkspaceStyle, type WorkspaceStyle } from "./workspaceStyles";
+import { isSidebarColorPreference, sidebarColorStorageKey, type SidebarColorPreference } from "./sidebarColor";
 
 /**
- * The user's appearance choices as one model: which theme, which colour mode and where the
- * navigation sits. ThemeProvider owns the live state; this module owns the shape, the defaults,
+ * The user's appearance choices as one model: base preset, workspace style, color scheme,
+ * mode, navigation and sidebar color. ThemeProvider owns the live state; this module owns the shape, the defaults,
  * persistence and resolution, so the topbar menu and a Settings › Appearance page share one source.
  *
  * `system` is a mode preference, not a theme mode: it follows the OS contrast and colour-scheme
@@ -14,14 +17,20 @@ export type ThemeModePreference = ThemeMode | "system";
 export interface AppearancePreferences {
   /** Theme id, or null for the configured default theme. */
   themeId: string | null;
+  workspaceStyle: WorkspaceStyle | null;
+  colorSchemeId: string | null;
   mode: ThemeModePreference;
   navigation: NavModePreference;
+  sidebarColor: SidebarColorPreference;
 }
 
 export const appearanceStorageKeys = {
   themeId: "elsa-studio-theme",
+  workspaceStyle: "elsa-studio-workspace-style",
+  colorSchemeId: "elsa-studio-color-scheme",
   mode: "elsa-studio-theme-mode",
-  navigation: navModeStorageKey
+  navigation: navModeStorageKey,
+  sidebarColor: sidebarColorStorageKey
 } as const;
 
 /** Sidebar and dock keys Reset also clears. These are chrome, not theme/mode/nav preferences. */
@@ -33,11 +42,14 @@ export const appearanceChromeStorageKeys = {
   activeBottomPanel: "elsa-studio-active-bottom-panel"
 } as const;
 
-/** Every key `resetAppearancePreferences` removes. Spec and code must stay in lockstep (8 keys). */
+/** Every appearance and chrome override cleared by Reset. */
 export const appearanceResetStorageKeys = [
   appearanceStorageKeys.themeId,
+  appearanceStorageKeys.workspaceStyle,
+  appearanceStorageKeys.colorSchemeId,
   appearanceStorageKeys.mode,
   appearanceStorageKeys.navigation,
+  appearanceStorageKeys.sidebarColor,
   appearanceChromeStorageKeys.sidebarCollapsed,
   appearanceChromeStorageKeys.bottomPanelCollapsed,
   appearanceChromeStorageKeys.bottomPanelHeight,
@@ -62,8 +74,12 @@ export const appearanceModePreferences: readonly ThemeModePreference[] = [
 
 export const defaultAppearancePreferences: AppearancePreferences = {
   themeId: null,
+  workspaceStyle: "linen",
+  colorSchemeId: null,
   mode: "system",
-  navigation: "theme"
+  navigation: "theme",
+  // A dark navigation keeps its contrast against every workspace appearance.
+  sidebarColor: "dark"
 };
 
 export function isThemeModePreference(value: unknown): value is ThemeModePreference {
@@ -93,15 +109,40 @@ function safely<T>(action: () => T, fallback: T): T {
   }
 }
 
+/** Host defaults are only fallbacks; an explicit user preference always wins. */
+export function getDefaultAppearancePreferences(): AppearancePreferences {
+  const configured = getStudioRuntimeConfig().appearance;
+  return {
+    ...defaultAppearancePreferences,
+    workspaceStyle: configured?.workspaceStyle === "preset" ? null : isWorkspaceStyle(configured?.workspaceStyle) ? configured.workspaceStyle : "linen",
+    colorSchemeId: configured?.paletteId || null,
+    mode: isThemeModePreference(configured?.mode) ? configured.mode : "system",
+    navigation: isNavModePreference(configured?.navigation) ? configured.navigation : "theme"
+  };
+}
+
+/** Distinguishes a stored choice from a resolved host fallback during reconciliation. */
+export function hasStoredAppearancePreference(key: keyof AppearancePreferences, storage: PreferenceStorage | undefined = defaultStorage()): boolean {
+  return storage ? safely(() => storage.getItem(appearanceStorageKeys[key]) !== null, false) : false;
+}
+
 /** Reads stored preferences; unknown or missing values fall back to the defaults. */
 export function readAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
   const read = (key: string) => (storage ? safely(() => storage.getItem(key), null) : null);
   const mode = read(appearanceStorageKeys.mode);
   const navigation = read(appearanceStorageKeys.navigation);
+  const sidebarColor = read(appearanceStorageKeys.sidebarColor);
+  const workspaceStyle = read(appearanceStorageKeys.workspaceStyle);
+  const themeId = read(appearanceStorageKeys.themeId) || null;
+  const colorSchemeId = read(appearanceStorageKeys.colorSchemeId);
+  const defaults = getDefaultAppearancePreferences();
   return {
-    themeId: read(appearanceStorageKeys.themeId) || null,
-    mode: isThemeModePreference(mode) ? mode : defaultAppearancePreferences.mode,
-    navigation: isNavModePreference(navigation) ? navigation : defaultAppearancePreferences.navigation
+    themeId,
+    workspaceStyle: workspaceStyle === "preset" || (themeId !== null && !isWorkspaceStyle(workspaceStyle)) ? null : isWorkspaceStyle(workspaceStyle) ? workspaceStyle : defaults.workspaceStyle,
+    colorSchemeId: colorSchemeId === "@theme" ? null : colorSchemeId || (themeId ? null : defaults.colorSchemeId),
+    mode: isThemeModePreference(mode) ? mode : defaults.mode,
+    navigation: isNavModePreference(navigation) ? navigation : defaults.navigation,
+    sidebarColor: isSidebarColorPreference(sidebarColor) ? sidebarColor : defaults.sidebarColor
   };
 }
 
@@ -116,8 +157,15 @@ export function writeAppearancePreferences(
       if (preferences.themeId === null) storage.removeItem(appearanceStorageKeys.themeId);
       else storage.setItem(appearanceStorageKeys.themeId, preferences.themeId);
     }
+    for (const key of ["workspaceStyle", "colorSchemeId"] as const) {
+      const value = preferences[key];
+      if (value === null && key === "workspaceStyle") storage.setItem(appearanceStorageKeys[key], "preset");
+      else if (value === null) storage.setItem(appearanceStorageKeys[key], "@theme");
+      else if (value !== undefined) storage.setItem(appearanceStorageKeys[key], value);
+    }
     if (preferences.mode !== undefined) storage.setItem(appearanceStorageKeys.mode, preferences.mode);
     if (preferences.navigation !== undefined) storage.setItem(appearanceStorageKeys.navigation, preferences.navigation);
+    if (preferences.sidebarColor !== undefined) storage.setItem(appearanceStorageKeys.sidebarColor, preferences.sidebarColor);
   }, undefined);
 }
 
@@ -129,7 +177,7 @@ export function resetAppearancePreferences(storage: PreferenceStorage | undefine
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(appearanceResetEventName));
   }
-  return { ...defaultAppearancePreferences };
+  return getDefaultAppearancePreferences();
 }
 
 type MatchMedia = (query: string) => { matches: boolean };

@@ -1,0 +1,222 @@
+{
+  "CShells.dll": {
+    "baseline": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0",
+    "candidate": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+  },
+  "Microsoft.EntityFrameworkCore.Sqlite.dll": {
+    "baseline": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89",
+    "candidate": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89"
+  },
+  "Elsa.Attention.Core.dll": {
+    "baseline": "d1f58a5159100723496766a1a836540fe4bc8321db33d33b10d8c52250e48b84",
+    "candidate": "d1f58a5159100723496766a1a836540fe4bc8321db33d33b10d8c52250e48b84"
+  },
+  "Elsa.Tasks.Schedules.dll": {
+    "baseline": "5cad333901c9049218ee9e17352e19d7469762031c7527eb7c90f777a5fae8c3",
+    "candidate": "5cad333901c9049218ee9e17352e19d7469762031c7527eb7c90f777a5fae8c3"
+  },
+  "Elsa.Foundation.Identity.Core.dll": {
+    "baseline": "62a979f8d3a1c04feb923fe7ace560a1e196613e7a7c4edf77f442f95616f510",
+    "candidate": "62a979f8d3a1c04feb923fe7ace560a1e196613e7a7c4edf77f442f95616f510"
+  },
+  "Npgsql.EntityFrameworkCore.PostgreSQL.dll": {
+    "baseline": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf",
+    "candidate": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf"
+  },
+  "Microsoft.EntityFrameworkCore.dll": {
+    "baseline": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933",
+    "candidate": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+  },
+  "Elsa.Activities.Sequence.dll": {
+    "baseline": "705ca30771311de0d200a927e6c73d22b3bbba23584ae15cc83ba650b5d90641",
+    "candidate": "705ca30771311de0d200a927e6c73d22b3bbba23584ae15cc83ba650b5d90641"
+  },
+  "xunit.abstractions.dll": {
+    "baseline": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c",
+    "candidate": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+  },
+  "Elsa.Workflows.Design.Core.dll": {
+    "baseline": "e46684fdb535f42e834539cd7ce21cbd1be036255c4ffe6939bb697060763e15",
+    "candidate": "e46684fdb535f42e834539cd7ce21cbd1be036255c4ffe6939bb697060763e15"
+  },
+  "Perf.dll": {
+    "baseline": "02252d95c3ec2997636dfa33ae67bf9320eca7bba27d4b5b3624613b7d528ead",
+    "candidate": "02252d95c3ec2997636dfa33ae67bf9320eca7bba27d4b5b3624613b7d528ead"
+  },
+  "Microsoft.EntityFrameworkCore.Abstractions.dll": {
+    "baseline": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c",
+    "candidate": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+  },
+  "Elsa.Workflows.Runtime.Api.dll": {
+    "baseline": "27c73b87f28e4e0dfea036b8eb1d7859b0bf25c8e9a06123d58b5f7bd648435e",
+    "candidate": "27c73b87f28e4e0dfea036b8eb1d7859b0bf25c8e9a06123d58b5f7bd648435e"
+  },
+  "xunit.core.dll": {
+    "baseline": "2f7feeec8c6dec7df684c25fb80aadb292b963d09723460f03d53c5ad2088acc",
+    "candidate": "2f7feeec8c6dec7df684c25fb80aadb292b963d09723460f03d53c5ad2088acc"
+  },
+  "Elsa.Caching.Core.dll": {
+    "baseline": "a003d4dfea89838b68557dba8e2b640a6f12365a173cec389fa84525f0e4634e",
+    "candidate": "a003d4dfea89838b68557dba8e2b640a6f12365a173cec389fa84525f0e4634e"
+  },
+  "Elsa.Api.Capabilities.dll": {
+    "baseline": "2d8c2ff37e4e1c5e2b9694957148288c74ce5fd392356bcb1289b82cf2946c6e",
+    "candidate": "2d8c2ff37e4e1c5e2b9694957148288c74ce5fd392356bcb1289b82cf2946c6e"
+  },
+  "Microsoft.Extensions.DependencyModel.dll": {
+    "baseline": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd",
+    "candidate": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd"
+  },
+  "Elsa.Serialization.Core.dll": {
+    "baseline": "f74d23234aef61da00d8d106dbebb393aa86b9cbf8d8b1e2f9cdf3034f0c2bb1",
+    "candidate": "f74d23234aef61da00d8d106dbebb393aa86b9cbf8d8b1e2f9cdf3034f0c2bb1"
+  },
+  "SQLitePCLRaw.batteries_v2.dll": {
+    "baseline": "e83aed1d42d8ae806abeb02f0233a477275b82b5db92c92aa0c243255ab6a793",
+    "candidate": "e83aed1d42d8ae806abeb02f0233a477275b82b5db92c92aa0c243255ab6a793"
+  },
+  "Npgsql.dll": {
+    "baseline": "9d8db086e9eda5ff20c4a7f83fa3eae7689198f57277ff9ceea1ee3526f5fcf8",
+    "candidate": "9d8db086e9eda5ff20c4a7f83fa3eae7689198f57277ff9ceea1ee3526f5fcf8"
+  },
+  "SQLitePCLRaw.provider.e_sqlite3.dll": {
+    "baseline": "64f5e6797a789e6f212cf619cc42af3888e64df3d2ac2b35b81304e5d0945b9d",
+    "candidate": "64f5e6797a789e6f212cf619cc42af3888e64df3d2ac2b35b81304e5d0945b9d"
+  },
+  "Microsoft.EntityFrameworkCore.Relational.dll": {
+    "baseline": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e",
+    "candidate": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+  },
+  "JetBrains.Annotations.dll": {
+    "baseline": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6",
+    "candidate": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+  },
+  "Elsa.Activities.Design.Core.dll": {
+    "baseline": "92f8dfeb8c55d596cfde5224fee7d1a880153cf59ff291c0b6a1144d673a991b",
+    "candidate": "92f8dfeb8c55d596cfde5224fee7d1a880153cf59ff291c0b6a1144d673a991b"
+  },
+  "Elsa.Serialization.SystemText.dll": {
+    "baseline": "9a7d56029f83ba922540817b71d3a547446fdabfff39a5757beed0660340b454",
+    "candidate": "9a7d56029f83ba922540817b71d3a547446fdabfff39a5757beed0660340b454"
+  },
+  "Elsa.Activities.Runtime.dll": {
+    "baseline": "c9c40f077caa3afc029fc86c9896461f7ea5a14cc02c0af9514b1e7405679f7f",
+    "candidate": "c9c40f077caa3afc029fc86c9896461f7ea5a14cc02c0af9514b1e7405679f7f"
+  },
+  "Cronos.dll": {
+    "baseline": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03",
+    "candidate": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+  },
+  "Elsa.Activities.Primitives.dll": {
+    "baseline": "eb5ec40d5ef6fd84de03c567cf4169092cc1eac1862b42f6dc7ca46601d76331",
+    "candidate": "eb5ec40d5ef6fd84de03c567cf4169092cc1eac1862b42f6dc7ca46601d76331"
+  },
+  "Elsa.Cluster.InProcess.dll": {
+    "baseline": "954d6e634ef24117f20349aff20a6dd29da08c7d81932396168c5185866dd156",
+    "candidate": "954d6e634ef24117f20349aff20a6dd29da08c7d81932396168c5185866dd156"
+  },
+  "Elsa.Api.AspNetCore.dll": {
+    "baseline": "943707a4ada710fac20ecd6c96f588bcbfb333a5a58f7643d2e4c4c5289e5411",
+    "candidate": "943707a4ada710fac20ecd6c96f588bcbfb333a5a58f7643d2e4c4c5289e5411"
+  },
+  "Elsa.Workflows.Runtime.dll": {
+    "baseline": "00fa09907652e33e0e8031bcdf77e7998a937f21ebe06698e97d636d1a659baa",
+    "candidate": "f3d36e7881f62c34e0380611109194c80d90edc1d66cf647c41834af2a79283e"
+  },
+  "Elsa.Persistence.EntityFramework.dll": {
+    "baseline": "8bdeef9704a5c1a014c6844ef3892346ff0b194b49ce73d76090f20e145bd0a1",
+    "candidate": "9228a67dc195184657ad968350673749e2847efb53ec04040ed7675f9bd1efa4"
+  },
+  "Elsa.Activities.Testing.dll": {
+    "baseline": "a99771edbd2988523598a305df5d7ba7ce9716fa073f21f0960ec2377532ed21",
+    "candidate": "a99771edbd2988523598a305df5d7ba7ce9716fa073f21f0960ec2377532ed21"
+  },
+  "Elsa.Primitives.dll": {
+    "baseline": "0279084e653a4c5d8cc53099ba3eaad7e28ba0dc3a731346f297f31b69a25f24",
+    "candidate": "0279084e653a4c5d8cc53099ba3eaad7e28ba0dc3a731346f297f31b69a25f24"
+  },
+  "Elsa.Pipelines.Core.dll": {
+    "baseline": "9d12c7054d870a53a31ad625a19b194e337ece5c4e4ad222c6f01eb13f12e9bd",
+    "candidate": "9d12c7054d870a53a31ad625a19b194e337ece5c4e4ad222c6f01eb13f12e9bd"
+  },
+  "Elsa.Persistence.Schema.dll": {
+    "baseline": "9c567f849c9bab9c324d5b2ba44078f5f85f9f394eb0d0381dad6d0bc78c17d4",
+    "candidate": "9c567f849c9bab9c324d5b2ba44078f5f85f9f394eb0d0381dad6d0bc78c17d4"
+  },
+  "Elsa.Workflows.Runtime.Core.dll": {
+    "baseline": "afbbbaff0fef043ed058f71838fd0fd9b0f48a55307cae64732d913e2b456b40",
+    "candidate": "afbbbaff0fef043ed058f71838fd0fd9b0f48a55307cae64732d913e2b456b40"
+  },
+  "CShells.Abstractions.dll": {
+    "baseline": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0",
+    "candidate": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+  },
+  "Elsa.Http.dll": {
+    "baseline": "3da54376e2708ef81ef9dde68a15095788bbe73c0a828540415e2cc6607e6c62",
+    "candidate": "3da54376e2708ef81ef9dde68a15095788bbe73c0a828540415e2cc6607e6c62"
+  },
+  "xunit.execution.dotnet.dll": {
+    "baseline": "e70febe547c15f8155db3e2d95c3ba4445a59cbc21a3e7541ab22ed49d3dcf7b",
+    "candidate": "e70febe547c15f8155db3e2d95c3ba4445a59cbc21a3e7541ab22ed49d3dcf7b"
+  },
+  "NativeEndpoints.dll": {
+    "baseline": "33b9de8bc38d14d7a08ec814b5b3f6ca1c0f45feddc071228bd1c39eeb401d47",
+    "candidate": "33b9de8bc38d14d7a08ec814b5b3f6ca1c0f45feddc071228bd1c39eeb401d47"
+  },
+  "Elsa.Events.Core.dll": {
+    "baseline": "d40295962751237a1fa718a2348f2374104655c14fced2b11fec7ddf55097855",
+    "candidate": "d40295962751237a1fa718a2348f2374104655c14fced2b11fec7ddf55097855"
+  },
+  "SQLitePCLRaw.core.dll": {
+    "baseline": "1e18b89ea319bffb633ea5698d8958cdaae3de8c5ac855353c7c6ad292795403",
+    "candidate": "1e18b89ea319bffb633ea5698d8958cdaae3de8c5ac855353c7c6ad292795403"
+  },
+  "Elsa.Foundation.Identity.dll": {
+    "baseline": "6515d3f4710d7c23c6c8ad61d5962bc0fc89fbe41ed0edcaa0e8a400d7c6a79b",
+    "candidate": "6515d3f4710d7c23c6c8ad61d5962bc0fc89fbe41ed0edcaa0e8a400d7c6a79b"
+  },
+  "Elsa.Cluster.Core.dll": {
+    "baseline": "9b65e49766884f0fb418008157f6718d4556c3582629e492ea2af68eaf26477f",
+    "candidate": "9b65e49766884f0fb418008157f6718d4556c3582629e492ea2af68eaf26477f"
+  },
+  "Elsa.Mediator.Core.dll": {
+    "baseline": "edbecbb29e42ef71a1fc1407f5771a006c0cc28dcc97dfc5cb9296c582b09f10",
+    "candidate": "edbecbb29e42ef71a1fc1407f5771a006c0cc28dcc97dfc5cb9296c582b09f10"
+  },
+  "xunit.assert.dll": {
+    "baseline": "bcd9711b22d227ac8cd4c1568e72433a0f576d2ec8aae64ac508081892015b1d",
+    "candidate": "bcd9711b22d227ac8cd4c1568e72433a0f576d2ec8aae64ac508081892015b1d"
+  },
+  "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": {
+    "baseline": "f9f88e7c50a4b74b02c5e899311c422ae05f1e77f1d0ab73aabc539408c2ea6e",
+    "candidate": "f9f88e7c50a4b74b02c5e899311c422ae05f1e77f1d0ab73aabc539408c2ea6e"
+  },
+  "Elsa.Tasks.Core.dll": {
+    "baseline": "5df6ecc516e71b193c204988e9ca0f968e01704a989f0eb51fa4bb4960160b44",
+    "candidate": "5df6ecc516e71b193c204988e9ca0f968e01704a989f0eb51fa4bb4960160b44"
+  },
+  "Elsa.Expressions.Core.dll": {
+    "baseline": "0e98d58303c88153acf65d98c1982f1d1a24e14e534fa9e22e1dba82f03aa3a1",
+    "candidate": "0e98d58303c88153acf65d98c1982f1d1a24e14e534fa9e22e1dba82f03aa3a1"
+  },
+  "Microsoft.Data.Sqlite.dll": {
+    "baseline": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088",
+    "candidate": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088"
+  },
+  "Elsa.Activities.Runtime.Core.dll": {
+    "baseline": "2f26acba842b0e95bd539226879ff93de58cb5436554e5bfc1fa4ab7d7eecafa",
+    "candidate": "c69f6a059478b689309d5cc9ea25e4add39581c58172c22d2c1aa8e1eaeb4769"
+  },
+  "Elsa.Serialization.Testing.dll": {
+    "baseline": "438d19ee966e180d5eac6488a0748052dd9462df316db3db9bb2c249946627e5",
+    "candidate": "438d19ee966e180d5eac6488a0748052dd9462df316db3db9bb2c249946627e5"
+  },
+  "CShells.AspNetCore.Abstractions.dll": {
+    "baseline": "3b0062c2ad98dc96471a1cb18527855c4a06eb7220cda44c48e89e13cb816084",
+    "candidate": "3b0062c2ad98dc96471a1cb18527855c4a06eb7220cda44c48e89e13cb816084"
+  },
+  "Elsa.Http.Core.dll": {
+    "baseline": "8b1a5ede9160bc0d1860a00ce11ddb2533c1d40a41ec29fb8d8868ef830cc35c",
+    "candidate": "8b1a5ede9160bc0d1860a00ce11ddb2533c1d40a41ec29fb8d8868ef830cc35c"
+  }
+}

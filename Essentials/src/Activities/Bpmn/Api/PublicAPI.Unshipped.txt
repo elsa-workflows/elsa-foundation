@@ -1,0 +1,7 @@
+#nullable enable
+Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature
+Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature.ActivitiesBpmnHostingApiFeature() -> void
+virtual Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+MinimalEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints
+static MinimalEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!

@@ -1,0 +1,289 @@
+{
+  "sourceRevision": "1ae57d214d31ad0d58526df557e4e4f13a4ef5cf",
+  "executionId": "14mKh7PMVrH",
+  "eventName": "template-baseline-real-wait",
+  "templateId": "template-3f7a7e5e2fe74528bf96bd8693c16866",
+  "templateRevision": "e1e1892d236c402d9128d132bb06de88",
+  "template": {
+    "id": "template-3f7a7e5e2fe74528bf96bd8693c16866",
+    "name": "Actual template migration witness",
+    "description": "Retained current writer, no state seeding.",
+    "revision": "e1e1892d236c402d9128d132bb06de88",
+    "createdAt": "2026-10-30T13:36:54.155228+00:00",
+    "lastModifiedAt": "2026-10-30T13:36:54.155228+00:00",
+    "content": {
+      "state": {
+        "variables": [],
+        "rootActivity": {
+          "nodeId": "real-wait",
+          "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+          "inputs": [
+            {
+              "referenceKey": "EventName",
+              "value": {
+                "value": "template-baseline-real-wait",
+                "expressionType": "Literal"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            },
+            {
+              "referenceKey": "CanStartWorkflow",
+              "value": {
+                "value": false,
+                "expressionType": "Literal"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            },
+            {
+              "referenceKey": "CorrelationId",
+              "value": {
+                "value": {
+                  "language": "JavaScript",
+                  "source": "args.instance",
+                  "capabilityProfile": "binding-pure-v1",
+                  "resultType": {
+                    "alias": "String",
+                    "collectionKind": "single"
+                  },
+                  "parameters": {
+                    "instance": {
+                      "kind": "WorkflowInstance",
+                      "member": "instanceId"
+                    }
+                  },
+                  "options": {}
+                },
+                "expressionType": "JavaScript"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            }
+          ],
+          "outputs": [],
+          "structure": null
+        },
+        "inputs": [],
+        "outputs": [],
+        "strategyOptions": {
+          "activationStrategyType": null,
+          "incidentStrategy": null,
+          "persistenceMode": "Durable"
+        }
+      },
+      "layout": [],
+      "activityPresentation": [
+        {
+          "nodeId": "real-wait",
+          "displayName": "A real published wait",
+          "description": null
+        }
+      ]
+    }
+  },
+  "heldView": {
+    "instance": {
+      "workflowExecutionId": "14mKh7PMVrH",
+      "artifactId": "artifact-0ad24e4359c1",
+      "definitionId": "14mKh5quFos",
+      "definitionVersionId": "14mKh5qycNe",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:0ad24e4359c190b071c14cf227f3f88a69b845783aba759a7d6d6d7c05d371ef",
+      "status": "Running",
+      "runKind": "PublishedRun",
+      "subStatus": null,
+      "createdAt": "2026-10-30T13:36:54.63722+00:00",
+      "startedAt": "2026-10-30T13:36:54.63722+00:00",
+      "updatedAt": "2026-10-30T13:36:54.65457+00:00",
+      "completedAt": null,
+      "correlationId": null,
+      "parentWorkflowExecutionId": null,
+      "tenantId": "default",
+      "activityCount": 1,
+      "incidentCount": 0,
+      "sourceReferenceId": "activation-ref:publication-14mKh6HXAem",
+      "publicationId": "publication-14mKh6HXAem",
+      "slotId": "activation-slot:11:14mKh5quFos:7:default",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "14mKh5qycNe",
+      "sourceVersion": "1.0.0",
+      "activeIncidentCount": 0,
+      "blockingIncidentCount": 0
+    },
+    "activities": [
+      {
+        "activityExecutionId": "14mKh7wERJM",
+        "workflowExecutionId": "14mKh7PMVrH",
+        "executableNodeId": "real-wait",
+        "authoredActivityId": "real-wait",
+        "activityType": "Elsa.Event",
+        "activityTypeVersion": "1.0.0+1ae57d214d31ad0d58526df557e4e4f13a4ef5cf",
+        "status": "Suspended",
+        "subStatus": "BookmarkWaiting",
+        "executionSequence": 9206038193785377056,
+        "scheduledAt": "2026-10-30T13:36:54.693157+00:00",
+        "startedAt": "2026-10-30T13:36:54.706675+00:00",
+        "completedAt": null,
+        "firstCheckpointId": "checkpoint:56cc8b19a00f0d44:schedule:real-wait:activity-scheduled:14mKh7wERJM",
+        "lastCheckpointId": "checkpoint:0fef0971ecf34db1:create-bookmark:14mKh7wERJM:attempt:1:trigger:1:bookmark-created:14mKh7wERJM:attempt:1:trigger:1",
+        "lastCommittedAt": "2026-10-30T13:36:55.232606+00:00",
+        "provenance": {
+          "parentActivityExecutionId": null,
+          "schedulingActivityExecutionId": null,
+          "schedulingWorkflowExecutionId": "14mKh7PMVrH",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": null,
+          "executionScopeId": null,
+          "schedulingCause": "WorkflowStart",
+          "metadata": {}
+        },
+        "outcomeNames": [],
+        "bookmarkCount": 1,
+        "incidentCount": 0,
+        "valueSnapshotCount": 3,
+        "metadata": {}
+      }
+    ],
+    "incidents": [],
+    "outputs": {},
+    "persistenceMode": "Durable",
+    "inspectionGranularity": "activity-level",
+    "activityNextContinuationToken": null,
+    "permissions": {
+      "canManage": true,
+      "canInspectValues": true
+    }
+  },
+  "definition": {
+    "definition": {
+      "id": "14mKh5quFos",
+      "name": "Actual template migration wait",
+      "description": null,
+      "createdAt": "2026-10-30T13:36:54.182513+00:00",
+      "lastModifiedAt": "2026-10-30T13:36:54.182513+00:00",
+      "deletedAt": null,
+      "draftId": null,
+      "latestVersionId": null,
+      "latestVersion": null,
+      "versionCount": 0
+    },
+    "draftId": "14mKh5qxGdQ",
+    "version": {
+      "id": "14mKh5qycNe",
+      "version": "1.0.0",
+      "definition": {
+        "id": "14mKh5quFos",
+        "name": "Actual template migration wait",
+        "description": null,
+        "createdAt": "2026-10-30T13:36:54.182513+00:00",
+        "lastModifiedAt": "2026-10-30T13:36:54.182513+00:00",
+        "deletedAt": null,
+        "draftId": null,
+        "latestVersionId": null,
+        "latestVersion": null,
+        "versionCount": 0
+      },
+      "state": {
+        "variables": [],
+        "rootActivity": {
+          "nodeId": "real-wait",
+          "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+          "inputs": [
+            {
+              "referenceKey": "EventName",
+              "value": {
+                "value": "template-baseline-real-wait",
+                "expressionType": "Literal"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            },
+            {
+              "referenceKey": "CanStartWorkflow",
+              "value": {
+                "value": false,
+                "expressionType": "Literal"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            },
+            {
+              "referenceKey": "CorrelationId",
+              "value": {
+                "value": {
+                  "language": "JavaScript",
+                  "source": "args.instance",
+                  "capabilityProfile": "binding-pure-v1",
+                  "resultType": {
+                    "alias": "String",
+                    "collectionKind": "single"
+                  },
+                  "parameters": {
+                    "instance": {
+                      "kind": "WorkflowInstance",
+                      "member": "instanceId"
+                    }
+                  },
+                  "options": {}
+                },
+                "expressionType": "JavaScript"
+              },
+              "autoEvaluate": null,
+              "evaluatorType": null,
+              "storageDriverType": null,
+              "isSensitive": null,
+              "conversion": null
+            }
+          ],
+          "outputs": [],
+          "structure": null
+        },
+        "inputs": [],
+        "outputs": [],
+        "strategyOptions": {
+          "activationStrategyType": null,
+          "incidentStrategy": null,
+          "persistenceMode": "Durable"
+        }
+      },
+      "layout": [],
+      "activityPresentation": []
+    }
+  },
+  "publication": {
+    "publicationId": "publication-14mKh6HXAem",
+    "definitionId": "14mKh5quFos",
+    "versionId": "14mKh5qycNe",
+    "definitionVersionId": "14mKh5qycNe",
+    "artifactId": "artifact-0ad24e4359c1",
+    "slotName": "default",
+    "status": "active",
+    "sourceReferenceId": "activation-ref:publication-14mKh6HXAem",
+    "createdAt": "2026-10-30T13:36:54.275332+00:00",
+    "activatedAt": "2026-10-30T13:36:54.495545+00:00",
+    "retiredAt": null,
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:0ad24e4359c190b071c14cf227f3f88a69b845783aba759a7d6d6d7c05d371ef",
+    "rootActivityId": "real-wait",
+    "nodeCount": 1
+  },
+  "stateSeeded": false,
+  "clockEdited": false
+}

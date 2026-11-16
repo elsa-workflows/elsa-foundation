@@ -4,12 +4,17 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Elsa.Etl.Tests")]
+[assembly: InternalsVisibleTo("Elsa.Etl.Tooling")]
+[assembly: InternalsVisibleTo("Elsa.Etl.Persistence.ProviderTests")]
 
 [assembly: EfModule(
     Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEfModule.Name,
     typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignDbContext),
     HistoryModule = Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEfModule.HistoryModuleName,
     Sqlite = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignSqliteDbContext),
+    SqlServer = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignSqlServerDbContext),
+    PostgreSql = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignPostgreSqlDbContext),
+    MySql = typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignMySqlDbContext),
     DisplayName = "ETL design",
     DefaultConnectionName = Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEfModule.DefaultConnectionName,
     DefaultSqliteConnectionString = Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEfModule.DefaultSqliteConnectionString)]

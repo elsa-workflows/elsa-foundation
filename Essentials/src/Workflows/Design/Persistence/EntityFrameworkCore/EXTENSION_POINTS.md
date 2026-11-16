@@ -55,3 +55,46 @@ importing it now send the same request, and the second replays the first, keepin
 Markers written earlier fingerprint the time. They are never compared with a new request, because the
 reconciler materializes only a definition it found missing, and the permanent delete retires the marker
 together with the definition.
+
+
+## Workflow authoring templates
+
+`IWorkflowTemplateStore` (Design Persistence Core) is an optional scoped port. EF registers
+`EfWorkflowTemplateStore` by default in `AddWorkflowsDesignEntityFrameworkCore`; it stores
+`WorkflowTemplateContent` (authored state, layout and activity presentation) in the tenant-scoped
+`elsa_workflow_templates` table. Consumers are the Design template endpoints and Studio catalog.
+`ListAsync` / `FindAsync` read snapshots; `SaveAsync(DesignOperationKey, id?, name, description,
+content, expectedRevision)` and `DeleteAsync(DesignOperationKey, id, expectedRevision)` use the
+Design atomic writer. Updates/deletes require the last read revision; conflicts never overwrite.
+
+Alternative Design backends may omit the port, or register exactly one implementation with the
+same scope, snapshot, atomic-replay and revision guarantees. Explicit backend replacement removes
+EF-owned descriptors, including this port. EF refuses a pre-existing template port and startup
+refuses duplicate template registrations. The optional port is not a mandatory workflow backend
+replacement contract. No template mutation creates workflow definitions, versions or executables.
+
+`WorkflowTemplateCapabilitySource` advertises `workflow-templates`, `workflow-template` and
+`workflow-template-delete` relations only when this port is present. Studio discovers these
+relations instead of constructing routes; code-owned Blank/HTTP recipes remain client starters.
+
+
+Custom catalogs support 1000 templates per tenant. Creation uses the host's existing
+`IDistributedLockProvider` to serialize catalog admission and checks capacity inside
+the atomic write; a full catalog returns HTTP 400 before insertion. Replaying the
+last successful create, reading, updating and deleting remain available at capacity.
+The optional API returns HTTP 501 when no template store is configured.
+
+## Workflow library operation keys
+
+`EfWorkflowLibraryStore` implements the operation-key members of `IWorkflowLibraryStore` (spec 1193 FR-021). The
+`elsa_workflow_tags` and `elsa_workflow_library_views` rows gain a nullable `OperationKey` (the SHA-256 lookup hash of
+the client key, never the key itself) and an `OperationFingerprint` (the hash of the normalized create input). The
+unique index on `(ScopeKey, OperationKey)` for tags and on `(ScopeKey, OwnerHash, OperationKey)` for views scopes a key
+like the existing tag-name index: two tenants, or two owners of views, may use the same key. Unkeyed rows hold null,
+which every provider admits more than once (SQL Server through the index's `OperationKey IS NOT NULL` filter).
+
+A keyed create first rereads by its key: the same fingerprint returns the existing row and writes nothing, another
+fingerprint is a `WorkflowLibraryConflictException`. A concurrent create under the same key loses the unique index and
+returns the winner's row after the same reread. The store writer's `DesignOperationKey` stays a fresh server key, so the
+`designOperation` ledger plays no part in this recovery. The `WorkflowLibraryOperationKeys` migration adds the columns
+and indexes for SQLite, SQL Server, PostgreSQL and MySQL.

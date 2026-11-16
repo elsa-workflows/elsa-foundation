@@ -1,0 +1,8 @@
+# Implementation plan
+Use existing Workflows Design assemblies, permissions and atomic-write infrastructure. Introduce a separate template document/read-write port in Design Persistence Core and an EF adapter/table in the existing Design context. Regenerate the pre-GA Initial migrations for all four providers using repository tooling. Store authored state and layout/presentation separately from workflow lifecycle data.
+
+Add capability-advertised Design APIs and a client template catalog combining immutable built-in recipes with custom snapshots. Reuse the existing workflow editor through an explicit document adapter, with template lifecycle controls hidden and draft validation probes disabled for template identities. Use revision-aware serialized writes and preserve local state on errors. Add Save as template from the live workflow draft, and clone custom template documents into independent workflow drafts when creating.
+
+Constitution: keep Core provider-neutral, no runtime domain dependency changes, no new heavy package or project. Use existing tenant access and credential-literal validation. Template JSON is authored content, never executable activity template material. Generic workflow state remains unchanged. Public cross-assembly ports only; track APIs where enforced. Draft Model X/versioning rules are not relied on.
+
+Validation: template CRUD/revision/tenant/built-in/dependency tests; EF restart and four-provider model migrations; full affected suites; real owned Workbench API journey; rendered browser create/save/edit/copy/delete/use in light/dark. Production frontend bundle budgets, typechecks/lint, architecture and generated-map checks. Commit and push a draft PR with evidence; never merge without exact-head gates and review.

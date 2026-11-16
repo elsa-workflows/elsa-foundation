@@ -14,15 +14,15 @@ public sealed partial class DefaultSecretNameValidator : ISecretNameValidator
             return false;
         }
 
-        var normalizedName = Normalize(name);
+        var trimmedName = name.Trim();
 
-        if (normalizedName.Length > SecretNameConstraints.MaximumLength)
+        if (trimmedName.Length > SecretNameConstraints.MaximumLength)
         {
             error = $"Secret name cannot exceed {SecretNameConstraints.MaximumLength} characters.";
             return false;
         }
 
-        if (!SecretNameRegex().IsMatch(normalizedName))
+        if (!SecretNameRegex().IsMatch(trimmedName))
         {
             error = "Secret name may contain only letters, numbers, dot, dash, underscore, and colon.";
             return false;
@@ -34,6 +34,6 @@ public sealed partial class DefaultSecretNameValidator : ISecretNameValidator
 
     public string Normalize(string name) => name.Trim().ToLowerInvariant();
 
-    [GeneratedRegex("^[a-z0-9._:-]+$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^[a-zA-Z0-9._:-]+$", RegexOptions.CultureInvariant)]
     private static partial Regex SecretNameRegex();
 }

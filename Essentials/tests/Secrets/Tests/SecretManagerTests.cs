@@ -36,17 +36,40 @@ public sealed class SecretManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task Create_Normalizes_Name_And_Does_Not_Reveal_Value()
+    public async Task Create_Preserves_Name_Casing_And_Does_Not_Reveal_Value()
     {
         var created = await CreateEncryptedAsync(" Payments.Api ");
 
-        Assert.Equal("payments.api", created.Name);
+        Assert.Equal("Payments.Api", created.Name);
         Assert.Equal(" Payments.Api ".Trim(), created.DisplayName);
         Assert.Null(created.ExpiresAt);
 
         var listed = Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery())).Items);
-        Assert.Equal("payments.api", listed.Name);
+        Assert.Equal("Payments.Api", listed.Name);
         Assert.DoesNotContain("secret-value", listed.Description ?? "");
+    }
+
+    [Fact]
+    public async Task Mixed_Case_Name_Keeps_Its_Spelling_Through_Lookup_And_Lifecycle()
+    {
+        await CreateEncryptedAsync(" DbConnectionString ");
+        await Assert.ThrowsAsync<SecretNameInUseException>(async () =>
+            await CreateEncryptedAsync(" DBCONNECTIONSTRING "));
+
+        Assert.Equal("DbConnectionString", (await _manager.FindAsync(TenantId, "dbconnectionstring"))!.Name);
+        var updated = await _manager.UpdateAsync(TenantId, "DBCONNECTIONSTRING",
+            new UpdateSecretMetadataRequest { DisplayName = "Database" });
+        Assert.Equal("DbConnectionString", updated.Name);
+        var rotated = await _manager.RotateAsync(TenantId, "dbConnectionString", new RotateSecretRequest { Value = "rotated" });
+        Assert.Equal("DbConnectionString", rotated.Name);
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("DBCONNECTIONSTRING"));
+        Assert.True(resolved.Succeeded);
+        Assert.Equal("rotated", resolved.Value);
+        Assert.Equal("DbConnectionString", resolved.Metadata!.Name);
+        Assert.True((await _manager.TestAsync(TenantId, "dbconnectionstring")).Succeeded);
+        Assert.Equal("DbConnectionString", (await _manager.RevokeAsync(TenantId, "DBCONNECTIONSTRING"))!.Name);
+        Assert.True(await _manager.DeleteAsync(TenantId, "dbconnectionstring"));
+        Assert.Equal("DBConnectionString", (await CreateEncryptedAsync("DBConnectionString")).Name);
     }
 
     [Fact]

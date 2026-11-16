@@ -28,6 +28,7 @@
          fleet seam and the gate registry - which every host shares, so a module loaded with its own copy of this
          assembly still reaches the host's cluster membership (#2143). -->
     <ProjectReference Include="..\Schema\Elsa.Persistence.Schema.csproj" />
+    <ProjectReference Include="../Core/Elsa.Persistence.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Test-only visibility for the pure resolver. Production adapters use the public preparation facade. -->

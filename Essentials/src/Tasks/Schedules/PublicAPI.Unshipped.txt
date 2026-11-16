@@ -7,7 +7,7 @@ Elsa.Tasks.Schedules.BackoffSweepWorkerTask
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.BackoffSweepWorkerTask(Microsoft.Extensions.Logging.ILogger! logger) -> void
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.CurrentSweepInterval.get -> System.TimeSpan
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ExecuteAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-Elsa.Tasks.Schedules.BackoffSweepWorkerTask.GetSchedule() -> Elsa.Tasks.Core.ITaskSchedule!
+virtual Elsa.Tasks.Schedules.BackoffSweepWorkerTask.GetSchedule() -> Elsa.Tasks.Core.ITaskSchedule!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.Logger.get -> Microsoft.Extensions.Logging.ILogger!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!

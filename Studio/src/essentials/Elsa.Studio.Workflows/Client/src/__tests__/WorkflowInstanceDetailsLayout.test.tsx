@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsPage, WorkflowInstancesPage } from "../workflow-editor/pages";
 import {
   clampRunDetailInspectorWidth,
@@ -105,13 +105,17 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
 
     await vi.waitFor(() => expect(container.textContent).toContain("Run workbench"));
-    expect(container.querySelector(".wf-page--run-workbench")).toBeTruthy();
+    const page = container.querySelector(".wf-page--run-workbench");
+    expect(page).toBeTruthy();
+    expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
+    expect(page?.querySelector(".wf-status-line")).toBeNull();
+    expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");
 
     flushSync(() => root.render(
@@ -127,7 +131,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -138,7 +142,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -150,7 +154,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -165,7 +169,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -183,7 +187,7 @@ describe("Run detail page layout", () => {
       flushSync(() => root.render(
         <WorkflowInstanceDetailsPage
           context={{} as StudioEndpointContext}
-          ai={{} as StudioAiContributionApi}
+          ai={{} as StudioWeaverRegistry}
           navigate={() => {}}
         />
       ));

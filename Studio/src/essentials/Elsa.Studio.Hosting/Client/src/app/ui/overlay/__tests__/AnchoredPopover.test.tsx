@@ -48,6 +48,26 @@ describe("calculateAnchoredPopoverPosition", () => {
 });
 
 describe("AnchoredPopover", () => {
+  it("keeps a nested popover in its supplied modal container", () => {
+    const host = document.createElement("div");
+    const modal = document.createElement("section");
+    modal.setAttribute("role", "dialog");
+    document.body.append(host, modal);
+    const root = createRoot(host);
+    const anchorRef = createRef<HTMLButtonElement>();
+    cleanup = () => {
+      flushSync(() => root.unmount());
+      host.remove();
+      modal.remove();
+    };
+    flushSync(() => root.render(<>
+      <button ref={anchorRef}>Anchor</button>
+      <AnchoredPopover anchorRef={anchorRef} open portalContainer={modal}>Modal options</AnchoredPopover>
+    </>));
+    expect(modal.querySelector(".studio-anchored-popover")?.textContent).toBe("Modal options");
+    expect(host.querySelector(".studio-anchored-popover")).toBeNull();
+  });
+
   it("portals, coalesces viewport events, and reports anchor-hidden dismissal", () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

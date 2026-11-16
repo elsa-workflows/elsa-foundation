@@ -1,10 +1,10 @@
 # Extension points — Workflows.Design.Validations domain
 
-The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and the four built-in baseline validators. Three sections:
+The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and its baseline validators. Three sections:
 
-- **Overridable contracts**: `ICredentialLiteralValidator`, the credential-literal rule (spec 188).
-- **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam.
-- **Events** — the validation gate (`DraftValidating`) and outcome notification (`DraftValidated`).
+- **Overridable contracts**: `ICredentialLiteralValidator` and the scoped `IActivityDataSelectionAnalyzer` authority.
+- **Implementable contributor interfaces** — draft validators, provider-owned analysis projections and input-source restrictions.
+- **Events** — validation, input-constraint collection and outcome notification.
 
 A closing note describes the credential-literal admission helper and the rule's exceptions, which are not extension points.
 
@@ -12,7 +12,17 @@ A closing note describes the credential-literal admission helper and the rule's 
 
 ## Overridable contracts
 
-The draft-validation *behavior* is contributed (see below); the validation *outcome* is derived state, recomputed in-lock on every create/update mutation and re-derived by the promotion gate. It is not persisted, so there is no read-model abstraction or storage seam to override. The one swappable service is the credential-literal rule.
+The draft-validation *behavior* is contributed (see below); the validation *outcome* is derived state, recomputed in-lock on every create/update mutation and re-derived by the promotion gate. It is not persisted, so there is no read-model abstraction or storage seam to override.
+
+### `IActivityDataSelectionAnalyzer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+
+- **Kind/signature:** one scoped replacement authority; `ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document, ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default)`.
+- **Default/registration:** `ActivityDataSelectionAnalyzer`, installed with `TryAddScoped`. A host may replace that one scoped registration. `DataSelectionAnalyzerCompositionCheck` rejects missing, duplicate or non-scoped authority at shell Prepare; copied shells inspect their own final registrations.
+- **Consumers:** `ValueFlowValidator`, authorized Workflow/Activity Design metadata coordinators, the existing expression-symbol adapter, and mandatory workflow/template/source-owned publication and test-run admission. Resource owners authorize the actual candidate/catalog before analysis; the analyzer reads no HTTP authority and creates no draft, runtime value or persistence write.
+- **Facts:** structure handlers retain control-flow ownership. Serialized shapes come through Activity Design Core's `IActivitySerializedShapeSource`; multiple matching owners fail closed. A browsed activity result carries the complete scope-free `ActivityResult` binding only where publication admits it unchanged; one decision serves both. The admission rule is stated in the [binding contract](../../../../../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire) and the reason codes in the [authoring contract](../../../../../../specs/1215-activity-data-selection/contracts/authoring-contract.md#source-identity-members-and-compatibility). No scope is ever invented, and a supplied scope is echoed. `ActivityResultSource` separately supplies the established portable-expression identity.
+- **Member reads:** only while `WorkflowDesignValidatorOptions.MemberReads` is on (default off), an `ActivityResultMember` read is offered and admitted by the same decision as the scope-free whole read of the same result, then typed from the producer's serialized shape: a member the shape proves undeclared is `ActivityData/UnknownMember`, one looked up in a value without members `ActivityData/MemberParentNotObject`; any other uncertain shape is admitted as not known. A focused query with a member path returns the member binding with the exact segments. A scope on the read is `ActivityData/InvalidSource`, a malformed or oversized path `ActivityData/InvalidMemberPath`. Whole-document analysis returns `ActivityDataSelectionAnalysis.MemberReads`, one entry per admitted read, which publication uses to pin the selected member's contract; a result member read the whole-read rules refuse is not typed, so it reports one finding. A `VariableMember` read (explicit `declaringScopeId` required) is offered and admitted exactly as the whole `Variable` read, with the same codes, and is never typed. Member paths are read by `ActivityDataMemberPath` (Core), shared with the publication compiler. Request and input member kinds stay refused.
+- **Compiled boundaries:** Publishing supplies `ActivityDataSelectionDocument.CompiledBoundaryInputs` only for exact resolved closed invocations. Each immutable entry is the complete selected authored/default input set, including an empty set; those invocation nodes are opaque to ignored caller structures. The analyzer rejects malformed, unknown, ambiguous, intrinsic or child-bearing entries and never invokes structure writers. Ancestor ordering and variable visibility keep their existing owners. This server-only init property is ignored by JSON; the existing constructor and deconstruction stay unchanged. This Core project has not opted into domain-wide PublicAPI baselining; the additive contract is pinned by owning compatibility tests.
+- **Composition:** `WorkflowDesignValidations` depends on `Events`. The required `IInlineEventPublisher` dispatches constraint collection through the canonical Sequential pipeline; missing publisher is a composition failure, not permission to ignore contributors.
 
 ### `ICredentialLiteralValidator` *(Core, `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (returns findings), a single-implementation **replacement contract** (framework §2.6.2), declared by `[CredentialLiteralValidatorReplacementContract]`.
@@ -25,6 +35,19 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 ---
 
 ## Implementable contributor interfaces
+
+### `IActivityDataSelectionDocumentProjector` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+
+- **Signature:** `ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(ActivityProviderManifest manifest, ActivityContract contract, string resourceId, string contractRevision, CancellationToken cancellationToken = default)`; the contract argument is the Activities Design Core public contract.
+- **Registration/ownership:** provider features contribute implementations through DI. Null means another provider/schema owns the manifest; exactly one matching projection is permitted. Malformed owned content fails instead of disappearing as unsupported. The coordinator passes the actual resource/revision after authorization; projection performs no store reads or synthetic workflow-draft creation.
+- **Known implementation:** `GraphActivityProvider`, singleton contribution from `Elsa.Activities.Graph.Design` *(cross-domain)*. It projects its closed graph body/public contract/variables and does not capture the scoped analyzer. Activity Design API and `ActivityTemplateCompiler` consume the contribution from their own scope.
+
+### `IActivityInputSourceConstraintProvider` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+
+- **Signature:** `ValueTask<ActivityDataInputConstraint?> GetConstraintAsync(IActivityDefinitionVersion activityVersion, string inputKey, CancellationToken cancellationToken = default)`.
+- **Registration:** additive scoped contributors, normally `services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityInputSourceConstraintProvider, MyProvider>())`; null adds no restriction. These are metadata contributions for an owner-resolved version/input, not a UI hint, grant or executable binding.
+- **Aggregation:** the single `CollectInputConstraints : IEventHandler<InputConstraintsCollecting>` awaits each registered provider and fills the event's get-only collection. The analyzer publishes inline, awaits contributions, and intersects them with existing credential/connection restrictions; no contribution can weaken another. Exceptions propagate and prevent a successful analysis/admission.
+- **Known implementation:** `DecisionInputSourceConstraintProvider`, from `Elsa.Decisions.Workflows.Design` *(cross-domain)*. It exposes the literal-at-publication Decision selector restriction; `DecisionPinSource` remains the final publication authority. Ordinary decision inputs are unrestricted by that contribution.
 
 ### `IDraftValidator` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (action-named contributor — inspects and **returns** findings).
@@ -49,9 +72,17 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 ## Events
 
-Both events are `IEvent` (framework §2.6.1); they differ only in **delivery strategy** (§2.6.6). This domain is the canonical mixed-strategy example.
+All events are `IEvent` (framework §2.6.1); their **delivery strategy** (§2.6.6) determines whether the publisher reads contributions back.
 
 Every `IEvent` type in `Elsa.Workflows.Design.Validations.Core` has a `### <EventClassName>` heading in this section, and every such heading names one; review keeps the two in step.
+
+### InputConstraintsCollecting
+
+**Semantic/payload.** Metadata contribution phase for one actual catalog-backed target: `ActivityVersion : IActivityDefinitionVersion`, `InputKey : string`, and get-only `Constraints : ICollection<ActivityDataInputConstraint>`. It contains neither bound business values nor authorization claims.
+
+**Publication/delivery.** `ActivityDataSelectionAnalyzer.Target` publishes through required `IInlineEventPublisher` (canonical Sequential) before reading/intersecting constraints. Target facts are cached within one analysis, so a target collects once per pass; intrinsics without a catalog version do not publish this event.
+
+**Expected handler/contributors.** Exactly one aggregating handler, internal `CollectInputConstraints`, registered idempotently by `WorkflowDesignValidationsFeature`. Modules implement `IActivityInputSourceConstraintProvider`, not separate collecting-event handlers. Provider calls are awaited in DI order; intersection grants no priority, and a failure propagates without shielding. This phase performs no save or publication write.
 
 **Sequential / contribution** (§2.6.6) — `DraftValidating`. The gate. Features implement `IDraftValidator` and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's `Errors` collection. The publishing command publishes it Sequential, awaits dispatch, and reads collected errors back.
 

@@ -54,6 +54,84 @@ internal static class PostCommitOutboxClaimedListingContract
         Assert.Equal(["lapsed"], await ListAsync(backend, limit: 1));
     }
 
+    /// <summary>
+    /// Given a time, also lists the items a claim delivered at or after it (#3661), after every held item and in recording
+    /// order. A claim-free delivery, one delivered earlier, and those of other kinds and executions are left out, and
+    /// without a time no delivered item is listed.
+    /// </summary>
+    public static async Task AlsoListsTheDeliveriesAClaimFinishedSinceAsync(Backend backend)
+    {
+        var since = ClaimedAt.AddMinutes(1);
+        await backend.AddPendingAsync(Pending("held", Execution, Continuation, ClaimedAt));
+        await backend.AddPendingAsync(Pending("delivered-before", Execution, Continuation, ClaimedAt.AddSeconds(1)));
+        await backend.AddPendingAsync(Pending("delivered-later", Execution, Continuation, ClaimedAt.AddSeconds(2)));
+        await backend.AddPendingAsync(Pending("delivered-at", Execution, Continuation, ClaimedAt.AddSeconds(3)));
+        await backend.AddPendingAsync(Pending("claim-free", Execution, Continuation, ClaimedAt.AddSeconds(4)));
+        await backend.AddPendingAsync(Pending("other-kind", Execution, "contract.other", ClaimedAt));
+        await backend.AddPendingAsync(Pending("other-execution", "wf-other", Continuation, ClaimedAt));
+        await ClaimAsync(backend, "sweep-a", TimeSpan.FromMinutes(15), Execution, Continuation);
+        await CompleteAsync(backend, await ClaimAsync(backend, "sweep-b", TimeSpan.FromMinutes(1), Execution, Continuation),
+            RuntimePostCommitOutboxStatus.Delivered, since.AddTicks(-1));
+        await CompleteAsync(backend, await ClaimAsync(backend, "sweep-c", TimeSpan.FromMinutes(1), Execution, Continuation),
+            RuntimePostCommitOutboxStatus.Delivered, since.AddMinutes(1));
+        await CompleteAsync(backend, await ClaimAsync(backend, "sweep-d", TimeSpan.FromMinutes(1), Execution, Continuation),
+            RuntimePostCommitOutboxStatus.Delivered, since);
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await backend.Outbox.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxDeliveryResult("claim-free", RuntimePostCommitOutboxStatus.Delivered, since.AddMinutes(1))));
+        await CompleteAsync(backend, await ClaimAsync(backend, "sweep-e", TimeSpan.FromMinutes(1), Execution, "contract.other"),
+            RuntimePostCommitOutboxStatus.Delivered, since);
+        await CompleteAsync(backend, await ClaimAsync(backend, "sweep-f", TimeSpan.FromMinutes(1), "wf-other", Continuation),
+            RuntimePostCommitOutboxStatus.Delivered, since);
+
+        Assert.Equal(["held", "delivered-later", "delivered-at"], await ListAsync(backend, limit: 10, since));
+        Assert.Equal(["held"], await ListAsync(backend, limit: 1, since));
+        Assert.Equal(["held"], await ListAsync(backend, limit: 10));
+    }
+
+    public static async Task ExcludesObservedDeliveriesBeforeTheProviderPageLimitAsync(Backend backend)
+    {
+        var since = ClaimedAt.AddMinutes(1);
+        // More observed rows than EF's 500-row page cap. Increasing the requested limit cannot get past them.
+        var observed = new List<string>();
+        for (var i = 0; i <= RuntimeStorePageRequest.MaximumLimit; i++)
+        {
+            var id = $"delivered-{i:D4}";
+            await backend.AddPendingAsync(Pending(id, Execution, Continuation, ClaimedAt.AddTicks(i)));
+            await CompleteAsync(backend, await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), Execution, Continuation),
+                RuntimePostCommitOutboxStatus.Delivered, since);
+            if (i < RuntimeStorePageRequest.MaximumLimit)
+                observed.Add(id);
+        }
+        await backend.AddPendingAsync(Pending("held", Execution, Continuation, ClaimedAt.AddMinutes(1)));
+        var held = await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), Execution, Continuation);
+        observed.Add("held");
+        // Exclusions use logical ordinal identity, including on providers with case-insensitive text collations.
+        observed.Add($"DELIVERED-{RuntimeStorePageRequest.MaximumLimit:D4}");
+        var query = new RuntimePostCommitOutboxClaimedQuery(Execution, Continuation, 1, since, observed);
+        observed.Clear(); // The request owns an immutable snapshot, even across a later provider read.
+
+        Assert.Equal(["held"], (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+        await CompleteAsync(backend, held, RuntimePostCommitOutboxStatus.FailedFinal, since);
+        Assert.Equal([$"delivered-{RuntimeStorePageRequest.MaximumLimit:D4}"],
+            (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+        await ExcludesObservedDeliveriesWithOrdinalIdentityAsync(backend);
+    }
+
+    public static async Task ExcludesObservedDeliveriesWithOrdinalIdentityAsync(Backend backend)
+    {
+        const string execution = Execution + "-casefold";
+        var since = ClaimedAt.AddMinutes(1);
+        // UTF-16 Base64 encodings YQA= and yQA= compare equal under a case-insensitive database collation.
+        foreach (var id in new[] { "a", "É" })
+        {
+            await backend.AddPendingAsync(Pending(id, execution, Continuation, ClaimedAt));
+            await CompleteAsync(backend, await ClaimAsync(backend, "sweep", TimeSpan.FromMinutes(15), execution, Continuation),
+                RuntimePostCommitOutboxStatus.Delivered, since);
+        }
+        var query = new RuntimePostCommitOutboxClaimedQuery(execution, Continuation, 1, since, ["a"]);
+        Assert.Equal(["É"], (await backend.Claims.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+    }
+
     private static async Task<RuntimePostCommitOutboxClaim> ClaimAsync(
         Backend backend,
         string ownerId,
@@ -63,15 +141,19 @@ internal static class PostCommitOutboxClaimedListingContract
         Assert.Single(await backend.Claims.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             ownerId, ClaimedAt, visibilityTimeout, limit: 1, workflowExecutionId, intentKind)));
 
-    private static async Task CompleteAsync(Backend backend, RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxStatus status) =>
+    private static async Task CompleteAsync(
+        Backend backend,
+        RuntimePostCommitOutboxClaim claim,
+        RuntimePostCommitOutboxStatus status,
+        DateTimeOffset? at = null) =>
         await backend.Claims.RecordDeliveryResultAsync(claim, new RuntimePostCommitOutboxDeliveryResult(
             claim.OutboxItemId,
             status,
-            ClaimedAt,
+            at ?? ClaimedAt,
             status == RuntimePostCommitOutboxStatus.Delivered ? null : "The delivery failed."));
 
-    private static async Task<string[]> ListAsync(Backend backend, int limit) =>
-        (await backend.Claims.ListClaimedAsync(new RuntimePostCommitOutboxClaimedQuery(Execution, Continuation, limit)))
+    private static async Task<string[]> ListAsync(Backend backend, int limit, DateTimeOffset? deliveredByClaimSince = null) =>
+        (await backend.Claims.ListClaimedAsync(new RuntimePostCommitOutboxClaimedQuery(Execution, Continuation, limit, deliveredByClaimSince)))
         .Select(item => item.OutboxItemId)
         .ToArray();
 
@@ -89,9 +171,12 @@ internal static class PostCommitOutboxClaimedListingContract
     public static Backend EntityFramework(RuntimeDbContext context, string scope)
     {
         var outbox = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor(scope));
-        return new Backend(outbox, item => outbox.SavePendingAsync(item));
+        return new Backend(outbox, outbox, item => outbox.SavePendingAsync(item));
     }
 
-    /// <summary>One provider's claim store and a way to seed it.</summary>
-    public sealed record Backend(IRuntimePostCommitOutboxClaimStore Claims, Func<RuntimePostCommitOutboxItem, ValueTask> AddPendingAsync);
+    /// <summary>One provider's claim store, its outbox for a claim-free delivery, and a way to seed it.</summary>
+    public sealed record Backend(
+        IRuntimePostCommitOutboxClaimStore Claims,
+        IRuntimePostCommitOutboxStore Outbox,
+        Func<RuntimePostCommitOutboxItem, ValueTask> AddPendingAsync);
 }

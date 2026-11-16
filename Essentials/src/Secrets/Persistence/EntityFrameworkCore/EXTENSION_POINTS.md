@@ -33,3 +33,7 @@ They are not a mandated application `DbContext` base (framework §2.9).
 ## Gate ownership
 
 This module's tests and the `Secrets EF composition` CI job own the Secrets persistence proof.
+
+## Persisted names
+
+The Secrets family reads v1 and v2 payloads. V2 retains technical-name casing while the physical identity remains lowercase. `SecretsV1Upcaster` preserves existing lowercase payloads unchanged. Writes follow the existing [schema finalization protocol](../../../../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md): lowercase v1 writes continue during rollout, and mixed-case names require finalized v2. No physical migration is added.

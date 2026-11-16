@@ -1,0 +1,45 @@
+#nullable enable
+Elsa.Agent.Review.Api.HumanReviewApi
+Elsa.Agent.Review.Api.HumanReviewRequest
+Elsa.Agent.Review.Api.HumanReviewRequest.<Clone>$() -> Elsa.Agent.Review.Api.HumanReviewRequest!
+Elsa.Agent.Review.Api.HumanReviewRequest.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Api.HumanReviewRequest.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Api.HumanReviewRequest.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId) -> void
+Elsa.Agent.Review.Api.HumanReviewRequest.Equals(Elsa.Agent.Review.Api.HumanReviewRequest? other) -> bool
+Elsa.Agent.Review.Api.HumanReviewRequest.HumanReviewRequest(string! WorkflowExecutionId, string! ActivityExecutionId) -> void
+Elsa.Agent.Review.Api.HumanReviewRequest.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Api.HumanReviewRequest.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest
+Elsa.Agent.Review.Api.ReviewDecisionRequest.<Clone>$() -> Elsa.Agent.Review.Api.ReviewDecisionRequest!
+Elsa.Agent.Review.Api.ReviewDecisionRequest.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Api.ReviewDecisionRequest.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Comment.get -> string?
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Comment.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.ContentHash.get -> string!
+Elsa.Agent.Review.Api.ReviewDecisionRequest.ContentHash.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Decision.get -> Elsa.Agent.Review.Models.ReviewDecision
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Decision.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId, out string! ContentHash, out Elsa.Agent.Review.Models.ReviewDecision Decision, out string? Comment, out string! RequestId) -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.Equals(Elsa.Agent.Review.Api.ReviewDecisionRequest? other) -> bool
+Elsa.Agent.Review.Api.ReviewDecisionRequest.RequestId.get -> string!
+Elsa.Agent.Review.Api.ReviewDecisionRequest.RequestId.init -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.ReviewDecisionRequest(string! WorkflowExecutionId, string! ActivityExecutionId, string! ContentHash, Elsa.Agent.Review.Models.ReviewDecision Decision, string? Comment, string! RequestId) -> void
+Elsa.Agent.Review.Api.ReviewDecisionRequest.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Api.ReviewDecisionRequest.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Api.AgentReviewApiFeature
+Elsa.Agent.Review.Api.AgentReviewApiFeature.AgentReviewApiFeature() -> void
+MinimalEndpoints.Generated.ElsaAgentReviewApiEndpoints
+override Elsa.Agent.Review.Api.HumanReviewRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Api.HumanReviewRequest.GetHashCode() -> int
+override Elsa.Agent.Review.Api.HumanReviewRequest.ToString() -> string!
+override Elsa.Agent.Review.Api.ReviewDecisionRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Api.ReviewDecisionRequest.GetHashCode() -> int
+override Elsa.Agent.Review.Api.ReviewDecisionRequest.ToString() -> string!
+static Elsa.Agent.Review.Api.HumanReviewApi.MapHumanReviewApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Agent.Review.Api.HumanReviewRequest.operator !=(Elsa.Agent.Review.Api.HumanReviewRequest? left, Elsa.Agent.Review.Api.HumanReviewRequest? right) -> bool
+static Elsa.Agent.Review.Api.HumanReviewRequest.operator ==(Elsa.Agent.Review.Api.HumanReviewRequest? left, Elsa.Agent.Review.Api.HumanReviewRequest? right) -> bool
+static Elsa.Agent.Review.Api.ReviewDecisionRequest.operator !=(Elsa.Agent.Review.Api.ReviewDecisionRequest? left, Elsa.Agent.Review.Api.ReviewDecisionRequest? right) -> bool
+static Elsa.Agent.Review.Api.ReviewDecisionRequest.operator ==(Elsa.Agent.Review.Api.ReviewDecisionRequest? left, Elsa.Agent.Review.Api.ReviewDecisionRequest? right) -> bool
+static MinimalEndpoints.Generated.ElsaAgentReviewApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
+virtual Elsa.Agent.Review.Api.AgentReviewApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.Review.Api.AgentReviewApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

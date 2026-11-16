@@ -1,4 +1,4 @@
-import type { StudioActivityDiagnostic } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityNodePresentationRecord, StudioActivityDiagnostic } from "@elsa-workflows/studio-sdk";
 
 export type ActivityContentAuthorityKind = "Design" | "ProviderSource" | string;
 
@@ -348,6 +348,7 @@ export interface ActivityDefinitionDraftView {
     payload?: unknown;
   };
   layout: ActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
   validation?: ActivityDraftValidationView | null;
   createdAt: string;
   updatedAt: string;
@@ -363,6 +364,7 @@ export interface CreateActivityDefinitionRequest {
   provider: ActivityProviderManifest;
   contract: ActivityContract;
   layout: ActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
 }
 
 export interface CreateActivityDefinitionResponse {
@@ -376,6 +378,7 @@ export interface CreateActivityDefinitionDraftRequest {
   provider?: ActivityProviderManifest;
   contract?: ActivityContract;
   layout?: ActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
 }
 
 export interface MigrateActivityDefinitionDraftRequest {
@@ -389,6 +392,7 @@ export interface ReplaceActivityDefinitionDraftRequest {
   contract: ActivityContract;
   provider: ActivityProviderManifest;
   layout: ActivityDefinitionLayoutRecord[];
+  activityPresentation?: StudioActivityNodePresentationRecord[];
   presentationLabel?: string | null;
 }
 
@@ -436,6 +440,7 @@ export interface ApplyActivityContractProposalRequest extends ProposeActivityCon
 }
 
 export interface ActivityDefinitionVersionView {
+  activityPresentation?: StudioActivityNodePresentationRecord[];
   definition: ActivityDefinitionIdentity;
   versionId: string;
   version: string;

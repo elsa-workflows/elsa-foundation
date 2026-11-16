@@ -21,9 +21,202 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | Contract | Layer | Default impl | Override when |
 |---|---|---|---|
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
+| `IWorkflowDefinitionAuthorizer` | Core — `Elsa.Workflows.Design.Core` | `HttpWorkflowDefinitionAuthorizer` (`.Api`) | A host replaces current per-definition read/manage authority. Select one scoped implementation; duplicates fail startup and missing/ambiguous authority refuses resource access. |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
+| `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
+| `IWorkflowLibraryCommands` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowLibraryCommands` (internal, this package); duplicates fail configuration and shell startup | A host replaces the library organization commands other domains (such as Weaver) call through Workflows Design Core. A replacement decides Weaver's library writes; the HTTP endpoints keep the built-in decisions. |
+| `IWorkflowVersionReader` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowVersionReader` (internal, this package); duplicates fail configuration and shell startup | A host replaces the exact version reads other domains (such as Weaver) make through Workflows Design Core. |
+| `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
+
+### `IWorkflowDefinitionAuthorizer` *(Contract — `Elsa.Workflows.Design.Core`)*
+
+`CanReadAsync(definitionId, cancellationToken)` and `CanManageAsync(definitionId, cancellationToken)`
+return current owner decisions without accepting a principal, permission string, client revision or
+Weaver model. The default uses the normalized HTTP principal, typed `WorkflowLibraryResource`
+permission checks, tenant-scoped `IWorkflowDefinitionStore.FindByIdAsync` existence and the existing
+`IWorkflowDefinitionDetailsReader.AuthorizeReadAsync` preflight for definition/folder/ancestor visibility.
+Management includes read visibility plus the typed management permission. Infrastructure failures
+from permission, metadata-store or reader operations become
+`WorkflowDefinitionAuthorizationException` from Workflow Design Core, with the definition identity,
+requested read/manage operation and original `InnerException`. Its outer message excludes infrastructure
+details. An existing authorization exception is preserved without another wrapper. Known native
+authorization refusals remain false, cancellation propagates, and failures never become permission grants.
+
+The startup validator captures the configuring collection's metadata only. Copied child-shell
+registrations rebind it to the child's collection, and repeated configuration retains one validator;
+an inherited application-wide `IServiceCollection` registration cannot hide a child duplicate.
+
+The built-in reader's preflight reads organization metadata only. A replacement details reader's
+compatibility default may call its complete `ReadAsync`. The definition GET, and the version GET for
+the version's definition, honor the selected authorizer before returning details and preserve the
+existing reader's not-found response. This contract does not replace the bounded query visibility
+policy used before counts and paging.
+
+**Failure semantics (spec 1193).** Any authorizer, built-in or replacement, that throws
+`WorkflowDefinitionAuthorizationException` makes every Design endpoint answer fail-closed as
+unavailable: HTTP 503 in the design error body with `errorCode`
+`workflow.authorization.unavailable` (`WorkflowDefinitionAuthorizationException.UnavailableCode`)
+and the exception's fixed message in `errors.generalErrors`. The inner cause is logged, never
+written. A `false` decision stays the existing 403, whose body, like every other design body, has
+no `errorCode` property. The Design owner's keyed `IEndpointFaultRenderer` writes this ahead of
+the codeless `WorkflowDesignExceptionTranslator`. Weaver's workflow tools and context report the
+same code, distinct from denied.
+
+**Read evidence (built-in only).** At the end of a successful `ReadAsync`, the built-in
+`WorkflowDefinitionDetailsReader` records internal, single-use evidence in the request's
+`HttpContext.Items`: its own instance, its definition store, the principal, the definition id and
+the stored tenant, and, when a library store is registered, the scoped permission service its Read
+permission and organization checks used. The built-in authorizer's next decision in that request
+takes the evidence and, only when the registered reader is that same instance, the store and
+principal are the same, and the id and the principal's tenant match, skips its repeated Read
+permission check (only when the reader made one), `FindByIdAsync` and `AuthorizeReadAsync`. A
+Manage decision still checks Manage. Any mismatch, including any replacement reader, even one that
+delegates to the built-in reader, gets the complete decision. A replacement authorizer never sees
+the evidence. A failed read discards earlier evidence, so a built-in GET makes three Read
+decisions on the definition, one per breadcrumb folder, one definition store read and one
+organization lookup, where it made six, two per folder, two and two.
+
+### `IWorkflowLibraryCommands` *(Contract — `Elsa.Workflows.Design.Core`, spec 1193 D4)*
+
+The library's organization commands for an explicit `WorkflowLibraryActor(actorId, tenantId)`: `GetPermissionsAsync`,
+`GetOrganizationAsync(definitionId)`, `ListTagsAsync(search)`, `CreateTagAsync(input, operationKey)`,
+`FindTagByOperationKeyAsync`, `EditTagsAsync(edit)`, `SetFavoritesAsync(ids, favorite)`,
+`MoveDefinitionsAsync(ids, folderId, operationKey)`, `ListViewsAsync`, `SaveViewAsync(viewId, input, operationKey)` and
+`FindViewByOperationKeyAsync`. Each returns a `WorkflowLibraryCommandResult<T>` whose status is one of
+`WorkflowLibraryCommandStatus` (`applied`, `denied`, `unavailable`, `conflict`, `not-found`, `invalid`, `unsupported`)
+with a cause-free message; multi-target commands report one `WorkflowLibraryTargetOutcome` per target, and a folder move,
+which the store applies atomically, reports the same outcome for every target. Delete and permanent delete are not offered.
+
+The default, `WorkflowLibraryCommands`, is the library endpoints' own logic, extracted: the endpoints run its request-bound
+methods over their injected store, exactly as before the extraction, and the Core contract runs the same methods. A
+replacement `IWorkflowLibraryCommands` decides Weaver's library writes; the HTTP endpoints keep the built-in decisions.
+For an explicit actor the default serves only the
+current request's own authenticated subject and tenant (any other is `denied`), applies the permission the matching
+endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for tag edits, `Manage` for folder moves,
+`Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
+reason before any actor or permission decision. Infrastructure failures and cancellation propagate. The Core create
+shapes carry everything the library's own create accepts (a tag's and its values' deprecation and identities, which the
+store validates as on its own create). A view's schema version is output only: the store creates version 1 and
+`WorkflowLibraryViewSnapshot.SchemaVersion` reports the stored version; a view save never supplies it. A create's operation key is optional (none is the
+library's ordinary non-idempotent create; Weaver always passes one); a blank key, or a key on a view update, is `invalid`.
+One registration per shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
+
+### `IWorkflowVersionReader` *(Contract — `Elsa.Workflows.Design.Core`, spec 1193 D4)*
+
+Exact, read-only reads of persisted workflow definition versions: `ReadAsync(versionId)` returns
+`WorkflowVersionDetails(VersionId, DefinitionId, Version, DefinitionName, State)` or `null` for an unknown version (a
+synthetic `draft:` identifier is never looked up), `FindDefinitionIdAsync(versionId)` returns only the definition a version
+belongs to (through the version store, without reading the version), so a consumer can ask the definition's owner first, and
+`ListAsync(definitionId)` returns the definition's
+`WorkflowDefinitionVersionSummary` rows in the store's order. The default, `WorkflowVersionReader`, reads through the same
+`IWorkflowVersionDetailsReader` composition as `GET versions/{versionId}` (without the layout and presentation records) and
+the same store list as `GET definitions/{definitionId}/versions`. It decides no authority: a consumer requires the host's
+`workflows/design:read` and the owning `IWorkflowDefinitionAuthorizer.CanReadAsync` decision for the version's definition
+before it discloses anything it read (Weaver's version context and `workflow_read_version` do both, owner first, so an
+unknown version, another definition's version and a withheld definition are the same unavailable outcome). Infrastructure
+failures and cancellation propagate. One registration per shell: a second one fails configuration and shell startup
+(`WorkflowVersionReaderStartupTask`).
+
+### `IWorkflowFolderDeletionStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+
+Optional scoped single-implementation port for safe folder removal:
+`PreviewFolderDeletionAsync(folderId, cancellationToken)` and
+`DeleteFolderAsync(folderId, previewRevision, deleteWorkflows, actorId, operationKey, cancellationToken)`.
+EF implements it on the library store; omission leaves the existing empty-only DELETE available.
+Only a registered port advertises `workflow-folder-deletion-preview` (GET) and
+`workflow-folder-delete` (POST), and both disappear when organization is disabled.
+
+Preview returns authoritative bounded direct workflow targets, affected descendant folders,
+destination and an opaque revision. The API checks Read/Manage on canonical returned resource identities, ancestor
+visibility and the selected `IWorkflowDefinitionAuthorizer` before returning count-only inventory.
+Commit repeats authorization and the provider must validate the preview again inside its atomic
+hierarchy transaction. Never trust client-supplied counts or browser filters. EF limits direct
+workflow targets to 10,000 and hierarchy targets to the existing folder bound.
+
+Default removal moves direct workflow membership (including deleted workflows) and child folders
+to the surviving parent/top level. Descendant paths/depths change, while hierarchy and workflow
+identities remain intact. Name collisions reject the entire operation. The opt-in marks only
+active, directly assigned workflows soft-deleted; already deleted facts, tags, favorites, authored
+content, immutable versions, publication and runtime are preserved. Every move/deletion audit fact
+commits with the mutation. Stale previews and provider failures cannot leave partial changes.
+
+### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+
+The scoped optional port owns catalog organization independently of authored workflow state.
+Startup permits an omitted library port for existing backends and rejects multiple registrations;
+backend ownership still rejects an implicit second owner of a selected port.
+Consumers are the capability-discovered folder, paged-definition, organization, tag, saved-view and
+favorite endpoints. `WorkflowLibraryCapabilitySource` advertises those relations only when the port
+is registered. Omission retains legacy flat browsing and yields a truthful unsupported response on
+direct requests to optional routes.
+
+**Signatures:** `ListFoldersAsync(parentId, pageSize, cursor)`, `GetFolderAsync(id)`,
+`CreateFolderAsync(name, parentId, actorId)`, `RenameFolderAsync(id, name, revision, actorId)`,
+`MoveFolderAsync(id, parentId, revision, actorId)`, `DeleteEmptyFolderAsync(id, revision, actorId)`,
+`MoveDefinitionsAsync(ids, folderId, actorId, operationKey)`,
+`ListDefinitionsAsync(query, subjectId, readScope)`, `GetVersionLabelsAsync(versionIds)`, `GetOrganizationAsync(definitionId)`,
+`ReplaceTagsAsync(definitionId, revision, tags, actorId, operationKey)`,
+`EditTagsAsync(edit, actorId)`, `ListTagsAsync(search, pageSize, cursor)`, `GetTagAsync(id)`,
+`CreateTagAsync(input, actorId)`, `CreateTagAsync(input, actorId, operationKey)`, `FindTagByOperationKeyAsync(operationKey)`,
+`UpdateTagAsync(id, input, actorId)`, `ListViewsAsync(subjectId)`, `SaveViewAsync(id, input, subjectId, canShare)`,
+`SaveViewAsync(id, input, subjectId, canShare, operationKey)`, `FindViewByOperationKeyAsync(operationKey, subjectId)`,
+`DeleteViewAsync(id, revision, subjectId, canShare)` and `SetFavoriteAsync(definitionId, favorite, subjectId)`;
+all operations are asynchronous and accept cancellation.
+
+**Operation keys (spec 1193 FR-021, Minor, additive):** the keyed `CreateTagAsync` and `SaveViewAsync` overloads and the two
+`Find…ByOperationKeyAsync` rereads are default interface members whose default throws
+`WorkflowLibraryOperationKeyUnsupportedException` (a `NotSupportedException` with a fixed message), so an existing
+replacement keeps compiling and a keyed create against it is unavailable (501 on the API), never silently non-idempotent.
+A store that implements them keeps the key unique per tenant scope for tags and per tenant scope and owning subject for
+views: the same key with the same input returns the resource that key created and writes nothing; the same key with
+different input is a `WorkflowLibraryConflictException`; the reread returns the key's resource or null. The client key is
+never the store writer's own operation key. A keyed view save creates only (`id` null); an update stays bound by its revision.
+
+**Override obligations:** replace one scoped implementation deliberately. Enforce the immutable
+ordinary tenant persistence scope for every identity and query; bind cursors to scope, actor and
+query; apply every membership predicate before bounded paging/counting; preserve hierarchy,
+revision, retry, lifecycle and source-reconciliation guarantees. Folder moves are atomic across
+the explicit selection; bulk tag outcomes are atomic per target. Views/favorites are isolated by
+server-derived subject. Folder placement during creation participates in
+`IAddWorkflowDefinitionCommand.Execute(..., folderId, actorId, cancellationToken)` in the same
+committing operation as definition/draft creation. No organization operation changes authored
+state or runtime behavior.
+
+`POST tags` and `POST views` accept an optional body `operationKey` (1–256 characters) and then call the keyed overloads:
+a repeat with the same key and body returns the existing tag or view (200), the same key with a different body is 409,
+and a store without key support answers 501. A request without a key is unchanged.
+
+The API derives actors through `IAuthSessionService` and evaluates permissions through
+`IPermissionAuthorizationService`, including per-target host resource handlers. Host handlers receive
+`WorkflowLibraryResource` with a definition or folder identity. Before querying the library, the API
+obtains `WorkflowLibraryReadScope` from the host's `IWorkflowLibraryVisibilityPolicy.GetScopeAsync(
+ClaimsPrincipal, CancellationToken)`. The scope has a nonblank revision (at most 256 characters), an
+optional allow-list and an optional deny-list (each at most 10,000 bounded definition identities).
+The persistence query applies this trusted scope before counts, ordering, page selection and cursor
+generation. The provider binds the policy revision and identity membership into continuation tokens.
+Clients and saved views cannot supply or replace the scope.
+
+The host policy must cover all current resource visibility rules for the normalized principal and
+change revision when its meaning or result changes. If any `IPermissionResourceHandler` is registered
+and no query visibility policy is composed, the API refuses the page before invoking the store and
+returns neither rows, counts nor cursors. Hosts with only tenant/action authorization and no resource
+handlers use an unrestricted tenant query scope. Per-item authorization remains a second defense;
+filtering an already completed page is not a supported substitute for query visibility.
+
+Paged rows retain the library query's membership/count and enrich only that bounded page through
+`IWorkflowDefinitionPublicationStateLookup`. `GetVersionLabelsAsync` resolves at most 100 explicitly
+referenced version identities to labels without loading authored payloads or complete history.
+Publication membership indexes are not a substitute for current lifecycle evidence; absent lookup
+evidence leaves publication state unknown. Soft-deleted organization remains readable, with
+assignment and placement action hints disabled.
+
+The permission contributor owns separate `workflows/design/tag-assignments:manage`,
+`workflows/design/tags:manage` and `workflows/design/views:share` catalog entries. Ordinary workflow
+read permission supports private views and personal favorites. Shared-view permission grants no
+workflow visibility. Permission hints in library responses are advisory; each endpoint and target
+is authorized again on the server. No new event contributor or periodic task is introduced here.
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
@@ -41,7 +234,7 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 ### `IWorkflowDefinitionPublicationStateLookup` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `ListByDefinitionIdsAsync(workflowDefinitionIds)` returns a dictionary of `WorkflowDefinitionPublicationSummary` values: `State` (`Draft`, `Published`, `Retracted`, `Retired`) and optional `PublishedVersionId`, the active publication's immutable source version ID. An absent entry means the provider cannot establish publication state.
-- **Default impl:** `NullWorkflowDefinitionPublicationStateLookup` in `Elsa.Workflows.Design.Api.Services`, so NativeEndpoints `GetRequiredService` succeeds on a design-only host and list/detail views leave `publicationState` unset. Publishing `Replace`s it with `WorkflowDefinitionPublicationStateLookup`. Live and empty slots cover Published and Retracted on every store. The source version comes from the active configured primary slot, or a unique version shared by all valid active publications when no primary is active. Conflicting or unavailable records leave the source version unset. Without a slot, Retired needs journal evidence and Draft needs a complete definition-keyed journal lookup; unsupported lookup leaves the state unset. The in-memory journal supports this lookup; the EF ledger lacks a definition-id hash — tracked by [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
+- **Default impl:** `NullWorkflowDefinitionPublicationStateLookup` in `Elsa.Workflows.Design.Api.Services`, so MinimalEndpoints `GetRequiredService` succeeds on a design-only host and list/detail views leave `publicationState` unset. Publishing `Replace`s it with `WorkflowDefinitionPublicationStateLookup`. Live and empty slots cover Published and Retracted on every store. The source version comes from the active configured primary slot, or a unique version shared by all valid active publications when no primary is active. Conflicting or unavailable records leave the source version unset. Without a slot, Retired needs journal evidence and Draft needs a complete definition-keyed journal lookup; unsupported lookup leaves the state unset. The in-memory journal supports this lookup; the EF ledger lacks a definition-id hash — tracked by [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, MyLookup>())`. Do not add a Design.Api → Publishing project reference; the lookup is the bridge.
 
 ### Domain-model abstractions
@@ -102,18 +295,20 @@ Known implementations: none in the foundation host; feature modules opt in by re
 - **Contract:** `Elsa.Workflows.Design.Core.Contracts.IActivityStructureHandler`.
 - **Members:**
   - `Kind` / `SchemaVersion` — identify the structure shape this handler owns.
-  - `ProjectChildren(activity)` / `ReplaceChildren(activity, projections)` — expose and rewrite the activity's child slots.
+  - `ProjectChildren(activity)` / `ReplaceChildren(activity, projections)` — expose and rewrite the activity's child slots. Each non-persisted `ActivityChildProjection` can also carry `OutcomeProjections`: per-child `ActivityChildOutcomeProjection` declarations with the expected activity type, additional outcome names and an optional literal-outcome input key. Publishing checks the resolved child type before pinning those names; the structure handler owns payload interpretation.
   - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
   - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
   - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
-  - `ChildrenCompletedBefore(activity, childNodeId)` *(default `null`)* — the direct children whose results the structure guarantees are committed before `childNodeId` runs, most relevant first. `PersistedExpressionAuthoringContextSource` offers their results to that child's expressions, ranked first; `null` promises no order. Sequence keeps its built-in document-order rule.
+  - `ChildrenCompletedBefore(activity, childNodeId)` *(default `null`)* — legacy completion declarations, most relevant first. The default richer assessment adapts an explicitly listed producer to Definite; an absent declaration promises no order. The shared analyzer retains this ranking for expression/source discovery, including Compensation's own and prior forward results.
+  - `AssessChildResult(activity, producerChildNodeId, consumerChildNodeId)` — owner-supplied `ActivityChildResultFacts`: availability, cyclic-backedge, possible concurrency, mutual exclusion and `EarlierProducerRunCanReachConsumer` (whether, within one run of the structure, an earlier run of the producer child can be among the runs that led to the consumer child). A scope-free activity-result binding is offered and admitted only where the structure holding producer and consumer, and every structure above it for its child holding both, says `false` ([binding contract](../../../../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire)); unset counts as "it can", so a handler that leaves it unset fails closed. `StructureHandlerOccurrenceFactGuardTests` checks over compiled code that every first-party handler can set it. Its conservative default adapts `ChildrenCompletedBefore`; undeclared order stays Unknown and absent nullable flags supply no safety proof. `IActivityStructureService` delegates to the installed owner. `ActivityDataSelectionAnalyzer` uses these facts for direct/portable admission and discovery; `ValueFlowValidator` separately uses ordering/concurrency/exclusion to assess colliding writes. Unknown owner facts do not certify write safety.
   - `AuthoredPayloadType` *(default `null`)* — the CLR model type of the handler's *authored* structure payload. The structure-kind registry endpoint (`GET design/workflows/structures`) publishes a generated JSON Schema per kind from this type so headless clients can compose structure payloads without reading source; `null` keeps the payload opaque/undocumented.
 - **Aggregation:** `IActivityStructureService` (`DefaultActivityStructureService`) resolves the registered handlers by `Kind`. `ScopedVariableResolver` walks the authored tree through this contract to compute per-node scoped-variable visibility.
 - **Registration:** register an implementation with DI as `IActivityStructureHandler` from the activity's own module.
 
 Known implementations:
-- `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
-- `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — scoped variables and document-order child-result assessment)*.
+- `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — scoped variables; parsed, runtime-normalized entry/dominance/backedge/concurrency/exclusion facts over all legal entries)*.
+- `BpmnStructureHandler` (`Elsa.Activities.Bpmn.Design`) *(cross-domain — authored BPMN children/outcomes, scoped variables and executable graph lowering)*.
 - `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
 
 ---
@@ -255,3 +450,31 @@ Heading convention: `### <EventClassName>`. Every published `IEvent` type of the
 - Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.
+
+
+## Workflow authoring templates
+
+`IWorkflowTemplateStore` (Design Persistence Core) is an optional scoped port. EF registers
+`EfWorkflowTemplateStore` by default in `AddWorkflowsDesignEntityFrameworkCore`; it stores
+`WorkflowTemplateContent` (authored state, layout and activity presentation) in the tenant-scoped
+`elsa_workflow_templates` table. Consumers are the Design template endpoints and Studio catalog.
+`ListAsync` / `FindAsync` read snapshots; `SaveAsync(DesignOperationKey, id?, name, description,
+content, expectedRevision)` and `DeleteAsync(DesignOperationKey, id, expectedRevision)` use the
+Design atomic writer. Updates/deletes require the last read revision; conflicts never overwrite.
+
+Alternative Design backends may omit the port, or register exactly one implementation with the
+same scope, snapshot, atomic-replay and revision guarantees. Explicit backend replacement removes
+EF-owned descriptors, including this port. EF refuses a pre-existing template port and startup
+refuses duplicate template registrations. The optional port is not a mandatory workflow backend
+replacement contract. No template mutation creates workflow definitions, versions or executables.
+
+`WorkflowTemplateCapabilitySource` advertises `workflow-templates`, `workflow-template` and
+`workflow-template-delete` relations only when this port is present. Studio discovers these
+relations instead of constructing routes; code-owned Blank/HTTP recipes remain client starters.
+
+### `IActivityStructureHandler.ProjectInputs` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Contribution keyed by structure kind and schema version; `IActivityStructureService` routes to the owning handler.
+- **Signature:** `ActivityStructureInputProjection ProjectInputs(ActivityNode activity)`, defaulting to an empty projection for existing handlers.
+- **Obligations:** project stable owner-derived reference keys, normal `InputDefinition` declarations and optional `ArgumentState` values. Declare consumed ordinary catalog keys explicitly; a null projected definition uses that catalog declaration. Publishing normalizes state keys, rejects duplicate declarations and compiles through the ordinary typed binding compiler. Expression authoring and draft validation use the same projection. Keep child traversal/replacement lossless for structure-owned arguments and unknown members.
+- **Known implementation:** Switch schema 2.0.0 projects Boolean case predicates, consumes Value and reintroduces it only when legacy matching remains. No Runtime project reads the Design projection.

@@ -1,0 +1,17 @@
+{
+  "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+  "base": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b",
+  "bundleRef": "refs/codex/verification/2898-main-0d6-6a99012a2",
+  "name": "elsa-bpmn-hosting-source-6a99012a2.bundle",
+  "bytes": 2224537,
+  "sha256": "880a87da23ccc45a1a66f436548377f6858488f4500f53e63369ad8c1802a0be",
+  "assetId": 697225921,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-6a99012a2.bundle",
+  "uploader": "elsa-workflows-codex[bot]",
+  "reDownloadedAndHashVerified": true,
+  "checksumAssetVerified": true,
+  "coldRestoreCandidateInitiallyAbsent": true,
+  "coldRestoreMatchesSource": true,
+  "releasePublishedAtUnchanged": true,
+  "scope": "Exact main-0d6 adoption product source. Qualification is recorded separately; no clean review, remote branch push, CI or merge verdict is implied. No new release or tag."
+}

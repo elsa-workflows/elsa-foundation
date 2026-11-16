@@ -130,3 +130,56 @@ The original implementation's exact-main gates are verified. This docs-only foll
 The owner-assigned historical [main-red umbrella #2293](https://github.com/elsa-workflows/elsa-foundation/issues/2293) was refreshed with the current green gate and retained evidence limits. It is not closed or taken over from this green run alone.
 
 The concurrent routing case begins at a quiescent background wait after the original native execution lease was released. The original stale-write case above supplies separate active-lease fencing evidence. SQLite local-process results do not qualify other databases, multi-machine partitions, clock skew, Orleans or other execution models. Physical external effects remain at least once. The historical receipt and HTTP timeout causes remain unproven by these passing runs.
+
+## PR2 recheck, 7–8 November 2026
+
+Execution-core PR2 rechecked spec 249 FR-001–006 and FR-009–011, T006–T017, T019 and T021. The unpushed test and docs commits were rebased onto main `c1f35d2dc73201df0e3890e1f0c851d9ddd52a37` with **zero conflicts**; the test tree is `9812e60f54f1178498e82c3d092268b859d4a36b`. SDK 10.0.300, `Release` / `net10.0`, Linux x86_64, local SQLite only. The command table below was first executed on `60d284932` on 7 November; the [rerun on reconciled head](#rerun-on-reconciled-head-8-november-2026) was executed on `9812e60f54` after the rebase. This section does not reassign the October SHAs, TRX identities or hosted CI numbers above. Feature #2905 and program #2892 remain open. [Migration and rollback](native-bpmn-migration-and-rollback.md) is the focused native/BPMN operator note.
+
+Counted-passing rows below exclude the Workbench cases still listed in `tools/ci/test-tiers.json` quarantine (#3147 stale-write, #3252 graceful handoff, #3259 departed-owner, #3260 killed-workers). Those four tests (eight theory rows) executed and the local TRX marked them Passed; they are **not counted as passing** and do not close the quarantine issues.
+
+| Check | Command | Result |
+|---|---|---|
+| Cancellation, late receipts, real restart (T016; counted) | `dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests\|FullyQualifiedName~NativeHostingConformanceTests\|FullyQualifiedName~NativeHostingGracefulHandoffTests' --logger 'trx;LogFileName=native-integrated-matrix.trx' --results-directory /tmp/elsa-execcore-pr2` | Counted **3/3**: `Explicit_cancellation_stops_held_bodies_and_survives_process_restart` InProcess 30.9s and Clustered 72.2s; `Remaining_lease_wait_is_zero_only_after_the_authored_lease_plus_one_poll`. Filter total 11 executed / 0 failed / 0 skipped in 15m58s. TRX `/tmp/elsa-execcore-pr2/native-integrated-matrix.trx`. |
+| Both receipt orders / killed-workers (T006–T008; quarantined #3260) | same filter | Executed 4/4 locally (InProcess and Clustered, both completion orders). **Not counted as passing.** |
+| Departed routing owner (T007/FR-003; quarantined #3259) | same filter | Executed 2/2 locally (left-then-right and right-then-left). **Not counted as passing.** |
+| Original stale-write fence (T011/FR-004; quarantined #3147) | same filter | Executed 1/1 locally (`Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires`, 84.6s). **Not counted as passing.** |
+| Graceful handoff (T014; quarantined #3252) | same filter | Executed 1/1 locally. **Not counted as passing.** |
+| T012 fence-removal mutation | would bypass `EfRuntimeCheckpointCommitStore` then restore | **NOT RUN.** Quickstart forbids committing the mutation; this recheck did not edit production fencing. Historical negative control remains bound to the 19–20 October record. |
+| Native composites / duplicate acceptance (T017) | `dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~BackgroundActivityWorkTests\|FullyQualifiedName~BackgroundActivityWorkCheckpointAtomicityTests\|FullyQualifiedName~NativeBackgroundActivityFlowchartEfTests'` | **50/0/0**, 54s. Includes Flowchart/Sequence composites, both receipt orders, cancellation/late-result, checkpoint atomicity and the stale-owner EF fence control `Old_coordinator_fence_cannot_accept_ready_receipt_or_write_native_participants_after_successor_acquires_ownership`. SQLite only. TRX `native-acceptance-ef.trx`. |
+| Fixture registration/disposal (T009) | `dotnet test Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603` | **44/0/0**. TRX `workbench-fixture.trx`. |
+| Placement / runnability / drain (T015) | `dotnet test Essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603 --filter FullyQualifiedName~Placement` | **92/0/0**. TRX `native-placement.trx`. |
+| Distributed EF (T015) | entire `Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests` | **107/0/0**. TRX `native-distributed-ef.trx`. |
+| Cluster membership contracts (T015) | entire `Elsa.Cluster.Tests` | **159 passed / 0 failed / 30 skipped** (skips remain inapplicable cluster-of-one cases, not passes). TRX `native-cluster.trx`. |
+| Cluster membership EF (T015) | SqliteEfClusterMembership, EfClusterMembershipStoreTests, EfClusterMembershipRegistrationTests, ClusterMembershipConfigurationTests, ClusterMembershipHostStopTests | **88 passed / 0 failed / 1 skipped**. Skip is FR039 fleet-entry, same reason as October: the race-free join never produces that entry. TRX `native-cluster-ef.trx`. |
+| Architecture (T019) | `bash tools/architecture/restore-ci-project-graph.sh` then `dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore` | Restore exit 0 (28s). Tests **617/0/0**, 68s. Count is not the October 578; the suite grew on main. TRX `architecture.trx`. |
+| Generated maps (T019) | `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | Passed: `Generated solution filters still describe the project graph.` `git diff --check` clean. |
+| T021 resulting-main hosted CI | GitHub Actions on merge `7d4d2183` | **NOT RUN** as a fresh hosted gate. Historical backend 16,705/0/32, core 4,021/0/1, architecture 578/0/0 remain bound to that merge. This recheck’s local architecture/maps results are recorded above, not substituted for that CI. |
+| Binary ApiCompat vs last-published nupkgs | `Microsoft.DotNet.ApiCompat.Tool` 10.0.403 against `Elsa.Workflows.Runtime.Core` 4.0.61-preview and `Elsa.Activities.Bpmn.Core` 4.0.2-preview | **NOT RUN.** nuget.org and the Elsa 4 Feedz query/download URLs returned 404. In-repo `RuntimePublicApiCompatibilityTests` **6/0/0**. Public API files were not regenerated (no production public API change). |
+| Other EF providers | PostgreSQL / SQL Server / MySQL Testcontainers | **NOT RUN.** Docker is not installed on this VM. |
+| Interrupted native publish vs EF GC (PR2 Part B) | `InterruptedPublicationGcTests.Native_publish_interrupted_after_artifact_save_is_classified_against_host_grace_gc` | Classification **(1) loss safely refused or retryable**. Host grace `00:05:00`, pump sweep `00:05:00`, max backoff `00:30:00`. First run (on `60d284932`): retry `publication-150IcWnBAxi`. Rerun on `9812e60f54`: before GC artifact present, liveRefs=[], journal=[], slot empty; sweep createdAt+6min deletedArtifacts=1 deletedReferences=0; retry `publication-150ToauhYuW` → `artifact-version-1`. TRX `/tmp/elsa-execcore-pr2-rerun/native-interrupted-gc.trx`. Did not change retention or pull #3951. |
+
+Captured SHA-256 values for this recheck’s Workbench binaries (identify the build; they are not the October hashes):
+
+| Artifact | SHA-256 |
+|---|---|
+| `Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll` | `47be3123854abbda48f677ee4497f2358178ec47827fd493cb8fb22f46a282e5` |
+| `Essentials/tests/Workbench/Tests/bin/Release/net10.0/Elsa.Workbench.Tests.dll` | `9c87f1b7b548a50739ae871a6461a20c6d76f7380c04288abb894ea54163e048` |
+| `Essentials/tests/Workbench/Fixtures/BackgroundActivities/bin/Release/net10.0/Elsa.Workbench.Tests.BackgroundActivities.dll` | `4242f71c7c24f3e5c6c3e70c6aec8dae760276cc94a6af10c59539af35e40b65` |
+| `Essentials/tests/Workbench/Fixtures/BackgroundActivities/elsa-package.json` | `6cff2ebdf32af0d341a1c01033d060110b9d6cc740b782de8374eb01f84d43ef` |
+
+Machine-readable receipt: [native-pr2-recheck-20261107.json](../../specs/249-native-hosting-conformance/evidence/native-pr2-recheck-20261107.json). Local diagnostic TRX/logs: `/tmp/elsa-execcore-pr2/` (7 November) and `/tmp/elsa-execcore-pr2-rerun/` (8 November on `c1f35d2dc`).
+
+### Rerun on reconciled head, 8 November 2026
+
+Rebase of the unpushed pair onto `c1f35d2dc73201df0e3890e1f0c851d9ddd52a37` (Studio minimap #3975 only; no overlapping paths). Suites requested for the reconciled head, all `Release` / `net10.0`:
+
+| Check | Result |
+|---|---|
+| Native interrupted-GC | **1/0/0**, classification (1). grace/pump 5/5/30 min. Witnesses: createdAt `2026-11-08T02:11:00.3471613Z`, sweepNow +6min, deletedArtifacts=1 deletedReferences=0; retry `publication-150ToauhYuW` / `artifact-version-1`. |
+| BPMN unit (includes BPMN interrupted-GC) | **582/0/0**, 1m59s. BPMN classification (1): before incarnation `62485159a6aa4411a119dc9dbbd72929`; after retry `e5b7ac48d79d4c1bb4644e50dde91c3a`; liveRef `bpmn-source:d205aa252894961f8f11b1bdf00e1535309e491eb723005831024cefc7e99cac` → `sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f`. |
+| BPMN interchange | **229/0/0** |
+| Native EF composites (T017 filter) | **50/0/0**, 54s |
+| Architecture restore + tests | restore exit 0; **617/0/0** |
+| Generated maps `-- check` | Passed: `Generated solution filters still describe the project graph.` |
+
+Quarantined Workbench rows #3147, #3252, #3259 and #3260 were not rerun and are still not counted as passing.

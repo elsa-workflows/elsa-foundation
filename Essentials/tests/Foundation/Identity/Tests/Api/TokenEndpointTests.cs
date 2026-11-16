@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -72,6 +73,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var permissions = principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value).ToList();
         // The seeded admin is granted every catalog permission; a representative one must round-trip.
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersManage, permissions);
+        Assert.Equal(principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
     }
 
     [Fact]
@@ -362,6 +364,104 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refresh_For_A_Disabled_User_Returns_401_Issues_Nothing_And_Revokes_Their_Other_Refresh_Tokens()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var first = await IssueRefreshTokenForAsync(accessToken);
+        var second = await IssueRefreshTokenForAsync(accessToken);
+        var (tenantId, userId) = await UserOfAsync(accessToken);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = await IssueRefreshTokenForAsync(accessToken) })).StatusCode);
+
+        await SetUserStatusAsync(tenantId, userId, UserStatus.Disabled);
+
+        // invalid_grant on the wire is a bare 401 with no token in the body.
+        var refused = await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = first });
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        Assert.DoesNotContain("accessToken", await refused.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        // The refusal revoked the user's other outstanding refresh token too, and re-enabling does not revive it.
+        await SetUserStatusAsync(tenantId, userId, UserStatus.Active);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = second })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+    }
+
+    [Fact]
+    public async Task Refresh_For_A_Deleted_User_Returns_401()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var refreshToken = await IssueRefreshTokenForAsync(accessToken);
+        var (tenantId, userId) = await UserOfAsync(accessToken);
+
+        await using (var scope = _fixture.Services.CreateAsyncScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().DeleteAsync(tenantId, userId));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_Leaves_A_Provider_Subject_Equal_To_The_Users_Id_Alone()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var (_, userId) = await UserOfAsync(accessToken);
+        // Another provider's sub happens to equal the Elsa user id; it is a different subject.
+        var lookalike = await IssueForAsync(_fixture, accessToken, subject: userId, provider: "other-idp");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = lookalike.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, lookalike.AccessToken));
+    }
+
+    [Fact]
+    public async Task External_Bearers_Of_Two_Providers_Sharing_A_Sub_Exchange_And_Sign_Out_Apart()
+    {
+        // Two normalized external bearers, two providers, the same sub. Each exchanges for its own first-party token.
+        var client = _fixture.Client;
+        var first = await ExchangeExternalAsync(client, NormalizedExternalAuthenticationHandler.Token("idp-1", "shared-sub"));
+        var second = await ExchangeExternalAsync(client, NormalizedExternalAuthenticationHandler.Token("idp-2", "shared-sub"));
+        var firstRefresh = await IssueRefreshTokenForExternalAsync(first, "idp-1");
+        var secondRefresh = await IssueRefreshTokenForExternalAsync(second, "idp-2");
+        Assert.Equal("shared-sub", await SubjectOfAsync(first));
+        Assert.Equal("shared-sub", await SubjectOfAsync(second));
+
+        // The first provider's subject signs out with its bearer.
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, first));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, first));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = firstRefresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, second));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = secondRefresh })).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_External_Bearer_Whose_Sub_Equals_An_Elsa_User_Id_Does_Not_Share_The_Users_Tokens()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var userToken = await FetchAccessTokenAsync(client);
+        var (_, userId) = await UserOfAsync(userToken);
+        var userRefresh = await IssueRefreshTokenForAsync(userToken);
+        // The external client holds no cookie; its bearer alone is exchanged.
+        WithoutCookie(client);
+        var external = await ExchangeExternalAsync(client, NormalizedExternalAuthenticationHandler.Token("idp-1", userId));
+        var externalRefresh = await IssueRefreshTokenForExternalAsync(external, "idp-1");
+        Assert.Equal(userId, await SubjectOfAsync(external));
+
+        // The external subject signs out: the Elsa user's tokens are untouched.
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, external));
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, external));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = externalRefresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, userToken));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = userRefresh })).StatusCode);
+    }
+
+    [Fact]
     public async Task Refresh_With_A_Garbage_Token_Returns_401_Not_500()
     {
         // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
@@ -443,14 +543,65 @@ public sealed class TokenEndpointTests : IAsyncLifetime
 
     private async Task<string> IssueRefreshTokenForAsync(string accessToken) => (await IssueForAsync(_fixture, accessToken)).RefreshToken!;
 
-    /// <summary>Issues a pair in the access token's tenant, for its subject unless another is named.</summary>
-    private static async Task<TokenIssueResult> IssueForAsync(TokenEndpointFixture fixture, string accessToken, string? subject = null)
+    /// <summary>
+    /// Issues a pair in the access token's tenant, for its subject unless another is named. For its own subject the
+    /// pair names the Elsa user, as the exchange does; a named other subject is no Elsa user and is issued under
+    /// <paramref name="provider"/>.
+    /// </summary>
+    private static async Task<TokenIssueResult> IssueForAsync(TokenEndpointFixture fixture, string accessToken, string? subject = null, string provider = "test-provider")
     {
         await using var scope = fixture.Services.CreateAsyncScope();
         var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
         var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
         return await tokens.IssueAsync(new TokenIssueRequest(
-            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []));
+            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, [])
+        {
+            CanonicalUserId = subject is null ? principal.FindFirst(IdentityClaimTypes.UserId)?.Value : null,
+            Provider = subject is null ? null : provider
+        });
+    }
+
+    /// <summary>Exchanges a normalized external bearer for a first-party access token.</summary>
+    private static async Task<string> ExchangeExternalAsync(HttpClient client, string externalToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, TokenRoute);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", externalToken);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<AccessTokenPayload>();
+        return payload!.AccessToken;
+    }
+
+    /// <summary>Issues the refresh token a refresh-capable external client would hold: the bearer's own subject under its provider.</summary>
+    private async Task<string> IssueRefreshTokenForExternalAsync(string accessToken, string provider)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
+        var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        Assert.Empty(principal.FindAll(IdentityClaimTypes.UserId));
+        return (await tokens.IssueAsync(new TokenIssueRequest(
+            principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []) { Provider = provider })).RefreshToken!;
+    }
+
+    private async Task<string> SubjectOfAsync(string accessToken)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var principal = (await scope.ServiceProvider.GetRequiredService<ITokenService>().ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        return principal.FindFirst(ClaimTypes.NameIdentifier)!.Value;
+    }
+
+    /// <summary>The tenant and Elsa user the access token was issued to.</summary>
+    private async Task<(string TenantId, string UserId)> UserOfAsync(string accessToken)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var principal = (await scope.ServiceProvider.GetRequiredService<ITokenService>().ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        return (principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
+    }
+
+    private async Task SetUserStatusAsync(string tenantId, string userId, UserStatus status)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().SetStatusAsync(tenantId, userId, status));
     }
 
     private static async Task<HttpStatusCode> CallProtectedAsync(HttpClient client, string accessToken)
@@ -492,7 +643,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         public ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default) => inner.ValidateAsync(request, cancellationToken);
         public ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default) => inner.RevokeAsync(request, cancellationToken);
 
-        public ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default) =>
-            fault.Armed ? throw new InvalidOperationException("The token store is unavailable.") : inner.RevokeSubjectAsync(subjectId, cancellationToken);
+        public ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default) =>
+            fault.Armed ? throw new InvalidOperationException("The token store is unavailable.") : inner.RevokeSubjectAsync(subject, cancellationToken);
     }
 }

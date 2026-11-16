@@ -1,0 +1,15 @@
+{
+  "sourceRevision": "11437c0bd2c0ee9d1dbf0a6bcc926f2f4672cd1a",
+  "actualStudioDirectHumanJourney": true,
+  "wholeStoresVerified": 12,
+  "backendRestarts": 2,
+  "freshBrowserRecovery": true,
+  "keyboardCompletion": true,
+  "completionReplayPreserved": true,
+  "nativeWorkflowRows": 0,
+  "nativeActivityRows": 0,
+  "nativeBookmarkRows": 0,
+  "fullPinAuthoritySourcePreserved": true,
+  "frozenSavedStudioCompatibilityProved": false,
+  "newClaimWriterIntroduced": false
+}

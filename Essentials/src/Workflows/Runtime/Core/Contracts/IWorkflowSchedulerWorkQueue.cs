@@ -13,6 +13,9 @@ public interface IWorkflowSchedulerWorkQueue
     /// </summary>
     bool SupportsClaimTransitions => false;
 
+    /// <summary>Whether a claim evaluates its request's validation before changing ownership.</summary>
+    bool SupportsClaimValidation => false;
+
     /// <summary>
     /// Indicates that <see cref="DeleteAsync"/> removes only the specified work-item identity, independently of
     /// listing/dequeue order and concurrent enqueues. Coalescing requires this capability to reconcile consumed work;

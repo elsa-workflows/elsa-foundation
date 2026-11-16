@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Tasks.Core;
@@ -59,6 +60,9 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     private readonly ExecutionPlacementMembership? _membership;
     private readonly HashSet<ClusterMemberIdentity> _reclaimedDepartures = [];
     private readonly Dictionary<string, BacklogRotation> _rotations = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DetachedDispatch> _detached = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Task> _releasing = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, HeldCommand> _held = new(StringComparer.Ordinal);
 
     public ExecutionPlacementPumpTask(
         IWorkflowExecutionActorProvider actorProvider,
@@ -135,8 +139,12 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     /// </summary>
     public async ValueTask<ExecutionPlacementSweepResult> SweepOnceAsync(CancellationToken cancellationToken = default)
     {
+        // Every wait for local work in one sweep shares one budget, a third of the placement lease, across every
+        // persistence scope, so the sweep returns to renew the node's placements in time however many executions are busy
+        // (#2831).
+        var waits = new SweepWaitBudget(_placementOptions.Value.LeaseDuration / 3);
         if (_scopeRunner is null)
-            return await SweepAsync(_placementService!, _transport!, _directPartition!, services: null, cancellationToken);
+            return await SweepAsync(_placementService!, _transport!, _directPartition!, services: null, waits, cancellationToken);
 
         var total = ExecutionPlacementSweepResult.Empty;
         if (_membership is not null)
@@ -152,6 +160,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 operationScope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>(),
                 new WorkflowExecutionPartition(persistenceScope.Value),
                 operationScope.ServiceProvider,
+                waits,
                 operationCancellationToken);
             total = total.Add(result);
         }, cancellationToken);
@@ -163,9 +172,12 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
 
     /// <summary>
     /// Hands off every execution this member still holds, in every persistence scope: passivating each
-    /// local actor, which waits for an in-flight drain to finish its turn, releasing its placement lease, and making its
-    /// unacknowledged transport items visible. A drain that outlasts the lease duration is left as a crash would be; its
-    /// leases are reclaimed once the host id is departed.
+    /// local actor, which makes an in-flight drain yield at its next step, releasing its placement lease, and making its
+    /// unacknowledged transport items visible. It waits for each passivation as long as the caller's token allows; a
+    /// single step that never ends holds it. The stop path bounds it by one lease: if a step outlasts that, the
+    /// passivation gives up, the drain carries on after the step on this member, its placement lapses, and fencing
+    /// refuses the old drain's next commit once another member takes the execution over. Leases left behind are
+    /// reclaimed once the host id is departed.
     /// </summary>
     public async ValueTask<int> HandOffAllAsync(string reason, CancellationToken cancellationToken = default)
     {
@@ -229,7 +241,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         }
         // `bounded` links the caller's token with its own lease-duration timer, so a caller cancellation and the timer
         // both surface as OperationCanceledException on `bounded.Token`; only the timer firing is a hand-off failure to
-        // swallow, as the class remarks say a drain that outlasts the lease is left as a crash would be. A caller
+        // swallow: a step that outlasts the lease leaves the drain to fencing, as HandOffAllAsync documents. A caller
         // cancellation must still propagate.
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -248,6 +260,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         IExecutionCommandTransport transport,
         WorkflowExecutionPartition expectedPartition,
         IServiceProvider? services,
+        SweepWaitBudget waits,
         CancellationToken cancellationToken)
     {
         var pumpOptions = _pumpOptions.Value;
@@ -270,18 +283,27 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         var acked = 0;
         var handedOff = 0;
 
+        var later = new TransportAccess(transport, expectedPartition, services);
+
         // 1. Renew placements this node holds so ownership does not lapse mid-drain, or hand them off.
         if (renewing || handingOff)
         {
             foreach (var lease in await placementService.ListOwnedAsync(pumpOptions.MaxExecutionsPerSweep, cancellationToken))
             {
+                // Still handing off or passivating, behind a drain that has not ended: leave the execution to that.
+                if (_releasing.ContainsKey(DetachedKey(expectedPartition, lease.WorkflowExecutionId)))
+                    continue;
+
                 var decision = handingOff ? standing : gate is null
                     ? null
                     : await gate.DecideAsync(lease.WorkflowExecutionId, services!, [], PendingCommands(transport, lease.WorkflowExecutionId), cancellationToken);
                 if (decision is { IsRunnable: false })
                 {
                     gate!.Report(lease.WorkflowExecutionId, expectedPartition, decision);
-                    await HandOffAsync(lease.WorkflowExecutionId, placementService, transport, expectedPartition, decision.Reason!, cancellationToken);
+                    // Passivation makes a running drain yield, but only at its next step, after the current one ends.
+                    await ReleaseBoundedAsync(
+                        HandOffAsync(lease.WorkflowExecutionId, placementService.NodeId, later, expectedPartition, decision.Reason!, cancellationToken).AsTask(),
+                        waits, expectedPartition, lease.WorkflowExecutionId, "Handing off", cancellationToken);
                     handedOff++;
                     continue;
                 }
@@ -289,7 +311,9 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 if (await placementService.TryRenewAsync(lease, cancellationToken) is not null)
                     renewed++;
                 else
-                    await PassivateLocallyAsync(lease.WorkflowExecutionId, expectedPartition, cancellationToken);
+                    await ReleaseBoundedAsync(
+                        PassivateLocallyAsync(lease.WorkflowExecutionId, expectedPartition, cancellationToken).AsTask(),
+                        waits, expectedPartition, lease.WorkflowExecutionId, "Passivating", cancellationToken);
             }
         }
 
@@ -326,6 +350,11 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                     }
                 }
 
+                // A hand-off or passivation still waiting for a drain holds the actor's lifecycle lock; a command
+                // dispatched now would wait for it, then run on a fresh actor after the placement is released.
+                if (_releasing.ContainsKey(DetachedKey(expectedPartition, executionId)))
+                    continue;
+
                 var claim = await placementService.TryClaimAsync(executionId, cancellationToken);
                 if (!claim.IsOwnedByClaimant)
                     continue;
@@ -334,6 +363,8 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 executionsThisSweep++;
 
                 var leased = await transport.LeaseAsync(executionId, placementService.NodeId, now, leaseDuration, pumpOptions.TransportLeaseBatchSize, cancellationToken);
+                var executionKey = DetachedKey(expectedPartition, executionId);
+                var busy = _detached.Values.Any(running => running.ExecutionKey == executionKey);
 
                 foreach (var item in leased)
                 {
@@ -343,21 +374,50 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                             "A persisted command partition does not match the current persistence scope.");
                     }
 
+                    if (item.LeaseToken is null)
+                        throw new InvalidOperationException("A leased command transport item must carry a lease token.");
+
+                    // Still dispatching from an earlier sweep, whose transport lease has lapsed since: keep that one
+                    // dispatch and let it acknowledge under this lease rather than queue the command a second time. One
+                    // that was delivered and has already given up acknowledging is acknowledged here instead.
+                    var detachedKey = DetachedKey(expectedPartition, item.TransportItemId);
+                    if (_detached.TryGetValue(detachedKey, out var running))
+                    {
+                        if (!running.TryMoveTo(item.LeaseToken.Value) &&
+                            await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, item.LeaseToken.Value, _timeProvider.GetUtcNow(), cancellationToken))
+                            acked++;
+                        continue;
+                    }
+
+                    // A busy execution's mailbox already holds a command waiting behind its drain; another would only wait
+                    // there too. It stays leased, under a record of this lease, and is released when the drain ends. A
+                    // Cancel always goes through: the drain yields to it at its next step.
+                    if (busy && item.Envelope.Command.Kind != WorkflowExecutionCommandKind.Cancel)
+                    {
+                        _held[detachedKey] = new HeldCommand(executionKey, item.TransportItemId, item.LeaseToken.Value);
+                        continue;
+                    }
+
+                    // An earlier hold of this item is superseded by this lease.
+                    _held.TryRemove(detachedKey, out _);
                     dispatched++;
-                    var result = await DispatchAsync(executionId, item.Envelope, placementService, cancellationToken);
+                    var dispatch = DispatchAsync(executionId, item.Envelope, placementService, cancellationToken).AsTask();
+
+                    // A command starts a drain that runs while its workflow keeps making progress. Waiting it out would
+                    // stop this sweep renewing every placement the node holds, so another node would claim the drain's
+                    // execution, and a Cancel forwarded here would never reach its mailbox (#2831).
+                    if (!await CompletesWithinAsync(dispatch, busy ? TimeSpan.Zero : pumpOptions.InlineDispatchWait, waits, cancellationToken))
+                    {
+                        Detach(detachedKey, executionKey, executionId, item, dispatch, placementService.NodeId, later);
+                        busy = true;
+                        continue;
+                    }
 
                     // Ack only on a delivered outcome. Deferred/Rejected leaves the item leased; when the lease expires it
                     // becomes visible again and is re-driven, preserving at-least-once delivery.
-                    if (result.Status is WorkflowExecutionCommandDispatchStatus.Accepted
-                        or WorkflowExecutionCommandDispatchStatus.Duplicate
-                        or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)
-                    {
-                        if (item.LeaseToken is null)
-                            throw new InvalidOperationException("A leased command transport item must carry a lease token.");
-
-                        if (await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, item.LeaseToken.Value, _timeProvider.GetUtcNow(), cancellationToken))
-                            acked++;
-                    }
+                    if (IsDelivered(await dispatch) &&
+                        await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, item.LeaseToken.Value, _timeProvider.GetUtcNow(), cancellationToken))
+                        acked++;
                 }
             }
 
@@ -561,7 +621,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         var handedOff = 0;
         foreach (var lease in await placementService.ListOwnedAsync(DistributedRuntimeQueryLimits.MaximumTake, cancellationToken))
         {
-            await HandOffAsync(lease.WorkflowExecutionId, placementService, transport, partition, reason, cancellationToken);
+            await HandOffAsync(lease.WorkflowExecutionId, placementService.NodeId, new TransportAccess(transport, partition, services: null), partition, reason, cancellationToken);
             handedOff++;
         }
 
@@ -571,12 +631,13 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     /// <summary>
     /// Hands one execution off: passivates the local actor at the drain's next boundary, which releases the
     /// placement lease still held under this host id and its placement token, then makes visible every transport item
-    /// this member leased for the execution and has not acknowledged, so an active member can claim and lease them.
+    /// this member leased for the execution and has not acknowledged, except one a detached dispatch still owns, so an
+    /// active member can claim and lease them.
     /// </summary>
     private async ValueTask HandOffAsync(
         string workflowExecutionId,
-        IExecutionPlacementService placementService,
-        IExecutionCommandTransport transport,
+        string nodeId,
+        TransportAccess transport,
         WorkflowExecutionPartition partition,
         string reason,
         CancellationToken cancellationToken)
@@ -590,9 +651,21 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 partition: partition),
             cancellationToken);
 
-        var now = _timeProvider.GetUtcNow();
-        foreach (var item in await transport.ListLeasedAsync(placementService.NodeId, now, _pumpOptions.Value.TransportLeaseBatchSize, workflowExecutionId, cancellationToken))
-            await transport.ReleaseLeaseAsync(workflowExecutionId, item.TransportItemId, placementService.NodeId, item.LeaseToken!.Value, now, cancellationToken);
+        await transport.UseAsync(async leases =>
+        {
+            var now = _timeProvider.GetUtcNow();
+            foreach (var item in await leases.ListLeasedAsync(nodeId, now, _pumpOptions.Value.TransportLeaseBatchSize, workflowExecutionId, cancellationToken))
+            {
+                // A dispatch the sweep detached owns its item: released here, a command its drain delivered would fail
+                // its ack and run again on another member. It acks a delivered command; an undelivered one keeps its
+                // lease until the lease lapses, as it would in the sweep.
+                if (_detached.ContainsKey(DetachedKey(partition, item.TransportItemId)))
+                    continue;
+                await leases.ReleaseLeaseAsync(workflowExecutionId, item.TransportItemId, nodeId, item.LeaseToken!.Value, now, cancellationToken);
+            }
+
+            return true;
+        });
     }
 
     /// <summary>A renewal that found the lease no longer as this pump held it passivates the local actor without releasing
@@ -643,6 +716,230 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
             ? await distributed.GetClaimedLocalAgentAsync(activation, cancellationToken)
             : await _actorProvider.GetAgentAsync(activation, cancellationToken);
         return await actor.EnqueueAsync(envelope, cancellationToken);
+    }
+
+    private static bool IsDelivered(WorkflowExecutionCommandDispatchResult result) =>
+        result.Status is WorkflowExecutionCommandDispatchStatus.Accepted
+            or WorkflowExecutionCommandDispatchStatus.Duplicate
+            or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted;
+
+    private static string DetachedKey(WorkflowExecutionPartition partition, string transportItemId) =>
+        partition.Value + "\n" + transportItemId;
+
+    // Measured on the injected clock: a test clock that never advances waits for every dispatch, as the sweep always did.
+    private async ValueTask<bool> CompletesWithinAsync(Task work, TimeSpan wait, SweepWaitBudget budget, CancellationToken cancellationToken)
+    {
+        if (work.IsCompleted)
+            return true;
+
+        var allowed = wait < budget.Remaining ? wait : budget.Remaining;
+        if (allowed <= TimeSpan.Zero)
+            return false;
+
+        var started = _timeProvider.GetUtcNow();
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var first = await Task.WhenAny(work, Task.Delay(allowed, _timeProvider, waiting.Token));
+        await waiting.CancelAsync();
+        budget.Remaining -= _timeProvider.GetUtcNow() - started;
+        return first == work;
+    }
+
+    // A hand-off or passivation that finishes in time fails the sweep as before. One still waiting for a drain is
+    // tracked until it ends, so no later sweep hands the execution off again, renews, claims or leases it meanwhile.
+    private async ValueTask ReleaseBoundedAsync(
+        Task work,
+        SweepWaitBudget budget,
+        WorkflowExecutionPartition partition,
+        string executionId,
+        string what,
+        CancellationToken cancellationToken)
+    {
+        if (await CompletesWithinAsync(work, _pumpOptions.Value.InlineDispatchWait, budget, cancellationToken))
+        {
+            await work;
+            return;
+        }
+
+        var key = DetachedKey(partition, executionId);
+        _releasing[key] = work;
+        _ = ObserveAsync();
+
+        async Task ObserveAsync()
+        {
+            try
+            {
+                await work;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning(exception, "{What} workflow execution {WorkflowExecutionId} failed after the sweep moved on.", what, executionId);
+            }
+            finally
+            {
+                _releasing.TryRemove(new KeyValuePair<string, Task>(key, work));
+            }
+        }
+    }
+
+    private void Detach(
+        string key,
+        string executionKey,
+        string executionId,
+        ExecutionCommandTransportItem item,
+        Task<WorkflowExecutionCommandDispatchResult> dispatch,
+        string ownerId,
+        TransportAccess transport)
+    {
+        var detached = new DetachedDispatch(executionKey, item.LeaseToken!.Value);
+        _detached[key] = detached;
+        _ = CompleteAsync();
+
+        async Task CompleteAsync()
+        {
+            try
+            {
+                if (IsDelivered(await dispatch))
+                {
+                    // The sweep may lease the item again while an ack runs; acknowledge under that lease instead. Once
+                    // this gives up, a sweep that leases the item again before the entry is removed acknowledges it.
+                    var leaseToken = detached.LeaseToken;
+                    while (!await AckAsync(leaseToken))
+                    {
+                        if (detached.TryGiveUp(leaseToken, out leaseToken))
+                        {
+                            Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its lease moved on; it is re-driven and deduplicated.", item.TransportItemId, executionId);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+                // The shell stopped while the drain ran. The item stays leased, and is re-driven once its lease lapses.
+                Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its shell stopped.", item.TransportItemId, executionId);
+            }
+            catch (Exception exception)
+            {
+                // Left leased: the item becomes visible again once its lease expires and is re-driven, as a failed
+                // dispatch in the sweep would be after the sweep's backoff.
+                Logger.LogWarning(exception, "Dispatching command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} failed after the sweep moved on.", item.TransportItemId, executionId);
+            }
+
+            _detached.TryRemove(new KeyValuePair<string, DetachedDispatch>(key, detached));
+            try
+            {
+                // Commands the sweep held back while this drain ran stay leased to this node, whatever this command's
+                // outcome. Make them visible now, so the next sweep, or the execution's new owner, dispatches them
+                // rather than wait out their lease. Only those: an undelivered command keeps its own lease, as it would
+                // in the sweep, and so does one a sweep leased since. One held after this takes the record waits out
+                // its lease.
+                if (!_detached.Values.Any(running => running.ExecutionKey == executionKey))
+                    await ReleaseHeldAsync();
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
+            {
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning(exception, "Could not release the commands held for workflow execution {WorkflowExecutionId}; they are re-driven once their lease lapses.", executionId);
+            }
+        }
+
+        // A release is a compare-and-set on the recorded lease, so an item leased again since stays leased.
+        async ValueTask ReleaseHeldAsync()
+        {
+            var held = _held.Where(entry => entry.Value.ExecutionKey == executionKey && _held.TryRemove(entry)).Select(entry => entry.Value).ToArray();
+            if (held.Length == 0)
+                return;
+
+            await transport.UseAsync(async leases =>
+            {
+                var now = _timeProvider.GetUtcNow();
+                foreach (var command in held)
+                    await leases.ReleaseLeaseAsync(executionId, command.TransportItemId, ownerId, command.LeaseToken, now);
+                return true;
+            });
+        }
+
+        ValueTask<bool> AckAsync(long leaseToken) =>
+            transport.UseAsync(leases => leases.AckAsync(executionId, item.TransportItemId, ownerId, leaseToken, _timeProvider.GetUtcNow()));
+    }
+
+    /// <summary>A dispatch a sweep stopped waiting for, and the lease it acknowledges under when it finishes.</summary>
+    private sealed class DetachedDispatch(string executionKey, long leaseToken)
+    {
+        private readonly Lock _sync = new();
+        private long _leaseToken = leaseToken;
+        private bool _gaveUp;
+
+        public string ExecutionKey { get; } = executionKey;
+
+        public long LeaseToken
+        {
+            get
+            {
+                lock (_sync)
+                    return _leaseToken;
+            }
+        }
+
+        /// <summary>Moves the acknowledgement to a newer lease of the item. Fails once the delivered dispatch gave up
+        /// acknowledging, and the caller acknowledges under its lease instead.</summary>
+        public bool TryMoveTo(long newer)
+        {
+            lock (_sync)
+            {
+                if (_gaveUp)
+                    return false;
+                _leaseToken = newer;
+                return true;
+            }
+        }
+
+        /// <summary>Gives up acknowledging after an ack under <paramref name="tried"/> failed, unless a newer lease
+        /// arrived meanwhile, which <paramref name="next"/> then carries.</summary>
+        public bool TryGiveUp(long tried, out long next)
+        {
+            lock (_sync)
+            {
+                next = _leaseToken;
+                _gaveUp = next == tried;
+                return _gaveUp;
+            }
+        }
+    }
+
+    /// <summary>A command a sweep held back behind a running drain, under the lease it holds it with.</summary>
+    private sealed record HeldCommand(string ExecutionKey, string TransportItemId, long LeaseToken);
+
+    /// <summary>What one sweep may still spend waiting for local work.</summary>
+    private sealed class SweepWaitBudget(TimeSpan total)
+    {
+        public TimeSpan Remaining { get; set; } = total;
+    }
+
+    /// <summary>
+    /// The command transport for work that may outlast the sweep. A sweep's operation scope ends with the sweep, so such
+    /// work opens a scope of its own; a pump built over one transport uses it directly.
+    /// </summary>
+    private sealed class TransportAccess(IExecutionCommandTransport transport, WorkflowExecutionPartition partition, IServiceProvider? services)
+    {
+        private readonly IPersistenceOperationScopeFactory? _scopes = services?.GetRequiredService<IPersistenceOperationScopeFactory>();
+
+        public async ValueTask<T> UseAsync<T>(Func<IExecutionCommandTransport, ValueTask<T>> use)
+        {
+            if (_scopes is null)
+                return await use(transport);
+
+            await using var scope = await _scopes.CreateAsync(new PersistenceScope(partition.Value));
+            return await use(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
+        }
     }
 
     /// <summary>Where a gated pump is in its pass through one scope's backlog, and what it found waiting so far.</summary>

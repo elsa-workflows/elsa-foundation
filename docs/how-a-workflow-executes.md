@@ -84,7 +84,8 @@ public sealed class Endpoint(IWorkflowExecutionStartService starter) : ApiEndpoi
     public override async Task<...> HandleAsync(ExecuteWorkflow request, CancellationToken ct)
     {
         var result = await starter.ExecuteAsync(request, ct);
-        // 429 if the server is shedding load, 409 if the command was rejected, otherwise 200
+        // 429 if the server is shedding load, 409 if the command was rejected,
+        // 400 if the inputs break the workflow's input contract, otherwise 200
     }
 }
 ```
@@ -99,7 +100,7 @@ The start service reads the executable once to pick up the workflow's default va
 
 ### 2. The dispatcher checks the executable
 
-The dispatcher looks up the executable. It checks that the executable is still the **published** one (a live *Published* source reference points at it), applies any start policy, and wraps the request in a *Start* command.
+The dispatcher looks up the executable. It checks that the executable is still the **published** one (a live *Published* source reference points at it), applies the workflow's input contract (it fills in declared defaults and refuses missing required, unknown or mistyped inputs), applies any start policy, and wraps the request in a *Start* command.
 
 Where do executables come from? Publishing compiles a definition version and saves the result to the executable store. That store is in memory by default. With database persistence switched on, it is a database store with a cache in front.
 
@@ -167,7 +168,7 @@ The committer then:
 There are two stores:
 
 - **In memory** (the default). Nothing survives a restart.
-- **Database** (EF Core). Writes everything in one transaction, plus a marker that makes replaying the same commit harmless.
+- **Database** (EF Core). Writes everything in one transaction, plus a marker that makes replaying the same commit harmless ([how a replay is answered](runtime-durable-resumption.md#the-idempotency-rule)).
 
 The Workbench uses SQLite: each EF module's `Provider` in `shells.json`, falling back to the `ConnectionStrings:Elsa` connection string. The database file is `elsa.db` next to the Workbench program.
 
@@ -215,8 +216,8 @@ The EF command budgets file records what each reference workflow costs on the ru
 
 | Reference workflow | Durable | Balanced |
 |---|---:|---:|
-| Ten WriteLine activities | 320 commands | 98 commands |
-| 4-activity HTTP workflow | 195 commands | 101 commands |
+| Ten WriteLine activities | 221 commands | 64 commands |
+| 4-activity HTTP workflow | 149 commands | 83 commands |
 
 SQLite allows one writer, and at its default `synchronous=FULL` each commit is an fsync, so requests queue behind each other's fsyncs. When *Durable* still committed every scheduler hop (about 106 commits per request of the HTTP reference workflow), that workflow plateaued at two concurrent clients on a cloud VM disk, about one request per second. This was measured, not inferred: fsyncs were counted per request, and injecting 5 ms into every fsync locally reproduced the plateau ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). The plateau has not been measured again for the per-activity *Durable*. Reducing the commit count further is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564).
 
@@ -277,7 +278,7 @@ For readers who want the exact contracts behind each step above:
 | Shells and features | Feature list: `CShells:Shells:default:Features`. A feature is a class marked `[ShellFeature(name: "...")]` implementing `IShellFeature` (package `CShells.Abstractions`) and registering services in `ConfigureServices(IServiceCollection)`. The default shell mounts at the root because `WebRouting.Path` is `""`. |
 | 1. Endpoint | Permission `WorkflowRuntimeExecute`; calls `IWorkflowExecutionStartService.ExecuteAsync`, which reads `IWorkflowExecutableStore.FindAsync(artifactId)` for variable defaults, builds a `WorkflowExecutionStartDispatchRequest` and calls `IWorkflowStartDispatcher.DispatchAsync`. |
 | HTTP trigger path | Middleware mounted by `ActivitiesHttpFeature.UseMiddleware` under `/workflows/http`; matches against `IRouteTable`; builds a `StimulusDispatchRequest` for `IStimulusRouter`. Convergence interval belongs to the `WorkflowsRuntimeHttp` feature. |
-| 2. Executable | `WorkflowExecutable` holds the root `ExecutableNode`, the resume targets and the incident strategy; it is immutable and content-addressed. Publishing calls `IWorkflowExecutableStore.SaveAsync`. Default store `InMemoryWorkflowExecutableStore`; with EF Core, `RuntimeArtifactsEntityFrameworkCoreRegistration` swaps in `CachingWorkflowExecutableStore` over `EfWorkflowExecutableStore`. The dispatcher checks `IWorkflowExecutableSourceReferenceStore` for a `Published` reference, runs `IWorkflowExecutableStartPolicy`, and builds a `WorkflowExecutionCommandEnvelope` of kind `WorkflowExecutionCommandKind.Start`. |
+| 2. Executable | `WorkflowExecutable` holds the root `ExecutableNode`, the resume targets and the incident strategy; it is immutable and content-addressed. Publishing calls `IWorkflowExecutableStore.SaveAsync`. Default store `InMemoryWorkflowExecutableStore`; with EF Core, `RuntimeArtifactsEntityFrameworkCoreRegistration` swaps in `CachingWorkflowExecutableStore` over `EfWorkflowExecutableStore`. The dispatcher checks `IWorkflowExecutableSourceReferenceStore` for a `Published` reference, validates the inputs with `IWorkflowExecutableInputValidator`, runs `IWorkflowExecutableStartPolicy`, and builds a `WorkflowExecutionCommandEnvelope` of kind `WorkflowExecutionCommandKind.Start`. |
 | 3. Mailbox | `IWorkflowExecutionActorProvider.GetAgentAsync`, then `IWorkflowExecutionActor.EnqueueAsync(envelope)`. Provider: `InProcessWorkflowExecutionActorProvider` (one mailbox per execution id). Executor: `IWorkflowExecutionCommandExecutor`, implemented by `ScopedWorkflowExecutionCommandExecutor`, which resolves `WorkflowSchedulerCommandRouter` per command. |
 | 4. Queue and drain | Work item `RuntimeSchedulerWorkItem`; `IWorkflowSchedulerWorkQueue.EnqueueAsync` is idempotent by `(WorkflowExecutionId, WorkItemId)`. Default queue `InMemoryWorkflowSchedulerWorkQueue`, EF `EfSchedulerWorkQueueStore`. `IWorkflowSchedulerDrainPolicy` (default `ImmediateWorkflowSchedulerDrainPolicy`, always drains now); the router pushes a `WorkflowBurstScope` (the drain runs as one burst, so its checkpoints can be committed together) and calls `IWorkflowDrainOrchestrator.DrainAsync`. The orchestrator calls `IRuntimeExecutionOwnershipService.AcquireAsync`, runs the drainer, processes the post-commit outbox and notifies each `IWorkflowSchedulerDrainObserver`. The drainer picks the one `IWorkflowSchedulerWorkHandler` whose `CanHandle` accepts the item's `CommandKind`. |
 | 5. Handler chain | `Start` → `WorkflowStartSchedulerWorkHandler` (enqueues a `Checkpoint` item carrying a post-commit intent to start the root); `Checkpoint` → `WorkflowCheckpointSchedulerWorkHandler`, after which `RuntimeSchedulerPostCommitIntentDispatcher` queues `StartActivity`; `StartActivity` → `WorkflowStartActivitySchedulerWorkHandler`, which runs `WorkflowIntrinsicExecutor.ExecuteAsync` when `ExecutableNode.IntrinsicKind` is set (`Set`, `Merge`, `Reduce`, `Return`, `Control`, `SetOutput`, `Finish`, …; no CLR type is activated); `InvokeActivity` → `WorkflowInvokeActivitySchedulerWorkHandler`, which calls `IActivityActivator.ActivateAsync` (`ActivityActivator` picks an `IActivityActivationStrategy` by descriptor kind) and then `activity.ExecuteAsync(context)`; on exception `ActivityFaultIncidentRecorder` commits an incident and the drain reports the item as completed; `CompleteActivity` → `WorkflowCompleteActivitySchedulerWorkHandler`, which enqueues the completion checkpoint and a second `CompleteActivity` item with payload kind `ParentCompletionEvaluation`, accepted only by `WorkflowParentActivityCompletionSchedulerWorkHandler`; that enqueues `ScheduleActivity`, handled by `WorkflowScheduleActivitySchedulerWorkHandler`. |

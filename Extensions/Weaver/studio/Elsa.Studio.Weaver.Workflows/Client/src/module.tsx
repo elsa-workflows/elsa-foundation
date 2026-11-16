@@ -1,43 +1,20 @@
 import React from "react";
 import type {
   ElsaStudioModuleApi,
-  StudioAiContextAttachment,
-  StudioAiProposalRendererProps,
-  StudioEndpointContext
+  StudioWeaverContextAttachment,
+  StudioWeaverResultRendererProps
 } from "@elsa-workflows/studio-sdk";
-import { capabilityIds, resolveCapabilityLink } from "@elsa-workflows/studio-workflows";
+import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "@elsa-workflows/studio-workflows";
 
+// Every prompt and renderer below is registered under this package's own module identity, and names only tools and
+// result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt reads through the
+// Runtime-side workflow_read_executable (Elsa.Weaver.Workflows.Runtime) and the explain-version prompt through
+// workflow_read_version (slice F); the explain-instance prompt reads one exact Run through the Runtime-side
+// workflow_read_run (slice G).
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.definition-context",
-    kind: "workflow-definition",
-    label: "Workflow definition",
-    description: "Attaches workflow definition metadata, draft state, versions, and validation diagnostics.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-definition", reference)
-  });
-
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.executable-context",
-    kind: "workflow-executable",
-    label: "Workflow executable",
-    description: "Attaches runtime executable identity, source, root activity, and resume target metadata.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-executable", reference)
-  });
-
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.instance-context",
-    kind: "workflow-instance",
-    label: "Workflow instance",
-    description: "Attaches workflow instance state, incidents, bookmarks, and recent execution history when available.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-instance", reference)
-  });
-
-  api.ai.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.suggest-create-metadata",
     label: "Suggest name and description",
     description: "Ask Weaver to propose a workflow display name and description for the draft being created.",
@@ -68,7 +45,7 @@ export function register(api: ElsaStudioModuleApi) {
     }
   });
 
-  api.ai.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-definition",
     label: "Explain workflow",
     description: "Ask Weaver to explain the selected workflow definition.",
@@ -83,28 +60,83 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.promptActions.add({
+  // An Executable is read-only (spec 1193 story 8, FR-028). The page that contributes its own workflows.executable context
+  // (the Executable Inspector) dispatches with attached: true, so this prompt never duplicates it; elsewhere (the executables
+  // list) the prompt attaches the exact identity itself, bound to its Artifact Hash.
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-executable",
     label: "Explain executable",
-    description: "Ask Weaver to explain a published workflow executable and its runtime start conditions.",
+    description: "Ask Weaver to explain a workflow Executable read-only: its identity, Artifact Hash, graph and Source References.",
     moduleId,
     placement: "selection",
     contextKind: "workflow-executable",
-    createPrompt: context => ({
-      // The attachment is the WorkflowExecutableSummary — metadata only. The prompt directs Weaver to
-      // pull the actual structure through the get-executable-detail tool so the explanation is grounded
-      // in the real node tree instead of guessed from the summary.
-      message: [
-        "Explain this workflow executable, its root activity, source version, and runtime execution implications.",
-        "The attached summary carries identity metadata only. Before explaining, call the get-executable-detail tool with this artifact id to retrieve the compiled node tree, input bindings, and references, and ground the explanation in that structure."
-      ].join("\n"),
-      mode: "enqueue",
-      attachments: [createAttachment("workflow-executable", readReferenceId(context), context)],
-      source: { moduleId, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
-    })
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowExecutableAttachment(context);
+      return {
+        message: [
+          "Explain this workflow Executable read-only: its identity and Artifact Hash, its root activity, its graph and the Source References that point at it.",
+          "Read it with workflow_read_executable and name the Artifact Hash you read. An Executable is immutable: refuse any request to change it, change nothing, and offer to work on the workflow's current draft instead."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
+      };
+    }
   });
 
-  api.ai.promptActions.add({
+  // One exact Run, read-only (spec 1193 story 9, FR-029). The run page contributes its own workflows.run context (the Run and
+  // the selected activity execution) and dispatches with attached: true, so this prompt never duplicates it; elsewhere the
+  // prompt attaches the exact identity itself. Never "the latest run" of a definition.
+  api.weaver.promptActions.add({
+    id: "weaver.workflows.explain-instance",
+    label: "Explain run",
+    description: "Ask Weaver to explain one exact workflow run read-only: why it faulted, where it waits and what the selected activity execution recorded.",
+    moduleId,
+    placement: "selection",
+    contextKind: "workflow-instance",
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowRunAttachment(context);
+      const selected = isRecord(context) && typeof context.activityExecutionId === "string" ? context.activityExecutionId.slice(0, 256) : null;
+      return {
+        message: [
+          "Explain this workflow run read-only: its status, why it faulted or where it is waiting, citing its recorded incidents and activity executions by id" +
+            (selected ? `, and what the selected activity execution ${selected} recorded.` : "."),
+          "Read it with workflow_read_run and name the Run you describe. If it is still in progress, say so and describe it as of the read time the result gives.",
+          "A withheld value stays withheld: never guess it. Report unavailable data as unavailable, with the reason the result gives.",
+          "Weaver never changes a run: refuse any request to retry, cancel, delete or dispatch it again, change nothing, and point to the run page's own controls."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-instance", label: "Explain run" }
+      };
+    }
+  });
+
+  // A persisted workflow definition version is read-only (spec 1193 story 8, FR-026).
+  api.weaver.promptActions.add({
+    id: "weaver.workflows.explain-version",
+    label: "Explain version",
+    description: "Ask Weaver to explain one exact workflow version read-only, or compare it with another version of the same workflow.",
+    moduleId,
+    placement: "selection",
+    contextKind: "workflow-version",
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowVersionAttachment(context);
+      const version = isRecord(context) && typeof context.version === "string" ? ` v${context.version.slice(0, 64)}` : "";
+      return {
+        message: [
+          `Explain what this workflow version${version} does, read-only, and name the exact version you describe.`,
+          "Read it with workflow_read_version; to say what changed, call it with compareToVersionId set to the other version of the same workflow, and present the comparison as the tool's own.",
+          "A version is immutable: refuse any request to change it, change nothing, and offer to work on the workflow's current draft instead."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-version", label: "Explain version" }
+      };
+    }
+  });
+
+  api.weaver.promptActions.add({
     id: "weaver.workflows.find-draft-risks",
     label: "Find draft risks",
     description: "Ask Weaver to inspect draft validation errors and graph structure for likely runtime issues.",
@@ -112,169 +144,171 @@ export function register(api: ElsaStudioModuleApi) {
     placement: "toolbar",
     contextKind: "workflow-definition",
     createPrompt: context => ({
-      message: "Find correctness, validation, maintainability, and runtime risks in this workflow draft. Prefer concrete findings over generic advice.",
+      message: "Find correctness, validation, maintainability, and runtime risks in the open workflow draft. Use the designer's current validation diagnostics in its working-state context, name the revision you read, and prefer concrete findings over generic advice.",
       mode: "enqueue",
       attachments: [createAttachment("workflow-definition", readReferenceId(context), context)],
       source: { moduleId, actionId: "weaver.workflows.find-draft-risks", label: "Find workflow risks" }
     })
   });
 
-  api.ai.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.propose-update",
     label: "Propose update",
-    description: "Ask Weaver for a reviewed workflow update proposal instead of applying mutations directly.",
+    description: "Ask Weaver for one reviewed Operation Batch for the open draft instead of applying mutations directly.",
     moduleId,
     placement: "toolbar",
     contextKind: "workflow-definition",
     createPrompt: context => ({
-      message: "Propose a safe workflow update. Return rationale, warnings, validation diagnostics, and a graph diff. Do not apply changes directly.",
+      message: "Propose one safe change to the open workflow draft as a reviewed Operation Batch (workflow_apply_operation_batch), using installed activities and declared inputs only. Ask me when an activity, input or target is unclear. Saving and publishing stay with me.",
       mode: "enqueue",
       attachments: [createAttachment("workflow-definition", readReferenceId(context), context)],
       source: { moduleId, actionId: "weaver.workflows.propose-update", label: "Propose workflow update" }
     })
   });
 
-  api.ai.promptActions.add({
-    id: "weaver.workflows.explain-instance",
-    label: "Explain instance",
-    description: "Ask Weaver to explain workflow instance state and history when instance data is available.",
-    moduleId,
-    placement: "empty-state",
-    contextKind: "workflow-instance",
-    createPrompt: context => ({
-      message: "Explain how to reason about workflow instances in this Studio view. If an instance is attached, summarize its state, incidents, bookmarks, and next actions.",
-      mode: "enqueue",
-      attachments: [createAttachment("workflow-instance", readReferenceId(context), context)],
-      source: { moduleId, actionId: "weaver.workflows.explain-instance", label: "Explain workflow instance" }
-    })
+  // Contributed by this package for the Workflows module's results; the host matches the result's resource module
+  // against resourceModuleIds. The designer-history Undo is Studio Workflows' own result control, shown after this card.
+  api.weaver.resultRenderers.add({
+    id: "weaver.workflows.batch-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowBatchResult {...props} />
   });
-
-  api.ai.tools.add({
-    name: "workflow.definition.read",
-    displayName: "Read workflow definition",
-    description: "Reads workflow definition metadata, draft state, versions, and validation diagnostics.",
-    mutability: "read-only",
-    dangerLevel: "low",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:read"],
-    agentScopes: ["workflow-author"]
+  // Spec 1193 slice E: the library's reviewed writes (per-target outcomes), and the library pages' own working-state changes.
+  api.weaver.resultRenderers.add({
+    id: "weaver.workflows.library-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow library change", resultTypes: ["workflows.library-result"], schemaVersions: ["1"],
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowLibraryResult {...props} />
   });
-
-  api.ai.tools.add({
-    name: "get-executable-detail",
-    displayName: "Get executable detail",
-    description: "Reads a workflow executable by artifact id: identity, compiled node tree with input-binding summaries, the chosen reference's layout, and all source references. Descriptor payloads are omitted and secret values are never inlined.",
-    mutability: "read-only",
-    dangerLevel: "low",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:read"],
-    agentScopes: ["workflow-author"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        artifactId: { type: "string", description: "The content-addressed artifact id of the executable to inspect." },
-        sourceReferenceId: { type: "string", description: "Optional source reference id selecting which reference's layout is returned; defaults to the newest live reference." }
-      },
-      required: ["artifactId"],
-      additionalProperties: false
-    },
-    // Executes through the module's authenticated endpoint context — the same context every other
-    // workflow-management call uses — so the endpoint's workflow read permission gates the tool and
-    // there is no bridge-key bypass (plan §6, ADR 0037).
-    execute: input => getExecutableDetail(api.backend, input)
+  api.weaver.resultRenderers.add({
+    id: "weaver.workflows.list-state-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow list change", resultTypes: ["workflows.list-state"], schemaVersions: ["1"],
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowPageChangeResult {...props} label="Workflow list change" />
   });
-
-  api.ai.tools.add({
-    name: "workflow.proposal.create",
-    displayName: "Create workflow proposal",
-    description: "Creates a reviewed workflow create/update proposal that requires explicit user approval before apply.",
-    mutability: "proposal",
-    dangerLevel: "medium",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:write"],
-    agentScopes: ["workflow-author"]
-  });
-
-  api.ai.proposalRenderers.add({
-    id: "weaver.workflows.workflow-proposal-renderer",
-    kind: "WorkflowCreate",
-    moduleId,
-    component: WorkflowProposalRenderer
-  });
-
-  api.ai.proposalRenderers.add({
-    id: "weaver.workflows.workflow-update-proposal-renderer",
-    kind: "WorkflowUpdate",
-    moduleId,
-    component: WorkflowProposalRenderer
+  api.weaver.resultRenderers.add({
+    id: "weaver.workflows.create-dialog-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "New workflow values", resultTypes: ["workflows.create-dialog-prefill"], schemaVersions: ["1"],
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowPageChangeResult {...props} label="New workflow values" />
   });
 }
 
-export function WorkflowProposalRenderer({ proposal }: StudioAiProposalRendererProps) {
-  const graphDiff = proposal.graphDiff;
+interface LibraryTargetOutcome { definitionId?: string; status?: string; message?: string | null }
 
+const libraryStatusLabel: Record<string, string> = {
+  applied: "Changed", denied: "Not permitted", conflict: "Changed elsewhere; reload", "not-found": "Unavailable", invalid: "Refused",
+  unavailable: "Organization unavailable", unsupported: "Not supported", "not-applied": "Not changed", proposed: "Proposed"
+};
+
+/**
+ * A reviewed library write (spec 1193 FR-021, SC-008): one line per workflow with its own outcome, the tag creations it
+ * makes first, and an overall outcome that says "partial" whenever some workflows were not changed; never "done" for those.
+ */
+export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  const targets = Array.isArray(data.targets) ? data.targets.filter(isRecord) as LibraryTargetOutcome[] : [];
+  const status = typeof data.status === "string" ? data.status : "proposed";
+  const changes = Array.isArray(data.changes) ? data.changes.filter(isRecord) : [];
+  const overall = toolResult ? status === "applied" ? "Changed in the workflow library." : status === "partial" ? "Partly changed: some workflows were not changed." : "Nothing was changed."
+    : proposal?.status === "denied" ? "Declined: nothing was changed." : "Review this library change.";
   return (
-    <section aria-label="Workflow proposal">
-      <h3>{proposal.kind} proposal</h3>
-      <p>{proposal.rationale || "No rationale provided."}</p>
-      {proposal.warnings?.length ? <ul>{proposal.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul> : null}
-      {proposal.diagnostics?.length ? (
-        <ul>
-          {proposal.diagnostics.map(diagnostic => (
-            <li key={`${diagnostic.code ?? ""}-${diagnostic.message}`}>
-              {diagnostic.severity ?? "info"}: {diagnostic.message}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {graphDiff ? (
-        <dl>
-          <dt>Added</dt>
-          <dd>{graphDiff.addedActivityIds?.length ?? 0}</dd>
-          <dt>Removed</dt>
-          <dd>{graphDiff.removedActivityIds?.length ?? 0}</dd>
-          <dt>Changed</dt>
-          <dd>{graphDiff.changedActivityIds?.length ?? 0}</dd>
-        </dl>
-      ) : null}
+    <section aria-label="Workflow library change" className="weaver-workflow-library" data-outcome={toolResult ? status : "proposed"}>
+      <p><strong>{overall}</strong></p>
+      {changes.some(change => change.change === "create-and-add") ? <p data-creates-tags="true">Creates the new tag(s) first; this needs tag-management permission.</p> : null}
+      {changes.length ? <ul aria-label="Tag changes">{changes.map((change, position) => <li key={position}>{String(change.change)}: {String(change.tag)}{change.value ? ` = ${String(change.value)}` : ""}</li>)}</ul> : null}
+      {targets.length ? <ul aria-label="Workflows">{targets.map((target, position) => (
+        <li key={target.definitionId ?? position} data-status={target.status}>{target.definitionId}: {libraryStatusLabel[target.status ?? "proposed"] ?? target.status}{target.message ? ` — ${target.message}` : ""}</li>
+      ))}</ul> : null}
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
     </section>
   );
 }
 
-// Backs the get-executable-detail Weaver Tool. Exported for the test suite. 404 (unknown artifact)
-// and 403 (missing workflow read permission) surface as the endpoint's errors, unmodified.
-export async function getExecutableDetail(context: StudioEndpointContext, input: Record<string, unknown>) {
-  const artifactId = readTrimmedString(input.artifactId);
-  if (!artifactId) throw new Error("get-executable-detail requires a non-empty artifactId.");
-
-  const sourceReferenceId = readTrimmedString(input.sourceReferenceId);
-  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
-  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-executable", { artifactId });
-  return context.http.getJson<unknown>(`${path}${query}`);
+/** A reviewed change to a library page's own working state: applied there only, revertible, and never saved. */
+export function WorkflowPageChangeResult({ toolResult, preparedInvocation, label }: StudioWeaverResultRendererProps & { label: string }) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  return (
+    <section aria-label={label} className="weaver-workflow-page-change">
+      <p><strong>{toolResult ? "Applied on the page only; nothing was saved." : "Review this change to the page."}</strong></p>
+      <pre>{JSON.stringify(data.change ?? {}, null, 2)}</pre>
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+    </section>
+  );
 }
 
-function readTrimmedString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+interface BatchOperationLabel { index?: number; kind?: string; summary?: string; risk?: string; reasons?: string[] }
+
+/**
+ * The review and result card of a reviewed Operation Batch (spec 1193 FR-011, FR-012): each operation with its risk
+ * label, the batch's highest risk and complexity label, what applying clears, the outcome in product words, and the
+ * outcome in product words. The whole-change Undo and the saved state are Studio Workflows' result control, shown after it.
+ */
+export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  const operations = Array.isArray(data.operations) ? data.operations.filter(isRecord) as BatchOperationLabel[] : [];
+  const risk = typeof data.risk === "string" ? data.risk : preparedInvocation?.risk;
+  return (
+    <section aria-label="Workflow change" className="weaver-workflow-batch">
+      <p><strong>{batchOutcome(proposal, toolResult)}</strong></p>
+      <p>
+        <span data-risk={risk}>{riskLabel(risk)}</span>
+        {data.highComplexity === true ? <> · <span data-complexity="high">High complexity: applied whole or not at all, never split</span></> : null}
+      </p>
+      {operations.length ? (
+        <ol aria-label="Operations">
+          {operations.map((operation, position) => (
+            <li key={operation.index ?? position} data-risk={operation.risk}>
+              <span>{riskLabel(operation.risk)}</span>{" "}
+              <span>{operation.summary ?? operation.kind ?? "Operation"}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      <p>The last test-run result and published-artifact association are cleared; Undo does not restore them. Saving and publishing remain your explicit actions.</p>
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+    </section>
+  );
 }
 
-function createWorkflowAttachment(kind: string, reference: unknown) {
-  return createAttachment(kind, readReferenceId(reference), reference);
+function batchOutcome(proposal: unknown, toolResult: StudioWeaverResultRendererProps["toolResult"]) {
+  // The receipt's own fact. Whether the user has since saved it is the owning module's live state, in its result control.
+  if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the working draft as one Undo step";
+  const status = isRecord(proposal) && typeof proposal.status === "string" ? proposal.status : "";
+  switch (status) {
+    case "awaiting-approval": case "edited": return "Proposed — awaiting your review";
+    case "approved": case "awaiting-client": return "Approved — not yet applied";
+    case "denied": case "rejected": case "refused": case "expired": case "cancelled": return "Refused — nothing changed";
+    case "uncertain": return "Uncertain — the editor could not confirm the change; it is never replayed";
+    default: return toolResult && !toolResult.succeeded ? "Refused — nothing changed" : "Proposed — awaiting your review";
+  }
 }
 
-function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioAiContextAttachment {
+function riskLabel(risk: unknown) {
+  return risk === "destructive" ? "Destructive" : risk === "reviewRequired" ? "Review required" : "Unclassified — review carefully";
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
+}
+
+function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioWeaverContextAttachment {
+  const record = isRecord(reference) ? reference : {};
+  const definition = isRecord(record.definition) ? record.definition : record;
+  const draft = isRecord(record.draft) ? record.draft : record;
+  const content: Record<string, string | null> = { requestKind: kind, referenceId };
+  for (const key of ["intent", "name", "description", "rootActivityVersionId"] as const) {
+    const value = record[key] ?? definition[key] ?? draft[key];
+    if (typeof value === "string") content[key] = value.slice(0, 1024);
+  }
   return {
-    kind,
-    referenceId,
-    metadata: isRecord(reference) ? reference : { value: reference }
+    id: `workflow-request:${kind}:${referenceId ?? "new"}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1",
+    source: moduleId, sourceId: referenceId ?? undefined, label: "Workflow request", contentType: "workflow.request", sensitivity: "internal", scope: "selection",
+    summary: "Workflow request context", origin: "clientSnapshot", target: null, content
   };
 }
 
 function readReferenceId(reference: unknown) {
   if (!isRecord(reference)) return null;
-  const id = reference.id ?? reference.definitionId ?? reference.artifactId ?? reference.instanceId;
+  const nestedDefinition = isRecord(reference.definition) ? reference.definition : {};
+  const id = reference.id ?? reference.definitionId ?? reference.artifactId ?? reference.instanceId ?? nestedDefinition.id;
   return typeof id === "string" ? id : null;
 }
 

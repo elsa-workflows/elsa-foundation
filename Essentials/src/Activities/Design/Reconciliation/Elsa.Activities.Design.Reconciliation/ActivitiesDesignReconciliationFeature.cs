@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Design.Reconciliation;
 
@@ -38,6 +39,8 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
         // The content hasher + entity factories are registered by the persistence feature (entity
         // construction lives with persistence); the reconciler consumes the factories.
         services.AddScoped<IActivityVersionReconciler, ActivityVersionReconciler>();
+        // Replaceable: the latest refusal of each source-owned version that a publishing bridge refused.
+        services.TryAddSingleton<IActivityReconciliationDiagnosticStore, InMemoryActivityReconciliationDiagnosticStore>();
 
         services.AddScoped<IStartupTask, ActivityVersionReconcilerStartupTask>();
 

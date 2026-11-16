@@ -112,6 +112,10 @@ public sealed class ActivityDependencyWatermarkExpiredException(string watermark
     public string Watermark { get; } = watermark;
 }
 
+/// <summary>No confirmed dependency snapshot is available; this does not mean there are no usages.</summary>
+public sealed class ActivityDependencyProjectionUnavailableException()
+    : Exception("Activity dependency projection has not been initialized.");
+
 public interface IActivityUpgradePlanStore
 {
     Task<ActivityUpgradePlan?> FindAsync(

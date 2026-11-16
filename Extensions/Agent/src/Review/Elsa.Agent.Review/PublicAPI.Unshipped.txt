@@ -1,0 +1,216 @@
+#nullable enable
+Elsa.Agent.Review.Activities.HumanReview
+Elsa.Agent.Review.Activities.HumanReview.Content.get -> System.Text.Json.JsonElement
+Elsa.Agent.Review.Activities.HumanReview.Content.set -> void
+Elsa.Agent.Review.Activities.HumanReview.HumanReview(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Secrets.Core.Contracts.ISecretValueProtector! protector) -> void
+Elsa.Agent.Review.Activities.HumanReview.Notes.get -> string?
+Elsa.Agent.Review.Activities.HumanReview.Notes.set -> void
+Elsa.Agent.Review.Activities.HumanReview.Title.get -> string?
+Elsa.Agent.Review.Activities.HumanReview.Title.set -> void
+Elsa.Agent.Review.Contracts.HumanReviewReference
+Elsa.Agent.Review.Contracts.HumanReviewReference.<Clone>$() -> Elsa.Agent.Review.Contracts.HumanReviewReference!
+Elsa.Agent.Review.Contracts.HumanReviewReference.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.HumanReviewReference.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewReference.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId) -> void
+Elsa.Agent.Review.Contracts.HumanReviewReference.Equals(Elsa.Agent.Review.Contracts.HumanReviewReference? other) -> bool
+Elsa.Agent.Review.Contracts.HumanReviewReference.HumanReviewReference(string! WorkflowExecutionId, string! ActivityExecutionId) -> void
+Elsa.Agent.Review.Contracts.HumanReviewReference.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.HumanReviewReference.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewStatus.Approved = 1 -> Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewStatus.Closed = 3 -> Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewStatus.Pending = 0 -> Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewStatus.Rejected = 2 -> Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewView
+Elsa.Agent.Review.Contracts.HumanReviewView.<Clone>$() -> Elsa.Agent.Review.Contracts.HumanReviewView!
+Elsa.Agent.Review.Contracts.HumanReviewView.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.HumanReviewView.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Content.get -> System.Text.Json.JsonElement
+Elsa.Agent.Review.Contracts.HumanReviewView.Content.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.ContentHash.get -> string!
+Elsa.Agent.Review.Contracts.HumanReviewView.ContentHash.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.DecidedBy.get -> string?
+Elsa.Agent.Review.Contracts.HumanReviewView.DecidedBy.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.DecisionComment.get -> string?
+Elsa.Agent.Review.Contracts.HumanReviewView.DecisionComment.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId, out string? Title, out System.Text.Json.JsonElement Content, out string? Notes, out string! ContentHash, out Elsa.Agent.Review.Contracts.HumanReviewStatus Status, out string? DecidedBy, out string? DecisionComment, out string? RequestId) -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Equals(Elsa.Agent.Review.Contracts.HumanReviewView? other) -> bool
+Elsa.Agent.Review.Contracts.HumanReviewView.HumanReviewView(string! WorkflowExecutionId, string! ActivityExecutionId, string? Title, System.Text.Json.JsonElement Content, string? Notes, string! ContentHash, Elsa.Agent.Review.Contracts.HumanReviewStatus Status, string? DecidedBy, string? DecisionComment, string? RequestId) -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Notes.get -> string?
+Elsa.Agent.Review.Contracts.HumanReviewView.Notes.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.RequestId.get -> string?
+Elsa.Agent.Review.Contracts.HumanReviewView.RequestId.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Status.get -> Elsa.Agent.Review.Contracts.HumanReviewStatus
+Elsa.Agent.Review.Contracts.HumanReviewView.Status.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.Title.get -> string?
+Elsa.Agent.Review.Contracts.HumanReviewView.Title.init -> void
+Elsa.Agent.Review.Contracts.HumanReviewView.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.HumanReviewView.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Contracts.IHumanReviews
+Elsa.Agent.Review.Contracts.IHumanReviews.DecideAsync(Elsa.Agent.Review.Contracts.ReviewDecisionCommand! command, Elsa.Agent.Review.Contracts.ReviewDecider! decider, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Review.Contracts.ReviewDecisionReceipt!>
+Elsa.Agent.Review.Contracts.IHumanReviews.GetAsync(Elsa.Agent.Review.Contracts.HumanReviewReference! reference, Elsa.Agent.Review.Contracts.ReviewDecider! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Review.Contracts.HumanReviewView?>
+Elsa.Agent.Review.Contracts.ReviewDecider
+Elsa.Agent.Review.Contracts.ReviewDecider.<Clone>$() -> Elsa.Agent.Review.Contracts.ReviewDecider!
+Elsa.Agent.Review.Contracts.ReviewDecider.ActorId.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecider.ActorId.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecider.Deconstruct(out string! TenantId, out string! ActorId) -> void
+Elsa.Agent.Review.Contracts.ReviewDecider.Equals(Elsa.Agent.Review.Contracts.ReviewDecider? other) -> bool
+Elsa.Agent.Review.Contracts.ReviewDecider.ReviewDecider(string! TenantId, string! ActorId) -> void
+Elsa.Agent.Review.Contracts.ReviewDecider.TenantId.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecider.TenantId.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.<Clone>$() -> Elsa.Agent.Review.Contracts.ReviewDecisionCommand!
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Comment.get -> string?
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Comment.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ContentHash.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ContentHash.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Decision.get -> Elsa.Agent.Review.Models.ReviewDecision
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Decision.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId, out string! ContentHash, out Elsa.Agent.Review.Models.ReviewDecision Decision, out string? Comment, out string! RequestId) -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Equals(Elsa.Agent.Review.Contracts.ReviewDecisionCommand? other) -> bool
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.RequestId.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.RequestId.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ReviewDecisionCommand(string! WorkflowExecutionId, string! ActivityExecutionId, string! ContentHash, Elsa.Agent.Review.Models.ReviewDecision Decision, string? Comment, string! RequestId) -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Contracts.ReviewDecisionCommand.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.<Clone>$() -> Elsa.Agent.Review.Contracts.ReviewDecisionReceipt!
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Deconstruct(out Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus Status, out string? Reason) -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Equals(Elsa.Agent.Review.Contracts.ReviewDecisionReceipt? other) -> bool
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Reason.get -> string?
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Reason.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.ReviewDecisionReceipt(Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus Status, string? Reason = null) -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Status.get -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Status.init -> void
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Accepted = 0 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.AlreadyResolved = 2 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Closed = 6 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Conflict = 3 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Forbidden = 4 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.NotFound = 5 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Pending = 1 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Refused = 8 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus.Unavailable = 7 -> Elsa.Agent.Review.Contracts.ReviewDecisionReceiptStatus
+Elsa.Agent.Review.Models.HumanReviewIds
+Elsa.Agent.Review.Models.HumanReviewResult
+Elsa.Agent.Review.Models.HumanReviewResult.<Clone>$() -> Elsa.Agent.Review.Models.HumanReviewResult!
+Elsa.Agent.Review.Models.HumanReviewResult.Comment.get -> string?
+Elsa.Agent.Review.Models.HumanReviewResult.Comment.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Content.get -> System.Text.Json.JsonElement
+Elsa.Agent.Review.Models.HumanReviewResult.Content.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.ContentHash.get -> string!
+Elsa.Agent.Review.Models.HumanReviewResult.ContentHash.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.DecidedAt.get -> System.DateTimeOffset
+Elsa.Agent.Review.Models.HumanReviewResult.DecidedAt.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.DecidedBy.get -> string!
+Elsa.Agent.Review.Models.HumanReviewResult.DecidedBy.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Decision.get -> string!
+Elsa.Agent.Review.Models.HumanReviewResult.Decision.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Deconstruct(out string! Decision, out string! ContentHash, out System.Text.Json.JsonElement Content, out string? Title, out string? Notes, out string! DecidedBy, out string? Comment, out System.DateTimeOffset DecidedAt, out string! RequestId) -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Equals(Elsa.Agent.Review.Models.HumanReviewResult? other) -> bool
+Elsa.Agent.Review.Models.HumanReviewResult.HumanReviewResult(string! Decision, string! ContentHash, System.Text.Json.JsonElement Content, string? Title, string? Notes, string! DecidedBy, string? Comment, System.DateTimeOffset DecidedAt, string! RequestId) -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Notes.get -> string?
+Elsa.Agent.Review.Models.HumanReviewResult.Notes.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.RequestId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewResult.RequestId.init -> void
+Elsa.Agent.Review.Models.HumanReviewResult.Title.get -> string?
+Elsa.Agent.Review.Models.HumanReviewResult.Title.init -> void
+Elsa.Agent.Review.Models.HumanReviewState
+Elsa.Agent.Review.Models.HumanReviewState.<Clone>$() -> Elsa.Agent.Review.Models.HumanReviewState!
+Elsa.Agent.Review.Models.HumanReviewState.ActivityExecutionId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.ActivityExecutionId.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.Content.get -> System.Text.Json.JsonElement
+Elsa.Agent.Review.Models.HumanReviewState.Content.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.ContentHash.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.ContentHash.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.Deconstruct(out int FormatVersion, out string! TenantId, out string! Partition, out string! WorkflowExecutionId, out string! ActivityExecutionId, out string! ExecutableNodeId, out string! ContentHash, out string! WaitId, out System.Text.Json.JsonElement Content, out string? Title, out string? Notes) -> void
+Elsa.Agent.Review.Models.HumanReviewState.Equals(Elsa.Agent.Review.Models.HumanReviewState? other) -> bool
+Elsa.Agent.Review.Models.HumanReviewState.ExecutableNodeId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.ExecutableNodeId.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.FormatVersion.get -> int
+Elsa.Agent.Review.Models.HumanReviewState.FormatVersion.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.HumanReviewState(int FormatVersion, string! TenantId, string! Partition, string! WorkflowExecutionId, string! ActivityExecutionId, string! ExecutableNodeId, string! ContentHash, string! WaitId, System.Text.Json.JsonElement Content, string? Title, string? Notes) -> void
+Elsa.Agent.Review.Models.HumanReviewState.Notes.get -> string?
+Elsa.Agent.Review.Models.HumanReviewState.Notes.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.Partition.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.Partition.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.TenantId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.TenantId.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.Title.get -> string?
+Elsa.Agent.Review.Models.HumanReviewState.Title.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.WaitId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.WaitId.init -> void
+Elsa.Agent.Review.Models.HumanReviewState.WorkflowExecutionId.get -> string!
+Elsa.Agent.Review.Models.HumanReviewState.WorkflowExecutionId.init -> void
+Elsa.Agent.Review.Models.ReviewDecision
+Elsa.Agent.Review.Models.ReviewDecision.Approve = 0 -> Elsa.Agent.Review.Models.ReviewDecision
+Elsa.Agent.Review.Models.ReviewDecision.Deny = 1 -> Elsa.Agent.Review.Models.ReviewDecision
+Elsa.Agent.Review.Models.ReviewDecisionDelivery
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.<Clone>$() -> Elsa.Agent.Review.Models.ReviewDecisionDelivery!
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.Deconstruct(out int FormatVersion, out string! Envelope) -> void
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.Envelope.get -> string!
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.Envelope.init -> void
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.Equals(Elsa.Agent.Review.Models.ReviewDecisionDelivery? other) -> bool
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.FormatVersion.get -> int
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.FormatVersion.init -> void
+Elsa.Agent.Review.Models.ReviewDecisionDelivery.ReviewDecisionDelivery(int FormatVersion, string! Envelope) -> void
+Elsa.Agent.Review.Services.HumanReviewException
+Elsa.Agent.Review.Services.HumanReviewException.Code.get -> string!
+Elsa.Agent.Review.Services.HumanReviewException.IsUnavailable.get -> bool
+Elsa.Agent.Review.AgentReviewFeature
+Elsa.Agent.Review.AgentReviewFeature.DecisionLifetime.get -> System.TimeSpan
+Elsa.Agent.Review.AgentReviewFeature.DecisionLifetime.set -> void
+Elsa.Agent.Review.AgentReviewFeature.AgentReviewFeature() -> void
+const Elsa.Agent.Review.Models.HumanReviewIds.ActivityType = "Elsa.Agent.Review.Activities.HumanReview" -> string!
+const Elsa.Agent.Review.Models.HumanReviewIds.DecidePermission = "agent-reviews:decide" -> string!
+const Elsa.Agent.Review.Models.HumanReviewIds.FormatVersion = 1 -> int
+const Elsa.Agent.Review.Models.HumanReviewIds.MaximumContentBytes = 65536 -> int
+const Elsa.Agent.Review.Models.HumanReviewIds.MaximumTextCharacters = 4096 -> int
+const Elsa.Agent.Review.Models.HumanReviewIds.ProviderId = "elsa.agent.human-review.v1" -> string!
+const Elsa.Agent.Review.Models.HumanReviewIds.ReadPermission = "agent-reviews:read" -> string!
+const Elsa.Agent.Review.Models.HumanReviewIds.ResumeTargetKey = "resume-target:human-review" -> string!
+const Elsa.Agent.Review.Models.HumanReviewIds.StimulusType = "elsa.agent.human-review.v1" -> string!
+override Elsa.Agent.Review.Contracts.HumanReviewReference.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Contracts.HumanReviewReference.GetHashCode() -> int
+override Elsa.Agent.Review.Contracts.HumanReviewReference.ToString() -> string!
+override Elsa.Agent.Review.Contracts.HumanReviewView.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Contracts.HumanReviewView.GetHashCode() -> int
+override Elsa.Agent.Review.Contracts.HumanReviewView.ToString() -> string!
+override Elsa.Agent.Review.Contracts.ReviewDecider.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Contracts.ReviewDecider.GetHashCode() -> int
+override Elsa.Agent.Review.Contracts.ReviewDecider.ToString() -> string!
+override Elsa.Agent.Review.Contracts.ReviewDecisionCommand.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Contracts.ReviewDecisionCommand.GetHashCode() -> int
+override Elsa.Agent.Review.Contracts.ReviewDecisionCommand.ToString() -> string!
+override Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.GetHashCode() -> int
+override Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.ToString() -> string!
+override Elsa.Agent.Review.Models.HumanReviewResult.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Models.HumanReviewResult.GetHashCode() -> int
+override Elsa.Agent.Review.Models.HumanReviewResult.ToString() -> string!
+override Elsa.Agent.Review.Models.HumanReviewState.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Models.HumanReviewState.GetHashCode() -> int
+override Elsa.Agent.Review.Models.HumanReviewState.ToString() -> string!
+override Elsa.Agent.Review.Models.ReviewDecisionDelivery.Equals(object? obj) -> bool
+override Elsa.Agent.Review.Models.ReviewDecisionDelivery.GetHashCode() -> int
+override Elsa.Agent.Review.Models.ReviewDecisionDelivery.ToString() -> string!
+static Elsa.Agent.Review.Contracts.HumanReviewReference.operator !=(Elsa.Agent.Review.Contracts.HumanReviewReference? left, Elsa.Agent.Review.Contracts.HumanReviewReference? right) -> bool
+static Elsa.Agent.Review.Contracts.HumanReviewReference.operator ==(Elsa.Agent.Review.Contracts.HumanReviewReference? left, Elsa.Agent.Review.Contracts.HumanReviewReference? right) -> bool
+static Elsa.Agent.Review.Contracts.HumanReviewView.operator !=(Elsa.Agent.Review.Contracts.HumanReviewView? left, Elsa.Agent.Review.Contracts.HumanReviewView? right) -> bool
+static Elsa.Agent.Review.Contracts.HumanReviewView.operator ==(Elsa.Agent.Review.Contracts.HumanReviewView? left, Elsa.Agent.Review.Contracts.HumanReviewView? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecider.operator !=(Elsa.Agent.Review.Contracts.ReviewDecider? left, Elsa.Agent.Review.Contracts.ReviewDecider? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecider.operator ==(Elsa.Agent.Review.Contracts.ReviewDecider? left, Elsa.Agent.Review.Contracts.ReviewDecider? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecisionCommand.operator !=(Elsa.Agent.Review.Contracts.ReviewDecisionCommand? left, Elsa.Agent.Review.Contracts.ReviewDecisionCommand? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecisionCommand.operator ==(Elsa.Agent.Review.Contracts.ReviewDecisionCommand? left, Elsa.Agent.Review.Contracts.ReviewDecisionCommand? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.operator !=(Elsa.Agent.Review.Contracts.ReviewDecisionReceipt? left, Elsa.Agent.Review.Contracts.ReviewDecisionReceipt? right) -> bool
+static Elsa.Agent.Review.Contracts.ReviewDecisionReceipt.operator ==(Elsa.Agent.Review.Contracts.ReviewDecisionReceipt? left, Elsa.Agent.Review.Contracts.ReviewDecisionReceipt? right) -> bool
+static Elsa.Agent.Review.Models.HumanReviewResult.operator !=(Elsa.Agent.Review.Models.HumanReviewResult? left, Elsa.Agent.Review.Models.HumanReviewResult? right) -> bool
+static Elsa.Agent.Review.Models.HumanReviewResult.operator ==(Elsa.Agent.Review.Models.HumanReviewResult? left, Elsa.Agent.Review.Models.HumanReviewResult? right) -> bool
+static Elsa.Agent.Review.Models.HumanReviewState.operator !=(Elsa.Agent.Review.Models.HumanReviewState? left, Elsa.Agent.Review.Models.HumanReviewState? right) -> bool
+static Elsa.Agent.Review.Models.HumanReviewState.operator ==(Elsa.Agent.Review.Models.HumanReviewState? left, Elsa.Agent.Review.Models.HumanReviewState? right) -> bool
+static Elsa.Agent.Review.Models.ReviewDecisionDelivery.operator !=(Elsa.Agent.Review.Models.ReviewDecisionDelivery? left, Elsa.Agent.Review.Models.ReviewDecisionDelivery? right) -> bool
+static Elsa.Agent.Review.Models.ReviewDecisionDelivery.operator ==(Elsa.Agent.Review.Models.ReviewDecisionDelivery? left, Elsa.Agent.Review.Models.ReviewDecisionDelivery? right) -> bool
+virtual Elsa.Agent.Review.AgentReviewFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

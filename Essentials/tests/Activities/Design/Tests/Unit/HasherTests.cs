@@ -84,6 +84,15 @@ public sealed class HasherTests
     }
 
     [Fact]
+    public void PaletteHints_DoNotChangeExecutableActivityIdentity()
+    {
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (definition, _) = MakeFixture();
+        var hinted = NewVersion(definition, designFacets: [Facet("elsa.activity-palette", """{ "containerModes": ["bpmn"] }""")]);
+        Assert.Equal(hasher.Hash(definition, NewVersion(definition)), hasher.Hash(definition, hinted));
+    }
+
+    [Fact]
     public void Hash_IsStable_WhenOnlyTheActivityIconFacetChanges()
     {
         var hasher = new DefaultActivityDefinitionHasher();

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNoticeTimer } from "./useNoticeTimer";
 
 export const defaultStudioActionNoticeDurationMs = 8_000;
 
@@ -24,53 +25,24 @@ export function StudioActionNotice({
   className
 }: StudioActionNoticeProps) {
   const [visible, setVisible] = useState(true);
-  const timeoutRef = useRef<number | null>(null);
-  const remainingMsRef = useRef(durationMs);
-  const deadlineRef = useRef(0);
-  const hoveredRef = useRef(false);
-  const focusedRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
-  const clearTimer = useCallback(() => {
-    if (timeoutRef.current == null) return;
-    window.clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-  }, []);
-
   const dismiss = useCallback(() => {
-    clearTimer();
-    remainingMsRef.current = 0;
     setVisible(false);
     onDismissRef.current?.();
-  }, [clearTimer]);
+  }, []);
 
-  const startTimer = useCallback((delayMs: number) => {
-    clearTimer();
-    const remainingMs = Math.max(0, delayMs);
-    remainingMsRef.current = remainingMs;
-    deadlineRef.current = Date.now() + remainingMs;
-    timeoutRef.current = window.setTimeout(dismiss, remainingMs);
-  }, [clearTimer, dismiss]);
-
-  const pauseTimer = useCallback(() => {
-    if (timeoutRef.current == null) return;
-    remainingMsRef.current = Math.max(0, deadlineRef.current - Date.now());
-    clearTimer();
-  }, [clearTimer]);
-
-  const resumeTimer = useCallback(() => {
-    if (hoveredRef.current || focusedRef.current || timeoutRef.current != null) return;
-    startTimer(remainingMsRef.current);
-  }, [startTimer]);
+  // Once dismissed the timer is released (null never elapses) so onDismiss fires only once.
+  const timerHandlers = useNoticeTimer({
+    durationMs: visible ? (Number.isFinite(durationMs) ? durationMs : defaultStudioActionNoticeDurationMs) : null,
+    onElapse: dismiss,
+    resetKey: message
+  });
 
   useEffect(() => {
-    hoveredRef.current = false;
-    focusedRef.current = false;
     setVisible(true);
-    startTimer(Number.isFinite(durationMs) ? durationMs : defaultStudioActionNoticeDurationMs);
-    return clearTimer;
-  }, [clearTimer, durationMs, message, startTimer]);
+  }, [message]);
 
   if (!visible) return null;
 
@@ -85,23 +57,7 @@ export function StudioActionNotice({
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      onMouseEnter={() => {
-        hoveredRef.current = true;
-        pauseTimer();
-      }}
-      onMouseLeave={() => {
-        hoveredRef.current = false;
-        resumeTimer();
-      }}
-      onFocusCapture={() => {
-        focusedRef.current = true;
-        pauseTimer();
-      }}
-      onBlurCapture={event => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        focusedRef.current = false;
-        resumeTimer();
-      }}
+      {...timerHandlers}
     >
       <span className="studio-action-notice-message">{message}</span>
       {actionLabel && onAction ? (

@@ -1,0 +1,19 @@
+#nullable enable
+Elsa.Agent.Connections.AgentConnectionModelProvider
+Elsa.Agent.Connections.AgentConnectionModelProvider.AgentConnectionModelProvider(Elsa.Connections.Core.Contracts.IConnectionResolver! resolver, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access) -> void
+abstract Elsa.Agent.Connections.AgentConnectionModelProvider.ProviderKey.get -> string!
+abstract Elsa.Agent.Connections.AgentConnectionModelProvider.ConnectionTypeName.get -> string!
+abstract Elsa.Agent.Connections.AgentConnectionModelProvider.ProtocolProfile.get -> string!
+abstract Elsa.Agent.Connections.AgentConnectionModelProvider.CreateClient(System.Uri! endpoint, string! modelId, Elsa.Connections.Core.Models.SensitiveValue apiKey, System.Net.Http.HttpClient! http) -> Microsoft.Extensions.AI.IChatClient!
+virtual Elsa.Agent.Connections.AgentConnectionModelProvider.CreatePrimaryHandler() -> System.Net.Http.HttpMessageHandler!
+Elsa.Agent.Connections.AgentConnectionModelProvider.GetCapabilitiesAsync(Elsa.Agent.Core.Models.AgentModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Core.Models.AgentModelCapabilities!>
+Elsa.Agent.Connections.AgentConnectionModelProvider.SupportsResultSchemaAsync(Elsa.Agent.Core.Models.AgentModelReference! model, System.Text.Json.JsonElement schema, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Agent.Connections.AgentConnectionModelProvider.OpenAsync(Elsa.Agent.Core.Contracts.AgentModelOpenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Core.Contracts.AgentModelClientLease!>
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider.AgentModelConnectionTypeProvider(string! providerKey, string! connectionTypeName) -> void
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider.ProviderKey.get -> string!
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider.Descriptor.get -> Elsa.Connections.Core.Models.ConnectionTypeDescriptor!
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider.ResolveHosts(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! settings) -> Elsa.Connections.Core.Models.AllowedHostsPolicy!
+Elsa.Agent.Connections.AgentModelConnectionTypeProvider.TestAsync(Elsa.Connections.Core.Contracts.IResolvedConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Connections.Core.Models.ConnectionTestResult!>!
+virtual Elsa.Agent.Connections.AgentConnectionModelProvider.SupportsPhysicalRequestReservations.get -> bool
+virtual Elsa.Agent.Connections.AgentConnectionModelProvider.SupportsStreaming.get -> bool

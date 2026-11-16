@@ -4,6 +4,7 @@ using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Api.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Studio.Core.Contracts;
 
 namespace Elsa.Studio.Hosting;
 
@@ -61,12 +62,14 @@ internal static class StudioBackendManagementBridge
     /// </summary>
     public static IServiceCollection AddStudioBackendManagementBridge(this IServiceCollection services, IConfiguration configuration)
     {
-        var options = StudioBackendManagementOptions.FromConfiguration(configuration);
-        services.AddSingleton(options);
+        StudioBackendAuthorityAccessor.Add(services, configuration);
+        services.AddSingleton(provider => new StudioBackendManagementOptions(
+            provider.GetRequiredService<IStudioBackendAuthorityAccessor>().Value.ServerBaseUrl,
+            configuration[StudioBackendManagementOptions.ManagementApiKeyConfigurationKey]));
         services.TryAddSingleton(TimeProvider.System);
 
-        services.AddHttpClient<StudioBackendManagementClient>(client =>
-            options.ConfigureBackendClient(client, StudioBackendManagementOptions.ReadRequestTimeout));
+        services.AddHttpClient<StudioBackendManagementClient>((provider, client) =>
+            provider.GetRequiredService<StudioBackendManagementOptions>().ConfigureBackendClient(client, StudioBackendManagementOptions.ReadRequestTimeout));
 
         return services;
     }

@@ -158,6 +158,28 @@ internal static class EtlHttpSourceFetchTransitions
         return new(EtlStoreStatus.Applied, ScheduleRetry(completed, now, policy), null);
     }
 
+    /// <summary>Validates a continuous run's caught-up response from the live latest attempt; the caller clears the journal.</summary>
+    /// <remarks>Unlike capture, a closed, captured or failed journal is refused so no receipt or failure is discarded.</remarks>
+    internal static EtlStoreStatus CaughtUp(EtlConnectorHttpSourceFetch fetch, EtlHttpSourceFetchAttempt attempt,
+        DateTimeOffset responseReceivedAtUtc, long fence, DateTimeOffset now, EtlHttpPolicy policy)
+    {
+        if (fetch is null || attempt is null || !ValidFetchPolicy(policy) || fence <= 0 ||
+            !EtlHttpRetryPolicy.IsUtc(responseReceivedAtUtc) || !EtlHttpRetryPolicy.IsUtc(now) || !ValidAttemptArgument(attempt))
+            return EtlStoreStatus.Invalid;
+
+        Validate(fetch, policy);
+        var latest = fetch.Attempts[^1];
+        if (!StringComparer.Ordinal.Equals(attempt.RequestHash, fetch.RequestHash) ||
+            fetch.Phase != EtlConnectorHttpSourceFetchPhase.InFlight || latest.Attempt != attempt ||
+            latest.CompletedAt is not null || latest.Outcome is not null || attempt.Fence != fence)
+            return EtlStoreStatus.Conflict;
+
+        return responseReceivedAtUtc < attempt.StartedAt || responseReceivedAtUtc >= attempt.ExpiresAt ||
+               responseReceivedAtUtc >= fetch.Deadline || responseReceivedAtUtc > now || now < fetch.UpdatedAt
+            ? EtlStoreStatus.Invalid
+            : EtlStoreStatus.Applied;
+    }
+
     internal static EtlConnectorHttpSourceFetchResult Capture(EtlConnectorHttpSourceFetch fetch,
         EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
         DateTimeOffset now, EtlHttpPolicy policy)

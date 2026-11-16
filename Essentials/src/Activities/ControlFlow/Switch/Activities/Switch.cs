@@ -12,20 +12,17 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Switch.Activities;
 
 /// <summary>
-/// Multi-way control-flow composite. Evaluates a <see cref="Value"/> input and schedules the branch of
-/// the first case whose match value equals it; when no case matches it schedules the <c>Default</c>
-/// branch. Each case branch lives in its own named child slot (<see cref="CaseSlotName"/>); the default
-/// branch lives in <see cref="DefaultSlotName"/>. Which slot child belongs to which case is recorded in
-/// the compiled structure. The composite completes with the matched case's match value as its outcome,
-/// or <see cref="Workflows.Runtime.Core.Constants.ActivityOutcomes.Default"/> when no case matched.
+/// Runs the first case whose pinned Boolean condition is true, or the default branch when none match.
+/// Retained legacy cases compare the pinned Value ordinally with their labels. Each case owns one
+/// named child slot and completes with its authored label; a selected empty case completes directly.
 /// </summary>
 /// <remarks>
-/// An unbound or null <see cref="Value"/> takes the <c>Default</c> branch: case match values are
-/// non-nullable strings and selection compares them ordinally against the value, so a null value never
-/// equals any declared case.
+/// Schema 1 retains ordinary Value matching. Schema 2 uses structure-owned inputs pinned before
+/// activation, evaluates only cases reached in order, and treats an unbound predicate as false.
 /// </remarks>
 [Activity(Icon = "Split")]
-[ActivityStructure("elsa.switch.structure", "1.0.0")]
+[Version("4.1.0")]
+[ActivityStructure("elsa.switch.structure", "2.0.0")]
 [ActivityOutcome(ActivityOutcomes.Default)]
 [ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot(
@@ -36,32 +33,49 @@ namespace Elsa.Activities.Switch.Activities;
     CollectionProperty = "cases",
     ChildProperty = "activity",
     LabelProperty = "match",
+    ItemIdProperty = "caseId",
+    ConditionProperty = "condition",
     SlotNameTemplate = "Switch.Case[{match}]")]
 [ActivityChildSlot("Switch.Default", "default", "Default", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeStructureInputConsumer
 {
     public const string DefaultSlotName = "Switch.Default";
     public const string CaseSlotPrefix = "Switch.Case[";
     public const string CaseSlotSuffix = "]";
     public const string StructureKind = "elsa.switch.structure";
-    public const string StructureSchemaVersion = "1.0.0";
+    public const string LegacyStructureSchemaVersion = "1.0.0";
+    public const string StructureSchemaVersion = "2.0.0";
+    private IReadOnlyDictionary<string, ValueEnvelope> _structureInputs = new Dictionary<string, ValueEnvelope>();
+    private bool _structureInputsBound;
 
     /// <summary>Builds the named child slot for a case's branch from its match value.</summary>
     public static string CaseSlotName(string match) => $"{CaseSlotPrefix}{match}{CaseSlotSuffix}";
 
     /// <summary>The value matched against each case's declared match value to select the branch to run.</summary>
-    [ActivityInput(Key = nameof(Value))]
+    [ActivityInput(Key = nameof(Value), Tier = InputTier.Optional,
+        Description = "Used by retained literal-match cases. Configure new cases with their own conditions.")]
     public string? Value { get; set; }
+
+    public static string ConditionInputKey(string caseId) => $"Case:{caseId}:Condition";
+
+    public void BindStructureInputs(IReadOnlyDictionary<string, ValueEnvelope> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (_structureInputsBound) throw new ControlFlowExecutionException("Switch structure inputs have already been bound.");
+        _structureInputs = inputs;
+        _structureInputsBound = true;
+    }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SwitchNavigator.From);
-        var branch = navigator.Select(Value);
+        var selection = navigator.Select(Value, _structureInputs);
+        var branch = selection.Branch;
 
         if (branch is null)
         {
-            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(navigator.OutcomeForValue(Value)));
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(selection.Outcome));
         }
 
         runtimeContext.ScheduleChildActivity(

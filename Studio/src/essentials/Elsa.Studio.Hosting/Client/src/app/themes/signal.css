@@ -8,18 +8,18 @@
 
 /* Legends are mono: the breadcrumb above each page title, the navigation section headings and the
    status chips and pills. */
-html[data-theme="signal"] .breadcrumb,
-html[data-theme="signal"] .nav-heading,
-html[data-theme="signal"] .studio-status-chip,
-html[data-theme="signal"] .studio-status-pill {
+html:where(:not([data-workspace-style]))[data-theme="signal"] .breadcrumb,
+html:where(:not([data-workspace-style]))[data-theme="signal"] .nav-heading,
+html:where(:not([data-workspace-style]))[data-theme="signal"] .studio-status-chip,
+html:where(:not([data-workspace-style]))[data-theme="signal"] .studio-status-pill {
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
 }
 
 /* The two eyebrow legends are also small, spaced capitals. They are dimmed in the shared rules (opacity
    .6); here they stay full strength because mono at this size needs the contrast. */
-html[data-theme="signal"] .breadcrumb,
-html[data-theme="signal"] .nav-heading {
+html:where(:not([data-workspace-style]))[data-theme="signal"] .breadcrumb,
+html:where(:not([data-workspace-style]))[data-theme="signal"] .nav-heading {
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -28,7 +28,7 @@ html[data-theme="signal"] .nav-heading {
 }
 
 /* Chips and pills follow the tight Signal corners rather than the pill shape. */
-html[data-theme="signal"] .studio-status-chip,
-html[data-theme="signal"] .studio-status-pill {
+html:where(:not([data-workspace-style]))[data-theme="signal"] .studio-status-chip,
+html:where(:not([data-workspace-style]))[data-theme="signal"] .studio-status-pill {
   border-radius: var(--radius-sm);
 }

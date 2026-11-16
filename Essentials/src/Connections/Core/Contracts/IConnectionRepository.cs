@@ -8,6 +8,13 @@ namespace Elsa.Connections.Core.Contracts;
 /// </summary>
 public interface IConnectionRepository
 {
+    /// <summary>Reports the selected metadata backend. Unknown providers do not imply restart persistence.</summary>
+    ValueTask<ConnectionRepositoryCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(new ConnectionRepositoryCapabilities("unspecified", false));
+    }
+
     ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default);
 
     /// <summary>

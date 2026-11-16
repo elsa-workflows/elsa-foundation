@@ -1,0 +1,72 @@
+Page text captured by the built-in browser's get_page_text from the owned Studio (127.0.0.1:5392)
+against the owned Workbench (127.0.0.1:5391), journey run 2 at 724bb5c00, after selecting the dirty run.
+Source element: <main>. Run list entries are omitted; the inspection panel follows verbatim.
+
+Run inspection
+Run etl-61d7b6d139bc55e1e53d5ebfa8f2ecf1d61cce845ce29788b124af195bf4530d
+
+Data rejected
+
+Published pipeline
+etl1:jsonl-dirty-4a101478:1:948b8f415e815c16588e183653b58a092a1a8cbfa4624c0a46ccdc2d9d313ef2
+Source records
+7
+Accepted records
+2
+Rejected records
+5
+Filtered records
+0
+Outstanding records
+0
+Outstanding bytes
+0
+Main output binding
+dirty-output
+Error output binding
+dirty-errors
+Diagnostic
+
+etl.rows-rejected
+
+Source input
+
+dirty-source
+
+Binding revision
+v1
+Expected SHA-256
+1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb
+Prepared snapshot SHA-256
+1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb
+Prepared snapshot bytes
+119
+
+Snapshot metadata describes the last verified preparation. This view does not recheck the files.
+
+Lookup input
+
+No lookup configured.
+
+Connector output progress
+Source type
+JSON Lines
+Main output type
+JSON Lines
+Error output type
+JSON Lines
+Main route bodies accepted
+2
+Error route bodies accepted
+3
+
+These counts describe settled output bodies, not records, attempts, or physical executions.
+
+Settled at 2026-11-02T14:25:22.355004+00:00.
+
+Partition progress
+Connector partition progress
+Partition	Source position	Claim	Fetch state	Owed output	Settled route bodies
+0	File range 1–5 (next 5)	Unclaimed	No fetch retry scheduled	None	Main: 1; errors: 2
+1	File range 5–8 (next 8)	Recorded claim expired
+2026-11-02T14:25:52.340971+00:00	No fetch retry scheduled	None	Main: 1; errors: 1

@@ -1,0 +1,256 @@
+{
+  "sourceRevision": "e11275eb75662fb27da1da692117f974e28ba955",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision. Round 4 re-recorded the two mutations whose failing tests round 3 edited, and round 5 recorded the connector-store mutation at its own revision. No other recorded original or failing test changed.",
+  "mutations": [
+    {
+      "mutation": "validator-guard",
+      "file": "Extensions/Etl/src/Core/EtlPipelineV2.cs",
+      "filter": "FullyQualifiedName~EtlContinuousRunPolicyTests",
+      "mutated": "Failed!  - Failed:     2, Passed:    11",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlContinuousRunPolicyTests.The_design_compiler_reports_each_violation(variant: \"csv-source\", code: \"etl.continuous-source-unsupported\")",
+        "Elsa.Etl.Tests.EtlContinuousRunPolicyTests.Unsupported_continuous_pipelines_are_refused_by_the_shared_rule(variant: \"csv-source\", code: \"etl.continuous-source-unsupported\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:    13",
+      "original": "return \"etl.continuous-source-unsupported\";",
+      "mutated_text": "return null;"
+    },
+    {
+      "mutation": "null-policy-serialized",
+      "file": "Extensions/Etl/src/Core/EtlArtifactV2Json.cs",
+      "filter": "FullyQualifiedName~EtlContinuousRunPolicyTests",
+      "mutated": "Failed!  - Failed:     2, Passed:    11",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlContinuousRunPolicyTests.A_continuous_policy_round_trips_and_an_explicit_null_reads_as_finite",
+        "Elsa.Etl.Tests.EtlContinuousRunPolicyTests.A_finite_pipeline_keeps_its_exact_v2_members_and_hash"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:    13",
+      "original": "continuous.ShouldSerialize = static (_, value) => value is not null;",
+      "mutated_text": "continuous.ShouldSerialize = static (_, _) => true;"
+    },
+    {
+      "mutation": "caught-up-unclassified",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpRequestBuilder.cs",
+      "filter": "DisplayName~Continuous_run_delivers",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Continuous_run_delivers_appended_records_idles_without_growth_and_drains_on_completion"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (string.IsNullOrEmpty(decodedContinuation))\n            return true;",
+      "mutated_text": "        if (string.IsNullOrEmpty(decodedContinuation))\n            return false;"
+    },
+    {
+      "mutation": "input-reservation-kept",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        partition.SourceInputReservedBytes = checked(partition.SourceInputReservedBytes - inputRelease);\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "idle-invariant-refused",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHistory.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)",
+      "mutated_text": "if (row.NotBeforeUtcTicks != sourceNotBefore)",
+      "round": 3,
+      "sourceRevision": "4065f78561fd43962eabd98a498a89c9bb8a089e"
+    },
+    {
+      "mutation": "final-ignores-attempt-start",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
+      "filter": "DisplayName~Completion_wakes",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Completion_wakes_idle_shards_and_rearms_a_poll_that_started_before_the_request"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (connector.CompletionRequestedAtUtcTicks is { } requested && requested <= attempt.StartedAt.UtcTicks)",
+      "mutated_text": "if (connector.CompletionRequestedAtUtcTicks is { } requested)"
+    },
+    {
+      "mutation": "completion-wakes-retry-waits",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            if (journal is not null) continue;\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "moving-empty-page-not-delayed",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHttpPageStore.cs",
+      "filter": "DisplayName~A_cursor_that_moves",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_cursor_that_moves_without_records_waits_one_interval_between_requests"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "checked(NowTicks() + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)",
+      "mutated_text": "checked(NowTicks() + 0 * continuous.PollIntervalSeconds)",
+      "round": 4,
+      "sourceRevision": "3d227c08cf215299d104317fb357907ed88d94fd"
+    },
+    {
+      "mutation": "final-page-not-normalized",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpPageCache.cs",
+      "filter": "DisplayName~Continuous_run_delivers",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Continuous_run_delivers_appended_records_idles_without_growth_and_drains_on_completion"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (_continuous && _requestBuilder.IsCaughtUp(",
+      "mutated_text": "if (!_continuous && _requestBuilder.IsCaughtUp("
+    },
+    {
+      "mutation": "closed-journal-accepted",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlHttpSourceFetchTransitions.cs",
+      "filter": "DisplayName~caught_up",
+      "mutated": "Failed!  - Failed:     1, Passed:     6",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.A_caught_up_response_never_clears_a_closed_journal(phase: \"captured\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     7",
+      "original": "            fetch.Phase != EtlConnectorHttpSourceFetchPhase.InFlight || latest.Attempt != attempt ||\n            latest.CompletedAt is not null",
+      "mutated_text": "            latest.Attempt != attempt ||\n            latest.CompletedAt is not null"
+    },
+    {
+      "mutation": "completion-request-repeated",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (connector.CompletionRequestedAtUtcTicks is not null) return EtlRunCompletionOutcome.AlreadyRequested;\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "completion-after-terminal",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Cancellation_ends_a_continuous",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Cancellation_ends_a_continuous_run_and_completion_is_refused_for_finite_and_terminal_runs"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlRunCompletionOutcome.Terminal;\n",
+      "mutated_text": "",
+      "round": 4,
+      "sourceRevision": "3d227c08cf215299d104317fb357907ed88d94fd"
+    },
+    {
+      "mutation": "complete-under-cancel-permission",
+      "file": "Extensions/Etl/src/Runtime/Api/Endpoints/CompleteRun/Endpoint.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "[RequirePermission(EtlRuntimePermissions.CompleteRuns)]",
+      "mutated_text": "[RequirePermission(EtlRuntimePermissions.CancelRuns)]"
+    },
+    {
+      "mutation": "claimed-idle-rejected",
+      "file": "Extensions/Etl/src/Runtime/Api/EtlRuntimeOperations.Connectors.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.OwedBatch is not null ||",
+      "mutated_text": "row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.IsClaimed || row.OwedBatch is not null ||"
+    },
+    {
+      "mutation": "caught-up-ignores-fence",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlHttpSourceFetchTransitions.cs",
+      "filter": "DisplayName~caught_up_response_is_accepted",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.A_caught_up_response_is_accepted_only_from_the_live_latest_attempt_within_its_window"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "latest.CompletedAt is not null || latest.Outcome is not null || attempt.Fence != fence)",
+      "mutated_text": "latest.CompletedAt is not null || latest.Outcome is not null)"
+    },
+    {
+      "mutation": "caught-up-ignores-window",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlHttpSourceFetchTransitions.cs",
+      "filter": "DisplayName~caught_up_response_is_accepted",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.A_caught_up_response_is_accepted_only_from_the_live_latest_attempt_within_its_window"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        return responseReceivedAtUtc < attempt.StartedAt || responseReceivedAtUtc >= attempt.ExpiresAt ||",
+      "mutated_text": "        return responseReceivedAtUtc >= attempt.ExpiresAt ||"
+    },
+    {
+      "mutation": "completion-of-finite-run",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (connector is null || EtlConnectorRecordCodec.Pipeline(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson)).Continuous is null)\n            return EtlRunCompletionOutcome.NotContinuous;\n",
+      "mutated_text": "        if (connector is null)\n            return EtlRunCompletionOutcome.NotContinuous;\n"
+    },
+    {
+      "mutation": "next-poll-on-retry-wait",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeInspector.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "idle = pipeline.Continuous is not null && fetch is null && owed is null",
+      "mutated_text": "idle = pipeline.Continuous is not null && owed is null"
+    },
+    {
+      "mutation": "complete-requires-connector-store",
+      "file": "Extensions/Etl/src/Runtime/Api/EtlRuntimeOperations.cs",
+      "filter": "DisplayName~Completion_reports_not_continuous",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Completion_reports_not_continuous_without_a_connector_store_and_unavailable_for_legacy_operations"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)\n            return new(\"notContinuous\");\n",
+      "mutated_text": "",
+      "round": 5,
+      "sourceRevision": "a41c556a404b1a49ea4ab9dcd716d808b75b6fa5"
+    },
+    {
+      "mutation": "complete-offered-for-every-run",
+      "file": "Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlRunsPage.tsx",
+      "filter": "vitest src/__tests__/runsPage.test.tsx",
+      "mutated": "Tests 1 failed | 13 passed (14)",
+      "failedTests": [
+        "ETL runs page > does not offer completion for a finite run or a host that predates continuous runs"
+      ],
+      "restored": "Tests 14 passed (14)",
+      "original": "  return run.connector?.mode === \"continuous\";",
+      "mutated_text": "  return true;"
+    }
+  ]
+}

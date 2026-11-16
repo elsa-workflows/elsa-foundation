@@ -1,4 +1,5 @@
 import { useTablistKeyboard } from "@elsa-workflows/studio-ui";
+import "../graph-authoring/workbenchPanelStyles.css";
 import { useLayoutEffect, useRef } from "react";
 import type { WorkflowEditorPanelTab } from "./editorTypes";
 

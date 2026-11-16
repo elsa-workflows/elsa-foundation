@@ -175,13 +175,14 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         var version = new ImportedReusableActivityVersion(
             item.ActivityDefinitionVersionId!,
             definitionId,
-            $"{source.Version}.0.0",
+            ReusableActivityImportIdentity.ImportedVersion(source.Version, item.ConverterRevision),
             item.SourceVersionId,
             Elsa3ImportedActivityContract.Build(converted),
             // Schema 2: the contract may declare several boundary outcomes, reached through Complete nodes (D-5).
             BuildGraphManifest(converted),
             item.Dependencies.Select(dependency => dependency.TargetActivityDefinitionVersionId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-            source.CreatedAt);
+            source.CreatedAt,
+            item.ConverterRevision);
         // No head: the definition has none until the publish phase publishes its first version (spec 246 FR-004).
         var authoring = new ActivityDefinitionAuthoringState
         {
@@ -209,7 +210,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = lineage.CreatedAt,
             LastModifiedAt = lineage.CreatedAt
         };
-        var version = new WorkflowDefinitionVersion(item.WorkflowDefinitionId, $"{source.Version}.0.0", sourceCreatedAt: source.CreatedAt)
+        var version = new WorkflowDefinitionVersion(item.WorkflowDefinitionId, ReusableActivityImportIdentity.ImportedVersion(source.Version, item.ConverterRevision), sourceCreatedAt: source.CreatedAt)
         {
             Id = item.WorkflowVersionId,
             State = state,

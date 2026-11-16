@@ -1,0 +1,66 @@
+{
+  "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+  "base": "b8fe4f464945cf1a9060bc7d1b83f50d8701425c",
+  "wholeRuntimeEf": {
+    "passed": 1839,
+    "failed": 0,
+    "skipped": 0,
+    "allDiscoveredCasesAccountedFor": true,
+    "includesCorrected17Regressions": true
+  },
+  "actualProductionHosts": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "authenticatedDirectStartWaitRestartResumeComplete": true,
+    "originalNativeExecutionAndPinRecovery": true,
+    "unselectedHostDisplays": 44
+  },
+  "developmentRegressions": {
+    "redFailed": 14,
+    "redPassedControls": 3,
+    "greenPassed": 17,
+    "skipped": 0,
+    "sameTestSource": true,
+    "finalLabelRefinementVerifiedByWholeCommittedRun": true
+  },
+  "frozen": {
+    "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+    "count": 104,
+    "allByteIdentical": true,
+    "manifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153"
+  },
+  "sourceBundle": {
+    "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+    "base": "b8fe4f464945cf1a9060bc7d1b83f50d8701425c",
+    "bundleRef": "refs/codex/verification/2898-material-fix-db76b980e",
+    "name": "elsa-bpmn-hosting-source-db76b980e.bundle",
+    "bytes": 2146041,
+    "sha256": "5bdea5ba29a6e667931f98c71ed7a863b9ece1597dafc473d56164e8ce23768d",
+    "coldRestoreCandidateInitiallyAbsent": true,
+    "coldRestoreMatchesSource": true
+  },
+  "reconciliation": {
+    "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+    "priorActualStudioSource": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "productionChanges": [
+      "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs"
+    ],
+    "scope": "Contract documentation and three new model-material error boundaries; optional scope context on the existing private normalizer preserves old native default text. Successful queries/writes, all serializers/schema/model/state/binding formats and public API declarations are unchanged.",
+    "noPublicApiDeclarationChange": true,
+    "currentActualHostControls": 2,
+    "selectedHostScope": "Authenticated direct wait/restart/resume/complete and original native execution/pin recovery; full46 remains at9d.",
+    "retainedEvidence": {
+      "savedStudioActualSource": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+      "nativeModelStorageActualSource": "f12385fcbe829e6f7cc0bb29347ec6c2e1d27dbf",
+      "abiActualSource": "c53167925de74d026be739ce4248ed4047c0e578",
+      "architectureBinarySource": "e28ef6701cc468d342803425ba77bed4594fb8db"
+    },
+    "limits": "No fresh corrected-source Studio or non-SQLite upgraded-host recovery is claimed. Prior actual2families/4runs/12stores and strict native21/ABI18/architecture594 keep their own sources; normal paths are unchanged. No clean full16/CI/merge/post-main or broader acceptance claim.",
+    "normalWriteAlgorithmAndFormatsUnchanged": true,
+    "writerFailureHandlingChanged": true
+  },
+  "remaining": "Full16 review, pending history route, remote draftf154/changes request, exact-head required CI, protected delivery and resulting-main verification. Broader acceptance and deferrals remain."
+}

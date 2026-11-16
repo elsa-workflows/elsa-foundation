@@ -21,7 +21,8 @@ export function WorkflowTestRunControls({
   stimulusEditors,
   onRunViewUpdated,
   onWaitDraftUpdated,
-  observation
+  observation,
+  showExecutionStatus = true
 }: {
   context: StudioEndpointContext;
   testRun: WorkflowTestRunState;
@@ -29,18 +30,20 @@ export function WorkflowTestRunControls({
   onRunViewUpdated(view: WorkflowTestRunView): void;
   onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
   observation?: TestRunObservation;
+  showExecutionStatus?: boolean;
 }) {
   const localObservation = useTestRunObservation({ context, testRun, enabled: !observation, onRunViewUpdated });
   return <TestRunCommands key={(observation ?? localObservation).identity} context={context} testRun={testRun} stimulusEditors={stimulusEditors}
-    onWaitDraftUpdated={onWaitDraftUpdated} observation={observation ?? localObservation} />;
+    onWaitDraftUpdated={onWaitDraftUpdated} observation={observation ?? localObservation} showExecutionStatus={showExecutionStatus} />;
 }
 
-function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated, observation }: {
+function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated, observation, showExecutionStatus }: {
   context: StudioEndpointContext;
   testRun: WorkflowTestRunState;
   stimulusEditors: StudioTestStimulusEditorContribution[];
   onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
   observation: TestRunObservation;
+  showExecutionStatus: boolean;
 }) {
   const { waits, waitsLoading: loading, waitsError, error: executionError, refreshWaits } = observation;
   const execution = observation.details?.instance;
@@ -69,19 +72,22 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
     }
   };
 
-  const canStop = !["Rejected", "DispatchRejected", "Stopped", "Expired"].includes(testRun.view.status) && !isTerminalExecution(execution?.status);
+  const canStop = !["Rejected", "DispatchRejected", "Stopped", "StopRequested", "Expired"].includes(testRun.view.status) && !isTerminalExecution(execution?.status);
   const executionState = execution && isTerminalExecution(execution.status) ? runtimeStateLabel(execution.status)
     : waits.length > 0 ? "Waiting" : execution ? runtimeStateLabel(execution.status) : null;
+  const stoppedWithoutExecution = testRun.view.status === "Stopped" && !testRun.view.workflowExecutionId;
+  const showWaits = !isTerminalExecution(execution?.status) && !stoppedWithoutExecution || loading || !!waitsError;
+  if (!showExecutionStatus && !canStop && !stopError && !showWaits && !executionError && !deliveryFeedback && observation.status === "connected") return null;
   return (
     <section className="wf-test-run-controls" aria-label="Test Run controls">
       {canStop ? <button type="button" onClick={() => { void stop(); }} disabled={stopping || !canInteract}>{stopping ? "Stopping…" : "Stop Test Run"}</button> : null}
       {stopError ? <p className="wf-test-drive-error" role="alert">{stopError}</p> : null}
-      {testRun.view.status === "Stopped" && execution && !isTerminalExecution(execution.status) ? <p role="status">Stop requested. Waiting for runtime confirmation.</p> : null}
-      {execution && executionState ? <p className="wf-test-run-execution-state" role="status"><strong>Execution</strong> {executionState}{execution.subStatus ? ` · ${execution.subStatus}` : ""}</p> : null}
+      {showExecutionStatus && (testRun.view.status === "StopRequested" || testRun.view.status === "Stopped" && execution) && !isTerminalExecution(execution?.status) ? <p role="status">Stop requested. Waiting for runtime confirmation.</p> : null}
+      {showExecutionStatus && execution && executionState ? <p className="wf-test-run-execution-state" role="status"><strong>Execution</strong> {executionState}{execution.subStatus ? ` · ${execution.subStatus}` : ""}</p> : null}
       {observation.status === "paused" ? <p role="status">Observation paused · last confirmed state</p> : null}
       {["disconnected", "unavailable", "expired"].includes(observation.status) ? <button type="button" onClick={observation.refresh}>Reconnect execution</button> : null}
       {executionError ? <p className="wf-test-drive-error" role="status">{executionError}</p> : null}
-      <div className="wf-test-run-waits">
+      {showWaits ? <div className="wf-test-run-waits">
         <header><h4>Waiting triggers</h4><button type="button" onClick={() => { observation.refresh(); }} disabled={loading || stopping}>Refresh</button></header>
         {waitsError ? <p className="wf-test-drive-error" role="alert">{waitsError}</p> : null}
         {loading ? <p role="status">Loading waiting triggers…</p> : null}
@@ -103,12 +109,12 @@ function TestRunCommands({ context, testRun, stimulusEditors, onWaitDraftUpdated
           }}
           refreshWaits={refreshWaits}
         />)}
-        {deliveryFeedback ? (
+      </div> : null}
+      {deliveryFeedback ? (
           <p role={deliveryFeedback.view.status === "Rejected" ? "alert" : "status"}>
             {deliveryStatusLabel(deliveryFeedback.view.status)}{deliveryFeedback.view.reason ? ` · ${deliveryFeedback.view.reason}` : ""}
           </p>
-        ) : null}
-      </div>
+      ) : null}
     </section>
   );
 }

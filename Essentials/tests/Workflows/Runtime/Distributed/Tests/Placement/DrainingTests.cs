@@ -1,8 +1,12 @@
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster;
 
@@ -75,6 +79,71 @@ public sealed class DrainingTests : IAsyncDisposable
         Assert.Equal(1, (await sweep).HandedOffCount);
         Assert.Equal("mid-drain", Assert.Single(draining.Runtime.Commands.Committed).EnvelopeId);
         Assert.Null(await _cluster.State.Placement.FindAsync(ExecutionId));
+    }
+
+    /// <summary>
+    /// A hand-off behind a drain that keeps running does not hold the sweep (#2831): the sweep stops waiting for it, and
+    /// later sweeps leave the execution to that hand-off, which completes at the drain's boundary.
+    /// </summary>
+    [Fact]
+    public async Task A_hand_off_behind_a_running_drain_does_not_hold_the_sweep()
+    {
+        var draining = await _cluster.StartAsync("host-a");
+        var hold = draining.Runtime.Commands.HoldNextDrain();
+        var drain = draining.Runtime.DispatchAsync(RuntimeWork.Work(ExecutionId, _cluster.Now, "mid-drain")).AsTask();
+        await hold.Started.Task;
+
+        draining.Member.Become(MemberStatus.Draining);
+        Assert.Equal(1, (await PumpSweeps.AdvancingAsync(draining.Runtime.Pump, _cluster.Clock)).HandedOffCount);
+        Assert.Equal(0, (await PumpSweeps.AdvancingAsync(draining.Runtime.Pump, _cluster.Clock)).HandedOffCount);
+        Assert.Equal(draining.HostId, (await _cluster.State.Placement.FindAsync(ExecutionId))?.OwnerId);
+
+        hold.Release();
+        await drain;
+        await PumpSweeps.UntilAsync(async () => await _cluster.State.Placement.FindAsync(ExecutionId) is null, "The hand-off did not finish after the drain.");
+        Assert.Equal("mid-drain", Assert.Single(draining.Runtime.Commands.Committed).EnvelopeId);
+    }
+
+    /// <summary>A hand-off that fails after the sweep moved on is logged, and later sweeps may claim the execution again.</summary>
+    [Fact]
+    public async Task A_hand_off_that_fails_after_the_sweep_moved_on_frees_the_execution()
+    {
+        var transport = new FailingListTransport(_cluster.State.Transport);
+        var member = await _cluster.StartAsync("host-a", setup => setup.Configure = services =>
+            services.Replace(ServiceDescriptor.Scoped<IExecutionCommandTransport>(_ => transport)));
+        var hold = member.Runtime.Commands.HoldNextDrain();
+        var drain = member.Runtime.DispatchAsync(RuntimeWork.Work(ExecutionId, _cluster.Now, "mid-drain")).AsTask();
+        await hold.Started.Task;
+
+        member.Member.Become(MemberStatus.Draining);
+        transport.FailNextList = true;
+        Assert.Equal(1, (await PumpSweeps.AdvancingAsync(member.Runtime.Pump, _cluster.Clock)).HandedOffCount);
+        hold.Release();
+        await drain;
+        await transport.Failed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        member.Member.Become(MemberStatus.Active);
+        await _cluster.State.Transport.SendAsync(ExecutionId, RuntimeWork.Work(ExecutionId, _cluster.Now, "after"), _cluster.Now);
+        await PumpSweeps.UntilAsync(async () => (await member.Runtime.Pump.SweepOnceAsync()).ClaimedCount == 1, "Later sweeps still left the execution to the failed hand-off.");
+        Assert.Equal(["mid-drain", "after"], member.Runtime.Commands.Committed.Select(commit => commit.EnvelopeId));
+    }
+
+    /// <summary>Fails the next listing of leased items, as a hand-off's transport might.</summary>
+    private sealed class FailingListTransport(IExecutionCommandTransport inner) : ForwardingCommandTransport(inner)
+    {
+        public bool FailNextList { get; set; }
+
+        public TaskCompletionSource Failed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset now, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default)
+        {
+            if (!FailNextList)
+                return base.ListLeasedAsync(ownerId, now, maxItems, workflowExecutionId, cancellationToken);
+
+            FailNextList = false;
+            Failed.TrySetResult();
+            throw new InvalidOperationException("The transport is unreachable.");
+        }
     }
 
     [Fact]

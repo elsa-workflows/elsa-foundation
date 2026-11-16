@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
@@ -14,6 +15,9 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Expressions.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +31,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
@@ -43,7 +47,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/3.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/4.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -70,6 +74,48 @@ public sealed class GraphActivityProvider(
                 })
         ],
         new([]));
+
+    public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(
+        ActivityProviderManifest manifest,
+        DesignActivityContract contract,
+        string resourceId,
+        string contractRevision,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(manifest);
+        if (!StringComparer.Ordinal.Equals(manifest.ProviderKey, Key))
+            return ValueTask.FromResult<ActivityDataSelectionDocument?>(null);
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contractRevision);
+
+        var subject = new ActivityDiagnosticSubject("ActivityDefinition", resourceId);
+        var diagnostics = ReadManifest(manifest, subject, out var graph).ToList();
+        if (!StringComparer.Ordinal.Equals(contract.ContractSchemaVersion, "1"))
+            throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ContractSchema", "The activity contract schema is unsupported.")]);
+        if (graph is not null)
+            ValidateGraphNodes(graph, subject, diagnostics);
+        if (graph is null || diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+            throw new ActivityDataSelectionRejectedException(diagnostics.Select(x => new ValidationError(
+                x.Location?.JsonPointer ?? "$activity", "ActivityDataSelection/" + x.Code, x.Message)));
+
+        // The provider's parser and structure-owned node projection are the same ones used for compilation.
+        // This request-only view creates neither a workflow draft nor a second graph/document owner.
+        TryReadRootNode(graph.RootActivity, out var root);
+        return ValueTask.FromResult<ActivityDataSelectionDocument?>(new(
+            "ActivityDefinition", resourceId, contractRevision, root,
+            contract.Inputs.Select(x => new InputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
+            graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
+            contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                SourceRepresentation: x.SourceRepresentation)).ToImmutableArray()));
+    }
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
         ActivityProviderContractProposalRequest request,
@@ -124,7 +170,7 @@ public sealed class GraphActivityProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var subject = new ActivityDiagnosticSubject(
-            "ActivityDraft",
+            request.SubjectKind,
             request.DraftId,
             request.DefinitionId,
             Revision: request.Revision);
@@ -185,10 +231,11 @@ public sealed class GraphActivityProvider(
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
-                ReadCanonicalArray(node.Element, "inputs"),
+                EffectiveInputArray(node),
                 activityStructureService.CompileExecutableStructure(node.Activity),
                 // A body node's captures into graph variables; absent when it captures nothing.
-                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null))
+                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
+            { StructureInputs = OptionalInputProjection(node.Activity) })
             .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
@@ -215,7 +262,7 @@ public sealed class GraphActivityProvider(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var subject = new ActivityDiagnosticSubject("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision);
+        var subject = new ActivityDiagnosticSubject(request.SubjectKind, request.DraftId, request.DefinitionId, Revision: request.Revision);
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         if (graph is null)
             return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], ActivityDiagnosticOrderer.Order(diagnostics)));
@@ -233,7 +280,25 @@ public sealed class GraphActivityProvider(
         return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery(dependencies, ActivityDiagnosticOrderer.Order(diagnostics)));
     }
 
-    private static IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(JsonElement element)
+    private ActivityStructureInputProjection? OptionalInputProjection(ActivityNode node)
+    {
+        var projection = activityStructureService.ProjectInputs(node);
+        return projection.Inputs.Count == 0 && projection.ConsumedInputKeys.Count == 0 ? null : projection;
+    }
+
+    private JsonElement EffectiveInputArray(GraphNode node) => OptionalInputProjection(node.Activity) is { } projection
+        ? JsonSerializer.SerializeToElement(projection.ApplyToInputs(node.Activity.Inputs), NodeSerializerOptions)
+        : ReadCanonicalArray(node.Element, "inputs");
+
+    private JsonElement EffectiveReferenceElement(GraphNode node)
+    {
+        if (OptionalInputProjection(node.Activity) is null) return node.Element;
+        var element = JsonNode.Parse(node.Element.GetRawText())!.AsObject();
+        element["inputs"] = JsonNode.Parse(EffectiveInputArray(node).GetRawText());
+        return JsonSerializer.SerializeToElement(element, NodeSerializerOptions);
+    }
+
+    private IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(JsonElement element)
     {
         ActivityNode? node;
         try
@@ -248,7 +313,9 @@ public sealed class GraphActivityProvider(
         if (node is null)
             return [];
 
-        return node.Inputs
+        var projection = activityStructureService.ProjectInputs(node);
+        var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        return node.Inputs.Where(input => !consumedUnused.Contains(input.ReferenceKey))
             .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
             .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
             .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
@@ -344,12 +411,10 @@ public sealed class GraphActivityProvider(
         return ActivityDiagnosticOrderer.Order(diagnostics);
     }
 
-    private void ValidateGraph(
+    private (IReadOnlyList<NodeCandidate> Candidates, IReadOnlyList<GraphNode> Nodes) ValidateGraphNodes(
         ActivityGraphManifest graph,
-        DesignActivityContract contract,
         ActivityDiagnosticSubject subject,
-        ICollection<ActivityDiagnostic> diagnostics,
-        IReadOnlyList<GraphNode> completeNodes)
+        ICollection<ActivityDiagnostic> diagnostics)
     {
         var candidates = EnumerateNodeCandidates(graph.RootActivity);
         foreach (var candidate in candidates)
@@ -421,6 +486,18 @@ public sealed class GraphActivityProvider(
             }
         }
 
+        return (candidates, nodes);
+    }
+
+    private void ValidateGraph(
+        ActivityGraphManifest graph,
+        DesignActivityContract contract,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics,
+        IReadOnlyList<GraphNode> completeNodes)
+    {
+        var (candidates, nodes) = ValidateGraphNodes(graph, subject, diagnostics);
+
         ValidateForbiddenCapabilities(candidates, subject, diagnostics);
 
         foreach (var duplicate in graph.Variables.GroupBy(x => x.ReferenceKey, StringComparer.Ordinal).Where(x => x.Count() > 1))
@@ -446,6 +523,7 @@ public sealed class GraphActivityProvider(
                 diagnostics.Add(diagnostic);
         }
 
+        ValidateBoundaryInputReads(graph, contract, subject, diagnostics);
         var outputKeys = contract.Outputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
         foreach (var mappingGroup in graph.OutputMappings.GroupBy(x => x.OutputReferenceKey, StringComparer.Ordinal))
         {
@@ -835,6 +913,29 @@ public sealed class GraphActivityProvider(
         }
     }
 
+    private static void ValidateBoundaryInputReads(ActivityGraphManifest graph, DesignActivityContract contract,
+        ActivityDiagnosticSubject subject, ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var inputs = contract.Inputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
+        for (var index = 0; index < graph.Variables.Count; index++)
+            Check(graph.Variables[index].InitialValue, $"/variables/{index}/initialValue", graph.Variables[index].ReferenceKey);
+        for (var index = 0; index < graph.OutputMappings.Count; index++)
+            Check(graph.OutputMappings[index].Source, $"/outputMappings/{index}/source", graph.OutputMappings[index].OutputReferenceKey);
+
+        void Check(ActivityInputDefault? source, string pointer, string referenceKey)
+        {
+            if (source is null || !StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "Input"))
+                return;
+            if (source.Value.ValueKind != JsonValueKind.Object || !source.Value.TryGetProperty("referenceKey", out var key) ||
+                key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-malformed",
+                    "A graph Input expression must name a declared public input by its reference key.", subject, pointer, referenceKey));
+            else if (!inputs.Contains(key.GetString()!))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-unknown",
+                    "The graph Input expression names an undeclared public input.", subject, pointer, referenceKey));
+        }
+    }
+
     private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
     {
         // ValidateGraph refuses a root that cannot be read, so an empty body here is never accepted.
@@ -1159,7 +1260,7 @@ public sealed class GraphActivityProvider(
         return canonical.RootElement.Clone();
     }
 
-    private static JsonElement BuildBoundaryPayload(
+    private JsonElement BuildBoundaryPayload(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
@@ -1198,7 +1299,7 @@ public sealed class GraphActivityProvider(
                     childSlotName = dependency.ChildSlotName,
                     childIndex = dependency.ChildIndex,
                     authoredDepth = node.Depth,
-                    inputBindings = ReadCanonicalArray(node.Element, "inputs"),
+                    inputBindings = EffectiveInputArray(node),
                     outputBindings = ReadCanonicalArray(node.Element, "outputs")
                 };
             }).ToArray(),
@@ -1293,7 +1394,9 @@ public sealed class GraphActivityProvider(
 
         return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
             request.ActivityTypeKey,
-            request.CandidateVersion,
+            // Release provenance belongs to the source reference. Pin the runtime contract
+            // schema, as source-owned CLR templates do, so a cosmetic republish keeps its hash.
+            RuntimeDescriptorSchemaVersion,
             WellKnownRuntimeActivityConsumers.GraphActivity,
             descriptorPayload,
             inputs,
@@ -1338,7 +1441,7 @@ public sealed class GraphActivityProvider(
     private static ActivityDiagnosticSubject ProposalSubject() => new("ActivityDefinition", Key);
 
     // A closed-scope body refers only to what the activity declares or contains.
-    private static void ValidateBodyReferences(
+    private void ValidateBodyReferences(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
@@ -1347,7 +1450,7 @@ public sealed class GraphActivityProvider(
         List<ActivityDiagnostic> diagnostics)
     {
         var bodyNodes = nodes
-            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, node.Element))
+            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, EffectiveReferenceElement(node)))
             .ToArray();
         foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
             diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));

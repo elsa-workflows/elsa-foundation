@@ -1,4 +1,5 @@
-﻿using Elsa.Primitives.Entities;
+using Elsa.Persistence.Core;
+using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -44,7 +45,17 @@ public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionD
     /// <summary>
     /// Serialized state of this draft.
     /// </summary>
-    public string? StateSource { get; set; }
+    private string? pendingContent;
+    [NotMapped]
+    public string? StateSource
+    {
+        get => Source?.Content ?? pendingContent;
+        set { pendingContent = value; if (Source is not null) Source.Content = value ?? ""; }
+    }
+
+    /// <summary>The one shared source payload; no second draft content column is persisted.</summary>
+    public SourceWorkingCopy? Source { get; set; }
+    public string? SourceKey { get; set; }
 
     /// <summary>
     /// Builds the persistence entity from any <see cref="IWorkflowDefinitionDraft"/> (e.g. a factory

@@ -206,6 +206,7 @@ describe("input shape construction", () => {
 describe("output shape construction", () => {
   it("creates a canonical output with a reference key and the smaller field set", () => {
     const output = createOutput({ name: "Result", alias: "Boolean" });
+    expect(JSON.parse(JSON.stringify(output)).isNullable).toBe(false);
     expect(output).toMatchObject({
       name: "Result",
       type: { alias: "Boolean", collectionKind: "Single" },

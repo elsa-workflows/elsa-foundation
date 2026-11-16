@@ -1,0 +1,12 @@
+{
+  "worker": "w3",
+  "series": "etl-series-r1",
+  "status": "passed",
+  "blob": "w3-etl-series-r1.tar.xz",
+  "bytes": 809948,
+  "sha256": "e5726bb83a6e130740c522e94a64a6fb0d8e2e0c107d922e18893eafd085662d",
+  "files": 667,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

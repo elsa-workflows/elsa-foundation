@@ -1,0 +1,409 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "products": {
+    "workbench": {
+      "sourceCommit": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+      "metadataOnly": true,
+      "actualProductVersions": [
+        {
+          "name": "Elsa.Workbench.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "488189eff32b56912ce7e271bc41dc6147e4a3c690c459e6abafbeb039500aca"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "0bc68b80b6c5bb7c6912cddcfc710670e5b83c453e3e3093c4110fa1a63a3b8e"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Interchange.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "68ec7255f0f5f1865e600e13c7d384b027937d62c3db66057a5554f6aad5dfa5"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.Core.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "ebb3b82611c0da4a08df0185fc30566c8138f0ae0d3fea0ca8414ee3ac890a2c"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "39a44298a71c00b6813e70725bd95e9d255d07208b99f27ae209d3b06eff943d"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "afeeec0adbbfb046d656825b3bae1fdd9c670c4f22c5715324cfc4fcf4ce4894"
+        },
+        {
+          "name": "Elsa.Activities.Runtime.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "b008af738b7fa2fa2a53914f0fa62dca4a872631fbc1f36ec8577219c87c2f93"
+        },
+        {
+          "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "604796a4007f398f47eca95f5eb710ed22aa27d3f3597f9abba0ac8496d20e31"
+        },
+        {
+          "name": "Elsa.Serialization.SystemText.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "f9d7d4b63e4bf6902aedaec18e762f0ba389ad62c7a64fbb68c1ff545de682bf"
+        },
+        {
+          "name": "Elsa.Workflows.Design.Core.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "fd5ba3bc28ece2d7dfaeb52c420c9c3640e18fb8bf72a2de5af4d4bc32419847"
+        },
+        {
+          "name": "Elsa.Workflows.Design.Api.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "31064c8d2b7e4c1a80633b1aac669875daf024877438d2c6b0447ca95375f765"
+        },
+        {
+          "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "97c35e9e8e62416df4afa17b9e2c9023743a4d5a2767d769daf05edd5976ce58"
+        },
+        {
+          "name": "Elsa.Persistence.EntityFramework.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "40c6e074d7501ffb2fc691a57677deb961a0384f90b18356e115e7c7e56c1e66"
+        }
+      ],
+      "releasedLibraryProducts": [
+        {
+          "name": "Bpmn.Model.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+        },
+        {
+          "name": "Bpmn.Semantics.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+        },
+        {
+          "name": "Bpmn.Interchange.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+        }
+      ]
+    },
+    "studio": {
+      "sourceCommit": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+      "metadataOnly": true,
+      "actualProductVersions": [
+        {
+          "name": "Elsa.Studio.Web.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "1f1fb159c7cd2484ac386ec8aa63a324f85233923fc393fdad878549c3ae6d5e"
+        },
+        {
+          "name": "Elsa.Studio.Hosting.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "a39c553800a82390ae5a4d9a3dfc2f9f6020e5737534de6ad65f0d89e84a85c6"
+        },
+        {
+          "name": "Elsa.Studio.Core.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "e5dc76ea03d013dc664ddeac9d07654bb573f7004bf219b8e7c5fb2497303cd0"
+        },
+        {
+          "name": "Elsa.Studio.Workflows.dll",
+          "productVersion": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+          "sha256": "6175ce5f4a18a5d2305919595e415f619f83b96d8fdca0bc8497b7481b1d5907"
+        }
+      ]
+    }
+  },
+  "compositionSha256": "5616870bb623b20bc2eec16d704de1d5801ca625672cfaf26d831cd5b0514f54",
+  "ownedProcesses": [
+    {
+      "role": "workbench",
+      "pid": 46582,
+      "parentPid": 46564,
+      "started": "Tue Nov  3 22:52:18 2026",
+      "executable": "dotnet"
+    },
+    {
+      "role": "studio",
+      "pid": 46682,
+      "parentPid": 46564,
+      "started": "Tue Nov  3 22:52:25 2026",
+      "executable": "dotnet"
+    },
+    {
+      "role": "workbench",
+      "pid": 46947,
+      "parentPid": 46564,
+      "started": "Tue Nov  3 22:52:35 2026",
+      "executable": "dotnet"
+    },
+    {
+      "role": "workbench",
+      "pid": 47215,
+      "parentPid": 46564,
+      "started": "Tue Nov  3 22:52:51 2026",
+      "executable": "dotnet"
+    },
+    {
+      "role": "workbench",
+      "pid": 47728,
+      "parentPid": 46564,
+      "started": "Tue Nov  3 22:53:17 2026",
+      "executable": "dotnet"
+    }
+  ],
+  "allOwnedChildrenStopped": true,
+  "originalReadySha256": "8b369c9a770a6574795343afd286bf441f0b40e7a6bb9724698ac811fc9e7f60",
+  "controllerSha256": "f35872677c8778d8eb94979e16dfc44df5db6dd6d6eb84c1e17f62ec141e3111",
+  "browserAssetInventory": {
+    "count": 3660,
+    "sha256": "e2e040d0489357c39eb0ec8d12027570e52458c3317af3e46f9afb6b3236df2d",
+    "digestEncoding": "SHA256 of UTF8 JSON of sorted [relativePath, sha256] pairs, compact separators comma/colon",
+    "groups": [
+      {
+        "root": "Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/wwwroot",
+        "count": 4,
+        "sha256": "506a5594019673724d2cc46426ef70d157769693845ce8fc0cdcafbcd8b8864d"
+      },
+      {
+        "root": "Extensions/Attention/studio/Elsa.Studio.Attention/wwwroot",
+        "count": 4,
+        "sha256": "f7e7fa6a0670deeae9bd09a36edd23e1cb1b7370f9172d3d4805cc0420c563ef"
+      },
+      {
+        "root": "Extensions/Connections/studio/Elsa.Studio.Connections/wwwroot",
+        "count": 4,
+        "sha256": "99e98a338dd22fe02422d06eb02489a31f2a0481ddded1017883d977f69750c9"
+      },
+      {
+        "root": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/wwwroot",
+        "count": 4,
+        "sha256": "391de1535a003b30884627b080d281f11bd75732fbed2be133b6387280e1a80a"
+      },
+      {
+        "root": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/wwwroot",
+        "count": 4,
+        "sha256": "17812566f14743e6a725e2fbe9a8081e54ff2719bfdc4a5a7c502247c12019d3"
+      },
+      {
+        "root": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/wwwroot",
+        "count": 4,
+        "sha256": "4c49674e3e8b29976d632f845ff993171c4592fc90f1d6f20a89cf2d0553a80b"
+      },
+      {
+        "root": "Extensions/Etl/studio/Elsa.Studio.Etl/wwwroot",
+        "count": 4,
+        "sha256": "8d64d500ea773f7b80934dd1d18cd3517c326a2e6a077b8dc389f1e3607125cc"
+      },
+      {
+        "root": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/wwwroot",
+        "count": 13,
+        "sha256": "01a82d5850149a501efc5a95aec405c5f44994e22f3884750f7fd671b4d709d1"
+      },
+      {
+        "root": "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/wwwroot",
+        "count": 13,
+        "sha256": "c986318e07ce18c461e46b8a9eed1d12a73df46483b49fce6fbd8d0024f1db2e"
+      },
+      {
+        "root": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/wwwroot",
+        "count": 13,
+        "sha256": "c17115c6b6a46b6013ac8c734b475638f80507355d9f5133b8329b520efb1968"
+      },
+      {
+        "root": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/wwwroot",
+        "count": 4,
+        "sha256": "178d7e63ea9512ea297b8fe3bb35df9437b995538476b1700034c0a4f5ccae25"
+      },
+      {
+        "root": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/wwwroot",
+        "count": 2,
+        "sha256": "bb72ae1f92b8a5c167817910259e05c77205c0d0000fc038a8b5a9263c86fdde"
+      },
+      {
+        "root": "Extensions/Secrets/studio/Elsa.Studio.Secrets/wwwroot",
+        "count": 4,
+        "sha256": "f4654fbfb9bc8368924fd335d6b44cef7b2601b0c91ac1ac8c2c7dd7898fa13c"
+      },
+      {
+        "root": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/wwwroot",
+        "count": 4,
+        "sha256": "54bf207a732d785a143c32d3dbbdecbf8da6d161abe5dca3e9d791d2251336b8"
+      },
+      {
+        "root": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/wwwroot",
+        "count": 1717,
+        "sha256": "369ac77a41e7b9d38eb64b351392f8599cee3a52bd95d5c231b3fc8efb561fe0"
+      },
+      {
+        "root": "Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/wwwroot",
+        "count": 4,
+        "sha256": "104a6a3c728ad8ea465afc226bee796d81141a3fd3a34fe973e25b7a3cfbc620"
+      },
+      {
+        "root": "Studio/src/essentials/Elsa.Studio.Backends/wwwroot",
+        "count": 4,
+        "sha256": "c4d2c0ba2866e8620f2acb7867305ba77c68a7e4fd3c816c307acd36b9a6b47e"
+      },
+      {
+        "root": "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot",
+        "count": 8,
+        "sha256": "a0bc1e1e2df3b6e794298318f4eedf819dacd211f4a922fcad2fec172d25f70c"
+      },
+      {
+        "root": "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot",
+        "count": 135,
+        "sha256": "80c1ba1a6c0d8aac412a9dd7956cb340c5f6c0e87b73e59e567dd55640ca5746"
+      },
+      {
+        "root": "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot",
+        "count": 1711,
+        "sha256": "a7d5446e39f8dcc81d2066433f1dec6be879212f50ce4a8d03f0e42a6fbe0596"
+      }
+    ]
+  },
+  "relevantWorkflowBrowserAssets": {
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/BpmnWorkflowsPage-DUuU2J4D.js": "bf5a38f70cfd77ecbec4fd6b6aaf6f9fb7fc7537d5ebbb6eadd214ab9c91b696",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowTestStimulusEditorComponents-B-vU9lWX.js": "a2e602f22d9219b6b9e255ec31233d174d753991c893f97b820854674e633880",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/CreateWorkflowDialog-BQu_o8y2.js": "9fd767055f7347aafcdded1514414807c0be3f194650896bf36aa53b4734d3b9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityVersionChangeDialog-DyjJU275.js": "67620f488d2b5d2fc7e70f59db8a20295034a5f8d5f0096c97ad4888bfea3413",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CoBGRLtP.css": "23352ee2f7bb5ffeadd5732ecabef12a9c93f602bd032424a34a901b34223291",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflow-C_RKryIo.js": "e0afc9fc8bc159cb06b496f98b1474619445b29682ca6afc68b943c4c855a1fe",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/DictionaryValueEditor-bNxdzTBb.js": "514e260fcd6735cad5be24c5a852fb02b863365615329ea1d65e37028dfe8244",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowTestDrivePanel-DSWRlZob.js": "c2e6c38203b130e2c23d5d05e3f2a78410b29fec3432ab44c90df07cd5140ad1",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/EditableCombobox-Dzrq1GYu.js": "3e0f0cbf25b3b0a29d65f8c86b9fd14b4b440b1832317ede2ecfa9020cf77719",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionTestRunDialog-CMUHDmz1.js": "e835e1f976dabd4f5de31b35684ac71b8b6ae0b827d4a3377c5b7842819041b0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowInputArgumentBindings-BNqeE0g1.js": "1a417487aa8ed4499a403ab8ed3dc06e1e6f9e5e17116588e76f14aa32103d03",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionWorkbench-DDF3SMTf.js": "61abf944949bedc62f2e36201986293bf3a3bf3e17ba8fa913ab3a60dc8790bb",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-KVvNVhub.css": "f611f2a2002e68bf4c4c3b66f42f311d756afbaeeddae880aafa2762c486037e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activitySummary-CgEqdv9C.js": "d45e10a78fef1d5bec5c447b787f5e8e7149daa0d79aaea5352af37f85027dc1",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowLibraryControls-YASR11qT.js": "195596befb86224a235def49064041d6adb396f501355d2bd6afc3c56a88a6ab",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityGraphImplementationEditor-DSR1Ne21.js": "b12acf6e679d98389ebe39b2270d0c79c87a585581fcbe99580a8ab524f67b55",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CKWO8OVD.css": "bffe27b439e42da31effd327965c0de8dc93ac5115f67f5ac76661fe44e682b0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-DYAYmVor.css": "ce1d27b140c1a6b0128868deb0e5b6972cb99f5d2c4abf49d25c637a02869b77",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-BoQngYd_.js": "c8c91029d4c933611621c1868737cbc4f3380276084aea1e57a6c637011edfe9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ExecutableRunButton-MhVepdVF.js": "dfe205b2269b19c151172d48954ad28fc8e01089f0c6be24c27f3dd9b6dc4301",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityDesign-CnyJW5mc.js": "54d61451624c71e53fadeeb9bcb32a1dec7b62b1e862fbb6bad11fd8aee625d1",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module9.css": "ce1d27b140c1a6b0128868deb0e5b6972cb99f5d2c4abf49d25c637a02869b77",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module8.css": "371ae48dc3c39bce058856cc7732e3a98f99801bc0553e428aebbfd2d4b928e5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityAvailabilityPage-CbIFF2xN.js": "e286e14ad985f979166cf3efb9eb853466aca0581aa0d1f51733be956e1822a7",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowDesign-DVJmIF9p.js": "e780c76ae17c9d4c3d42a4e4b5f422360575cc77a8ca5f76c62af47964961a89",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-BOCDfeX4.css": "5fd2be6c9872f08a5a083af16e688f9f0c3bc801f54cb019c72067b20a65cf83",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module27.css": "822d9c6b8f434fe76b2fd4a90f266bf1572c827e5d4d7af4ca0f9d5da7323de8",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowTagsDialog-Ch7vqx5z.js": "3a1c537bf71685fb0fc47058231034838dcf4f0830c6116b4225ce49b5d95666",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-1y2h9nUk.css": "4556308bd4c804040bcbfc0bb259bd5e66f03770115a322096d014a806df7678",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ReusableBoundaryInspector-Ey6f8avG.js": "dfdbd1a901d2b57f995d4f5577a8236a09c0413f5c488509b807d561065553ce",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionVersionLifecycleDialog-Btd2t_N2.js": "5d3d042c476f151b20f131f4936196975eab010097fcd27a13fb74589b603dd4",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-D8xoiZVp.css": "befb6266cfa87e7d3e202e8d8656693a3f14dc7b89f7892f4f54a4b3ebcdd3aa",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowRootCards-C6gyf86H.js": "19cc8e7105c759897c49b48c470349612bef9677aca61d2eceb399fe4bfb372d",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module26.css": "7834036f9c52babee59f7924ae889db3c594ed83787fcfb0a391b64e9d98ca16",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module18.css": "573fea4a3ab24ea86bfa06b495d2cfb947d71a68a750278ef7a744c08eb112a5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module30.css": "befb6266cfa87e7d3e202e8d8656693a3f14dc7b89f7892f4f54a4b3ebcdd3aa",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module24.css": "55b66a4c9d2f259fa2c33767e92994f8a959b6d2587fc1b4c8713ca1ea12d0a2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowEditor-82tXklX3.js": "9a8609f2055551593e0bd5c6e986d2c506adcab53661c09b5d6f2ec4c73926e6",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/StudioLink-z5hsyEBo.js": "4472e5f3588b051a671779844e8cd7b0febdebc3e51a82d52b73d49a69fd8cb9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowOrganizationCapabilities-CWbWT9lD.js": "a1ccaaecac5103a9aed62a9b750ecef5f18ffc9c2b96a5a7b35f250bcca20b23",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/runtime-Hy_h96tj.js": "00ca38921aa9e51760377a185e289f504fcd35d515553899e14fa3507249024d",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module25.css": "5d2471c38386c095a5317ffefe47b77a406df4dcdef33523d56dba04f1f4f87c",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module19.css": "69e36002ea37ba9d90a622491aed9cee8477753323955806044e4ca205b0e48f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/InspectorPanel-Cl5T0WCv.js": "1758022616341df54e37482e6650b26bf7928c1346cea0fb09c0aba15c5caca1",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowExecutableInspector-UXCokRTc.js": "455b8c336e6262faa95a23b2621d6cd7fb7fbdde20c6313ba4eb3b4b5d3e8252",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module21.css": "503432632e996bf491b8c4e52362df4994a54461d242481c84b8ca2b086a6a84",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-BInXQz8s.css": "bc477fe67ef791175c6093a362cdd6cd93b99a0b5ae93f71c0e66040e4d6c0f0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-L7zaS7cQ.css": "69e36002ea37ba9d90a622491aed9cee8477753323955806044e4ca205b0e48f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowTemplates-pUDLJUH6.js": "fcc05f59a3a3efa1d4a7334a51537c4d9d787b79278272e3f1111b1268675e50",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityInputWire-jLtTAekl.js": "18fd22c0e010cedf66b49a6374d664234176c9737faba9c500d749ee37c81ee0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module20.css": "23352ee2f7bb5ffeadd5732ecabef12a9c93f602bd032424a34a901b34223291",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/CodeMirrorStudioCodeEditor-B5rWB7IJ.js": "e44e92436c1d4333346d63511616b50c1fac984baab84f7289040017a9e43857",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-B_5t3v0N.js": "8b57a82a1b572e20bb48daa0a0e727a7342c27fb2d69d6369c3b8622e692345d",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module22.css": "167fc5cbdd60b0f75c71c7482239bb2d396b99d0c68c9d609479600c5a2e2e64",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowTestHttpAction-Co3_xXFy.js": "a21c7814b1ff77bb1ee7eef0d9e8cc952466de6c70260f0b2166ad9d1e69cd92",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/StatusViews-C1gSl9Kk.js": "63a774ee23cdcce852932169c4e59bad6134d8f6e65f59ccc8f7493b4bf6968e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CAcTrpql.css": "822d9c6b8f434fe76b2fd4a90f266bf1572c827e5d4d7af4ca0f9d5da7323de8",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowTestRequestDefaults-CV8gHSd8.js": "8b3b3ce5abe216cd42999d0b6487f8a2662dabbe58367aca182174d329526105",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-j5sahz5J.css": "21a0755cd136a246b04a0228bf54d29ba90ef6e337681903ba628de22837c9e9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-Bpmmgz75.css": "24d3dd8b0b0508dac43624f3b3263bf5de9f6f9538d07ff3dd21232c2ed48b8e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowExecutables-DwSSmNRO.js": "d99a8166badec2d4eac943fbccf3e2d9b8a2c95d63666e7f8bf656b24979170e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionDraftEditor-Dgzs2Ptr.js": "fcbb42fbf78a283c0b50156e494ca0eb62cb6ad8aa8ff407c62fa2949ceea447",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module23.css": "a0f9e1cd4c51b58a60ba3b722aca000843afdd8ef889de42a4221230ac2ec5d7",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityAvailability-B37nP7V6.js": "0cc6a5855f0bcc2cabd91fbf5b03bacdd30963f33c3133581794532f6c69c50b",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module12.css": "3eef9879d6177c00a9a25a833beaeff153113c0c14f22ddbd34fd00afa2a8469",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/SequenceDesigner-Bwr6L0ea.js": "1548cbf470c633b7ce82715ef13e5e5826d2a6305d92bab7e79bc387c2c5e5bf",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-OJGcBrZs.css": "3eef9879d6177c00a9a25a833beaeff153113c0c14f22ddbd34fd00afa2a8469",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityIconView-dyeUx16t.js": "7fb68854db2255bcbde8c6fca397877ba4acc69f124fbcaff224e7991e95ab81",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module13.css": "bffe27b439e42da31effd327965c0de8dc93ac5115f67f5ac76661fe44e682b0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionDependencyExplorer-Ds3ooA0W.js": "6d3d05ed3cbd1d65b7ac9f7a062199955be8054f1908f0c7c2b9dbd5de395356",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module11.css": "ea899265803aff9dbeb3620a3023891d366a6eddbfbe6e53f69ca188df334fba",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-BKodccjm.js": "74620a24e1175470a71cf808d19b31834c0a66c037ee56773b1a9c09af481cdf",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-rG2bnV7q.css": "e2c90c84fc442e9bd3a36a9d16750169f69bbdc7f0e09b0c933860f78d04a0f9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/MoveWorkflowDefinitionsDialog-AX884dQS.js": "cd4db6bdef0b0e4e1da54b4437549890cec07723c9427ff3e1525b8013366370",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js": "58e6f8707e06ca74e14d237626ef09117d2ba51bf04b402cdb94b719ee1aabad",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowOrganization-ChTyGrtn.js": "93416341d037df1218306f5528ebf081a6cf8bee95a6d7a87890bc6390c07b79",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module10.css": "4556308bd4c804040bcbfc0bb259bd5e66f03770115a322096d014a806df7678",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowAccessibility-D8vyJSNC.js": "181fd6c905ddc98fc69bfd7bdf2c2464ad41a7cce2b369a85d63e16e25ac7ee2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module14.css": "2e3ad576670fce6c9272baa085e1f9b31af36af78aba0588c22a0ba666f9a931",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module28.css": "b199bd02611548afb9456658bbd2f2a93e4fd2a0124aa58fa1679304092a2d2b",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityExecutionBrowser-Bsa0Tv_z.js": "7767ccfea098281ac60cf4c7cb11cef8f238e2b0ca55857f3f2b42e6e822af4f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowHistory-ckbGRYfl.js": "d7718ae18967b2c5b6ea061a9449e2bf1b2f17a06f24625885d00a14591c1fdb",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowInstances-BQtwl0Yv.js": "485b303db47833048f7d12ed0d7a4a4070d8290ae24f0732ad55f11b65f70bc2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module--XPLSCoS.css": "371ae48dc3c39bce058856cc7732e3a98f99801bc0553e428aebbfd2d4b928e5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/SaveWorkflowTemplateDialog-DSQGxxq3.js": "f2e95335e18dc6edc052a4ceee11325dc62cb66958ddae3e1018d93551d54081",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-DW2RMfCO.css": "ea899265803aff9dbeb3620a3023891d366a6eddbfbe6e53f69ca188df334fba",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module29.css": "bc477fe67ef791175c6093a362cdd6cd93b99a0b5ae93f71c0e66040e4d6c0f0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-4ChoEdUR.css": "10455f73424e17bffdbce680f9161f84d7fb645783fdfb8c37de03c5ca77c1dc",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowOrganizationButton-CprstKVv.js": "0e9e77fd7587478abfa87b0e6d01e19c17dea00f28fdf60ee07393f9cf2f615b",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module15.css": "788e0c3b371ede4115066da9f251b785ceccef712a5d5b99c0046018e80545de",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-CAzgoEZG.js": "6c06a9bbb27e6d4989599957d25aa38970c46057199f1adea4c73fe4856787a3",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/Elsa3ReusableImportPage-DvWeDONG.js": "a951143c6d8bab68e6dc4fda93e2cbb02a8a7b26824fdc7cc12b99eca847cea2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module17.css": "ff7a57aa5d2a9b1e55d03e2e24ac21c21509117869e6a6706adfb4b07e8fed9a",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowRunInputDialog-D7wgn504.js": "64763a54b6bb90f738d9f61fba7db2681b8adca6e496531741c63bc9e8b79788",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowTestRunControls-B6ea3KuM.js": "9784ebfce82ad83438844e7709c5ee5be1c779a6a863f9ec0cdd258e30d5cda4",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CBD_8sO2.css": "167fc5cbdd60b0f75c71c7482239bb2d396b99d0c68c9d609479600c5a2e2e64",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-7LJ28n_L.css": "573fea4a3ab24ea86bfa06b495d2cfb947d71a68a750278ef7a744c08eb112a5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-hfZDpHL3.js": "a0c226c9343e34ccfea4323ec477c1ff0316b81b7bdb5c05bf254e72c6dac3d5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowListIdentifiers-DrlT_693.js": "bd0041adb928d95632e62fd97f0ae10f2b62f4f5366f849b2ae8d8502b6d255f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityDefinitionDraftManagementShared-mK_VHYvs.js": "150b1d49afb94a74a683af26af26f974271a9924572d29095d5632402dd93c2e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/CompensationScopeDesigner-DIKpq58g.js": "ed4d601fb55cd75df2161fd3c2c00aab1cd4ce5fff5a8b6168b455166548182c",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module16.css": "34754dd44a226174f2a4129dd82d13d72f8a66fcf65d829ff91b2950dc3371d9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-DY5s0YD9.css": "ff7a57aa5d2a9b1e55d03e2e24ac21c21509117869e6a6706adfb4b07e8fed9a",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/HttpTestRequestDialog-BlUMLYsx.js": "ca16c9b51a436e46d202e8966a1c9960f63d1abacf34317b15a062e004f5e717",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CYS334qb.css": "ccf3b27bb87d98beac1e0f07bff889b658c464eb02616d23cfb972ec33a0db98",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CIPzgUla.css": "788e0c3b371ede4115066da9f251b785ceccef712a5d5b99c0046018e80545de",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-BZt_t5fy.css": "b199bd02611548afb9456658bbd2f2a93e4fd2a0124aa58fa1679304092a2d2b",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/AttachedRunActivityInspector-bH42ERWO.js": "ae6a9013e3f3155ba78af6fd7f0f82bf0d16c8db431778a6d5438dbbb17eafe2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module5.css": "24d3dd8b0b0508dac43624f3b3263bf5de9f6f9538d07ff3dd21232c2ed48b8e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-BDk6Ee69.js": "bf25fbd80960eebaefbda98e83925b1d29d4cfe838cfec07b5b0ab0a5ef39cc0",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module4.css": "ccf3b27bb87d98beac1e0f07bff889b658c464eb02616d23cfb972ec33a0db98",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityIconGlyphs-DflLLTQ3.js": "db7de3b78b661e69a0f2e80a143a3bfca0ec2a0d9da71e4107f7e0c6390ac3dd",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/workflowAgentResult-CphGbZAq.js": "5172c2c7006439f6c523208d7db305862f01895b2a5c01f49ad46d763513f038",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-Bab-MLVS.css": "5d2471c38386c095a5317ffefe47b77a406df4dcdef33523d56dba04f1f4f87c",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowTemplatesPage-DQfxW3lY.js": "ac660466e2e2b3c6d3faa8fbcfdec0e9a2e035687f52b54bbab595ab9f2f7b26",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityDefinitions-jXk_dY8I.js": "c1f31c3e70e4caffefc41ee4cdeb7eda1e47b9debbdfcd5cbce0e70cd0d0cf55",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-xvJcti78.css": "34754dd44a226174f2a4129dd82d13d72f8a66fcf65d829ff91b2950dc3371d9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module6.css": "e2c90c84fc442e9bd3a36a9d16750169f69bbdc7f0e09b0c933860f78d04a0f9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CsoYkbXP.css": "2e3ad576670fce6c9272baa085e1f9b31af36af78aba0588c22a0ba666f9a931",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module7.css": "10455f73424e17bffdbce680f9161f84d7fb645783fdfb8c37de03c5ca77c1dc",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-CbUjeOKa.css": "a0f9e1cd4c51b58a60ba3b722aca000843afdd8ef889de42a4221230ac2ec5d7",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.css": "21a0755cd136a246b04a0228bf54d29ba90ef6e337681903ba628de22837c9e9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityDefinitionDependencies-CDm7llFy.js": "afd9f9057e67e5ae58602f21f0eb6ccf7017098ad500c2b1e4d8559652654021",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowActivityExecutionDetails-C8HqyW9J.js": "5b6807d1aeeade56865d9b8733b275e908a475b16ad1858da64eb6281cd32838",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activity-DJsL0suZ.js": "92ec130746759490653ca9de00bf067a3b959e5b49966383d30bca1f783d8202",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowReadOnlyMiniMap-VX7s6Abl.js": "b7ef23563b0adb924ad9ebaf16de8a09cc8b3b8f30e16d8f04a0849d2eb55533",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module3.css": "5fd2be6c9872f08a5a083af16e688f9f0c3bc801f54cb019c72067b20a65cf83",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowTagsPage-BQK-pYre.js": "f4bac725ecd13933fa5d5ff72d0e99ea520401787886fb3bc670f9471cbd58d5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module2.css": "f611f2a2002e68bf4c4c3b66f42f311d756afbaeeddae880aafa2762c486037e",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-6BMI3wpv.css": "7834036f9c52babee59f7924ae889db3c594ed83787fcfb0a391b64e9d98ca16",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-DhAHxbqJ.css": "55b66a4c9d2f259fa2c33767e92994f8a959b6d2587fc1b4c8713ca1ea12d0a2",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/WorkflowDefinitions-BWhR-XAJ.js": "b9568f0ed407cca296a42c4cfe734543635069f1169dd53c859454492fcbc4a8",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/RuntimeDiagnosticsSettingsPage-B-LYnGZi.js": "192bf6c60b6a6a77ac6e142dc0422af1c73504322deaecfe883e8da31cf951a7",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/index-DikYDiOK.js": "ea5b7ced153499ddd2b057f1ad53ac9ed8e040754133c68e5b8b766c8cfc9bb5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityUpgradeWorkbenchPage-BMVhp9k2.js": "ecb68c18ef4a7451bb4f2fb1cbe6e1143dfe944c915cbb3b24db323970b6d00f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionsPage-B_NZzbdq.js": "593c541e6ce76e2196905a266e632b4655594fa65a4783bb3a1a6cad12c4a65f",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module-ta7q7sJQ.css": "503432632e996bf491b8c4e52362df4994a54461d242481c84b8ca2b086a6a84",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/ActivityDefinitionCreateDialog-IV4Vhm5U.js": "decb9ce6b84ea0c7bcb076cee33d63db6de5cfd713729e9b0b832a1eff5ad44c",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/activityGraphOutcomeMappingOptions-_RW4lTOb.js": "7855c00dbad930286b5656c2832dc2a5c2011034c2f4554e1a15620628bc862b",
+    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/.vite/manifest.json": "53006630507ee85e6ab6b08253e849f964ff37d71983c97946fe1bcaf7978905"
+  }
+}

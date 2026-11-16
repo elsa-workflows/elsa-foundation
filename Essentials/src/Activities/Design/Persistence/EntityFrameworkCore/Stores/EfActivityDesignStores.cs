@@ -296,7 +296,18 @@ public sealed class EfActivityDesignStores(
         rows = ApplyVisibility(rows, query.TenantId);
         if (!string.IsNullOrWhiteSpace(query.Search)) rows = rows.Where(x => x.SearchText.Contains(query.Search.Trim().ToUpperInvariant()));
         if (query.Authority is { } authority) rows = rows.Where(x => x.ContentAuthorityKind == authority);
-        if (!string.IsNullOrWhiteSpace(query.ProviderKey)) rows = rows.Where(x => x.HeadProviderKey == query.ProviderKey.Trim() || x.RecommendationProviderKey == query.ProviderKey.Trim());
+        if (!string.IsNullOrWhiteSpace(query.ProviderKey))
+        {
+            var providerKey = query.ProviderKey.Trim();
+            var drafts = Access(db.ActivityDraftManagementProjections.AsNoTracking()).Where(x =>
+                x.ValidFromSequence <= snapshot.Sequence && x.ValidToSequenceExclusive > snapshot.Sequence &&
+                x.Status == ActivityDefinitionDraftStatus.Active && x.ProviderKey == providerKey);
+            rows = rows.Where(x => x.HeadProviderKey == providerKey || x.RecommendationProviderKey == providerKey ||
+                drafts.Any(draft => draft.TenantId == x.TenantId &&
+                    EF.Property<string>(draft, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                    EF.Property<string>(draft, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash") &&
+                    draft.DefinitionId == x.ResourceId));
+        }
         // The marker rejects malformed and structurally inconsistent rows in SQL. The digest
         // itself is intentionally provider-neutral (it is defined over UTF-16 material), so
         // validate full material in bounded, stable-order batches before applying page bounds.
@@ -541,7 +552,7 @@ public sealed class EfActivityDesignStores(
             ?? throw new InvalidOperationException($"Activity version publication '{request.RootVersionId}' was not found.");
         var owner = new ActivityDefinitionReference("ActivityVersion", root.DefinitionId, root.DefinitionVersionId, root.Version, TenantId: root.TenantId, Lifecycle: root.Lifecycle);
         var projection = await ById(db.ActivityDependencyProjections.AsNoTracking(), ActivityDependencyProjectionState.CurrentId).SingleOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException("Activity dependency projection has not been initialized.");
+            ?? throw new ActivityDependencyProjectionUnavailableException();
         var watermark = Fingerprint(projection);
         if (request.Watermark is not null && !StringComparer.Ordinal.Equals(request.Watermark, watermark))
             throw new ActivityDependencyWatermarkExpiredException(request.Watermark);
@@ -572,7 +583,8 @@ public sealed class EfActivityDesignStores(
                 Definition = new { request.Definition.ActivityTypeKey, request.Definition.Category, request.Definition.DisplayName, request.Definition.Description },
                 Authoring = new { request.AuthoringState.ContentAuthority, request.AuthoringState.ForkedFrom, request.AuthoringState.HeadVersionId, request.AuthoringState.RecommendedVersionId },
                 Draft = new { request.InitialDraft.DefinitionId, request.InitialDraft.Revision, request.InitialDraft.SourceVersionId, request.InitialDraft.PresentationLabel, request.InitialDraft.Status, request.InitialDraft.State },
-                Layout = request.InitialLayout.Records
+                Layout = request.InitialLayout.Records,
+                request.InitialLayout.ActivityPresentation
             };
             await EfDesignAtomicCommand.ExecuteAsync(atomic, new DesignOperationKey($"create:{request.Definition.Id}"), "activity.authoring.create.v1", material,
                 ["activityDefinition", "activityDefinitionAuthoring", "activityDefinitionDraft", "activityDefinitionDraftLayout"], async (context, token) =>
@@ -663,6 +675,52 @@ public sealed class EfActivityDesignStores(
         }, tenantId: version.TenantId, cancellationToken: cancellationToken)).Value;
     }
 
+    public async Task RefreshPaletteHintsAsync(
+        DesignOperationKey operationKey,
+        ActivityDefinitionVersion version,
+        string? expectedOldFacetsSource,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(version);
+        EnsureTenant(version.TenantId);
+        PrepareVersion(version);
+        var incomingFacetsSource = version.DesignFacetsSource;
+        var stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
+        // Restrict this exception to the palette facet. Even a direct caller cannot replace structure,
+        // outcome, icon or other descriptor content through this presentation refresh.
+        static string OtherFacets(string? source) => JsonSerializer.Serialize(
+            (JsonSerializer.Deserialize<ActivityDesignFacet[]>(source ?? "[]", Json) ?? [])
+            .Where(facet => facet.Kind != "elsa.activity-palette"));
+        if (stored.Hash != version.Hash || OtherFacets(stored.DesignFacetsSource) != OtherFacets(incomingFacetsSource))
+            throw new InvalidOperationException("A palette refresh cannot change executable identity or other design facets.");
+        if (stored.DesignFacetsSource == incomingFacetsSource)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var token = Guid.NewGuid().ToByteArray();
+        var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
+            .Where(row => row.Hash == version.Hash && row.DesignFacetsSource == expectedOldFacetsSource)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(row => row.DesignFacetsSource, incomingFacetsSource)
+                .SetProperty(row => row.LastModifiedAt, now)
+                .SetProperty(row => EF.Property<byte[]>(row, "ConcurrencyToken"), token), cancellationToken);
+        if (updated == 1)
+        {
+            version.LastModifiedAt = now;
+            return;
+        }
+        stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
+        if (stored.Hash == version.Hash && stored.DesignFacetsSource == incomingFacetsSource)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+        throw new DbUpdateConcurrencyException("The catalog entry changed during a palette hints refresh.");
+    }
+
     public async Task RefreshAsync(
         DesignOperationKey operationKey,
         ActivityDefinitionVersion version,
@@ -678,7 +736,7 @@ public sealed class EfActivityDesignStores(
         var now = DateTimeOffset.UtcNow;
         var token = Guid.NewGuid().ToByteArray();
         // ExecuteUpdateAsync bypasses PropertySaveBehavior.Throw on Hash/InputsSource. That is the
-        // sanctioned tier-only refresh: compare-and-swap on the old hash, and stamp concurrency
+        // sanctioned input-presentation refresh: compare-and-swap on the old hash, and stamp concurrency
         // bookkeeping the same way SaveChanges would. operationKey is unused; the hash CAS is the
         // retry token.
         var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
@@ -1204,6 +1262,8 @@ public sealed class EfActivityDesignStores(
         draft.LastModifiedAt = DateTimeOffset.UtcNow;
         layout.Revision = draft.Revision;
         layout.Records = request.Layout.ToList();
+        if (request.ActivityPresentation is not null)
+            layout.ActivityPresentation = ActivityNodePresentationRecord.NormalizeCollection(request.ActivityPresentation).ToList();
         layout.LastModifiedAt = draft.LastModifiedAt;
         if (projections is not null) await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(draft.LastModifiedAt, [], [draft], []), cancellationToken);
         else await SaveAsync(cancellationToken);

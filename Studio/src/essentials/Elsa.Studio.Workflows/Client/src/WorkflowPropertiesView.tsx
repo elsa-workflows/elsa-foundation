@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
-import { formatDate } from "./workflowFormatting";
+import { getActivityAuthoringCapabilities } from "./api/activityDesign";
+import type { ActivityAuthoringCapabilities } from "./activityDefinitionTypes";
 import { IncidentStrategySection } from "./IncidentStrategySection";
 import { PersistenceModeSection } from "./PersistenceModeSection";
 import {
@@ -47,16 +49,24 @@ interface PickerOption {
   group?: string;
 }
 
+type StorageOptions = PickerOption[] | ((alias: string) => PickerOption[]) | null;
+type StorageOptionsStatus = "loading" | "ready" | "unavailable";
+
+function storageChoices(options: StorageOptions, alias: string) {
+  return typeof options === "function" ? options(alias) : options;
+}
+
 interface DescriptorOptions {
   typeOptions: PickerOption[] | null;
-  storageOptions: PickerOption[] | null;
+  storageOptions: StorageOptions;
+  storageOptionsStatus: StorageOptionsStatus;
   editorForAlias: EditorForAlias;
 }
 
-// Loads type descriptors once per editor mount. Storage remains the Foundation compatibility
-// free-text field because Foundation intentionally has no live storage-driver catalog contract.
+// Type editors come from Expressions; activated, type-compatible storage comes from authoring capabilities.
 export function useDescriptorOptions(context: StudioEndpointContext): DescriptorOptions {
   const [variableTypes, setVariableTypes] = useState<VariableTypeDescriptor[] | null>(null);
+  const [storage, setStorage] = useState<{ context: StudioEndpointContext; status: StorageOptionsStatus; capabilities?: ActivityAuthoringCapabilities }>();
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +76,25 @@ export function useDescriptorOptions(context: StudioEndpointContext): Descriptor
     );
     return () => { cancelled = true; };
   }, [context]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStorage({ context, status: "loading" });
+    void Promise.resolve().then(() => getActivityAuthoringCapabilities(context)).then(
+      capabilities => { if (!cancelled) setStorage({ context, status: "ready", capabilities }); },
+      () => { if (!cancelled) setStorage({ context, status: "unavailable" }); }
+    );
+    return () => { cancelled = true; };
+  }, [context]);
+
+  const storageOptions = useMemo(() => {
+    const capabilities = storage?.context === context ? storage.capabilities : undefined;
+    const activated = new Set(capabilities?.storageDriverKeys ?? []);
+    const byAlias = new Map((capabilities?.types ?? []).map(type => [type.alias,
+      type.supportsDurability ? [...new Set(type.compatibleStorageDriverKeys.filter(key => activated.has(key)))].sort().map(key => ({ value: key, label: key })) : []
+    ]));
+    return (alias: string) => byAlias.get(alias) ?? [];
+  }, [context, storage]);
 
   const typeOptions = useMemo<PickerOption[] | null>(
     () => variableTypes && variableTypes.length > 0
@@ -93,7 +122,7 @@ export function useDescriptorOptions(context: StudioEndpointContext): Descriptor
   }, [variableTypes]);
 
   // `null` is the PickerOrText contract for a free-text field, not a pending descriptor request.
-  return { typeOptions, storageOptions: null, editorForAlias };
+  return { typeOptions, storageOptions, storageOptionsStatus: storage?.context === context ? storage.status : "loading", editorForAlias };
 }
 
 export type EditorForAlias = (alias: string) => string;
@@ -129,12 +158,13 @@ function buildCollectionOps<T extends Record<string, unknown>>(
   };
 }
 
-function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, onChange }: {
+function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabled, onChange }: {
   value: string;
   options: PickerOption[] | null;
   placeholder?: string;
   allowEmpty?: boolean;
   ariaLabel: string;
+  disabled?: boolean;
   onChange(value: string): void;
 }) {
   // No descriptors available → free-text fallback so the field stays editable.
@@ -143,6 +173,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, onChan
       <input
         type="text"
         aria-label={ariaLabel}
+        disabled={disabled}
         value={value}
         placeholder={placeholder}
         onChange={event => onChange(event.target.value)}
@@ -156,7 +187,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, onChan
   const grouped = groups.length > 0;
 
   return (
-    <select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value)}>
+    <select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
       {allowEmpty ? <option value="">{placeholder ?? "—"}</option> : null}
       {/* An alias the descriptor list doesn't know about is preserved but shown as an unresolved, disabled option. */}
       {!hasValue ? <option value={value} disabled>{value} (unresolved)</option> : null}
@@ -214,6 +245,17 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   ariaLabel: string;
   onChange(value: string): void;
 }) {
+  if (editor === "json") {
+    let error: string | null = null;
+    if (value.trim()) {
+      try { JSON.parse(value); } catch { error = "Enter a valid JSON value."; }
+    }
+    return <div>
+      <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
+        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+      {error ? <span role="alert">{error}</span> : null}
+    </div>;
+  }
   const specialized = fitsEditor(editor, value);
   if (specialized && editor === "checkbox") {
     return (
@@ -261,7 +303,7 @@ function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, c
     <section className="wf-properties-section">
       <div className="wf-properties-section-head">
         <h3>{title}</h3>
-        <button type="button" className="wf-properties-add" onClick={onAdd}><Plus size={14} /> {addLabel}</button>
+        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
       </div>
       {isEmpty ? (
         <p className="wf-muted">{emptyLabel}</p>
@@ -311,13 +353,14 @@ interface ArgumentColumns {
 // One row editor for all three collections. They share Name / Type / Collection-kind; Variables and
 // Inputs add a type-aware Default and a Storage picker; Outputs are minimal (produced, not consumed).
 function ArgumentsEditor({
-  items, typeOptions, storageOptions, editorForAlias,
+  items, typeOptions, storageOptions, storageOptionsStatus, editorForAlias,
   namePrefix, nameKeys, title, addLabel, emptyLabel,
   create, patch, columns, warnings, onChange
 }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
-  storageOptions: PickerOption[] | null;
+  storageOptions: StorageOptions;
+  storageOptionsStatus?: StorageOptionsStatus;
   editorForAlias: EditorForAlias;
   namePrefix: string;
   nameKeys: string[];
@@ -352,11 +395,12 @@ function ArgumentsEditor({
       {items.map((item, index) => {
         const name = readStringField(item, nameKeys);
         const argType = readArgumentType(item);
+        const rowStorageOptions = storageChoices(storageOptions, argType.alias);
         const referenceKey = readStringField(item, referenceKeyKeys);
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
-        // A collection's default is a single scalar editor only for a `Single` type; collection defaults
-        // fall back to free text (editing a list/array default inline is out of scope).
-        const editor = argType.collectionKind === "Single" ? editorForAlias(argType.alias) : "text";
+        const typeEditor = editorForAlias(argType.alias);
+        // JSON defaults keep their raw syntax for scalar values and collections alike.
+        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
           <tr key={index}>
             <td>
@@ -386,7 +430,9 @@ function ArgumentsEditor({
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
                   editor={editor}
-                  onChange={value => update(index, { default: literalDefault(value) })}
+                  onChange={value => update(index, { default: editor === "json" && value !== ""
+                    ? { value, expressionType: "Object" }
+                    : literalDefault(value) })}
                 />
               </td>
             ) : null}
@@ -395,8 +441,9 @@ function ArgumentsEditor({
                 <PickerCell
                   ariaLabel={`${namePrefix} storage driver`}
                   value={readStringField(item, storageDriverKeys)}
-                  options={storageOptions}
-                  placeholder="—"
+                  options={rowStorageOptions}
+                  placeholder={storageOptionsStatus === "loading" ? "Loading storage…" : storageOptionsStatus === "unavailable" ? "Storage unavailable" : rowStorageOptions?.length === 0 ? "No compatible storage" : "Select storage"}
+                  disabled={storageOptionsStatus === "loading" || storageOptionsStatus === "unavailable" || rowStorageOptions?.length === 0}
                   allowEmpty
                   onChange={value => update(index, { storageDriverType: value || null })}
                 />
@@ -419,10 +466,11 @@ function ArgumentsEditor({
   );
 }
 
-export function VariablesEditor({ items, typeOptions, storageOptions, editorForAlias, title = "Variables", addLabel = "Add variable", emptyLabel = "No variables defined.", warnings, onChange }: {
+export function VariablesEditor({ items, typeOptions, storageOptions, storageOptionsStatus, editorForAlias, title = "Variables", addLabel = "Add variable", emptyLabel = "No variables defined.", warnings, onChange }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
-  storageOptions: PickerOption[] | null;
+  storageOptions: StorageOptions;
+  storageOptionsStatus?: StorageOptionsStatus;
   editorForAlias: EditorForAlias;
   title?: string;
   addLabel?: string;
@@ -435,13 +483,18 @@ export function VariablesEditor({ items, typeOptions, storageOptions, editorForA
       items={items}
       typeOptions={typeOptions}
       storageOptions={storageOptions}
+      storageOptionsStatus={storageOptionsStatus}
       editorForAlias={editorForAlias}
       namePrefix="Variable"
       nameKeys={variableNameKeys}
       title={title}
       addLabel={addLabel}
       emptyLabel={emptyLabel}
-      create={(name, alias) => createVariable({ name, alias })}
+      create={(name, alias) => {
+        const variable = createVariable({ name, alias });
+        const available = storageChoices(storageOptions, readArgumentType(variable).alias);
+        return available?.length === 1 ? { ...variable, storageDriverType: available[0].value } : variable;
+      }}
       patch={(existing, next) => updateVariable(existing as VariableDefinition, next)}
       columns={{ default: true, storage: true }}
       warnings={warnings}
@@ -450,10 +503,11 @@ export function VariablesEditor({ items, typeOptions, storageOptions, editorForA
   );
 }
 
-function InputsEditor({ items, typeOptions, storageOptions, editorForAlias, onChange }: {
+function InputsEditor({ items, typeOptions, storageOptions, storageOptionsStatus, editorForAlias, onChange }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
-  storageOptions: PickerOption[] | null;
+  storageOptions: StorageOptions;
+  storageOptionsStatus?: StorageOptionsStatus;
   editorForAlias: EditorForAlias;
   onChange(next: unknown[]): void;
 }) {
@@ -462,6 +516,7 @@ function InputsEditor({ items, typeOptions, storageOptions, editorForAlias, onCh
       items={items}
       typeOptions={typeOptions}
       storageOptions={storageOptions}
+      storageOptionsStatus={storageOptionsStatus}
       editorForAlias={editorForAlias}
       namePrefix="Input"
       nameKeys={argumentNameKeys}
@@ -479,7 +534,7 @@ function InputsEditor({ items, typeOptions, storageOptions, editorForAlias, onCh
 function OutputsEditor({ items, typeOptions, storageOptions, editorForAlias, onChange }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
-  storageOptions: PickerOption[] | null;
+  storageOptions: StorageOptions;
   editorForAlias: EditorForAlias;
   onChange(next: unknown[]): void;
 }) {
@@ -507,7 +562,7 @@ export function toRecords(value: unknown[] | undefined): Record<string, unknown>
 }
 
 // Self-contained variable editor (loads its own type/storage descriptors) for use outside the
-// Properties tab — e.g. the container-scoped variables section in the activity inspector. Workflow-
+// workflow data tabs — e.g. the container-scoped variables section in the activity inspector. Workflow-
 // and container-scoped declarations share this one editor, differing only by where they are stored.
 export function ScopedVariablesEditor({ context, variables, title, addLabel, emptyLabel, warnings, onChange }: {
   context: StudioEndpointContext;
@@ -518,12 +573,13 @@ export function ScopedVariablesEditor({ context, variables, title, addLabel, emp
   warnings?: Map<string, string>;
   onChange(next: unknown[]): void;
 }) {
-  const { typeOptions, storageOptions, editorForAlias } = useDescriptorOptions(context);
+  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
   return (
     <VariablesEditor
       items={toRecords(variables)}
       typeOptions={typeOptions}
       storageOptions={storageOptions}
+      storageOptionsStatus={storageOptionsStatus}
       editorForAlias={editorForAlias}
       title={title}
       addLabel={addLabel}
@@ -602,12 +658,6 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
   onStateChange(producer: StateProducer): void;
   onDefinitionMetaChange?(patch: { name?: string; description?: string }): void;
 }) {
-  const { typeOptions, storageOptions, editorForAlias } = useDescriptorOptions(context);
-  const variables = toRecords(draft.state.variables);
-  const inputs = toRecords(draft.state.inputs);
-  const outputs = toRecords(draft.state.outputs);
-  const versions = details?.versions ?? [];
-
   return (
     <div className="wf-properties-view">
       <InformationSection
@@ -626,6 +676,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
       />
 
       <PersistenceModeSection
+        context={context}
         strategyOptions={draft.state.strategyOptions}
         onChange={persistenceMode => onStateChange(state => ({
           ...state,
@@ -633,43 +684,43 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         }))}
       />
 
-      <VariablesEditor
-        items={variables}
+    </div>
+  );
+}
+
+export type WorkflowDataSection = "variables" | "inputs" | "outputs";
+
+/** Workflow declarations share the scoped editors and the draft's existing save and undo path. */
+export function WorkflowDataView({ section, draft, context, onStateChange }: {
+  section: WorkflowDataSection;
+  draft: WorkflowDraft;
+  context: StudioEndpointContext;
+  onStateChange(producer: StateProducer): void;
+}) {
+  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
+  return (
+    <div className="wf-properties-view">
+      {section === "variables" ? <VariablesEditor
+        items={toRecords(draft.state.variables)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
+        storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
-      />
-      <InputsEditor
-        items={inputs}
+      /> : section === "inputs" ? <InputsEditor
+        items={toRecords(draft.state.inputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
+        storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, inputs: next }))}
-      />
-      <OutputsEditor
-        items={outputs}
+      /> : <OutputsEditor
+        items={toRecords(draft.state.outputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, outputs: next }))}
-      />
-
-      <section className="wf-properties-section">
-        <h3>Versions</h3>
-        {versions.length === 0 ? (
-          <p className="wf-muted">No published versions yet.</p>
-        ) : (
-          <ul className="wf-properties-versions">
-            {versions.map(version => (
-              <li key={version.id}>
-                <span className="wf-properties-version-tag">v{version.version}</span>
-                <time>{formatDate(version.createdAt)}</time>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      />}
     </div>
   );
 }

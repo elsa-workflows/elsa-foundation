@@ -64,10 +64,11 @@ internal sealed partial class ImportDatabase(
 
     public EfReusableActivityImportOperationStore OperationStore(IPersistenceAccessContextAccessor access) => new(Import(), access);
 
-    public IReusableActivityImportOperationService Service(IPersistenceAccessContextAccessor access, TimeProvider? clock = null, IReusableActivityImportCommand? command = null)
+    /// <param name="converterRevision">The converter revision the import runs at (#3921); 0, the default, is the revision every earlier import used.</param>
+    public IReusableActivityImportOperationService Service(IPersistenceAccessContextAccessor access, TimeProvider? clock = null, IReusableActivityImportCommand? command = null, int converterRevision = 0)
     {
         clock ??= new MutableTimeProvider(ImportFixtures.Now);
-        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var analyzer = new ReusableActivityCollectionAnalyzer(converterRevision: new ImportFixtures.FixedConverterRevision(converterRevision));
         var importer = new ReusableActivityCollectionImporter(analyzer, ImportFixtures.Materializer(), command ?? Command(access, clock), new NoCredentialInputs());
         return new ReusableActivityImportOperationService(OperationStore(access), importer, ImportFixtures.Options(), clock, NullLogger<ReusableActivityImportOperationService>.Instance);
     }

@@ -18,12 +18,23 @@ public interface IEtlConnectorRuntimeInspector
 /// <summary>Consistent internal run snapshot plus settled route-effect counts.</summary>
 /// <remarks>Run includes its retained invocation and is not a public wire DTO. APIs must project approved
 /// fields rather than serializing it or its artifact, binding handles and object references.</remarks>
-public sealed record EtlConnectorRunInspection(EtlConnectorRunView Run, long AcceptedMainEffects, long AcceptedErrorEffects);
+public sealed record EtlConnectorRunInspection(EtlConnectorRunView Run, long AcceptedMainEffects, long AcceptedErrorEffects)
+{
+    /// <summary>Whether the run's pinned pipeline runs continuously until completion or cancellation.</summary>
+    public bool Continuous { get; init; }
+
+    /// <summary>When completion of a continuous run was requested; null when finite or not yet requested.</summary>
+    public DateTimeOffset? CompletionRequestedAt { get; init; }
+}
 
 /// <summary>Exactly one of File and Http is present. No file-offset sentinel represents HTTP progress.</summary>
 public sealed record EtlConnectorPartitionInspection(int PartitionOrdinal, EtlConnectorFilePosition? File,
     EtlConnectorHttpProgress? Http, bool IsClaimed, long? ClaimFence, DateTimeOffset? ClaimExpiresAt,
-    DateTimeOffset? NotBefore, EtlConnectorOwedInspection? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects);
+    DateTimeOffset? NotBefore, EtlConnectorOwedInspection? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects)
+{
+    /// <summary>A caught-up continuous shard's next poll; it equals NotBefore and is null for every other wait.</summary>
+    public DateTimeOffset? NextPollAt { get; init; }
+}
 
 /// <summary>Zero-based page/item coordinates within a partition; unknown page size is null with item offset zero.</summary>
 public sealed record EtlConnectorHttpProgress(long PageSequence, int NextItem, int? PageRecordCount, bool Exhausted,
@@ -37,7 +48,7 @@ public sealed record EtlConnectorRetryInspection(string Phase, int AttemptCount,
     DateTimeOffset? NotBefore, int? LastStatusCode);
 
 /// <summary>A positive record/input-byte reservation. Route record counts cannot exceed its record count.</summary>
-/// <remarks>Unretained output has no effects. JSONL effects have no HTTP retry journal.</remarks>
+/// <remarks>Unretained output has no effects. File (JSONL or CSV) effects have no HTTP retry journal.</remarks>
 public sealed record EtlConnectorOwedInspection(long RecordCount, long InputBytes, bool OutputRetained,
     EtlConnectorEffectInspection? Main, EtlConnectorEffectInspection? Errors);
 

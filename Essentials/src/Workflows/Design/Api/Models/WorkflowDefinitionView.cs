@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Api.Models;
 
@@ -22,7 +23,14 @@ public sealed record WorkflowDefinitionView(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? PublishedVersionId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? PublishedVersion = null
+    string? PublishedVersion = null,
+    string? FolderId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<WorkflowFolder>? FolderBreadcrumb = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<WorkflowTagAssignment>? Tags = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    bool? Favorite = null
 );
 
 public sealed record WorkflowDefinitionListView(IReadOnlyCollection<WorkflowDefinitionView> Items);

@@ -16,7 +16,7 @@ public sealed class DerivedDatasetTests : IDisposable
 {
     private const string Primitives = "Essentials/src/Primitives/Elsa.Primitives.csproj";
     private const string Tasks = "Essentials/src/Tasks/Elsa.Tasks.csproj";
-    private const string Agent = "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj";
+    private const string Agent = "Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj";
 
     private readonly SyntheticRepository repo = new() { WriteLockFiles = true };
 
@@ -30,7 +30,7 @@ public sealed class DerivedDatasetTests : IDisposable
         repo.AddProject("Essentials/tests/Tasks/Elsa.Tasks.Tests.csproj", packable: false, references: [Tasks]);
         repo.Write("Essentials/src/Tasks/Scheduler.cs", "public sealed class Scheduler;");
         repo.Write("Essentials/src/Primitives/Primitive.cs", "public sealed class Primitive;");
-        repo.Write("Extensions/Agent/src/Core/Agent.cs", "public sealed class Agent;");
+        repo.Write("Extensions/Weaver/src/Core/Agent.cs", "public sealed class Agent;");
     }
 
     [Fact]
@@ -119,17 +119,17 @@ public sealed class DerivedDatasetTests : IDisposable
         [
             new PublishedPackage("Elsa.Primitives", PackageVersionNumber.Parse("4.0.3-preview", "test"), baseline),
             new PublishedPackage("Elsa.Tasks", PackageVersionNumber.Parse("4.0.7-preview", "test"), baseline),
-            new PublishedPackage("Elsa.Agent.Core", PackageVersionNumber.Parse("4.0.2-preview", "test"), baseline)
+            new PublishedPackage("Elsa.Weaver.Core", PackageVersionNumber.Parse("4.0.2-preview", "test"), baseline)
         ]);
-        repo.Write("Extensions/Agent/src/Core/Agent.cs", "public sealed class Agent { }");
+        repo.Write("Extensions/Weaver/src/Core/Agent.cs", "public sealed class Agent { }");
         var commit = CommitWithoutMap();
 
         var computation = VersionCalculator.Compute(repo.Calculator, commit, record);
 
-        Assert.Equal(["Elsa.Agent.Core"], computation.Affected);
+        Assert.Equal(["Elsa.Weaver.Core"], computation.Affected);
         Assert.Equal("4.0.7", computation["Elsa.Tasks"].Version.Numeric);
         Assert.Equal("4.0.3", computation["Elsa.Primitives"].Version.Numeric);
-        Assert.Equal("4.0.3", computation["Elsa.Agent.Core"].Version.Numeric);
+        Assert.Equal("4.0.3", computation["Elsa.Weaver.Core"].Version.Numeric);
     }
 
     [Fact]

@@ -26,7 +26,7 @@ namespace Elsa.Studio.Tests;
 /// these tests route that named client through a stub backend so the assertions are about the gate's HTTP behaviour,
 /// not the network. The browser never carries an Elsa host management key on any of these requests.
 /// </summary>
-public sealed class StudioBridgeAuthTests : IAsyncDisposable
+public sealed class StudioBridgeAuthTests : IAsyncLifetime
 {
     private const string BackendBaseUrl = "https://backend.example/";
     private const string ValidBearer = "valid-user-bearer";
@@ -471,7 +471,9 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

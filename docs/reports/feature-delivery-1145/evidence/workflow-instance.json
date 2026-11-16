@@ -1,0 +1,93 @@
+{
+  "status": 200,
+  "body": {
+    "instance": {
+      "workflowExecutionId": "01a1ade1b905729db04d87699be53999",
+      "artifactId": "artifact-d0771f00f1d2",
+      "definitionId": "wfdef_fr2_remote_delivery_1145",
+      "definitionVersionId": "wfver-19eb68111ec851e33c29168f25901504bcbf4cd60aaa1a8b9019494bf25ff8b8",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:d0771f00f1d258d70c1d6ece62e8d3a69fd8700146f578223b9bfdd6d7ab9316",
+      "status": "Completed",
+      "runKind": "PublishedRun",
+      "subStatus": null,
+      "createdAt": "2026-11-05T22:43:33.8383406+00:00",
+      "startedAt": "2026-11-05T22:43:33.8383406+00:00",
+      "updatedAt": "2026-11-05T22:43:33.8671623+00:00",
+      "completedAt": "2026-11-05T22:43:33.8671623+00:00",
+      "correlationId": null,
+      "parentWorkflowExecutionId": null,
+      "tenantId": "default",
+      "activityCount": 1,
+      "incidentCount": 0,
+      "sourceReferenceId": "activation-ref:publication-14wvAGh8pnE",
+      "publicationId": "publication-14wvAGh8pnE",
+      "slotId": "activation-slot:30:wfdef_fr2_remote_delivery_1145:7:default",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "wfver-19eb68111ec851e33c29168f25901504bcbf4cd60aaa1a8b9019494bf25ff8b8",
+      "sourceVersion": "1.0.0",
+      "activeIncidentCount": 0,
+      "blockingIncidentCount": 0
+    },
+    "activities": [
+      {
+        "activityExecutionId": "01a1ade1b94e70d2aa79362a697426b4",
+        "workflowExecutionId": "01a1ade1b905729db04d87699be53999",
+        "executableNodeId": "proof-result",
+        "authoredActivityId": "proof-result",
+        "activityType": "elsa.intrinsic.setoutput",
+        "activityTypeVersion": "1.0.0",
+        "status": "Completed",
+        "subStatus": null,
+        "executionSequence": 3138164883179721690,
+        "scheduledAt": "2026-11-05T22:43:33.8450128+00:00",
+        "startedAt": "2026-11-05T22:43:33.8662622+00:00",
+        "completedAt": "2026-11-05T22:43:33.8662622+00:00",
+        "firstCheckpointId": "checkpoint:d2439b926c11b31c:schedule:proof-result:activity-scheduled:01a1ade1b94e70d2aa79362a697426b4",
+        "lastCheckpointId": "checkpoint:109190150313d8db:checkpoint:WorkflowCompleted:01a1ade1b94e70d2aa79362a697426b4",
+        "lastCommittedAt": "2026-11-05T22:43:33.8671623+00:00",
+        "provenance": {
+          "parentActivityExecutionId": null,
+          "schedulingActivityExecutionId": null,
+          "schedulingWorkflowExecutionId": "01a1ade1b905729db04d87699be53999",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": null,
+          "executionScopeId": null,
+          "schedulingCause": "WorkflowStart",
+          "metadata": {}
+        },
+        "outcomeNames": [
+          "Done"
+        ],
+        "bookmarkCount": 0,
+        "incidentCount": 0,
+        "valueSnapshotCount": 0,
+        "metadata": {}
+      }
+    ],
+    "incidents": [],
+    "outputs": {
+      "proof": {
+        "value": {
+          "kind": "string",
+          "typeName": "String",
+          "preview": "remote-feed-execution-passed",
+          "length": 28,
+          "truncated": false
+        },
+        "isRedacted": false,
+        "redactionReason": null,
+        "capturedAt": "2026-11-05T22:43:33.8661631+00:00"
+      }
+    },
+    "persistenceMode": "Balanced",
+    "inspectionGranularity": "boundary-level",
+    "activityNextContinuationToken": null,
+    "permissions": {
+      "canManage": true,
+      "canInspectValues": true
+    }
+  },
+  "redirectLocation": null
+}

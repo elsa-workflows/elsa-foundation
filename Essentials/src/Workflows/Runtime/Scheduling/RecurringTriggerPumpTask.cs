@@ -35,7 +35,9 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// claiming, before or after routing, leaves the claim to lapse, and a peer then fires the occurrence again. A route that
 /// throws, or that finds no binding owned by the schedule (index drift mid-republish), releases the claim with a
 /// geometric backoff capped at <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, so the occurrence is retried
-/// rather than skipped. Each claim is renewed immediately before its route (<see cref="FencedClaimLease{TClaim}"/>), and a
+/// rather than skipped. Each claim is renewed immediately before its route (<see cref="FencedClaimLease{TClaim}"/>), and also
+/// while it routes when a persistence scope factory is available (each renewal in its own scope; schedules may then route
+/// concurrently up to <see cref="RecurringTriggerPumpOptions.MaxConcurrentDispatches"/>), and a
 /// claim lost before the route, or found stale when settling or releasing, is logged and skipped without ending the sweep.
 /// </para>
 /// <para>
@@ -123,6 +125,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 
         _options = options;
         _timeProvider = timeProvider;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.Value.MaxConcurrentDispatches);
         if (_options.Value.ClaimVisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options), "Recurring-trigger claim visibility timeout must be greater than zero.");
     }
@@ -138,20 +141,23 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 
         if (_scopeRunner is null)
         {
-            await SweepAsync(_store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
+            await SweepAsync(new PersistenceScope(PersistenceScope.DefaultValue), _store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
         }
         else
         {
-            await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
+            await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
             {
                 await SweepAsync(
+                    persistenceScope,
                     operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
                     operationScope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
                     operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
                     operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
                     options,
                     now,
-                    operationCancellationToken);
+                    operationCancellationToken,
+                    operationScope.ServiceProvider.GetService<IPersistenceOperationScopeFactory>(),
+                    operationScope.ServiceProvider.GetService<IRuntimeAdmissionLoadSignal>());
             }, cancellationToken);
         }
     }
@@ -164,28 +170,57 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
             backoffInterval);
 
     private async Task SweepAsync(
+        PersistenceScope persistenceScope,
         IRecurringTriggerScheduleStore store,
         IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         IRecurringScheduleCalculator calculator,
         RecurringTriggerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IPersistenceOperationScopeFactory? scopeFactory = null,
+        IRuntimeAdmissionLoadSignal? loadSignal = null)
     {
         var claims = await store.ClaimDueAsync(
             new RecurringTriggerOccurrenceClaimRequest(_claimOwnerId, now, options.ClaimVisibilityTimeout, options.MaxSchedulesPerTick),
             cancellationToken);
-        // Renewed before each route only, never during it: the router's start dispatch shares this scope's unit of work, so
-        // a renewal running beside it would collide with it. A route that outlives the lease is repeated by a peer, and the
-        // repeat converges on the keyed start.
-        var lease = new FencedClaimLease<RecurringTriggerOccurrenceClaim>(store.RenewClaimAsync, options.ClaimVisibilityTimeout, _timeProvider);
-        var fired = 0;
-
-        foreach (var claim in claims)
+        async ValueTask<RecurringTriggerOccurrenceClaim?> RenewAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset at,
+            TimeSpan visibility, CancellationToken ct)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (await FireAsync(store, bindingStore, router, calculator, lease, claim, options, now, cancellationToken))
-                fired++;
+            if (scopeFactory is null)
+                return await store.RenewClaimAsync(claim, at, visibility, ct);
+            await using var scope = await scopeFactory.CreateAsync(persistenceScope, ct);
+            return await scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>().RenewClaimAsync(claim, at, visibility, ct);
+        }
+        var lease = new FencedClaimLease<RecurringTriggerOccurrenceClaim>(RenewAsync, options.ClaimVisibilityTimeout, _timeProvider);
+        var fired = 0;
+        if (scopeFactory is not null && options.MaxConcurrentDispatches > 1)
+        {
+            await Parallel.ForEachAsync(claims.GroupBy(x => x.Schedule.ScheduleId, StringComparer.Ordinal),
+                new ParallelOptions { MaxDegreeOfParallelism = options.MaxConcurrentDispatches, CancellationToken = cancellationToken },
+                async (group, ct) =>
+                {
+                    foreach (var claim in group)
+                    {
+                        await using var scope = await scopeFactory.CreateAsync(persistenceScope, ct);
+                        if (await FireAsync(scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
+                                scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
+                                scope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
+                                scope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
+                                lease, claim, options, now, ct, loadSignal, keepRenewing: true))
+                            Interlocked.Increment(ref fired);
+                    }
+                });
+        }
+        else
+        {
+            foreach (var claim in claims)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await FireAsync(store, bindingStore, router, calculator, lease, claim, options, now, cancellationToken,
+                        loadSignal, keepRenewing: scopeFactory is not null))
+                    fired++;
+            }
         }
 
         if (fired > 0 && Logger.IsEnabled(LogLevel.Debug))
@@ -203,7 +238,9 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         RecurringTriggerOccurrenceClaim claim,
         RecurringTriggerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRuntimeAdmissionLoadSignal? loadSignal = null,
+        bool keepRenewing = false)
     {
         var schedule = claim.Schedule;
         DateTimeOffset? next;
@@ -221,10 +258,15 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 
         // A null next means the Cron is exhausted: the occurrence in the cursor is its last. It is still routed under the
         // claim below, and the schedule is removed only after that, rather than left perpetually due.
-        var run = await lease.RunAsync(
-            claim,
-            routeCancellationToken => RouteAsync(bindingStore, router, schedule, routeCancellationToken),
-            cancellationToken);
+        async ValueTask<RouteOutcome> RouteChargedAsync(CancellationToken ct)
+        {
+            using var charge = loadSignal is { HasAmbientCharge: false } ? loadSignal.OpenCharge() : null;
+            return await RouteAsync(bindingStore, router, schedule, ct);
+        }
+        // Custom direct hosts may share the renewal store's context with routing, so retain renew-before-only there.
+        var run = keepRenewing
+            ? await lease.RunRenewingAsync(claim, RouteChargedAsync, cancellationToken)
+            : await lease.RunAsync(claim, RouteChargedAsync, cancellationToken);
 
         switch (run.Status)
         {

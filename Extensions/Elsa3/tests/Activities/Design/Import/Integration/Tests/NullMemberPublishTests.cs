@@ -15,8 +15,8 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 public sealed class NullMemberPublishTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// The JTest corpus case. Publishing is the step #3200 broke; running an imported RunJavaScript is blocked separately,
-    /// by its <c>arguments</c> input (#3195), so this test stops at publishing.
+    /// The JTest corpus case. Publishing is the step #3200 broke; <see cref="RunJavaScriptDefaultArgumentsTests"/> runs
+    /// the same import (#3195).
     /// </summary>
     [Fact]
     public async Task A_RunJavaScript_with_null_possible_outcomes_and_result_publishes()

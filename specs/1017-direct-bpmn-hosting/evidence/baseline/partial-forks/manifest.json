@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-host-capture",
+  "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "captureToolSourceCommit": "96eb35af481c2ab6ce596012c82913dadf35442d",
+  "captureRunnerSha256": "cc0f6bbe10f2207423983129a437425560947e5696d7acb88e5caab1a1d2482b",
+  "capturedAt": "2026-10-28T06:34:40.049497+00:00",
+  "ownedHost": {
+    "processId": 380,
+    "controllerProcessId": 379,
+    "startEpochSeconds": 1793158908,
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "d52e6ff05b5dd82ea701e0f16fe59e393f864a30f4e272fe79684d16e18f5961"
+  },
+  "frozenAuthoringFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "frozenContractReceipt": "frozen-contract.json",
+  "caseReceipt": "cases.json",
+  "captureCut": "same-owned-host-stopped-across-whole-store-backups",
+  "assets": [
+    {
+      "path": "cases.json",
+      "sha256": "613d2620435f1d62546ec5df2b63128d8549323a2f36543f99db1ea4a3eede62",
+      "role": "actual-api-views"
+    },
+    {
+      "path": "product-versions.json",
+      "sha256": "78db735cf5c4f874704f00941b2a49789a61358fe0dab4f64a86bd19ba2925df",
+      "role": "matched-binary-source-binding"
+    },
+    {
+      "path": "runtime.sqlite",
+      "sha256": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb",
+      "role": "whole-sqlite-store"
+    },
+    {
+      "path": "design.sqlite",
+      "sha256": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e",
+      "role": "whole-sqlite-store"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "1db28e45f8ff5296fd0095347c877c73eba8a9833c4410e7d79113b05aedaf06",
+      "role": "actual-frozen-authoring-comparison"
+    }
+  ],
+  "coverage": [
+    "actual-partial-fork",
+    "legacy-bpmn-root",
+    "native-Sequence",
+    "native-Flowchart",
+    "native-CompensationScope",
+    "Balanced",
+    "Durable"
+  ],
+  "limits": [
+    "Not direct-model hosting or upgraded-host recovery proof.",
+    "Does not complete the writer map: pending callback/cohort/control/MI/compensation/Studio cuts need their own captures.",
+    "Only the explicitly owned POSIX/SQLite host profile is exercised; no distributed or other-provider claim."
+  ]
+}

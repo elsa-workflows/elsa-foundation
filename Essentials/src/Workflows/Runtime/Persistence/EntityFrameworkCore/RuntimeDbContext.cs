@@ -13,6 +13,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
+    internal DbSet<UserTaskEntity> UserTasks => Set<UserTaskEntity>();
+    internal DbSet<UserTaskFormEntity> UserTaskForms => Set<UserTaskFormEntity>();
+
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
     public DbSet<WorkflowExecutableCoordinationEntity> WorkflowExecutableCoordinations => Set<WorkflowExecutableCoordinationEntity>();
@@ -50,6 +53,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     {
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
+        modelBuilder.ApplyConfiguration(new UserTaskConfiguration());
+        modelBuilder.ApplyConfiguration(new UserTaskFormConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
@@ -61,6 +66,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new ActivityExecutionInspectionEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionHierarchyEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutionStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeModelExecutionEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeModelInputEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowAlterationPlanEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowAlterationJobEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowTestScopeEntityConfiguration());

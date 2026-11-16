@@ -154,6 +154,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
+            throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions or model-owned native worker admission.");
         try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)
@@ -554,6 +557,32 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return item;
     }
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId,
+        IReadOnlyCollection<string> excludedIntentKinds, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(excludedIntentKinds);
+        var excludedKinds = new HashSet<string>(excludedIntentKinds, StringComparer.Ordinal);
+        foreach (var kind in excludedKinds) ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        cancellationToken.ThrowIfCancellationRequested();
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new InvalidOperationException("A durable source read requires explicit persistence access.");
+        var scope = access.RequireScope();
+        if (System.Transactions.Transaction.Current is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
+        lock (_state.SyncRoot)
+        {
+            foreach (var item in _state.OutboxItems.Values.Where(item => item.Intent.WorkflowExecutionId == workflowExecutionId &&
+                !excludedKinds.Contains(item.Intent.Kind) && item.Status != RuntimePostCommitOutboxStatus.Delivered))
+            {
+                if (item.StimulusDeliverySourceScope is null)
+                    throw new InvalidDataException("The in-memory source has no committed scope witness.");
+                if (item.StimulusDeliverySourceScope == scope) return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(item);
+            }
+            return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
+        }
+    }
+
     ValueTask IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
         IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
     {
@@ -915,9 +944,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         lock (_state.SyncRoot)
         {
+            // A delivered item is never claimable again, so it sorts after every unsettled one.
             return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(_state.OutboxItems.Values
                 .Where(query.Matches)
-                .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                .OrderBy(item => item.Status == RuntimePostCommitOutboxStatus.Delivered
+                    ? DateTimeOffset.MaxValue
+                    : RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item))
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
                 .Take(query.Limit)

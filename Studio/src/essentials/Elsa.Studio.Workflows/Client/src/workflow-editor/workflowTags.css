@@ -1,0 +1,35 @@
+.wf-tag-page { min-width: 0; }
+.wf-tag-form { display: grid; gap: 16px; max-width: 720px; min-width: 0; }
+.wf-tag-form label { display: grid; gap: 6px; min-width: 0; }
+.wf-tag-form :is(input:not([type="checkbox"]), textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--studio-control-height);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  padding: 8px 10px;
+  font: inherit;
+}
+/* Native checkbox geometry must not change when the host's generic input focus rule releases. */
+.wf-tag-form input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+.wf-tag-form textarea { min-height: 96px; resize: vertical; }
+.wf-tag-form .wf-library-check { display: flex; align-items: center; gap: 8px; }
+.wf-tag-form :is(input, textarea, select):focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.wf-tag-form .wf-tag-value-editor { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.wf-tag-form .wf-tag-value-editor legend { font-weight: 600; margin-bottom: 8px; }
+.wf-tag-form .wf-library-control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.wf-tag-form .wf-library-control-row > label:first-child { flex: 1 1 180px; }
+.wf-tag-page .studio-table td { overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .wf-tag-form :is(input, textarea, select) { font-size: 16px; }
+}

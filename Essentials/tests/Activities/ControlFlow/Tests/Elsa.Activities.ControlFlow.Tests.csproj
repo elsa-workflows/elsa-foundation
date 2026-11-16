@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />

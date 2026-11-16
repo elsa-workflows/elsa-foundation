@@ -1,11 +1,46 @@
 import { describe, expect, it } from "vitest";
 import {
   parseWorkflowDefinitionBrowseLocation,
-  updateWorkflowDefinitionBrowseUrl
+  updateWorkflowDefinitionBrowseUrl,
+  clearUnavailableWorkflowBrowseConstraints,
+  unavailableWorkflowBrowseConstraints
 } from "../workflow-editor/workflowDefinitionBrowseLocation";
 import { updateWorkflowDefinitionIdInUrl } from "../workflow-editor/workflowDefinitionUrl";
 
 describe("workflow definition browse location", () => {
+  it("retains a supported direct folder when only extended query options are unavailable", () => {
+    const location = parseWorkflowDefinitionBrowseLocation("?folderId=finance&includeDescendants=true&sort=modified&publicationState=published&columns=location&search=invoice");
+    const recovered = clearUnavailableWorkflowBrowseConstraints(location, { folders: true, tags: false, favorites: false, views: false, paging: true, queryOptions: false });
+    expect(recovered.folderSelection).toEqual({ id: "finance" });
+    expect(recovered.includeDescendants).toBe(false);
+    expect(recovered.sort).toBe("name");
+    expect(recovered.publicationState).toBeUndefined();
+    expect(recovered.search).toBe("invoice");
+    expect(recovered.columns).toEqual(["location"]);
+  });
+
+  it("clears only unsupported predicates on a partially capable backend and retires their saved-view association", () => {
+    const source = new URL("https://studio.example/workflows/definitions?backend=authoring&search=invoice&state=deleted&folderId=finance&favoritesOnly=true&view=mine&columns=tags,location&sort=modified&publicationState=published&other=keep#result");
+    source.searchParams.set("tagFilters", JSON.stringify([{ tagId: "critical", operator: "exists" }]));
+    const location = parseWorkflowDefinitionBrowseLocation(source.search);
+    const support = { folders: true, tags: false, favorites: true, views: true, paging: true, queryOptions: true };
+    expect(unavailableWorkflowBrowseConstraints(location, support)).toEqual({ folders: false, descendants: false, tags: true, favorites: false, view: false, sort: false, publication: false });
+    const recovered = clearUnavailableWorkflowBrowseConstraints(location, support);
+    expect(recovered).toMatchObject({ folderSelection: { id: "finance" }, favoritesOnly: true, search: "invoice", listState: "deleted", columns: ["tags", "location"], sort: "modified", publicationState: "published" });
+    expect(recovered.tagFilters).toEqual([]);
+    expect(recovered.viewId).toBeUndefined();
+    const url = updateWorkflowDefinitionBrowseUrl(source, recovered);
+    expect(url.searchParams.get("backend")).toBe("authoring");
+    expect(url.searchParams.get("other")).toBe("keep");
+    expect(url.hash).toBe("#result");
+    expect(url.searchParams.has("tagFilters")).toBe(false);
+  });
+
+  it("retains a completely supported saved view unchanged", () => {
+    const location = parseWorkflowDefinitionBrowseLocation("?view=mine&favoritesOnly=true");
+    expect(clearUnavailableWorkflowBrowseConstraints(location, { folders: true, tags: true, favorites: true, views: true, paging: true, queryOptions: true })).toBe(location);
+  });
+
   it("round-trips an opaque folder ID, lifecycle, and search without using path identity", () => {
     const location = {
       folderSelection: { id: " folder/with ?# and ünicode " } as const,

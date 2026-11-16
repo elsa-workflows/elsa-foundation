@@ -4,11 +4,13 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -35,6 +37,23 @@ public sealed class ModuleMigrationTests : IDisposable
             Assert.True(context.Database.GetMigrations().Any(), $"{type.Name} has no migrations. Run tools/ef/generate-module-migrations.sh.");
             Assert.False(context.Database.HasPendingModelChanges(), $"{type.Name} has model changes without a migration. Run tools/ef/generate-module-migrations.sh.");
         }
+    }
+
+    // A snapshot can merge cleanly while a concurrent incremental migration still describes the old schema.
+    // Future migration safety checks read that migration's target model, so it must retain the complete schema.
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void The_latest_runtime_migration_retains_the_complete_runtime_schema(string provider)
+    {
+        var type = Assert.Single(ModuleContextCatalog.Contexts(provider), type => typeof(RuntimeDbContext).IsAssignableFrom(type));
+        using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider));
+        var migrations = context.GetService<IMigrationsAssembly>();
+        var latest = migrations.Migrations.Last();
+        var target = migrations.CreateMigration(latest.Value, context.Database.ProviderName!).TargetModel;
+        var initialized = context.GetService<IModelRuntimeInitializer>().Initialize(target, designTime: true);
+        var current = context.GetService<IDesignTimeModel>().Model;
+        Assert.False(context.GetService<IMigrationsModelDiffer>().HasDifferences(initialized.GetRelationalModel(), current.GetRelationalModel()),
+            $"{type.Name}: {latest.Key} does not describe the complete runtime schema.");
     }
 
     /// <summary>

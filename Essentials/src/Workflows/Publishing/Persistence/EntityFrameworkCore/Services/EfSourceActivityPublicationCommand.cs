@@ -42,6 +42,14 @@ public sealed class EfSourceActivityPublicationCommand : ICommitSourceActivityPu
 
     private static void Validate(SourceActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit)
     {
+        var tenantId = commit.Definition.TenantId;
+        if (!StringComparer.Ordinal.Equals(tenantId, commit.AuthoringState.TenantId) ||
+            !StringComparer.Ordinal.Equals(tenantId, commit.CatalogVersion.TenantId) ||
+            !StringComparer.Ordinal.Equals(tenantId, commit.Publication.TenantId) ||
+            !StringComparer.Ordinal.Equals(tenantId, commit.Layout.TenantId) ||
+            !StringComparer.Ordinal.Equals(tenantId, commit.SourceReference.TenantId))
+            throw new ArgumentException("Source activity publication ownership does not align.", nameof(commit));
+
         if (commit.AuthoringState.ContentAuthority.Kind != ActivityContentAuthorityKind.ProviderSource ||
             !StringComparer.Ordinal.Equals(commit.Definition.Id, commit.CatalogVersion.DefinitionId) ||
             !StringComparer.Ordinal.Equals(commit.Definition.Id, commit.Publication.DefinitionId) ||

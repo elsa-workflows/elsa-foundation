@@ -17,7 +17,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        await using var database = new TestDatabase(directory);
+        await using var database = new EtlRuntimeTestDatabase(directory);
         await using var context = database.CreateContext();
         await context.Database.OpenConnectionAsync();
         var migrator = context.GetService<IMigrator>();
@@ -49,8 +49,10 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.True(batch.Settled);
         Assert.Equal(fixture.BatchId, batch.BatchId);
         Assert.Equal(fixture.OutputJson, batch.OutputJson);
-        Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
-        Assert.Equal(0, (await context.ConnectorPartitions.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
+        // Spec 1192 adds a later connector-run column, so read only this historical column at this migration target.
+        Assert.Equal(0, await context.ConnectorRuns.AsNoTracking().Select(row => row.SourceInputReservedBytes).SingleAsync());
+        // Spec 1196 adds later partition columns, so read only this historical column here too.
+        Assert.Equal(0, await context.ConnectorPartitions.AsNoTracking().Select(row => row.SourceInputReservedBytes).SingleAsync());
 
         // Current runtime continuation uses the full current schema after verifying the historical step.
         await migrator.MigrateAsync();
@@ -67,7 +69,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_source_fetch_migration_rejects_inconsistent_pairs_and_negative_reservations()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await CreateSqliteDatabaseAsync();
         await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
         var fixture = await SeedLegacyHttpContinuationAsync(context, clock.GetUtcNow());
@@ -119,6 +121,7 @@ public sealed partial class EtlRuntimeStoreTests
         var bindingJson = EtlConnectorRecordCodec.ValidateBindings(pipeline, admission.Bindings, 128);
         var scope = EtlRuntimeRecordCodec.Scope(admission.Invocation.Scope);
         var run = EtlRuntimeRecordCodec.RunRecord(admission.Invocation,
+            EtlRuntimeRecordCodec.EncodeIdentity(admission.Invocation.RunId, "run id"),
             EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation), null, now.UtcTicks);
 
         var initialRequest = new EtlHttpRequest("shard-a", null);

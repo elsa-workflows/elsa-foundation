@@ -28,11 +28,12 @@ internal static class ReferenceWorkflowRuns
     public const string WriteLineSequence = "writeline-sequence";
     public const string HttpReference = "http-reference";
     public const string ForkJoinResume = "fork-join-resume";
+    public const string SuspendingSequence100 = "suspending-sequence-100";
 
-    /// <summary>Balanced's cap on the activities folded into one commit: the production default, which no reference run reaches.</summary>
+    /// <summary>Balanced's production cap on activities folded into one commit; the long suspension reference crosses it.</summary>
     public const int MaxActivitiesPerCommit = 50;
 
-    public static readonly IReadOnlyList<string> Workflows = [WriteLineSequence, HttpReference, ForkJoinResume];
+    public static readonly IReadOnlyList<string> Workflows = [WriteLineSequence, HttpReference, ForkJoinResume, SuspendingSequence100];
 
     /// <summary>
     /// What runs on a timer instead of because of the workflow: the execution lease, the scheduler work claim and the
@@ -84,6 +85,9 @@ internal static class ReferenceWorkflowRuns
             case ForkJoinResume:
                 await RunForkJoinResumeAsync(fixture, measure);
                 break;
+            case SuspendingSequence100:
+                await RunForkJoinResumeAsync(fixture, measure, longSequence: true);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.");
         }
@@ -121,9 +125,9 @@ internal static class ReferenceWorkflowRuns
         await AssertCompletedAsync(fixture, recordsCompletion);
     }
 
-    private static async Task RunForkJoinResumeAsync(HttpEndpointHostFixture fixture, Func<Func<Task>, Task> measure)
+    private static async Task RunForkJoinResumeAsync(HttpEndpointHostFixture fixture, Func<Func<Task>, Task> measure, bool longSequence = false)
     {
-        var executable = ReferenceWorkflows.ForkJoinResume();
+        var executable = longSequence ? ReferenceWorkflows.SuspendingSequence100() : ReferenceWorkflows.ForkJoinResume();
         await fixture.PublishAsync(executable);
 
         var executionId = string.Empty;
@@ -132,6 +136,18 @@ internal static class ReferenceWorkflowRuns
         var bookmark = Assert.Single(await fixture.ListBookmarksAsync(executionId));
         Assert.Equal(ReferenceWorkflows.EventNodeId, bookmark.ExecutableNodeId);
         Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.WorkflowExecutionAsync(executionId)).Status);
+
+        (string Id, ActivityExecutionStatus Status)[]? beforeWrites = null;
+        if (longSequence)
+        {
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var writes = (await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId))
+                .Where(activity => activity.Execution.ExecutableNodeId.StartsWith("write-", StringComparison.Ordinal)).ToArray();
+            Assert.Equal(Enumerable.Range(1, 100).Select(index => $"write-{index}").OrderBy(id => id, StringComparer.Ordinal),
+                writes.Select(activity => activity.Execution.ExecutableNodeId).OrderBy(id => id, StringComparer.Ordinal));
+            Assert.All(writes, activity => Assert.Equal(ActivityExecutionStatus.Completed, activity.Status));
+            beforeWrites = writes.Select(activity => (activity.Execution.ActivityExecutionId, activity.Status)).OrderBy(activity => activity.ActivityExecutionId, StringComparer.Ordinal).ToArray();
+        }
 
         BookmarkResumeDispatchResult? resumed = null;
         await measure(async () =>
@@ -148,6 +164,14 @@ internal static class ReferenceWorkflowRuns
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed!.Status);
         Assert.Empty(await fixture.ListBookmarksAsync(executionId));
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.WorkflowExecutionAsync(executionId)).Status);
+        if (beforeWrites is not null)
+        {
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var afterWrites = (await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId))
+                .Where(activity => activity.Execution.ExecutableNodeId.StartsWith("write-", StringComparison.Ordinal))
+                .Select(activity => (activity.Execution.ActivityExecutionId, activity.Status)).OrderBy(activity => activity.ActivityExecutionId, StringComparer.Ordinal).ToArray();
+            Assert.Equal(beforeWrites, afterWrites);
+        }
     }
 
     /// <summary>

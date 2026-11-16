@@ -1,0 +1,1643 @@
+[
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1308,
+    "WorkflowsPerSecond": 43.57272697211089,
+    "MeanMs": 23.601693761467885,
+    "P50Ms": 19.9283,
+    "P95Ms": 43.21545,
+    "P99Ms": 54.549499999999995,
+    "AllocatedBytesPerWorkflow": 2427361.29593709,
+    "CpuCoreEquivalent": 0.9958902310116768,
+    "ColdMs": 533.1638,
+    "CpuMsPerWorkflow": 23.443339842726083,
+    "throughputMin": 36.318802422609394,
+    "throughputMax": 50.82665152161239,
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1",
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1265,
+    "WorkflowsPerSecond": 42.06896689113711,
+    "MeanMs": 24.07261620115619,
+    "P50Ms": 19.28135,
+    "P95Ms": 43.649699999999996,
+    "P99Ms": 77.5805,
+    "AllocatedBytesPerWorkflow": 2430635.141564115,
+    "CpuCoreEquivalent": 0.9549101855484013,
+    "ColdMs": 520.44475,
+    "CpuMsPerWorkflow": 22.88280211017348,
+    "throughputMin": 37.335127049245074,
+    "throughputMax": 46.80280673302914,
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeDurable-Activities1-r2",
+      "baseline-ProviderPostgreSql-ModeDurable-Activities1-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Ephemeral",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1471,
+    "WorkflowsPerSecond": 48.985940307836756,
+    "MeanMs": 20.606095700833066,
+    "P50Ms": 17.958750000000002,
+    "P95Ms": 34.701899999999995,
+    "P99Ms": 38.932249999999996,
+    "AllocatedBytesPerWorkflow": 2427142.6522745257,
+    "CpuCoreEquivalent": 1.0118007544639893,
+    "ColdMs": 528.39365,
+    "CpuMsPerWorkflow": 20.8245415285678,
+    "throughputMin": 44.22896383387636,
+    "throughputMax": 53.74291678179716,
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1",
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 2481,
+    "WorkflowsPerSecond": 82.69507653708314,
+    "MeanMs": 12.091405344486972,
+    "P50Ms": 10.632100000000001,
+    "P95Ms": 20.942050000000002,
+    "P99Ms": 27.039250000000003,
+    "AllocatedBytesPerWorkflow": 1559237.5984741454,
+    "CpuCoreEquivalent": 1.0315086997809324,
+    "ColdMs": 356.9527,
+    "CpuMsPerWorkflow": 12.473124756467659,
+    "throughputMin": 82.32745625065645,
+    "throughputMax": 83.06269682350981,
+    "commands": [
+      33
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1",
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 630,
+    "WorkflowsPerSecond": 20.952840247460784,
+    "MeanMs": 47.88308003458005,
+    "P50Ms": 40.9516,
+    "P95Ms": 98.24395,
+    "P99Ms": 106.5681,
+    "AllocatedBytesPerWorkflow": 9164971.78050778,
+    "CpuCoreEquivalent": 1.0593651297223161,
+    "ColdMs": 665.0631,
+    "CpuMsPerWorkflow": 50.658002593502594,
+    "throughputMin": 19.736962772499673,
+    "throughputMax": 22.168717722421892,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r2",
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 200,
+    "WorkflowsPerSecond": 5.004839000162386,
+    "MeanMs": 205.51733700000005,
+    "P50Ms": 187.9913,
+    "P95Ms": 360.5502,
+    "P99Ms": 405.1134,
+    "AllocatedBytesPerWorkflow": 28382106.759999998,
+    "CpuCoreEquivalent": 0.8612188755518635,
+    "ColdMs": 967.8942999999999,
+    "CpuMsPerWorkflow": 174.467145,
+    "throughputMin": 4.169691447711409,
+    "throughputMax": 5.8399865526133645,
+    "commands": [
+      286
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeDurable-Activities10-r2",
+      "baseline-ProviderPostgreSql-ModeDurable-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Ephemeral",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 596,
+    "WorkflowsPerSecond": 19.847116895372395,
+    "MeanMs": 50.960856602870805,
+    "P50Ms": 43.86625,
+    "P95Ms": 99.1948,
+    "P99Ms": 112.5852,
+    "AllocatedBytesPerWorkflow": 9145668.071451355,
+    "CpuCoreEquivalent": 1.0560869823666938,
+    "ColdMs": 631.7853,
+    "CpuMsPerWorkflow": 53.684681305536564,
+    "throughputMin": 17.729212355213487,
+    "throughputMax": 21.9650214355313,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r2",
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1044,
+    "WorkflowsPerSecond": 34.79339955673217,
+    "MeanMs": 30.26025048513302,
+    "P50Ms": 25.3913,
+    "P95Ms": 69.21105,
+    "P99Ms": 82.40415,
+    "AllocatedBytesPerWorkflow": 5270767.2435402535,
+    "CpuCoreEquivalent": 1.1053432228385964,
+    "ColdMs": 413.32735,
+    "CpuMsPerWorkflow": 33.16121418883672,
+    "throughputMin": 26.99038800308842,
+    "throughputMax": 42.59641111037591,
+    "commands": [
+      63
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1",
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 200,
+    "WorkflowsPerSecond": 2.7292359965404858,
+    "MeanMs": 368.40532949999994,
+    "P50Ms": 334.9853,
+    "P95Ms": 519.2638000000001,
+    "P99Ms": 557.71705,
+    "AllocatedBytesPerWorkflow": 237858203.64,
+    "CpuCoreEquivalent": 1.1860021636122293,
+    "ColdMs": 1306.55515,
+    "CpuMsPerWorkflow": 435.02388,
+    "throughputMin": 2.5273300799282796,
+    "throughputMax": 2.931141913152692,
+    "commands": [
+      391
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r2",
+      "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 60,
+    "WorkflowsPerSecond": 0.6227903929512346,
+    "MeanMs": 1622.09722,
+    "P50Ms": 1572.51415,
+    "P95Ms": 1897.8616000000002,
+    "P99Ms": 1946.6936,
+    "AllocatedBytesPerWorkflow": 554348024.2666667,
+    "CpuCoreEquivalent": 0.8206916504872672,
+    "ColdMs": 4350.7842,
+    "CpuMsPerWorkflow": 1324.3902666666668,
+    "throughputMin": 0.5600541887524347,
+    "throughputMax": 0.6855265971500346,
+    "commands": [
+      2176,
+      2339
+    ],
+    "transactions": [
+      205
+    ],
+    "checkpointCommits": [
+      102
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeDurable-Activities100-r1",
+      "baseline-ProviderPostgreSql-ModeDurable-Activities100-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Ephemeral",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 200,
+    "WorkflowsPerSecond": 4.432346490904032,
+    "MeanMs": 225.6133505,
+    "P50Ms": 207.0687,
+    "P95Ms": 347.71355,
+    "P99Ms": 416.4398,
+    "AllocatedBytesPerWorkflow": 73078428.56,
+    "CpuCoreEquivalent": 1.1203506167110278,
+    "ColdMs": 1144.8938,
+    "CpuMsPerWorkflow": 252.80258,
+    "throughputMin": 4.398732213236937,
+    "throughputMax": 4.465960768571127,
+    "commands": [
+      346
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1",
+      "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "baseline",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 202,
+    "WorkflowsPerSecond": 6.505918431511907,
+    "MeanMs": 153.98210681372544,
+    "P50Ms": 146.1027,
+    "P95Ms": 241.6411,
+    "P99Ms": 289.78610000000003,
+    "AllocatedBytesPerWorkflow": 43062076.16,
+    "CpuCoreEquivalent": 1.1096639905359629,
+    "ColdMs": 649.8906,
+    "CpuMsPerWorkflow": 170.87158754901964,
+    "throughputMin": 6.224407182791605,
+    "throughputMax": 6.78742968023221,
+    "commands": [
+      333
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1",
+      "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 16,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "capacity",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 4537,
+    "WorkflowsPerSecond": 301.69219665120596,
+    "MeanMs": 52.981147520387935,
+    "P50Ms": 49.7517,
+    "P95Ms": 72.6137,
+    "P99Ms": 96.0233,
+    "AllocatedBytesPerWorkflow": 2417929.936081111,
+    "CpuCoreEquivalent": 5.907037655727817,
+    "ColdMs": 857.3315,
+    "CpuMsPerWorkflow": 19.579683270883844,
+    "throughputMin": 301.69219665120596,
+    "throughputMax": 301.69219665120596,
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency16-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 64,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "capacity",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 6064,
+    "WorkflowsPerSecond": 402.21644075885774,
+    "MeanMs": 158.80538764841714,
+    "P50Ms": 123.1927,
+    "P95Ms": 333.5986,
+    "P99Ms": 487.8575,
+    "AllocatedBytesPerWorkflow": 2421467.988126649,
+    "CpuCoreEquivalent": 5.5834930160461145,
+    "ColdMs": 516.0824,
+    "CpuMsPerWorkflow": 13.881812005277046,
+    "throughputMin": 402.21644075885774,
+    "throughputMax": 402.21644075885774,
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "capacity-ProviderPostgreSql-ModeBalanced-Activities1-Concurrency64-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 64,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "capacity",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 2286,
+    "WorkflowsPerSecond": 149.34193319879145,
+    "MeanMs": 423.5421095800523,
+    "P50Ms": 349.5177,
+    "P95Ms": 875.8936,
+    "P99Ms": 1250.7657,
+    "AllocatedBytesPerWorkflow": 9123236.566929134,
+    "CpuCoreEquivalent": 5.907498403589611,
+    "ColdMs": 620.0395,
+    "CpuMsPerWorkflow": 39.55686307961505,
+    "throughputMin": 149.34193319879145,
+    "throughputMax": 149.34193319879145,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "capacity-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency64-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "experiment",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 547,
+    "WorkflowsPerSecond": 18.222512013987195,
+    "MeanMs": 54.985079642579656,
+    "P50Ms": 47.068,
+    "P95Ms": 103.95205,
+    "P99Ms": 116.28585000000001,
+    "AllocatedBytesPerWorkflow": 9203697.307611927,
+    "CpuCoreEquivalent": 1.056160949273613,
+    "ColdMs": 665.3205,
+    "CpuMsPerWorkflow": 58.051656438389195,
+    "throughputMin": 17.39630595241869,
+    "throughputMax": 19.0487180755557,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1",
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "experiment",
+    "variant": "fast",
+    "processes": 2,
+    "samples": 741,
+    "WorkflowsPerSecond": 24.680742926020862,
+    "MeanMs": 41.24451995883399,
+    "P50Ms": 34.771100000000004,
+    "P95Ms": 81.6813,
+    "P99Ms": 94.733,
+    "AllocatedBytesPerWorkflow": 8732025.598931909,
+    "CpuCoreEquivalent": 1.0719259089114317,
+    "ColdMs": 660.0784,
+    "CpuMsPerWorkflow": 44.12636071428571,
+    "throughputMin": 21.394896603996727,
+    "throughputMax": 27.966589248045,
+    "commands": [
+      65
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1",
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "experiment",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 200,
+    "WorkflowsPerSecond": 3.150077499722838,
+    "MeanMs": 317.4470335,
+    "P50Ms": 307.5137,
+    "P95Ms": 389.06605,
+    "P99Ms": 470.97235,
+    "AllocatedBytesPerWorkflow": 238035260.96,
+    "CpuCoreEquivalent": 1.2767340368234912,
+    "ColdMs": 1310.51515,
+    "CpuMsPerWorkflow": 405.31654000000003,
+    "throughputMin": 3.134467305869808,
+    "throughputMax": 3.165687693575867,
+    "commands": [
+      391
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1",
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "experiment",
+    "variant": "fast",
+    "processes": 2,
+    "samples": 200,
+    "WorkflowsPerSecond": 5.627134246507039,
+    "MeanMs": 178.30658700000004,
+    "P50Ms": 161.52625,
+    "P95Ms": 294.70745,
+    "P99Ms": 389.28594999999996,
+    "AllocatedBytesPerWorkflow": 75058941.84,
+    "CpuCoreEquivalent": 1.265573979886951,
+    "ColdMs": 996.2629,
+    "CpuMsPerWorkflow": 225.65856,
+    "throughputMin": 5.298332520445498,
+    "throughputMax": 5.95593597256858,
+    "commands": [
+      290
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1",
+      "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r2"
+    ]
+  },
+  {
+    "provider": "Memory",
+    "mode": "EphemeralNoRecord",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 33494,
+    "WorkflowsPerSecond": 3349.215458228252,
+    "MeanMs": 0.29832994267629853,
+    "P50Ms": 0.2235,
+    "P95Ms": 0.6332,
+    "P99Ms": 0.8292,
+    "AllocatedBytesPerWorkflow": 318076.92983817996,
+    "CpuCoreEquivalent": 2.3408525190262015,
+    "ColdMs": 221.55,
+    "CpuMsPerWorkflow": 0.6989256284707709,
+    "throughputMin": 3349.215458228252,
+    "throughputMax": 3349.215458228252,
+    "commands": [
+      0
+    ],
+    "transactions": [
+      0
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderMemory-ModeEphemeralNoRecord-Activities1-r1"
+    ]
+  },
+  {
+    "provider": "Memory",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 1568,
+    "WorkflowsPerSecond": 156.71348788614733,
+    "MeanMs": 6.379764923469395,
+    "P50Ms": 5.1469,
+    "P95Ms": 11.7708,
+    "P99Ms": 18.0423,
+    "AllocatedBytesPerWorkflow": 3633801.9438775512,
+    "CpuCoreEquivalent": 1.6903920359804574,
+    "ColdMs": 301.1568,
+    "CpuMsPerWorkflow": 10.786512755102041,
+    "throughputMin": 156.71348788614733,
+    "throughputMax": 156.71348788614733,
+    "commands": [
+      0
+    ],
+    "transactions": [
+      0
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderMemory-ModeBalanced-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "Memory",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 5890,
+    "WorkflowsPerSecond": 588.9525893165601,
+    "MeanMs": 1.697306095076397,
+    "P50Ms": 1.2185,
+    "P95Ms": 4.4144,
+    "P99Ms": 6.9026,
+    "AllocatedBytesPerWorkflow": 2510352.9371816637,
+    "CpuCoreEquivalent": 1.9238953264262226,
+    "ColdMs": 237.8422,
+    "CpuMsPerWorkflow": 3.2666387096774194,
+    "throughputMin": 588.9525893165601,
+    "throughputMax": 588.9525893165601,
+    "commands": [
+      0
+    ],
+    "transactions": [
+      0
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderMemory-ModeEphemeralNoRecord-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "Memory",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 193,
+    "WorkflowsPerSecond": 19.25080341682011,
+    "MeanMs": 51.93875077720209,
+    "P50Ms": 41.069,
+    "P95Ms": 122.468,
+    "P99Ms": 173.2974,
+    "AllocatedBytesPerWorkflow": 37352040.78756477,
+    "CpuCoreEquivalent": 1.7309878566730006,
+    "ColdMs": 353.7491,
+    "CpuMsPerWorkflow": 89.91769430051815,
+    "throughputMin": 19.25080341682011,
+    "throughputMax": 19.25080341682011,
+    "commands": [
+      0
+    ],
+    "transactions": [
+      0
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderMemory-ModeBalanced-Activities100-r1"
+    ]
+  },
+  {
+    "provider": "Memory",
+    "mode": "EphemeralNoRecord",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 517,
+    "WorkflowsPerSecond": 51.592702656285724,
+    "MeanMs": 19.37963771760154,
+    "P50Ms": 15.0565,
+    "P95Ms": 41.3708,
+    "P99Ms": 62.7004,
+    "AllocatedBytesPerWorkflow": 26772496.170212764,
+    "CpuCoreEquivalent": 1.7606462839233248,
+    "ColdMs": 258.6569,
+    "CpuMsPerWorkflow": 34.12587814313346,
+    "throughputMin": 51.592702656285724,
+    "throughputMax": 51.592702656285724,
+    "commands": [
+      0
+    ],
+    "transactions": [
+      0
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderMemory-ModeEphemeralNoRecord-Activities100-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 952,
+    "WorkflowsPerSecond": 95.18723443998925,
+    "MeanMs": 10.503297584033612,
+    "P50Ms": 9.0416,
+    "P95Ms": 18.8063,
+    "P99Ms": 22.9055,
+    "AllocatedBytesPerWorkflow": 2561183.294117647,
+    "CpuCoreEquivalent": 1.43146712594374,
+    "ColdMs": 454.8673,
+    "CpuMsPerWorkflow": 15.038435924369749,
+    "throughputMin": 95.18723443998925,
+    "throughputMax": 95.18723443998925,
+    "commands": [
+      50
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeBalanced-Activities1-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "EphemeralNoRecord",
+    "leaves": 1,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 1915,
+    "WorkflowsPerSecond": 191.4435050216681,
+    "MeanMs": 5.221901462140982,
+    "P50Ms": 4.5059,
+    "P95Ms": 9.713,
+    "P99Ms": 13.2249,
+    "AllocatedBytesPerWorkflow": 1639226.6527415144,
+    "CpuCoreEquivalent": 1.5061097470136564,
+    "ColdMs": 335.3715,
+    "CpuMsPerWorkflow": 7.867123759791124,
+    "throughputMin": 191.4435050216681,
+    "throughputMax": 191.4435050216681,
+    "commands": [
+      33
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 359,
+    "WorkflowsPerSecond": 35.86806486844438,
+    "MeanMs": 27.87452729805013,
+    "P50Ms": 17.8737,
+    "P95Ms": 63.9379,
+    "P99Ms": 80.4306,
+    "AllocatedBytesPerWorkflow": 9528680.668523677,
+    "CpuCoreEquivalent": 1.4514792754271233,
+    "ColdMs": 467.0966,
+    "CpuMsPerWorkflow": 40.467175487465184,
+    "throughputMin": 35.86806486844438,
+    "throughputMax": 35.86806486844438,
+    "commands": [
+      100
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeBalanced-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 467,
+    "WorkflowsPerSecond": 46.68801098565899,
+    "MeanMs": 21.41550513918628,
+    "P50Ms": 15.6049,
+    "P95Ms": 47.4057,
+    "P99Ms": 63.0629,
+    "AllocatedBytesPerWorkflow": 5486935.074946467,
+    "CpuCoreEquivalent": 1.4945963026154514,
+    "ColdMs": 375.4125,
+    "CpuMsPerWorkflow": 32.01242184154176,
+    "throughputMin": 46.68801098565899,
+    "throughputMax": 46.68801098565899,
+    "commands": [
+      63
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 48,
+    "WorkflowsPerSecond": 4.735855723102567,
+    "MeanMs": 211.13247291666667,
+    "P50Ms": 170.0215,
+    "P95Ms": 513.2231,
+    "P99Ms": 671.003,
+    "AllocatedBytesPerWorkflow": 241282125,
+    "CpuCoreEquivalent": 1.9653443101786594,
+    "ColdMs": 1021.4281,
+    "CpuMsPerWorkflow": 414.99243750000005,
+    "throughputMin": 4.735855723102567,
+    "throughputMax": 4.735855723102567,
+    "commands": [
+      605
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeBalanced-Activities100-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "EphemeralNoRecord",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "local",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 92,
+    "WorkflowsPerSecond": 9.18398395853487,
+    "MeanMs": 108.87197934782606,
+    "P50Ms": 90.8421,
+    "P95Ms": 305.7521,
+    "P99Ms": 346.3543,
+    "AllocatedBytesPerWorkflow": 44535677.91304348,
+    "CpuCoreEquivalent": 1.4565817525159699,
+    "ColdMs": 491.6274,
+    "CpuMsPerWorkflow": 158.60020652173915,
+    "throughputMin": 9.18398395853487,
+    "throughputMax": 9.18398395853487,
+    "commands": [
+      333
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": true,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 100,
+    "WorkflowsPerSecond": 5.639252336195623,
+    "MeanMs": 177.31639000000004,
+    "P50Ms": 165.8122,
+    "P95Ms": 272.2788,
+    "P99Ms": 320.6744,
+    "AllocatedBytesPerWorkflow": 26138590.48,
+    "CpuCoreEquivalent": 0.926109316500511,
+    "ColdMs": 955.2887,
+    "CpuMsPerWorkflow": 164.22555,
+    "throughputMin": 5.639252336195623,
+    "throughputMax": 5.639252336195623,
+    "commands": [
+      254
+    ],
+    "transactions": [
+      22
+    ],
+    "checkpointCommits": [
+      11
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeBalanced-Activities10-ExternalTrue-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1701,
+    "WorkflowsPerSecond": 56.53802968542729,
+    "MeanMs": 71.27660161167663,
+    "P50Ms": 62.739149999999995,
+    "P95Ms": 119.3202,
+    "P99Ms": 137.35715,
+    "AllocatedBytesPerWorkflow": 9138827.554931555,
+    "CpuCoreEquivalent": 3.0758372882797564,
+    "ColdMs": 612.1213,
+    "CpuMsPerWorkflow": 54.62479154966655,
+    "throughputMin": 51.62767302277075,
+    "throughputMax": 61.44838634808383,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r2",
+      "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency4-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 16,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 4216,
+    "WorkflowsPerSecond": 139.86795461490624,
+    "MeanMs": 114.39517447729051,
+    "P50Ms": 95.89224999999999,
+    "P95Ms": 259.10595,
+    "P99Ms": 293.29475,
+    "AllocatedBytesPerWorkflow": 9134024.852882316,
+    "CpuCoreEquivalent": 7.030884229941061,
+    "ColdMs": 635.3043,
+    "CpuMsPerWorkflow": 50.21873818416033,
+    "throughputMin": 134.22466541705796,
+    "throughputMax": 145.51124381275451,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r1",
+      "scaling-ProviderPostgreSql-ModeBalanced-Activities10-Concurrency16-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": true,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 100,
+    "WorkflowsPerSecond": 3.561177886223479,
+    "MeanMs": 280.79199499999993,
+    "P50Ms": 264.8967,
+    "P95Ms": 414.3837,
+    "P99Ms": 558.8139,
+    "AllocatedBytesPerWorkflow": 34066538.64,
+    "CpuCoreEquivalent": 0.8252904397861318,
+    "ColdMs": 1162.9939,
+    "CpuMsPerWorkflow": 231.74648000000002,
+    "throughputMin": 3.561177886223479,
+    "throughputMax": 3.561177886223479,
+    "commands": [
+      377
+    ],
+    "transactions": [
+      33
+    ],
+    "checkpointCommits": [
+      22
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeDurable-Activities10-ExternalTrue-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 202,
+    "WorkflowsPerSecond": 13.317231438035723,
+    "MeanMs": 298.8552004950494,
+    "P50Ms": 286.8332,
+    "P95Ms": 394.84,
+    "P99Ms": 476.2762,
+    "AllocatedBytesPerWorkflow": 28341496.237623762,
+    "CpuCoreEquivalent": 2.4943691350245234,
+    "ColdMs": 930.3378,
+    "CpuMsPerWorkflow": 187.3038811881188,
+    "throughputMin": 13.317231438035723,
+    "throughputMax": 13.317231438035723,
+    "commands": [
+      286
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency4-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 16,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 592,
+    "WorkflowsPerSecond": 38.189567309492986,
+    "MeanMs": 414.44046891891924,
+    "P50Ms": 382.4535,
+    "P95Ms": 559.6693,
+    "P99Ms": 625.0653,
+    "AllocatedBytesPerWorkflow": 28363832.135135137,
+    "CpuCoreEquivalent": 5.964228064535053,
+    "ColdMs": 890.6008,
+    "CpuMsPerWorkflow": 156.17427702702705,
+    "throughputMin": 38.189567309492986,
+    "throughputMax": 38.189567309492986,
+    "commands": [
+      286
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeDurable-Activities10-Concurrency16-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 1,
+    "external": true,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 100,
+    "WorkflowsPerSecond": 5.243431250863888,
+    "MeanMs": 190.70242599999995,
+    "P50Ms": 171.1309,
+    "P95Ms": 322.5229,
+    "P99Ms": 362.9265,
+    "AllocatedBytesPerWorkflow": 26146371.28,
+    "CpuCoreEquivalent": 0.8885474028548312,
+    "ColdMs": 975.0313,
+    "CpuMsPerWorkflow": 169.45915000000002,
+    "throughputMin": 5.243431250863888,
+    "throughputMax": 5.243431250863888,
+    "commands": [
+      254
+    ],
+    "transactions": [
+      22
+    ],
+    "checkpointCommits": [
+      11
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-ExternalTrue-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 1332,
+    "WorkflowsPerSecond": 88.76967509539175,
+    "MeanMs": 45.05681576576579,
+    "P50Ms": 40.2882,
+    "P95Ms": 81.8957,
+    "P99Ms": 92.1094,
+    "AllocatedBytesPerWorkflow": 5309816.516516517,
+    "CpuCoreEquivalent": 3.373434589765009,
+    "ColdMs": 389.2378,
+    "CpuMsPerWorkflow": 38.00210585585586,
+    "throughputMin": 88.76967509539175,
+    "throughputMax": 88.76967509539175,
+    "commands": [
+      63
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency4-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "EphemeralNoRecord",
+    "leaves": 10,
+    "concurrency": 16,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 3197,
+    "WorkflowsPerSecond": 212.4205632141537,
+    "MeanMs": 75.26203812949636,
+    "P50Ms": 60.1625,
+    "P95Ms": 255.0915,
+    "P99Ms": 293.1337,
+    "AllocatedBytesPerWorkflow": 5260989.377541445,
+    "CpuCoreEquivalent": 6.866147471032534,
+    "ColdMs": 464.6754,
+    "CpuMsPerWorkflow": 32.3233653425086,
+    "throughputMin": 212.4205632141537,
+    "throughputMax": 212.4205632141537,
+    "commands": [
+      63
+    ],
+    "transactions": [
+      1
+    ],
+    "checkpointCommits": [
+      0
+    ],
+    "labels": [
+      "scaling-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-Concurrency16-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "sqlite-scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 855,
+    "WorkflowsPerSecond": 56.42561358565108,
+    "MeanMs": 70.48720959064329,
+    "P50Ms": 17.6182,
+    "P95Ms": 332.0785,
+    "P99Ms": 625.4562,
+    "AllocatedBytesPerWorkflow": 9545238.465497077,
+    "CpuCoreEquivalent": 1.881241902017021,
+    "ColdMs": 574.2105,
+    "CpuMsPerWorkflow": 33.34021169590643,
+    "throughputMin": 56.42561358565108,
+    "throughputMax": 56.42561358565108,
+    "commands": [
+      100
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1"
+    ]
+  },
+  {
+    "provider": "Sqlite",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 16,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "sqlite-scaling",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 1060,
+    "WorkflowsPerSecond": 68.94050847761433,
+    "MeanMs": 228.7597318867924,
+    "P50Ms": 143.8444,
+    "P95Ms": 795.1628,
+    "P99Ms": 1368.2311,
+    "AllocatedBytesPerWorkflow": 9668308.150943397,
+    "CpuCoreEquivalent": 2.6721173287327207,
+    "ColdMs": 481.6036,
+    "CpuMsPerWorkflow": 38.75975660377358,
+    "throughputMin": 68.94050847761433,
+    "throughputMax": 68.94050847761433,
+    "commands": [
+      100
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": false,
+    "phase": "tuning",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1714,
+    "WorkflowsPerSecond": 57.05692566019105,
+    "MeanMs": 70.30623952072338,
+    "P50Ms": 63.411100000000005,
+    "P95Ms": 120.69915,
+    "P99Ms": 135.94485,
+    "AllocatedBytesPerWorkflow": 9158202.480191765,
+    "CpuCoreEquivalent": 3.135389019950214,
+    "ColdMs": 625.6184000000001,
+    "CpuMsPerWorkflow": 55.00527956962077,
+    "throughputMin": 53.81941915075884,
+    "throughputMax": 60.294432169623256,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r1",
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingFalse-Concurrency4-r2"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 4,
+    "external": false,
+    "cap": 50,
+    "contextPooling": true,
+    "phase": "tuning",
+    "variant": "baseline",
+    "processes": 2,
+    "samples": 1938,
+    "WorkflowsPerSecond": 64.4838227312983,
+    "MeanMs": 62.01583351580106,
+    "P50Ms": 56.6723,
+    "P95Ms": 105.98920000000001,
+    "P99Ms": 126.07815,
+    "AllocatedBytesPerWorkflow": 8181240.599370409,
+    "CpuCoreEquivalent": 3.125477811602451,
+    "ColdMs": 594.3925999999999,
+    "CpuMsPerWorkflow": 48.48607461609345,
+    "throughputMin": 63.443716123601995,
+    "throughputMax": 65.5239293389946,
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r2",
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities10-ContextPoolingTrue-Concurrency4-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 10,
+    "contextPooling": false,
+    "phase": "tuning",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 35,
+    "WorkflowsPerSecond": 2.271703014942581,
+    "MeanMs": 440.1694571428571,
+    "P50Ms": 432.6063,
+    "P95Ms": 515.0704,
+    "P99Ms": 516.0518,
+    "AllocatedBytesPerWorkflow": 365720428.5714286,
+    "CpuCoreEquivalent": 1.296084651702656,
+    "ColdMs": 1625.2139,
+    "CpuMsPerWorkflow": 570.5343714285715,
+    "throughputMin": 2.271703014942581,
+    "throughputMax": 2.271703014942581,
+    "commands": [
+      527
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap10-r1"
+    ]
+  },
+  {
+    "provider": "PostgreSql",
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "external": false,
+    "cap": 250,
+    "contextPooling": false,
+    "phase": "tuning",
+    "variant": "baseline",
+    "processes": 1,
+    "samples": 84,
+    "WorkflowsPerSecond": 5.593323138303345,
+    "MeanMs": 178.77038214285716,
+    "P50Ms": 154.0486,
+    "P95Ms": 293.8877,
+    "P99Ms": 569.5274,
+    "AllocatedBytesPerWorkflow": 73181889.23809524,
+    "CpuCoreEquivalent": 1.2900604290646172,
+    "ColdMs": 939.0771,
+    "CpuMsPerWorkflow": 230.6429285714286,
+    "throughputMin": 5.593323138303345,
+    "throughputMax": 5.593323138303345,
+    "commands": [
+      346
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "tuning-ProviderPostgreSql-ModeBalanced-Activities100-Cap250-r1"
+    ]
+  }
+]

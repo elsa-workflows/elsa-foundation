@@ -3,13 +3,14 @@
 Owner project: `Elsa.Etl.Runtime.Api`
 Domain: `Elsa.Etl`
 
-`IEtlRuntimeOperations` is the scoped operation seam dispatched by the five NativeEndpoints endpoints. The default
+`IEtlRuntimeOperations` is the scoped operation seam dispatched by the six MinimalEndpoints endpoints. The default
 implementation derives scope from a validated normalized principal and the host's ordinary persistence scope. Route
-and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection and
-`etl/runs:cancel` for cancellation; it returns bounded summaries and never exposes host file paths, binding handles,
-artifact payloads, native result addresses, output object keys or worker owner identities. Run detail includes
-retained source/lookup revisions and expected digests; prepared snapshot digests/lengths describe the last
-verified preparation, not a fresh integrity check. They remain absent before the relevant admission/preparation.
+and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection,
+`etl/runs:cancel` for cancellation and `etl/runs:complete` to request completion of a continuous run; it returns
+bounded summaries and never exposes host file paths, binding handles, artifact payloads, native result addresses,
+output object keys or worker owner identities. Run detail includes retained source/lookup revisions and expected
+digests (null for a SQL source, which has none until it is read; [spec 1198](../../../../../specs/1198-etl-sql-source/spec.md)); prepared snapshot digests/lengths describe the last verified preparation, not a fresh integrity check. They
+remain absent before the relevant admission/preparation.
 
 `EtlRunBindingAliasesView.Lookup` is nullable for v2 runs without a lookup, and their `LookupInput` is absent.
 The v1 topology still requires its lookup. Consumers must preserve that distinction rather than fabricate an alias.
@@ -35,7 +36,17 @@ implementing their four original operations: the default connector-inspection me
 override that method; unavailable support is not an empty successful page. A malformed inspector projection returns a fixed
 `etl.provider-invalid` error instead of contradictory progress or arbitrary provider state text.
 
-Accepted-effect totals count settled route bodies. A receiver acknowledgement or JSONL publication can still
+`CompleteAsync` serves `etl-run-complete` (`POST /etl/runs/{id}/complete`). Its default body reports HTTP 503 with
+`etl.provider-unavailable`, so existing replacements keep compiling. An unknown or foreign run is 404 through the same
+scoped lookup as cancellation; otherwise the 200 result is `accepted`, `alreadyRequested`, `terminal` or
+`notContinuous`, with `notContinuous` taking precedence so a finite run never answers `terminal`. A v1 file run answers
+`notContinuous` even when the provider has no connector store; a v2 run there gets 503 `etl.provider-unavailable`. Connector run detail
+adds `mode` (`finite` or `continuous`) and `completionRequestedAt`; connector partitions add `nextPollAt`, which a
+provider may set only for an idle shard (one that may still show a claim until its worker releases it) and only equal
+to `notBefore` ([spec 1192](../../../../../specs/1192-etl-continuous-http/spec.md)). `notBefore` keeps its meaning of
+next eligibility, so clients that predate `nextPollAt` show an idle shard's next poll as an ordinary eligibility wait.
+
+Accepted-effect totals count settled route bodies. A receiver acknowledgement or a JSONL or CSV file publication can still
 await batch acceptance, and cancelled runs can retain owed effects. Raw URLs, continuation tokens, bodies,
 authentication details and request/effect identities are excluded. See the
 [inspection checkpoint](../../../../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).

@@ -96,3 +96,10 @@ export function summarizeBpmnImportIssues(analysis: BpmnImportAnalysis): string 
   if (parts.length === 0) parts.push(`${analysis.issues.length} note(s)`);
   return parts.join(", ");
 }
+
+/** Direct publication must not turn a degraded conversion into apparently executable authoring. */
+export function assertLosslessBpmnImport(analysis: BpmnImportAnalysis): void {
+  const lost = analysis.issues.filter(issue => ![0, "info"].includes(
+    typeof issue.severity === "string" ? issue.severity.toLowerCase() : issue.severity));
+  if (lost.length) throw new Error(`BPMN import was refused because meaning could be lost: ${lost.map(issue => issue.message).join("; ")}. The current process is unchanged; the original file is retained for correction.`);
+}

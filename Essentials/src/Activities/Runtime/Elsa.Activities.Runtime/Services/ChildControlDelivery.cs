@@ -92,7 +92,8 @@ internal static class ChildControlDelivery
                 NewFaultIncidentRecordRequest = (committer, state, exception, subStatus, snapshots) =>
                     new ActivityFaultIncidentRecordRequest(committer, workItem, state.InvocationId, state.Execution.ExecutableNodeId,
                         state, exception, subStatus, new Dictionary<string, string> { [RuntimeMetadataKeys.CheckpointReason] = "ChildControlEvaluation" },
-                        new Dictionary<string, string>(), snapshots),
+                        // Every fault arm (a throw, a returned fault, a failed disposal) names the child whose batches the consumer received.
+                        new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = incoming.CallingActivityExecutionId }, snapshots),
                 ChildControlContribution = contribution
             }, alreadyProcessed: null, cancellationToken);
     }

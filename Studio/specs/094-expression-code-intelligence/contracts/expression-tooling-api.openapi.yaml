@@ -107,8 +107,42 @@ components:
         major: { type: integer, const: 1 }
         minor: { type: integer, minimum: 0 }
     ToolingState:
-      type: string
-      enum: [success, supportedEmpty, unavailable, unauthorized, incompatible, stale, canceled]
+      description: >
+        Foundation v1 hosts emit integer ordinals 0..6 using System.Text.Json web
+        defaults (see ExpressionToolingEndpointTests.cs). Studio also accepts named
+        strings in any casing. Ordinal order matches ExpressionToolingOutcomeState:
+        Success, SupportedEmpty, Unavailable, Unauthorized, Incompatible, Stale,
+        Canceled.
+      oneOf:
+        - { type: integer, enum: [0, 1, 2, 3, 4, 5, 6] }
+        - { type: string, enum: [success, supportedEmpty, unavailable, unauthorized, incompatible, stale, canceled] }
+    SymbolKind:
+      description: >
+        Foundation v1 hosts emit integer ordinals 0..8 using System.Text.Json web
+        defaults. Studio also accepts named strings in any casing. Ordinal order
+        matches ExpressionSymbolKind: Variable, WorkflowInput, ActivityResult,
+        Function, Filter, Tag, Namespace, Member, Extension.
+      oneOf:
+        - { type: integer, enum: [0, 1, 2, 3, 4, 5, 6, 7, 8] }
+        - { type: string, enum: [variable, workflowInput, activityResult, function, filter, tag, namespace, member, extension] }
+    ValueKind:
+      description: >
+        Foundation v1 hosts emit integer ordinals 0..6 using System.Text.Json web
+        defaults. Studio also accepts named strings in any casing. Ordinal order
+        matches ExpressionValueKind: Unknown, Scalar, Object, Array, Map, Function,
+        Reference.
+      oneOf:
+        - { type: integer, enum: [0, 1, 2, 3, 4, 5, 6] }
+        - { type: string, enum: [unknown, scalar, object, array, map, function, reference] }
+    DiagnosticSeverity:
+      description: >
+        Foundation v1 hosts emit integer ordinals 0..3 using System.Text.Json web
+        defaults. Studio also accepts named strings in any casing. Ordinal order
+        matches ExpressionDiagnosticSeverity: Error, Warning, Information, Hint.
+        Studio maps Information and Hint to info.
+      oneOf:
+        - { type: integer, enum: [0, 1, 2, 3] }
+        - { type: string, enum: [error, warning, information, hint] }
     ContextRequest:
       type: object
       additionalProperties: false
@@ -268,7 +302,7 @@ components:
       properties:
         symbolId: { type: string }
         name: { type: string }
-        kind: { type: string }
+        kind: { $ref: "#/components/schemas/SymbolKind" }
         documentation: { type: string }
         valueShape: { $ref: "#/components/schemas/ValueShape" }
         signatures:
@@ -285,9 +319,7 @@ components:
       type: object
       properties:
         displayName: { type: string }
-        kind:
-          type: string
-          enum: [unknown, scalar, object, array, map, function, reference]
+        kind: { $ref: "#/components/schemas/ValueKind" }
         isNullable: { type: boolean, default: true }
         hasLazyChildren:
           type: boolean
@@ -362,13 +394,13 @@ components:
         detail: { type: string }
         documentation: { type: string }
         insertText: { type: string }
-        kind: { type: string }
+        kind: { $ref: "#/components/schemas/SymbolKind" }
     Diagnostic:
       type: object
       required: [code, severity, message, documentRevision]
       properties:
         code: { type: string }
-        severity: { type: string, enum: [error, warning, information, hint] }
+        severity: { $ref: "#/components/schemas/DiagnosticSeverity" }
         message: { type: string }
         documentRevision: { type: string }
         range: { $ref: "#/components/schemas/Range" }

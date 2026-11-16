@@ -7,6 +7,8 @@
                       LogicalName="Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v2.json" />
     <EmbeddedResource Include="Catalogs/foundation-selection-catalog-v3.json"
                       LogicalName="Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v3.json" />
+    <EmbeddedResource Include="Catalogs/foundation-selection-catalog-v4.json"
+                      LogicalName="Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v4.json" />
   </ItemGroup>
 
 </Project>

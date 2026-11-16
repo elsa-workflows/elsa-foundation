@@ -37,6 +37,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     {
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .WithFaultingLeaf();
         if (configureServices is not null)

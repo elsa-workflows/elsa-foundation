@@ -29,6 +29,7 @@ test("preview, cancel and explicit execution show actual partial physical outcom
       diagnostics: [{ code: "StoppedAfterPartialWork", message: "Later work failed; preview again." }] } });
   });
   await page.goto("/package-maintenance.html");
+  await page.getByRole("tab", { name: "Studio", exact: true }).click();
   await expect(page.getByRole("button", { name: "Execute cleanup" })).toHaveCount(0);
   await expect(page.getByLabel("Inactive versions to keep per package")).toHaveValue("");
   await page.getByRole("button", { name: "Preview cleanup" }).click();
@@ -55,6 +56,7 @@ test("a saved retention change clears the plan and requires another preview", as
     return route.fulfill({ json: { requiresRestart: false } });
   });
   await page.goto("/package-maintenance.html");
+  await page.getByRole("tab", { name: "Studio", exact: true }).click();
   await page.getByRole("button", { name: "Preview cleanup" }).click();
   await expect(page.getByRole("button", { name: "Execute cleanup" })).toBeEnabled();
   await page.getByLabel("Inactive versions to keep per package").fill("0");

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "readOnlyDerivedFrom": "direct/capture/before-elsa.sqlite.gz",
+  "sourceGzipSha256": "7dfbc162435e0118b7f1c39a38f1cc4fc75986f1967a39dc6b538c7db8f183e0",
+  "identity": {
+    "artifactId": "sha256:6eadf9652fa4455bfd7f2621ecf1ec1f8423e9da56459716fda9df33e7b66f54",
+    "definitionId": "bpmn-model:sha256:6eadf9652fa4455bfd7f2621ecf1ec1f8423e9da56459716fda9df33e7b66f54",
+    "definitionVersionId": "sha256:6eadf9652fa4455bfd7f2621ecf1ec1f8423e9da56459716fda9df33e7b66f54",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:6eadf9652fa4455bfd7f2621ecf1ec1f8423e9da56459716fda9df33e7b66f54"
+  },
+  "protocol": {
+    "key": "elsa.bpmn",
+    "version": 1
+  },
+  "profile": "foundation-native-work-v1",
+  "definition": {
+    "formatVersion": 2,
+    "process": {
+      "processId": "direct-etl",
+      "elements": [
+        {
+          "elementId": "start",
+          "elementType": "startEvent"
+        },
+        {
+          "elementId": "service",
+          "elementType": "serviceTask",
+          "bindingRef": "pipeline"
+        },
+        {
+          "elementId": "end",
+          "elementType": "endEvent"
+        },
+        {
+          "elementId": "error",
+          "elementType": "boundaryEvent",
+          "attachedToRef": "service",
+          "cancelActivity": true,
+          "eventDefinitions": [
+            {
+              "type": "error",
+              "properties": {
+                "code": "etl.rows-rejected"
+              }
+            }
+          ]
+        },
+        {
+          "elementId": "error-end",
+          "elementType": "endEvent"
+        }
+      ],
+      "sequenceFlows": [
+        {
+          "flowId": "to-service",
+          "sourceRef": "start",
+          "targetRef": "service"
+        },
+        {
+          "flowId": "to-end",
+          "sourceRef": "service",
+          "targetRef": "end"
+        },
+        {
+          "flowId": "caught-end",
+          "sourceRef": "error",
+          "targetRef": "error-end"
+        }
+      ]
+    },
+    "humanBindings": [],
+    "serviceBindings": [
+      {
+        "bindingId": "pipeline",
+        "executable": {
+          "artifactId": "artifact-c59218a87e6b",
+          "definitionId": "14l5kW99c8G",
+          "definitionVersionId": "14l5kWAt7LJ",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:c59218a87e6bc67ddcb65ceb6b0a0326ba56fd70394a4ea99245aca34b367780"
+        },
+        "businessErrorCode": "etl.rows-rejected"
+      }
+    ]
+  },
+  "expectedContentHash": "sha256:6eadf9652fa4455bfd7f2621ecf1ec1f8423e9da56459716fda9df33e7b66f54"
+}

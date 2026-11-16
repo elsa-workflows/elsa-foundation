@@ -1,0 +1,23 @@
+{
+  "source": "5618ed377594d6cd8428fdd3ff37cca357004722",
+  "snapshots": [
+    {
+      "snapshot": "partial.sqlite.gz",
+      "revision": 2,
+      "lifecycle": 0,
+      "modelInputs": 2,
+      "nativeRows": 0,
+      "integrity": "ok"
+    },
+    {
+      "snapshot": "completed.sqlite.gz",
+      "revision": 4,
+      "lifecycle": 3,
+      "modelInputs": 4,
+      "nativeRows": 0,
+      "integrity": "ok"
+    }
+  ],
+  "designTablesAbsent": true,
+  "nativeWrapperAbsent": true
+}

@@ -1,0 +1,33 @@
+{
+  "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+  "base": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee",
+  "previousQualifiedProduct": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+  "unchangedSourceTrees": [
+    "Essentials/src/Workflows/Runtime",
+    "Essentials/src/Workflows/Publishing",
+    "Essentials/src/Activities/Bpmn",
+    "Essentials/src/Activities/Behavioral",
+    "Essentials/tests/Workflows/Runtime/Tests",
+    "Essentials/tests/Activities/Bpmn",
+    "tools/bpmn"
+  ],
+  "unchangedDoesNotMeanNewExecution": true,
+  "priorFullEvidence": {
+    "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "runtime": 3106,
+    "bpmn": 513,
+    "interchange": 132,
+    "behavioral": 220,
+    "fullActualHosts": 46
+  },
+  "affectedRuntimeEfFixture": "WorkerProfileCandidate expected catalog hash/version3 to4 only; profile digest unchanged. Whole Runtime EF repeats separately; see runtime-ef-catalog-results.json.",
+  "priorStrictNativeEvidence": {
+    "source": "f12385fcbe829e6f7cc0bb29347ec6c2e1d27dbf",
+    "passed": 21
+  },
+  "priorBinaryApiEvidence": {
+    "source": "c53167925de74d026be739ce4248ed4047c0e578",
+    "comparisons": 18
+  },
+  "limits": "Earlier passes keep actual source. Current selected actual hosts2 do not claim a new full46 run. Broader provider/direct-model Studio/ETL/program acceptance and final delivery gates remain."
+}

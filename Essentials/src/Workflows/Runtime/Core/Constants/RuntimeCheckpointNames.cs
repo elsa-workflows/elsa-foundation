@@ -5,6 +5,8 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 public static class RuntimeCheckpointNames
 {
     public const string WorkflowStarted = nameof(WorkflowStarted);
+    /// <summary>Retires an already queued native model-work start without admitting a native execution.</summary>
+    public const string NativeModelWorkStartRetired = nameof(NativeModelWorkStartRetired);
     public const string ActivityScheduled = nameof(ActivityScheduled);
     public const string ActivityStarted = nameof(ActivityStarted);
     public const string ActivityAttemptClaimed = nameof(ActivityAttemptClaimed);

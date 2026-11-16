@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudioButton } from "../forms/Button";
+import { StudioDialogFooter } from "../layout/DialogFooter";
 import { StudioSearchInput } from "../forms/SearchInput";
 import { StudioActionNotice } from "../feedback/ActionNotice";
 import { StatusPill } from "../feedback/StatusPill";
@@ -153,6 +154,32 @@ describe("StudioListRow", () => {
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     row.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     expect(activations).toBe(3);
+  });
+});
+
+describe("StudioDialogFooter", () => {
+  it("renders Cancel as the default StudioButton and the confirm action as primary", () => {
+    const host = mount(
+      <StudioDialogFooter cancelLabel="Cancel" confirmLabel="Create" />
+    );
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map(button => [button.textContent, button.getAttribute("data-variant"), button.getAttribute("type")])).toEqual([
+      ["Cancel", "default", "button"],
+      ["Create", "primary", "submit"]
+    ]);
+    expect(host.querySelector("footer")?.classList.contains("studio-dialog-footer")).toBe(true);
+  });
+
+  it("omits the confirm action when no label is provided and keeps leading/extra in order", () => {
+    const host = mount(
+      <StudioDialogFooter
+        leading={<StudioButton>Reload</StudioButton>}
+        extra={<StudioButton>Delete</StudioButton>}
+        cancelLabel="Close"
+      />
+    );
+    expect([...host.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reload", "Delete", "Close"]);
+    expect(host.querySelector("button[data-variant='primary']")).toBeNull();
   });
 });
 

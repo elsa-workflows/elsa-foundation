@@ -27,6 +27,7 @@ const noRenderedPanel = () => {
 let replaceActivity: (next: ActivityNode) => void = noRenderedPanel;
 let replaceDraftId: (next: string) => void = noRenderedPanel;
 let replaceEditors: (next: StudioActivityPropertyEditorContribution[]) => void = noRenderedPanel;
+let replaceReadOnly: (next: boolean) => void = noRenderedPanel;
 
 const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
@@ -49,6 +50,7 @@ afterEach(() => {
   replaceActivity = noRenderedPanel;
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
+  replaceReadOnly = noRenderedPanel;
   unmountActivePanel();
 });
 
@@ -65,12 +67,15 @@ function renderPanel(
     expressionDescriptorStatus?: "loading" | "ready" | "failed";
     draftId?: string;
     strictMode?: boolean;
+    readOnly?: boolean;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
     updateActivity?: boolean;
   } = {}
 ) {
   const container = document.createElement("div");
+  // Embedded authoring surfaces supply a scoped token root that also owns their overlays.
+  container.className = "wf-tokens";
   document.body.appendChild(container);
   const root = createRoot(container);
   const descriptor: StudioActivityDescriptor = {
@@ -86,15 +91,20 @@ function renderPanel(
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
     const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
     const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
+    const [readOnly, setReadOnly] = React.useState(options.readOnly ?? false);
+    const optionsRef = React.useRef(options);
+    optionsRef.current = options;
     replaceActivity = setCurrentActivity;
     replaceDraftId = setCurrentDraftId;
     replaceEditors = setCurrentEditors;
-    const handleChange = (nextActivity: ActivityNode) => {
-      options.onChange?.(nextActivity);
-      if (options.updateActivity !== false) setCurrentActivity(nextActivity);
-    };
+    replaceReadOnly = setReadOnly;
+    const handleChange = React.useCallback((nextActivity: ActivityNode) => {
+      optionsRef.current.onChange?.(nextActivity);
+      if (optionsRef.current.updateActivity !== false) setCurrentActivity(nextActivity);
+    }, []);
     const panel = (
       <ActivityPropertiesPanel
+        readOnly={readOnly}
         draftId={currentDraftId}
         activity={currentActivity}
         descriptor={descriptor}
@@ -137,7 +147,215 @@ function propertyLabels(container: HTMLElement) {
   return [...container.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent);
 }
 
+it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
+  const onChange = vi.fn();
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
+    supports: descriptor => descriptor.name === "FormId", component: props => <button type="button" aria-label="Pin form" onClick={() => props.context.setLiteralInputs?.({ FormId: "purchase", FormVersion: "2" })}>{String(props.context.inputValues?.FormVersion ?? "unset")}</button>
+  }];
+  const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: activity(), editors, onChange });
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="Pin form"]')!;
+  flushSync(() => button.click());
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange.mock.calls[0][0].FormId.expression.value).toBe("purchase");
+  expect(onChange.mock.calls[0][0].FormVersion.expression.value).toBe("2");
+  expect([...container.querySelectorAll("button")].some(item => item.textContent === "2")).toBe(true);
+});
+
+it("refreshes a contributed editor when only a sibling literal input changes", async () => {
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
+    supports: descriptor => descriptor.name === "FormId", component: props => <output aria-label="Pinned version">{String(props.context.inputValues?.FormVersion ?? "unset")}</output>
+  }];
+  const literal = (value: string) => ({ typeName: "System.String", expression: { type: "Literal", value } });
+  const current = activity({ FormId: literal("purchase"), FormVersion: literal("1") });
+  const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: current, editors });
+  await nextFrame();
+  expect(container.querySelector('[aria-label="Pinned version"]')?.textContent).toBe("1");
+  flushSync(() => replaceActivity({ ...current, FormVersion: literal("2") }));
+  await nextFrame();
+  expect(container.querySelector('[aria-label="Pinned version"]')?.textContent).toBe("2");
+});
+
 describe("activity property organization", () => {
+  it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
+    const changes: ActivityNode[] = [];
+    const source = "`Started Order ID: ${args.OrderId}`";
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source,
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { Existing: { kind: "Literal", value: "preserve me" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: {
+        inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }]
+      },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker).not.toBeNull();
+    flushSync(() => {
+      picker.value = "OrderId";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saved = (changes.at(-1)!.text as { expression: { value: Record<string, unknown> } }).expression.value;
+    expect(saved).toMatchObject({
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        Existing: { kind: "Literal", value: "preserve me" },
+        OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
+      }
+    });
+    expect(container.textContent).toContain("args.OrderId");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    const removed = (changes.at(-1)!.text as { expression: { value: { source: string; parameters: Record<string, unknown> } } }).expression.value;
+    expect(removed).toMatchObject({
+      source,
+      parameters: { Existing: { kind: "Literal", value: "preserve me" } }
+    });
+    expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
+  });
+
+  it("keeps a stale workflow input binding removable after the input is deleted", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.disabled).toBe(true);
+    expect(container.textContent).toContain("OrderId (missing workflow input)");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+  });
+
+  it("lets authors remove a malformed workflow input binding with no member key", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+  });
+
+  it("does not offer input bindings for malformed object-valued expressions", () => {
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.OrderId", parameters: {} } }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
+    });
+
+    expect(container.querySelector(".wf-js-input-bindings")).toBeNull();
+  });
+
+  it("allows prototype-key workflow input names to be bound in the picker", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "args.constructor" } } }),
+      workflowState: { inputs: [{ referenceKey: "input-constructor", name: "constructor", displayName: "constructor" }] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.querySelector<HTMLOptionElement>("option[value='constructor']")?.disabled).toBe(false);
+    flushSync(() => {
+      picker.value = "constructor";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const parameters = (changes.at(-1)!.text as { expression: { value: { parameters: Record<string, unknown> } } }).expression.value.parameters;
+    expect(Object.prototype.hasOwnProperty.call(parameters, "constructor")).toBe(true);
+    expect(parameters.constructor).toEqual({ kind: "WorkflowRequest", memberKey: "constructor" });
+  });
+
+  it("locks an already expanded editor without disabling Close or accepting stale edits", () => {
+    const changes: ActivityNode[] = [];
+    let lateEdit: ((value: unknown) => void) | undefined;
+    const container = renderPanel([input("Condition", { isWrapped: true })], {
+      activity: activity({ condition: { typeName: "System.String", expression: { type: "JavaScript", value: "original" } } }),
+      expressionEditors: [{
+        id: "locking-editor",
+        supports: () => true,
+        surfaces: { expanded: props => {
+          lateEdit ??= props.onChange;
+          return <textarea value={String(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.currentTarget.value)} />;
+        } }
+      }],
+      onChange: next => changes.push(next)
+    });
+    clickButton(container, "Open expanded Condition editor");
+    const dialog = document.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
+    const editor = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+    expect(editor.disabled).toBe(false);
+    flushSync(() => replaceReadOnly(true));
+    expect(editor.disabled).toBe(true);
+    const pickers = [...dialog.querySelectorAll<HTMLButtonElement>(".wf-syntax-picker-trigger")];
+    expect(pickers).toHaveLength(2);
+    expect(pickers.every(button => button.disabled)).toBe(true);
+    expect(dialog.querySelector<HTMLButtonElement>("button[aria-label='Close Condition editor']")!.disabled).toBe(false);
+    expect(lateEdit).toBeDefined();
+    flushSync(() => lateEdit!("late edit"));
+    expect(changes).toHaveLength(0);
+    flushSync(() => replaceReadOnly(false));
+    expect(editor.disabled).toBe(false);
+    expect(editor.value).toBe("original");
+  });
+
   it("does not invent expression types when the backend returns none", () => {
     const container = renderPanel([
       input("Message", { isWrapped: true, defaultSyntax: "Literal" })
@@ -741,6 +959,46 @@ describe("activity property organization", () => {
     expect(entries()[0]!.hasAttribute("aria-invalid")).toBe(false);
   });
 
+  it("lets a dedicated expression editor replace the generic dictionary table", async () => {
+    const dedicated: StudioExpressionEditorContribution = {
+      id: "test.decision-inputs",
+      order: 40,
+      supports: context => context.descriptor.name === "Inputs",
+      surfaces: {
+        inline: ({ value, onChange }) => (
+          <label>
+            amount
+            <input
+              aria-label="amount"
+              value={String((value as { amount?: { value?: string } } | null)?.amount?.value ?? "")}
+              onChange={event => onChange({ amount: { kind: "number", value: event.target.value } })}
+            />
+          </label>
+        ),
+        expanded: ({ onChange }) => <textarea aria-label="Decision inputs JSON" onChange={event => onChange(JSON.parse(event.target.value))} />
+      },
+      createDefaultValue: () => ({})
+    };
+    const container = renderPanel([input("Inputs", {
+      referenceKey: "Inputs",
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      collectionKind: "Dictionary",
+      isWrapped: true
+    })], {
+      editors: builtInPropertyEditors,
+      expressionEditors: [dedicated, createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        Inputs: {
+          typeName: "Elsa.Decisions.Core.DecisionValue",
+          expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } }
+        }
+      })
+    });
+    await nextFrame();
+    expect(container.querySelector(".wf-dictionary-editor")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('[aria-label="amount"]')?.value).toBe("950");
+  });
+
   it("keeps a new dictionary's blank-key error visible after opening and closing its expanded editor", async () => {
     const container = renderPanel([input("Headers", {
       typeName: "System.String",
@@ -759,13 +1017,245 @@ describe("activity property organization", () => {
 
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
     await nextFrame();
-    expect(container.querySelector("button[aria-label='Close Headers editor']")).not.toBeNull();
+    expect(document.querySelector("button[aria-label='Close Headers editor']")).not.toBeNull();
 
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Headers editor']")!.click());
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Headers editor']")!.click());
     await nextFrame();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
     expect(container.querySelector<HTMLInputElement>(".wf-dictionary-cell.key input")?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("keeps an inline expression validation error after the expanded editor closes", async () => {
+    const ReportingExpression: StudioExpressionEditorContribution["surfaces"]["inline"] = ({
+      onValidationChange,
+      context,
+      onExpand
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return (
+        <div>
+          <textarea aria-label={`${context.surface} script`} defaultValue="not a number" />
+          {onExpand ? <button type="button" aria-label="Expand from editor" onClick={onExpand}>Expand</button> : null}
+        </div>
+      );
+    };
+    const reporting: StudioExpressionEditorContribution = {
+      id: "test.blocking-expression",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { inline: ReportingExpression, expanded: ReportingExpression }
+    };
+    const container = renderPanel([input("Template", { isWrapped: true, tier: "optional" })], {
+      expressionEditors: [reporting],
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "JavaScript", value: "not a number" } }
+      })
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    await nextFrame();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+    expect(container.querySelector("textarea[aria-label='inline script']")).not.toBeNull();
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Expand from editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("button[aria-label='Close Template editor']")).not.toBeNull();
+    expect(document.querySelector("textarea[aria-label='expanded script']")).not.toBeNull();
+
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Template editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("button[aria-label='Close Template editor']")).toBeNull();
+    expect(container.querySelector("textarea[aria-label='inline script']")).not.toBeNull();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+  });
+
+  it("opens a module-owned structured Inputs editor with a labeled expand control, not overlay chrome", async () => {
+    const ReportingInputsInline: StudioExpressionEditorContribution["surfaces"]["inline"] = ({
+      onValidationChange
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return <input aria-label="amount" defaultValue="" />;
+    };
+    const ReportingInputsExpanded: StudioExpressionEditorContribution["surfaces"]["expanded"] = ({
+      onValidationChange
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return <input aria-label="amount expanded" defaultValue="" />;
+    };
+    const reporting: StudioExpressionEditorContribution = {
+      id: "decisions.inputs",
+      supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+      createDefaultValue: () => ({}),
+      surfaces: { inline: ReportingInputsInline, expanded: ReportingInputsExpanded }
+    };
+    const container = renderPanel([input("Inputs", {
+      referenceKey: "Inputs",
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      collectionKind: "Dictionary",
+      isWrapped: true,
+      defaultSyntax: "Object",
+      uiHint: "decision-inputs"
+    })], {
+      expressionEditors: [reporting],
+      activity: activity({
+        Inputs: { typeName: "Elsa.Decisions.Core.DecisionValue", expression: { type: "Object", value: { amount: { kind: "number", value: "" } } } }
+      })
+    });
+    await nextFrame();
+    expect(container.querySelector(".wf-expression-expand-button")).toBeNull();
+    const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Inputs editor']");
+    expect(expand?.textContent).toContain("Open expanded editor");
+    expand!.focus();
+    flushSync(() => expand!.click());
+    await nextFrame();
+    const dialog = document.querySelector<HTMLElement>("[role='dialog']");
+    expect(dialog).not.toBeNull();
+    expect(dialog?.querySelector("[aria-label='amount expanded']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(dialog!.contains(document.activeElement)).toBe(true);
+    const focusable = dialogFocusable(dialog!);
+    focusable[0].focus();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(focusable.at(-1));
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Inputs editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("[role='dialog']")).toBeNull();
+    expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(document.activeElement).toBe(expand);
+  });
+
+  it("does not rebuild an unrelated JavaScript row when a sibling input that opted into activity context changes", async () => {
+    let scriptRenders = 0;
+    const ScriptEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      scriptRenders += 1;
+      return <textarea aria-label="script" data-renders={String(scriptRenders)} defaultValue={String(value ?? "")} />;
+    };
+    const InputsEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      const record = value && typeof value === "object" ? value as Record<string, { value?: string }> : {};
+      return <output aria-label="amount">{record.amount?.value ?? ""}</output>;
+    };
+    const inputsValue = (amount: string) => ({
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      expression: { type: "Object", value: { amount: { kind: "number", value: amount } } }
+    });
+    const templateValue = { typeName: "System.String", expression: { type: "JavaScript", value: "return 1;" } };
+    const current = activity({
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: inputsValue("950"),
+      template: templateValue
+    });
+    renderPanel([
+      input("Decision", { referenceKey: "Decision", isWrapped: true, defaultSyntax: "Literal", uiHint: "decision-version" }),
+      input("Inputs", {
+        referenceKey: "Inputs",
+        typeName: "Elsa.Decisions.Core.DecisionValue",
+        isWrapped: true,
+        defaultSyntax: "Object"
+      }),
+      input("Template", { isWrapped: true, defaultSyntax: "JavaScript" })
+    ], {
+      expressionEditors: [
+        {
+          id: "decisions.inputs",
+          readsActivityContext: true,
+          supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+          surfaces: { inline: InputsEditor }
+        },
+        {
+          id: "test.javascript",
+          supports: context => context.syntax === "JavaScript",
+          surfaces: { inline: ScriptEditor }
+        }
+      ],
+      activity: current
+    });
+    await nextFrame();
+    const scriptRendersAfterMount = scriptRenders;
+    flushSync(() => replaceActivity({ ...current, Inputs: inputsValue("951") }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+
+    flushSync(() => replaceActivity({
+      ...current,
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "scoring@v1" } },
+      Inputs: inputsValue("951")
+    }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+  });
+
+  it("keeps that JavaScript row memoized while property editor contributions are registered but not resolved for it", async () => {
+    let scriptRenders = 0;
+    const ScriptEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      scriptRenders += 1;
+      return <textarea aria-label="script" data-renders={String(scriptRenders)} defaultValue={String(value ?? "")} />;
+    };
+    const InputsEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      const record = value && typeof value === "object" ? value as Record<string, { value?: string }> : {};
+      return <output aria-label="amount">{record.amount?.value ?? ""}</output>;
+    };
+    const inputsValue = (amount: string) => ({
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      expression: { type: "Object", value: { amount: { kind: "number", value: amount } } }
+    });
+    const templateValue = { typeName: "System.String", expression: { type: "JavaScript", value: "return 1;" } };
+    const current = activity({
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: inputsValue("950"),
+      template: templateValue
+    });
+    renderPanel([
+      input("Decision", { referenceKey: "Decision", isWrapped: true, defaultSyntax: "Literal", uiHint: "decision-version" }),
+      input("Inputs", {
+        referenceKey: "Inputs",
+        typeName: "Elsa.Decisions.Core.DecisionValue",
+        isWrapped: true,
+        defaultSyntax: "Object"
+      }),
+      input("Template", { isWrapped: true, defaultSyntax: "JavaScript" })
+    ], {
+      expressionEditors: [
+        {
+          id: "decisions.inputs",
+          readsActivityContext: true,
+          supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+          surfaces: { inline: InputsEditor }
+        },
+        {
+          id: "test.javascript",
+          supports: context => context.syntax === "JavaScript",
+          surfaces: { inline: ScriptEditor }
+        }
+      ],
+      // Real hosts register the built-in editors, whose text fallback supports every input. Only a contribution that opted
+      // into activity context and supports this row may defeat the memo.
+      editors: [
+        ...builtInPropertyEditors,
+        { id: "test.unrelated-property-editor", readsActivityContext: true, supports: descriptor => descriptor.uiHint === "test-unrelated", component: () => null }
+      ],
+      activity: current
+    });
+    await nextFrame();
+    const scriptRendersAfterMount = scriptRenders;
+    flushSync(() => replaceActivity({ ...current, Inputs: inputsValue("951") }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+
+    flushSync(() => replaceActivity({
+      ...current,
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "scoring@v1" } },
+      Inputs: inputsValue("951")
+    }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
   });
 
   it("does not let a valid simultaneous dictionary editor instance clear its sibling error", async () => {
@@ -804,7 +1294,7 @@ describe("activity property organization", () => {
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
     await nextFrame();
     expect(callbacks.size).toBe(2);
-    expect(container.querySelectorAll(".wf-dictionary-editor input[data-validation-instance]")).toHaveLength(2);
+    expect(document.querySelectorAll(".wf-dictionary-editor input[data-validation-instance]")).toHaveLength(2);
 
     const [first, second] = [...callbacks.values()];
     first!(true);
@@ -979,7 +1469,7 @@ describe("activity property organization", () => {
     expect(container.querySelector("input[type='checkbox']")).toBeNull();
 
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Condition editor']")?.click());
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
     expect(expanded?.value).toBe("value and");
     expect(document.activeElement).toBe(expanded);
   });
@@ -1023,7 +1513,7 @@ describe("activity property organization", () => {
 
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Expand from editor']")!.click());
 
-    expect(container.querySelector("[aria-label='Expanded rich editor']")).not.toBeNull();
+    expect(document.querySelector("[aria-label='Expanded rich editor']")).not.toBeNull();
     expect(container.querySelector("[aria-label='Expand from editor']")).toBeNull();
     const expandedContext = contexts.at(-1)!;
     expect(expandedContext.surface).toBe("expanded");
@@ -1063,7 +1553,7 @@ describe("activity property organization", () => {
       .toEqual({ ...definition, source: "args.response.message" });
 
     clickButton(container, "Open expanded Template editor");
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
     expect(expanded.value).toBe("args.response.message");
     changeTextArea(expanded, "args.response.code");
     expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
@@ -1112,6 +1602,150 @@ describe("activity property organization", () => {
     const replacement = container.querySelector<HTMLInputElement>("input[aria-label='Template expression']");
     expect(replacement?.value).toBe("Hello");
     expect(document.activeElement).toBe(replacement);
+  });
+
+  it("keeps portable expression source and parameters when switching between text syntaxes", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] },
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Liquid");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Text expression']")?.value).toBe(source);
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Liquid",
+      value: { ...definition, language: "Liquid" }
+    });
+  });
+
+  it("confirms removal of expression bindings when switching a portable expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']");
+    expect(confirmation?.textContent).toContain("keep the source text as a Literal value");
+    expect(confirmation?.textContent).toContain("remove 1 expression binding");
+    expect(changes).toHaveLength(0);
+
+    const removeBindings = [...confirmation!.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: source
+    });
+  });
+
+  it("keeps an empty portable source when confirming a switch to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", defaultValue: "default text", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("keep the source text as a Literal value");
+    const removeBindings = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: ""
+    });
+  });
+
+  it("uses the literal default when switching a bound non-string expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "args.Count",
+      resultType: { alias: "Int32", collectionKind: "Single" },
+      parameters: { Count: { kind: "WorkflowRequest", memberKey: "Count" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Count", { referenceKey: "count", typeName: "System.Int32", defaultValue: 42, isWrapped: true })
+    ], {
+      activity: activity({ count: { typeName: "System.Int32", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("will replace the current value and remove 1 expression binding");
+    const replace = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Replace value and remove 1 binding")!;
+    flushSync(() => replace.click());
+
+    expect((changes.at(-1)!.count as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: 42
+    });
+  });
+
+  it("preserves an ordinary string expression as a Literal without confirmation", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "hello" } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: "hello"
+    });
   });
 
   it("preserves a primitive Literal as visible text when switching to a text expression", () => {
@@ -1384,18 +2018,104 @@ describe("activity property organization", () => {
     expect(container.querySelector(".wf-object-expression-summary")?.textContent).toContain("2 properties");
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
 
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']");
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']");
     expect(expanded?.value).toContain('"first": 1');
-    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(document.querySelector("[role='dialog']")).not.toBeNull();
 
     changeTextArea(expanded!, '{"first":');
-    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+    expect(document.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
     expect(changes).toHaveLength(0);
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")?.click());
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")?.click());
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
 
-    expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
-    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+    expect(document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
+    expect(document.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+  });
+
+  it("keeps an expanded property editor outside a clipping embedder while inheriting its theme tokens", () => {
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1 } } }
+      })
+    });
+    container.style.overflow = "hidden";
+    container.style.setProperty("--wf-text", "rgb(12, 34, 56)");
+    container.style.setProperty("--wf-panel", "rgb(210, 220, 230)");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
+    const dialog = document.body.querySelector<HTMLElement>(".wf-property-editor-dialog");
+    expect(dialog).not.toBeNull();
+    expect(container.contains(dialog)).toBe(false);
+    const portalRoot = dialog!.closest(".wf-tokens") as HTMLElement | null;
+    expect(portalRoot).not.toBeNull();
+    expect(portalRoot).not.toBe(container);
+    expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(12, 34, 56)");
+    expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("rgb(210, 220, 230)");
+    container.style.setProperty("--wf-text", "rgb(9, 8, 7)");
+    container.style.removeProperty("--wf-panel");
+    document.documentElement.setAttribute("data-theme-mode", "dark");
+    document.documentElement.setAttribute("data-theme-appearance", "dark");
+    document.documentElement.setAttribute("data-color-scheme", "classic");
+    return vi.waitFor(() => {
+      expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(9, 8, 7)");
+      expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("");
+    }).finally(() => {
+      document.documentElement.removeAttribute("data-theme-mode");
+      document.documentElement.removeAttribute("data-theme-appearance");
+      document.documentElement.removeAttribute("data-color-scheme");
+    });
+  });
+
+  it("disconnects the portal theme observer on close and watches appearance attributes", () => {
+    const Original = window.MutationObserver;
+    const disconnect = vi.fn();
+    const filters: Array<readonly string[] | undefined> = [];
+    vi.stubGlobal("MutationObserver", class {
+      inner: MutationObserver;
+      constructor(callback: MutationCallback) {
+        this.inner = new Original(callback);
+      }
+      observe(target: Node, options?: MutationObserverInit) {
+        filters.push(options?.attributeFilter);
+        this.inner.observe(target, options);
+      }
+      disconnect() {
+        disconnect();
+        this.inner.disconnect();
+      }
+      takeRecords() {
+        return this.inner.takeRecords();
+      }
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1 } } }
+      })
+    });
+    const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")!;
+    expand.focus();
+    flushSync(() => expand.click());
+    expect(filters.some(filter =>
+      ["data-theme-mode", "data-theme-appearance", "data-color-scheme"].every(name => filter?.includes(name))
+    )).toBe(true);
+
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")!.click());
+    expect(document.body.querySelector(".wf-property-editor-dialog")).toBeNull();
+    expect(disconnect).toHaveBeenCalled();
+    expect(document.activeElement).toBe(expand);
   });
 });
 
@@ -1661,7 +2381,7 @@ describe("masked inputs", () => {
     expectNowhere(storedValue);
 
     openExpandedEditor(container);
-    expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='ApiToken expanded value']")!.value).toBe("");
+    expect(document.querySelector<HTMLTextAreaElement>("textarea[aria-label='ApiToken expanded value']")!.value).toBe("");
     expectNowhere(storedValue);
   });
 
@@ -1897,6 +2617,12 @@ function openAndSelect(scope: ParentNode, label: string) {
 
 async function nextFrame() {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function dialogFocusable(dialog: HTMLElement) {
+  return [...dialog.querySelectorAll<HTMLElement>(
+    "button, input:not([type='hidden']), textarea, select, [href], [contenteditable='true'], [tabindex]"
+  )].filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0) && !element.closest("[hidden], [aria-hidden='true']"));
 }
 
 function changeTextArea(input: HTMLTextAreaElement, value: string) {

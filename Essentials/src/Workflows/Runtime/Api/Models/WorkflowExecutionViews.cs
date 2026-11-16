@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -97,7 +98,7 @@ public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
     IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents,
-    IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
+    [property: JsonConverter(typeof(WorkflowOutputsJsonConverter))] IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
     string PersistenceMode,
     string InspectionGranularity,
     string? ActivityNextContinuationToken = null,
@@ -117,8 +118,10 @@ public sealed record WorkflowOutputView(
     string? RedactionReason,
     DateTimeOffset CapturedAt)
 {
+    public string? CaptureMode { get; init; }
+
     public static WorkflowOutputView From(WorkflowOutputProjection projection) =>
-        new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt);
+        new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt) { CaptureMode = projection.CaptureMode?.ToString() };
 
     public static WorkflowOutputView Redacted(DateTimeOffset capturedAt) =>
         new(null, true, "Caller is not authorized to inspect sensitive values.", capturedAt);

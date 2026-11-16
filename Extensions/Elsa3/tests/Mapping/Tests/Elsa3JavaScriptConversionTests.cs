@@ -103,6 +103,23 @@ public sealed class Elsa3JavaScriptConversionTests
         Assert.Equal("({ \"total\": args.total })", Source(Input(node, "arguments")));
     }
 
+    /// <summary>
+    /// #3287: the <c>arguments</c> expression declares the type of RunJavaScript's <c>arguments</c> input, because
+    /// publication requires the two to match exactly. It declared <c>Object</c>, and every script that read anything
+    /// was refused at publish.
+    /// </summary>
+    [Fact]
+    public async Task The_arguments_expression_declares_the_arguments_input_type()
+    {
+        var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getVariable('greeting');")));
+
+        var result = await ConvertAsync(Sequence("root", script), new Elsa3Variable { Id = "greeting", Name = "greeting", TypeName = "String" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var arguments = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "node"), "arguments").Value.Value);
+        Assert.Equal("System.Text.Json.JsonElement", arguments.GetProperty("resultType").GetProperty("Alias").GetString());
+    }
+
     [Fact]
     public async Task A_script_without_reads_gets_no_arguments()
     {

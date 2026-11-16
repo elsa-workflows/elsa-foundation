@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -326,23 +328,277 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
-    public async Task DrainAsync_WithRetryAfterPolicy_RecordsRetryScheduledWithoutImmediateReEnqueue()
+    public async Task DrainAsync_WithRetryAfterPolicy_ReleasesTheItemUntilItIsDueThenRunsItAgain()
     {
+        // #3275: RetryAfter used to ack-delete the item and record a NextRetryAt that nothing read, so the step stalled
+        // silently. The claimed item is now released with the policy's delay: it stays queued as the only copy, is not
+        // claimable before the delay, and runs again once due (the resumption sweep re-drives claimable work).
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var time = new FakeTimeProvider(_now);
+        var handler = new AlwaysFaultingSchedulerWorkHandler();
         var delay = TimeSpan.FromMinutes(5);
-        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")));
-        await queue.EnqueueAsync(NewWorkItem(1));
+        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")), time, handler,
+            hasResumptionRedriver: true);
+        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
         Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
         Assert.Equal(_now + delay, record.NextRetryAt);
-        // Not immediately re-enqueued: honoring the delay is left to the resumption sweep (W2 follow-up).
-        Assert.Empty(remaining);
+        Assert.Collection(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")), item => Assert.Equal("work-1", item.WorkItemId));
+
+        // The sweep's backlog discovery sees the execution exactly when the retry is due.
+        time.Advance(delay - TimeSpan.FromSeconds(1));
+        Assert.Empty(await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+        var early = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        Assert.Empty(early.Items);
+        Assert.Equal(1, handler.InvocationCount);
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(["wfexec-1"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+        var due = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        Assert.Equal("work-1", Assert.Single(due.Items).WorkItemId);
+        Assert.Equal(2, handler.InvocationCount);
+        Assert.Equal(2, Assert.Single(await poisonStore.ListAsync("wfexec-1")).FailureCount);
+    }
+
+    [Theory]
+    [InlineData("no-redriver")]
+    [InlineData("policy-throws")]
+    [InlineData("checkpoint-rule")]
+    [InlineData("release-refused")]
+    [InlineData("delay-unrepresentable")]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenTheRetryCannotBeHeld_PoisonsTheDelayableItem(string reason)
+    {
+        // Each case would otherwise leave a released item nothing re-drives, an item claimed to loop on every lapse, a
+        // retry of a run the faulter terminates, or a claim-lost throw with no record. A delay that ends past the last
+        // representable time used to throw before the ack, so the item stayed claimed to fault again on every lapse.
+        // All are poisoned and acked.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        IWorkflowSchedulerWorkQueue queue = reason == "release-refused" ? new RefusingReleaseWorkQueue(inner) : inner;
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var delay = reason == "delay-unrepresentable" ? TimeSpan.MaxValue : TimeSpan.FromMinutes(5);
+        IRuntimeDomainRetryPolicy policy = reason == "policy-throws"
+            ? new ThrowingRetryPolicy()
+            : new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after"));
+        Func<RuntimeSchedulerWorkItem, Exception>? checkpointRuleFault = reason == "checkpoint-rule"
+            ? item => new RuntimeCheckpointCommitValidationException($"A checkpoint rule refused {item.WorkItemId}.")
+            : null;
+        var handler = new AlwaysFaultingSchedulerWorkHandler(checkpointRuleFault);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions())),
+            poisonStore: poisonStore,
+            retryPolicy: policy,
+            hasResumptionRedriver: reason != "no-redriver");
+        await inner.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Null(record.NextRetryAt);
+        Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        if (reason == "policy-throws")
+        {
+            Assert.Equal("PolicyFailed", record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
+            Assert.Equal(typeof(InvalidOperationException).FullName, record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason]);
+        }
+    }
+
+    [Fact]
+    public async Task DrainAsync_WhenThePoisonStoreCannotBeRead_KeepsTheFaultedItemClaimedForReDrive()
+    {
+        // #3275 moved the poison-store read (the prior failure count the retry policy is given) before the ack, because
+        // a RetryAfter is released instead of acknowledged. A read that throws now leaves the item claimed and un-acked:
+        // the exception surfaces, and the item is claimable again once its claim lapses. Before, the ack ran first and
+        // the failed read dropped the item with no record.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var time = new FakeTimeProvider(_now);
+        var handler = new AlwaysFaultingSchedulerWorkHandler();
+        var drainer = NewDrainer(queue, new UnreadablePoisonStore(), new NoopRuntimeDomainRetryPolicy(), time, handler);
+        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        await Assert.ThrowsAsync<IOException>(() => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
+
+        Assert.Equal(1, handler.InvocationCount);
+        Assert.Equal("work-1", Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).WorkItemId);
+        Assert.Empty(await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+        time.Advance(new RuntimeSchedulerWorkClaimOptions().VisibilityTimeout);
+        Assert.Equal(["wfexec-1"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WithRetryAfterPolicy_ForWorkThatCannotBeDelayed_PoisonsInsteadOfParkingSilently()
+    {
+        // RunSchedulerWork has no delayed release, so the queue cannot hold the retry even where a resumption sweep is
+        // composed. #3275: it is poisoned (projected as a blocking incident) rather than recorded as RetryScheduled with
+        // a NextRetryAt that nothing would act on.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var delay = TimeSpan.FromMinutes(5);
+        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")),
+            hasResumptionRedriver: true);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Null(record.NextRetryAt);
+        Assert.Equal(nameof(RuntimeDomainRetryMode.RetryAfter), record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenTheAcknowledgementAfterASuccessfulDispatchFails_PoisonsWithoutRunningTheStepAgain()
+    {
+        // #3275: the handler returned, so its effect is durable, and only the acknowledgement after it failed. That
+        // failure lands in the same fault arm as a handler fault, and a RetryAfter used to release the completed step to
+        // run again. Only a fault the handler itself threw is released. This one takes the path it always took: the
+        // fault arm acknowledges again and records it, and with the retry not held the record is Poisoned.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new FailFirstCompleteWorkQueue(inner);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var time = new FakeTimeProvider(_now);
+        var handler = new SucceedingSchedulerWorkHandler();
+        var delay = TimeSpan.FromMinutes(5);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler],
+            time,
+            faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions())),
+            poisonStore: poisonStore,
+            retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")),
+            consumedWorkClaimAccessor: new RuntimeConsumedSchedulerWorkClaimAccessor(),
+            hasResumptionRedriver: true);
+        await inner.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.ResumeBookmark));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(queue.CompleteFailed);
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+        Assert.Null(record.NextRetryAt);
+        Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+
+        time.Advance(delay);
+        Assert.Empty((await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"))).Items);
+        Assert.Equal(1, handler.InvocationCount);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_ThrowsClaimLostWithoutAckOrRecord(
+        bool otherOwnerClaimed)
+    {
+        // A handler crosses a durable boundary that deactivates the coalescing overlay, and the durable copy is then
+        // claimed by another owner or removed. The release must persist at once, and cannot: this drain lost the item.
+        // The fallback acknowledgement used to succeed through the overlay and delete the durable copy by identity, out
+        // from under the other owner's live claim, and then record the step Poisoned. The refusal now fences the overlay
+        // claim, so the acknowledgement is refused too: the drainer throws claim-lost and records nothing, and whatever
+        // holds the durable copy keeps it.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
+        var session = new RuntimeCoalescingSession("wfexec-1", inner, new PersistenceModeOptions());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var workItem = NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity);
+        var handler = new AlwaysFaultingSchedulerWorkHandler(beforeFault: item => LoseDurableCopyAfterABoundaryAsync(session, inner, item, otherOwnerClaimed));
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, TimeSpan.FromMinutes(5), "retry-after")),
+            hasResumptionRedriver: true);
+        await inner.EnqueueAsync(workItem);
+
+        InvalidOperationException exception;
+        using (accessor.Push(session))
+            exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1)).AsTask());
+
+        Assert.Contains("was lost during 'complete' with status 'Stale'", exception.Message);
+        Assert.Equal(1, handler.InvocationCount);
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+        await AssertDurableCopyLeftToItsHolderAsync(inner, otherOwnerClaimed);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_WhenAnInactiveCoalescingSegmentRefusesAnUnavailableRelease_ThrowsClaimLostAndKeepsTheItemQueued(
+        bool otherOwnerClaimed)
+    {
+        // The same refusal on the temporarily-unavailable arm: the drainer throws claim-lost for the refused release.
+        // Nothing is acknowledged or poisoned, and whatever holds the durable copy keeps it.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
+        var session = new RuntimeCoalescingSession("wfexec-1", inner, new PersistenceModeOptions());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new AlwaysFaultingSchedulerWorkHandler(
+            _ => new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable."),
+            item => LoseDurableCopyAfterABoundaryAsync(session, inner, item, otherOwnerClaimed));
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore);
+        await inner.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        InvalidOperationException exception;
+        using (accessor.Push(session))
+            exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1)).AsTask());
+
+        Assert.Contains("was lost during 'release after temporary unavailability' with status 'Stale'", exception.Message);
+        Assert.Equal(1, handler.InvocationCount);
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+        await AssertDurableCopyLeftToItsHolderAsync(inner, otherOwnerClaimed);
+    }
+
+    // A retaining boundary deactivates the overlay, and the durable copy then leaves this drain: another owner takes it
+    // under a live claim, which no delayed release may override, or it is removed. The session reads the system clock,
+    // so the claim is live by that clock. Another writer then queues work-2 behind it.
+    private async ValueTask LoseDurableCopyAfterABoundaryAsync(
+        RuntimeCoalescingSession session,
+        InMemoryWorkflowSchedulerWorkQueue inner,
+        RuntimeSchedulerWorkItem item,
+        bool otherOwnerClaimed)
+    {
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        if (otherOwnerClaimed)
+        {
+            var claim = await inner.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+                item.WorkflowExecutionId, "other-owner", DateTimeOffset.UtcNow, TimeSpan.FromDays(1)));
+            Assert.Equal(item.WorkItemId, claim?.Item.WorkItemId);
+        }
+        else
+        {
+            Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+        }
+        await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
+    }
+
+    private static async Task AssertDurableCopyLeftToItsHolderAsync(InMemoryWorkflowSchedulerWorkQueue inner, bool otherOwnerClaimed)
+    {
+        Assert.Equal(otherOwnerClaimed ? ["work-1", "work-2"] : ["work-2"],
+            (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+        if (otherOwnerClaimed)
+            Assert.Equal(["work-1"], (await inner.ListActiveClaimsAsync("wfexec-1", DateTimeOffset.UtcNow)).Select(claim => claim.Item.WorkItemId));
     }
 
     [Fact]
@@ -430,17 +686,21 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     private WorkflowSchedulerDrainer NewDrainer(
         InMemoryWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerPoisonStore poisonStore,
-        IRuntimeDomainRetryPolicy retryPolicy) =>
+        IRuntimeDomainRetryPolicy retryPolicy,
+        FakeTimeProvider? timeProvider = null,
+        IWorkflowSchedulerWorkHandler? handler = null,
+        bool hasResumptionRedriver = false) =>
         TestSchedulerDrainer.Create(
             queue,
-            [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FakeTimeProvider(_now),
+            [handler ?? new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider ?? new FakeTimeProvider(_now),
             pauseGate: null,
             workflowExecutionStateStore: null,
             pipelineDispatcher: null,
             faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions())),
             poisonStore: poisonStore,
-            retryPolicy: retryPolicy);
+            retryPolicy: retryPolicy,
+            hasResumptionRedriver: hasResumptionRedriver);
 
     private RuntimeSchedulerWorkItem NewWorkItem(
         int index,
@@ -582,16 +842,94 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         InMemoryWorkflowSchedulerPoisonStore PoisonStore,
         WorkflowSchedulerDrainer Drainer);
 
-    private sealed class AlwaysFaultingSchedulerWorkHandler(Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null) : IWorkflowSchedulerWorkHandler
+    private sealed class AlwaysFaultingSchedulerWorkHandler(
+        Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null,
+        Func<RuntimeSchedulerWorkItem, ValueTask>? beforeFault = null) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
+        public int InvocationCount { get; private set; }
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            if (beforeFault is not null)
+                await beforeFault(workItem);
+            throw exceptionFactory?.Invoke(workItem) ?? new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+        }
+    }
+
+    private sealed class UnreadablePoisonStore : IWorkflowSchedulerPoisonStore
+    {
+        public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("No record is written when the read fails.");
+        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
+            throw new IOException("The poison store is unavailable.");
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new IOException("The poison store is unavailable.");
+    }
+
+    private sealed class ThrowingRetryPolicy : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            throw new InvalidOperationException("The policy cannot decide.");
+    }
+
+    // Refuses every release, as a coalescing segment does for an item a boundary already consumed.
+    private sealed class RefusingReleaseWorkQueue(IWorkflowSchedulerWorkQueue inner) : IWorkflowSchedulerWorkQueue
+    {
+        public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
+        public bool SupportsClaimValidation => inner.SupportsClaimValidation;
+        public bool SupportsTargetedDeletion => inner.SupportsTargetedDeletion;
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) => inner.EnqueueAsync(workItem, cancellationToken);
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) => inner.ListAsync(query, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => inner.DequeueAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) => inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) => inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken cancellationToken = default) => inner.ClaimAsync(request, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) => inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(RuntimeSchedulerWorkClaim claim, CancellationToken cancellationToken = default) => inner.CompleteClaimAsync(claim, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
+            new(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(ConsumedSchedulerWorkItem consumed, CancellationToken cancellationToken = default) => inner.ConsumeClaimedAsync(consumed, cancellationToken);
+    }
+
+    // Times out the first claim completion, as a provider whose acknowledgement times out would.
+    private sealed class FailFirstCompleteWorkQueue(IWorkflowSchedulerWorkQueue inner) : IWorkflowSchedulerWorkQueue
+    {
+        public bool CompleteFailed { get; private set; }
+        public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
+        public bool SupportsClaimValidation => inner.SupportsClaimValidation;
+        public bool SupportsTargetedDeletion => inner.SupportsTargetedDeletion;
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) => inner.EnqueueAsync(workItem, cancellationToken);
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) => inner.ListAsync(query, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => inner.DequeueAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) => inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) => inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken cancellationToken = default) => inner.ClaimAsync(request, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) => inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) => inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(ConsumedSchedulerWorkItem consumed, CancellationToken cancellationToken = default) => inner.ConsumeClaimedAsync(consumed, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(RuntimeSchedulerWorkClaim claim, CancellationToken cancellationToken = default)
+        {
+            if (CompleteFailed)
+                return inner.CompleteClaimAsync(claim, cancellationToken);
+            CompleteFailed = true;
+            throw new TimeoutException("The acknowledgement timed out.");
+        }
+    }
+
+    private sealed class SucceedingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(SucceedingSchedulerWorkHandler);
         public int InvocationCount { get; private set; }
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
 
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {
             InvocationCount++;
-            throw exceptionFactory?.Invoke(workItem) ?? new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+            return ValueTask.CompletedTask;
         }
     }
 

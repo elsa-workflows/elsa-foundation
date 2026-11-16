@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Api.AspNetCore;
 
 /// <summary>Elsa's endpoint metadata vocabulary, as standard ASP.NET Core endpoint conventions.</summary>
 /// <remarks>
-/// The endpoint pipeline itself is <see href="https://www.nuget.org/packages/NativeEndpoints">NativeEndpoints</see>.
+/// The endpoint pipeline itself is <see href="https://www.nuget.org/packages/MinimalEndpoints">MinimalEndpoints</see>.
 /// What stays here is what the package has no opinion about: which module owns an endpoint, how its
 /// access is dispositioned, which authoring model published it, and which host credential enforces
 /// it. Those are Elsa's inventory and governance concepts, they are read by the endpoint manifest and

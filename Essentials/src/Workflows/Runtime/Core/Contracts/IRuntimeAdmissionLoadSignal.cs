@@ -14,11 +14,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IRuntimeAdmissionLoadSignal
 {
-    /// <summary>Dispatch units currently in flight across every admitted command this host is running.</summary>
+    /// <summary>Dispatch units currently in flight across admitted commands and charged durable background dispatches.</summary>
     long InFlightDispatches { get; }
 
     /// <summary>
-    /// Whether the calling flow is already inside an admitted command. A child workflow started from inside a parent's
+    /// Whether the calling flow already has a load charge, from admission or durable background dispatch. A child workflow started from inside a parent's
     /// drain is not new work arriving at the host, it is the continuation of work the host already accepted, so
     /// shedding it would free nothing (the parent still holds its charge) and could only bounce until the parent
     /// finishes.
@@ -39,20 +39,20 @@ public interface IRuntimeAdmissionLoadSignal
     IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad);
 
     /// <summary>
-    /// Opens a charge unconditionally, for the paths the controller has already decided are not subject to the limit
-    /// (shedding disabled, or a command dispatched from inside an admitted one). Disposing it releases the units it
+    /// Opens a charge unconditionally, for accepted work or bounded durable background dispatch that is not subject
+    /// to live-arrival shedding. Disposing it releases the units it
     /// accumulated and restores the previous ambient charge.
     /// </summary>
     IRuntimeAdmissionCharge OpenCharge();
 
     /// <summary>
-    /// Charges one scheduler dispatch to the ambient charge. A no-op when nothing was admitted on this flow, which is
-    /// what keeps recovery-sweep and pump dispatches out of the live-dispatch reading.
+    /// Charges one scheduler dispatch to the ambient charge. A no-op when this flow has no charge. Configured timer,
+    /// recurrence and recovery re-drive pumps, and outbox delivery, open charges around actual work.
     /// </summary>
     void RecordDispatch();
 }
 
-/// <summary>The in-flight charge held by one admitted command for as long as it occupies the host.</summary>
+/// <summary>The in-flight charge held by an admitted command or actual durable background dispatch.</summary>
 public interface IRuntimeAdmissionCharge : IDisposable
 {
     /// <summary>

@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />

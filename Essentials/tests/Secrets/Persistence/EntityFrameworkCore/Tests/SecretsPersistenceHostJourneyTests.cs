@@ -5,6 +5,8 @@ using CShells.Lifecycle;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -18,7 +20,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SecretsPersistenceHostJourneyTests
 {
     private const string EntityFrameworkBackend = "entity-framework";
-    private const string SecretName = "payments.journey";
+    private const string SecretName = "Payments.Journey";
     private const string SecretValue = "phase-3-secret";
     private const string IdentitySecretName = "identity.projection";
 
@@ -69,6 +71,11 @@ public sealed class SecretsPersistenceHostJourneyTests
             {
                 AssertSelectedBackend(scope.ServiceProvider, expectedRepository, expectedBackend);
 
+                // This bounded host has no fleet; finalize explicitly after its sole reader is active.
+                var context = scope.ServiceProvider.GetRequiredService<SecretsSqliteDbContext>();
+                var gate = scope.ServiceProvider.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType())!;
+                await SecretsNameSchemaTests.FinalizeAsync(context, gate);
+
                 var manager = scope.ServiceProvider.GetRequiredService<ISecretManager>();
                 var created = await manager.CreateAsync(
                     SecretsHostCatalog.TenantId,
@@ -85,7 +92,7 @@ public sealed class SecretsPersistenceHostJourneyTests
 
                 var resolved = await scope.ServiceProvider
                     .GetRequiredService<ISecretValueResolver>()
-                    .ResolveAsync(SecretsHostCatalog.TenantId, new SecretReference(SecretName, SecretTypeNames.Text));
+                    .ResolveAsync(SecretsHostCatalog.TenantId, new SecretReference(SecretName.ToUpperInvariant(), SecretTypeNames.Text));
                 Assert.True(resolved.Succeeded);
                 Assert.Equal(SecretValue, resolved.Value);
 
@@ -110,13 +117,14 @@ public sealed class SecretsPersistenceHostJourneyTests
 
             var found = await scope.ServiceProvider
                 .GetRequiredService<ISecretManager>()
-                .FindAsync(SecretsHostCatalog.TenantId, SecretName);
+                .FindAsync(SecretsHostCatalog.TenantId, SecretName.ToLowerInvariant());
             Assert.NotNull(found);
+            Assert.Equal(SecretName, found.Name);
             Assert.Equal("Journey secret updated", found.DisplayName);
 
             var resolved = await scope.ServiceProvider
                 .GetRequiredService<ISecretValueResolver>()
-                .ResolveAsync(SecretsHostCatalog.TenantId, new SecretReference(SecretName));
+                .ResolveAsync(SecretsHostCatalog.TenantId, new SecretReference(SecretName.ToUpperInvariant()));
             Assert.True(resolved.Succeeded);
             Assert.Equal(SecretValue, resolved.Value);
 
@@ -139,7 +147,7 @@ public sealed class SecretsPersistenceHostJourneyTests
         var stale = await revisions.SaveWithRevisionAsync(current.Secret, current.Revision);
         Assert.Equal(SecretRevisionSaveStatus.Conflict, stale.Status);
 
-        var persisted = await repository.FindAsync(SecretsHostCatalog.TenantId, SecretName);
+        var persisted = await repository.FindAsync(SecretsHostCatalog.TenantId, SecretName.ToLowerInvariant());
         Assert.NotNull(persisted);
         Assert.Equal("OCC winner", persisted.Description);
     }

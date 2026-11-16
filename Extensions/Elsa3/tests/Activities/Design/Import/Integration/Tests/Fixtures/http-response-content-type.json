@@ -1,0 +1,37 @@
+{
+  "id": "http-response-content-type-v1",
+  "definitionId": "http-response-content-type",
+  "name": "http-response-content-type",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "root", "nodeId": "root", "name": "root", "type": "Elsa.Flowchart", "version": 1,
+    "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "activities": [
+      {
+        "id": "endpoint", "nodeId": "endpoint", "name": "endpoint", "type": "Elsa.HttpEndpoint", "version": 1,
+        "customProperties": { "canStartWorkflow": true, "runAsynchronously": false },
+        "path": { "typeName": "String", "expression": { "type": "Literal", "value": "elsa3/hello" } },
+        "supportedMethods": { "typeName": "List<String>", "expression": { "type": "Object", "value": "[\"POST\"]" } }
+      },
+      {
+        "id": "respond", "nodeId": "respond", "name": "respond", "type": "Elsa.WriteHttpResponse", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "content": { "typeName": "String", "expression": { "type": "Literal", "value": "Hello from Elsa 3" } }
+      }
+    ],
+    "connections": [{ "source": { "activity": "endpoint", "port": "Done" }, "target": { "activity": "respond", "port": "In" } }],
+    "variables": []
+  }
+}

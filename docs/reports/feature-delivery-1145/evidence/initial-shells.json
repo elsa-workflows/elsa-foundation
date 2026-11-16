@@ -1,0 +1,67 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "Events": {},
+          "Serialization": {},
+          "Tasks": {},
+          "Mediator": {},
+          "Expressions": {},
+          "MemoryCache": {},
+          "FileSystemDistributedLocking": {},
+          "ApiCapabilities": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesDesignApi": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "ActivitiesDesignEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof"
+          },
+          "WorkflowsDesignEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof"
+          },
+          "WorkflowsPublishingEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof"
+          },
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof"
+          },
+          "IdentityIamEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof"
+          },
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionName": "Fr2Proof",
+            "IsDevelopmentOrDemo": false,
+            "SeedAdminUserName": "fr2-admin",
+            "SeedAdminEmail": "fr2@example.invalid",
+            "SeedAdminRoleName": "administrator"
+          }
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

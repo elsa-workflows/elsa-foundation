@@ -20,7 +20,6 @@
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Fixtures/BackgroundActivities/BackgroundActivities.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Fixtures/Reservations/Reservations.csproj" ReferenceOutputAssembly="false" />
-    <!-- The compensation sample package, which WorkbenchCompensationSampleTests drops into the feed as its README says. -->
   </ItemGroup>
 
 </Project>

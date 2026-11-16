@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.Json.Serialization;
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -944,12 +945,30 @@ public sealed class RuntimePostCommitOutboxQuery
 /// execution's items of one intent kind whose delivery a deliverer took on and has not settled. That is an item claimed
 /// for delivery (<see cref="RuntimePostCommitOutboxStatus.Delivering"/>) or one whose attempt failed and waits for a retry
 /// (<see cref="RuntimePostCommitOutboxStatus.FailedRetryable"/>). Both filters are required, so the read stays within one
-/// execution.
+/// execution. With <see cref="DeliveredByClaimSince"/> it also selects the items a claim delivered at or after that time.
 /// </summary>
 public sealed class RuntimePostCommitOutboxClaimedQuery
 {
-    public RuntimePostCommitOutboxClaimedQuery(string workflowExecutionId, string intentKind, int limit)
+    public RuntimePostCommitOutboxClaimedQuery(
+        string workflowExecutionId,
+        string intentKind,
+        int limit,
+        DateTimeOffset? deliveredByClaimSince = null)
+        : this(workflowExecutionId, intentKind, limit, deliveredByClaimSince, [])
     {
+    }
+
+    public RuntimePostCommitOutboxClaimedQuery(
+        string workflowExecutionId,
+        string intentKind,
+        int limit,
+        DateTimeOffset? deliveredByClaimSince,
+        IReadOnlyCollection<string> excludedDeliveredOutboxItemIds)
+    {
+        ArgumentNullException.ThrowIfNull(excludedDeliveredOutboxItemIds);
+        var excluded = excludedDeliveredOutboxItemIds.ToFrozenSet(StringComparer.Ordinal);
+        foreach (var id in excluded)
+            ArgumentException.ThrowIfNullOrWhiteSpace(id, nameof(excludedDeliveredOutboxItemIds));
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
         if (limit <= 0)
@@ -958,20 +977,43 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         WorkflowExecutionId = workflowExecutionId;
         IntentKind = intentKind;
         Limit = limit;
+        DeliveredByClaimSince = deliveredByClaimSince;
+        ExcludedDeliveredOutboxItemIds = excluded;
     }
 
     public string WorkflowExecutionId { get; }
     public string IntentKind { get; }
     public int Limit { get; }
 
+    /// <summary>
+    /// When set, the listing also returns the items a claim delivered at or after this time: delivered under a fencing
+    /// token (<see cref="RuntimePostCommitOutboxItem.DeliveryFencingToken"/> above zero), with
+    /// <see cref="RuntimePostCommitOutboxItem.DeliveredAt"/> no earlier than it. A claim-free delivery, which a drain that
+    /// owns or owned the execution makes, is never returned (#3661).
+    /// </summary>
+    public DateTimeOffset? DeliveredByClaimSince { get; }
+
+    /// <summary>Previously observed delivered IDs to exclude before applying the limit. Held items remain listed.
+    /// The input is copied using ordinal identity comparison.</summary>
+    public IReadOnlySet<string> ExcludedDeliveredOutboxItemIds { get; }
+
+
     /// <summary>Whether <paramref name="item"/> is one this query lists.</summary>
     public bool Matches(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable &&
+        return (item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable ||
+                IsDeliveredByClaimSince(item)) &&
                StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
                StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
     }
+
+    private bool IsDeliveredByClaimSince(RuntimePostCommitOutboxItem item) =>
+        DeliveredByClaimSince is { } since &&
+        item.Status == RuntimePostCommitOutboxStatus.Delivered &&
+        item.DeliveryFencingToken > 0 &&
+        item.DeliveredAt >= since &&
+        !ExcludedDeliveredOutboxItemIds.Contains(item.OutboxItemId);
 }
 
 public sealed class RuntimePostCommitOutboxDeliveryResult

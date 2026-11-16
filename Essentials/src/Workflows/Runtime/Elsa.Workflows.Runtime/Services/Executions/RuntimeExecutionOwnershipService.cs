@@ -1,5 +1,4 @@
 using System.Globalization;
-using Elsa.Primitives.Identity;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -50,7 +49,81 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         _options = options;
     }
 
-    public async ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        (await AcquireAsync(workflowExecutionId, borrow: false, cancellationToken)).Lease;
+
+    /// <summary>
+    /// Acquires the run for one short write that is not a drain, such as an alteration. Like
+    /// <see cref="AcquireAsync(string, CancellationToken)"/> it issues the next fencing token, so whoever held the run
+    /// is refused at its next heartbeat or commit. What differs is what the ownership record says:
+    /// <list type="bullet">
+    /// <item>The run had no owner: the lease is marked as borrowed from no owner. It records no drain, so a later
+    /// borrower that finds it sees no owner.</item>
+    /// <item>The run had an owner (a lease on the record, live or expired): the lease stands in for that owner. The
+    /// owner's heartbeat stays on the record, so the run is listed under the owner as well as under the borrower.
+    /// The lease is marked with the expiry of the owner's lease, for a later borrower that finds it.</item>
+    /// </list>
+    /// Either way the lease is the borrower's own: its id, acquired now.
+    /// </summary>
+    internal ValueTask<ExecutionLeaseBorrow> BorrowAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        AcquireAsync(workflowExecutionId, borrow: true, cancellationToken);
+
+    /// <summary>
+    /// Ends a borrow. A lease borrowed from no owner is released. A lease that stands in for an owner is not
+    /// released, because that would erase the record of an owner whose work may need recovery. It stays on the
+    /// record under a new fencing token, and expires when the owner's lease would have, or at once if that lease
+    /// had already expired, so recovery finds the run no later than the owner's lease expiry. The owner's heartbeat
+    /// is still beside it. The owner itself, if it is still running, stays fenced out.
+    /// Returns <see cref="RuntimeExecutionOwnershipTransitionStatus.Stale"/> without writing when the run has been
+    /// taken from the borrower.
+    /// </summary>
+    internal async ValueTask<RuntimeExecutionOwnershipTransitionResult> ReturnAsync(
+        ExecutionLeaseBorrow borrow,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(borrow);
+        var borrowed = borrow.Lease;
+        if (borrow.OwnersLeaseExpiresAt is not { } ownersExpiry)
+            return await ReleaseAsync(borrowed, cancellationToken);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = await FindVersionedOwnershipStateAsync(borrowed.WorkflowExecutionId, cancellationToken);
+            if (loaded is null)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.NotFound, null);
+
+            var existing = loaded.State;
+            var highestToken = ReadHighestIssuedToken(existing);
+            if (!Matches(existing.ExecutionLease, borrowed))
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Stale, highestToken);
+
+            var nextToken = checked(highestToken + 1);
+            var left = new RuntimeExecutionLease(
+                leaseId: borrowed.LeaseId,
+                workflowExecutionId: borrowed.WorkflowExecutionId,
+                ownerId: borrowed.OwnerId,
+                acquiredAt: borrowed.AcquiredAt,
+                // A lease cannot expire before it was acquired. One tick after is "already expired" to every reader.
+                expiresAt: ownersExpiry > borrowed.AcquiredAt ? ownersExpiry : borrowed.AcquiredAt.AddTicks(1),
+                fencingToken: nextToken,
+                metadata: existing.ExecutionLease!.Metadata);
+            var state = NewOwnershipState(borrowed.WorkflowExecutionId, existing, left, existing.Heartbeat, nextToken);
+            var result = await _operationalStateStore.TrySaveAsync(state, loaded.Revision, cancellationToken);
+            if (result.Succeeded)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Applied, nextToken);
+            if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
+                not ExecutionLivenessStateWriteStatus.NotFound)
+            {
+                throw new InvalidOperationException($"Unsupported ownership return write outcome '{result.Status}'.");
+            }
+        }
+    }
+
+    private async ValueTask<ExecutionLeaseBorrow> AcquireAsync(
+        string workflowExecutionId,
+        bool borrow,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -65,19 +138,26 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             var nextToken = checked(ReadHighestIssuedToken(existing) + 1);
             var now = _timeProvider.GetUtcNow();
 
+            // Read from the revision the write below is conditioned on, so it is the lease this acquisition replaces.
+            var ownersExpiry = borrow ? FindOwnersLeaseExpiry(existing) : null;
             var lease = new RuntimeExecutionLease(
-                leaseId: ShortIdentityGenerator.Generate(now),
+                leaseId: RuntimeExecutionIdGenerator.NewId(now),
                 workflowExecutionId: workflowExecutionId,
                 ownerId: _options.OwnerId,
                 acquiredAt: now,
                 expiresAt: now + _options.LeaseDuration,
-                fencingToken: nextToken);
+                fencingToken: nextToken,
+                metadata: !borrow ? null
+                    : ownersExpiry is { } expiry ? BorrowedLeaseMark.ForOwner(expiry)
+                    : BorrowedLeaseMark.ForNoOwner());
 
-            var heartbeat = NewHeartbeat(workflowExecutionId, lease, now);
+            // A lease that stands in for an owner leaves the owner's heartbeat on the record. That heartbeat is what
+            // still lists the run under the owner, for host reclaim and for the migration quiescence probe.
+            var heartbeat = ownersExpiry is null ? NewHeartbeat(workflowExecutionId, lease, now) : existing!.Heartbeat;
             var state = NewOwnershipState(workflowExecutionId, existing, lease, heartbeat, nextToken);
             var result = await _operationalStateStore.TrySaveAsync(state, loaded?.Revision ?? 0, cancellationToken);
             if (result.Succeeded)
-                return lease;
+                return new ExecutionLeaseBorrow(lease, ownersExpiry);
             if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
                 not ExecutionLivenessStateWriteStatus.NotFound)
             {
@@ -113,9 +193,13 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
                 ownerId: lease.OwnerId,
                 acquiredAt: lease.AcquiredAt,
                 expiresAt: now + _options.LeaseDuration,
-                fencingToken: lease.FencingToken);
+                fencingToken: lease.FencingToken,
+                metadata: existing.ExecutionLease.Metadata);
 
-            var heartbeat = NewHeartbeat(lease.WorkflowExecutionId, refreshedLease, now);
+            // Renewing a lease that stands in for an owner keeps the owner's heartbeat, as borrowing it did.
+            var heartbeat = BorrowedLeaseMark.StandsInForAnOwner(refreshedLease)
+                ? existing.Heartbeat
+                : NewHeartbeat(lease.WorkflowExecutionId, refreshedLease, now);
             var state = NewOwnershipState(lease.WorkflowExecutionId, existing, refreshedLease, heartbeat, highestToken);
             var result = await _operationalStateStore.TrySaveAsync(state, loaded.Revision, cancellationToken);
             if (result.Succeeded)
@@ -203,7 +287,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
 
     private RuntimeHeartbeat NewHeartbeat(string workflowExecutionId, RuntimeExecutionLease lease, DateTimeOffset now) =>
         new(
-            heartbeatId: ShortIdentityGenerator.Generate(now),
+            heartbeatId: RuntimeExecutionIdGenerator.NewId(now),
             workflowExecutionId: workflowExecutionId,
             ownerId: lease.OwnerId,
             leaseId: lease.LeaseId,
@@ -261,6 +345,14 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
         return true;
     }
+
+    // When the lease of the owner a borrower finds on the record expires. A lease borrowed from no owner records no
+    // owner. A lease that stands in for an owner carries that owner's expiry, so a second borrower leaves the same
+    // expiry as the first would have, whether the first is still running, has returned, or stopped.
+    private static DateTimeOffset? FindOwnersLeaseExpiry(ExecutionLivenessState? existing) =>
+        existing?.ExecutionLease is not { } lease || BorrowedLeaseMark.IsFromNoOwner(lease) ? null
+        : BorrowedLeaseMark.StandsInForAnOwner(lease) ? BorrowedLeaseMark.ReadOwnersLeaseExpiry(lease)
+        : lease.ExpiresAt;
 
     private static bool Matches(RuntimeExecutionLease? current, RuntimeExecutionLease presented) =>
         current is not null &&

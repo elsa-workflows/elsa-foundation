@@ -286,6 +286,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("('[]')");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .HasColumnType("varbinary(16)");
@@ -800,6 +806,12 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ActivityPresentation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("('[]')");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()

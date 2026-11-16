@@ -1,6 +1,6 @@
 namespace Elsa.Secrets.Core.Models;
 
-/// <summary>Portable persistence bounds for normalized secret identities.</summary>
+/// <summary>Portable persistence bounds for case-preserving secret names and their normalized identities.</summary>
 public static class SecretNameConstraints
 {
     public const int MaximumLength = 256;
@@ -25,11 +25,12 @@ public static class SecretNameConstraints
 
         if (name.Any(character => character is not (
                 >= 'a' and <= 'z' or
+                >= 'A' and <= 'Z' or
                 >= '0' and <= '9' or
                 '.' or '-' or '_' or ':')))
         {
             throw new ArgumentException(
-                "A persisted secret name must already be normalized and contain only letters, numbers, dot, dash, underscore, and colon.",
+                "A persisted secret name must be trimmed and contain only letters, numbers, dot, dash, underscore, and colon.",
                 nameof(name));
         }
     }

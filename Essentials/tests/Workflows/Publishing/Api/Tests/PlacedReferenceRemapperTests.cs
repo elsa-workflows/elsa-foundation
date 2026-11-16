@@ -54,6 +54,19 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     [Fact]
+    public void An_activity_result_without_a_scope_follows_the_placement_and_still_declares_none()
+    {
+        var node = NodeWith(Binding(
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("compute", "result", producerScopeId: null)));
+
+        var result = PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope).InputBindings["value"].ActivityResult!;
+
+        Assert.Equal("node-compute", result.ProducerExecutableNodeId);
+        Assert.Null(result.ProducerScopeId);
+    }
+
+    [Fact]
     public void Expression_parameters_follow_the_placement_and_keep_the_rest_of_the_expression()
     {
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)
@@ -103,6 +116,87 @@ public sealed class PlacedReferenceRemapperTests
     public void A_node_without_references_to_remap_is_returned_unchanged()
     {
         var node = NodeWith(Binding(RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("a")));
+
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
+    }
+
+    /// <summary>
+    /// A request member read is not remapped yet, so the remapper refuses one rather than return it as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
+    public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
+    {
+        var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, source, selection,
+            workflowRequest: source == RuntimeInputBindingSource.WorkflowRequestMember ? new RuntimeWorkflowRequestReference("customer") : null,
+            variable: source == RuntimeInputBindingSource.VariableMember ? new RuntimeVariableReference("total", "box") : null,
+            activityResult: source == RuntimeInputBindingSource.ActivityResultMember
+                ? new RuntimeActivityResultReference("compute", "$result", producerScopeId: null)
+                : null);
+
+        var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
+
+        Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("box", "node-box")]
+    [InlineData("workflow", GraphScope)]
+    [InlineData("activity-graph", GraphScope)]
+    public void A_variable_member_read_moves_with_its_scope_and_keeps_its_selection(string scope, string placedScope)
+    {
+        var selection = new RuntimeReadSelection(1, ["address", "a.b", ""], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableMember, selection, variable: new RuntimeVariableReference("total", scope),
+            metadata: new Dictionary<string, string> { ["input.meta"] = "kept" });
+
+        var remapped = PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope).InputBindings["value"];
+
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, remapped.Source);
+        Assert.Equal(("total", placedScope), (remapped.Variable!.VariableKey, remapped.Variable.DeclaringScopeId));
+        Assert.Same(selection, remapped.Selection);
+        Assert.Equal("kept", remapped.Metadata["input.meta"]);
+    }
+
+    [Fact]
+    public void A_variable_member_read_of_a_scope_outside_the_placement_is_returned_unchanged()
+    {
+        var node = NodeWith(new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableMember, new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit),
+            variable: new RuntimeVariableReference("total", "elsewhere")));
+
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
+    }
+
+    [Fact]
+    public void A_result_member_read_moves_with_its_producer_and_keeps_its_selection()
+    {
+        var selection = new RuntimeReadSelection(1, ["address", "a.b", ""], RuntimeReadSelectionMode.Known, new ValueTypeDescriptor("String"),
+            mayBeAbsent: true, mayBeNull: false, ValueRepresentation.TextValue, "elsa.activity-value-json/1");
+        var plan = ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, selection,
+            activityResult: new RuntimeActivityResultReference("compute", "$result", producerScopeId: null, isOptional: true),
+            metadata: new Dictionary<string, string> { ["input.meta"] = "kept" }, conversionPlan: plan);
+
+        var remapped = PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope).InputBindings["value"];
+
+        Assert.Equal(RuntimeInputBindingSource.ActivityResultMember, remapped.Source);
+        Assert.Equal("node-compute", remapped.ActivityResult!.ProducerExecutableNodeId);
+        Assert.Null(remapped.ActivityResult.ProducerScopeId);
+        Assert.True(remapped.ActivityResult.IsOptional);
+        Assert.Same(selection, remapped.Selection);
+        Assert.Same(plan, remapped.ConversionPlan);
+        Assert.Equal("kept", remapped.Metadata["input.meta"]);
+    }
+
+    [Fact]
+    public void A_result_member_read_of_a_producer_outside_the_placement_is_returned_unchanged()
+    {
+        var node = NodeWith(new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new RuntimeActivityResultReference("elsewhere", "$result", producerScopeId: null)));
 
         Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
     }

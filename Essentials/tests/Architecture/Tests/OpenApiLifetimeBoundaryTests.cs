@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -40,7 +40,14 @@ public sealed class OpenApiLifetimeBoundaryTests
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Activities.Design.Api")
             .ToArray();
 
-        Assert.Equal(38, endpoints.Length);
+        Assert.Equal(39, endpoints.Length);
+        var dataContext = Assert.Single(endpoints.OfType<RouteEndpoint>(), endpoint => endpoint.RoutePattern.RawText ==
+            "/design/activities/drafts/{draftId}/activity-data/context");
+        Assert.Equal([HttpMethods.Post], dataContext.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
+        Assert.Equal(typeof(Elsa.Activities.Design.Api.Models.ActivityDataSelectionContextRequest),
+            Assert.Single(dataContext.Metadata.GetOrderedMetadata<IAcceptsMetadata>()).RequestType);
+        Assert.Contains(dataContext.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata =>
+            metadata.StatusCode == 200 && metadata.Type == typeof(Elsa.Activities.Design.Api.Models.ActivityDataSelectionContextResponse));
         Assert.All(endpoints, endpoint =>
         {
             var marker = Assert.Single(endpoint.Metadata.OfType<EndpointLifetimeMetadata>());
@@ -154,7 +161,7 @@ public sealed class OpenApiLifetimeBoundaryTests
     public void Dynamic_api_explorer_refresh_registration_is_idempotent_and_null_guarded()
     {
         Assert.Throws<ArgumentNullException>(() => new EndpointDataSourceActionDescriptorChangeProvider(null!));
-        Assert.Throws<ArgumentNullException>(() => NativeEndpointsServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh(null!));
+        Assert.Throws<ArgumentNullException>(() => MinimalEndpointsServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh(null!));
 
         var source = new TestEndpointDataSource();
         var services = new ServiceCollection();
@@ -273,7 +280,7 @@ public sealed class OpenApiLifetimeBoundaryTests
 
     /// <remarks>
     /// Ownership is Elsa's vocabulary, so once the unload-safety validator moved into
-    /// NativeEndpoints the invariant moved with it into <see cref="EndpointOwnershipValidator"/>
+    /// MinimalEndpoints the invariant moved with it into <see cref="EndpointOwnershipValidator"/>
     /// rather than out of the tree. It is still enforced as a final convention at mapping time, so
     /// an unowned endpoint still cannot reach the manifest.
     /// </remarks>

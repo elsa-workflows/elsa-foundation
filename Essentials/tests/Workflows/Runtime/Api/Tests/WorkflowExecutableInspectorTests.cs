@@ -33,6 +33,22 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Runtime_inspection_keeps_every_immutable_action_outcome_without_an_authoring_catalog()
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { });
+        var contract = new ActivityContract("Elsa.CreateUserTask", "1.0.0", "test", descriptor, [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Approve", "Reject", "Request More Info", "Unmatched"], new ActivityActivationRequirement("test", "Elsa.CreateUserTask"));
+        var root = new ExecutableNode("review", "review", "Elsa.CreateUserTask", "1.0.0",
+            new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptor),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(), activityContract: contract);
+        await _executableStore.SaveAsync(Executable(_now, root));
+        await _referenceStore.SaveAsync(Reference("published", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+        var details = await _inspector.GetAsync("artifact-1");
+        Assert.Equal(contract.Outcomes, details!.RootActivity.Outcomes);
+    }
+
+    [Fact]
     public void Runtime_owns_the_self_contained_executable_inspector()
     {
         var inspector = RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.Services.WorkflowExecutableInspector");
@@ -606,6 +622,27 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Null(compiled.Binding.ConversionPlan);
         Assert.Null(structural.Summary);
         Assert.Null(structural.Secret);
+    }
+
+    /// <summary>
+    /// A member read (#4078) is shown as its source followed by each exact member, with its selection, so inspection never
+    /// presents it as a read of the whole source.
+    /// </summary>
+    [Fact]
+    public async Task InputSourcesShowAMemberReadByItsSourceAndExactMemberPath()
+    {
+        var selection = new RuntimeReadSelection(1, ["customer", "a.b"], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("text", StringType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, selection,
+            activityResult: new RuntimeActivityResultReference("producer", "$result", producerScopeId: null));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["text"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-member", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-member"))!.CompiledInputs);
+
+        Assert.Equal(nameof(RuntimeInputBindingSource.ActivityResultMember), compiled.Binding.Source);
+        Assert.Equal("$result → \"customer\" → \"a.b\"", compiled.Binding.Summary);
+        Assert.Same(selection, compiled.Binding.Selection);
     }
 
     [Fact]

@@ -11,7 +11,7 @@ using Elsa.Workflows.Publishing.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -50,6 +50,12 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
     public async ValueTask<bool> TryWriteAsync(HttpContext context, Exception exception)
     {
         var metadata = context.GetEndpoint()?.Metadata;
+        if (ActivityDataSelectionPublicationProblems.TryFind(exception, out var sourceRefusal))
+        {
+            await ActivityPublishingProblems.WriteAsync(context.Response,
+                ActivityDataSelectionPublicationProblems.Create(sourceRefusal, context), context.RequestAborted);
+            return true;
+        }
         if (metadata?.GetMetadata<ActivityProblemEndpointMetadata>() is { } activity)
         {
             if (exception is ActivityPublicationRejectedException rejected)

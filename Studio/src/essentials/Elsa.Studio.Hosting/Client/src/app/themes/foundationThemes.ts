@@ -1,5 +1,6 @@
 import type { StudioThemeLayout } from "../../sdk";
 import type { StudioThemeDefinition, ThemeModeDefinition, ThemeTypography } from "./presets";
+import { minimalStudioPresets } from "./minimalPresets";
 
 /*
  * The signature Elsa Studio 4 themes. Each defines all four modes — Light, Dark, Dim and High
@@ -176,7 +177,7 @@ const classicEmerald = (lightness: number, chroma = 0.13) => oklch(lightness, ch
 const classic = definition(
   "classic",
   "Classic",
-  "The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards and Geist. The Elsa Studio 4 default.",
+  "The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards and Geist. Available as an original preset.",
   geistTypography,
   { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "14px" },
   "classic",
@@ -203,6 +204,35 @@ const classic = definition(
       overrides: { success: classicEmerald(0.8, 0.14), successForeground: oklch(0.18, 0.03, 163) }
     }),
     highContrast: highContrast(oklch(0.86, 0.16, skyHue), skyHue, { success: classicEmerald(0.86, 0.19) })
+  }
+);
+
+const linen = definition(
+  "linen", "Linen", "Warm porcelain, charcoal navigation and a restrained copper accent.",
+  { sans: `"Manrope Variable", "Manrope", ${sansFallback}`, mono: geistTypography.mono },
+  { radiusSm: "9px", radius: "11px", radiusMd: "16px", radiusLg: "20px", radiusXl: "24px" },
+  "classic",
+  {
+    light: mode({
+      scheme: "light", hue: 85, chroma: 0.009,
+      background: 0.957, card: 0.995, muted: 0.94, border: 0.88, input: 0.97, sidebar: 0.26, foreground: 0.31, mutedForeground: 0.48,
+      primary: oklch(0.50, 0.13, 36), primaryForeground: white,
+      wash: oklch(0.94, 0.022, 65), activeForeground: oklch(0.43, 0.1, 36),
+      overrides: { sidebarForeground: oklch(0.95, 0.009, 85), sidebarActive: oklch(0.36, 0.018, 65), sidebarActiveForeground: white }
+    }),
+    dark: mode({
+      scheme: "dark", hue: 85, chroma: 0.008,
+      background: 0.19, card: 0.235, muted: 0.27, border: 0.36, input: 0.22, sidebar: 0.26, foreground: 0.95, mutedForeground: 0.76,
+      primary: oklch(0.76, 0.09, 47), primaryForeground: oklch(0.2, 0.02, 36),
+      wash: oklch(0.32, 0.03, 55), activeForeground: oklch(0.9, 0.045, 55)
+    }),
+    dim: mode({
+      scheme: "dim", hue: 85, chroma: 0.012,
+      background: 0.29, card: 0.335, muted: 0.375, border: 0.44, input: 0.31, sidebar: 0.245, foreground: 0.96, mutedForeground: 0.82,
+      primary: oklch(0.8, 0.09, 50), primaryForeground: oklch(0.22, 0.02, 40),
+      wash: oklch(0.4, 0.035, 55), activeForeground: oklch(0.94, 0.025, 60)
+    }),
+    highContrast: highContrast(oklch(0.87, 0.1, 65), 65)
   }
 );
 
@@ -307,7 +337,7 @@ const atelierSans = `"Instrument Sans Variable", "Instrument Sans", ${sansFallba
 
 const atelier = definition(
   "atelier",
-  "Atelier",
+  "Atelier Original",
   "Warm, editorial calm: paper neutrals, serif titles and a plum accent.",
   {
     sans: atelierSans,
@@ -467,6 +497,47 @@ const dusk = definition(
   }
 );
 
-export const foundationThemeIds = ["classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+/** Neutral actions and surfaces; the small focus/selection mark carries the accent. */
+function minimalMode(scheme: "light" | "dark" | "dim", id: string): ThemeModeDefinition {
+  const light = scheme === "light";
+  const dim = scheme === "dim";
+  const graphite = id === "builtin:graphite";
+  const contrastNav = light && id === "builtin:atelier";
+  const hue = id === "builtin:porcelain" ? 240 : 150;
+  const foreground = light ? 0.25 : 0.95;
+  const sidebar = contrastNav ? 0.28 : light ? 0.955 : dim ? 0.26 : 0.205;
+  return mode({
+    scheme, hue: 150, chroma: 0.003,
+    background: light ? 0.98 : dim ? 0.32 : graphite ? 0.26 : 0.235,
+    card: light ? 0.998 : dim ? 0.36 : graphite ? 0.305 : 0.285,
+    muted: light ? 0.95 : dim ? 0.39 : 0.335,
+    border: light ? 0.88 : dim ? 0.49 : 0.425,
+    input: light ? 1 : dim ? 0.34 : 0.29,
+    sidebar, foreground, mutedForeground: light ? 0.49 : dim ? 0.81 : 0.76,
+    primary: oklch(light ? 0.28 : 0.91, 0.005, 150),
+    primaryForeground: oklch(light ? 0.99 : 0.22, 0.003, 150),
+    wash: oklch(light ? 0.945 : dim ? 0.405 : 0.35, 0.003, 150),
+    activeForeground: oklch(foreground, 0.003, 150),
+    overrides: {
+      ring: oklch(light ? 0.52 : 0.79, 0.035, hue),
+      sidebarForeground: oklch(contrastNav ? 0.95 : foreground, 0.003, 150),
+      sidebarActive: oklch(contrastNav ? 0.36 : light ? 0.90 : 0.31, 0.004, 150),
+      sidebarActiveForeground: oklch(contrastNav ? 0.99 : foreground, 0.003, 150)
+    }
+  });
+}
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];
+const minimalThemes = minimalStudioPresets.map(preset => ({
+  ...definition(preset.id, preset.name, preset.description,
+    { sans: `"Manrope Variable", "Manrope", ${sansFallback}`, mono: geistTypography.mono },
+    { radiusSm: "6px", radius: "8px", radiusMd: "12px", radiusLg: "16px", radiusXl: "20px" },
+    "classic", {
+      light: minimalMode("light", preset.id), dark: minimalMode("dark", preset.id),
+      dim: minimalMode("dim", preset.id), highContrast: highContrast(oklch(0.9, 0.035, preset.id === "builtin:porcelain" ? 240 : 150), 150)
+    }),
+  workspaceStyle: "minimal" as const
+}));
+
+export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];

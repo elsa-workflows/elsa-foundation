@@ -30,6 +30,22 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     public async Task DisposeAsync() => await _fixture.DisposeAsync();
 
     [Fact]
+    public async Task SyncEndpoint_NullBody_IsAnOptionalResultProjection_AndReturnsAnEmptyResponse()
+    {
+        await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
+            artifactId: "artifact-sync-null", path: "sync/null", method: "POST",
+            resultValueId: "sync-null-result", statusCode: 200, body: null, contentType: "text/plain");
+
+        var response = await _fixture.Client.PostAsync($"{BasePath}sync/null",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+        var artifact = await ReadArtifactForSingleRunAsync();
+        Assert.Equal(JsonValueKind.Null, artifact.GetProperty("body").ValueKind);
+    }
+
+    [Fact]
     public async Task SyncEndpoint_WorkflowWritesResponse_SameExchangeReturnsAuthoredResponse_AndRecordsTheDurableArtifact()
     {
         // A sync endpoint whose workflow writes a custom status/body/content-type/header returns THAT

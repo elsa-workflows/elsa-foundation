@@ -14,9 +14,18 @@ internal sealed class StudioFeatureGuard(IRuntimeFeatureCatalog catalog) : IFeat
             refusals.Add(new("StudioApi", "The selected Studio shell must keep StudioApi enabled."));
         var disabled = context.Request.Features.Where(feature => !feature.Enabled).Select(feature => feature.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var snapshot = await catalog.GetSnapshotAsync(cancellationToken);
+        var descriptors = snapshot.FeatureDescriptors.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var resolver = new FeatureDependencyResolver();
         foreach (var feature in snapshot.FeatureDescriptors.Where(feature => enabled.Contains(feature.Id)))
+        {
             foreach (var dependency in feature.Dependencies.Where(disabled.Contains))
                 refusals.Add(new(feature.Id, $"Feature '{feature.Id}' requires '{dependency}', which this request explicitly disables."));
+            try { _ = resolver.GetOrderedFeatures([feature.Id], descriptors); }
+            catch (Exception error) when (error is InvalidOperationException or FeatureNotFoundException)
+            {
+                refusals.Add(new(feature.Id, $"Feature '{feature.Id}' has an invalid dependency graph: {error.Message}"));
+            }
+        }
         return new(refusals);
     }
 }

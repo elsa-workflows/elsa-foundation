@@ -42,8 +42,16 @@ internal static class EtlConnectorRecordCodec
         EtlRuntimeRecordCodec.ValidateInvocation(invocation);
         if (invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)
             throw new ArgumentException("Connector storage requires a connector-format artifact.");
-        return EtlArtifactV2Json.Read(invocation.Artifact.Pipeline);
+        var pipeline = EtlArtifactV2Json.Read(invocation.Artifact.Pipeline);
+        // A continuous shard's retained window bounds its pages instead (spec 1196), so every page-sequence check in
+        // this store sees no authored limit. The pinned artifact is unchanged; this copy is never written back.
+        return pipeline.Continuous is null
+            ? pipeline
+            : pipeline with { Http = pipeline.Http with { MaxPagesPerPartition = ContinuousPageSequenceBound } };
     }
+
+    /// <summary>The page-sequence bound of a continuous shard: its lifetime page count, not its retained pages.</summary>
+    internal const int ContinuousPageSequenceBound = int.MaxValue;
 
     internal static string ValidateBindings(EtlPipelineV2 pipeline, EtlConnectorRunBindings bindings, int maximumPartitions)
     {
@@ -62,14 +70,30 @@ internal static class EtlConnectorRecordCodec
             pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
             pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes || !EtlHttpRetryPolicy.IsValid(pipeline.Http))
             throw new ArgumentException("The connector storage limits are invalid.");
+        if (EtlContinuousRunPolicy.FindViolation(pipeline) is not null)
+            throw new ArgumentException("The continuous run policy is unsupported.");
         switch (pipeline.Source)
         {
             case EtlCsvSource csv:
-                Binding(bindings.Source, EtlConnectorKind.Csv, csv.Binding);
+                Binding(bindings.Source, EtlConnectorKind.Csv, csv.Binding, isInput: true);
                 if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A CSV source cannot have HTTP shards.");
                 break;
+            case EtlJsonlSource jsonl:
+                Binding(bindings.Source, EtlConnectorKind.Jsonl, jsonl.Binding, isInput: true);
+                if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A JSON Lines source cannot have HTTP shards.");
+                break;
+            case EtlSqlSource sql:
+                // Its content is unknown until preparation reads it, so the pin carries no digest (spec 1198).
+                Binding(bindings.Source, EtlConnectorKind.Sql, sql.Binding, isInput: false);
+                if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A SQL source cannot have HTTP shards.");
+                break;
+            case EtlRabbitMqSource queue:
+                // A queue's messages are unknown until preparation receives them, so the pin carries no digest (spec 1201).
+                Binding(bindings.Source, EtlConnectorKind.RabbitMq, queue.Binding, isInput: false);
+                if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A RabbitMQ source cannot have HTTP shards.");
+                break;
             case EtlHttpJsonSource http:
-                Binding(bindings.Source, EtlConnectorKind.Http, http.Binding);
+                Binding(bindings.Source, EtlConnectorKind.Http, http.Binding, isInput: false);
                 if (bindings.HttpShardIds.Count == 0 || bindings.HttpShardIds.Count > limits.MaxPartitions ||
                     bindings.HttpShardIds.Distinct(StringComparer.Ordinal).Count() != bindings.HttpShardIds.Count)
                     throw new ArgumentException("HTTP shard identities must be nonempty, bounded and unique.");
@@ -77,7 +101,7 @@ internal static class EtlConnectorRecordCodec
                 break;
             default: throw new ArgumentException("The connector source is unsupported.");
         }
-        if (pipeline.Lookup is { } lookup) Binding(bindings.Lookup, EtlConnectorKind.Csv, lookup.Binding);
+        if (pipeline.Lookup is { } lookup) Binding(bindings.Lookup, EtlConnectorKind.Csv, lookup.Binding, isInput: true);
         else if (bindings.Lookup is not null) throw new ArgumentException("The connector has no declared lookup.");
         Destination(bindings.Main, pipeline.Routes.Main);
         Destination(bindings.Errors, pipeline.Routes.Errors);
@@ -88,20 +112,24 @@ internal static class EtlConnectorRecordCodec
     {
         ArgumentNullException.ThrowIfNull(prepared);
         long retained = 0;
-        if (pipeline.Source is EtlCsvSource)
+        if (pipeline.Source is EtlCsvSource or EtlJsonlSource or EtlSqlSource or EtlRabbitMqSource)
         {
-            var file = prepared.File ?? throw new ArgumentException("The CSV snapshot is missing.");
+            var file = prepared.File ?? throw new ArgumentException("The file snapshot is missing.");
             EtlRuntimeRecordCodec.ValidateObject(file.Source, "source");
             EtlRuntimeRecordCodec.ValidateObject(file.Index, "index");
+            // A CSV index entry 0 is its header; a JSON Lines entry 0 is a sentinel, so an empty file still has one entry.
+            // A SQL or RabbitMQ snapshot is JSON Lines.
+            var indexBoundBytes = pipeline.Source is EtlCsvSource ? file.Source.ByteLength : checked(file.Source.ByteLength + 1);
             if (file.RecordCount < 0 || file.RecordCount == long.MaxValue ||
                 file.Source.ByteLength > pipeline.Limits.MaxSnapshotBytes ||
                 file.Index.ByteLength != checked((file.RecordCount + 1) * 24) ||
-                file.Index.ByteLength > checked(file.Source.ByteLength * 24) ||
-                file.Source.ContentHash != bindings.Source.Revision.ExpectedSha256)
-                throw new ArgumentException("The CSV preparation does not match its pinned input and limits.");
+                file.Index.ByteLength > checked(indexBoundBytes * 24) ||
+                // A SQL or RabbitMQ snapshot is anchored on its own recorded hash, which the batch builder verifies.
+                pipeline.Source is not (EtlSqlSource or EtlRabbitMqSource) && file.Source.ContentHash != bindings.Source.Revision.ExpectedSha256)
+                throw new ArgumentException("The file preparation does not match its pinned input and limits.");
             retained = checked(file.Source.ByteLength + file.Index.ByteLength);
         }
-        else if (prepared.File is not null) throw new ArgumentException("An HTTP source cannot have a CSV snapshot.");
+        else if (prepared.File is not null) throw new ArgumentException("An HTTP source cannot have a file snapshot.");
         if (pipeline.Lookup is not null)
         {
             var lookup = prepared.Lookup ?? throw new ArgumentException("The lookup snapshot is missing.");
@@ -168,13 +196,17 @@ internal static class EtlConnectorRecordCodec
     {
         switch (destination)
         {
-            case EtlJsonlDestination file: Binding(binding, EtlConnectorKind.Jsonl, file.Binding); break;
-            case EtlHttpDestination http: Binding(binding, EtlConnectorKind.Http, http.Binding); break;
+            case EtlJsonlDestination file: Binding(binding, EtlConnectorKind.Jsonl, file.Binding, isInput: false); break;
+            case EtlHttpDestination http: Binding(binding, EtlConnectorKind.Http, http.Binding, isInput: false); break;
+            case EtlCsvDestination csv: Binding(binding, EtlConnectorKind.Csv, csv.Binding, isInput: false); break;
+            case EtlSqlDestination sql: Binding(binding, EtlConnectorKind.Sql, sql.Binding, isInput: false); break;
+            case EtlRabbitMqDestination rabbitMq: Binding(binding, EtlConnectorKind.RabbitMq, rabbitMq.Binding, isInput: false); break;
             default: throw new ArgumentException("The connector destination is unsupported.");
         }
     }
 
-    private static void Binding(EtlConnectorBindingRevision? binding, EtlConnectorKind kind, string alias)
+    /// <remarks>File inputs are digest-pinned whatever their format; outputs, HTTP and SQL sources carry no digest.</remarks>
+    private static void Binding(EtlConnectorBindingRevision? binding, EtlConnectorKind kind, string alias, bool isInput)
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(binding.Revision);
@@ -182,7 +214,7 @@ internal static class EtlConnectorRecordCodec
         EtlRuntimeRecordCodec.ValidateIdentity(revision.Revision, "binding revision");
         EtlRuntimeRecordCodec.ValidateIdentity(revision.Handle, "binding handle");
         if (binding.Kind != kind || revision.Alias != alias ||
-            (kind == EtlConnectorKind.Csv ? !EtlRuntimeRecordCodec.IsSha256(revision.ExpectedSha256) : revision.ExpectedSha256 is not null))
+            (isInput && kind != EtlConnectorKind.Http ? !EtlRuntimeRecordCodec.IsSha256(revision.ExpectedSha256) : revision.ExpectedSha256 is not null))
             throw new ArgumentException("The connector binding does not match the published role and alias.");
     }
 }

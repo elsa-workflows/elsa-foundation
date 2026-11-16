@@ -1,3 +1,4 @@
+import type { ActivityPaletteHints } from "./graph-authoring/activityPaletteContext";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
@@ -48,6 +49,9 @@ export interface WorkflowDefinitionSummary {
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
   folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+  tags?: { tagId: string; valueId?: string | null }[];
+  favorite?: boolean;
+  permissions?: { canAssignTags?: boolean; canManageFolders?: boolean; canManageTags?: boolean; canShareViews?: boolean };
 }
 
 export interface WorkflowFolderBreadcrumbItem {
@@ -62,6 +66,7 @@ export interface WorkflowFolder {
   normalizedName: string;
   createdAt: string;
   lastModifiedAt: string;
+  revision?: string;
 }
 
 export interface WorkflowFolderDetail {
@@ -100,6 +105,11 @@ export interface WorkflowDraft {
   layout: DesignMetadataRecord[];
   activityPresentation?: ActivityPresentationRecord[];
   validationErrors: ValidationError[];
+  /**
+   * The server's identity of this saved draft, returned by the draft endpoints. Only the copy the server acknowledged
+   * is a valid request base; a live draft edited since keeps an older value.
+   */
+  authoringRevision?: string;
 }
 
 export interface IncidentStrategyReference {
@@ -205,6 +215,8 @@ export interface ActivityCatalogResponse {
 export interface ActivityCatalogItem {
   activityVersionId: string;
   activityTypeKey: string;
+  /** The runtime type a compiled node carries when the CLR activity declares one (e.g. `Elsa.HttpEndpoint`); absent otherwise. */
+  runtimeActivityType?: string | null;
   version: string;
   category: string;
   displayName: string;
@@ -216,6 +228,7 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
   ports?: unknown[];
@@ -225,6 +238,8 @@ export interface ActivityCatalogItem {
   // additive). Signals the client to materialize an intrinsic ActivityNode rather than a catalog activity
   // reference; older backends omit it and nothing new is shown. Absent ⇒ an ordinary catalog activity.
   intrinsic?: ActivityAuthoringIntrinsic | null;
+  /** Where the catalog row came from (the API's provenance view): `CLR` or `Json` for a source-owned activity, `ActivityDefinitionDraft` for a design-authored one. */
+  provenance?: { sourceKind?: string | null; sourceId?: string | null; featureId?: string | null } | null;
   /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
@@ -496,6 +511,7 @@ export interface WorkflowOutput {
   description: string;
   category: string;
   [key: string]: unknown;
+  isNullable: boolean;
 }
 
 // A selectable argument element type from the Expressions domain's variable-types capability.
@@ -517,6 +533,7 @@ export interface VariableTypeDescriptorsResponse {
 }
 
 export interface CreateDefinitionRequest {
+  activityPresentation?: ActivityPresentationRecord[];
   name: string;
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;
@@ -558,6 +575,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
@@ -747,6 +765,8 @@ export interface WorkflowExecutableNode {
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+  /** Outcomes pinned in the executable, independent of the current authoring catalog. */
+  outcomes?: string[] | null;
   bpmnStructure?: WorkflowExecutableBpmnStructure | null;
 }
 
@@ -878,8 +898,18 @@ export interface WorkflowInstanceSummary {
   blockingIncidentCount?: number | null;
 }
 
+export interface WorkflowOutputValue {
+  value: unknown;
+  isRedacted: boolean;
+  redactionReason?: string | null;
+  capturedAt: string;
+  captureMode?: string | null;
+}
+
 export interface WorkflowInstanceDetails {
   instance: WorkflowInstanceSummary;
+  /** Missing on older hosts; an empty collection means no captured outputs. */
+  outputs?: Record<string, WorkflowOutputValue>;
   activities: ActivityExecutionStateSummary[];
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;
@@ -1052,6 +1082,7 @@ export interface ActivityExecutionLayoutConnection {
 }
 
 export interface ActivityExecutionLayout {
+  activityPresentation?: WorkflowExecutableActivityPresentation[];
   workflowExecutionId: string;
   activityExecutionId: string;
   artifactId: string;

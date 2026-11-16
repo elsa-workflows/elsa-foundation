@@ -159,7 +159,13 @@ public sealed class SecretInputPathCoverageTests
         var builder = new WorkflowAlterationRuntimeCheckpointStateBuilder(workflow);
         Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)).Apply(builder);
         var successor = Assert.Single(builder.ActivityExecutions, change => change.State.Status == ActivityExecutionStatus.Running).State;
-        Assert.Same(source.InputSnapshot, successor.InputSnapshot);
+        Assert.NotSame(source.InputSnapshot, successor.InputSnapshot);
+        Assert.Equal(successor.InvocationId, successor.InputSnapshot!.InvocationId);
+        Assert.Equal(source.InvocationId, source.InputSnapshot!.InvocationId);
+        Assert.Equal(source.InputSnapshot.ContractFingerprint, successor.InputSnapshot.ContractFingerprint);
+        Assert.Equal(source.InputSnapshot.BindingFingerprint, successor.InputSnapshot.BindingFingerprint);
+        Assert.Equal(source.InputSnapshot.MaterializedAt, successor.InputSnapshot.MaterializedAt);
+        Assert.Equal(source.InputSnapshot.Values, successor.InputSnapshot.Values);
         SecretResolutionTestSupport.AssertSnapshotWithheld(successor);
 
         // Commit the reschedule's activity states, then deliver its continuation through the real scheduler work

@@ -26,6 +26,8 @@ export interface PublicationReviewState {
   phase: PublicationReviewPhase;
   progressStep?: PublicationProgressStep;
   draftSnapshot: WorkflowDraft;
+  /** The history line captured with `draftSnapshot`; its save passes it so batch autosave holds stay exact. */
+  draftLineage?: string[];
   currentVersion: string;
   proposedVersion: string;
   unsavedChangesIncluded: true;
@@ -145,6 +147,25 @@ export function withPublicationWarnings(review: PublicationReviewState, entries:
   const { warnings } = splitPublicationValidations(entries);
   const added = warnings.filter((message, index) => !review.validationWarnings.includes(message) && warnings.indexOf(message) === index);
   return added.length ? { ...review, validationWarnings: [...review.validationWarnings, ...added] } : review;
+}
+
+/** Designer-side Decision (and other contribution) issues that must block Review & publish in Studio. */
+export function withLocalValidationErrors(
+  review: PublicationReviewState,
+  entries: ReadonlyArray<{ message?: string | null }> | null | undefined
+): PublicationReviewState {
+  const added = (entries ?? [])
+    .map(entry => entry.message?.trim())
+    .filter((message): message is string => !!message)
+    .filter((message, index, messages) => !review.validationErrors.includes(message) && messages.indexOf(message) === index);
+  if (!added.length) return review;
+  const validationErrors = [...review.validationErrors, ...added];
+  return {
+    ...review,
+    validationErrors,
+    phase: "validationBlocked",
+    executableStatus: "blocked"
+  };
 }
 
 /**

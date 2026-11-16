@@ -15,6 +15,29 @@ public sealed class BpmnRoundTripTests
     private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
+    [Fact]
+    public void Export_AcceptsStudioIntrinsicAndConversionStrings()
+    {
+        using var document = JsonDocument.Parse("""
+            {
+              "activities": [{
+                "nodeId": "set-variable", "activityVersionId": "elsa.intrinsic.set@1", "outputs": [],
+                "inputs": [{ "referenceKey": "value", "value": { "value": 42, "expressionType": "Literal" }, "conversion": { "mode": "json" } }],
+                "intrinsic": { "kind": "set", "valueType": { "alias": "Int32" }, "variable": { "referenceKey": "counter" } }
+              }],
+              "elements": [{ "elementId": "task", "elementType": "task", "childNodeId": "set-variable", "name": "Set Variable" }]
+            }
+            """);
+        var node = new ActivityNode("process", "bpmn-version", [], [],
+            new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, document.RootElement.Clone()));
+
+        var xml = _exporter.Export(node);
+        var imported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var task = Assert.Single(imported.Elements);
+        Assert.Equal("task", task.ElementId);
+        Assert.Equal("Set Variable", task.Name);
+    }
+
     private static ActivityNode ProcessNode(BpmnAuthoredStructure structure) =>
         new(
             "node-bpmn",

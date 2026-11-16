@@ -129,6 +129,25 @@ internal sealed partial class EtlRuntimeOperations(
         };
     }
 
+    public async Task<EtlRunCompletionView> CompleteAsync(EtlRunRequest request, CancellationToken cancellationToken)
+    {
+        var scope = requestScope.Get();
+        var run = await FindRunAsync(scope, request.Id, cancellationToken);
+        // A v1 file run is never continuous, even on a provider without a connector store; a v2 run needs the store.
+        if (run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)
+            return new("notContinuous");
+        var status = await Required<IEtlConnectorRuntimeStore>().RequestConnectorRunCompletionAsync(scope, run.Invocation.RunId, cancellationToken);
+        return status switch
+        {
+            EtlRunCompletionOutcome.Accepted => new("accepted"),
+            EtlRunCompletionOutcome.AlreadyRequested => new("alreadyRequested"),
+            EtlRunCompletionOutcome.Terminal => new("terminal"),
+            EtlRunCompletionOutcome.NotContinuous => new("notContinuous"),
+            EtlRunCompletionOutcome.NotFound => throw NotFound(),
+            _ => throw ProviderContractError()
+        };
+    }
+
     private async Task<EtlRunView> FindRunAsync(EtlScope scope, string id, CancellationToken cancellationToken) =>
         await Required<IEtlRuntimeStore>().FindRunAsync(scope, id, cancellationToken) ?? throw NotFound();
 

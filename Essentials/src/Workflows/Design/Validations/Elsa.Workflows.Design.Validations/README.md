@@ -16,15 +16,57 @@ Per framework §2.22 — this README documents what the feature registers.
 ## Activation
 
 `WorkflowDesignValidationsFeature : IShellFeature` — named `WorkflowDesignValidations`.
+It declares `DependsOn = Events`. Library/test hosts that call `ConfigureServices` directly must
+also compose `EventsFeature`; the shared analyzer requires the canonical inline publisher.
+
+## Shared activity data analysis
+
+The feature installs one scoped `IActivityDataSelectionAnalyzer` with `TryAddScoped`. Discovery,
+draft diagnostics and headless publication/test-run admission consume the same authority over the
+actual canonical candidate. `ValueFlowValidator` retains separate concurrent-write policy while
+structure handlers own entry/order/join/backedge facts. Providers can contribute their exact closed
+body through `IActivityDataSelectionDocumentProjector`; Graph Design ships that cross-domain projection.
+
+Catalog-backed target analysis publishes `InputConstraintsCollecting` inline (Sequential).
+The single internal `CollectInputConstraints` handler aggregates
+`IActivityInputSourceConstraintProvider` results; the analyzer intersects them with credential and
+connection restrictions before returning target/source facts. Decisions contributes its fixed selector
+rule. Null contributions add nothing; failures propagate. Metadata discovery writes no state and does
+not evaluate a producer or expression. See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for signatures,
+replacement/cardinality rules and source/shape ownership.
+
+The composed `DraftValidating` handler keeps one credential/connection refusal per input and retains
+the existing whole-variable validator's rule ID when the shared analyzer reports the same unresolved
+reference. Direct analysis/publication still receives its complete admission findings; independent
+portable-parameter failures are not collapsed by a blanket path/type deduplication.
 
 ## Settings
 
-`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` property; default `100`).
+`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` and `MemberReads` properties).
 
 - `MaxRecursionDepth` — safety net for the iterative activity-tree walker. Validators that
   recurse through activity-owned structure (required-input, variable-expression
   resolver) stop descending past this depth. Iterative DFS internally, so the .NET call stack
   is never the actual risk — the bound guards against cyclic / malformed Draft data.
+- `MemberReads` — default `false`. Whether a binding may read one member of an activity result
+  (`ActivityResultMember`) or of a variable (`VariableMember`). While it is off the shared analyzer neither
+  offers nor admits one (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template
+  compilation, BPMN publication or import can produce an executable that carries one. With it on, a read inside
+  a reusable activity's body is published untyped and its member is checked when the run reads it, so an
+  explicit conversion on such a read is refused at publication. A variable member read names its variable's
+  declaring scope explicitly, is always published untyped (a variable can hold JSON from any writer), and so
+  refuses an explicit conversion too.
+
+  **Member names are matched exactly.** Each member segment matches the stored member name exactly, case
+  included. A variable seeded from a CLR value when a run starts is stored with its CLR property names, so
+  `CustomerId` reads that member and `customerId` reads it as absent (`VF-SEL-001` when the input needs a
+  value).
+
+  **Upgrade rule.** An executable with a member read cannot be read by a runtime built before member reads
+  existed: it reports the payload as corrupt, and without distributed placement the work item is poisoned and
+  the run blocked. Where several runtimes share one store, upgrade every one of them, then turn `MemberReads`
+  on. With distributed placement an older member does not claim such an execution; it waits for one that can
+  run it.
 
 ## Contributor interfaces registered
 
@@ -103,8 +145,10 @@ declare `DependsOn` on this feature, and so does `Elsa3ImportJsonActivities`. A 
 
 ## Tasks registered
 
-None (no startup / recurring / scheduled tasks). The feature registers one shell initializer, the
-`ICredentialLiteralValidator` composition check above.
+No startup-task, recurring-task or scheduled-task registrations. Two Prepare-phase shell initializers
+validate the final composition once per shell activation: the `ICredentialLiteralValidator` check and
+`DataSelectionAnalyzerCompositionCheck` (exactly one scoped analyzer). Copied shells validate their
+own descriptor inventory. Constraint collection runs on target analysis, not on a timer.
 
 ## Notes
 

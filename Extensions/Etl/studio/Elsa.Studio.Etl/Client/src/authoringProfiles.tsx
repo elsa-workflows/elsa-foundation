@@ -58,7 +58,7 @@ export const fileAuthoringProfile: EtlAuthoringProfile<EtlPipeline, EtlBindingSu
 
 export const connectorAuthoringProfile: EtlAuthoringProfile<EtlPipelineV2, EtlConnectorBindingSummary> = {
   title: "Connector pipelines",
-  description: "Read HTTP JSON or CSV, transform records, and deliver to HTTP or JSONL destinations.",
+  description: "Read HTTP JSON, CSV or JSON Lines, transform records, and deliver to HTTP, JSONL or CSV destinations.",
   createDefault: createDefaultEtlConnectorPipeline,
   Editor: EtlConnectorPipelineEditor,
   api: {

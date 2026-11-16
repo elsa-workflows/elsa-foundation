@@ -259,7 +259,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
     public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var executables = (await _executableStore.ListAllAsync(cancellationToken)).ToArray();
+        var executables = (await LoadRetentionMaterialAsync(cancellationToken)).ToArray();
         var templates = (await _activityTemplateStore.ListAllAsync(cancellationToken)).ToArray();
         HashSet<string> protectedArtifactIds;
         HashSet<string> executionProtectedArtifactIds;
@@ -328,7 +328,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             if (guard is null) continue;
             try
             {
-                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentExecutables = await LoadRetentionMaterialAsync(cancellationToken);
                 var currentRuntimeRoots = await ListRuntimeRootIdsAsync(cancellationToken);
                 if (ResolveProtectedClosure(currentExecutables, currentRuntimeRoots).Contains(reference.ArtifactId)) continue;
                 if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, guard, cancellationToken))
@@ -379,7 +379,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                     continue;
                 }
 
-                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentExecutables = await LoadRetentionMaterialAsync(cancellationToken);
                 var currentTemplates = await _activityTemplateStore.ListAllAsync(cancellationToken);
                 var currentProtectedArtifactIds = await LoadProtectedClosureAsync(currentExecutables, currentTemplates, now, cancellationToken);
                 if (currentProtectedArtifactIds.Contains(artifactId))
@@ -451,14 +451,14 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     private static HashSet<string> ResolveRetainedTemplateIds(
-        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<RetentionMaterial> executables,
         IReadOnlyCollection<ExecutableActivityTemplate> templates,
         HashSet<string> retainedArtifactIds)
     {
         var byId = templates.ToDictionary(template => template.TemplateId, StringComparer.Ordinal);
         var byHash = templates.ToDictionary(template => template.TemplateHash, StringComparer.Ordinal);
         var pending = new Queue<ExecutableActivityTemplateIdentity>();
-        foreach (var executable in executables.Where(item => retainedArtifactIds.Contains(item.Identity.ArtifactId)))
+        foreach (var executable in executables.Where(item => retainedArtifactIds.Contains(item.Identity.ArtifactId) && item.NativeWorkflow is not null).Select(item => item.NativeWorkflow!))
         {
             // Draft wrappers carry this on the artifact; ordinary reusable placements carry it on each
             // boundary node. NodesById is the immutable, fully flattened node snapshot, including nested slots.
@@ -510,7 +510,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     private async ValueTask<HashSet<string>> LoadProtectedClosureAsync(
-        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<RetentionMaterial> executables,
         IReadOnlyCollection<ExecutableActivityTemplate> templates,
         DateTimeOffset now,
         CancellationToken cancellationToken)
@@ -582,7 +582,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     private static HashSet<string> ResolveProtectedClosure(
-        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<RetentionMaterial> executables,
         IEnumerable<string> rootArtifactIds)
     {
         var identitiesById = executables.ToDictionary(executable => executable.Identity.ArtifactId, StringComparer.Ordinal);
@@ -606,8 +606,23 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             roots.Add(executable.Identity);
         }
 
-        return WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables)
-            .Select(executable => executable.Identity.ArtifactId)
-            .ToHashSet(StringComparer.Ordinal);
+        return executables.All(x => x.Snapshot is not null)
+            ? WorkflowExecutableDependencyGraph.ResolveMaterialClosure(roots, executables.Select(x => x.Snapshot!).ToArray())
+                .Select(x => x.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal)
+            : WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables.Select(x => x.NativeWorkflow!).ToArray())
+                .Select(x => x.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
     }
+    private async ValueTask<IReadOnlyCollection<RetentionMaterial>> LoadRetentionMaterialAsync(CancellationToken cancellationToken)
+    {
+        if (_executableStore.SupportsModelMaterial)
+            return (await WorkflowExecutableDependencyGraph.ListMaterialAsync(_executableStore, cancellationToken))
+                .Select(x => new RetentionMaterial(x.Identity, x.CreatedAt, x.NativeWorkflow, x)).ToArray();
+        return (await _executableStore.ListAllAsync(cancellationToken))
+            .Select(x => new RetentionMaterial(x.Identity, x.CreatedAt, x, null)).ToArray();
+    }
+
+    // GC needs a read projection. Legacy native providers need not invent a physical incarnation to supply it.
+    private sealed record RetentionMaterial(WorkflowExecutableIdentity Identity, DateTimeOffset CreatedAt,
+        WorkflowExecutable? NativeWorkflow, RuntimeExecutionMaterial? Snapshot);
+
 }

@@ -245,7 +245,7 @@ public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatt
     }
 }
 
-public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+public sealed class RequirePermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
 {
     public RequirePermissionAttribute(string permission)
     {
@@ -269,7 +269,7 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpo
 /// permission that individually satisfies the requirement, and the applied convention carries the
 /// full any-mode policy plus the security-disposition metadata the endpoint inventory asserts on.
 /// </summary>
-public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
 {
     public RequireAnyPermissionAttribute(params string[] permissions)
     {
@@ -288,7 +288,7 @@ public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEn
 /// the applied convention carries the full all-mode policy plus the security-disposition metadata the endpoint inventory
 /// asserts on.
 /// </summary>
-public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
 {
     public RequireAllPermissionsAttribute(params string[] permissions)
     {
@@ -544,6 +544,32 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
         return ValueTask.FromResult(new ClaimsNormalizationResult(new ClaimsPrincipal(identity), roles, permissions));
     }
 
+    // Case-insensitive, as ClaimsPrincipal.FindAll and FindFirstValue read claim types: an incoming claim that differs
+    // from an internal type only in case would otherwise survive the strip and still be honoured downstream. Spelled
+    // out per type so the architecture boundary scan still sees this reviewed reader compare the permission type.
     private static bool IsInternalIdentityClaim(string claimType) =>
-        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
+        string.Equals(claimType, IdentityClaimTypes.Normalized, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.TenantId, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Provider, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Permission, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Default for hosts whose identity provider cannot re-read a subject's current grants. It refuses every
+/// request, so deferred work that needs a fresh decision fails closed instead of trusting a saved grant.
+/// </summary>
+public sealed class UnsupportedCurrentSubjectPermissionAuthorizer : ICurrentSubjectPermissionAuthorizer
+{
+    public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(
+        CurrentSubjectPermissionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(CurrentSubjectPermissionResult.Unsupported(
+            "The configured identity provider cannot re-evaluate a subject's current permissions."));
+    }
 }

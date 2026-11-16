@@ -13,6 +13,22 @@ afterEach(() => {
 });
 
 describe("secret picker", () => {
+  it("matches existing references case-insensitively and preserves stored spelling when selected", async () => {
+    const onChange = vi.fn();
+    const response = pickerResponse();
+    response.items[0].name = "Payments.Api";
+    const { container } = render({
+      value: { name: "PAYMENTS.API", typeName: "text", scope: "tenant-a" },
+      onChange,
+      postJson: vi.fn(async () => response)
+    });
+    await waitFor(() => container.querySelector("select")?.value === "secret-1");
+    expect(container.textContent).not.toContain("Unavailable");
+    expect(onChange).not.toHaveBeenCalled();
+    container.querySelector("select")!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onChange).toHaveBeenCalledWith({ name: "Payments.Api", typeName: "text", scope: "tenant-a" });
+  });
+
   it("renders allowlisted metadata and serializes only an opaque Secret Reference", async () => {
     const onChange = vi.fn();
     const { container } = render({ onChange, initialFocus: true });

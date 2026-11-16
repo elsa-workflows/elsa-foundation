@@ -131,8 +131,11 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
         var reusable = sourceVersionId == "approval-v1" ? fixture.Reusable : fixture.Rejecting;
         var wrapper = await fixture.PublishAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
 
-        // The approval wrapper passes its request's approve member to the declared input.
-        var run = await Host.RunAsync(wrapper, new JsonObject { ["approve"] = true });
+        // The approval wrapper passes its request's approve member to the declared input. The rejecting reusable declares
+        // no inputs, so its wrapper is started without one: an undeclared input is refused at start (#3728).
+        var run = sourceVersionId == "approval-v1"
+            ? await Host.RunAsync(wrapper, new JsonObject { ["approve"] = true })
+            : await Host.RunAsync(wrapper);
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
@@ -187,8 +190,7 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 /// <summary>
 /// An imported Elsa 3 reusable whose body reads its own input converts, publishes and runs,
 /// reading the value its caller passed. Result reads and captures are converted (mapping tests)
-/// but not run here: any converted RunJavaScript, reusable or not, faults on its default arguments, and its Object
-/// result cannot feed a Boolean input without a conversion.
+/// but not run here: a converted RunJavaScript's Object result cannot feed a Boolean input without a conversion.
 /// </summary>
 public sealed class ImportedReusableValueReadTests
 {

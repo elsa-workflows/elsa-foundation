@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "spec": "1197-etl-sql-destination",
+  "sourceRevision": "a8f339cd2f012a70c817759b024d89aa13f47db5",
+  "workingTreeDirty": true,
+  "workbenchAssemblySha256": "8506a452a398e57c41d8faab24f3da016f6433a2d40f709969c9f29fac92bf79",
+  "hostProcessId": 94735,
+  "cases": {
+    "first": {
+      "definition": "sql-first-688d6ab5",
+      "selection": "etl1:sql-first-688d6ab5:1:c84064164cf7c108083e54668e5eb6211d56e2bc214fb0987207691754174ea0",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 4,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "sql",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 4,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "table": [
+        "1|Ada",
+        "2|Bram",
+        "3|Cleo",
+        "4|Dee"
+      ],
+      "ledgerRowsForRun": 4,
+      "hostPathOrSecretInInspection": false
+    },
+    "second": {
+      "definition": "sql-second-c553a73c",
+      "selection": "etl1:sql-second-c553a73c:1:897f465a6f5b2e4c4e268220f8938bc65ca4ceb6cfee5ce8cf40cea6288c2227",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 3,
+        "acceptedRecords": 3,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "sql",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 3,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "table": [
+        "1|Ada",
+        "2|Bram II",
+        "3|Cleo II",
+        "4|Dee",
+        "5|Eve"
+      ],
+      "ledgerRowsForRun": 3,
+      "hostPathOrSecretInInspection": false
+    }
+  },
+  "baseUrl": "http://127.0.0.1:50569",
+  "catalogSqlBindings": [
+    [
+      "warehouse",
+      "MainOutput",
+      "sql"
+    ]
+  ],
+  "checks": {
+    "catalogListsTheSqlBinding": true,
+    "firstRunInsertedEveryRowThroughDone": true,
+    "secondRunUpdatedAndInsertedThroughDone": true,
+    "oneLedgerRowPerBatch": true,
+    "inspectionShowsTheSqlRoute": true,
+    "noAccountingLeft": true,
+    "noHostPathOrSecretInInspection": true
+  },
+  "passed": true
+}

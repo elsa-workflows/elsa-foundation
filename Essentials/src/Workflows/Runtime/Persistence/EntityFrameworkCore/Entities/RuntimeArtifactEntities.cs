@@ -5,6 +5,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [EfSchemaContentAddressed("Keyed by scope and artifact id, and the artifact id is the hash of the executable's content.")]
 public sealed class WorkflowExecutableEntity
 {
+    public bool IsModelMaterial { get; set; }
     public string Id { get; set; } = null!;
     public string ScopeKey { get; set; } = null!;
     public string ScopeKeyHash { get; set; } = null!;

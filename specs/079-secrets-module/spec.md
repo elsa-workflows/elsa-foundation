@@ -94,7 +94,7 @@ Administrators can distinguish between metadata read, secret management, value u
 ### Functional Requirements
 
 - **FR-001**: The system MUST support named logical secrets that are referenced by immutable technical name.
-- **FR-002**: The system MUST normalize technical names for uniqueness checks and reject case-insensitive or trimmed duplicates.
+- **FR-002**: The system MUST preserve the entered casing of technical names, trim surrounding whitespace, and use a normalized identity for case-insensitive lookup and uniqueness checks. Case-only or trimmed duplicates MUST be rejected within the same tenant.
 - **FR-003**: The system MUST treat the technical name as immutable after creation.
 - **FR-004**: The system MUST separate safe secret metadata from secret value material.
 - **FR-005**: The system MUST provide safe metadata list and detail views that contain no raw value, encrypted payload, external lookup secret, or provider-private material.

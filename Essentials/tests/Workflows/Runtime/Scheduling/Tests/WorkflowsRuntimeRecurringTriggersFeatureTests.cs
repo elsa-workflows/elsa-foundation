@@ -41,6 +41,7 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
         {
             SweepIntervalSeconds = 3,
             MaxBackoffIntervalMinutes = 2,
+            MaxConcurrentDispatches = 3,
             MaxSchedulesPerTick = 42
         }.ConfigureServices(services);
 
@@ -49,6 +50,7 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
         Assert.Equal(TimeSpan.FromSeconds(3), options.SweepInterval);
         Assert.Equal(TimeSpan.FromMinutes(2), options.MaxBackoffInterval);
         Assert.Equal(42, options.MaxSchedulesPerTick);
+        Assert.Equal(3, options.MaxConcurrentDispatches);
     }
 
     [Fact]

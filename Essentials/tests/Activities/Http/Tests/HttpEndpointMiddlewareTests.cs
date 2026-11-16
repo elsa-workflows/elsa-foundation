@@ -182,6 +182,36 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
+    public async Task MatchingRequest_WhoseOnlyStartWasRefusedByItsInputContract_RepliesBadRequest()
+    {
+        // #3728: the route is live, so 404 would be wrong, and the same request would be refused again.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Refused("binding-1", "artifact-1", "runtime.input.missing-required"));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"id":7}""");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MatchingRequest_WithADuplicateBesideARefusedStart_IsNotABadRequest()
+    {
+        // A keyed replay whose first delivery started one workflow must not turn into a client error.
+        var router = new RecordingStimulusRouter(
+            StimulusStartOutcome.SkippedDuplicate("binding-1", "artifact-1"),
+            StimulusStartOutcome.Refused("binding-2", "artifact-2", "runtime.input.missing-required"));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"id":7}""");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.NotEqual(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task MatchingTemplate_WithNoStartedTriggers_RepliesNotFound()
     {
         // The template is in the table (so it resolves and reaches dispatch) but the router starts nothing.

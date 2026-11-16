@@ -35,3 +35,7 @@ public abstract class IconBaseActivity : IconFixtureActivity;
 
 /// <summary>Inherits <c>Boxes</c> from <see cref="IconBaseActivity"/> and declares no icon of its own.</summary>
 public sealed class InheritedIconFixtureActivity : IconBaseActivity;
+
+[ActivityPalette(ContainerModes = ["bpmn"], SlotIds = ["Bpmn.Activities"],
+    AncestorActivityTypes = ["Acme.Owner"], ResourceKinds = ["activity-definition-graph"], Description = "Use in a BPMN scope.")]
+public sealed class PaletteFixtureActivity : IconFixtureActivity;

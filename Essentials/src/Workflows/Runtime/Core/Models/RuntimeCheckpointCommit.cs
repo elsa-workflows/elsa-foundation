@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -14,6 +15,71 @@ public sealed record RuntimeCheckpointCommit(
     IReadOnlyDictionary<string, string> Metadata)
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
+
+    /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelStateChange? ModelState { get; init; }
+
+    /// <summary>The exact model decision authorizing initial native worker admission, checked in the same transaction.</summary>
+    /// <remarks>A refreshed concurrency condition is excluded from logical replay identity; the native state retains its immutable model-work origin.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
+
+    /// <summary>The observed native parent wait that must remain live when its model child is first admitted.</summary>
+    /// <remarks>A concurrency condition, not source authority. Admission preserves the parent bookmark and its generation.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedModelParentWait { get; init; }
+
+    /// <summary>Only a first model decision may depend on another execution's exact native wait.</summary>
+    public void EnsureModelParentAdmissionShape()
+    {
+        if (ExpectedModelParentWait is not { } expected) return;
+        // A first evaluation may already owe its terminal result to this same live parent wait.
+        if (ModelState is not { ExpectedRevision: null, State.Lifecycle: RuntimeModelLifecycle.Running or RuntimeModelLifecycle.TerminalPendingSettlement } model ||
+            ExpectedFence is null || ExpectedModelExecution is not null || ExpectedBookmarkResume is not null ||
+            expected.WorkflowExecutionId == WorkflowExecutionId || expected.RegistrationCapture is not { } capture ||
+            capture.Scope.PersistenceScope != model.State.Scope || capture.Scope.TenantId != model.State.TenantId ||
+            StateChanges.WorkflowExecution is not null || StateChanges.Bookmarks.Count != 0 || StateChanges.ActivityExecutions.Count != 0)
+            throw new InvalidOperationException("Model child admission requires its initial decision and captured live native parent wait.");
+    }
+
+    /// <summary>Only an initial native worker checkpoint may depend on another execution's live model decision.</summary>
+    public void EnsureModelAdmissionShape()
+    {
+        if (ExpectedModelExecution is not { } expected) return;
+        if (ModelState is not null || ExpectedBookmarkResume is not null || ExpectedFence is null ||
+            Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+            expected.ExecutionId == WorkflowExecutionId || expected.Lifecycle != RuntimeModelLifecycle.Running ||
+            StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert,
+                State.Status: WorkflowExecutionStatus.Running } native ||
+            native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
+            native.State.ParentWorkflowExecutionId is not null ||
+            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != expected.Scope.Value ||
+            native.State.Authority is not { } authority ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(expected.Authority, authority.SystemIdentity,
+                authority.RootInitiator, authority.Metadata))
+            throw new InvalidOperationException("Native worker admission requires its matching initial state, authority and exact live model decision.");
+        if (native.State.ModelWorkOrigin is { } origin && (!origin.MatchesModel(expected) ||
+            origin.WorkerExecutionId != WorkflowExecutionId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, native.State.PinnedExecutable)))
+            throw new InvalidOperationException("The native worker's model invocation differs from its admission condition.");
+    }
+
+    /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
+    public void EnsureModelStateShape()
+    {
+        if (ModelState is not { } model) return;
+        var retainsState = model.ExpectedRevision == model.State.Revision;
+        if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
+            (!retainsState && model.State.UpdatedAt != Checkpoint.OccurredAt) ||
+            model.State.UpdatedAt > Checkpoint.OccurredAt || model.Input.AcceptedAt != Checkpoint.OccurredAt ||
+            ExpectedBookmarkResume is not null || StateChanges.WorkflowExecution is not null ||
+            StateChanges.ActivityExecutions.Count != 0 || StateChanges.ActivityExecutionInspections.Count != 0 ||
+            StateChanges.Bookmarks.Count != 0 || StateChanges.DurableValues.Count != 0 ||
+            StateChanges.Incidents.Count != 0 || StateChanges.ActivityScopeCleanups.Count != 0 ||
+            StateChanges.AlterationJobTerminalChange is not null || !StateChanges.BackgroundActivityWork.IsEmpty)
+            throw new InvalidOperationException("A model decision requires its exact execution, timestamp and fence, without native execution state.");
+    }
 
     /// <summary>Optional exact physical wait condition, atomically checked with initial trigger consumption.</summary>
     /// <remarks>This is a write condition, not source authority. Legacy providers refuse it. Null retains the old wire/fingerprint.</remarks>

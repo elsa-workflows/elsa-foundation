@@ -734,6 +734,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             // A secret read keeps its own policy: it is what makes the withheld input render as sensitive.
             RuntimeInputBindingSource.SecretRead => new RuntimeInputBinding(
                 key, type, binding.EffectivePolicy, binding.Source, metadata: binding.Metadata, conversionPlan: binding.ConversionPlan, secret: binding.Secret),
+            // A member read keeps its role payload and selection, so the engine, not the harness, decides what to do with it.
+            RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.ActivityResultMember =>
+                new RuntimeInputBinding(key, type, ValueProtectionPolicy.InstanceInline, binding.Source, binding.Selection,
+                    workflowRequest: binding.WorkflowRequest, variable: binding.Variable, activityResult: binding.ActivityResult, metadata: binding.Metadata),
             _ => throw new InvalidOperationException(
                 $"Test executable input '{key}' on node '{node.ExecutableNodeId}' still uses legacy binding source '{binding.Source}'.")
         };

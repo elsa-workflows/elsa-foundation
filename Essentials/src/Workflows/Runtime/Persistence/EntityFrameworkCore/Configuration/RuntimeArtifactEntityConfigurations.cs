@@ -9,6 +9,7 @@ public sealed class WorkflowExecutableEntityConfiguration : IEntityTypeConfigura
     public void Configure(EntityTypeBuilder<WorkflowExecutableEntity> b)
     {
         b.ToTable(RuntimeArtifactEfModule.WorkflowExecutableTableName);
+        b.Property(x => x.IsModelMaterial).HasDefaultValue(false).IsRequired();
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();

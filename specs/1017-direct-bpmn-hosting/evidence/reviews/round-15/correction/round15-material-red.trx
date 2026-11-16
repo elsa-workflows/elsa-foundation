@@ -1,0 +1,488 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="43fba60f-3788-47e0-a60d-8ce2f383e694" name="@Sipkes-Mac-Mini 2026-11-01 03:31:59" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-11-01T03:31:59.3147990+01:00" queuing="2026-11-01T03:31:59.3147990+01:00" start="2026-11-01T03:31:58.3648130+01:00" finish="2026-11-01T03:31:59.5071260+01:00" />
+  <TestSettings name="default" id="6eab2ab6-a4bf-4886-aeb2-b488919fa35e">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-11-01_03_31_59" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="bd7b100f-4268-4133-80bd-2617a59c008b" testId="662b0c1c-0965-9b8d-4ec9-2eb0aa88100d" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.1686987" startTime="2026-11-01T03:31:59.3005420+01:00" endTime="2026-11-01T03:31:59.4566520+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bd7b100f-4268-4133-80bd-2617a59c008b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : Unrequested material write cancellation.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 98
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 113
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 113
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.ExecuteAsync[T](DbContext context, String operation, String identity, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 42
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 57
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 58</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="546a36d2-c659-4ba9-a0d7-c8ede82b5697" testId="fb4c9709-9d92-e513-071e-bc0d2e20f2f0" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;page&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0216814" startTime="2026-11-01T03:31:59.2448260+01:00" endTime="2026-11-01T03:31:59.2662430+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="546a36d2-c659-4ba9-a0d7-c8ede82b5697" />
+    <UnitTestResult executionId="0429cd09-0139-4e79-a2e2-5b492b7bd2e0" testId="a248024d-fa85-7696-6d34-7be8dbb5c4e6" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;page&quot;, providerCancellation: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0026920" startTime="2026-11-01T03:31:59.2665850+01:00" endTime="2026-11-01T03:31:59.2744550+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0429cd09-0139-4e79-a2e2-5b492b7bd2e0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : Unrequested material-store cancellation.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 87
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 45
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c5d49a76-a4a9-4b42-88de-5b665b700b7e" testId="9acc4cfa-945e-a798-0cf2-e40113a4cbda" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;find&quot;, providerCancellation: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0003869" startTime="2026-11-01T03:31:59.2769180+01:00" endTime="2026-11-01T03:31:59.2769330+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5d49a76-a4a9-4b42-88de-5b665b700b7e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : Unrequested material-store cancellation.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 639
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 680
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 697
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindMaterialAsync(String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 22
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 43
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="4e6cac9a-e60a-4b1f-86e4-bdb699f20e67" testId="4c8755ff-9b15-cb5e-2e98-ce0b4219b21b" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;find&quot;, providerCancellation: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0003810" startTime="2026-11-01T03:31:59.2802120+01:00" endTime="2026-11-01T03:31:59.2804590+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4e6cac9a-e60a-4b1f-86e4-bdb699f20e67">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.IO.IOException)
+---- System.IO.IOException : Authoritative material store failed.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 639
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 680
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 697
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindMaterialAsync(String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 22
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 43
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="769361ff-1abd-4663-aee1-d2543f9aa495" testId="553fecd5-e43e-f139-1f29-6e14661a3ae4" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;save&quot;, providerCancellation: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0025341" startTime="2026-11-01T03:31:59.2773670+01:00" endTime="2026-11-01T03:31:59.2797120+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="769361ff-1abd-4663-aee1-d2543f9aa495">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : Unrequested material-store cancellation.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 639
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 680
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 697
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 40
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 44
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="35de8906-a59b-4721-9d99-a32e277a5b40" testId="c26b12be-f48a-b57e-857f-a2742c83e94c" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;find&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0071922" startTime="2026-11-01T03:31:59.2404480+01:00" endTime="2026-11-01T03:31:59.2445220+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="35de8906-a59b-4721-9d99-a32e277a5b40" />
+    <UnitTestResult executionId="7bb2cac6-6ef5-40e6-bfc4-ca90ce11605e" testId="1abd2ca2-1a3d-71b4-6b35-a932122d75d7" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;save&quot;, providerCancellation: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0039445" startTime="2026-11-01T03:31:59.2808150+01:00" endTime="2026-11-01T03:31:59.2848330+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7bb2cac6-6ef5-40e6-bfc4-ca90ce11605e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.IO.IOException)
+---- System.IO.IOException : Authoritative material store failed.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 639
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 680
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:line 697
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 40
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 44
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="cac22ceb-4b45-453e-ba3a-8b6c18edb546" testId="190e4317-f119-864b-7a58-4cf385fe7e12" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;page&quot;, providerCancellation: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0009416" startTime="2026-11-01T03:31:59.2765440+01:00" endTime="2026-11-01T03:31:59.2765800+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cac22ceb-4b45-453e-ba3a-8b6c18edb546">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.IO.IOException)
+---- System.IO.IOException : Authoritative material store failed.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 48
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 60
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 68
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 87
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 45
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="43fd0049-0f24-41ec-af94-20933b58d868" testId="c804ce59-8799-dd44-7d41-f160de121823" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;save&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:00.3964145" startTime="2026-11-01T03:31:58.8386880+01:00" endTime="2026-11-01T03:31:59.2373190+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="43fd0049-0f24-41ec-af94-20933b58d868" />
+    <UnitTestResult executionId="5d86b0ed-daec-4d84-9784-26cfabde710e" testId="5d8e5da8-ef3f-355f-867f-2087f6a88d9b" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0254298" startTime="2026-11-01T03:31:59.4572790+01:00" endTime="2026-11-01T03:31:59.4824300+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5d86b0ed-daec-4d84-9784-26cfabde710e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+Actual:   typeof(System.IO.IOException)
+---- System.IO.IOException : Material write failed after staging.</Message>
+          <StackTrace>   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 98
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 113
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs:line 113
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.ExecuteAsync[T](DbContext context, String operation, String identity, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs:line 42
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 57
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs:line 58</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="662b0c1c-0965-9b8d-4ec9-2eb0aa88100d">
+      <Execution id="bd7b100f-4268-4133-80bd-2617a59c008b" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_save_failure_discards_staging_and_allows_the_same_material_to_retry" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;page&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="fb4c9709-9d92-e513-071e-bc0d2e20f2f0">
+      <Execution id="546a36d2-c659-4ba9-a0d7-c8ede82b5697" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_provider_failures_remain_contextual" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;page&quot;, providerCancellation: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="a248024d-fa85-7696-6d34-7be8dbb5c4e6">
+      <Execution id="0429cd09-0139-4e79-a2e2-5b492b7bd2e0" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;find&quot;, providerCancellation: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="4c8755ff-9b15-cb5e-2e98-ce0b4219b21b">
+      <Execution id="4e6cac9a-e60a-4b1f-86e4-bdb699f20e67" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;find&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="c26b12be-f48a-b57e-857f-a2742c83e94c">
+      <Execution id="35de8906-a59b-4721-9d99-a32e277a5b40" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_provider_failures_remain_contextual" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="5d8e5da8-ef3f-355f-867f-2087f6a88d9b">
+      <Execution id="5d86b0ed-daec-4d84-9784-26cfabde710e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_save_failure_discards_staging_and_allows_the_same_material_to_retry" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;find&quot;, providerCancellation: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="9acc4cfa-945e-a798-0cf2-e40113a4cbda">
+      <Execution id="c5d49a76-a4a9-4b42-88de-5b665b700b7e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;save&quot;, providerCancellation: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="1abd2ca2-1a3d-71b4-6b35-a932122d75d7">
+      <Execution id="7bb2cac6-6ef5-40e6-bfc4-ca90ce11605e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;save&quot;, providerCancellation: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="553fecd5-e43e-f139-1f29-6e14661a3ae4">
+      <Execution id="769361ff-1abd-4663-aee1-d2543f9aa495" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: &quot;page&quot;, providerCancellation: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="190e4317-f119-864b-7a58-4cf385fe7e12">
+      <Execution id="cac22ceb-4b45-453e-ba3a-8b6c18edb546" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_io_and_unrequested_cancellation_retain_context" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_provider_failures_remain_contextual(operation: &quot;save&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.tests.dll" id="c804ce59-8799-dd44-7d41-f160de121823">
+      <Execution id="43fd0049-0f24-41ec-af94-20933b58d868" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests" name="Material_provider_failures_remain_contextual" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="662b0c1c-0965-9b8d-4ec9-2eb0aa88100d" executionId="bd7b100f-4268-4133-80bd-2617a59c008b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fb4c9709-9d92-e513-071e-bc0d2e20f2f0" executionId="546a36d2-c659-4ba9-a0d7-c8ede82b5697" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a248024d-fa85-7696-6d34-7be8dbb5c4e6" executionId="0429cd09-0139-4e79-a2e2-5b492b7bd2e0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9acc4cfa-945e-a798-0cf2-e40113a4cbda" executionId="c5d49a76-a4a9-4b42-88de-5b665b700b7e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4c8755ff-9b15-cb5e-2e98-ce0b4219b21b" executionId="4e6cac9a-e60a-4b1f-86e4-bdb699f20e67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="553fecd5-e43e-f139-1f29-6e14661a3ae4" executionId="769361ff-1abd-4663-aee1-d2543f9aa495" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c26b12be-f48a-b57e-857f-a2742c83e94c" executionId="35de8906-a59b-4721-9d99-a32e277a5b40" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1abd2ca2-1a3d-71b4-6b35-a932122d75d7" executionId="7bb2cac6-6ef5-40e6-bfc4-ca90ce11605e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="190e4317-f119-864b-7a58-4cf385fe7e12" executionId="cac22ceb-4b45-453e-ba3a-8b6c18edb546" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c804ce59-8799-dd44-7d41-f160de121823" executionId="43fd0049-0f24-41ec-af94-20933b58d868" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5d8e5da8-ef3f-355f-867f-2087f6a88d9b" executionId="5d86b0ed-daec-4d84-9784-26cfabde710e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="11" executed="11" passed="3" failed="8" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.10]   Discovering: Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.22]   Discovered:  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.23]   Starting:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.68]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.68]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.68]       Actual:   typeof(System.OperationCanceledException)
+[xUnit.net 00:00:00.68]       ---- System.OperationCanceledException : Unrequested material-store cancellation.
+[xUnit.net 00:00:00.68]       Stack Trace:
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(87,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(45,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.68]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.68]       Actual:   typeof(System.IO.IOException)
+[xUnit.net 00:00:00.68]       ---- System.IO.IOException : Authoritative material store failed.
+[xUnit.net 00:00:00.68]       Stack Trace:
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(87,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(45,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.68]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.68]       Actual:   typeof(System.OperationCanceledException)
+[xUnit.net 00:00:00.68]       ---- System.OperationCanceledException : Unrequested material-store cancellation.
+[xUnit.net 00:00:00.68]       Stack Trace:
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(639,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(680,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(697,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(22,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindMaterialAsync(String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(43,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.68]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.68]       Actual:   typeof(System.OperationCanceledException)
+[xUnit.net 00:00:00.68]       ---- System.OperationCanceledException : Unrequested material-store cancellation.
+[xUnit.net 00:00:00.68]       Stack Trace:
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(639,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(680,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(697,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(40,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(44,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.68]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.68]       Actual:   typeof(System.IO.IOException)
+[xUnit.net 00:00:00.68]       ---- System.IO.IOException : Authoritative material store failed.
+[xUnit.net 00:00:00.68]       Stack Trace:
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.68]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(639,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(680,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(697,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(22,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindMaterialAsync(String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.68]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(43,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.68]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.69]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.69]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.69]       Actual:   typeof(System.IO.IOException)
+[xUnit.net 00:00:00.69]       ---- System.IO.IOException : Authoritative material store failed.
+[xUnit.net 00:00:00.69]       Stack Trace:
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(48,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(60,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(String operation, Boolean providerCancellation)
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.69]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]            at Microsoft.EntityFrameworkCore.Query.ShapedQueryCompilingExpressionVisitor.SingleOrDefaultAsync[TSource](IAsyncEnumerable`1 asyncEnumerable, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(68,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.QueryAsync[T](DbContext context, String operation, String identity, Func`1 query)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(639,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindExecutableAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(680,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.FindPairAsync(String scope, String artifactId, String id, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs(697,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.LoadPairAsync(String scope, String artifactId, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(40,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.69]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(44,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;Material_io_and_unrequested_cancellation_retain_context&gt;g__Execute|0&gt;d.MoveNext()
+[xUnit.net 00:00:00.69]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.86]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.86]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.86]       Actual:   typeof(System.OperationCanceledException)
+[xUnit.net 00:00:00.86]       ---- System.OperationCanceledException : Unrequested material write cancellation.
+[xUnit.net 00:00:00.86]       Stack Trace:
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(98,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(113,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(113,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.86]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.86]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.86]            at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(42,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.ExecuteAsync[T](DbContext context, String operation, String identity, Func`1 action)
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(57,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.86]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(58,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.88]       Assert.Throws() Failure: Exception type was not an exact match
+[xUnit.net 00:00:00.88]       Expected: typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException)
+[xUnit.net 00:00:00.88]       Actual:   typeof(System.IO.IOException)
+[xUnit.net 00:00:00.88]       ---- System.IO.IOException : Material write failed after staging.
+[xUnit.net 00:00:00.88]       Stack Trace:
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(98,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(113,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeModelCheckpointTests.cs(113,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(Boolean providerCancellation)
+[xUnit.net 00:00:00.88]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:00.88]         ----- Inner Stack Trace -----
+[xUnit.net 00:00:00.88]            at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs(42,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEfPersistenceBoundary.ExecuteAsync[T](DbContext context, String operation, String identity, Func`1 action)
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(57,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.88]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs(58,0): at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutableStore.Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+[xUnit.net 00:00:00.89]   Finished:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2756440+01:00">
+        <Text>[xUnit.net 00:00:00.68]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "page", providerCancellation: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2767120+01:00">
+        <Text>[xUnit.net 00:00:00.68]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "page", providerCancellation: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2770560+01:00">
+        <Text>[xUnit.net 00:00:00.68]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "find", providerCancellation: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2799820+01:00">
+        <Text>[xUnit.net 00:00:00.68]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "save", providerCancellation: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2805570+01:00">
+        <Text>[xUnit.net 00:00:00.68]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "find", providerCancellation: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.2879890+01:00">
+        <Text>[xUnit.net 00:00:00.69]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_io_and_unrequested_cancellation_retain_context(operation: "save", providerCancellation: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.4572650+01:00">
+        <Text>[xUnit.net 00:00:00.86]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-11-01T03:31:59.4828010+01:00">
+        <Text>[xUnit.net 00:00:00.88]     Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(providerCancellation: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

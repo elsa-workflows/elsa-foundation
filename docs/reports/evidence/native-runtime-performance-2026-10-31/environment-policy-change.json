@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-10-31T12:04:59.070518+00:00",
+  "old": "Start load1 <=8 and external CPU <=400%; reject two consecutive 2s samples above500%",
+  "new": "Start five consecutive 2s external CPU samples <=250%; load average recorded; same rejection rule",
+  "reason": "Load average retained earlier build spikes despite low current CPU activity",
+  "acceptedBeforeChange": [
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantbaseline-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities100-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantbaseline-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities10-r1.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities1-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities100-Variantfast-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities1-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeralNoRecord-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities1-r1.json",
+    "experiment-ProviderPostgreSql-ModeBalanced-Activities10-Variantfast-r1.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities10-r1.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities10-r1.json",
+    "baseline-ProviderPostgreSql-ModeEphemeral-Activities10-r1.json",
+    "baseline-ProviderPostgreSql-ModeBalanced-Activities100-r1.json",
+    "baseline-ProviderPostgreSql-ModeDurable-Activities1-r1.json"
+  ]
+}

@@ -50,11 +50,22 @@ public sealed record EtlRunInputIdentityView(
 public sealed record EtlRunBindingAliasesView(string Source, string? Lookup, string Output, string Errors);
 
 public sealed record EtlRunConnectorView(string SourceKind, string MainKind, string ErrorKind,
-    long AcceptedMainEffects, long AcceptedErrorEffects);
+    long AcceptedMainEffects, long AcceptedErrorEffects)
+{
+    /// <summary><c>finite</c>, or <c>continuous</c> for a run that polls until completion or cancellation.</summary>
+    public string Mode { get; init; } = "finite";
+
+    /// <summary>When completion of a continuous run was requested.</summary>
+    public DateTimeOffset? CompletionRequestedAt { get; init; }
+}
 
 public sealed record EtlRunConnectorPartitionView(int PartitionOrdinal, EtlRunFileProgressView? File,
     EtlRunHttpProgressView? Http, bool IsClaimed, long? ClaimFence, DateTimeOffset? ClaimExpiresAt,
-    DateTimeOffset? NotBefore, EtlRunConnectorOwedView? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects);
+    DateTimeOffset? NotBefore, EtlRunConnectorOwedView? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects)
+{
+    /// <summary>A caught-up continuous shard's next poll; it equals NotBefore and is null for retry waits.</summary>
+    public DateTimeOffset? NextPollAt { get; init; }
+}
 
 public sealed record EtlRunFileProgressView(long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal);
 public sealed record EtlRunHttpProgressView(long PageSequence, int NextItem, int? PageRecordCount, bool Exhausted,
@@ -89,6 +100,9 @@ public sealed record EtlRunOwedBatchView(long StartOrdinal, long EndOrdinalExclu
 
 public sealed record EtlRunCancellationView(bool CancellationAccepted, EtlRunTerminalResultView TerminalResult);
 
+/// <summary>The outcome of a completion request: <c>accepted</c>, <c>alreadyRequested</c>, <c>terminal</c> or <c>notContinuous</c>.</summary>
+public sealed record EtlRunCompletionView(string Result);
+
 /// <summary>Runtime operations over a trusted request scope. Request values carry no tenant or partition authority.</summary>
 public interface IEtlRuntimeOperations
 {
@@ -102,4 +116,10 @@ public interface IEtlRuntimeOperations
             new EtlApiException(503, "etl.provider-unavailable"));
     }
     Task<EtlRunCancellationView> CancelAsync(EtlRunRequest request, CancellationToken cancellationToken);
+    /// <summary>Requests completion of a continuous run: its shards drain to caught-up and the run settles.</summary>
+    Task<EtlRunCompletionView> CompleteAsync(EtlRunRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromException<EtlRunCompletionView>(new EtlApiException(503, "etl.provider-unavailable"));
+    }
 }

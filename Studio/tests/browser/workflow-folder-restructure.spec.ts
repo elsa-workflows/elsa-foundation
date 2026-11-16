@@ -1,10 +1,55 @@
 import { expect, test } from "@playwright/test";
 
+for (const theme of ["light", "dark"]) {
+  test(`collapsing folders gives the list more room and restores its selected and expanded context (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/?theme=${theme}&mode=folder-restructure`);
+    const navigation = page.getByRole("complementary", { name: "Workflow folders" });
+    await navigation.getByRole("button", { name: "Expand Platform", exact: true }).click();
+    const operations = navigation.locator('[data-folder-id="folder-operations"]');
+    await operations.click();
+    await expect(operations).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByText("Operations workflow")).toBeVisible();
+    const content = page.locator(".wf-folder-content");
+    const expandedWidth = (await content.boundingBox())!.width;
+    const toggle = navigation.getByRole("button", { name: "Collapse folders", exact: true });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    const restore = navigation.getByRole("button", { name: "Expand folders", exact: true });
+    await expect(restore).toHaveAttribute("aria-expanded", "false");
+    await expect(restore).toBeFocused();
+    await expect(navigation.getByRole("tree")).toBeHidden();
+    expect((await content.boundingBox())!.width).toBeGreaterThan(expandedWidth + 100);
+    await expect(page.getByText("Operations workflow")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toBeFocused();
+    await expect(operations).toBeVisible();
+    await expect(operations).toHaveAttribute("aria-selected", "true");
+    await expect(navigation.locator('[data-folder-id="folder-platform"]')).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test(`deleting a folder while collapsed returns focus to the visible restore control (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/?theme=${theme}&mode=folder-restructure`);
+    const navigation = page.getByRole("complementary", { name: "Workflow folders" });
+    await navigation.getByRole("button", { name: "Expand Archive", exact: true }).click();
+    await navigation.locator('[data-folder-id="folder-empty"]').click();
+    await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+    await navigation.getByRole("button", { name: "Collapse folders", exact: true }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
+    await expect(navigation.getByRole("button", { name: "Expand folders", exact: true })).toBeFocused();
+    await expect(navigation.getByRole("tree")).toBeHidden();
+    await expect(page.getByText("Archive workflow")).toBeVisible();
+  });
+}
+
 test("keyboard users can rename, restructure, and empty-delete folders in a narrow public-capability view", async ({ page }) => {
   await page.setViewportSize({ width: 430, height: 760 });
   await page.goto("/?theme=light&mode=folder-restructure");
 
-  const folderPicker = page.getByRole("button", { name: "Folders" });
+  const folderPicker = page.getByRole("button", { name: "Folders", exact: true });
   await folderPicker.focus();
   await page.keyboard.press("Enter");
   const platform = page.getByRole("treeitem", { name: /Platform/ });
@@ -161,4 +206,23 @@ test("renaming a continuation-page folder retains its selected and expanded tree
   await expect(page.getByRole("treeitem", { name: /Empty folder/ })).toBeVisible();
   await expect(page.locator(".wf-folder-breadcrumb")).toContainText("Long-term archive");
   await expect(page.getByText("Archive workflow")).toBeVisible();
+});
+
+for (const width of [390, 1440]) test(`Manage folders exposes the tree and selected folder actions (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/?theme=light&mode=folder-restructure");
+  const manage = page.getByRole("button", { name: "Manage folders", exact: true });
+  await manage.click();
+  const manager = page.getByRole("dialog", { name: "Manage workflow folders" });
+  await expect(manager.getByRole("button", { name: "Create folder", exact: true })).toBeVisible();
+  await expect(manager).toContainText("Select a folder to rename");
+  await manager.locator('[data-folder-id="folder-platform"]').click();
+  await expect(manager).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Rename", exact: true })).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Move", exact: true })).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(manager).toBeHidden();
+  await expect(manage).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });

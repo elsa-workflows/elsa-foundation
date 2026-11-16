@@ -26,16 +26,25 @@ internal static class EtlDesignEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        if (!StringComparer.Ordinal.Equals(provider, "sqlite"))
-            throw new NotSupportedException("The initial ETL design EF module supports SQLite only.");
-
-        Binding.AddContext<EtlDesignSqliteDbContext>(services, options.Pooling, (serviceProvider, builder) =>
-            Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
-        services.AddScoped<EtlDesignDbContext>(providerServices => providerServices.GetRequiredService<EtlDesignSqliteDbContext>());
+        var addContext = Binding.Select<Action<IServiceCollection, EtlDesignEntityFrameworkCoreOptions, string>>(
+            provider,
+            AddContext<EtlDesignSqliteDbContext>,
+            AddContext<EtlDesignSqlServerDbContext>,
+            AddContext<EtlDesignPostgreSqlDbContext>,
+            AddContext<EtlDesignMySqlDbContext>);
+        addContext(services, options, provider);
         services.AddScoped<EfEtlDefinitionStore>();
         services.AddScoped<IEtlDefinitionStore>(providerServices => providerServices.GetRequiredService<EfEtlDefinitionStore>());
         services.AddScoped<IEtlDefinitionStoreV2>(providerServices => providerServices.GetRequiredService<EfEtlDefinitionStore>());
         services.AddScoped<IEtlDefinitionCatalog, EfEtlDefinitionCatalog>();
         return services;
+    }
+
+    private static void AddContext<TContext>(IServiceCollection services, EtlDesignEntityFrameworkCoreOptions options, string provider)
+        where TContext : EtlDesignDbContext
+    {
+        Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
+            Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        services.AddScoped<EtlDesignDbContext>(providerServices => providerServices.GetRequiredService<TContext>());
     }
 }

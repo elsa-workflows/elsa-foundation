@@ -17,7 +17,14 @@ public sealed class RecurringTriggerPumpOptions
     public int MaxSchedulesPerTick { get; set; } = 100;
 
     /// <summary>
-    /// Lease on a claimed occurrence, renewed immediately before it is routed. When a claimant dies before settling the
+    /// Maximum concurrent dispatches in a sweep. Defaults to one. Parallel dispatch requires bound operation
+    /// scopes; custom hosts without a scope factory retain sequential dispatch. Tune against provider capacity.
+    /// </summary>
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
+    /// <summary>
+    /// Lease on a claimed occurrence, renewed immediately before it is routed and, when the pump has a persistence scope
+    /// factory, every third of this timeout while it routes (each renewal in its own scope). When a claimant dies before settling the
     /// occurrence, a peer fires it again once this lease lapses, so it bounds how late a crashed fire is completed.
     /// </summary>
     public TimeSpan ClaimVisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);

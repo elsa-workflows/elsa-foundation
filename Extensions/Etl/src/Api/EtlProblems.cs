@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Etl.Api;
 

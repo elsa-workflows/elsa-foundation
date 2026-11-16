@@ -13,6 +13,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Configuration;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -31,7 +32,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         if (!Path.IsPathFullyQualified(ControlDirectory) || !Directory.Exists(ControlDirectory))
             throw new InvalidOperationException("The recovery probe requires an existing owned absolute control directory.");
         var control = new RecoveryProbeControl(ControlDirectory);
-        services.AddSingleton(control);
+        services.AddSingleton<RecoveryProbeControl>(_ => control);
         if (AdmissionStaticLimit is { } limit)
         {
             if (limit <= 0) throw new InvalidOperationException("The owned admission limit must be positive.");
@@ -146,6 +147,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         }
         public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         {
+            await control.CutNativeWorkBeforeDispatchAsync(source, cancellationToken);
             var cut = await control.CaptureCalledControlClaimAsync(source.Intent, outbox, access, cancellationToken);
             await inner.DispatchAsync(source, cancellationToken);
             await control.CutCalledControlBeforeAcknowledgmentAsync(cut, outbox, cancellationToken);
@@ -219,9 +221,96 @@ public class BpmnRecoveryProbeFeature : IShellFeature
     }
 }
 
-internal sealed class RecoveryProbeControl(string directory)
+internal sealed class RecoveryProbeControl(string directory) : IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    private readonly IDisposable nativeParentObserver = new NativeParentCompletionCut(directory);
+    public void Dispose() => nativeParentObserver.Dispose();
+
+    // Observe this isolated probe process's real runtime transactions, including nested drain scopes.
+    // Exact scope/workflow/node matching selects the owned case. Buffered/coalesced logical
+    // acknowledgments never reach this observer. No checkpoint row or queue item is manufactured.
+    private sealed class NativeParentCompletionCut : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+    {
+        private readonly string directory;
+        private readonly List<IDisposable> subscriptions = new();
+        private readonly object gate = new();
+        private IDisposable? allListeners;
+        private bool disposed;
+
+        public NativeParentCompletionCut(string directory)
+        {
+            this.directory = directory;
+            allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+        }
+        public void OnNext(DiagnosticListener listener)
+        {
+            if (listener.Name != DbLoggerCategory.Name) return;
+            lock (gate)
+            {
+                if (!disposed) subscriptions.Add(listener.Subscribe((IObserver<KeyValuePair<string, object?>>)this,
+                    name => name == RelationalEventId.TransactionCommitted.Name));
+            }
+        }
+        public void OnNext(KeyValuePair<string, object?> value)
+        {
+            if (value.Key != RelationalEventId.TransactionCommitted.Name || value.Value is not TransactionEndEventData data ||
+                data.Context is not RuntimeDbContext context) return;
+            lock (gate) { if (disposed) return; }
+            var path = Path.Combine(directory, "native-parent-plan.json");
+            if (!File.Exists(path)) return;
+            using var planDocument = JsonDocument.Parse(File.ReadAllText(path));
+            var plan = planDocument.RootElement;
+            var caseId = plan.GetProperty("caseId").GetString()!;
+            if (!Regex.IsMatch(caseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant)) throw new InvalidDataException("Invalid native-parent probe case.");
+            var workflowId = plan.GetProperty("workflowExecutionId").GetString();
+            var nodeId = plan.GetProperty("childNodeId").GetString();
+            var childExecutionId = plan.GetProperty("childActivityExecutionId").GetString();
+            foreach (var entry in context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>())
+            {
+                var row = entry.Entity;
+                if (row.ScopeKey != EfRelationalIdentity.Encode(plan.GetProperty("scope").GetString()!) ||
+                    row.WorkflowExecutionId != EfRelationalIdentity.Encode(workflowId!) ||
+                    row.IntentKind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork ||
+                    row.Status != (int)RuntimePostCommitOutboxStatus.Pending) continue;
+                using var document = JsonDocument.Parse(row.ContentJson);
+                var work = document.RootElement.GetProperty("intent").GetProperty("payload");
+                if (work.GetProperty("CommandKind").GetInt32() != (int)WorkflowExecutionCommandKind.CompleteActivity ||
+                    !work.TryGetProperty("Payload", out var payload) ||
+                    !payload.TryGetProperty("CompletedChildActivityExecutionId", out var child) || child.GetString() != childExecutionId ||
+                    payload.GetProperty("ExecutableNodeId").GetString() != "native-parent") continue;
+                var caseDirectory = Path.Combine(directory, caseId); Directory.CreateDirectory(caseDirectory);
+                var claimed = Path.Combine(caseDirectory, "claimed");
+                try { using var token = new FileStream(claimed, FileMode.CreateNew, FileAccess.Write, FileShare.Read); token.Flush(true); }
+                catch (IOException) when (File.Exists(claimed)) { return; }
+                var marker = new { CaseId = caseId, Phase = "native-parent-completion-before-consumption", ProviderEvent = "EF.TransactionCommitted",
+                    WorkflowExecutionId = workflowId, ChildNodeId = nodeId, SourceOutboxItemId = EfRelationalIdentity.Decode(row.OutboxItemId),
+                    Scope = EfRelationalIdentity.Decode(row.ScopeKey), Work = work.Clone(), CapturedAtUtc = DateTimeOffset.UtcNow };
+                var temporary = Path.Combine(caseDirectory, "reached.tmp");
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                { JsonSerializer.Serialize(stream, marker, Json); stream.Flush(true); }
+                File.Move(temporary, Path.Combine(caseDirectory, "reached.json"));
+                Dispose();
+                while (!File.Exists(Path.Combine(caseDirectory, "release"))) Thread.Sleep(100);
+                return;
+            }
+        }
+        public void OnError(Exception error) { }
+        public void OnCompleted() { }
+        public void Dispose()
+        {
+            List<IDisposable> owned;
+            lock (gate)
+            {
+                if (disposed) return;
+                disposed = true; owned = new(subscriptions); subscriptions.Clear();
+                if (allListeners is { } all) owned.Add(all);
+                allListeners = null;
+            }
+            foreach (var subscription in owned) subscription.Dispose();
+        }
+    }
 
     public async ValueTask<CalledControlCapture?> CaptureCalledControlClaimAsync(RuntimePostCommitIntent intent,
         IPostCommitOutboxLookupStore outbox, IPersistenceAccessContextAccessor access, CancellationToken cancellationToken)
@@ -510,6 +599,45 @@ internal sealed class RecoveryProbeControl(string directory)
             }
             foreach (var subscription in owned) subscription.Dispose();
         }
+    }
+
+    public async ValueTask CutNativeWorkBeforeDispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        var expectedPhase = source.Intent.Kind switch
+        {
+            "Elsa.Bpmn.CancelNativeWork.v1" => "before-native-cancel",
+            "Elsa.Bpmn.StartNativeWork.v1" => "before-native-start",
+            _ => null
+        };
+        var path = Path.Combine(directory, "plan.json");
+        if (expectedPhase is null || !File.Exists(path)) return;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json)
+            ?? throw new InvalidDataException("The owned native-work plan is empty.");
+        if (plan.Phase != expectedPhase || expectedPhase == "before-native-cancel" && plan.TargetExecutionId is null) return;
+        var executionId = expectedPhase == "before-native-start" ? source.Intent.Payload?.GetProperty("executionId").GetString()
+            : source.Intent.Payload?.GetProperty("origin").GetProperty("executionId").GetString();
+        if (plan.TargetExecutionId is not null && executionId != plan.TargetExecutionId) return;
+        if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new InvalidDataException("The owned native-work case name is invalid.");
+        var caseDirectory = Path.Combine(directory, plan.CaseId); Directory.CreateDirectory(caseDirectory);
+        var token = Path.Combine(caseDirectory, "claimed");
+        try { using var claimed = new FileStream(token, FileMode.CreateNew, FileAccess.Write, FileShare.Read); claimed.Flush(true); }
+        catch (IOException) when (File.Exists(token))
+        {
+            if (expectedPhase == "before-native-start")
+                while (!File.Exists(Path.Combine(caseDirectory, "release"))) await Task.Delay(100, cancellationToken);
+            return;
+        }
+        var marker = new { plan.CaseId, Phase = plan.Phase, ProviderEvent = expectedPhase == "before-native-cancel"
+                ? "ActualNativeCancellationSourceBeforeDispatcher" : "ActualNativeStartSourceBeforeDispatcher",
+            SourceOutboxItemId = source.SourceOutboxItemId, source.SourceCommitId, source.IntentFingerprint,
+            Scope = source.Scope.Value, source.Claim.OwnerId, source.Claim.FencingToken, source.Claim.VisibleAfter,
+            source.Intent.WorkflowExecutionId, source.Intent.Payload, CapturedAtUtc = DateTimeOffset.UtcNow };
+        var temporary = Path.Combine(caseDirectory, "reached.tmp");
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        { await JsonSerializer.SerializeAsync(stream, marker, Json, cancellationToken); stream.Flush(true); }
+        File.Move(temporary, Path.Combine(caseDirectory, "reached.json"));
+        while (!File.Exists(Path.Combine(caseDirectory, "release"))) await Task.Delay(100, cancellationToken);
     }
 
     public async ValueTask CutAsync(string phase, PostCommitDeliveryContext source, CancellationToken cancellationToken,

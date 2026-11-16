@@ -1,4 +1,8 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
+using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -11,45 +15,11 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Services;
-
-public sealed record ActivityTemplateDependencyRequest(
-    string DefinitionVersionId,
-    string OccurrenceId,
-    IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
-    string? ParentOccurrenceId = null,
-    string ChildSlotName = "activity-graph",
-    int ChildIndex = 0,
-    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
-{
-    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
-}
-
-public sealed record ActivityTemplateCompilerRequest(
-    ActivityDefinition Definition,
-    ActivityDefinitionDraft Draft,
-    string CandidateDefinitionVersionId,
-    string CandidateVersion,
-    long LayoutBytes);
-
-public sealed record ActivityTemplateCompilerResult(
-    ExecutableActivityTemplate? Template,
-    ActivityResourceMeasurements Measurements,
-    IReadOnlyList<ActivityResolvedDependency> DirectDependencies,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics)
-{
-    public bool IsSuccessful => Template is not null && Diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
-    public IReadOnlyList<ActivityVersionChange> ProviderCompatibilityChanges { get; init; } = [];
-}
-
-public interface IActivityTemplateCompiler
-{
-    ValueTask<ActivityTemplateCompilerResult> CompileAsync(
-        ActivityTemplateCompilerRequest request,
-        CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Resolves exact immutable dependencies and turns a provider compilation into one closed,
@@ -63,12 +33,68 @@ public sealed class ActivityTemplateCompiler(
     IActivityDefinitionVersionStore activityVersions,
     IExecutableActivityTemplateReader templates,
     IActivityTemplateAdmissionPolicy admissionPolicy,
-    TimeProvider timeProvider) : IActivityTemplateCompiler
+    TimeProvider timeProvider,
+    IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
+    IActivityDataSelectionAnalyzer dataAnalyzer,
+    IActivityStructureService? activityStructures = null) : IActivityTemplateCompiler
 {
+    // Retain the source-analysis constructor while the owning structure projection is added.
+    public ActivityTemplateCompiler(
+        IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications,
+        IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates,
+        IActivityTemplateAdmissionPolicy admissionPolicy,
+        TimeProvider timeProvider,
+        IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
+        IActivityDataSelectionAnalyzer dataAnalyzer)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
+            timeProvider, dataProjectors, dataAnalyzer, null)
+    {
+    }
+
+    // Preserve the existing binary constructor. Legacy callers must supply the shared authority
+    // before compiling; absence fails closed rather than restoring the former admission gap.
+    public ActivityTemplateCompiler(
+        IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications,
+        IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates,
+        IActivityTemplateAdmissionPolicy admissionPolicy,
+        TimeProvider timeProvider)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
+            timeProvider, [], null!)
+    {
+    }
+
     public async ValueTask<ActivityTemplateCompilerResult> CompileAsync(
         ActivityTemplateCompilerRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        try
+        {
+            return await CompileCoreAsync(request, cancellationToken);
+        }
+        catch (ActivityDataSelectionRejectedException exception)
+        {
+            throw new ActivityDataSelectionRejectedException(exception.Findings)
+            {
+                ResourceKind = request.Candidate.SubjectKind,
+                ResourceId = request.Candidate.Id,
+                ProviderKey = request.Candidate.Provider.ProviderKey
+            };
+        }
+    }
+
+    private async ValueTask<ActivityTemplateCompilerResult> CompileCoreAsync(
+        ActivityTemplateCompilerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var document = await ValidateDataSelectionAsync(request, cancellationToken);
+        var projected = document is not null;
         var subject = Subject(request);
         var diagnostics = new List<ActivityDiagnostic>();
         var resolved = new List<ActivityResolvedDependency>();
@@ -78,7 +104,7 @@ public sealed class ActivityTemplateCompiler(
         IActivityTemplateDependencyDiscoverer discoverer;
         try
         {
-            discoverer = dependencyDiscoverers.Resolve(request.Draft.State.Provider.ProviderKey, request.Draft.State.Provider.SchemaVersion);
+            discoverer = dependencyDiscoverers.Resolve(request.Candidate.Provider.ProviderKey, request.Candidate.Provider.SchemaVersion);
         }
         catch (InvalidOperationException)
         {
@@ -87,16 +113,16 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider has no dependency discovery strategy.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes);
         }
 
         var discovery = await discoverer.DiscoverDependenciesAsync(new(
             request.Definition.Id,
-            request.Draft.Id,
-            request.Draft.Revision,
-            request.Draft.State.Provider), cancellationToken);
+            request.Candidate.Id,
+            request.Candidate.Revision,
+            request.Candidate.Provider) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(discovery.Diagnostics);
         authoritativeDependencies = discovery.Dependencies.Select(x => new ActivityTemplateDependencyRequest(
             x.DefinitionVersionId,
@@ -222,7 +248,7 @@ public sealed class ActivityTemplateCompiler(
         IActivityTemplateProviderCompiler provider;
         try
         {
-            provider = providers.Resolve(request.Draft.State.Provider.ProviderKey, request.Draft.State.Provider.SchemaVersion);
+            provider = providers.Resolve(request.Candidate.Provider.ProviderKey, request.Candidate.Provider.SchemaVersion);
         }
         catch (InvalidOperationException)
         {
@@ -231,7 +257,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider or manifest schema is unavailable.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes);
         }
@@ -239,14 +265,21 @@ public sealed class ActivityTemplateCompiler(
         var compilation = await provider.CompileAsync(new(
             request.Definition.Id,
             request.Definition.ActivityTypeKey,
-            request.Draft.Id,
-            request.Draft.Revision,
+            request.Candidate.Id,
+            request.Candidate.Revision,
             request.CandidateVersion,
-            request.Draft.State.Contract,
-            request.Draft.State.Provider,
+            request.Candidate.Contract,
+            request.Candidate.Provider,
             resolved,
-            provider.CompilerFingerprint), cancellationToken);
+            provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
+        if (!projected && compilation.Occurrences.Count != 0)
+            throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ProviderProjectionMissing",
+                "The activity provider must expose its authored graph for source-read validation.")]);
+        if (compilation.ExecutableRoot is not null)
+            ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected,
+                ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(compilation.ExecutableRoot,
+                    request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures));
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
         {
@@ -255,7 +288,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned a compiler fingerprint different from its registered fingerprint.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return the exact compiler fingerprint supplied by the Publishing coordinator.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -270,7 +303,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned direct dependencies that differ from the coordinator-resolved authoritative dependency set.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Provider compilers must echo the exact coordinator-resolved dependencies without adding, removing, or changing occurrences.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -303,7 +336,7 @@ public sealed class ActivityTemplateCompiler(
                     ActivityDiagnosticSeverity.Error,
                     "The activity provider's Runtime consumer requirements do not exactly match its executable nodes.",
                     subject,
-                    new(request.Draft.State.Provider.ProviderKey),
+                    new(request.Candidate.Provider.ProviderKey),
                     "Declare every and only the stable consumer/schema pairs used by the compiled executable nodes.",
                     new Dictionary<string, string>(StringComparer.Ordinal)));
             }
@@ -317,7 +350,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned one or more negative resource measurements.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return non-negative resource measurements for admission-policy evaluation.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -355,7 +388,7 @@ public sealed class ActivityTemplateCompiler(
                     ? $"The activity provider returned duplicate placement content for occurrence '{duplicateOccurrence}'."
                     : "The activity provider's placement content does not exactly match the resolved dependency occurrences.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return at most one placement-content record for every resolved occurrence, without adding or omitting occurrences.",
                 new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
@@ -380,7 +413,10 @@ public sealed class ActivityTemplateCompiler(
                         ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion,
                         occurrence.InputBindings,
                         structure,
-                        occurrence.OutputBindings);
+                        occurrence.OutputBindings)
+                    {
+                        InputContracts = CompileOccurrenceInputContracts(occurrence, loadedTemplates[x.TemplateId].Root)
+                    };
                 }
 
                 return new ExecutableActivityTemplateDependency(
@@ -429,7 +465,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The closed activity resource measurements exceed the supported numeric range.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return bounded local measurements and review the compiled dependency closure.",
                 new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
@@ -479,6 +515,41 @@ public sealed class ActivityTemplateCompiler(
         {
             ProviderCompatibilityChanges = compilation.ProviderCompatibilityChanges
         };
+    }
+
+    private async ValueTask<ActivityDataSelectionDocument?> ValidateDataSelectionAsync(ActivityTemplateCompilerRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (dataAnalyzer is null)
+            throw new InvalidOperationException("Activity compilation requires the shared activity data selection analyzer.");
+        var revision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
+        {
+            request.Candidate.SubjectKind, request.Candidate.Id, request.Candidate.Revision,
+            request.Candidate.Provider, request.Candidate.Contract
+        });
+        ActivityDataSelectionDocument? document = null;
+        foreach (var projector in dataProjectors)
+        {
+            var candidate = await projector.TryProjectAsync(request.Candidate.Provider, request.Candidate.Contract,
+                request.Candidate.Id, revision, cancellationToken);
+            if (candidate is null)
+                continue;
+            if (document is not null)
+                throw new InvalidOperationException("Multiple providers claimed the activity data selection document.");
+            if (!StringComparer.Ordinal.Equals(candidate.ResourceId, request.Candidate.Id) ||
+                !StringComparer.Ordinal.Equals(candidate.ContractRevision, revision))
+                throw new InvalidOperationException("The activity data selection document does not match the actual candidate.");
+            document = candidate;
+        }
+        if (document is null)
+            return null;
+        var analysis = await dataAnalyzer.AnalyzeAsync(document, cancellationToken: cancellationToken);
+        if (!StringComparer.Ordinal.Equals(analysis.ContractRevision, revision))
+            throw new InvalidOperationException("Activity data selection analysis does not match the actual candidate.");
+        var errors = analysis.Findings.Where(x => StringComparer.Ordinal.Equals(x.Severity, ValidationSeverities.Error)).ToArray();
+        if (errors.Length != 0)
+            throw new ActivityDataSelectionRejectedException(errors);
+        return document;
     }
 
     private static bool TryReadDeclaredStructure(
@@ -612,6 +683,40 @@ public sealed class ActivityTemplateCompiler(
         return closure;
     }
 
+    private static IReadOnlyList<RuntimeActivityInputContract>? CompileOccurrenceInputContracts(ActivityTemplateOccurrenceCompilation occurrence, ExecutableNode source)
+    {
+        if (occurrence.StructureInputs is not { } projection || projection.Inputs.Count == 0 && projection.ConsumedInputKeys.Count == 0)
+            return null;
+        var sourceInputs = source.ActivityContract?.Inputs
+            ?? throw new InvalidOperationException("An occurrence with structure inputs requires an exact pinned source contract.");
+        if (projection.ConsumedInputKeys.Any(key => !sourceInputs.ContainsKey(key)))
+            throw new InvalidOperationException("An occurrence structure consumes an undeclared source input.");
+        var result = sourceInputs.Values.Where(input => !projection.ConsumedInputKeys.Contains(input.Key, StringComparer.Ordinal)).ToDictionary(input => input.Key, StringComparer.Ordinal);
+        foreach (var input in projection.Inputs)
+        {
+            RuntimeActivityInputContract contract;
+            if (input.Definition is { } definition)
+            {
+                if (definition.ReferenceKey != input.ReferenceKey) throw new InvalidOperationException("An occurrence structure input does not match its definition.");
+                contract = new(input.ReferenceKey, definition.Name, new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind),
+                    definition.IsRequired, definition.IsNullable, definition.DefaultValue.HasValue, definition.DefaultValue,
+                    RuntimeInputBindingCompiler.EffectivePolicy(occurrence.OccurrenceId, definition, input.State),
+                    isCredential: definition.IsCredential == true, connectionType: definition.ConnectionType) { IsStructureInput = true };
+            }
+            else
+            {
+                var original = sourceInputs.GetValueOrDefault(input.ReferenceKey)
+                    ?? throw new InvalidOperationException("An occurrence structure input has no source declaration.");
+                var policy = input.State is null ? original.Policy : ValuePolicyCombiner.CombineAuthoredInput(original.Policy,
+                    input.State.StorageDriverType, input.State.IsSensitive, $"Occurrence '{occurrence.OccurrenceId}' input '{input.ReferenceKey}'");
+                contract = new(original.Key, original.Name, original.Type, original.IsRequired, original.IsNullable, original.HasDefault,
+                    original.DefaultValue, policy, original.EditorMetadata, original.IsCredential, original.ConnectionType) { IsStructureInput = true };
+            }
+            if (!result.TryAdd(input.ReferenceKey, contract)) throw new InvalidOperationException("An occurrence structure declares a duplicate input key.");
+        }
+        return result.Values.OrderBy(input => input.Key, StringComparer.Ordinal).ToArray();
+    }
+
     private static IEnumerable<ActivityDiagnostic> ValidateOccurrenceRequests(
         IReadOnlyList<ActivityTemplateDependencyRequest> dependencies,
         ActivityDiagnosticSubject subject)
@@ -721,10 +826,10 @@ public sealed class ActivityTemplateCompiler(
         });
 
     private static ActivityDiagnosticSubject Subject(ActivityTemplateCompilerRequest request) => new(
-        "ActivityDraft",
-        request.Draft.Id,
+        request.Candidate.SubjectKind,
+        request.Candidate.Id,
         request.Definition.Id,
-        Revision: request.Draft.Revision);
+        Revision: request.Candidate.Revision);
 
     private static bool IsError(ActivityDiagnostic diagnostic) => diagnostic.Severity == ActivityDiagnosticSeverity.Error;
 

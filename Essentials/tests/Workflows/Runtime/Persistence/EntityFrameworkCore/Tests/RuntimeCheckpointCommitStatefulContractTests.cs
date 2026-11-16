@@ -78,8 +78,8 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
     /// <summary>
     /// #1780: completing a final child-start failure reports what was persisted. A child that exists makes the start
     /// delivered and discards the DispatchFailed projection and its parent resume; without one, all three are persisted.
-    /// Every store applies one shared rule, and so does a coalescing session that owns the claim, which persists into its
-    /// overlay; without a session the coalescing decorator passes straight through to the store.
+    /// Every store applies one shared rule. A retained coalescing session also claims external child starts through the
+    /// durable store, so the completion and dispatch outcome are immediately visible to another delivery scope.
     /// </summary>
     [Theory]
     [MemberData(nameof(ClaimCompletionData))]
@@ -125,16 +125,16 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             sessions,
             backend.Executions);
         RuntimeCoalescingSession? session = null;
+        await backend.SeedPendingOutboxItemAsync(start);
         if (coalesced)
         {
-            // Seeded straight into the overlay: a segment never defers a dispatch, but a session must apply the rule to any
-            // claim it owns.
+            // A dispatch boundary is already durable before its external child-start intent can be claimed.
             session = new RuntimeCoalescingSession(pending.ParentWorkflowExecutionId, backend.Queue, new PersistenceModeOptions(), backend.Delivery);
             session.RecordCapFlushState(new RuntimeCheckpointStateChangeSet(
                 null, null, [], [], [], [], [], [DispatchChange(started)], postCommitOutbox: [Change(start.OutboxItemId, start)]));
+            session.MarkOutboxDurablyPersisted([Change(start.OutboxItemId, start)]);
+            session.ClearBuffer();
         }
-        else
-            await backend.SeedPendingOutboxItemAsync(start);
         using var sessionScope = sessions.Push(session);
         var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             "owner-contract", OccurredAt.AddSeconds(2), TimeSpan.FromMinutes(1), 1, pending.ParentWorkflowExecutionId)));
@@ -162,10 +162,9 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Equal(
             childExists ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal,
             (await outbox.FindAsync(claim.OutboxItemId))?.Status);
-        // A session writes its dispatch at its next flush, so read what that flush would persist.
-        var dispatch = session is null
-            ? await backend.Dispatches.FindAsync(pending.DispatchId)
-            : Assert.Single(session.FoldBufferedStateChanges().WorkflowDispatches).State;
+        var dispatch = await backend.Dispatches.FindAsync(pending.DispatchId);
+        if (session is not null)
+            Assert.Empty(session.FoldBufferedStateChanges().WorkflowDispatches);
         Assert.Equal(childExists ? WorkflowDispatchStatus.Started : WorkflowDispatchStatus.DispatchFailed, dispatch?.Status);
         Assert.Equal(childExists, await outbox.FindAsync(followUp.OutboxItemId) is null);
     }
@@ -223,6 +222,32 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Equal("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.", exception.Message);
         Assert.Equal(0, await backend.CountMarkersAsync());
         Assert.Equal(lease.LeaseId, (await backend.Liveness.FindAsync(WorkflowId, ownershipStateId))!.ExecutionLease!.LeaseId);
+    }
+
+    /// <summary>
+    /// #2667: an alteration commits its terminal job evidence under the run's ownership lease. Each store checks that
+    /// fence in the unit of work that stages the job, so a commit under a lease the run no longer has changes nothing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(StoreData))]
+    public async Task A_fenced_alteration_commit_is_refused_under_a_lease_the_run_no_longer_has_and_lands_under_the_current_one(string store)
+    {
+        await using var backend = await RuntimeCheckpointCommitContractBackend.CreateAsync(store);
+        var job = await backend.ClaimAlterationJobAsync(WorkflowId);
+        var lost = await backend.Ownership.AcquireAsync(WorkflowId);
+        var current = await backend.Ownership.AcquireAsync(WorkflowId);
+        var commit = StatefulCommit(Terminal(TerminalChange(job, StatefulCommitId)));
+
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() =>
+            backend.Store.CommitAsync(commit with { ExpectedFence = lost.ToFence() }, Immediate()).AsTask());
+        Assert.Equal(0, await backend.CountMarkersAsync());
+        Assert.Equal(WorkflowAlterationJobStatus.Running, (await backend.Alterations.FindJobAsync(job.JobId))!.Status);
+
+        await backend.Store.CommitAsync(commit with { ExpectedFence = current.ToFence() }, Immediate());
+
+        Assert.Equal(1, await backend.CountMarkersAsync());
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await backend.Alterations.FindJobAsync(job.JobId))!.Status);
+        Assert.Equal(current.LeaseId, (await backend.Liveness.FindAsync(WorkflowId, RuntimeExecutionOwnershipStateId.For(WorkflowId)))!.ExecutionLease!.LeaseId);
     }
 
     private sealed record ConflictCase(

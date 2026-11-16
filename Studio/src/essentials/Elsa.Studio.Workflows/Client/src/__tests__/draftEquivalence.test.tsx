@@ -10,6 +10,10 @@ import { useDraftEquivalence } from "../workflow-editor/useDraftEquivalence";
 import type { WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import { activationSlot, publicationRecord } from "./fixtures/publicationSlots";
 
+vi.mock("../workflow-editor/lazyTestDriveUi", () => ({
+  LazyWorkflowTestRunControls: () => <div data-testid="execution-controls" />
+}));
+
 const definitionId = "definition-1";
 
 function executable(overrides: Partial<WorkflowExecutableSummary> = {}): WorkflowExecutableSummary {
@@ -116,6 +120,32 @@ describe("WorkflowRuntimePanel equivalence caption", () => {
     );
 
     expect(container.querySelector(".wf-runtime-equivalence")).toBeNull();
+  });
+
+  it("keeps the rejection reason visible without controls for a nonexistent execution", () => {
+    const context = { baseUrl: "https://backend.example" } as StudioEndpointContext;
+    const reason = "The target must resolve to one accessible Published artifact.";
+    const container = render(
+      <WorkflowRuntimePanel
+        testRun={{ draftSignature: "draft", view: testRun({ status: "Rejected", artifactId: null, workflowExecutionId: null, reason }) }}
+        context={context}
+        onRunViewUpdated={vi.fn()}
+        onOpenRun={vi.fn()}
+      />
+    );
+
+    expect(container.textContent).toContain(reason);
+    expect(container.querySelector("[data-testid='execution-controls']")).toBeNull();
+
+    flushSync(() => active!.root.render(
+      <WorkflowRuntimePanel
+        testRun={{ draftSignature: "draft", view: testRun() }}
+        context={context}
+        onRunViewUpdated={vi.fn()}
+        onOpenRun={vi.fn()}
+      />
+    ));
+    expect(container.querySelector("[data-testid='execution-controls']")).not.toBeNull();
   });
 
   it("drops a stale signal computed for an earlier test run", () => {

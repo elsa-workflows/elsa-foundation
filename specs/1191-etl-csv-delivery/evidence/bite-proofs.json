@@ -1,0 +1,147 @@
+{
+  "sourceRevision": "eb418a835600e7aa98221b32f41bb593b9d2ac06",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter.",
+  "mutations": [
+    {
+      "mutation": "csv-quoting-disabled",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlCsvRouteWriter.cs",
+      "filter": "FullyQualifiedName~EtlCsvRouteWriterTests",
+      "mutated": "Failed!  - Failed:    11, Passed:     9",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Headers_and_error_rows_use_the_string_rule",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Output_reads_back_through_the_csv_source_reader_with_its_typed_values",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Record_rows_keep_mapping_order_and_exact_scalar_text",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \" leading\", expected: \"\\\" leading\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"\", expected: \"\\\"\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"a,b\", expected: \"\\\"a,b\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"carriage\\rreturn\", expected: \"\\\"carriage\\rreturn\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"line\\nbreak\", expected: \"\\\"line\\nbreak\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"say \\\"hi\\\"\", expected: \"\\\"say \\\"\\\"hi\\\"\\\"\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"trailing\\t\", expected: \"\\\"trailing\\t\\\"\")",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Strings_are_quoted_only_when_they_need_it(value: \"\u00a0nbsp\", expected: \"\\\"\u00a0nbsp\\\"\")"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:    20",
+      "original": "return quote ? \"\\\"\" + value.Replace(\"\\\"\", \"\\\"\\\"\", StringComparison.Ordinal) + \"\\\"\" : value;",
+      "mutated_text": "return value;",
+      "note": "Replaces an earlier mutation whose operator precedence only disabled the empty-string check."
+    },
+    {
+      "mutation": "csv-header-omitted",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~Csv_routes_retain_header",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_routes_retain_header_and_rows_then_publish_verified_csv_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            if (_count == 0)\n                _stream.Write(csvHeader);\n            _stream.Write(row);",
+      "mutated_text": "            _stream.Write(row);"
+    },
+    {
+      "mutation": "csv-crlf-to-lf",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Output/EtlCsvRouteWriter.cs",
+      "filter": "FullyQualifiedName~EtlCsvRouteWriterTests",
+      "mutated": "Failed!  - Failed:     3, Passed:    17",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.A_single_null_column_row_is_an_empty_line",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Headers_and_error_rows_use_the_string_rule",
+        "Elsa.Etl.Tests.EtlCsvRouteWriterTests.Record_rows_keep_mapping_order_and_exact_scalar_text"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:    20",
+      "original": "string.Join(',', cells) + \"\\r\\n\"",
+      "mutated_text": "string.Join(',', cells) + \"\\n\"",
+      "note": "Round 2 (7f3974f29) renamed A_single_null_column_row_is_an_empty_line to A_single_null_column_row_is_an_empty_line_that_the_csv_source_reads_as_one_null_field."
+    },
+    {
+      "mutation": "effect-kind-raw-csv",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorOutputStore.cs",
+      "filter": "FullyQualifiedName~Csv_routes_retain_header",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_routes_retain_header_and_rows_then_publish_verified_csv_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => 2,",
+      "mutated_text": "        EtlConnectorKind.Jsonl => 2,\n        EtlConnectorKind.Csv => 0,"
+    },
+    {
+      "mutation": "acceptance-key-extension",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+      "filter": "FullyQualifiedName~Csv_routes_retain_header|FullyQualifiedName~Connector_api_distinguishes_captured_input",
+      "mutated": "Failed!  - Failed:     2, Passed:     1",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_distinguishes_captured_input_and_acknowledged_outputs_from_accepted_progress(csvErrors: True)",
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_routes_retain_header_and_rows_then_publish_verified_csv_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     3",
+      "original": "EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind)",
+      "mutated_text": "EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId)"
+    },
+    {
+      "mutation": "verification-store-jsonl",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~Csv_routes_retain_header",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_routes_retain_header_and_rows_then_publish_verified_csv_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "var verified = await publishedStore.ReadAsync(",
+      "mutated_text": "var verified = await _jsonlStore.ReadAsync("
+    },
+    {
+      "mutation": "http-bracket-unreserved",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~An_http_error_array_reserves",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.An_http_error_array_reserves_its_closing_bracket_when_a_file_route_fills_the_limit"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "var reserved = _count == 0 ? 1 : 0;",
+      "mutated_text": "var reserved = 0;",
+      "note": "This test leaves the bracket's byte free, so it bites only through the byte accounting; http-bracket-unreserved-at-limit (round 3) reproduces the overrun itself. Round 2 (7f3974f29) widened this test to a Theory over jsonlMain; the 1/1 result and the parameterless name were recorded at eb418a835."
+    },
+    {
+      "mutation": "csv-row-bound-loose",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~Csv_row_bound",
+      "mutated": "Failed!  - Failed:     1, Passed:     1",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_row_bound_counts_the_header_and_rejects_the_row_that_does_not_fit(overBy: 1, accepted: 1, rejected: 1)"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     2",
+      "original": "if (total > Math.Min(maxBytes - _stream.Length, remainingOutputBytes))",
+      "mutated_text": "if (total > Math.Min(maxBytes - _stream.Length, remainingOutputBytes) + 1)"
+    },
+    {
+      "mutation": "http-first-row-unbounded",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~An_http_main_first_row",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.An_http_main_first_row_that_fills_the_allowance_is_rejected_not_the_batch"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": ": mainIsArray && main.IsEmpty ? remainingBytes - 1 : remainingBytes);",
+      "mutated_text": ": remainingBytes);",
+      "round": 1,
+      "sourceRevision": "1b46b4574e431a326124190defcaa812695a2cfa"
+    },
+    {
+      "mutation": "http-bracket-unreserved-at-limit",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~A_file_row_that_would_take",
+      "mutated": "Failed!  - Failed:     2, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(jsonlMain: False)",
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(jsonlMain: True)"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     2",
+      "original": "var reserved = _count == 0 ? 1 : 0;",
+      "mutated_text": "var reserved = 0;",
+      "round": 3,
+      "sourceRevision": "81a82f43c191ccdb9868244cdbeed5166707daa5"
+    }
+  ]
+}

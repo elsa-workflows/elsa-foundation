@@ -40,6 +40,7 @@ public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
         new()
         {
             Id = source.Id,
+            TenantId = (source as TenantEntity)?.TenantId,
             ActivityTypeKey = source.ActivityTypeKey,
             Category = source.Category,
             DisplayName = source.DisplayName,

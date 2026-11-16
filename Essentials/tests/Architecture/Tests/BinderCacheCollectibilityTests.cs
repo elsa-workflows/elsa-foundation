@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -74,7 +74,7 @@ public sealed class BinderCacheCollectibilityTests
     private static byte[] CompileFixture()
     {
         const string source = """
-            using NativeEndpoints;
+            using MinimalEndpoints;
             using System.Threading;
             using System.Threading.Tasks;
 

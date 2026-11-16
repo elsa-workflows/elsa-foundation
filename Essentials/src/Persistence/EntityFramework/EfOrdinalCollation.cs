@@ -95,11 +95,23 @@ public static class EfOrdinalCollation
     /// list can serve a model whose entities do not all carry the same columns.
     /// </param>
     public static void Apply(ModelBuilder modelBuilder, string providerName, params string[] alsoCompared)
+        => ApplyCore(modelBuilder, providerName, null, alsoCompared);
+
+    /// <summary>Declares ordinal comparison only on the named entities, preserving other modules in a consumer-owned model.</summary>
+    public static void ApplyToEntities(ModelBuilder modelBuilder, string providerName, IReadOnlyCollection<Type> entityTypes, params string[] alsoCompared)
+    {
+        ArgumentNullException.ThrowIfNull(entityTypes);
+        ApplyCore(modelBuilder, providerName, entityTypes, alsoCompared);
+    }
+
+    private static void ApplyCore(ModelBuilder modelBuilder, string providerName, IReadOnlyCollection<Type>? entityTypes, string[] alsoCompared)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         var collation = ForProvider(providerName);
         foreach (var property in ComparedProperties(modelBuilder.Model, alsoCompared))
         {
+            if (entityTypes is not null && !entityTypes.Contains(property.DeclaringType.ClrType))
+                continue;
             // The in-memory half, declared on every provider: corrective on SQL Server, a restatement of
             // the default on the other three, and the same sentence in all four models.
             property.SetValueComparer(Ordinal);

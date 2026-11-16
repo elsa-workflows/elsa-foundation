@@ -102,19 +102,29 @@ Definition of one independently bindable plain `[ActivityInput]` property.
 | `Name` | Current author/editor display name |
 | `Type` | Portable value type descriptor |
 | `Required` | Whether omission is invalid |
-| `Nullable` | Whether an explicit `null` (and, when optional, canonical `Absent`) is valid independently of requiredness |
+| `Nullable` | Whether an explicit `null` is valid independently of requiredness |
 | `Default` | Optional pinned default `ValueEnvelope` |
 | `Policy` | Minimum value-protection policy |
 | `EditorMetadata` | Ordering, category, UI hint, options, and provider metadata |
 
 An omitted binding, explicit null, and a literal default are distinct authored states. Publication
-must reject omission for a required input, lower it to the pinned literal default when one exists,
-or preserve accepted optional omission as an `Absent` literal for nullable targets. Requiredness and
-nullability are independent: a required nullable input accepts explicit `null` but not omission. A
-non-nullable input without a binding or pinned default is invalid, and explicit `null` is invalid for
-that input. The executable and complete invocation snapshot remain authoritative; hydration
-deterministically maps optional nullable `Absent` to null instead of consulting transient CLR property
-initializers.
+normalizes declared inputs under [ADR 0045 §2](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings):
+
+- Reject omission for a required input, even when a declared default exists. A required nullable input
+  accepts explicit `null` but not omission.
+- Lower an omitted optional input to its pinned declared default when one exists; otherwise lower it
+  to an explicit null literal for a nullable target, or its type's default literal for a non-nullable
+  target. A non-nullable type without a usable non-null type default needs a declared default;
+  publication rejects an omitted optional input without one (`VF-ACT-003`).
+- Preserve explicit `null` for nullable targets. For a non-nullable target, reject it with `VF-ACT-004`
+  unless the pinned workflow-level default-on-null policy is enabled and the target has a usable
+  non-null type default. That policy substitutes the type default independently of any declared default.
+
+Accepted optional omissions therefore become concrete literal bindings; they do not remain `Absent`
+in the normalized input set. The executable and complete invocation snapshot remain authoritative:
+input values are completed and pinned before activation, and hydration consumes those values without
+consulting transient CLR property initializers. This completion of declared inputs does not erase
+the distinction between missing and explicit null properties inside an arbitrary JSON value.
 
 CLR catalog rows persisted before nullable metadata was introduced retain `Nullable = unknown`; they
 are not mutated in place. Same-version reconciliation may treat an incoming CLR row as compatible
@@ -176,7 +186,7 @@ Authored portable function definition.
 | `ResultType` | Expected portable result type |
 | `Parameters` | Ordered named parameters, each with an authored binding |
 | `Options` | Serializable evaluator options |
-| `CapabilityProfile` | Explicit deterministic capabilities permitted during evaluation |
+| `CapabilityProfile` | Explicit capabilities permitted during evaluation (`binding-readonly-v1`; need not be deterministic, D-1) |
 
 Binding expressions cannot carry delegates, closures, ambient variable/output names, mutating host
 functions, or implicit time/random/configuration access.
@@ -262,7 +272,7 @@ Executable pure expression.
 | `ResultType` | Portable expected result type |
 | `Parameters` | Name → normalized `RuntimeInputBinding` |
 | `Options` | Serialized evaluator options |
-| `CapabilityProfile` | Explicit deterministic capabilities |
+| `CapabilityProfile` | Explicit capabilities (`binding-readonly-v1`) |
 
 Parameter bindings are materialized before evaluation. The evaluator receives an immutable parameter
 map, never an activity execution or variable context.
@@ -307,6 +317,16 @@ Fields: `WorkflowExecutionId`, request `Type`, complete request `ValueEnvelope`,
 and `CapturedAt`. It is owned by the workflow execution record and cannot be mutated after the start
 checkpoint.
 
+Admission completes the request from the pinned contract before the start checkpoint (ADR 0045 §2 amendment, D-10):
+- requiredness is checked first: an omitted required member refuses admission even when a declared default exists (a
+  declared default never satisfies a required member);
+- an omitted optional member takes its declared default;
+- an omitted optional member without a default materializes as `null` when its type is nullable, and as its type's
+  default otherwise;
+- a rejected request executes no activities and schedules no workflow work.
+
+A later read of a declared member therefore always finds a value.
+
 ### `ActivityExecutionState` (logical invocation)
 
 Durable aggregate for one logical invocation of one executable node. The existing
@@ -346,8 +366,9 @@ Complete materialized input set pinned before any CLR activity construction or u
 Invariants:
 
 - The keys exactly equal the pinned contract's normalized input set.
-- Every required key carries a non-`Absent`, type/policy-compatible value; an optional key may carry
-  `Absent`.
+- Every key, required or optional, carries a completed, type/policy-compatible value. Accepted optional
+  omission is already represented by its declared default, explicit null, or usable type default;
+  `Absent` is not permitted in the completed input snapshot.
 - Durable execution accepts only persistable envelopes.
 - The snapshot is created while transitioning Scheduled → Running and committed atomically with the
   first attempt and the post-commit invocation intent.

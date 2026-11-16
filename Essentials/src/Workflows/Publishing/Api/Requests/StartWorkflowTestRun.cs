@@ -2,6 +2,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Requests;
 
@@ -26,7 +27,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         IReadOnlyDictionary<string, JsonElement>? Inputs = null,
         IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null,
         bool AcknowledgeUnavailableExpressionValidation = false,
-        WorkflowTestRunStartSelection? Start = null)
+        WorkflowTestRunStartSelection? Start = null,
+        IReadOnlyCollection<WorkflowExecutableLayoutRecord>? Layout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(SnapshotId);
@@ -41,6 +43,7 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
             ActivityPresentationRecord.NormalizeCollection(ActivityPresentation);
         this.AcknowledgeUnavailableExpressionValidation = AcknowledgeUnavailableExpressionValidation;
         this.Start = Start;
+        this.Layout = Layout?.ToArray() ?? [];
     }
 
     public string DefinitionId { get; init; }
@@ -57,6 +60,9 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
     public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; init; }
     public bool AcknowledgeUnavailableExpressionValidation { get; init; }
     public WorkflowTestRunStartSelection? Start { get; init; }
+
+    /// <summary>Frozen canvas coordinates for this draft snapshot, separate from executable behavior.</summary>
+    public IReadOnlyCollection<WorkflowExecutableLayoutRecord> Layout { get; init; } = [];
 }
 
 /// <summary>Module-neutral selection for a direct start or one discovered trigger option.</summary>

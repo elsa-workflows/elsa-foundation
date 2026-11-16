@@ -17,7 +17,9 @@ public sealed class EfSchemaFamilyCatalogAcrossAssembliesTests
     [Fact]
     public void The_catalog_reads_this_assemblys_own_family_declaration_and_its_content_columns()
     {
-        var family = Assert.Single(EfSchemaFamilyCatalog.Discover([typeof(EfSchemaFinalization).Assembly]));
+        var families = EfSchemaFamilyCatalog.Discover([typeof(EfSchemaFinalization).Assembly]);
+        var family = Assert.Single(families, x => x.Name == EfSchemaFinalization.SchemaFamily);
+        Assert.Contains(families, x => x.Name == EfSourceModel.SchemaFamily && x.CurrentVersion == EfSourceModel.SchemaVersion && x.Module is null);
 
         Assert.Equal((EfSchemaFinalization.SchemaFamily, (string?)null, EfSchemaFinalization.SchemaVersion), (family.Name, family.Module, family.CurrentVersion));
         Assert.NotEmpty(family.ContentColumns);

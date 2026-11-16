@@ -419,3 +419,28 @@ async function waitFor(assertion: () => void) {
     }
   }
 }
+
+describe("useWorkflowEditorData in a background workspace tab", () => {
+  it("keeps the live draft when a hidden tab returns instead of reloading it from the server", async () => {
+    const api = createApi([[]]);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    active = { root, container };
+    const show = (mode: "visible" | "hidden") => flushSync(() => root.render(<React.Activity mode={mode}><Probe context={api.context} /></React.Activity>));
+    show("visible");
+    await waitFor(() => expect(callbacks.loadDraft).toHaveBeenCalledTimes(1));
+    const definitionReads = () => api.getJson.mock.calls.filter(([path]) => String(path).endsWith("/definitions/definition-1")).length;
+    expect(definitionReads()).toBe(1);
+
+    show("hidden");
+    await new Promise(resolve => setTimeout(resolve, 20));
+    show("visible");
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(definitionReads()).toBe(1);
+    expect(callbacks.loadDraft).toHaveBeenCalledTimes(1);
+    expect(callbacks.markSaved).toHaveBeenCalledTimes(1);
+    expect(callbacks.resetHistory).toHaveBeenCalledTimes(1);
+  });
+});

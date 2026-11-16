@@ -36,6 +36,11 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
         ];
     }
 
+    // If promises no order between its branches, so availability stays unknown. It schedules the chosen branch itself,
+    // once per run, so no earlier run of a branch leads to a later one.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var then = SingleBranch(childProjections, IfActivity.ThenSlotName);

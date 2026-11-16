@@ -12,7 +12,7 @@ namespace Elsa.Activities.Http.CommandCost;
 /// <summary>
 /// A persistence mode as the measurement names it: the host's mode and its RecordCompletion setting, which only
 /// Ephemeral reads. Balanced folds up to <see cref="ReferenceWorkflowRuns.MaxActivitiesPerCommit"/> activities into one
-/// commit, the production default, which no measured run reaches.
+/// commit, the production default; the long suspension reference crosses it.
 /// </summary>
 internal sealed record CommandCostMode(string Name, PersistenceMode Mode, bool RecordCompletion = true)
 {
@@ -144,12 +144,13 @@ internal static class CommandCostScenarios
         return new CommandCostRun(database.Provider, workflow, mode.Name, Activities(workflow, writeLines), window.Commands, window.Counts, window.Wire);
     }
 
-    /// <summary>The activity executions of a run: the Sequence and its WriteLines, the four HTTP activities, or the Parallel and its two branches.</summary>
+    /// <summary>Includes structural nodes as well as the leaf activity executions in each reference run.</summary>
     private static int Activities(string workflow, int writeLines) => workflow switch
     {
         ReferenceWorkflowRuns.WriteLineSequence => writeLines + 1,
         ReferenceWorkflowRuns.HttpReference => 4,
         ReferenceWorkflowRuns.ForkJoinResume => 3,
+        ReferenceWorkflowRuns.SuspendingSequence100 => 103,
         RollbackProbe => 0,
         _ => throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.")
     };

@@ -97,12 +97,12 @@ describe("findNodeScopePath", () => {
     expect(scope?.slot.activities.map(activity => activity.nodeId)).toEqual(["in-secondary"]);
   });
 
-  it("returns null for a node stranded in the root's own non-primary slot", () => {
-    // Frames only ever descend into children, so the root's non-primary slots are unreachable — the
-    // canvas can't surface them either, so navigation must honestly report "no path".
+  it("locates a node in the root secondary slot", () => {
     const rootWithSlots = twoSlot("root", leaf("in-primary"), leaf("in-secondary"));
 
-    expect(findNodeScopePath(rootWithSlots, "in-secondary", activity => activity.nodeId, twoSlotCatalog)).toBeNull();
+    const path = findNodeScopePath(rootWithSlots, "in-secondary", activity => activity.nodeId, twoSlotCatalog)!;
+    expect(path).toEqual([{ kind: "root", ownerNodeId: "root", slotId: "acme.two-slot.structure:secondary", label: "root / Secondary" }]);
+    expect(resolveScope(rootWithSlots, path, twoSlotCatalog)?.slot.activities.map(node => node.nodeId)).toEqual(["in-secondary"]);
   });
 });
 

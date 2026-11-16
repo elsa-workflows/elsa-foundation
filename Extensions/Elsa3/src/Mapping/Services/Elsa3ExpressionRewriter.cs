@@ -455,10 +455,10 @@ public sealed class Elsa3ExpressionRewriter
         /// </summary>
         private static readonly Dictionary<string, (string Name, string Declaration)> InlineHelpers = new(StringComparer.Ordinal)
         {
-            ["isNullOrEmpty"] = ("__elsa3IsNullOrEmpty",
-                "function __elsa3IsNullOrEmpty(v) { return v == null || v === \"\"; }"),
-            ["isNullOrWhiteSpace"] = ("__elsa3IsNullOrWhiteSpace",
-                "function __elsa3IsNullOrWhiteSpace(v) { return v == null || /^[\\t-\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]*$/.test(v); }"),
+            ["isNullOrEmpty"] = ("__isNullOrEmpty",
+                "function __isNullOrEmpty(v) { return v == null || v === \"\"; }"),
+            ["isNullOrWhiteSpace"] = ("__isNullOrWhiteSpace",
+                "function __isNullOrWhiteSpace(v) { return v == null || /^[\\t-\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]*$/.test(v); }"),
         };
 
         private readonly SortedSet<string> _helpers = new(StringComparer.Ordinal);
@@ -469,8 +469,8 @@ public sealed class Elsa3ExpressionRewriter
         /// <summary>Elsa 3 built-ins that read instance metadata, and the parameter each one becomes.</summary>
         private static readonly Dictionary<string, (string Member, string Parameter)> InstanceMembers = new(StringComparer.Ordinal)
         {
-            ["getCorrelationId"] = (WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "elsa3CorrelationId"),
-            ["getWorkflowInstanceId"] = (WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "elsa3WorkflowInstanceId"),
+            ["getCorrelationId"] = (WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "workflowCorrelationId"),
+            ["getWorkflowInstanceId"] = (WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "workflowInstanceId"),
         };
 
         private static readonly HashSet<string> PureGlobalCalls = new(StringComparer.Ordinal)

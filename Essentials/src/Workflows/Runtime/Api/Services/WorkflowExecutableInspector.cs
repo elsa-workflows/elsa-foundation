@@ -318,7 +318,8 @@ public sealed class WorkflowExecutableInspector(
                 .OrderBy(capture => capture.OutputName, StringComparer.Ordinal)
                 .Select(OutputCapture)
                 .ToArray(),
-            ProjectBpmnStructure(node));
+            ProjectBpmnStructure(node),
+            node.ActivityContract?.Outcomes.ToArray());
 
     private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
         new(
@@ -474,7 +475,10 @@ public sealed class WorkflowExecutableInspector(
             includeSourceDetails ? binding.ActivityResult : null,
             includeSourceDetails ? binding.ConversionPlan : null,
             includeSourceDetails ? binding.Metadata : null,
-            secret);
+            secret)
+        {
+            Selection = includeSourceDetails ? binding.Selection : null
+        };
     }
 
     private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
@@ -491,6 +495,10 @@ public sealed class WorkflowExecutableInspector(
                         input.DefaultValue?.Clone()))
                     .ToArray());
 
+    // A member read names its source and then each exact member, so it never reads as a whole-value read.
+    private static string? MemberPath(string? source, RuntimeReadSelection? selection) =>
+        selection is null ? source : string.Join(" \u2192 ", new[] { source ?? string.Empty }.Concat(selection.Segments.Select(segment => JsonSerializer.Serialize(segment))));
+
     private static string? Preview(RuntimeInputBinding binding)
     {
         var text = binding.Source switch
@@ -502,6 +510,9 @@ public sealed class WorkflowExecutableInspector(
             RuntimeInputBindingSource.ActivityResult => binding.ActivityResult?.ProjectionKey,
             // The reference, never a value: activation alone resolves a secret.
             RuntimeInputBindingSource.SecretRead => binding.Secret?.Name,
+            RuntimeInputBindingSource.WorkflowRequestMember => MemberPath(binding.WorkflowRequest?.MemberKey, binding.Selection),
+            RuntimeInputBindingSource.VariableMember => MemberPath(binding.Variable?.VariableKey, binding.Selection),
+            RuntimeInputBindingSource.ActivityResultMember => MemberPath(binding.ActivityResult?.ProjectionKey, binding.Selection),
             _ => null
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";
