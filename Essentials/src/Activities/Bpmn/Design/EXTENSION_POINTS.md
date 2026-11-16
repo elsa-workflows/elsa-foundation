@@ -27,3 +27,4 @@
   runtime readers share the private Core codec and frozen key. The runtime hosting feature supplies no publisher contribution.
 
 See [authoring migration](README.md) and the [runtime responsibilities](../Elsa.Activities.Bpmn/EXTENSION_POINTS.md).
+- `RelateChildren` (spec 266) reads the element graph (`BpmnTimeRelationAnalysis`): reachability with waiting parallel/inclusive joins; exclusive gateways, alternative start events and interrupting boundaries as exclusive choices; every other split, event subprocesses and compensation handlers unordered; non-sequential multi-instance and children after an overlapping non-waiting join overlap themselves. `CompletesAfterItsChildren` is `true`: the process cancels its live children before completing.

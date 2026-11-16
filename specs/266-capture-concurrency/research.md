@@ -69,7 +69,9 @@ join sentence require across levels, for example a threshold Parallel inside a S
   several inbound connections waits for every live inbound path. The `merge` policy does not wait
   (`FlowchartJoinCoordinator.ShouldWaitForTarget`): it runs once per arrival. So for two children X and Y where Y is
   reachable from X, X is ordered before Y unless a non-waiting join (a `merge` node with two or more inbound
-  connections) on a path from X to Y is not dominated by X: another arrival can run it, and Y, while X is in flight.
+  connections) on a path from X to Y is not dominated by X and has another inbound source that neither follows X nor
+  excludes it: that arrival can run the join, and Y, while X is in flight. An exclusive merge after an exclusive split
+  therefore keeps its continuation ordered.
   A merge node reached by unordered arrivals can itself run twice at once (R-5).
 - BPMN joins: parallel and inclusive gateways wait. An exclusive gateway, an event-based gateway and any other element
   with several incoming flows pass each token on (BPMN uncontrolled flow); they are treated like `merge`.
@@ -96,8 +98,9 @@ The BPMN handler analyses the element graph (sequence flows) with a virtual root
   X starts on a different choice than every path to Y. Exclusive splits are exclusive gateways (each outgoing flow a
   choice), different start events, and a host with interrupting boundary events (the normal flow and each
   interrupting boundary are choices; a non-interrupting boundary is not a choice). A boundary event is modelled as a
-  successor of a pseudo element in front of its host, so it is ordered after the host's predecessors and unordered
-  with the host.
+  successor of a pseudo element in front of its host, so it is ordered after the host's predecessors. With an
+  interrupting boundary the host and the boundary path are exclusive: the process cancels the host before it can
+  commit (R-3). With a non-interrupting boundary they are unordered.
 - Unordered: everything else, including parallel, inclusive and event-based gateway branches, implicit splits,
   event subprocesses and compensation handlers (they have no sequence flows).
 - Children that are not bound to an element, or a graph that cannot be read, give `Unspecified`.

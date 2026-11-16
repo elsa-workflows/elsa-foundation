@@ -31,3 +31,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   container scope, so it declares no container-scoped variables (`SupportsScopedVariables` defaults to
   `false`). Its `AssessChildResult` keeps availability `Unknown` and states
   `EarlierProducerRunCanReachConsumer = false`: `Parallel` schedules each branch itself, once per run.
+- `ParallelStructureHandler.RelateChildren` states branches `Unordered` (spec 266); `CompletesAfterItsChildren` is `false` when a threshold below the runnable branch count lets the join complete while other branches still run.

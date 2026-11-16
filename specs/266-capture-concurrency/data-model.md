@@ -18,7 +18,7 @@ What a structure states about two of its direct children within one run of the s
 
 | Member | Default | Meaning |
 |---|---|---|
-| `ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)` | `Unspecified` | The relation above. |
+| `ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)` | adapts `ChildrenCompletedBefore` (a child declared completed before another runs before it), otherwise `Unspecified` | The relation above. |
 | `bool? CompletesAfterItsChildren(ActivityNode activity)` | `null` | `true`: the structure completes only after every child run it started has ended (or was cancelled before it could commit). `false`: it can complete while a child still runs. `null`: not declared, treated as `false`. |
 
 `IActivityStructureService` gets the same two members, forwarding to the handler of the node's structure kind;

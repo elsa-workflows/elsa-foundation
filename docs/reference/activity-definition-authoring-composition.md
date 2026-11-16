@@ -73,9 +73,10 @@ Publishing the activity refuses a body reference the activity does not declare o
 
 A capture writes the activity's own variable row. That row is the variable's only store: the variables the body
 reads are projected from it, not kept as a separate frame. Several nodes may capture into one variable one after
-another, and later reads see the last captured value. ADR 0048 §5 requires publication to refuse captures that can
-run concurrently into one variable, unless a merge or reduction governs them. That check is not built yet, for
-workflow variables or graph variables ([#3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198)).
+another, and later reads see the last captured value. Captures into one variable whose order the body does not fix
+(for example on two branches of a Parallel) are reported as an `activity.graph.unordered-variable-write` warning when
+the draft is validated and when the activity compiles; the activity still publishes and the last committed capture
+wins. See [Writes to one variable whose order is not defined](variable-write-order.md).
 
 The last two in the table that need the body nodes' resolved contracts (the result check and the capture type check)
 run when the activity compiles; the others also run when a draft is validated. Ambient JavaScript reads and the key

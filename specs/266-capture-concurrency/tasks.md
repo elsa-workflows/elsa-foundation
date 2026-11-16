@@ -14,14 +14,14 @@ implementation within each phase.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 Add `ActivityChildTimeRelation` in `Essentials/src/Workflows/Design/Core/Models/ActivityChildTimeRelation.cs`
-- [ ] T003 Add `RelateChildren` and `CompletesAfterItsChildren` with defaults to
+- [X] T002 Add `ActivityChildTimeRelation` in `Essentials/src/Workflows/Design/Core/Models/ActivityChildTimeRelation.cs`
+- [X] T003 Add `RelateChildren` and `CompletesAfterItsChildren` with defaults to
   `Essentials/src/Workflows/Design/Core/Contracts/IActivityStructureHandler.cs` and forwarding members (with
   defaults) to `Essentials/src/Workflows/Design/Core/Contracts/IActivityStructureService.cs`
-- [ ] T004 Forward both members in `Essentials/src/Workflows/Design/Core/Services/DefaultActivityStructureService.cs`
-- [ ] T005 Implement `UnorderedVariableWriteAnalysis` (writes, rules of data-model.md, findings, message) in
+- [X] T004 Forward both members in `Essentials/src/Workflows/Design/Core/Services/DefaultActivityStructureService.cs`
+- [X] T005 Implement `UnorderedVariableWriteAnalysis` (writes, rules of data-model.md, findings, message) in
   `Essentials/src/Workflows/Design/Core/Services/UnorderedVariableWriteAnalysis.cs`
-- [ ] T006 [P] Analysis tests over a test-only structure service (ordered, unordered, exclusive, undeclared,
+- [X] T006 [P] Analysis tests over a test-only structure service (ordered, unordered, exclusive, undeclared,
   self-overlap, early release, three writers, duplicate capture target) in
   `Essentials/tests/Workflows/Design/Tests/UnorderedVariableWriteAnalysisTests.cs`
 
@@ -29,17 +29,17 @@ implementation within each phase.
 
 **Independent test**: a Parallel with two capturing branches warns, names both, and promotes.
 
-- [ ] T007 [US1] Declare Parallel (unordered; completes after children unless threshold < branches) in
+- [X] T007 [US1] Declare Parallel (unordered; completes after children unless threshold < branches) in
   `Essentials/src/Activities/ControlFlow/Parallel/Internal/ParallelStructureHandler.cs`
-- [ ] T008 [US1] Declare Sequence (index order, completes after children) in
+- [X] T008 [US1] Declare Sequence (index order, completes after children) in
   `Essentials/src/Activities/Sequence/Internal/SequenceStructureHandler.cs`
-- [ ] T009 [US1] Declare Flowchart (reachability with waiting joins, `merge` rule, trigger-entry exclusivity,
+- [X] T009 [US1] Declare Flowchart (reachability with waiting joins, `merge` rule, trigger-entry exclusivity,
   port-blind forks, merge self-overlap; completes after children unless a `firstWins` node exists) in
   `Essentials/src/Activities/Flowchart/Internal/FlowchartChildResultAnalysis.cs` and `FlowchartStructureHandler.cs`
-- [ ] T010 [US1] Replace `ValueFlowValidator`'s concurrency code with the analysis (captures + Set/Merge/Reduce,
+- [X] T010 [US1] Replace `ValueFlowValidator`'s concurrency code with the analysis (captures + Set/Merge/Reduce,
   warning severity, duplicate capture warning) in
   `Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Validators/ValueFlowValidator.cs`
-- [ ] T011 [US1] Update the existing intrinsic tests to expect warning severity, and add Story 1 scenarios 1, 3, 4,
+- [X] T011 [US1] Update the existing intrinsic tests to expect warning severity, and add Story 1 scenarios 1, 3, 4,
   5, 6 (promotion), 7 and 8 (threshold Parallel and Flowchart `merge` join) in
   `Essentials/tests/Workflows/Design/Tests/ValueFlowValidatorTests.cs`
 
@@ -47,12 +47,12 @@ implementation within each phase.
 
 **Independent test**: If arms, Switch cases, a loop body, a Flowchart path and a waiting join report nothing.
 
-- [ ] T012 [P] [US2] Declare If and Switch (mutually exclusive, completes after children) in
+- [X] T012 [P] [US2] Declare If and Switch (mutually exclusive, completes after children) in
   `Essentials/src/Activities/ControlFlow/If/Internal/IfStructureHandler.cs` and
   `Essentials/src/Activities/ControlFlow/Switch/Internal/SwitchStructureHandler.cs`
-- [ ] T013 [P] [US2] Declare the loops (one child, never overlapping, completes after children) in
+- [X] T013 [P] [US2] Declare the loops (one child, never overlapping, completes after children) in
   `Essentials/src/Activities/ControlFlow/Loops/LoopStructureHandler.cs`
-- [ ] T014 [US2] Story 2 scenarios 1–4 and 6 (waiting join orders branch before continuation) in
+- [X] T014 [US2] Story 2 scenarios 1–4 and 6 (waiting join orders branch before continuation) in
   `Essentials/tests/Workflows/Design/Tests/ValueFlowValidatorTests.cs`; scenario 5 is covered as the D-2a
   several-outcomes case (research R-2, finding F-1)
 
@@ -60,33 +60,33 @@ implementation within each phase.
 
 **Independent test**: a graph body Parallel warns in draft validation and compilation; compilation succeeds.
 
-- [ ] T015 [US3] Run the analysis in `GraphActivityProvider.ValidateAsync` and `CompileAsync` and add the warnings in
+- [X] T015 [US3] Run the analysis in `GraphActivityProvider.ValidateAsync` and `CompileAsync` and add the warnings in
   `Essentials/src/Activities/Graph/Design/Services/GraphActivityProvider.cs`
-- [ ] T016 [US3] Story 3 scenarios 1–3, keeping spec 265's two tests unchanged, in
+- [X] T016 [US3] Story 3 scenarios 1–3, keeping spec 265's two tests unchanged, in
   `Essentials/tests/Activities/Graph/Tests/GraphUnorderedWriteTests.cs`
 
 ## Phase 6: User Story 4 - Every structure declares how its children relate, BPMN included (P2)
 
 **Independent test**: a BPMN parallel gateway warns, an exclusive gateway does not, a test-only structure works.
 
-- [ ] T017 [US4] Declare BPMN (element-graph analysis of research R-6, multi-instance self-overlap, completes after
+- [X] T017 [US4] Declare BPMN (element-graph analysis of research R-6, multi-instance self-overlap, completes after
   children) in `Essentials/src/Activities/Bpmn/Design/Internal/BpmnTimeRelationAnalysis.cs` and
   `BpmnStructureHandler.cs`
-- [ ] T018 [P] [US4] Declare CompensationScope (forward steps in order, then handlers in reverse; completes after
+- [X] T018 [P] [US4] Declare CompensationScope (forward steps in order, then handlers in reverse; completes after
   children) in `Essentials/src/Activities/Compensation/Internal/CompensationScopeStructureHandler.cs`
-- [ ] T019 [US4] Declaration tests for every built-in structure in
+- [X] T019 [US4] Declaration tests for every built-in structure in
   `Essentials/tests/Activities/ControlFlow/Tests/ChildTimeRelationTests.cs` and the BPMN/Flowchart test projects;
   Story 4 scenarios 1–3 (BPMN parallel and exclusive gateway, undeclared structure) in
   `Essentials/tests/Workflows/Design/Tests/ValueFlowValidatorTests.cs`
 
 ## Phase 7: Polish
 
-- [ ] T020 [P] Record the declaration in `EXTENSION_POINTS.md` of `Elsa.Workflows.Design.Core` and every structure
+- [X] T020 [P] Record the declaration in `EXTENSION_POINTS.md` of `Elsa.Workflows.Design.Core` and every structure
   module (FR-012)
-- [ ] T021 [P] Write `docs/reference/variable-write-order.md` (FR-004, FR-014) and link it from
+- [X] T021 [P] Write `docs/reference/variable-write-order.md` (FR-004, FR-014) and link it from
   `docs/reference/activity-definition-authoring-composition.md`
-- [ ] T022 SC-005: confirm the shared-ancestor Parallel capture test fails with the rule removed
-- [ ] T023 Build the touched projects and run their tests; set the spec's Status to Implemented
+- [X] T022 SC-005: confirm the shared-ancestor Parallel capture test fails with the rule removed
+- [X] T023 Build the touched projects and run their tests; set the spec's Status to Implemented
 
 ## Dependencies
 

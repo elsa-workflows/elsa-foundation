@@ -76,3 +76,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   journal view `compensation.journal` version 1 (phase, cause, entries with attempts, waits and offered decisions,
   resolutions, origins and confirmations, the entries still to undo, hand-over progress and the abandonment). It carries
   no captured value; the cause message needs the sensitive-values grant.
+- `CompensationScopeStructureHandler.RelateChildren` (spec 266) states one total order, forward steps in order, then handlers newest first, and it completes after its children (it cancels live children before completing).
