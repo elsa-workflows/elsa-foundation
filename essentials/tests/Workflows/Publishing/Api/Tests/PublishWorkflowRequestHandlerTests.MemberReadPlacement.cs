@@ -247,6 +247,78 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(before, await State());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_local_SetOutput_member_is_pinned_in_its_original_template_and_placed_with_its_public_contract(bool explicitNone)
+    {
+        var executable = await PublishPlacedBodyAsync(BodyRead(explicitNone
+            ? new AuthoredValueConversionRequest(AuthoredValueConversionMode.None) : null), assignOutput: true,
+            beforePlacement: template =>
+            {
+                var originalSetter = Assert.Single(template.Root.DescendantsAndSelf(), node => node.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+                var originalBinding = originalSetter.InputBindings["value"];
+                Assert.Equal(RuntimeReadSelectionMode.Known, originalBinding.Selection!.Mode);
+                Assert.Equal(new ValueTypeDescriptor("String"), originalBinding.Selection.SelectedType);
+                Assert.Equal(["customerId"], originalBinding.Selection.Segments);
+                Assert.Equal("producer", originalBinding.ActivityResult!.ProducerExecutableNodeId);
+                Assert.DoesNotContain(template.DirectDependencies, dependency => dependency.OccurrenceId == "assign");
+                Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), template.RuntimeRequirements);
+                Assert.Contains(new RuntimeRequirement("intrinsic", "2"), template.RuntimeRequirements);
+                Assert.Equal(template.TemplateHash, ExecutableActivityTemplateBehaviorHasher.Compute(template.Root, template.ResumeTargets,
+                    template.DirectDependencies, template.ClosedTemplates, template.RuntimeRequirements, template.StorageDriverRequirements,
+                    template.ProviderFingerprint, template.CompatibilityMetadata));
+            });
+
+        var producer = Assert.Single(executable.RootActivity.DescendantsAndSelf(),
+            node => node.ActivityContract?.ActivityTypeKey == CustomerProducerVersion.Definition.ActivityTypeKey);
+        var setter = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+        var binding = setter.InputBindings["value"];
+        Assert.Equal(RuntimeReadSelectionMode.Known, binding.Selection!.Mode);
+        Assert.Equal(new ValueTypeDescriptor("String"), binding.Selection.SelectedType);
+        Assert.Equal(["customerId"], binding.Selection.Segments);
+        Assert.Equal(producer.ExecutableNodeId, binding.ActivityResult!.ProducerExecutableNodeId);
+        Assert.NotEqual("producer", binding.ActivityResult.ProducerExecutableNodeId);
+        Assert.Null(binding.ActivityResult.ProducerScopeId);
+        Assert.Equal(explicitNone ? ValueConversionMode.None : ValueConversionMode.Auto, binding.ConversionPlan!.Mode);
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan.Operation);
+        Assert.Equal("String", binding.TargetType.Alias);
+        Assert.Equal("output-key", setter.Descriptor.Payload.GetProperty("referenceKey").GetString());
+        Assert.Equal("2", setter.Descriptor.SchemaVersion);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+        Assert.Contains(new RuntimeRequirement("intrinsic", "2"), executable.RuntimeRequirements);
+    }
+
+    [Fact]
+    public async Task A_local_member_requirement_is_included_before_the_original_template_hash_is_computed()
+    {
+        await PublishPlacedBodyAsync(BodyRead(null), assignOutput: true, beforePlacement: template =>
+        {
+            Assert.DoesNotContain(template.DirectDependencies, dependency => dependency.OccurrenceOverlay?.MemberReads is { Count: > 0 });
+            Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), template.RuntimeRequirements);
+            Assert.Equal(template.TemplateHash, ExecutableActivityTemplateBehaviorHasher.Compute(template.Root, template.ResumeTargets,
+                template.DirectDependencies, template.ClosedTemplates, template.RuntimeRequirements, template.StorageDriverRequirements,
+                template.ProviderFingerprint, template.CompatibilityMetadata));
+        });
+    }
+
+    [Fact]
+    public async Task A_known_incompatible_local_SetOutput_member_refuses_before_all_publication_writes()
+    {
+        await PublishPlacedBodyAsync(BodyRead(null), assignOutput: true);
+        async Task<string> State() => JsonSerializer.Serialize(new
+        {
+            Executables = await _store.ListAllAsync(), References = await _referenceStore.ListAllAsync(),
+            Publications = await _publicationStore.ListBySlotAsync(DefaultSlotId), Activation = await _activationAuthority.FindAsync("definition-1", "default")
+        });
+        var before = await State();
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            PublishPlacedBodyAsync(BodyRead(null), shapeSource: new CustomerIdShape { Alias = "Int32" }, assignOutput: true));
+        var refusal = Assert.IsType<ValueConversionPublicationException>(error.InnerException);
+        Assert.NotEqual(ValueConversionRejectionReason.SelectedMemberContractUnknown, refusal.ReasonCode);
+        Assert.Equal(before, await State());
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {

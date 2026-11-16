@@ -277,9 +277,15 @@ public sealed class ActivityTemplateCompiler(
             throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ProviderProjectionMissing",
                 "The activity provider must expose its authored graph for source-read validation.")]);
         if (compilation.ExecutableRoot is not null)
-            ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected,
-                ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(compilation.ExecutableRoot,
-                    request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures));
+        {
+            var readFacts = ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(compilation.ExecutableRoot,
+                request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures) with
+            {
+                OriginalMemberReads = ActivityTemplateDataSelectionGuard.DescribeOriginalMemberReads(compilation.ExecutableRoot,
+                    document, sourceAnalysis, resolved, loadedTemplates, activityStructures)
+            };
+            ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected, readFacts);
+        }
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
         {
@@ -443,9 +449,12 @@ public sealed class ActivityTemplateCompiler(
             .OrderBy(x => x.TemplateHash, StringComparer.Ordinal)
             .ThenBy(x => x.TemplateId, StringComparer.Ordinal)
             .ToArray();
+        // This is still the provider's original local tree; dependency roots are placed separately.
+        var executableRoot = MemberReadSelectionPinner.Pin(compilation.ExecutableRoot, sourceAnalysis?.MemberReads ?? []);
         var runtimeRequirements = compilation.RuntimeRequirements
             .Concat(closure.Values.SelectMany(x => x.RuntimeRequirements))
-            .Concat(directRuntimeDependencies.Any(dependency => dependency.OccurrenceOverlay?.MemberReads is { Count: > 0 })
+            .Concat(directRuntimeDependencies.Any(dependency => dependency.OccurrenceOverlay?.MemberReads is { Count: > 0 }) ||
+                    executableRoot.DescendantsAndSelf().SelectMany(node => node.InputBindings.Values).Any(binding => binding.Selection is not null)
                 ? [new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1")] : [])
             .Distinct()
             .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
@@ -495,7 +504,7 @@ public sealed class ActivityTemplateCompiler(
             return new(null, measurements, resolved, ActivityDiagnosticOrderer.Order(diagnostics));
 
         var hash = ExecutableActivityTemplateBehaviorHasher.Compute(
-            compilation.ExecutableRoot,
+            executableRoot,
             compilation.TemplateLocalResumeTargets,
             directRuntimeDependencies,
             closedTemplates,
@@ -507,7 +516,7 @@ public sealed class ActivityTemplateCompiler(
         var executableTemplate = new ExecutableActivityTemplate(
             templateId,
             hash,
-            compilation.ExecutableRoot,
+            executableRoot,
             compilation.TemplateLocalResumeTargets,
             directRuntimeDependencies,
             closedTemplates,
