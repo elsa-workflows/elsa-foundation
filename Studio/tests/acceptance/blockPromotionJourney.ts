@@ -174,11 +174,14 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     const resume = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
     await expect(resume).toContainText("Proposed reusable activity");
     const existing = resume.getByRole("radio", { name: "Use a published version", exact: true });
-    // The choice must not move while it is pressed: a radio whose size follows focus slid from under the pointer on desktop.
-    const pressedAt = await existing.boundingBox();
-    await existing.click();
-    await expect(existing).toBeChecked();
+    // The choice must stay under the pointer while it is pressed: a radio whose size followed focus slid away on desktop.
+    await existing.scrollIntoViewIfNeeded();
+    const pressedAt = (await existing.boundingBox())!;
+    await page.mouse.move(pressedAt.x + 2, pressedAt.y + pressedAt.height / 2);
+    await page.mouse.down();
     expect(await existing.boundingBox()).toEqual(pressedAt);
+    await page.mouse.up();
+    await expect(existing).toBeChecked();
     await resume.getByRole("combobox", { name: "Published version", exact: true }).selectOption(reusable.headVersionId);
     await capture(page, info, "workflow-promotion-resume");
     await resume.getByRole("button", { name: "Replace block with this version", exact: true }).click();
