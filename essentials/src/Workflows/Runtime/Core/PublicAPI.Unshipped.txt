@@ -12593,6 +12593,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity
 const Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.FingerprintLength = 16 -> int
 static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Derive(string! parentId, string! step) -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Fingerprint(string! value) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySafety.ValidateObservation(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation! observation) -> void
 Elsa.Workflows.Runtime.Core.Models.ValueConversionOperation.NumericToString = 6 -> Elsa.Workflows.Runtime.Core.Models.ValueConversionOperation
 static Elsa.Workflows.Runtime.Core.Models.ValueConversionCompatibility.CanFormatNumericAsString(Elsa.Primitives.Models.ValueTypeDescriptor! source, Elsa.Primitives.Models.ValueRepresentation representation, Elsa.Primitives.Models.ValueTypeDescriptor! target) -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowIntrinsicDescriptorSchemas

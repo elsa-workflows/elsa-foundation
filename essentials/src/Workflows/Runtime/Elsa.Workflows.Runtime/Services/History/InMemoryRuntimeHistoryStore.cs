@@ -304,11 +304,11 @@ internal sealed class InMemoryRuntimeHistoryStore(
             throw new ArgumentException("The history continuation no longer identifies an available range.", "continuationToken");
     }
 
-    private static void ValidateHead(string run, RuntimeHistoryHead? head)
+    internal static void ValidateHead(string run, RuntimeHistoryHead? head)
     {
         if (head is not null && head.WorkflowExecutionId != run)
             throw new RuntimeHistoryIntegrityException(run, "the sequence head belongs to another workflow execution");
-        if (head is { } value && (value.FirstSequence < 0 || value.LastSequence < 0 || value.PurgedThroughSequence < 0 ||
+        if (head is { } value && (value.Policy is null || value.FirstSequence < 0 || value.LastSequence < 0 || value.PurgedThroughSequence < 0 ||
             value.PurgedThroughSequence > value.LastSequence ||
             value.FirstSequence > value.LastSequence && (value.LastSequence == long.MaxValue || value.FirstSequence != value.LastSequence + 1)))
             throw new RuntimeHistoryIntegrityException(run, "the retained sequence head is invalid");

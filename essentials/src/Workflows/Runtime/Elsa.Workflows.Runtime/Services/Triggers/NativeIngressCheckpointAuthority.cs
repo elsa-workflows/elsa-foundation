@@ -35,6 +35,17 @@ internal static class NativeIngressCheckpointAuthority
             work.WorkerExecutionId == state.WorkflowExecutionId && WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable);
     }
 
+    internal static void EnsureHistoryScope(PersistenceAccessContext access, WorkflowExecutionState execution)
+    {
+        var scope = access.RequireScope();
+        // Retained native origins can bind a physical partition independently of their logical tenant.
+        // Their actual admission remains conditional on the source seal; this grants no new source authority.
+        if (!HasBoundScope(execution, scope.Value))
+            access.EnsureTenantScope(execution.TenantId);
+        if (execution.Partition is { } partition && partition.Value != scope.Value)
+            throw new InvalidOperationException("The native execution belongs to a different physical persistence scope.");
+    }
+
     internal static void ValidateWait(RuntimeCheckpointCommit commit, RuntimeCommittedIngressWait committed)
     {
         commit.EnsureExactBookmarkResumeShape();
