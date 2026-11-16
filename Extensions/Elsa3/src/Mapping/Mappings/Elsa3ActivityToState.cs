@@ -51,6 +51,9 @@ public sealed class Elsa3ActivityToState
                 // JSON null the member pass did not convert) is dropped: an untyped binding cannot be published.
                 if (!TryGetArgument(key, value, out var argument))
                     continue;
+                if (isInput && resolved.Inputs.First(input => StringComparer.Ordinal.Equals(input.ReferenceKey, key)).Type.CollectionKind
+                        is Elsa.Primitives.Models.CollectionKind.Array or Elsa.Primitives.Models.CollectionKind.List)
+                    argument = WithJsonListLiteral(argument);
                 (isInput ? inputs : outputs).Add(argument);
             }
 
@@ -72,7 +75,31 @@ public sealed class Elsa3ActivityToState
         // populating it from the import.
     }
 
-    private static bool TryGetArgument(string key, JsonElement jsonElement, out ArgumentState argument)
+    /// <summary>
+    /// A literal bound to a collection input whose text is a JSON array (Elsa 3 converted such text to the list, for
+    /// example <c>["Approved","Rejected"]</c> or <c>[200,404]</c>) becomes that JSON array. Elsa 4 reads literal text
+    /// for a collection as a comma-separated list, so the brackets and quotes would otherwise become part of the items.
+    /// </summary>
+    private static ArgumentState WithJsonListLiteral(ArgumentState argument)
+    {
+        if (!string.Equals(argument.Value.ExpressionType, Elsa3TypedValues.Literal, StringComparison.OrdinalIgnoreCase) ||
+            argument.Value.Value is not string text ||
+            !text.TrimStart().StartsWith('['))
+            return argument;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Array
+                ? argument with { Value = new ArgumentValue(document.RootElement.Clone(), argument.Value.ExpressionType) }
+                : argument;
+        }
+        catch (JsonException)
+        {
+            return argument;
+        }
+    }
+
+    internal static bool TryGetArgument(string key, JsonElement jsonElement, out ArgumentState argument)
     {
         argument = ArgumentState.Null(key);
         // A typed null: the conversion of a null member whose Elsa 4 input accepts null (spec 267).

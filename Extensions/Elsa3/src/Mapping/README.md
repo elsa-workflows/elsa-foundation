@@ -122,6 +122,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   bound to a JSON member must therefore be declared untyped in Elsa 3 (`Object`, or a list or dictionary of objects):
   Elsa 3 converted a typed declaration's result (`Int32` turns `"5"` into 5), and Elsa 4 would take the value as
   returned, so a typed declaration is `VF-IMP-008`.
+- **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
+  `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
+  as a comma-separated list, so the brackets and quotes would otherwise become part of the items.
 - **HTTP response body.** Elsa 4's `WriteHttpResponse.Body` is a JSON value: text is sent as is, anything else as JSON,
   and an unset content type is inferred as Elsa 3 did (`text/plain` for text, `application/json` otherwise). Elsa 3
   `Content` therefore converts when it is a literal or a `String` variable, or when the content type is unset, blank or JSON.
@@ -140,14 +143,23 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     `done`, other names verbatim). `End` does the same with `done`, but only in the workflow's root flowchart: Elsa 3
     `End` ends only its enclosing flowchart, so elsewhere it is `ELS3-ACTIVITY-UNSUPPORTED-MODE`.
   - `Done` is always declared and mapped from the natural completion.
-  - Several outcomes or an expression outcome → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared
-    with a warning; a declared outcome nothing reaches is dropped with a warning.
+  - Several literal outcomes (a JSON list, literal or `Object`) become the graph `Complete`'s literal `outcomes` list of
+    reference keys, so the caller follows every one of them (spec 1208 FR-029); one outcome stays `outcome`. An
+    expression outcome, and several outcomes in a workflow that is not reusable (Elsa 4 `finish` names one), are
+    `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared with a warning; a declared outcome nothing
+    reaches is dropped with a warning.
 - **Flowcharts** (spec 239) become Elsa 4 Flowcharts with their connections:
   - A connection keeps its source, target and port. The port is mapped by the map's outcome rules (an Elsa 3 `If` or
     `Switch` completes with `Done`; Elsa 4's completes with `True`/`False` or a case match, so one connection becomes
     one per Elsa 4 outcome), or kept when the Elsa 4 activity emits it. Target ports and vertices have no behaviour and
     are dropped.
   - A RunJavaScript `Done` connection stays on `Done`, with or without possible outcomes (spec 1208, #3295).
+  - A Switch or FlowSwitch in `MatchFirst` mode (the default) gets a synthesized `Value` that returns the first true
+    case's label. In `MatchAny` mode (`MatchAny`, `matchAny` or `1`) it becomes the Elsa 4 Switch's `MatchAny` mode,
+    each case keeping its own condition (read with JavaScript truthiness, as in `MatchFirst`), so every true case's
+    connection runs, or `Default` when none is true (spec 1208 FR-028). Elsa 4 cannot run case activities in `MatchAny`
+    mode, so a `MatchAny` Switch case that holds an activity is `ELS3-ACTIVITY-UNSUPPORTED-MODE` (use a FlowSwitch and
+    connect the cases); so is a mode set by an expression or an unknown mode. Every case carries a case identity.
     A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
     code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
     connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx

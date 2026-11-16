@@ -973,7 +973,13 @@ internal sealed class Elsa3ActivityNormalizer(
         if (entry is null)
             return;
         foreach (var rule in entry.Members.Where(rule => rule.Rule == Elsa3MemberRuleKind.Structure))
-            context.RemoveProperty(rule.Elsa3Name);
+        {
+            var names = context.Activity.AdditionalProperties.Keys
+                .Where(name => StringComparer.OrdinalIgnoreCase.Equals(name, rule.Elsa3Name) && !context.Node.RewrittenProperties.Contains(name))
+                .ToArray();
+            foreach (var name in names)
+                context.Activity.AdditionalProperties.Remove(name);
+        }
     }
 
     private void PinIntrinsic(Elsa3RewriteContext context)

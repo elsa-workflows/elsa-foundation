@@ -284,7 +284,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
             expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase))
         {
-            property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(property.Value);
+            // The current value, not the one collected before lowering began: a script's setOutcome conversion may
+            // already have declared its outcomes on this node's possible outcomes (DeclareScriptOutcomes).
+            property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(property.Activity.AdditionalProperties[property.PropertyName]);
             return;
         }
 

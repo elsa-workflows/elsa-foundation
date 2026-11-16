@@ -211,6 +211,27 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.DoesNotContain("setOutcomes(", converted, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Spec 1208 FR-027: a computed name declares the catch-all on the possible outcomes whichever order the members
+    /// have, and the possible outcomes are published as a JSON list, not as text Elsa 4 would split at its commas.
+    /// </summary>
+    [Fact]
+    public async Task A_computed_outcome_declares_the_catch_all_on_the_possible_outcomes_list()
+    {
+        var root = Sequence("root",
+            Activity("node", "Elsa.RunJavaScript",
+                ("script", Literal("setOutcome(variables.decision)")),
+                ("possibleOutcomes", Literal("[\"Approved\",\"Rejected\"]", "List<String>"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root,
+            variables: [new Elsa3Variable { Id = "decision", Name = "decision", TypeName = "String" }]));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var possibleOutcomes = Input(Node(result.Value!.State, "node"), "possibleOutcomes");
+        var list = Assert.IsType<JsonElement>(possibleOutcomes.Value.Value);
+        Assert.Equal(["Approved", "Rejected", "Unlisted outcome"], list.EnumerateArray().Select(item => item.GetString()));
+    }
+
     // Spec 1208 FR-027, Q7: a computed name is refused when the activity lists no possible outcomes.
     [Theory]
     [InlineData("var name = 'Appro' + 'ved'; setOutcome(name)")]
