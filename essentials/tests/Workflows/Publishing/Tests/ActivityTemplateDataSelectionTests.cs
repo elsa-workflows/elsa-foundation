@@ -271,6 +271,122 @@ public sealed class ActivityTemplateDataSelectionTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Original_local_member_reads_use_the_exact_dependency_contract_even_when_runtime_ids_collide(bool collision)
+    {
+        var (root, facts) = OriginalMemberCase("valid", collision);
+        Assert.Single(facts.OriginalMemberReads!);
+        ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
+        Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(root, [], true));
+    }
+
+    [Theory]
+    [InlineData("null-scope")]
+    [InlineData("null-optional")]
+    public void Accepted_null_member_source_fields_preserve_their_existing_normalized_semantics(string variant)
+    {
+        var (root, facts) = OriginalMemberCase(variant);
+        var read = Assert.Single(facts.OriginalMemberReads!).Value;
+        Assert.Null(read.Source.ProducerScopeId);
+        Assert.False(read.Source.IsOptional);
+        ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
+    }
+
+    [Theory]
+    [InlineData("unknown-producer", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("ambiguous-dependency", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("ambiguous-source", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("wrong-version", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("wrong-template", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("wrong-projection", "ActivityDataSelection/ProjectionUnknown")]
+    [InlineData("unprojected-source", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("unapproved-read", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("wrong-revision", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("authored-scope", "ActivityDataSelection/ProducerUnknown")]
+    [InlineData("rewritten-producer", "ActivityDataSelection/MemberContractMismatch")]
+    [InlineData("rewritten-projection", "ActivityDataSelection/MemberContractMismatch")]
+    [InlineData("rewritten-role", "ActivityDataSelection/MemberContractMismatch")]
+    [InlineData("rewritten-path", "ActivityDataSelection/MemberContractMismatch")]
+    [InlineData("rewritten-optional", "ActivityDataSelection/MemberContractMismatch")]
+    [InlineData("forged-known", "ActivityDataSelection/MemberContractMismatch")]
+    public void Original_dependency_facts_never_authorize_a_different_or_unresolved_read(string variant, string code)
+    {
+        var (root, facts) = OriginalMemberCase(variant);
+        var error = Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(root, true, facts));
+        Assert.Contains(error.Findings, finding => finding.Path == "consumer/inputs/value" && finding.Type == code);
+    }
+
+    [Fact]
+    public void Original_dependency_facts_do_not_replace_the_required_source_projection()
+    {
+        var (root, facts) = OriginalMemberCase("valid");
+        var error = Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(root, false, facts));
+        Assert.Contains(error.Findings, finding => finding.Type == "ActivityDataSelection/ProviderProjectionMissing");
+    }
+
+    private static (ExecutableNode Root, ActivityTemplateDataSelectionFacts Facts) OriginalMemberCase(string variant, bool collision = false)
+    {
+        var producerId = collision ? "set-output:consumer" : "producer";
+        var projection = variant == "wrong-projection" ? "missing" : "Customer";
+        var payload = new Dictionary<string, object?>
+        {
+            ["producerNodeId"] = producerId, ["projectionKey"] = projection, ["isOptional"] = false, ["memberPath"] = new[] { "a.b", "" }
+        };
+        if (variant == "authored-scope") payload["producerScopeId"] = "foreign";
+        if (variant == "null-scope") payload["producerScopeId"] = null;
+        if (variant == "null-optional") payload["isOptional"] = null;
+        var producer = new ActivityNode(producerId, "producer-version", [], []);
+        var otherProducer = new ActivityNode("other-producer", "other-version", [], []);
+        var consumer = new ActivityNode("consumer", "local", [new ArgumentState("value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(payload), "ActivityResultMember"), null, null, null, null)], []);
+        var authored = new ActivityNode("authored-root", "sequence", [], [], new("owned", "1", JsonSerializer.SerializeToElement(new { })));
+        var children = variant == "ambiguous-source" ? new[] { producer, otherProducer, consumer, producer } : new[] { producer, otherProducer, consumer };
+        var structures = new StructureOwner(authored, children);
+        var source = new ActivityDataSelectionDocument("ActivityDefinition", "candidate", "revision", authored, [], [], []);
+        var analysis = new ActivityDataSelectionAnalysis(variant == "wrong-revision" ? "other" : "revision", null, [], [])
+        {
+            MemberReadsEnabled = true,
+            MemberReads = variant == "unapproved-read" ? [] : [new("consumer/inputs/value", producerId, projection, ["a.b", ""], true,
+                new("String"), false, false, ValueRepresentation.TextValue, "elsa.activity-value-json/1")]
+        };
+        var resultContract = new ActivityResultContract(new("Object"), true, ActivityValuePolicy.Default,
+            [new ActivityResultProjectionContract("Customer", "customer", new("Object"), true, ActivityValuePolicy.Default),
+             new ActivityResultProjectionContract("Other", "other", new("Object"), true, ActivityValuePolicy.Default)]);
+        var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract("producer", "1", "native", JsonSerializer.SerializeToElement(new { }), [],
+            resultContract, ["Done"], new("native", "producer"));
+        var dependencyRoot = new ExecutableNode("template-root", "template-authored", "native", "1", new("native", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(), activityContract: contract);
+        var template = new ExecutableActivityTemplate("template", "sha256:exact", dependencyRoot, new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [], [], [], "provider", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var dependency = new ActivityResolvedDependency("definition", "producer-version", "1", template.TemplateId, template.TemplateHash,
+            new DesignContract("1", [], [], []), ActivityDefinitionVersionLifecycle.Active, null, producerId, []);
+        if (variant == "wrong-version") dependency = dependency with { VersionId = "changed-version" };
+        if (variant == "wrong-template") dependency = dependency with { TemplateHash = "sha256:changed" };
+        var dependencies = new List<ActivityResolvedDependency> { dependency with { OccurrenceId = "other-producer", VersionId = "other-version" } };
+        if (variant != "unknown-producer") dependencies.Add(dependency);
+        if (variant == "ambiguous-dependency") dependencies.Add(dependency);
+        var role = variant == "rewritten-role" ? RuntimeInputBindingSource.ActivityResult : RuntimeInputBindingSource.ActivityResultMember;
+        string[] segments = variant == "rewritten-path" ? ["a", "b", ""] : ["a.b", ""];
+        var binding = new RuntimeInputBinding("value", new("String"), ValueProtectionPolicy.InstanceInline, role,
+            selection: role != RuntimeInputBindingSource.ActivityResultMember ? null : variant == "forged-known"
+                ? new RuntimeReadSelection(1, segments, RuntimeReadSelectionMode.Known, new("Int32"), true, true, ValueRepresentation.StructuredValue, "forged/profile")
+                : new RuntimeReadSelection(1, segments, RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new(variant == "rewritten-producer" ? "other-producer" : producerId,
+                variant == "rewritten-projection" ? "Other" : projection, null, variant == "rewritten-optional"));
+        var root = new ExecutableNode("set-output:consumer", "consumer", "native", "1", new("native", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding> { ["value"] = binding }, new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+        var empty = new Dictionary<string, IReadOnlyCollection<string>>();
+        var facts = new ActivityTemplateDataSelectionFacts(empty, empty, empty)
+        {
+            OriginalMemberReads = ActivityTemplateDataSelectionGuard.DescribeOriginalMemberReads(root,
+                variant == "unprojected-source" ? null : source, analysis, dependencies,
+                new Dictionary<string, ExecutableActivityTemplate> { [template.TemplateId] = template }, structures)
+        };
+        return (root, facts);
+    }
+
     private static RuntimeInputBinding VariableBinding(string key, string scope) => new("value", new("String"),
         ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead, variable: new(key, scope));
 
@@ -298,11 +414,11 @@ public sealed class ActivityTemplateDataSelectionTests
             childSlots: [new("body", children)], activityContract: contract);
     }
 
-    private sealed class StructureOwner(ActivityNode root, ActivityNode child) : IActivityStructureService
+    private sealed class StructureOwner(ActivityNode root, params ActivityNode[] children) : IActivityStructureService
     {
         public bool SupportsScopedVariables(ActivityNode activity) => activity.NodeId == root.NodeId;
         public bool Projected { get; private set; }
-        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => activity.NodeId == root.NodeId ? [new("body", [child])] : [];
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => activity.NodeId == root.NodeId ? [new("body", children)] : [];
         public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children) => activity;
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity)

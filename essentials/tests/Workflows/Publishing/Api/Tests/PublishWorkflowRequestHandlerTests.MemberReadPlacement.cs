@@ -11,12 +11,14 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DesignContract = Elsa.Activities.Design.Core.Models.ActivityContract;
@@ -26,15 +28,13 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// A result member read between two nodes of a reusable activity's body is published deferred, even where the
-/// producer's shape types the member: the body is compiled only when it is placed, after the template's analysis, and
-/// the workflow's analysis does not look inside a placed body. Placement remaps the producer and keeps the segments;
-/// the runtime checks the member's fit when it reads it. An explicit conversion on such a read is refused.
+/// Result member contracts in a reusable body are pinned at placement using the body occurrence identity;
+/// producer remapping and conversion linking preserve that selected contract.
 /// </summary>
 public sealed partial class PublishWorkflowRequestHandlerTests
 {
     [Fact]
-    public async Task A_member_read_in_a_placed_reusable_body_is_published_deferred_with_its_producer_remapped()
+    public async Task A_member_read_in_a_placed_reusable_body_is_published_known_with_its_producer_remapped()
     {
         var executable = await PublishPlacedBodyAsync(BodyRead(conversion: null));
 
@@ -47,19 +47,26 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.NotEqual("producer", binding.ActivityResult.ProducerExecutableNodeId);
         Assert.Null(binding.ActivityResult.ProducerScopeId);
         Assert.Equal(["customerId"], binding.Selection!.Segments);
-        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
-        Assert.Null(binding.ConversionPlan);
+        Assert.Equal(RuntimeReadSelectionMode.Known, binding.Selection.Mode);
+        Assert.Equal(new ValueTypeDescriptor("String"), binding.Selection.SelectedType);
+        Assert.False(binding.Selection.MayBeAbsent);
+        Assert.False(binding.Selection.MayBeNull);
+        Assert.Equal("elsa.activity-value-json/1", binding.Selection.ProfileRevision);
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan!.Operation);
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
     }
 
     [Fact]
-    public async Task An_explicit_conversion_on_a_member_read_in_a_placed_reusable_body_is_refused()
+    public async Task An_explicit_conversion_on_a_known_member_in_a_placed_reusable_body_is_linked()
     {
-        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
-            PublishPlacedBodyAsync(BodyRead(new AuthoredValueConversionRequest(AuthoredValueConversionMode.Json))));
+        var executable = await PublishPlacedBodyAsync(BodyRead(new AuthoredValueConversionRequest(AuthoredValueConversionMode.None)));
+        var binding = Assert.Single(executable.RootActivity.DescendantsAndSelf(),
+            node => node.InputBindings.TryGetValue("Text", out var text) && text.Source == RuntimeInputBindingSource.ActivityResultMember).InputBindings["Text"];
 
-        var refusal = Assert.IsType<ValueConversionPublicationException>(exception.InnerException);
-        Assert.Equal(ValueConversionRejectionReason.SelectedMemberContractUnknown, refusal.ReasonCode);
+        Assert.Equal(RuntimeReadSelectionMode.Known, binding.Selection!.Mode);
+        Assert.Equal(ValueConversionMode.None, binding.ConversionPlan!.Mode);
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan.Operation);
+        Assert.Null(binding.ConversionRequest);
     }
 
     /// <summary>
@@ -158,19 +165,344 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal("b", Assert.IsType<WorkflowRequestExpressionParameterBinding>(binding.Expression.Parameters["B"]).MemberKey);
     }
 
+    [Fact]
+    public async Task A_placed_reusable_body_retains_original_contract_after_same_version_metadata_drift()
+    {
+        var shape = new CustomerIdShape();
+        var calls = 0;
+        var executable = await PublishPlacedBodyAsync(BodyRead(null), shapeSource: shape, beforePlacement: template =>
+        {
+            var overlay = Assert.Single(template.DirectDependencies, dependency => dependency.OccurrenceId == "reader").OccurrenceOverlay!;
+            Assert.Equal("2", overlay.SchemaVersion);
+            Assert.Equal("String", Assert.Single(overlay.MemberReads!).Value.Selection.SelectedType!.Alias);
+            Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), template.RuntimeRequirements);
+            Assert.Equal(template.TemplateHash, ExecutableActivityTemplateBehaviorHasher.Compute(template.Root, template.ResumeTargets,
+                template.DirectDependencies, template.ClosedTemplates, template.RuntimeRequirements, template.StorageDriverRequirements,
+                template.ProviderFingerprint, template.CompatibilityMetadata));
+            calls = shape.Calls;
+            shape.Alias = "Int32";
+            shape.Profile = "unavailable/new-profile";
+            shape.RefuseQueries = true;
+        });
+        var selection = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.InputBindings.Values.Any(
+            binding => binding.Source == RuntimeInputBindingSource.ActivityResultMember)).InputBindings["Text"].Selection!;
+        Assert.Equal("String", selection.SelectedType!.Alias);
+        Assert.Equal("elsa.activity-value-json/1", selection.ProfileRevision);
+        Assert.Equal(calls, shape.Calls);
+    }
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 4)]
+    public async Task Repeated_and_nested_placed_reusable_body_occurrences_keep_their_own_known_sources(bool nested, int expected)
+    {
+        var executable = await PublishPlacedBodyAsync(BodyRead(null), copies: 2, nested: nested);
+        var reads = executable.RootActivity.DescendantsAndSelf().Where(node => node.InputBindings.Values.Any(
+            binding => binding.Source == RuntimeInputBindingSource.ActivityResultMember)).ToArray();
+        Assert.Equal(expected, reads.Length);
+        Assert.Equal(expected, reads.Select(node => node.InputBindings["Text"].ActivityResult!.ProducerExecutableNodeId).Distinct().Count());
+        foreach (var reader in reads)
+        {
+            var producerId = reader.InputBindings["Text"].ActivityResult!.ProducerExecutableNodeId;
+            var parent = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.ChildSlots.SelectMany(slot => slot.Activities)
+                .Any(child => child.ExecutableNodeId == reader.ExecutableNodeId));
+            Assert.Contains(parent.ChildSlots.SelectMany(slot => slot.Activities), node => node.ExecutableNodeId == producerId);
+            Assert.Equal(RuntimeReadSelectionMode.Known, reader.InputBindings["Text"].Selection!.Mode);
+            Assert.NotEqual("reader", reader.AuthoredActivityId);
+        }
+    }
+
+    [Theory]
+    [InlineData(ActivitySerializedShapeState.Unknown)]
+    [InlineData(ActivitySerializedShapeState.Truncated)]
+    [InlineData(ActivitySerializedShapeState.Unavailable)]
+    public async Task An_untyped_result_in_a_placed_reusable_body_keeps_legacy_deferred_behavior(ActivitySerializedShapeState state)
+    {
+        var executable = await PublishPlacedBodyAsync(BodyRead(null), shapeSource: new CustomerIdShape { State = state }, beforePlacement: template =>
+        {
+            var overlay = Assert.Single(template.DirectDependencies, dependency => dependency.OccurrenceId == "reader").OccurrenceOverlay!;
+            Assert.Equal("1", overlay.SchemaVersion);
+            Assert.Null(overlay.MemberReads);
+        });
+        var binding = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.InputBindings.Values.Any(
+            input => input.Source == RuntimeInputBindingSource.ActivityResultMember)).InputBindings["Text"];
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection!.Mode);
+        Assert.Null(binding.ConversionPlan);
+    }
+
+    [Fact]
+    public async Task A_known_incompatible_member_in_a_placed_reusable_body_refuses_before_all_publication_writes()
+    {
+        await PublishPlacedBodyAsync(BodyRead(null)); // Positive controls for all four stores.
+        async Task<string> State() => JsonSerializer.Serialize(new
+        {
+            Executables = await _store.ListAllAsync(), References = await _referenceStore.ListAllAsync(),
+            Publications = await _publicationStore.ListBySlotAsync(DefaultSlotId), Activation = await _activationAuthority.FindAsync("definition-1", "default")
+        });
+        var before = await State();
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            PublishPlacedBodyAsync(BodyRead(null), shapeSource: new CustomerIdShape { Alias = "Int32" }));
+        var refusal = Assert.IsType<ValueConversionPublicationException>(error.InnerException);
+        Assert.NotEqual(ValueConversionRejectionReason.SelectedMemberContractUnknown, refusal.ReasonCode);
+        Assert.Equal(before, await State());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_local_SetOutput_member_is_pinned_in_its_original_template_and_placed_with_its_public_contract(bool explicitNone)
+    {
+        var executable = await PublishPlacedBodyAsync(BodyRead(explicitNone
+            ? new AuthoredValueConversionRequest(AuthoredValueConversionMode.None) : null), assignOutput: true,
+            beforePlacement: template =>
+            {
+                var originalSetter = Assert.Single(template.Root.DescendantsAndSelf(), node => node.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+                var originalBinding = originalSetter.InputBindings["value"];
+                Assert.Equal(RuntimeReadSelectionMode.Known, originalBinding.Selection!.Mode);
+                Assert.Equal(new ValueTypeDescriptor("String"), originalBinding.Selection.SelectedType);
+                Assert.Equal(["customerId"], originalBinding.Selection.Segments);
+                Assert.Equal("producer", originalBinding.ActivityResult!.ProducerExecutableNodeId);
+                Assert.DoesNotContain(template.DirectDependencies, dependency => dependency.OccurrenceId == "assign");
+                Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), template.RuntimeRequirements);
+                Assert.Contains(new RuntimeRequirement("intrinsic", "2"), template.RuntimeRequirements);
+                Assert.Equal(template.TemplateHash, ExecutableActivityTemplateBehaviorHasher.Compute(template.Root, template.ResumeTargets,
+                    template.DirectDependencies, template.ClosedTemplates, template.RuntimeRequirements, template.StorageDriverRequirements,
+                    template.ProviderFingerprint, template.CompatibilityMetadata));
+            });
+
+        var producer = Assert.Single(executable.RootActivity.DescendantsAndSelf(),
+            node => node.ActivityContract?.ActivityTypeKey == CustomerProducerVersion.Definition.ActivityTypeKey);
+        var setter = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.IntrinsicKind == WorkflowIntrinsicKind.SetOutput);
+        var binding = setter.InputBindings["value"];
+        Assert.Equal(RuntimeReadSelectionMode.Known, binding.Selection!.Mode);
+        Assert.Equal(new ValueTypeDescriptor("String"), binding.Selection.SelectedType);
+        Assert.Equal(["customerId"], binding.Selection.Segments);
+        Assert.Equal(producer.ExecutableNodeId, binding.ActivityResult!.ProducerExecutableNodeId);
+        Assert.NotEqual("producer", binding.ActivityResult.ProducerExecutableNodeId);
+        Assert.Null(binding.ActivityResult.ProducerScopeId);
+        Assert.Equal(explicitNone ? ValueConversionMode.None : ValueConversionMode.Auto, binding.ConversionPlan!.Mode);
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan.Operation);
+        Assert.Equal("String", binding.TargetType.Alias);
+        Assert.Equal("output-key", setter.Descriptor.Payload.GetProperty("referenceKey").GetString());
+        Assert.Equal("2", setter.Descriptor.SchemaVersion);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+        Assert.Contains(new RuntimeRequirement("intrinsic", "2"), executable.RuntimeRequirements);
+    }
+
+    [Fact]
+    public async Task A_local_member_requirement_is_included_before_the_original_template_hash_is_computed()
+    {
+        await PublishPlacedBodyAsync(BodyRead(null), assignOutput: true, beforePlacement: template =>
+        {
+            Assert.DoesNotContain(template.DirectDependencies, dependency => dependency.OccurrenceOverlay?.MemberReads is { Count: > 0 });
+            Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), template.RuntimeRequirements);
+            Assert.Equal(template.TemplateHash, ExecutableActivityTemplateBehaviorHasher.Compute(template.Root, template.ResumeTargets,
+                template.DirectDependencies, template.ClosedTemplates, template.RuntimeRequirements, template.StorageDriverRequirements,
+                template.ProviderFingerprint, template.CompatibilityMetadata));
+        });
+    }
+
+    [Fact]
+    public async Task A_known_incompatible_local_SetOutput_member_refuses_before_all_publication_writes()
+    {
+        await PublishPlacedBodyAsync(BodyRead(null), assignOutput: true);
+        async Task<string> State() => JsonSerializer.Serialize(new
+        {
+            Executables = await _store.ListAllAsync(), References = await _referenceStore.ListAllAsync(),
+            Publications = await _publicationStore.ListBySlotAsync(DefaultSlotId), Activation = await _activationAuthority.FindAsync("definition-1", "default")
+        });
+        var before = await State();
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            PublishPlacedBodyAsync(BodyRead(null), shapeSource: new CustomerIdShape { Alias = "Int32" }, assignOutput: true));
+        var refusal = Assert.IsType<ValueConversionPublicationException>(error.InnerException);
+        Assert.NotEqual(ValueConversionRejectionReason.SelectedMemberContractUnknown, refusal.ReasonCode);
+        Assert.Equal(before, await State());
+    }
+
+    [Fact]
+    public async Task A_stored_known_schema1_body_stays_deferred_after_the_same_body_is_republished_with_facts()
+    {
+        var shape = new CustomerIdShape();
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
+        var versions = new List<ActivityDefinitionVersion> { _writeLineActivity, _sequenceActivity, CustomerProducerVersion };
+        var versionStore = new FakeActivityVersionStore(versions);
+        var publications = new DefaultPublications();
+        var templates = new DefaultTemplates();
+        var sources = new List<WorkflowExecutableSourceReference>();
+        foreach (var (dependency, root) in new[]
+                 {
+                     (_writeLineActivity, Node("write", Text("body"))),
+                     (CustomerProducerVersion, new ActivityNode("produce", CustomerProducerVersion.Id, [], [])),
+                     (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))]))
+                 })
+            await PublishAuthorableAsync(dependency, root, versionStore, registry, publications, templates, sources);
+        using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
+        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()),
+            services.GetRequiredService<IServiceScopeFactory>());
+        var definition = new ActivityDefinition { Id = "legacy-upgrade-definition", ActivityTypeKey = "legacy-upgrade-body", Category = "Test" };
+        var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
+        var body = BodySequence("body", [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", BodyRead(null))]);
+        var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
+        {
+            rootActivity = body, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var authoredBytes = manifest.Payload.GetRawText();
+        var known = await shape.DescribeResultAsync(CustomerProducerVersion, "$result", ["customerId"], new());
+        Assert.Equal(ActivitySerializedShapeState.Known, known!.State);
+        Assert.Equal(new TypeReference("String"), known.Type);
+        Assert.Equal("elsa.activity-value-json/1", known.ProfileRevision);
+
+        // Explicit valid legacy fixture, not an old compiler emission: compile provider-owned local content,
+        // then store original four-argument schema-1 overlays BEFORE any current fact capture/pin pass.
+        var discovery = await graph.DiscoverDependenciesAsync(new(definition.Id, "legacy-draft", 1, manifest));
+        var resolved = new List<ActivityResolvedDependency>();
+        foreach (var dependency in discovery.Dependencies)
+        {
+            var publication = (await publications.FindAsync(dependency.DefinitionVersionId))!;
+            var catalogVersion = versions.Single(version => version.Id == dependency.DefinitionVersionId);
+            Assert.True(ActivityStructureDesignFacetReader.TryReadSingle(catalogVersion.DesignFacets, out var facet));
+            ActivityStructureContract? structure = null;
+            if (facet is not null) { Assert.True(ActivityStructureDesignFacetReader.TryReadContract(facet, out var parsed)); structure = parsed; }
+            resolved.Add(new(publication.DefinitionId, publication.DefinitionVersionId, publication.Version, publication.TemplateId,
+                publication.TemplateHash, publication.Contract, publication.Lifecycle, publication.TenantId, dependency.OccurrenceId,
+                dependency.NodeOrigin, dependency.ParentOccurrenceId, dependency.ChildSlotName, dependency.ChildIndex, dependency.MemberUsage, structure));
+        }
+        var local = await graph.CompileAsync(new(definition.Id, definition.ActivityTypeKey, "legacy-draft", 1, "1.0.0", contract, manifest, resolved, GraphActivityProvider.Fingerprint));
+        Assert.DoesNotContain(local.Diagnostics, diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        var dependencies = resolved.Select(dependency =>
+        {
+            var occurrence = local.Occurrences.Single(item => item.OccurrenceId == dependency.OccurrenceId);
+            Assert.Null(occurrence.StructureInputs); // This body has no structure-added input contract.
+            var structure = occurrence.Structure is null ? null : new ExecutableActivityStructure(occurrence.Structure.Kind, occurrence.Structure.SchemaVersion, occurrence.Structure.Payload);
+            var overlay = new ExecutableActivityTemplateOccurrenceOverlay("1", occurrence.InputBindings, structure, occurrence.OutputBindings);
+            // Exercise the retained constructor's actual wire, with known source metadata still available.
+            overlay = JsonSerializer.Deserialize<ExecutableActivityTemplateOccurrenceOverlay>(JsonSerializer.Serialize(overlay))!;
+            return new ExecutableActivityTemplateDependency(dependency.DefinitionId, dependency.VersionId, dependency.Version,
+                dependency.TemplateId, dependency.TemplateHash, dependency.OccurrenceId,
+                new ActivityInvocationOrigin(dependency.NodeOrigin.Select(origin =>
+                {
+                    Assert.Equal("AuthoredNode", origin.Kind);
+                    return new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.AuthoredNode, origin.Id);
+                }).ToArray()),
+                dependency.ParentOccurrenceId, dependency.ChildSlotName, dependency.ChildIndex, overlay);
+        }).ToArray();
+        var closed = new List<ExecutableActivityTemplate>();
+        foreach (var dependency in resolved) closed.Add((await templates.FindAsync(dependency.TemplateId))!);
+        var identities = closed.Select(template => new ExecutableActivityTemplateIdentity(template.TemplateId, template.TemplateHash)).Distinct().OrderBy(x => x.TemplateHash, StringComparer.Ordinal).ToArray();
+        var requirements = local.RuntimeRequirements.Concat(closed.SelectMany(template => template.RuntimeRequirements)).Distinct().OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal).ToArray();
+        var drivers = local.StorageDriverRequirements.Concat(closed.SelectMany(template => template.StorageDriverRequirements)).Distinct().OrderBy(x => x.DriverKey, StringComparer.Ordinal).ToArray();
+        var compatibility = new Dictionary<string, string>();
+        var legacyHash = ExecutableActivityTemplateBehaviorHasher.Compute(local.ExecutableRoot!, local.TemplateLocalResumeTargets, dependencies,
+            identities, requirements, drivers, local.ProviderFingerprint, compatibility);
+        var legacy = new ExecutableActivityTemplate("activity-template-" + legacyHash["sha256:".Length..], legacyHash, local.ExecutableRoot!, local.TemplateLocalResumeTargets,
+            dependencies, identities, requirements, local.ProviderFingerprint, compatibility, DateTimeOffset.UnixEpoch, drivers);
+
+        ActivityDefinitionVersion Store(ExecutableActivityTemplate template, string id, string version)
+        {
+            var publication = new ActivityDefinitionVersionPublication
+            {
+                Id = id, DefinitionVersionId = id, DefinitionId = definition.Id, ActivityTypeKey = definition.ActivityTypeKey, Version = version,
+                ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, Contract = contract, Provider = manifest,
+                TemplateId = template.TemplateId, TemplateHash = template.TemplateHash, SourceReferenceId = id + "-source", ProviderFingerprint = template.ProviderFingerprint,
+                DirectDependencyCount = template.DirectDependencies.Count, ClosedTemplateCount = template.ClosedTemplates.Count,
+                RuntimeRequirements = template.RuntimeRequirements.Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion)).ToList(),
+                Lifecycle = ActivityDefinitionVersionLifecycle.Active
+            };
+            publications.Add(publication); templates.Add(template); sources.Add(SourceOf(publication, template));
+            var catalogVersion = new ActivityDefinitionVersion(version, definition.Id)
+            {
+                Id = id, Definition = definition, ProviderKey = manifest.ProviderKey, ProviderSchemaVersion = manifest.SchemaVersion,
+                ConsumerKey = template.Root.Descriptor.ConsumerKey, ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
+                DescriptorPayload = template.Root.Descriptor.Payload, Inputs = []
+            };
+            versions.Add(catalogVersion);
+            return catalogVersion;
+        }
+        var oldVersion = Store(legacy, "legacy-upgrade-v1", "1.0.0");
+        var legacyBytes = JsonSerializer.Serialize(legacy);
+        var oldPublicationBytes = JsonSerializer.Serialize(await publications.FindAsync(oldVersion.Id));
+        var oldSourceBytes = JsonSerializer.Serialize(sources.Single(source => source.DefinitionVersionId == oldVersion.Id));
+        Assert.All(legacy.DirectDependencies, dependency => { Assert.Equal("1", dependency.OccurrenceOverlay!.SchemaVersion); Assert.Null(dependency.OccurrenceOverlay.MemberReads); });
+
+        async Task<RuntimeInputBinding> Place(ActivityDefinitionVersion selected, string suffix)
+        {
+            shape.RefuseQueries = true;
+            var calls = shape.Calls;
+            var workflow = WorkflowVersion(SequenceNode("workflow", [new ActivityNode("placed", selected.Id, [], [])]),
+                "legacy-upgrade-parent-" + suffix, "legacy-upgrade-parent-version-" + suffix, "1.0.0");
+            var store = new FakeVersionStore(workflow);
+            var compiler = TestCompiler.Create(store, versionStore, _activityStructureService, registry, publications, templates,
+                new DefaultSourceReferences([.. sources]), dataSelectionAnalyzer: TestCompiler.SourceAuthority(versionStore, _activityStructureService, memberReads: true,
+                    services => services.AddSingleton<IActivitySerializedShapeSource>(shape)));
+            var publication = await Handler(null, compiler, store).Handle(new PublishWorkflow(workflow.Id), CancellationToken.None);
+            var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
+            Assert.Equal(calls, shape.Calls);
+            Assert.Equal(legacyBytes, JsonSerializer.Serialize(await templates.FindAsync(legacy.TemplateId)));
+            Assert.Equal(oldPublicationBytes, JsonSerializer.Serialize(await publications.FindAsync(oldVersion.Id)));
+            Assert.Equal(oldSourceBytes, JsonSerializer.Serialize(sources.Single(source => source.DefinitionVersionId == oldVersion.Id)));
+            Assert.Equal(authoredBytes, manifest.Payload.GetRawText());
+            return Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.InputBindings.Values.Any(binding => binding.Source == RuntimeInputBindingSource.ActivityResultMember)).InputBindings["Text"];
+        }
+        var beforeUpgrade = await Place(oldVersion, "old-before");
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, beforeUpgrade.Selection!.Mode);
+        Assert.Null(beforeUpgrade.ConversionPlan);
+        shape.RefuseQueries = false;
+        var beforeRepublishQueries = shape.Calls;
+        var coordinator = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([graph]), new ActivityTemplateDependencyDiscovererRegistry([graph]),
+            publications, versionStore, templates, new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [graph],
+            TestCompiler.SourceAuthority(versionStore, _activityStructureService, memberReads: true, services => services.AddSingleton<IActivitySerializedShapeSource>(shape)), _activityStructureService);
+        var compiled = await coordinator.CompileAsync(new(definition, new ActivityTemplateCandidate("ActivityDraft", "same-body-draft", 2, contract, manifest), "legacy-upgrade-v2", "1.1.0", 0));
+        Assert.True(compiled.IsSuccessful, string.Join("; ", compiled.Diagnostics.Select(diagnostic => diagnostic.Code + ": " + diagnostic.Message)));
+        var current = compiled.Template!;
+        Assert.True(shape.Calls > beforeRepublishQueries);
+        Assert.Equal(legacy.ProviderFingerprint, current.ProviderFingerprint);
+        var currentVersion = Store(current, "legacy-upgrade-v2", "1.1.0");
+        Assert.Equal(oldVersion.DefinitionId, currentVersion.DefinitionId);
+        Assert.Equal(oldVersion.Definition.ActivityTypeKey, currentVersion.Definition.ActivityTypeKey);
+        Assert.NotEqual(oldVersion.Id, currentVersion.Id);
+        Assert.NotEqual((await publications.FindAsync(oldVersion.Id))!.SourceReferenceId, (await publications.FindAsync(currentVersion.Id))!.SourceReferenceId);
+        Assert.NotEqual(legacy.TemplateId, current.TemplateId);
+        Assert.NotEqual(legacy.TemplateHash, current.TemplateHash);
+        var reader = Assert.Single(current.DirectDependencies, dependency => dependency.OccurrenceId == "reader").OccurrenceOverlay!;
+        Assert.Equal("2", reader.SchemaVersion);
+        Assert.Equal(RuntimeReadSelectionMode.Known, Assert.Single(reader.MemberReads!).Value.Selection.Mode);
+        var upgraded = await Place(currentVersion, "new");
+        Assert.Equal(RuntimeReadSelectionMode.Known, upgraded.Selection!.Mode);
+        Assert.Equal("String", upgraded.Selection.SelectedType!.Alias);
+        Assert.Equal(ValueConversionOperation.Identity, upgraded.ConversionPlan!.Operation);
+        var retained = await Place(oldVersion, "old-after");
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, retained.Selection!.Mode);
+        Assert.Null(retained.ConversionPlan);
+        Assert.Equal(legacyHash, ExecutableActivityTemplateBehaviorHasher.Compute(legacy.Root, legacy.ResumeTargets, legacy.DirectDependencies, legacy.ClosedTemplates,
+            legacy.RuntimeRequirements, legacy.StorageDriverRequirements, legacy.ProviderFingerprint, legacy.CompatibilityMetadata));
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {
             producerNodeId = "producer", projectionKey = "$result", isOptional = false, memberPath = new[] { "customerId" }
         }), "ActivityResultMember"), null, null, null, null, conversion);
 
-    // Compiles a reusable activity whose body produces a customer and reads its typed customerId, places it in a
-    // workflow and publishes that workflow, with member reads on in both analyses.
-    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null, bool declaresCustomerInput = false, bool assignOutput = false, bool rootSetter = false, bool sumInputs = false)
+    private static ActivityNode BodySequence(string nodeId, IReadOnlyCollection<ActivityNode> activities) =>
+        new(nodeId, "activity-sequence", Inputs: [], Outputs: [],
+            Structure: new ActivityNodeStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+    // Genuine provider compilation, immutable publication, placement, and the actual publish handler.
+    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null,
+        bool declaresCustomerInput = false, IActivitySerializedShapeSource? shapeSource = null,
+        Action<ExecutableActivityTemplate>? beforePlacement = null, int copies = 1, bool nested = false,
+        bool assignOutput = false, bool rootSetter = false, bool sumInputs = false)
     {
+        var shape = shapeSource ?? new CustomerIdShape();
+        void Shape(IServiceCollection services) => services.AddSingleton<IActivitySerializedShapeSource>(shape);
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
-        var dependencyVersions = new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity, CustomerProducerVersion]);
+        var versions = new List<ActivityDefinitionVersion> { _writeLineActivity, _sequenceActivity, CustomerProducerVersion };
+        var dependencyVersions = new FakeActivityVersionStore(versions);
         var publications = new DefaultPublications();
         var templates = new DefaultTemplates();
         var sources = new List<WorkflowExecutableSourceReference>();
@@ -181,64 +513,80 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                      (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))]))
                  })
             await PublishAuthorableAsync(dependency, root, dependencyVersions, registry, publications, templates, sources);
-
-        // The body: a producer and a reader of one of its members, in a Sequence.
+        using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
+        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()),
+            services.GetRequiredService<IServiceScopeFactory>());
+        var frozen = new List<(ExecutableActivityTemplate Template, string Bytes, ActivityProviderManifest Manifest, string Body)>();
+        async Task<ActivityDefinitionVersion> PublishReusable(string id, ActivityNode body, DesignContract contract, object[] variables)
+        {
+            var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
+            {
+                rootActivity = body, variables, outputMappings = Array.Empty<object>()
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            var coordinator = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([graph]),
+                new ActivityTemplateDependencyDiscovererRegistry([graph]), publications, dependencyVersions, templates,
+                new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [graph],
+                TestCompiler.SourceAuthority(dependencyVersions, _activityStructureService, memberReads: true, Shape), _activityStructureService);
+            var compiled = await coordinator.CompileAsync(new(new ActivityDefinition
+                { Id = id + "-definition", ActivityTypeKey = id, Category = "Test" },
+                new ActivityTemplateCandidate("ActivityDraft", id + "-draft", 1, contract, manifest), id + "-version", "1.0.0", 0));
+            Assert.True(compiled.IsSuccessful, string.Join("; ", compiled.Diagnostics.Select(diagnostic => diagnostic.Code + ": " + diagnostic.Message)));
+            var template = compiled.Template!;
+            frozen.Add((template, JsonSerializer.Serialize(template), manifest, manifest.Payload.GetRawText()));
+            var publication = DefaultPublication(id + "-version", id + "-definition", contract, template, manifest,
+                ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary);
+            publications.Add(publication);
+            templates.Add(template);
+            sources.Add(SourceOf(publication, template));
+            var version = new ActivityDefinitionVersion("1.0.0", publication.DefinitionId)
+            {
+                Id = publication.DefinitionVersionId,
+                Definition = new ActivityDefinition { Id = publication.DefinitionId, ActivityTypeKey = publication.ActivityTypeKey, Category = "Test" },
+                ProviderKey = manifest.ProviderKey, ProviderSchemaVersion = manifest.SchemaVersion,
+                ConsumerKey = template.Root.Descriptor.ConsumerKey, ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
+                DescriptorPayload = template.Root.Descriptor.Payload, Inputs = []
+            };
+            versions.Add(version);
+            return version;
+        }
         var reader = assignOutput
             ? new ActivityNode("assign", "elsa.intrinsic.set-output@1", [Text("PublicResult") with { ReferenceKey = "name" }, read with { ReferenceKey = "value" }], [])
             {
                 Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any"))
             }
             : Node("reader", read);
-        var body = rootSetter ? reader : new ActivityNode("body", _sequenceActivity.Id, [], [], new ActivityNodeStructure(
-            SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
-            JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
-                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
-        using var services = new ServiceCollection().AddScoped<IActivityTemplateInputBindingCompiler>(_ => new RuntimeInputBindingCompiler(registry)).BuildServiceProvider();
-        var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()),
-            services.GetRequiredService<IServiceScopeFactory>());
+        var body = rootSetter ? reader : BodySequence("body",
+            [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), reader]);
         var contract = new DesignContract("1", sumInputs ? [new("a", "A", new("Double"), false, true, null, "elsa.json"), new("b", "B", new("Double"), false, true, null, "elsa.json")] : declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [],
             assignOutput ? [new("output-key", "PublicResult", new(sumInputs ? "Double" : "String"), true, false, "elsa.json")] : [], [new("done", "Done", true)]);
-        var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
-        {
-            rootActivity = body, variables = bodyVariables ?? [], outputMappings = Array.Empty<object>()
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-        var coordinator = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([graph]),
-            new ActivityTemplateDependencyDiscovererRegistry([graph]), publications, dependencyVersions, templates,
-            new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [graph],
-            TestCompiler.SourceAuthority(dependencyVersions, _activityStructureService, memberReads: true, TypedCustomerId), _activityStructureService);
-        var compiled = await coordinator.CompileAsync(new(new ActivityDefinition
-            { Id = "reusable-definition", ActivityTypeKey = "reusable-member-read", Category = "Test" },
-            new ActivityTemplateCandidate("ActivityDraft", "reusable-draft", 1, contract, manifest), "reusable-version", "1.0.0", 0));
-        Assert.True(compiled.IsSuccessful, string.Join("; ", compiled.Diagnostics.Select(diagnostic => diagnostic.Code + ": " + diagnostic.Message)));
-        var template = compiled.Template!;
-
-        // Place the reusable activity in a workflow and publish that.
-        var publication = DefaultPublication("reusable-version", "reusable-definition", contract, template, manifest,
-            ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary);
-        publications.Add(publication);
-        templates.Add(template);
-        sources.Add(SourceOf(publication, template));
-        var reusableVersion = new ActivityDefinitionVersion("1.0.0", publication.DefinitionId)
-        {
-            Id = publication.DefinitionVersionId,
-            Definition = new ActivityDefinition { Id = publication.DefinitionId, ActivityTypeKey = publication.ActivityTypeKey, Category = "Test" },
-            ProviderKey = manifest.ProviderKey, ProviderSchemaVersion = manifest.SchemaVersion,
-            ConsumerKey = template.Root.Descriptor.ConsumerKey, ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
-            DescriptorPayload = template.Root.Descriptor.Payload, Inputs = []
-        };
-        var version = WorkflowVersion(SequenceNode("workflow", [new ActivityNode("placed", reusableVersion.Id, [], [])]));
-        var versionStore = new FakeVersionStore(version);
-        var workflowVersions = new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity, CustomerProducerVersion, reusableVersion]);
-        var compiler = TestCompiler.Create(versionStore, workflowVersions, _activityStructureService, registry, publications, templates,
+        var reusable = await PublishReusable("reusable-member-read", body, contract, bodyVariables ?? []);
+        beforePlacement?.Invoke(frozen[0].Template);
+        if (nested)
+            reusable = await PublishReusable("wrapper", BodySequence("wrapper-body",
+                [new ActivityNode("nested-a", reusable.Id, [], []), new ActivityNode("nested-b", reusable.Id, [], [])]),
+                new DesignContract("1", [], [], [new("done", "Done", true)]), []);
+        var workflow = WorkflowVersion(SequenceNode("workflow", Enumerable.Range(0, copies)
+            .Select(index => new ActivityNode("placed-" + index, reusable.Id, [], [])).ToArray()));
+        var versionStore = new FakeVersionStore(workflow);
+        var compiler = TestCompiler.Create(versionStore, dependencyVersions, _activityStructureService, registry, publications, templates,
             new DefaultSourceReferences([.. sources]),
-            dataSelectionAnalyzer: TestCompiler.SourceAuthority(workflowVersions, _activityStructureService, memberReads: true, TypedCustomerId));
-
-        var published = await Handler(null, compiler, versionStore).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
-        return Assert.IsType<WorkflowExecutable>(await _store.FindAsync(published.ArtifactId));
+            dataSelectionAnalyzer: TestCompiler.SourceAuthority(dependencyVersions, _activityStructureService, memberReads: true, Shape));
+        var authoredBefore = JsonSerializer.Serialize(workflow.State);
+        try
+        {
+            var published = await Handler(null, compiler, versionStore).Handle(new PublishWorkflow(workflow.Id), CancellationToken.None);
+            return Assert.IsType<WorkflowExecutable>(await _store.FindAsync(published.ArtifactId));
+        }
+        finally
+        {
+            Assert.Equal(authoredBefore, JsonSerializer.Serialize(workflow.State));
+            foreach (var snapshot in frozen)
+            {
+                Assert.Equal(snapshot.Bytes, JsonSerializer.Serialize(snapshot.Template));
+                Assert.Equal(snapshot.Body, snapshot.Manifest.Payload.GetRawText());
+            }
+        }
     }
-
-    private static void TypedCustomerId(IServiceCollection services) =>
-        services.AddSingleton<IActivitySerializedShapeSource>(new CustomerIdShape());
 
     // Compiles a one-node workflow of the dependency and publishes it as an authorable activity a body can place.
     private async Task PublishAuthorableAsync(ActivityDefinitionVersion dependency, ActivityNode root, FakeActivityVersionStore versions,
@@ -267,16 +615,23 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     /// <summary>Types the producer's <c>customerId</c> member as a required, non-null string.</summary>
     private sealed class CustomerIdShape : IActivitySerializedShapeSource
     {
+        public string Alias { get; set; } = "String";
+        public string Profile { get; set; } = "elsa.activity-value-json/1";
+        public ActivitySerializedShapeState State { get; set; } = ActivitySerializedShapeState.Known;
+        public int Calls { get; private set; }
+        public bool RefuseQueries { get; set; }
         public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
-            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<ActivitySerializedShape?>(admittedVersion.Id != CustomerProducerVersion.Id
-                ? null
-                : memberPath.SequenceEqual(["customerId"])
-                    ? new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Scalar, new("String"), "contract", "elsa.activity-value-json/1", "metadata")
-                    {
-                        IsNullable = false, Presence = ActivitySerializedPresence.Required, Representation = ValueRepresentation.TextValue
-                    }
-                    : new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Object, new("Object"), "contract", "elsa.activity-value-json/1", "metadata"));
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default)
+        {
+            if (admittedVersion.Id != CustomerProducerVersion.Id) return ValueTask.FromResult<ActivitySerializedShape?>(null);
+            if (RefuseQueries) throw new InvalidOperationException("Placement must not consult newer body metadata.");
+            Calls++;
+            return ValueTask.FromResult<ActivitySerializedShape?>(memberPath.SequenceEqual(["customerId"])
+                ? new(State, ActivitySerializedValueKind.Scalar, State == ActivitySerializedShapeState.Known ? new(Alias) : null,
+                    "contract", Profile, "metadata")
+                { IsNullable = false, Presence = ActivitySerializedPresence.Required, Representation = ValueRepresentation.TextValue }
+                : new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Object, new("Object"), "contract", Profile, "metadata"));
+        }
 
         public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
             ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>

@@ -12542,6 +12542,13 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.Conflic
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.TriggerTypeKey.get -> string?
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerSourceResourceCommitStore.SupportsActivatedType(string! typeKey) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.MatchesPublication(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? tenantId, System.DateTimeOffset now, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource? expectedOwner = null) -> bool
+const Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.MemberReadSchemaVersion = "2" -> string!
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.ExecutableActivityTemplateOccurrenceOverlay(string! schemaVersion, System.Text.Json.JsonElement inputBindings, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityStructure? structure, System.Text.Json.JsonElement? outputBindings, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead!>? memberReads) -> void
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.MemberReads.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead!>?
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead.ExecutableActivityTemplateMemberRead(Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference! source, Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection! selection) -> void
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead.Source.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference!
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateMemberRead.Selection.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection!
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.IsEquivalentTo(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact! other) -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts.Created(Elsa.Workflows.Runtime.Core.Models.IncidentState! incident, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!
