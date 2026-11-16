@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -143,6 +145,108 @@ public sealed class BpmnRoundTripTests
         Assert.Equal(42, shapes.GetProperty("start").GetProperty("x").GetDouble());
         // The shape without an authored position got a synthesized one, so other modelers can render it.
         Assert.True(shapes.GetProperty("end").GetProperty("x").GetDouble() > 0);
+    }
+
+    [Fact]
+    public void Native_subprocess_DI_keeps_its_own_fractional_bounds_and_waypoints()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements: [new("inner-start", BpmnElementTypes.StartEvent), new("inner-end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("inner-flow", "inner-start", "inner-end")],
+            diagram: JsonSerializer.SerializeToElement(new {
+                shapes = new Dictionary<string, object> { ["inner-start"] = new { x = 10.25, y = 20.75, width = 36.5, height = 35.25 } },
+                edges = new Dictionary<string, object> { ["inner-flow"] = new { waypoints = new[] { new { x = 46.75, y = 38.375 }, new { x = 100.5, y = 38.375 } } } }
+            }, SerializerOptions));
+        var nested = ProcessNode(inner) with { NodeId = "native-subprocess" };
+        var outer = new BpmnAuthoredStructure(activities: [nested],
+            elements: [new("start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("entry", "start", "sub"), new("exit", "sub", "end")],
+            diagram: JsonSerializer.SerializeToElement(new { shapes = new Dictionary<string, object> { ["sub"] = new { x = 300.5, y = 400.25, width = 120, height = 80 } }, edges = new Dictionary<string, object>() }, SerializerOptions));
+        var result = ExportImport(outer);
+        Assert.Equal(300.5, result.Diagram!.Value.GetProperty("shapes").GetProperty("sub").GetProperty("x").GetDouble());
+        var body = Assert.Single(result.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        Assert.NotNull(body.Diagram);
+        var bounds = body.Diagram.Value.GetProperty("shapes").GetProperty("inner-start");
+        Assert.Equal(10.25, bounds.GetProperty("x").GetDouble());
+        Assert.Equal(20.75, bounds.GetProperty("y").GetDouble());
+        Assert.Equal(36.5, bounds.GetProperty("width").GetDouble());
+        Assert.Equal(35.25, bounds.GetProperty("height").GetDouble());
+        var points = body.Diagram.Value.GetProperty("edges").GetProperty("inner-flow").GetProperty("waypoints");
+        Assert.Equal(46.75, points[0].GetProperty("x").GetDouble());
+        Assert.Equal(100.5, points[1].GetProperty("x").GetDouble());
+    }
+
+    [Fact]
+    public void Generated_subprocess_routes_and_missing_shapes_stay_in_their_own_DI_plane()
+    {
+        var inner = new BpmnAuthoredStructure(
+            elements: [new("inner-start", BpmnElementTypes.StartEvent), new("inner-task", BpmnElementTypes.Task), new("inner-end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("inner-entry", "inner-start", "inner-task"), new("inner-exit", "inner-task", "inner-end")],
+            diagram: JsonSerializer.SerializeToElement(new {
+                shapes = new Dictionary<string, object> { ["inner-start"] = new { x = 10.25, y = 20.75, width = 36.5, height = 35.25 } },
+                edges = new Dictionary<string, object>()
+            }, SerializerOptions));
+        var nested = ProcessNode(inner) with { NodeId = "native-subprocess" };
+        var outer = new BpmnAuthoredStructure(activities: [nested],
+            elements: [new("start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("end", BpmnElementTypes.EndEvent)],
+            sequenceFlows: [new("entry", "start", "sub"), new("exit", "sub", "end")]);
+        var result = ExportImport(outer);
+        var body = Assert.Single(result.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var shapes = body.Diagram!.Value.GetProperty("shapes");
+        var edges = body.Diagram.Value.GetProperty("edges");
+        foreach (var id in new[] { "inner-start", "inner-task", "inner-end" })
+        {
+            Assert.True(shapes.TryGetProperty(id, out _), $"Missing local shape {id}");
+            Assert.False(result.Diagram!.Value.GetProperty("shapes").TryGetProperty(id, out _));
+        }
+        foreach (var id in new[] { "inner-entry", "inner-exit" })
+        {
+            Assert.Equal(2, edges.GetProperty(id).GetProperty("waypoints").GetArrayLength());
+            Assert.False(result.Diagram!.Value.GetProperty("edges").TryGetProperty(id, out _));
+        }
+        Assert.Equal(10.25, shapes.GetProperty("inner-start").GetProperty("x").GetDouble());
+        Assert.Equal(20.75, shapes.GetProperty("inner-start").GetProperty("y").GetDouble());
+    }
+
+    [Fact]
+    public void Native_scalar_variable_type_survives_XML_without_an_unrepresentable_default()
+    {
+        var authored = new BpmnAuthoredStructure(variables: [new("counter", "counter", new TypeReference("Int32"), null, null)]);
+        var imported = ExportImport(authored);
+        var variable = Assert.Single(imported.Variables);
+        Assert.Equal("counter", variable.ReferenceKey);
+        Assert.Equal("counter", variable.Name);
+        Assert.Equal(new TypeReference("Int32"), variable.Type);
+        Assert.Null(variable.Default);
+    }
+
+    [Theory]
+    [InlineData("identity")]
+    [InlineData("type")]
+    [InlineData("collection")]
+    [InlineData("storage")]
+    [InlineData("expression")]
+    [InlineData("literal-default")]
+    public async Task Unrepresented_variable_settings_are_explicit_export_omissions(string setting)
+    {
+        var variable = new VariableDefinition("counter", "counter", new TypeReference("Int32"), null, null);
+        variable = setting switch {
+            "identity" => variable with { ReferenceKey = "stable-counter-key" },
+            "type" => variable with { Type = new TypeReference("Acme.Account") },
+            "collection" => variable with { Type = new TypeReference("Int32", CollectionKind.Array) },
+            "storage" => variable with { StorageDriverType = "external-store" },
+            "literal-default" => variable with { Default = new ArgumentValue(42, "Literal") },
+            _ => variable with { Default = new ArgumentValue("variables.outer", "JavaScript") }
+        };
+        var source = ProcessNode(new BpmnAuthoredStructure(variables: [variable]));
+        var before = source.Structure!.Payload.GetRawText();
+        var result = await _exporter.ExportAsync(source);
+        Assert.Throws<BpmnInterchangeException>(() => _exporter.Export(source));
+        Assert.Equal(before, source.Structure.Payload.GetRawText());
+        var omission = Assert.Single(result.Omissions);
+        Assert.Equal("unsupported-variable", omission.Code);
+        Assert.Equal(variable.ReferenceKey, omission.ReferenceKey);
+        Assert.Equal("node-bpmn", omission.ElementId);
     }
 
     [Fact]
