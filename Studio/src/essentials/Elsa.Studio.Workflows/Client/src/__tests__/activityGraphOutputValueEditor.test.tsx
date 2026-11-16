@@ -72,7 +72,7 @@ describe("unified graph output value source", () => {
   });
   it("preserves an unsupported saved expression until the author chooses a replacement", async () => {
     const view = renderEditor({ mapping: { syntax: "Liquid", value: "existing source" } });
-    await vi.waitFor(() => expect(button(view.container, "Edit existing source")?.disabled).toBe(true));
+    await vi.waitFor(() => expect(button(view.container, 'Edit "existing source"')?.disabled).toBe(true));
     expect(view.container.textContent).toContain("Graph outputs cannot evaluate Liquid");
     click(button(view.container, "Change value source"));
     const select = view.container.querySelector<HTMLSelectElement>("select")!;
