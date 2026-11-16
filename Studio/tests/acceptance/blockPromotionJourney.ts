@@ -149,8 +149,12 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await expect(row("block")).toBeVisible();
     const kept = await api<{ definition: { definitionId: string; headVersionId: string } }>(`/design/activities/definitions/${reusable.definitionId}`);
     expect(kept.definition.headVersionId).toBe(reusable.headVersionId);
+    await expect(page.getByRole("status").filter({ hasText: "Undo restores the block" })).toHaveCount(0);
     await capture(page, info, "workflow-promotion-undone");
-    proof.workflowUndo = { restored: (await calls())[0].nodeId, reusableKept: kept.definition };
+    // Redo re-applies the exact call as one step.
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect.poll(async () => (await calls())[0]?.activityVersionId).toBe(reusable.headVersionId);
+    proof.workflowUndo = { restored: "block", redone: (await calls())[0], reusableKept: kept.definition };
 
     // Activity Definition host: the same command in the reusable graph editor. Its own root Sequence maps Done to
     // its public outcome, so the host resource is valid before and after the replacement.

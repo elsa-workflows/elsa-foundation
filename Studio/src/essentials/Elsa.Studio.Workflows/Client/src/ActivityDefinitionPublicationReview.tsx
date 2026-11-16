@@ -38,7 +38,8 @@ export function ActivityDefinitionPublicationReview({
   onOpenVersion,
   onOpenWorkflows,
   triggerRef,
-  mode = "full"
+  mode = "full",
+  titleLevel = "h2"
 }: {
   context: StudioEndpointContext;
   definitionId: string;
@@ -56,6 +57,8 @@ export function ActivityDefinitionPublicationReview({
   onOpenWorkflows?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   mode?: "full" | "toolbar";
+  /** The review title's heading level where the review is embedded under another heading. */
+  titleLevel?: "h2" | "h3";
 }) {
   const queryClient = useQueryClient();
   const blockedReasonId = useId();
@@ -308,7 +311,7 @@ export function ActivityDefinitionPublicationReview({
 
   const reviewPanel = <section className="ad-publication-review" aria-labelledby="activity-publication-title">
     <header className="ad-publication-header">
-      <div><span className="ad-kicker">{mode === "toolbar" ? "Publish activity" : "Immutable publication"}</span><h2 id="activity-publication-title">Review &amp; publish</h2><p>{mode === "full" ? "Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection." : "Studio saves the current draft, then checks its impact and readiness before publication."}</p></div>
+      <div><span className="ad-kicker">{mode === "toolbar" ? "Publish activity" : "Immutable publication"}</span>{titleLevel === "h3" ? <h3 id="activity-publication-title">Review &amp; publish</h3> : <h2 id="activity-publication-title">Review &amp; publish</h2>}<p>{mode === "full" ? "Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection." : "Studio saves the current draft, then checks its impact and readiness before publication."}</p></div>
       {mode === "full" ? <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
         <GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}
       </button> : null}

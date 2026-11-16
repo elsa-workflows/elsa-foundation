@@ -6,7 +6,7 @@ import { NativeBlockCommands } from "./graph-authoring/NativeBlockCommands";
 import { useNativeBlockAuthority } from "./graph-authoring/nativeBlockAuthority";
 import { composeExpressionScopePreservation } from "./graph-authoring/expressionScopePreservation";
 import { composePromotionExpressionSupport } from "./graph-authoring/promotionExpressionSupport";
-import { promotionMaterialJson } from "./graph-authoring/blockPromotionTarget";
+import { activityGraphPromotionPayload } from "./graph-authoring/blockPromotionHostDocuments";
 import type { BlockPromotionHost } from "./graph-authoring/BlockPromotionDialog";
 import type { NativeBlockDocument } from "./graph-authoring/nativeBlocks";
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
@@ -431,10 +431,9 @@ export function ActivityGraphImplementationEditor({
   // Promotion may rewrite graph-owned mappings outside the root (output mappings reading block results). The
   // public contract belongs to the definition editor, so a proposal that would change it is refused here.
   const promotionDocument = (document: NativeBlockDocument, referenceContext: unknown[]) => {
-    if (promotionMaterialJson(referenceContext[0]) !== promotionMaterialJson(contract)) return null;
     const replaced = activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout);
-    const rest = referenceContext[1] && typeof referenceContext[1] === "object" ? referenceContext[1] as Record<string, unknown> : {};
-    return { ...replaced, payload: { ...rest, rootActivity: normalizePayload(replaced.payload).rootActivity }, activityPresentation: document.activityPresentation };
+    const promoted = activityGraphPromotionPayload(contract, (value.payload ?? {}) as Record<string, unknown>, normalizePayload(replaced.payload).rootActivity, referenceContext);
+    return promoted ? { ...replaced, payload: promoted, activityPresentation: document.activityPresentation } : null;
   };
   const blockPromotion: BlockPromotionHost = {
     resourceKind: "activity-definition-graph",
@@ -443,7 +442,10 @@ export function ActivityGraphImplementationEditor({
     capabilities: promotionCapabilities.data ?? null,
     capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
     expressionBoundary: promotionExpressionSupport,
-    refreshCatalog: async () => { await catalogQuery.refetch(); },
+    refreshCatalog: async () => {
+      const result = await catalogQuery.refetch();
+      if (result.isError) throw new Error("Studio could not reload the activity catalog. Try again when the service is available.");
+    },
     validate: async (document, referenceContext) => {
       const candidate = promotionDocument(document, referenceContext);
       if (!candidate) return { state: "invalid", messages: ["This promotion would change this activity's own public contract. Change the contract first, then promote again."] };
@@ -451,7 +453,8 @@ export function ActivityGraphImplementationEditor({
     },
     apply: (document, referenceContext, selection, isCurrent) => {
       const candidate = promotionDocument(document, referenceContext);
-      if (!candidate || !isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+      if (!candidate) throw new Error("This promotion would change this activity's own public contract.");
+      if (!isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
       commitDocument(candidate);
       interactions.selectNodes(selection);
       if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);

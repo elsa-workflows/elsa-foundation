@@ -42,6 +42,13 @@ it.each([
   expect(promote()!.title).toBe(reason);
 });
 
+it.each([["loading", "Loading reusable activity authoring…"], ["failed", "Reusable activity authoring is unavailable on this server."]] as const)(
+  "shows the %s reason beside a selected block, not only in a tooltip", (state, reason) => {
+    host = { ...host, capabilitiesState: state }; render();
+    const description = document.getElementById(promote()!.getAttribute("aria-describedby")!);
+    expect(description?.textContent).toBe(reason);
+  });
+
 it("opens the review dialog for the selected block", async () => {
   render();
   expect(promote()!.disabled).toBe(false);

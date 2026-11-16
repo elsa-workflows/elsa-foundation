@@ -1,6 +1,6 @@
 import { describeWorkflowError } from "../workflow-editor/editorHelpers";
 import { describeNativeBlockChange } from "./nativeBlockPreview";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import { getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
@@ -9,6 +9,7 @@ import { useDialogFocus } from "../workflow-editor/useDialogFocus";
 import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, planUngroupNativeBlock, type NativeBlockContext, type NativeBlockDocument, type NativeBlockKind, type NativeBlockPlan } from "./nativeBlocks";
 import { nativeBlockEditorDocument, nativeBlockPlannerContext } from "./nativeBlockEditorContext";
 import type { BlockPromotionHost } from "./BlockPromotionDialog";
+import type { ActivityNode } from "../workflowTypes";
 import "./nativeBlockCommands.css";
 
 export interface NativeBlockValidation {
@@ -49,11 +50,21 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const validating = useRef(false);
   const [committing, setCommitting] = useState(false);
   const [promoting, setPromoting] = useState<string | null>(null);
-  const [promotionStatus, setPromotionStatus] = useState<string | null>(null);
+  const [promotionStatus, setPromotionStatus] = useState<{ message: string; nodeId: string; versionId: string } | null>(null);
+  const promotionReasonId = useId();
   const committingRef = useRef(false);
   const request = useRef(0);
   const close = () => { if (committingRef.current) return; request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); setRetryValidation(false); validating.current = false; };
   useEffect(() => () => { request.current++; }, []);
+  // The replacement notice holds only while the call it describes is in the document; Undo restores the block and retires it.
+  const promotedCallPresent = promotionStatus ? findNode(props.context.document.rootActivity, promotionStatus.nodeId, props.context.catalog)?.activityVersionId === promotionStatus.versionId : false;
+  // The host may render the committed document after the notice is set, so it retires only once the call was seen.
+  const promotedCallSeen = useRef(false);
+  useEffect(() => {
+    if (!promotionStatus) { promotedCallSeen.current = false; return; }
+    if (promotedCallPresent) promotedCallSeen.current = true;
+    else if (promotedCallSeen.current) setPromotionStatus(null);
+  }, [promotionStatus, promotedCallPresent]);
   useLayoutEffect(() => { if (retryValidation && !busy) previewButton.current?.focus(); }, [retryValidation, busy]);
   const invalidatePreview = () => { setPlan(null); setMessages([]); setRetryValidation(false); };
   const reportFailure = (error: unknown, applying = false) => {
@@ -154,14 +165,16 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
       <button type="button" disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => begin("ungroup")}>Ungroup…</button>
       {isBlock && selected ? <button type="button" onClick={() => props.open(selected.nodeId)}>Open {label || "block"} ({childCount} steps)</button> : null}
       {props.promotion ? <button type="button" disabled={!props.context.canEdit || !isBlock || !selected || props.promotion.capabilitiesState !== "ready"}
-        title={promotionUnavailable} onClick={() => { if (selected) { setPromotionStatus(null); setPromoting(selected.nodeId); } }}>Promote to reusable activity…</button> : null}
+        title={promotionUnavailable} aria-describedby={promotionUnavailable && isBlock ? promotionReasonId : undefined}
+        onClick={() => { if (selected) { setPromotionStatus(null); setPromoting(selected.nodeId); } }}>Promote to reusable activity…</button> : null}
       {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
     </div>
     {unavailable ? <p className="wf-muted wf-block-command-notice">{unavailable}</p> : null}
-    {promotionStatus ? <p className="wf-block-command-notice" role="status">{promotionStatus}</p> : null}
+    {promotionUnavailable && isBlock && props.context.canEdit ? <p id={promotionReasonId} className="wf-muted wf-block-command-notice">{promotionUnavailable}</p> : null}
+    {promotionStatus ? <p className="wf-block-command-notice" role="status">{promotionStatus.message}</p> : null}
     {promoting && props.promotion && props.endpoint ? <Suspense fallback={<span role="status">Loading reusable activity promotion…</span>}>
       <BlockPromotionDialog endpoint={props.endpoint} context={props.context} createPosition={props.createPosition} host={props.promotion} blockNodeId={promoting}
-        onClose={() => setPromoting(null)} onReplaced={message => { setPromoting(null); setPromotionStatus(message); }} />
+        onClose={() => setPromoting(null)} onReplaced={(message, versionId) => { setPromotionStatus({ message, nodeId: promoting, versionId }); setPromoting(null); }} />
     </Suspense> : null}
     {action ? <NativeBlockDialog title={title} onClose={close}>
       <h2>{title}</h2>
@@ -186,6 +199,15 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
       <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button ref={previewButton} type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : retryValidation ? "Retry validation" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
     </NativeBlockDialog> : null}
   </>;
+}
+
+function findNode(node: ActivityNode, nodeId: string, catalog: NativeBlockContext["catalog"]): ActivityNode | undefined {
+  if (node.nodeId === nodeId) return node;
+  for (const slot of getChildSlots(node, catalog)) for (const child of slot.activities) {
+    const found = findNode(child, nodeId, catalog);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export function NativeBlockDialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {

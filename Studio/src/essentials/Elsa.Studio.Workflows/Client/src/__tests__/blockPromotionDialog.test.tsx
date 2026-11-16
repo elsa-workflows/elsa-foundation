@@ -14,8 +14,8 @@ const api = vi.hoisted(() => ({ createActivityDefinition: vi.fn(), getActivityDe
 vi.mock("../api/activityDesign", async original => ({ ...(await original<typeof import("../api/activityDesign")>()), ...api }));
 // The ordinary publication review has its own suite; here it reports one exact applied outcome.
 vi.mock("../ActivityDefinitionPublicationReview", () => ({
-  ActivityDefinitionPublicationReview: ({ onPublished, draftId }: { onPublished(outcome: { definitionVersionId: string }): void; draftId: string }) =>
-    <button type="button" onClick={() => onPublished({ definitionVersionId: "published-version" })}>Publish {draftId}</button>
+  ActivityDefinitionPublicationReview: ({ onPublished, draftId }: { onPublished(outcome: { definitionVersionId: string; version: string }): void; draftId: string }) =>
+    <button type="button" onClick={() => onPublished({ definitionVersionId: "published-version", version: "1.0.0" })}>Publish {draftId}</button>
 }));
 const { BlockPromotionDialog } = await import("../graph-authoring/BlockPromotionDialog");
 
@@ -84,6 +84,7 @@ it("reviews the proposed interface and changes nothing until an exact published 
   expect(host.apply).not.toHaveBeenCalled();
   expect(JSON.stringify(nativeContext.document)).toBe(before);
 
+  expect(container.textContent).toContain("Published version 1.0.0");
   click("Replace block with this version"); await settle(6);
 
   expect(host.refreshCatalog).toHaveBeenCalledTimes(1);
@@ -94,6 +95,7 @@ it("reviews the proposed interface and changes nothing until an exact published 
   expect(children(document.rootActivity)[0]).toMatchObject({ nodeId: "block", activityVersionId: "published-version", structure: null });
   expect(selection).toEqual(["block"]);
   expect(onReplaced.mock.calls[0][0]).toContain("Undo restores the block; the reusable activity stays published.");
+  expect(onReplaced.mock.calls[0][1]).toBe("published-version");
 });
 
 it("keeps the document when the server refuses to create the reusable activity", async () => {
@@ -159,4 +161,21 @@ it("cancels without creating anything", () => {
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(api.createActivityDefinition).not.toHaveBeenCalled();
   expect(host.apply).not.toHaveBeenCalled();
+});
+
+it("keeps the dialog open while a create is in flight, so a late success is not lost", async () => {
+  let finish!: (value: unknown) => void;
+  api.createActivityDefinition.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  click("Create reusable activity draft"); await settle(1);
+  expect(button("Cancel").disabled).toBe(true);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await settle(1);
+  expect(onClose).not.toHaveBeenCalled();
+  finish({ definition: { definitionId: "definition-1", displayName: "Prepare shipment" }, draft: { draftId: "draft-1", definitionId: "definition-1", revision: 1 } }); await settle();
+  expect(container.textContent).toContain("Draft created");
+  expect(button("Close").disabled).toBe(false);
+});
+
+it("shows where each input's value comes from and how many steps the block has", () => {
+  expect(container.textContent).toContain("1 step; 1 input");
+  expect(container.textContent).toContain("Greeting · String · from workflow input Greeting");
 });

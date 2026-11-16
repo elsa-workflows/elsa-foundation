@@ -7,6 +7,7 @@ import { nextNativeBlockPosition } from "../graph-authoring/nativeBlockPlacement
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { composePromotionExpressionSupport } from "../graph-authoring/promotionExpressionSupport";
 import type { BlockPromotionHost } from "../graph-authoring/BlockPromotionDialog";
+import { workflowPromotionState } from "../graph-authoring/blockPromotionHostDocuments";
 import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
@@ -1400,7 +1401,6 @@ export function WorkflowEditor({
 
   // Promotion replaces the block and the workflow-owned references the planner rewrote (outputs reading block
   // results) in the same single history edit that native block commands use.
-  const promotionState = (referenceContext: unknown[]) => ({ ...(referenceContext[0] as Omit<typeof draft.state, "rootActivity">) });
   const blockPromotion: BlockPromotionHost = {
     resourceKind: "workflow-definition",
     publicInputs: (draft.state.inputs ?? []).filter((input): input is WorkflowInput => Boolean(input) && typeof input === "object")
@@ -1411,12 +1411,12 @@ export function WorkflowEditor({
     refreshCatalog,
     validate: async (document, referenceContext) => {
       if (!editorDoc.canEdit() || editorDoc.pinned || (!documentAdapter && !persistedDraft)) return { state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] };
-      const candidate = { ...draft, state: { ...promotionState(referenceContext), rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+      const candidate = { ...draft, state: workflowPromotionState(draft.state, document, referenceContext), layout: document.layout, activityPresentation: document.activityPresentation };
       if (documentAdapter) return documentAdapter.validateCandidate?.(context, candidate) ?? { state: "unavailable", messages: ["This resource does not provide candidate validation."] };
       return validateWorkflowCandidate(context, persistedDraft!, candidate);
     },
     apply: async (document, referenceContext, selection, isCurrent) => {
-      const next = { ...draft, state: { ...promotionState(referenceContext), rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+      const next = { ...draft, state: workflowPromotionState(draft.state, document, referenceContext), layout: document.layout, activityPresentation: document.activityPresentation };
       if (!editorDoc.canEdit()) throw new Error("The resource is no longer editable.");
       const applied = await commitNativeBlock(draft, frames, selectedNodeId, next, selection, () => isCurrent() && editorDoc.canEdit());
       if (!applied) throw new Error("The source changed before the edit could be committed.");
