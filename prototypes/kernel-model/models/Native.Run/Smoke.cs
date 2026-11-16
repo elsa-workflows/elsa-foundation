@@ -89,11 +89,12 @@ public static class Smoke
             if (http.Effect is null || mail.Effect is null) continue;
             var attempt = mode == Modes.Durable ? 1 : 0;      // Durable commits an External activity's attempt before it runs
             Check(http.Attempt == attempt && mail.Attempt == attempt, $"both ran under attempt {attempt}");
-            var httpKey = EffectKey.For(http.Instance, http.Frame, http.Attempt);
+            var httpKey = EffectKey.For(http.Instance, http.Node, http.Frame, http.Attempt);
             Check(((HttpSendEffect)http.Effect).Request.Headers[SendHttpRequest.IdempotencyKeyHeader] == httpKey, $"the request's {SendHttpRequest.IdempotencyKeyHeader} is its effect key {httpKey}");
-            var mailKey = EffectKey.For(mail.Instance, mail.Frame, mail.Attempt);
+            var mailKey = EffectKey.For(mail.Instance, mail.Node, mail.Frame, mail.Attempt);
             Check(((EmailSendEffect)mail.Effect).Mail.MessageId == SendEmail.MessageId(mailKey), $"the email's Message-ID is {SendEmail.MessageId(mailKey)}");
             Check(httpKey != mailKey && http.Frame != mail.Frame, "two activations, two keys");
+            Check(httpKey == $"{http.Instance.Ref.Id}/{http.Node}/{http.Frame}/{attempt}", "the key is instance/node/frame/attempt (the owner's shape of 16 November)");
         }
 
         Console.WriteLine("cancel");

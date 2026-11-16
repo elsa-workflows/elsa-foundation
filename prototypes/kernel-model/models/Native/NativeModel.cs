@@ -410,7 +410,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     // The effect key is derived from committed facts (EffectKey.For); only the MUTATION mints one per execution.
     private static long _unstableKeys;
     private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource,
-        Has(NativeFlaw.UnstableEffectKey) ? EffectKey.For(turn.Instance, frame.Id, frame.Attempt) + "." + Interlocked.Increment(ref _unstableKeys) : null);
+        Has(NativeFlaw.UnstableEffectKey) ? EffectKey.For(turn.Instance, frame.Node, frame.Id, frame.Attempt) + "." + Interlocked.Increment(ref _unstableKeys) : null);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -490,7 +490,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 break;
             case OutboundEffect o:
                 // Round 5 C: the host sends it now, with the key the activity put in it. Nothing is recorded for it: the
-                // key is derived from the frame and attempt the commit already carries, so a replay re-derives it.
+                // key is derived from the node, frame and attempt the commit already carries, so a replay re-derives it.
                 model.Options.OnOutbound?.Invoke(turn.Instance, frame.Id, frame.Node, frame.Attempt, o);
                 break;
         }

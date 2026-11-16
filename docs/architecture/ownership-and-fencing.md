@@ -112,15 +112,19 @@ refused, and the replacement owner, the redelivery or the replayed burst sends i
 attempt before it runs; no mode closes it, and the kernel makes no exactly-once claim for anything outside its store.
 
 What the kernel gives instead is a **stable effect key** per activity attempt, derived from committed facts only: the
-instance (its creation included), the model's frame and the attempt, in the form `{instance origin}/{frame}/{attempt}`
-(`EffectKey.For` in the prototype's `src/Kernel.Workflows`). The same frame and attempt re-derive the same key on
-whichever owner replays them; a new attempt gets a new key. The activity hands the key to the receiver where the receiver
+instance (its creation included), the activity's node, the model's frame and the attempt, in the form
+`{instance origin}/{node}/{frame}/{attempt}` (`EffectKey.For` in the prototype's `src/Kernel.Workflows`). The same node,
+frame and attempt re-derive the same key on whichever owner replays them; a new attempt gets a new key. The node is in
+the key by the owner's decision of 16 November: in Balanced and Ephemeral mode a replayed burst mints its frame numbers
+from the committed state, and a replay over a longer inbox can hand a frame number to another activity than the lost
+turn did, so a key without the node could name two different effects and a receiver would drop the second as a repeat.
+With the node, a reused frame number never collides across activities. The activity hands the key to the receiver where the receiver
 looks for a repeat: the built-in HTTP activity sends it as the `Idempotency-Key` header, the email activity as the local
 part of the `Message-ID`. **Deduplication is the receiving side's job**, and conditional: a receiver that keeps the
 keys it has seen drops the repeat, one that does not sees the effect twice. The kernel records no key and drops no
 repeat. The prototype's simulation (NATIVE.md, N7) checks that an outbound effect carries its key, that a resend after a
-lost turn result or a takeover carries the same one, and that no two activations share one; its mutation
-`UnstableEffectKey` shows the check bites.
+lost turn result or a takeover carries the same one, and that no two activations share one, two nodes under a reused
+frame number included; its mutation `UnstableEffectKey` shows the check bites.
 
 ## Alternatives considered
 

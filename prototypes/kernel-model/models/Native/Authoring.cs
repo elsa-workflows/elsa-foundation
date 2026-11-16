@@ -168,7 +168,7 @@ public class ActivityContext
 
     internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource, string? effectKey = null)
         => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource, EffectKey) =
-            (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource, effectKey ?? Kernel.Workflows.EffectKey.For(instance.Id, creation, frame, attempt));
+            (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource, effectKey ?? Kernel.Workflows.EffectKey.For(instance.Id, creation, node, frame, attempt));
 
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
@@ -179,8 +179,9 @@ public class ActivityContext
     /// <summary>The committed attempt of an External activity in Durable mode; 0 otherwise.</summary>
     public int Attempt { get; }
     /// <summary>
-    /// The stable key of this attempt's external effect (<see cref="Kernel.Workflows.EffectKey"/>): the same string
-    /// whenever this frame and attempt run, on whichever owner, and a different one for any other activation. What an
+    /// The stable key of this attempt's external effect (<see cref="Kernel.Workflows.EffectKey"/>: instance, node, frame,
+    /// attempt): the same string whenever this frame and attempt of this node run, on whichever owner, and a different
+    /// one for any other activation, another node under a reused frame number included. What an
     /// activity hands a partner so that the partner can drop a repeat; the kernel itself drops nothing.
     /// </summary>
     public string EffectKey { get; }

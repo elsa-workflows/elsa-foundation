@@ -22,9 +22,11 @@ public sealed class NativeOracle
     public readonly Dictionary<string, string> ChildOf = new(StringComparer.Ordinal);                // child -> parent|frame (waited)
     public readonly Dictionary<string, int> Resumes = new(StringComparer.Ordinal);                   // child -> resumes of its parent
     public readonly Dictionary<string, int> Effects = new(StringComparer.Ordinal);                   // instance|frame -> side effects run
-    // Round 5 C (N7): what each outbound effect carried as its key, by instance|frame:attempt, and who owns each key.
-    public readonly Dictionary<string, (string Key, string Node)> Outbound = new(StringComparer.Ordinal);
-    public readonly Dictionary<string, string> EffectKeyOwners = new(StringComparer.Ordinal);       // key -> instance|frame:attempt
+    // Round 5 C (N7): what each outbound effect carried as its key, by instance|node|frame:attempt; who owns each key;
+    // and which node first sent under each frame number, to see a frame number handed to another node on a replay.
+    public readonly Dictionary<string, string> Outbound = new(StringComparer.Ordinal);               // instance|node|frame:attempt -> key
+    public readonly Dictionary<string, string> EffectKeyOwners = new(StringComparer.Ordinal);       // key -> instance|node|frame:attempt
+    public readonly Dictionary<string, (string Node, string Key)> FrameNodes = new(StringComparer.Ordinal); // instance|frame:attempt -> first node and its key
     // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
     public readonly HashSet<string> Fired = new(StringComparer.Ordinal);                             // instance|frame|node|round
     public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame|round -> nodes of cancelled paths
@@ -40,6 +42,7 @@ public sealed partial class World
     public static long NativeRerunsFlagged; // of those, the ones whose turn the kernel said may have run before (ITurn.Redelivered)
     public static long NativeInstances;     // native instances compared with a run without faults, over all runs
     public static long NativeSameKeyReruns; // outbound effects (HTTP, email) sent again with the key of their first sending, over all runs
+    public static long NativeReusedFrames;  // outbound effects whose frame number another node had already sent under (a Balanced or Ephemeral replay over a longer inbox), over all runs
 
     private NativeModel NativeModelFor(Actor actor) => new(NativeWorkflows.Registry, new NativeOptions
     {
@@ -259,8 +262,9 @@ public sealed partial class World
 
     /// <summary>
     /// N7 (round 5 C): an outbound effect carries its effect key where its receiver looks (the HTTP header, the
-    /// Message-ID); the key is the same every time the same frame and attempt are sent, on whichever owner, and no two
-    /// activations share one. The host's transport is the only place the key can be observed: the kernel records nothing.
+    /// Message-ID); the key is the same every time the same node, frame and attempt are sent, on whichever owner, and no
+    /// two activations share one, two nodes under a reused frame number included (the owner's decision of 16 November:
+    /// the node is in the key). The host's transport is the only place the key can be observed: the kernel records nothing.
     /// </summary>
     private void Outbound(InstanceInfo instance, string frame, string node, int attempt, OutboundEffect effect)
     {
@@ -274,17 +278,26 @@ public sealed partial class World
         };
         var id = CreationProtocol.Origin(instance.Ref.Id, instance.Creation);
         if (what is not null) Faults.Add($"N7 {id}: {what}");
-        var slot = $"{id}|{frame}:{attempt}";
+        var slot = $"{id}|{node}|{frame}:{attempt}";
         if (Native.Outbound.TryGetValue(slot, out var first))
         {
-            // Sent again (the turn's result was lost, or another owner replays it): the same frame and attempt, the same key.
-            if (first.Node != node) Faults.Add($"N7 {id}: frame {frame} (attempt {attempt}) was {first.Node} when first sent and is {node} now, under the key {effect.Key}");
-            else if (first.Key != effect.Key) Faults.Add($"N7 {id}: {node} (frame {frame}, attempt {attempt}) was sent again with the key {effect.Key}; its first sending carried {first.Key}");
+            // Sent again (the turn's result was lost, or another owner replays it): the same node, frame and attempt, the same key.
+            if (first != effect.Key) Faults.Add($"N7 {id}: {node} (frame {frame}, attempt {attempt}) was sent again with the key {effect.Key}; its first sending carried {first}");
             else Interlocked.Increment(ref NativeSameKeyReruns);
             return;
         }
-        Native.Outbound[slot] = (effect.Key, node);
+        Native.Outbound[slot] = effect.Key;
         if (!Native.EffectKeyOwners.TryAdd(effect.Key, slot)) Faults.Add($"N7 {id}: {node} (frame {frame}, attempt {attempt}) carries the key {effect.Key}, which {Native.EffectKeyOwners[effect.Key]} already sent");
+        // A frame number another node already sent under (a Balanced or Ephemeral replay minted it again for a different
+        // activity): the two effects are different and must carry different keys, whatever else holds.
+        var number = $"{id}|{frame}:{attempt}";
+        if (Native.FrameNodes.TryGetValue(number, out var earlier))
+        {
+            if (earlier.Node == node) return;
+            Interlocked.Increment(ref NativeReusedFrames);
+            if (earlier.Key == effect.Key) Faults.Add($"N7 {id}: {node} and {earlier.Node} both sent under frame {frame} (attempt {attempt}) with one key {effect.Key}");
+        }
+        else Native.FrameNodes[number] = (node, effect.Key);
     }
 
     private string? NativeCheck()
