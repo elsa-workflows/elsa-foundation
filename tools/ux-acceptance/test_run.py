@@ -399,7 +399,7 @@ class VerdictTests(unittest.TestCase):
 
 class CompositionTests(unittest.TestCase):
     def setUp(self):
-        self.shells = json.loads((acceptance.ROOT / 'Essentials/apps/Elsa.Workbench/shells.json').read_text(encoding='utf-8-sig'))
+        self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench/shells.json').read_text(encoding='utf-8-sig'))
         self.features = self.shells['CShells']['Shells']['default']['Features']
 
     def test_subset_lists_name_only_currently_configured_features(self):
@@ -534,8 +534,8 @@ class OrchestrationTests(unittest.TestCase):
             # These commands are mocked: keep their simulated fixture build entirely in an owned source copy.
             source = Path(temporary) / 'source'
             for relative in (
-                'Essentials/apps/Elsa.Workbench/appsettings.json',
-                'Essentials/apps/Elsa.Workbench/shells.json',
+                'apps/Elsa.Workbench/appsettings.json',
+                'apps/Elsa.Workbench/shells.json',
                 'Studio/src/apps/Elsa.Studio.Web/appsettings.json',
                 'Studio/src/apps/Elsa.Studio.Web/shells.json',
                 'e2e-tests/activity-data-selection/fixtures/fixture.targets',
@@ -563,7 +563,7 @@ class OrchestrationTests(unittest.TestCase):
 
             def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
                 if log.name == 'fixture-cleanup-build.log':
-                    dll = source / 'Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                    dll = source / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
                     dll.write_bytes(b'fixture-free default host')
                     return
@@ -746,7 +746,7 @@ class SourcePairTests(unittest.TestCase):
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
-                dll = root / 'Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = root / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
                 dll.parent.mkdir(parents=True)
                 def command(_args, log, **_kwargs):
                     if log.name == 'backend-build.log': raise RuntimeError('primary build failure')
