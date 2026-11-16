@@ -56,6 +56,28 @@ const isReadOnlyNodeChange = (change: NodeChange<Node<WorkflowNodeData>>) =>
 
 const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
 
+export interface CanvasFocusIntent {
+  isCurrent(): boolean;
+  dispose(): void;
+}
+
+/** Newer focus takes precedence over a delayed canvas restoration. */
+export function captureCanvasFocusIntent(): CanvasFocusIntent {
+  const origin = document.activeElement;
+  let current = true;
+  const dispose = () => {
+    current = false;
+    document.removeEventListener("focusin", laterFocus);
+  };
+  const laterFocus = (event: FocusEvent) => {
+    if (event.target !== origin && event.target !== document.body) dispose();
+  };
+  document.addEventListener("focusin", laterFocus);
+  return { isCurrent: () => current && (document.activeElement === origin || document.activeElement === document.body), dispose };
+}
+
+type PendingCanvasFocus = { nodeId: string; intent: CanvasFocusIntent };
+
 /**
  * Shape of the slot currently mirrored on the canvas. `unsupported` is a read-only projection of a
  * structure this host cannot edit; `none` means no slot resolved (leaf activity, or nothing chosen).
@@ -151,7 +173,7 @@ export interface GraphCanvasInteractionsResult {
   connectMenu: ConnectMenuState | null;
   setConnectMenu: React.Dispatch<React.SetStateAction<ConnectMenuState | null>>;
   edgeActions: WorkflowEdgeActions;
-  queueCanvasNodeFocus(nodeId: string): void;
+  queueCanvasNodeFocus(nodeId: string, intent?: CanvasFocusIntent): void;
   stampCanvasNode: GraphCanvasStamp;
   /** Canvas selection is a set; the inspector retains a distinct primary node. */
   selectNodes(nodeIds: string[], primaryNodeId?: string | null): void;
@@ -234,7 +256,7 @@ export function useGraphCanvasInteractions({
   } | null>(null);
   const nativePaletteDragRef = useRef<{ itemKey: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
-  const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const pendingCanvasFocusRef = useRef<PendingCanvasFocus | null>(null);
   const focusObserverRef = useRef<MutationObserver | null>(null);
 
   const isUnsupported = mode === "unsupported";
@@ -331,17 +353,23 @@ export function useGraphCanvasInteractions({
     return document.activeElement === element;
   }, []);
 
-  const queueCanvasNodeFocus = useCallback((nodeId: string) => {
-    pendingFocusNodeIdRef.current = nodeId;
+  const clearPendingCanvasFocus = useCallback((expected?: PendingCanvasFocus) => {
+    const pending = pendingCanvasFocusRef.current;
+    if (expected && pending !== expected) return;
+    pending?.intent.dispose();
+    pendingCanvasFocusRef.current = null;
+    focusObserverRef.current?.disconnect();
+    focusObserverRef.current = null;
+  }, []);
+
+  const watchCanvasFocus = useCallback((pending: PendingCanvasFocus) => {
     focusObserverRef.current?.disconnect();
     const tryFocus = () => {
-      if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
-      pendingFocusNodeIdRef.current = null;
-      focusObserverRef.current?.disconnect();
-      focusObserverRef.current = null;
+      if (pendingCanvasFocusRef.current !== pending) return;
+      if (!pending.intent.isCurrent()) { clearPendingCanvasFocus(pending); return; }
+      if (focusCanvasNode(pending.nodeId)) clearPendingCanvasFocus(pending);
     };
-    // React Flow mounts new nodes hidden until measured. Observe its visibility update rather
-    // than treating a found-but-not-focusable wrapper as successful or guessing a render delay.
+    // React Flow mounts nodes hidden until measured; retain the original focus intent across those updates.
     const canvas = canvasRef.current;
     if (canvas) {
       const observer = new MutationObserver(tryFocus);
@@ -349,24 +377,24 @@ export function useGraphCanvasInteractions({
       focusObserverRef.current = observer;
     }
     window.requestAnimationFrame(tryFocus);
-  }, [focusCanvasNode]);
+  }, [clearPendingCanvasFocus, focusCanvasNode]);
 
-  useEffect(() => () => {
-    pendingFocusNodeIdRef.current = null;
-    focusObserverRef.current?.disconnect();
-  }, []);
+  const queueCanvasNodeFocus = useCallback((nodeId: string, intent = captureCanvasFocusIntent()) => {
+    if (!intent.isCurrent()) { intent.dispose(); return; }
+    clearPendingCanvasFocus();
+    const pending = { nodeId, intent };
+    pendingCanvasFocusRef.current = pending;
+    watchCanvasFocus(pending);
+  }, [clearPendingCanvasFocus, watchCanvasFocus]);
+
+  useEffect(() => () => clearPendingCanvasFocus(), [clearPendingCanvasFocus]);
 
   useEffect(() => {
-    const nodeId = pendingFocusNodeIdRef.current;
-    if (!nodeId) return;
-    if (nodes.some(node => node.id === nodeId)) {
-      queueCanvasNodeFocus(nodeId);
-    } else {
-      pendingFocusNodeIdRef.current = null;
-      focusObserverRef.current?.disconnect();
-      focusObserverRef.current = null;
-    }
-  }, [nodes, queueCanvasNodeFocus]);
+    const pending = pendingCanvasFocusRef.current;
+    if (!pending) return;
+    if (nodes.some(node => node.id === pending.nodeId)) watchCanvasFocus(pending);
+    else clearPendingCanvasFocus(pending);
+  }, [clearPendingCanvasFocus, nodes, watchCanvasFocus]);
 
   /**
    * Places an already-positioned node on the canvas, clearing the previous selection, selecting and
