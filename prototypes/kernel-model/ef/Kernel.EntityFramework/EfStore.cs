@@ -211,8 +211,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 }
 
 /// <summary>
-/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL. A commit is: the fence, checked; then
-/// one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
+/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL.
+/// Since round 5 B the commit is the store's own SQL by default (EfStore.Owned.cs, COMMIT-SQL.md): the fence first, then every
+/// row with its count checked, in one command per round trip; <see cref="CommitSql"/> chooses, and
+/// <c>CommitSql.EntityFramework</c> keeps the path described here as the reference. On that path a commit is: the fence,
+/// checked; then one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
 /// concurrency tokens on epoch and position, which saves a round trip and takes the lease time from this machine's
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
