@@ -83,20 +83,26 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await expect(trigger).toBeFocused();
     expect((await api<{ items: unknown[] }>(`/design/activities/definitions?search=${encodeURIComponent(name)}`)).items).toHaveLength(0);
 
-    await trigger.click();
-    await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-    await dialog.getByRole("button", { name: "Create reusable activity draft", exact: true }).click();
+    // The completing pass uses the keyboard only: focus and Enter, typing, no pointer.
+    const press = async (locator: ReturnType<Page["getByRole"]>) => { await locator.focus(); await locator.press("Enter"); };
+    await press(trigger);
+    await dialog.getByRole("textbox", { name: "Name", exact: true }).focus();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type(name);
+    await press(dialog.getByRole("button", { name: "Create reusable activity draft", exact: true }));
     await expect(dialog).toContainText("Draft created");
     await capture(page, info, `${host}-promotion-created`);
-    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
+    await press(dialog.getByRole("button", { name: "Prepare publication", exact: true }));
     const publish = dialog.getByRole("button", { name: /^Publish \d+\.\d+\.\d+$/ });
     await expect(publish).toBeEnabled();
-    await publish.click();
+    await press(publish);
     await expect(dialog).toContainText("Replace the block with this exact version.");
     await capture(page, info, `${host}-promotion-published`);
     await recordMaterial(host, name, dialog);
-    await dialog.getByRole("button", { name: "Replace block with this version", exact: true }).click();
+    await press(dialog.getByRole("button", { name: "Replace block with this version", exact: true }));
     await expect(dialog).toBeHidden();
+    // Focus lands on the replaced call, not on the page body.
+    await expect.poll(() => row("block").evaluate(element => element === document.activeElement || element.contains(document.activeElement))).toBe(true);
     await expect(page.getByRole("status").filter({ hasText: "Undo restores the block; the reusable activity stays published." })).toBeVisible();
     await capture(page, info, `${host}-promotion-replaced`);
     const definitions = await api<{ items: { definition: { definitionId: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(name)}`);
@@ -155,6 +161,41 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await page.getByRole("button", { name: "Redo", exact: true }).click();
     await expect.poll(async () => (await calls())[0]?.activityVersionId).toBe(reusable.headVersionId);
     proof.workflowUndo = { restored: "block", redone: (await calls())[0], reusableKept: kept.definition };
+    // Resume: with the block restored, choose the exact published version later instead of creating another.
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect.poll(async () => (await calls())[0]?.structure?.kind ?? null).toBe("elsa.sequence.structure");
+    await row("block").click();
+    await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
+    const resume = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
+    await resume.getByRole("radio", { name: "Use a published version", exact: true }).check();
+    await resume.getByRole("combobox", { name: "Published version", exact: true }).selectOption(reusable.headVersionId);
+    await capture(page, info, "workflow-promotion-resume");
+    await resume.getByRole("button", { name: "Replace block with this version", exact: true }).click();
+    await expect(resume).toBeHidden();
+    await expect.poll(async () => (await calls())[0]?.activityVersionId).toBe(reusable.headVersionId);
+    expect((await api<{ items: unknown[] }>(`/design/activities/definitions?search=${encodeURIComponent(`Prepare shipment ${stamp}`)}`)).items).toHaveLength(1);
+    proof.workflowResume = { versionId: reusable.headVersionId, call: (await calls())[0] };
+
+    // A block whose script reads workflow state outside its parameters cannot be promoted. The review names the
+    // reason and its location, offers no create, and the source and catalog stay as they were.
+    const opaque = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
+      name: `Block promotion refusal ${stamp}`, layout: [{ nodeId: "block", x: 80, y: 100 }], activityPresentation: [{ nodeId: "block", displayName: "Read settings" }],
+      initialState: { rootActivity: sequence("root", [sequence("block", [line("inside", { expressionType: "JavaScript", value: { language: "JavaScript", source: "variables.secret",
+        resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {} } })])]), variables: [], inputs: [], outputs: [] }
+    });
+    workflowIds.push(opaque.definition.id);
+    const opaqueBefore = await api(`/design/workflows/drafts/${opaque.draft.id}`);
+    await page.goto(`/workflows/definitions?backend=legacy&definition=${opaque.definition.id}`); await canvas();
+    await expect(row("block")).toBeVisible();
+    await row("block").click();
+    await page.getByRole("button", { name: "Promote to reusable activity…", exact: true }).click();
+    const refused = page.getByRole("dialog", { name: "Promote to reusable activity", exact: true });
+    await expect(refused.getByRole("alert")).toContainText("This block cannot become a reusable activity");
+    await expect(refused.getByRole("button", { name: "Create reusable activity draft", exact: true })).toBeDisabled();
+    await capture(page, info, "workflow-promotion-refused");
+    await refused.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(await api(`/design/workflows/drafts/${opaque.draft.id}`)).toEqual(opaqueBefore);
+    proof.workflowRefusal = { definitionId: opaque.definition.id, unchanged: true };
 
     // Activity Definition host: the same command in the reusable graph editor. Its own root Sequence maps Done to
     // its public outcome, so the host resource is valid before and after the replacement.
@@ -178,6 +219,8 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     await page.getByRole("button", { name: "Undo Activity Graph edit", exact: true }).click();
     await expect.poll(async () => (await graphCalls())[0]?.structure?.kind ?? null).toBe("elsa.sequence.structure");
     await capture(page, info, "activity-promotion-undone");
+    await page.getByRole("button", { name: "Redo Activity Graph edit", exact: true }).click();
+    await expect.poll(async () => (await graphCalls())[0]?.activityVersionId).toBe(nested.headVersionId);
     proof.activityReplacement = { definitionId: graph.definition.definitionId, reusable: nested };
   } catch (error) { failures.push(error); } finally {
     const cleanup: { kind: string; id: string; status: string }[] = [];

@@ -4,6 +4,10 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 
 | Term | Canonical meaning |
 |---|---|
+| Block (named block) | A named occurrence of an existing native composite (Sequence, Flowchart or BPMN subprocess) embedded where its steps were, with no separate definition and no execution or value-isolation boundary of its own. See [Named blocks](../named-blocks.md). |
+| Extract into block / Ungroup | The inverse authoring commands that move selected steps into a new block and back, each as one history step, preserving step identities, data access and Break/Complete targets. |
+| Block promotion | Turning a block into an ordinary reusable activity: review → ordinary draft → normal publication → replacement of the block by a call to that exact published version in one undoable edit. Undo never deletes the reusable activity. |
+| Activity presentation | Typed per-node authoring information (display name, description) saved with a draft or version and frozen with it for historical inspection. |
 | Elsa foundation workspace | The repository role where foundation libraries, architecture gates, maps, skills, and glossary knowledge make Elsa navigable and verifiable. |
 | Elsa host | An ASP.NET Core application instance that composes selected Elsa features. In this repository that is `Elsa.Workbench`, a development and demo host; the shipped host is not yet built. |
 | Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
