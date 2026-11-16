@@ -10,6 +10,7 @@ These pages describe the proposed clean-slate execution kernel. They are design 
 2. [The kernel in motion](https://crystal-pellet-h5m3.here.now/): follow a workflow through persistence modes, faults and the fence lab. [HTML source](../reports/clean-slate-kernel/kernel-in-motion.html).
 3. [Storage model](storage-model.md) — **Proposed**: the provider contract, record lifecycles, writers, invariants, query paths, indexes and retention costs.
 4. [Ownership and fencing](ownership-and-fencing.md) — **Proposed**: why leases need a fence, how take and commit interact, and the costs and alternatives.
+5. [Migrating running instances](migrating-running-instances.md) — **Proposed**: state versions per model and per activity, the migration command and each container's hook, what in-flight work does, and release 1's simple cases.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 
