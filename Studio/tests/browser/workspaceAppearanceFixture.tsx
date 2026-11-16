@@ -18,7 +18,7 @@ const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "more" }
+  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "build" }
 ], { includeThemeBuilder: false });
 
 const panels = new URLSearchParams(location.search).has("bottom-panel")

@@ -1,7 +1,7 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { useCompactNavigation } from "../navigation/useCompactNavigation";
 import type { StudioNavigationContribution } from "../../sdk";
+import { NavigationContextLink } from "../navigation/NavigationViews";
 import { settingsPathFor, type SettingsSectionGroup } from "./settingsSections";
 import "./settings.css";
 
@@ -63,16 +63,8 @@ function SettingsSectionLink({
 }) {
   const href = settingsPathFor(section);
   return (
-    <a
-      className="settings-nav-link"
-      href={qualifyStudioBackendPath(href)}
-      aria-current={current ? "page" : undefined}
-      onClick={event => {
-        event.preventDefault();
-        onNavigate(href);
-      }}
-    >
+    <NavigationContextLink className="settings-nav-link" path={href} current={current} onNavigate={onNavigate}>
       {section.label}
-    </a>
+    </NavigationContextLink>
   );
 }

@@ -11,11 +11,15 @@ public static class LeaseChecks
         await CheckLoadDuringUnrelatedEvictions(Check);
         await CheckMissingAliasDuringLoad(Check);
         await CheckConcurrentProcessDeaths(Check);
+        await CheckAliasLoadProgress(Check);
         await CheckChangedAliasSnapshot(Check);
         await CheckResidentAliasBirth(Check);
         await CheckSettledAliasMiss(Check);
+        await CheckComparedBirths(Check);
+        await CheckRecreatedNeighbors(Check);
         await CheckFutureMintedName(Check);
         await CheckMergedSpellings(Check);
+        await CheckEphemeralDuringAliasRetry(Check);
         const string id = "0/subject";
         long time = 100;
         var store = new InMemoryStore(1, () => time);
@@ -326,6 +330,46 @@ public static class LeaseChecks
         }).ToList()
     };
 
+    private static async Task CheckAliasLoadProgress(Action<bool, string> check)
+    {
+        foreach (var mode in new[] { "existing", "alternate-spelling", "missing" })
+        {
+            var store = new InMemoryStore(1, () => 100);
+            var wire = CaseInsensitive(store);
+            await using var owner = new Worker("arrival", 0, wire, new WorkflowInstance([new Counter()]),
+                new() { MaxInstances = 0, Monotonic = () => 100 });
+            await new DurableHost([owner]).ActivateAsync(0);
+            var target = InstanceRef.In(0, "established");
+            var requested = mode == "alternate-spelling" ? InstanceRef.In(0, "ESTABLISHED") : target;
+            if (mode != "missing")
+            {
+                owner.Post(new("seed", target, "add", Json.Write(new Add("seed")), Start: Counter.Spec), fresh: true);
+                owner.RunTurn(target.Id);
+                await owner.FlushAsync();
+            }
+            var input = new Message("durable", requested, "add", Json.Write(new Add("work")), Start: mode == "missing" ? Counter.Spec : null);
+            await store.AddAsync(input);
+            await owner.PollAsync();
+            var arrivals = 0;
+            wire.AfterLoad = _ =>
+            {
+                var other = InstanceRef.In(0, $"other-{++arrivals}");
+                owner.Post(new($"other-{arrivals}", other, "add", Json.Write(new Add("arrived")), Start: Counter.Spec), fresh: true);
+                return Task.CompletedTask;
+            };
+            for (var pass = 0; pass < 3 && store.Messages.ContainsKey(input.InboxKey); pass++) await owner.RunAsync();
+            var applied = store.Instances.GetValueOrDefault(target.Id);
+            var reads = wire.LoadCalls;
+            var progressed = applied is not null && Json.Read<CounterState>(applied.State).Ids.SequenceEqual(
+                mode == "missing" ? ["durable"] : new[] { "seed", "durable" });
+            wire.AfterLoad = null;
+            await owner.RunAsync();
+            await owner.RunAsync();
+            check(progressed && reads == 2 && arrivals == 2 && store.Instances.Count == 3 && !owner.Messages.Any(),
+                $"durable {mode} target advances during unrelated alias arrivals: reads={reads}, target revision={applied?.Revision}, drained rows={store.Instances.Count}");
+        }
+    }
+
     private static async Task CheckChangedAliasSnapshot(Action<bool, string> check)
     {
         var store = new InMemoryStore(1, () => 100);
@@ -437,6 +481,38 @@ public static class LeaseChecks
         }
     }
 
+    private static async Task CheckComparedBirths(Action<bool, string> check)
+    {
+        foreach (var traffic in new[] { false, true })
+        {
+            var store = new InMemoryStore(1, () => 100);
+            var wire = CaseInsensitive(store);
+            await using var owner = new Worker("compared", 0, wire, new WorkflowInstance([new Counter()]),
+                new() { MaxBatch = 500, PollLimit = 500, Monotonic = () => 100 });
+            await new DurableHost([owner]).ActivateAsync(0);
+            Message Start(string name) => new(name, InstanceRef.In(0, name), "add", Json.Write(new Add(name)), Start: Counter.Spec);
+            var waiting = traffic ? new[] { Start("z-waiting") } : Enumerable.Range(0, 12).Select(n => Start($"batch-{n}")).ToArray();
+            if (traffic)
+            {
+                owner.Post(new("future", waiting[0].Target, "wake", Due: 100_000));
+                await owner.RunAsync();
+            }
+            foreach (var item in waiting) await store.AddAsync(item);
+            await owner.PollAsync();
+            var reads = wire.LoadCalls;
+            for (var pass = 0; pass < 2; pass++)
+            {
+                if (traffic) owner.Post(Start($"a-fresh-{pass}"), fresh: true);
+                await owner.RunAsync();
+            }
+            var complete = waiting.All(m => store.Instances.TryGetValue(m.Target.Id, out var row) && row.Revision == 1 &&
+                Json.Read<CounterState>(row.State).Ids.SequenceEqual([m.Id]) && store.Messages.GetValueOrDefault(m.InboxKey) is not { Done: false });
+            var fresh = !traffic || store.Instances.Count == 3;
+            check(complete && fresh && wire.LoadCalls - reads == 1,
+                $"distinct compared starts complete in two ordinary passes, traffic={traffic}, completed={complete}, rows={store.Instances.Count}, additional lookups={wire.LoadCalls - reads}");
+        }
+    }
+
     private static async Task CheckFutureMintedName(Action<bool, string> check)
     {
         foreach (var durable in new[] { false, true })
@@ -463,6 +539,59 @@ public static class LeaseChecks
             check(actualBirth && store.Instances.Count == 1 && row.Revision == 2 && Json.Read<CounterState>(row.State).Ids.SequenceEqual(["creator", "after"]) &&
                 store.Messages.GetValueOrDefault(after.InboxKey) is not { Done: false } && (mode == "new input spelling" || owner.Messages.Any(i => i.Id == planned.InboxKey)),
                 $"ordinary input observes an equivalent birth before the minted Start is due, {mode}, durable={durable}, revision={row.Revision}");
+        }
+    }
+
+    private static async Task CheckRecreatedNeighbors(Action<bool, string> check)
+    {
+        foreach (var mode in new[] { "no traffic", "early target", "late target" })
+        {
+            var store = new InMemoryStore(1, () => 100);
+            var wire = CaseInsensitive(store);
+            await using var owner = new Worker("reuse", 0, wire, new WorkflowInstance([new Counter()]), new() { MaxInstances = 100, Monotonic = () => 100 });
+            await new DurableHost([owner]).ActivateAsync(0);
+            var neighbors = Enumerable.Range(0, 3).Select(n => InstanceRef.In(0, $"middle-{n}")).ToArray();
+            foreach (var id in neighbors)
+            {
+                owner.Post(new("birth-" + id.Id, id, "add", Json.Write(new Add("born")), TargetCreation: 1,
+                    Start: Counter.Spec with { Creation = new(1, 0, id.Id) }), fresh: true);
+                await owner.RunAsync();
+                owner.Post(new("stop-" + id.Id, id, Kinds.Terminate, TargetCreation: 1)); await owner.RunAsync();
+                owner.Post(new("delete-" + id.Id, id, Kinds.Delete, TargetCreation: 1)); await owner.RunAsync();
+            }
+            var victim = InstanceRef.In(0, mode == "early target" ? "early" : "z-waiting");
+            var input = new Message("waiting", victim, "add", Json.Write(new Add("target")), Start: Counter.Spec);
+            await store.AddAsync(input); await owner.PollAsync();
+            var reads = wire.LoadCalls;
+            var correct = neighbors.All(id => store.Instances[id.Id] is { Retired: true, Creation: 1 });
+            for (var pass = 0; pass < 12; pass++)
+            {
+                if (mode != "no traffic")
+                    foreach (var id in neighbors)
+                    {
+                        var previous = store.Instances[id.Id];
+                        if (id == neighbors[pass % neighbors.Length])
+                        {
+                            var generation = previous.Creation + 1; var start = $"recreate-{pass}";
+                            correct &= previous.Retired;
+                            owner.Post(new(start, id, "add", Json.Write(new Add(start)), TargetCreation: generation,
+                                Start: Counter.Spec with { Creation = new(generation, previous.Creation, start) }));
+                        }
+                        else if (!previous.Retired) owner.Post(new($"control-{pass}-{id.Id}", id,
+                            previous.Status == InstanceStatus.Running ? Kinds.Terminate : Kinds.Delete, TargetCreation: previous.Creation));
+                    }
+                await owner.RunAsync();
+                if (mode != "no traffic")
+                {
+                    var born = store.Instances[neighbors[pass % neighbors.Length].Id];
+                    correct &= !born.Retired && Json.Read<CounterState>(born.State).Ids.SequenceEqual([$"recreate-{pass}"]);
+                }
+                if (pass == 1) correct &= store.Instances.ContainsKey(victim.Id);
+            }
+            check(correct && store.Instances.GetValueOrDefault(victim.Id) is { Revision: 1 } row && Json.Read<CounterState>(row.State).Ids.SequenceEqual(["waiting"]) &&
+                store.Messages.GetValueOrDefault(input.InboxKey) is not { Done: false } && wire.LoadCalls - reads == 1 &&
+                neighbors.All(id => store.Instances[id.Id].Creation == (mode == "no traffic" ? 1 : 5)),
+                $"qualified recreations preserve progress at an unrelated physical key, {mode}, waiting applied={store.Instances.ContainsKey(victim.Id)}, lookups={wire.LoadCalls - reads}");
         }
     }
 
@@ -507,6 +636,32 @@ public static class LeaseChecks
         }
     }
 
+    private static async Task CheckEphemeralDuringAliasRetry(Action<bool, string> check)
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var wire = CaseInsensitive(store);
+        await using var owner = new Worker("inline", 0, wire, new WorkflowInstance([new Counter(), new Sequence()]),
+            new() { MaxInstances = 0, Monotonic = () => 100 });
+        await new DurableHost([owner]).ActivateAsync(0);
+        void Inline(string id) => owner.Post(new(id, InstanceRef.In(0, id), Kinds.Start, Start: Sequence.Spec(1, Sequence.Ephemeral)), fresh: true);
+        Inline("standalone");
+        await owner.RunAsync();
+        var standalone = wire.LoadCalls == 0 && wire.CommitCalls == 0 && !owner.Messages.Any();
+        var target = InstanceRef.In(0, "durable");
+        owner.Post(new("seed", target, "add", Json.Write(new Add("seed")), Start: Counter.Spec), fresh: true);
+        owner.RunTurn(target.Id);
+        await owner.FlushAsync();
+        owner.Post(new("second", target, "add", Json.Write(new Add("second"))));
+        var arrivals = 0;
+        wire.AfterLoad = _ => { Inline($"inline-{++arrivals}"); return Task.CompletedTask; };
+        await owner.RunAsync();
+        await owner.RunAsync();
+        var row = store.Instances[target.Id];
+        check(standalone && arrivals == 2 && wire.LoadCalls == 2 && wire.CommitCalls == 2 &&
+            row.Revision == 2 && store.Instances.Count == 1 && !owner.Messages.Any() && !owner.NeedsLoad,
+            $"minted inline Ephemeral actors finish without their own read or commit during a positive retry: standalone={standalone}, lookups={wire.LoadCalls}, commits={wire.CommitCalls}, arrivals={arrivals}");
+    }
+
     private static async Task CheckLoadAfterEviction(Action<bool, string> check)
     {
         var store = new InMemoryStore(1, () => 100);
@@ -546,13 +701,14 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool DelayNext, DelayTake;
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
-    public int PollCalls, LoadCalls;
+    public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource Landed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource Reply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CommitCalls++;
         var result = await inner.CommitAsync(batch, cancellationToken);
         if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await Reply.Task; }
         return result;
