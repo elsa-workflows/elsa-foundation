@@ -32,8 +32,9 @@ public enum NativeFlaw
     NoRoundReset = 1 << 6,      // a loop-closing connection opens no new round
     DeadPathRunsNode = 1 << 7,  // a node whose every inbound arrived dead is run
     CancelLeavesPaths = 1 << 8, // a first-wins race completes without cancelling its losers
-    // Round 5 C, the effect key (N7): minted per execution instead of derived from committed facts; without the node,
-    // so two activities in one scope share a key; without the iteration path, so two iterations of one activity do.
+    // Round 5 C, the effect key (N7): minted per turn instead of derived from committed facts, so a resend carries another
+    // key; without the node, so two activities in one scope share a key; without the iteration path, so two iterations
+    // of one activity do.
     UnstableEffectKey = 1 << 9,
     NodelessEffectKey = 1 << 10,
     PathlessEffectKey = 1 << 11,
@@ -429,6 +430,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, CompositeActivity> IterationProbes = new();
     private static long _unstableKeys;
+    private readonly long _unstableStamp = Interlocked.Increment(ref _unstableKeys);   // MUTATION: one value per turn, so a resend in another turn carries another key
 
     /// <summary>
     /// Which activation of its node this frame is, within the instance: for every frame on the way from the root to it,
@@ -471,7 +473,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         if (Has(NativeFlaw.NodelessEffectKey)) return EffectKey.For(turn.Instance, "node", path, frame.Attempt);
         if (Has(NativeFlaw.PathlessEffectKey)) return EffectKey.For(turn.Instance, frame.Node, EffectKey.RootPath, frame.Attempt);
         var key = EffectKey.For(turn.Instance, frame.Node, path, frame.Attempt);
-        return Has(NativeFlaw.UnstableEffectKey) ? key + "." + Interlocked.Increment(ref _unstableKeys) : key;
+        return Has(NativeFlaw.UnstableEffectKey) ? key + "." + _unstableStamp : key;
     }
 
     // ---- transitions -------------------------------------------------------------------------------------------------

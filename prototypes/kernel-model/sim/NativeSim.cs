@@ -22,11 +22,13 @@ public sealed class NativeOracle
     public readonly Dictionary<string, string> ChildOf = new(StringComparer.Ordinal);                // child -> parent|frame (waited)
     public readonly Dictionary<string, int> Resumes = new(StringComparer.Ordinal);                   // child -> resumes of its parent
     public readonly Dictionary<string, int> Effects = new(StringComparer.Ordinal);                   // instance|frame -> side effects run
-    // Round 5 C (N7): what each logical activation (instance|node|iteration path:attempt) first sent, its key and content;
-    // who owns each key; and which activation first sent under each frame number, to count frame numbers a replay handed on.
-    public readonly Dictionary<string, (string Key, string Content)> Outbound = new(StringComparer.Ordinal);
-    public readonly Dictionary<string, string> EffectKeyOwners = new(StringComparer.Ordinal);       // key -> activation
-    public readonly Dictionary<string, string> FrameOwners = new(StringComparer.Ordinal);           // instance|frame:attempt -> activation
+    // Round 5 C (N7): what each instance sent, by node/path (the key without its instance and attempt), for the comparison
+    // with the fault-free reference run at the end; every (instance, key) seen, to count the resends; which key first went
+    // out under each frame number, to count the frame numbers a replay handed on; and a record of every activation's key.
+    public readonly Dictionary<string, HashSet<string>> Sent = new(StringComparer.Ordinal);         // instance -> node/path sent
+    public readonly HashSet<string> KeysSeen = new(StringComparer.Ordinal);                          // instance|key
+    public readonly Dictionary<string, string> FrameOwners = new(StringComparer.Ordinal);           // instance|frame:attempt -> node/path
+    public readonly Dictionary<string, (string Key, string Content)> Outbound = new(StringComparer.Ordinal); // instance|node|path:attempt -> first key and content (a record for the witnesses)
     // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
     public readonly HashSet<string> Fired = new(StringComparer.Ordinal);                             // instance|frame|node|round
     public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame|round -> nodes of cancelled paths
@@ -262,18 +264,15 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// N7 (round 5 C): an outbound effect carries its effect key where its receiver looks (the HTTP header, the
-    /// Message-ID). One logical activation (instance, node, iteration path, attempt) carries one key and one content every
-    /// time it is sent, on whichever owner and however the replay ordered the agenda; one key belongs to one activation
-    /// (the owner's decision of 16 November: the iteration path, not the frame number, tells activations apart). The
-    /// host's transport is the only place the key can be observed: the kernel records nothing. The sweep also counts
-    /// the frame numbers a replay handed to another activation and the nodes sent from twice, so that the mix is shown
-    /// to produce the cases the key exists for.
+    /// N7 (round 5 C), the part seen at the host's transport: an outbound effect carries its effect key where its receiver
+    /// looks (the HTTP header, the Message-ID). The identity checks are at the end (<see cref="NativeEnd"/>), against the
+    /// fault-free reference run, so that they do not read the key's own components. Here the sweep also counts the resends
+    /// (the same instance sending one key again: a lost turn result, a takeover), the frame numbers a replay handed to
+    /// another activation and the nodes sent from twice, so that the mix is shown to produce the cases the key exists for.
     /// </summary>
     private void Outbound(OutboundSending s)
     {
         var (node, frame, path, attempt, key, effect) = (s.Node, s.Frame, s.IterationPath, s.Attempt, s.EffectKey, s.Effect);
-        // The key is carried where the receiver looks: the header as it is, the Message-ID as <key@domain>.
         var what = effect switch
         {
             HttpSendEffect h => h.Request.Headers.TryGetValue(SendHttpRequest.IdempotencyKeyHeader, out var header) && header == key ? null
@@ -282,29 +281,37 @@ public sealed partial class World
                 : $"the email of {node} does not carry its effect key {key} as its Message-ID: '{e.Mail.MessageId}'",
             _ => $"an unknown outbound effect {effect.GetType().Name}",
         };
-        var id = CreationProtocol.Origin(s.Instance.Ref.Id, s.Instance.Creation);
+        var id = s.Instance.Ref.Id;
         if (what is not null) Faults.Add($"N7 {id}: {what}");
-        // The content the activation determines: the mix's bodies and subjects name the iteration, nothing a sibling writes.
+        var sent = Native.Sent.TryGetValue(id, out var set) ? set : Native.Sent[id] = new(StringComparer.Ordinal);
+        var local = NativeReference.NodeAndPath(key);
+        if (!Native.KeysSeen.Add($"{id}|{key}")) Interlocked.Increment(ref NativeSameKeyReruns);
+        else if (sent.Any(k => k.StartsWith(node + "/", StringComparison.Ordinal))) Interlocked.Increment(ref NativeRevisits);
+        sent.Add(local);
+        if (!Native.FrameOwners.TryAdd($"{id}|{frame}:{attempt}", local) && Native.FrameOwners[$"{id}|{frame}:{attempt}"] != local) Interlocked.Increment(ref NativeReusedFrames);
         var content = effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" };
-        var activation = $"{id}|{node}|{path}:{attempt}";
-        if (Native.Outbound.TryGetValue(activation, out var first))
+        Native.Outbound.TryAdd($"{CreationProtocol.Origin(id, s.Instance.Creation)}|{node}|{path}:{attempt}", (key, content));
+    }
+
+    /// <summary>
+    /// N7 (round 5 C), the identity half, against the fault-free reference run of the same definition and input (the
+    /// oracle, independent of the key's own components): the reference sends every key once, so two activations never
+    /// share one; and every key an instance sent here is one the reference sends, so one logical activation keeps its key
+    /// across a lost turn and its replay, on whichever owner. What a resend carries as content is not compared: the
+    /// receiver keeps the first sending (the owner's rule). Instances whose completions depend on event order are
+    /// excepted from N5 and N1; none of them sends.
+    /// </summary>
+    private string? NativeKeys()
+    {
+        foreach (var (id, sent) in Native.Sent)
         {
-            // Sent again (the turn's result was lost, or another owner replays it): the same key and the same content.
-            if (first.Key != key) Faults.Add($"N7 {id}: {node} ({path}, attempt {attempt}) was sent again with the key {key}; its first sending carried {first.Key}");
-            else if (first.Content != content) Faults.Add($"N7 {id}: {node} ({path}, attempt {attempt}) was sent again under the key {key} with '{content}'; its first sending carried '{first.Content}'");
-            else Interlocked.Increment(ref NativeSameKeyReruns);
+            if (Store.Instances.GetValueOrDefault(id) is not { Model: NativeModel.ModelKey } row || row.Definition is "n-join2" or "n-graph") continue;
+            var expected = NativeReference.Of(row.Definition, Json.Read<NativeState>(row.State).Variables.GetValueOrDefault("input"));
+            if (expected.DuplicateKeys.Count > 0) return $"N7 {row.Definition}: a run without faults sends {expected.DuplicateKeys[0]} twice: two activations share one key";
+            foreach (var local in sent)
+                if (!expected.Keys.Contains(local)) return $"N7 {id} ({row.Definition}) sent {local}, which a run without faults never sends: an activation's key moved";
         }
-        else
-        {
-            Native.Outbound[activation] = (key, content);
-            if (!Native.EffectKeyOwners.TryAdd(key, activation))
-                Faults.Add($"N7 {id}: {node} ({path}, attempt {attempt}) carries the key {key}, which {Native.EffectKeyOwners[key]} already sent" +
-                    (Native.Outbound[Native.EffectKeyOwners[key]].Content == content ? "" : $" with another content ('{Native.Outbound[Native.EffectKeyOwners[key]].Content}' against '{content}')"));
-            if (Native.Outbound.Keys.Any(a => a != activation && a.StartsWith($"{id}|{node}|", StringComparison.Ordinal))) Interlocked.Increment(ref NativeRevisits);
-        }
-        // A frame number another activation already sent under: a Balanced or Ephemeral replay minted it again for a
-        // different activity or iteration. The keys told them apart above; here it is only counted.
-        if (!Native.FrameOwners.TryAdd($"{id}|{frame}:{attempt}", activation) && Native.FrameOwners[$"{id}|{frame}:{attempt}"] != activation) Interlocked.Increment(ref NativeReusedFrames);
+        return null;
     }
 
     private string? NativeCheck()
@@ -335,6 +342,7 @@ public sealed partial class World
     {
         ScanJournal();
         if (Faults.FirstOrDefault() is { } fault) return fault;
+        if (NativeKeys() is { } keys) return keys;
         foreach (var (id, (_, mode, posted)) in Native.Started)
         {
             var row = Store.Instances.GetValueOrDefault(id);
@@ -380,10 +388,22 @@ public static class NativeSwitch
     };
 }
 
+/// <summary>What a run without faults ends with: its variables, the types it completed, the effect keys it sent (by node/path) and any key it sent twice.</summary>
+public sealed record Reference(string Variables, string Types, HashSet<string> Keys, List<string> DuplicateKeys);
+
 /// <summary>The same workflow and input, run alone on one worker with no faults: what a faulty run must end with.</summary>
 public static class NativeReference
 {
-    private static readonly ConcurrentDictionary<string, (string Variables, string Types)> Cache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Reference> Cache = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The key without its instance origin and attempt: <c>node/path</c>, the same for every instance of a definition and
+    /// in every mode. Whatever follows the attempt's digits stays (a mutation's suffix), so that a key minted outside the
+    /// committed facts is judged as what it is.
+    /// </summary>
+    public static string NodeAndPath(string key) => key.Split('/') is { Length: >= 3 } parts ? parts[^3] + "/" + parts[^2] + parts[^1].TrimStart("0123456789".ToCharArray()) : key;
+
+    private static NativeFlaw KeyFlaws => NativeSwitch.Flaws & (NativeFlaw.UnstableEffectKey | NativeFlaw.NodelessEffectKey | NativeFlaw.PathlessEffectKey);
 
     public static string Describe(Dictionary<string, JsonNode?> variables) =>
         string.Join(", ", variables.OrderBy(v => v.Key, StringComparer.Ordinal).Select(v => $"{v.Key}={v.Value?.ToJsonString() ?? "null"}"));
@@ -394,14 +414,23 @@ public static class NativeReference
         return string.Join(", ", nodes.Select(n => all[n].Type.Name).GroupBy(t => t).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}"));
     }
 
-    public static (string Variables, string Types) Of(string workflow, JsonNode? input) =>
-        Cache.GetOrAdd(workflow + "|" + input?.ToJsonString(), _ => Run(workflow, input as JsonObject));
+    public static Reference Of(string workflow, JsonNode? input) =>
+        Cache.GetOrAdd(workflow + "|" + input?.ToJsonString() + "|" + (int)KeyFlaws, _ => Run(workflow, input as JsonObject));   // the mutation check runs every flaw in one process
 
-    private static (string, string) Run(string workflow, JsonObject? input)
+    private static Reference Run(string workflow, JsonObject? input)
     {
         var time = 1_000_000L;
         var store = new InMemoryStore(1, () => time);
-        var worker = new Worker("reference", 0, store, new WorkflowInstance([new NativeModel(NativeWorkflows.Registry)]), new WorkerOptions { Monotonic = () => time });
+        // The reference carries the effect-key mutations (and only those), so that a mutated key is judged against itself:
+        // a key the reference sends twice is a collision, a key the run sends and the reference never does has moved.
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var duplicates = new List<string>();
+        var model = new NativeModel(NativeWorkflows.Registry, new NativeOptions
+        {
+            Flaws = KeyFlaws,
+            OnOutbound = s => { var local = NodeAndPath(s.EffectKey); if (!keys.Add(local)) duplicates.Add(local); },
+        });
+        var worker = new Worker("reference", 0, store, new WorkflowInstance([model]), new WorkerOptions { Monotonic = () => time });
         new DurableHost([worker]).ActivateAsync(0).AsTask().Wait();
         worker.PollAsync().Wait();
         var id = InstanceRef.In(0, "reference");
@@ -419,6 +448,6 @@ public static class NativeReference
         if (row.Status != InstanceStatus.Finished) throw new InvalidOperationException($"the reference run of {workflow} ended as {row.Status}");
         var nodes = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position)
             .SelectMany(j => Json.Read<List<string>>(j.Entries)).Where(e => e.StartsWith("c:", StringComparison.Ordinal)).Select(e => e.Split(':')[2]);
-        return (Describe(Json.Read<NativeState>(row.State).Variables), Types(workflow, nodes));
+        return new(Describe(Json.Read<NativeState>(row.State).Variables), Types(workflow, nodes), keys, duplicates);
     }
 }

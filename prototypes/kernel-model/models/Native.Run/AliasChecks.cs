@@ -81,6 +81,39 @@ public static class AliasChecks
         check(keysA.Distinct(StringComparer.Ordinal).Count() == 2, $"{mode}, merge: the two tokens carried two keys ({string.Join(", ", keysA)})");
         check(keysA.SequenceEqual(keysB), $"{mode}, merge: the same two keys across the lost turn and its replay ({string.Join(", ", keysA)} against {string.Join(", ", keysB)})");
         check(a.All(o => o.Path.Contains("^m-e", StringComparison.Ordinal)), $"{mode}, merge: each token names the merge and its source ({string.Join(", ", a.Select(o => o.Path))})");
+        await JoinAsync(mode, check, outside: false);
+        await JoinAsync(mode, check, outside: true);
+    }
+
+    /// <summary>
+    /// A join forward of a Merge fires once per token (both inbounds from the merge), or once per token plus whatever the
+    /// outside inbound makes of it (one inbound from the merge, one from outside): either way it fires twice in one round,
+    /// and which arrivals make up each firing depends on the order the agenda ran them in. The join's firing gets its
+    /// ordinal in the round from the Flowchart's committed count (the owner's decision of 16 November: different
+    /// activations always get different keys; the nth firing is the nth in the lost turn and in its replay, whatever its
+    /// content). The Http behind the join inherits the token. With the round alone both firings shared one key.
+    /// </summary>
+    private static async Task JoinAsync(string mode, Action<bool, string> check, bool outside)
+    {
+        var name = outside ? "join, one inbound from outside the merge" : "join, both inbounds from the merge";
+        var registry = new WorkflowRegistry();
+        List<Connection> connections = [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "x"), new("x", "j"), new("j", "h")];
+        connections.Add(outside ? new("s0", "y") : new("m", "y"));
+        connections.Add(new("y", "j"));
+        registry.Add(Workflow("alias", Sequence("root",
+                Flowchart("flow",
+                    [Set("s0", "k", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), WriteLine("x", "x"), WriteLine("y", "y"), WriteLine("j", "joined"), Http("h", "https://partner.example/join", "joined")],
+                    connections.ToArray(), ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
+                Set("out", "output", "done")),
+            ("k", 0), ("output", null)));
+        var a = await Run(registry, mode, "x", ["alias-1"], ["alias-2"]);
+        var b = await Run(registry, mode, "x", ["alias-1", "alias-2"], []);
+        var keysA = a.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var keysB = b.Select(o => o.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        check(a.Count == 2 && b.Count == 2, $"{mode}, {name}: the join fired twice in A and in B ({a.Count}, {b.Count})");
+        check(keysA.Distinct(StringComparer.Ordinal).Count() == 2 && keysB.Distinct(StringComparer.Ordinal).Count() == 2, $"{mode}, {name}: the two firings carried two keys ({string.Join(", ", keysA)}; {string.Join(", ", keysB)})");
+        check(keysA.SequenceEqual(keysB), $"{mode}, {name}: the same two keys across the lost turn and its replay ({string.Join(", ", keysA)} against {string.Join(", ", keysB)})");
+        check(a.All(o => o.Path.Contains("^j#", StringComparison.Ordinal)), $"{mode}, {name}: each firing names the join and its ordinal ({string.Join(", ", a.Select(o => o.Path))})");
     }
 
     private static async Task<List<(string Node, string Frame, string Path, int Attempt, string Key, string Body)>> Run(WorkflowRegistry registry, string mode, string id, string[] first, string[] second)

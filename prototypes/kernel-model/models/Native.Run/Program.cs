@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
+if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
+if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
 if (args is ["park"]) return await ParkChecks.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {
@@ -36,7 +38,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | cost sqlite | cost postgres <connection> | memory [runs]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | cost sqlite | cost postgres <connection> | memory [runs]");
 return 2;
 
 static class Cost

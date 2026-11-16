@@ -267,8 +267,9 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   only. The instance id is fixed at creation and the key never reads partitions or positions; the node is the activity's
   stable id in the definition; the iteration path is the iteration numbers of the repeating scopes that enclose the
   activation (a ForEach index, a While pass, a Flowchart round and, forward of a Merge, the token named by the merge
-  and the arrival's source, a StateMachine visit serial, a retry generation), each from the enclosing activity's
-  committed state, root first; the attempt is 0, or 1 for an External activity in Durable mode, and takes no other
+  and the arrival's source, a Flowchart join's firing ordinal in its round, a StateMachine visit serial, a retry
+  generation), each from the enclosing activity's committed state, root first; the attempt is 0, or 1 for an External
+  activity in Durable mode, and takes no other
   value. One logical activation re-derives one key on whichever owner replays it; two activations of one node never
   share one; a retry after a definite failure is a new generation in the path, so a new key. The frame number is not in
   the key (the owner's reason): in Balanced and Ephemeral a replayed burst mints frame numbers from the committed state

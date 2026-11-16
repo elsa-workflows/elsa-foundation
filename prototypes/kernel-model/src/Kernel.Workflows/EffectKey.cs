@@ -11,9 +11,11 @@ namespace Kernel.Workflows;
 ///   its predecessor). The id is fixed at creation; the key never reads partitions or positions.
 /// - The node is the activity's stable id in the workflow definition, the one the model already uses.
 /// - The iteration path says which activation of that node this is within the instance: the iteration numbers of the
-///   loops and other repeating scopes that enclose it, root first (a ForEach index, a While iteration, a Flowchart
-///   round, a retry generation), each derived from the enclosing activity's committed state. Two activations of one
-///   node always differ in it; one logical activation keeps it whatever a replay does to the agenda.
+///   loops and other repeating scopes that enclose it, root first (a ForEach index, a While pass, a Flowchart round,
+///   the merge and source a Flowchart token passed, a Flowchart join's firing ordinal in its round, a StateMachine
+///   visit serial, a retry generation), each derived from the enclosing activity's committed state. Two activations of
+///   one node always differ in it; one logical activation keeps it whatever a replay does to the agenda, and what it
+///   carries as content may then differ from its first sending: the receiver keeps the first.
 /// - The attempt is 0, or 1 for an External activity in Durable mode, whose attempt is committed before it runs.
 ///
 /// Why no frame number (the owner's reason): in Balanced and Ephemeral mode a replayed burst mints its frame numbers

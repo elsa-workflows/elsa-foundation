@@ -19,7 +19,7 @@ public static class NativeWorkflows
     ];
 
     /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
-    public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph" };
+    public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph", "n-out" };
 
     private static WorkflowRegistry Build()
     {
@@ -44,6 +44,11 @@ public static class NativeWorkflows
                         While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
                     Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
                 ForEach("each", Expr("[1, 2]"), Http("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
+                // A fork meets at a Merge and forks again to a join: the join fires once per token, the Http behind it twice.
+                Flowchart("mj",
+                    [WriteLine("f0", "fork"), WriteLine("p", "p"), WriteLine("q", "q"), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Http("hj", "https://partner.example/joined", "joined")],
+                    [new("f0", "p"), new("f0", "q"), new("p", "m"), new("q", "m"), new("m", "u"), new("m", "v"), new("u", "hj"), new("v", "hj")],
+                    ("m", Gateway.Merge), ("hj", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("'out ' + i + ' ' + tag"))),
             ("i", 0), ("tag", 0), ("output", null)));
         registry.Add(Workflow("n-join", Sequence("root", Parallel("par", null, Branch(1), Branch(2), Branch(3)), Set("out", "output", Expr("'joined ' + hits"))),

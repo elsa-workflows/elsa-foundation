@@ -116,10 +116,12 @@ the shape the owner decided on 16 November: `{instance origin}/{node}/{iteration
 the prototype's `src/Kernel.Workflows`). The instance origin is the instance's id, fixed at creation, with its creation;
 the key never reads partitions or positions. The node is the activity's stable id in the definition. The iteration path
 is the iteration numbers of the repeating scopes that enclose the activation (a loop index, a loop pass, a flowchart
-round, a retry generation), root first, each taken from the enclosing activity's committed state. The attempt is 0, or
-1 for an activity whose attempt Durable mode commits before it runs; it takes no other value. One logical activation
-re-derives one key on whichever owner replays it; two activations of one activity never share one; a retry is a new
-generation in the path, so a new key.
+round, the merge and source a flowchart token passed, a flowchart join's firing ordinal in its round, a statechart
+visit serial, a retry generation), root first, each taken from the enclosing activity's committed state. The attempt is
+0, or 1 for an activity whose attempt Durable mode commits before it runs; it takes no other value. One logical
+activation re-derives one key on whichever owner replays it; two activations of one activity never share one; a retry
+is a new generation in the path, so a new key. What a replayed activation carries as content may differ from its first
+sending; the key says they are one activation, and the receiver keeps the first.
 
 The frame number of the activation is deliberately absent (the owner's reason): in Balanced and Ephemeral mode a
 replayed burst mints its frame numbers from the committed state in agenda order, and a replay over a longer inbox (a

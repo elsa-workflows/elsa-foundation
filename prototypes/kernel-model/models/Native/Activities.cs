@@ -320,13 +320,13 @@ public sealed class Flowchart : CompositeActivity
     // A run started by a trigger that is a child of this Flowchart begins there (main's SelectEntryNode), so that the
     // trigger is delivered; otherwise at the start node.
     protected internal override void Execute(CompositeContext context) =>
-        Step(context, null, (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
+        Step(context, null, new(StringComparer.Ordinal), (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
         var (path, scope, _, _) = Decode(child.Tag);
-        if (!TryReadState(context, out var before)) return;
-        Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
             new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)), source: child);
     }
 
@@ -334,16 +334,22 @@ public sealed class Flowchart : CompositeActivity
     // own, as the other native composites pass it on, not the engine's generic flowchart.child.faulted.
     protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
     {
-        if (!TryReadState(context, out var before)) return;
-        Step(context, before, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
     }
 
-    /// <summary>The engine's state before this callback; corrupt state faults the Flowchart.</summary>
-    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state)
+    /// <summary>
+    /// The frame's state before this callback: the engine's state and this host's own join firing counts (round 5 C),
+    /// committed together; corrupt state faults the Flowchart.
+    /// </summary>
+    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state, out Dictionary<string, int> firings)
     {
+        firings = new(StringComparer.Ordinal);
         try
         {
-            state = ReadEngineState(context.ReadState<JsonNode>());
+            var node = context.ReadState<JsonNode>();
+            state = ReadEngineState(node);
+            firings = ReadFirings(node);
             return true;
         }
         catch (JsonException exception)
@@ -354,7 +360,7 @@ public sealed class Flowchart : CompositeActivity
         }
     }
 
-    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null, ChildCompleted? source = null)
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Dictionary<string, int> firings, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null, ChildCompleted? source = null)
     {
         FlowchartStep step;
         try
@@ -367,10 +373,8 @@ public sealed class Flowchart : CompositeActivity
             return;
         }
 
-        // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
-        // they are not kept in the instance's state (the rest is the state main stages).
-        context.SetState(JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact));
         foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
+        var scheduling = new List<(Node Child, string Tag)>();
         foreach (var scheduled in step.Scheduled)
         {
             // A join fires once per scheduling id the engine gives the firing (the releasing completion, or the producer
@@ -381,8 +385,14 @@ public sealed class Flowchart : CompositeActivity
             if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
                 && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)     // as the engine counts them
                 context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
-            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey, Token(context, scheduled, source)));
+            scheduling.Add((context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey, Token(context, scheduled, source, firings))));
         }
+        // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
+        // they are not kept in the instance's state (the rest is the state main stages). The join firing counts ride
+        // beside the engine's state when there are any; a Flowchart without a join keeps the engine's state alone.
+        var engine = JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact);
+        context.SetState(firings.Count == 0 ? engine : new JsonObject { ["engine"] = engine, ["firings"] = new JsonObject(firings.Select(f => KeyValuePair.Create(f.Key, (JsonNode?)f.Value))) });
+        foreach (var (child, tag) in scheduling) context.Schedule(child, tag);
         switch (step.Kind)
         {
             case FlowchartStepKind.Complete:
@@ -440,8 +450,15 @@ public sealed class Flowchart : CompositeActivity
         return Engines.GetOrAdd(flaws, static f => FlowchartEngines.Create(new FlowchartOptions { Flaws = f }));
     }
 
-    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too).</summary>
-    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) => state?.Deserialize<FlowchartExecutionState>(Compact);
+    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too): alone, or beside the host's join firing counts.</summary>
+    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) =>
+        (state is JsonObject o && o.ContainsKey("engine") ? o["engine"] : state)?.Deserialize<FlowchartExecutionState>(Compact);
+
+    /// <summary>How often each join has fired in each round (<c>node|round</c>), from the frame's committed state (round 5 C).</summary>
+    private static Dictionary<string, int> ReadFirings(JsonNode? state) =>
+        state is JsonObject o && o["firings"] is JsonObject firings
+            ? firings.ToDictionary(f => f.Key, f => f.Value!.GetValue<int>(), StringComparer.Ordinal)
+            : new(StringComparer.Ordinal);
 
     /// <summary>The path a child of a Flowchart frame runs on, from its tag.</summary>
     public static string? PathOf(string? tag) => Decode(tag).Path;
@@ -466,9 +483,9 @@ public sealed class Flowchart : CompositeActivity
 
     /// <summary>
     /// The child's iteration for the effect key (round 5 C): the engine's iteration key of the round it was scheduled in
-    /// (<c>head:2</c>: the loop head and the round, from the engine's committed state) and, forward of a Merge, the
-    /// token it rides (<see cref="Token"/>), both carried on the tag. A node outside a loop and not forward of a merge
-    /// has none: it fires once per instance.
+    /// (<c>head:2</c>: the loop head and the round, from the engine's committed state) and the token it rides
+    /// (<see cref="Token"/>), both carried on the tag. A node outside a loop, not forward of a merge and not a join has
+    /// none: it fires once per instance.
     /// </summary>
     protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope)
     {
@@ -477,20 +494,27 @@ public sealed class Flowchart : CompositeActivity
     }
 
     /// <summary>
-    /// A node fires once per round, so the round names its activation, except forward of a Merge, where it fires once
-    /// per token (the owner's decision of 16 November: identify each arrival by its source). A token is named by the
-    /// merges it passed in this round and the source node of each arrival, from committed facts only: the merge's own
-    /// activation appends <c>^merge-source</c> to the token of the completing child that reached it; a plain successor
-    /// (one arrival) inherits its predecessor's token; a join consumes several arrivals and fires once per round, so it
-    /// starts afresh; a new round starts afresh. The engine's path ids are not used: they are minted in mutation order.
-    /// A join forward of a merge is fired by whichever arrival releases it, which a replay can reorder; the mix has
-    /// none, and NATIVE.md reports it to the owner.
+    /// What tells two firings of one node in one round apart (the owner's decision of 16 November: the node plus its
+    /// iteration numbers, which replay cannot reorder, and different activations always get different keys), from
+    /// committed facts only. A node with one inbound connection fires once per token: it inherits the token of the
+    /// completing child that reached it, and a Merge appends <c>^merge-source</c> (each arrival identified by its source).
+    /// A join (several inbound connections, not a Merge) fires once per round unless it lies forward of a merge, where
+    /// it fires once per token under whichever arrival releases it; it gets its firing ordinal in the round from this
+    /// host's committed count, <c>^join#n</c>: the nth firing is the nth in the lost turn and in its replay, whatever
+    /// arrivals made it up. Nodes after the join inherit that token. A new round starts afresh. The engine's path ids are
+    /// not used: they are minted in mutation order.
     /// </summary>
-    private static string? Token(CompositeContext context, FlowchartScheduledNode scheduled, ChildCompleted? source)
+    private static string? Token(CompositeContext context, FlowchartScheduledNode scheduled, ChildCompleted? source, Dictionary<string, int> firings)
     {
+        if (context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)
+        {
+            var round = $"{scheduled.NodeId}|{scheduled.IterationKey ?? "-"}";
+            var ordinal = firings[round] = firings.GetValueOrDefault(round) + 1;
+            return $"^{scheduled.NodeId}#{ordinal}";
+        }
         if (source is null) return null;
-        var (_, _, round, token) = Decode(source.Tag);
-        var inherited = round == scheduled.IterationKey && scheduled.SchedulingCause != "join" ? token : null;
+        var (_, _, sourceRound, token) = Decode(source.Tag);
+        var inherited = sourceRound == scheduled.IterationKey ? token : null;
         return context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) == Gateway.Merge ? $"{inherited}^{scheduled.NodeId}-{source.Node}" : inherited;
     }
 
