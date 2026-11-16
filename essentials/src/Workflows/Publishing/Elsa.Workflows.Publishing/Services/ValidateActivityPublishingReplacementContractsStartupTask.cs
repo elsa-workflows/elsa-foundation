@@ -13,6 +13,7 @@ internal sealed class ValidateActivityPublishingReplacementContractsStartupTask(
     internal static readonly Type[] Contracts =
     [
         typeof(IActivityTemplateCompiler),
+        typeof(IActivityTemplateInputBindingCompiler),
         typeof(IActivityPublicationCandidateEvaluator),
         typeof(IActivityPublicationReadiness),
         typeof(IActivityCatalogProjection),

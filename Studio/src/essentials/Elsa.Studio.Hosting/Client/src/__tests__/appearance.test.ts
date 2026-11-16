@@ -60,7 +60,7 @@ describe("appearance model", () => {
   });
 
   it("reset removes every listed appearance and chrome key and returns the defaults", () => {
-    expect(appearanceResetStorageKeys).toHaveLength(11);
+    expect(appearanceResetStorageKeys).toHaveLength(12);
     expect([...appearanceResetStorageKeys]).toEqual([
       appearanceStorageKeys.themeId,
       appearanceStorageKeys.workspaceStyle,
@@ -72,7 +72,8 @@ describe("appearance model", () => {
       appearanceChromeStorageKeys.bottomPanelCollapsed,
       appearanceChromeStorageKeys.bottomPanelHeight,
       appearanceChromeStorageKeys.bottomPanelMaximized,
-      appearanceChromeStorageKeys.activeBottomPanel
+      appearanceChromeStorageKeys.activeBottomPanel,
+      appearanceChromeStorageKeys.navigationGroups
     ]);
     const storage = memoryStorage({
       "elsa-studio-theme": "drift",
@@ -84,6 +85,7 @@ describe("appearance model", () => {
       "elsa-studio-bottom-panel-height": "320",
       "elsa-studio-bottom-panel-maximized": "true",
       "elsa-studio-active-bottom-panel": "console",
+      "elsa-studio.ui.nav.groups": '{"build":false}',
       "elsa-studio-unrelated": "keep"
     });
     expect(resetAppearancePreferences(storage)).toEqual(defaultAppearancePreferences);

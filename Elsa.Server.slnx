@@ -222,11 +222,11 @@
   <Folder Name="/extensions/Rules/tests/Persistence/EntityFrameworkCore/">
     <Project Path="extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
-  <Folder Name="/essentials/" />
   <Folder Name="/apps/">
     <Project Path="apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
+  <Folder Name="/essentials/" />
   <Folder Name="/essentials/build/">
     <Project Path="essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj" />
   </Folder>
@@ -540,6 +540,8 @@
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/">
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/studio/" />
+  <Folder Name="/tests/" />
   <Folder Name="/essentials/tests/">
     <Project Path="essentials/tests/Testing/Elsa.Testing.csproj" />
   </Folder>

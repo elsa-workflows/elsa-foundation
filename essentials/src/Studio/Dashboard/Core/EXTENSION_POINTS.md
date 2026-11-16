@@ -31,4 +31,4 @@ The management feature publishes through Elsa Events using Sequential dispatch a
 
 See the [query contract](../../../../../specs/1217-ai-dashboards/contracts/query.md), [resource contract](../../../../../specs/1217-ai-dashboards/contracts/resources.md) and [authoring contract](../../../../../specs/1217-ai-dashboards/contracts/weaver.md) for admission and failure semantics.
 
-`IDashboardAuthoringService` now has its model-agnostic default in `Elsa.Weaver.Dashboard`: see the [owning authoring catalog](../../../../../Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md). Provider adapters remain outside these contracts.
+`IDashboardAuthoringService` now has its model-agnostic default in `Elsa.Weaver.Dashboard`: see the [owning authoring catalog](../../../../../extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md). Provider adapters remain outside these contracts.

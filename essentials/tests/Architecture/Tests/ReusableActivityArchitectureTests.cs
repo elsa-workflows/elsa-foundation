@@ -9,17 +9,17 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Elsa4_legacy_workflow_as_activity_projects_and_model_are_absent()
     {
-        Assert.False(File.Exists(FullPath("Essentials/src/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj")));
-        Assert.False(File.Exists(FullPath("Essentials/src/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj")));
-        Assert.False(File.Exists(FullPath("Essentials/src/Workflows/Design/Core/Models/WorkflowActivityOptions.cs")));
-        Assert.False(File.Exists(FullPath("Essentials/src/Workflows/Primitives/Models/WorkflowIdentity.cs")));
-        Assert.False(File.Exists(FullPath("Essentials/tests/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj")));
+        Assert.False(File.Exists(FullPath("essentials/src/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj")));
+        Assert.False(File.Exists(FullPath("essentials/src/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj")));
+        Assert.False(File.Exists(FullPath("essentials/src/Workflows/Design/Core/Models/WorkflowActivityOptions.cs")));
+        Assert.False(File.Exists(FullPath("essentials/src/Workflows/Primitives/Models/WorkflowIdentity.cs")));
+        Assert.False(File.Exists(FullPath("essentials/tests/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj")));
     }
 
     [Fact]
     public void Graph_runtime_references_only_stable_runtime_and_expression_contracts() =>
         AssertProjectReferences(
-            "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
+            "essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
             "Elsa.Activities.Runtime.Core",
             // Boundary expressions use portable evaluator/type contracts, never a concrete language engine.
             "Elsa.Expressions.Core",
@@ -29,7 +29,7 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Graph_design_may_project_workflow_design_structure_but_does_not_reference_runtime_implementations() =>
         AssertProjectReferences(
-            "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
+            "essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
             "Elsa.Activities.Design.Core",
             "Elsa.Activities.Runtime.Core",
             // The provider uses the provider-neutral Design structure projector to preserve
@@ -49,7 +49,7 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Publishing_entity_framework_bridge_commits_through_the_design_and_runtime_EF_seams_only() =>
         AssertProjectReferences(
-            "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
+            "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
             "Elsa.Persistence.EntityFramework",
@@ -64,7 +64,7 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Elsa3_import_ef_bridge_references_design_ef_lanes_and_runtime_core_contracts_only() =>
         AssertProjectReferences(
-            "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
+            "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
             "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
             "Elsa.Persistence.EntityFramework",
             "Elsa.Serialization.Core",

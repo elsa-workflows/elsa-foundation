@@ -58,6 +58,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
     }
 
     public ActivityExecutionScope ExecutionScope { get; }
+    private bool _outputsCaptured;
+
     public IReadOnlyDictionary<string, DurableValueState> Inputs => ReadOnly(_inputs);
     public IReadOnlyDictionary<string, DurableValueState> Variables => ReadOnly(_variables);
     public IReadOnlyDictionary<string, DurableValueState> Outputs => ReadOnly(_outputs);
@@ -225,7 +227,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         ArgumentNullException.ThrowIfNull(mappings);
         ArgumentNullException.ThrowIfNull(requiredReferenceKeys);
         ArgumentNullException.ThrowIfNull(evaluateExpression);
-        if (_outputs.Count != 0)
+        if (_outputsCaptured)
             throw new InvalidOperationException("Graph outputs have already been captured.");
 
         var mappingsByKey = mappings.ToDictionary(item => item.OutputReferenceKey, StringComparer.Ordinal);
@@ -236,11 +238,13 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             cancellationToken.ThrowIfCancellationRequested();
             if (!mappingsByKey.TryGetValue(descriptor.ReferenceKey, out var mapping))
             {
-                if (requiredReferenceKeys.Contains(descriptor.ReferenceKey))
-                    throw new InvalidOperationException($"Required graph output '{descriptor.ReferenceKey}' has no boundary mapping.");
+                if (!_outputs.ContainsKey(descriptor.ReferenceKey) && requiredReferenceKeys.Contains(descriptor.ReferenceKey))
+                    throw new InvalidOperationException($"Required graph output '{descriptor.ReferenceKey}' was neither assigned nor mapped.");
                 continue;
             }
 
+            if (_outputs.ContainsKey(descriptor.ReferenceKey))
+                throw new InvalidOperationException($"Graph output '{descriptor.ReferenceKey}' has both a Set Output assignment and a boundary mapping.");
             var value = await evaluateExpression(mapping.Source, descriptor.Type, cancellationToken);
             staged.Add(
                 descriptor.ReferenceKey,
@@ -256,7 +260,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         }
 
         Publish(_outputs, staged);
-        return _outputs.Values.ToArray();
+        _outputsCaptured = true;
+        return staged.Values.ToArray();
     }
 
     public ValueTask<RuntimeDurableValueReadResult> ReadInputAsync(

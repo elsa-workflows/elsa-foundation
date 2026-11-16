@@ -45,7 +45,7 @@ services:
     build:
       # Build context MUST be the repository root (two levels up from docker/compose).
       context: ../..
-      dockerfile: Essentials/apps/Elsa.Workbench/Dockerfile
+      dockerfile: apps/Elsa.Workbench/Dockerfile
     image: elsa-workbench:local
     depends_on:
       postgres:

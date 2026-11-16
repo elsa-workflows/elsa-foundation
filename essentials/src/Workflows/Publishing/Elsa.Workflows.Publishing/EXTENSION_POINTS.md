@@ -19,6 +19,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IActivityTemplateCompiler` *(Publishing Core)* | `ActivityTemplateCompiler` (scoped) | Candidate dependency resolution, provider compilation or template admission differs. |
+| `IActivityTemplateInputBindingCompiler` *(Publishing Core)* | Scoped `RuntimeInputBindingCompiler` | A template provider needs the registered binding compiler to lower graph input reads and validate authored intrinsic inputs. |
 | `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
 | `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
@@ -51,11 +52,11 @@ accepting the receipt.
 
 ### Candidate publication services
 
-These five contracts are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. They are not contribution collections.
+These six contracts are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. They are not contribution collections.
 
 The compiler request/result and `ActivityTemplateCandidate` models live in Publishing Core. Draft publication and provider-backed source publication share the evaluator, readiness and catalog projection; draft publication also consumes the release policy. Typed domain source adapters can consume these Core ports without referencing this engine implementation. A provider-backed source publisher may supply an evaluator without the default template compiler.
 
-The evaluator must preserve the validator's refusal even without an error diagnostic, return ordered diagnostics against the candidate's actual subject, and admit only successful compilation with no error diagnostics. The compiler retains exact dependency pins and provider/template admission policy. Readiness reports the selected Runtime consumers/schema versions and durable storage drivers, and binds review to a stable fingerprint. Catalog projection derives activity ports, emitted outcomes and immutable publication metadata from the validated contract and compiled template; it does not create editable source. Release choices must satisfy the existing semantic-version compatibility floor; recommendation and activation remain separate domain commands. Replacements must preserve those obligations and each owning publisher's canonical commit and authorization boundaries.
+The evaluator must preserve the validator's refusal even without an error diagnostic, return ordered diagnostics against the candidate's actual subject, and admit only successful compilation with no error diagnostics. The compiler retains exact dependency pins and provider/template admission policy. Its input binding compiler must preserve declared input types, reference keys and explicit expression parameter bindings when lowering template nodes. Readiness reports the selected Runtime consumers/schema versions and durable storage drivers, and binds review to a stable fingerprint. Catalog projection derives activity ports, emitted outcomes and immutable publication metadata from the validated contract and compiled template; it does not create editable source. Release choices must satisfy the existing semantic-version compatibility floor; recommendation and activation remain separate domain commands. Replacements must preserve those obligations and each owning publisher's canonical commit and authorization boundaries.
 
 ### Authority stores
 
@@ -240,7 +241,7 @@ The Activity Graph implementation and its feature registration are documented in
 The provider/compiler/discovery registries are scoped. Contributors that read selected persistence
 access or scoped model metadata must remain in the publication operation; stateless singleton
 contributors remain supported. The agent registrations are documented in their
-[contributing-feature catalog](../../../../../Extensions/Agent/src/Design/EXTENSION_POINTS.md).
+[contributing-feature catalog](../../../../../extensions/Agent/src/Design/EXTENSION_POINTS.md).
 
 ## Cross-domain seams consumed by the engine
 

@@ -20,16 +20,24 @@ import xml.etree.ElementTree as ET
 
 BASELINE = "b555bd8460270476e49496e519c69b65180e9505"
 REPOSITORY = Path(__file__).resolve().parents[4]
-TESTS = Path("Extensions/Etl/tests/Tests")
+TESTS = Path("extensions/Etl/tests/Tests")
 PROJECT = TESTS / "Elsa.Etl.Tests.csproj"
-HARNESS = Path("Extensions/Etl/tests/Shared/EtlV1NativeUpgradeJourneyTests.cs")
+HARNESS = Path("extensions/Etl/tests/Shared/EtlV1NativeUpgradeJourneyTests.cs")
 HARNESS_FILES = {
     str(PROJECT), str(TESTS / "EtlPublishedWorkflowFixture.cs"),
     str(TESTS / "EtlPublishedWorkflowJourneyTests.cs"),
     str(HARNESS),
 }
-ADAPTER = Path("Extensions/Etl/tests/Shared/v1-native-upgrade-harness.patch")
-SUCCESSOR_CHANGES = HARNESS_FILES | {"Extensions/Etl/tests/Shared/test-v1-native-upgrade.py", str(ADAPTER)}
+PREDECESSOR_TESTS = Path("Extensions/Etl/tests/Tests")
+PREDECESSOR_HARNESS = Path("Extensions/Etl/tests/Shared/EtlV1NativeUpgradeJourneyTests.cs")
+PREDECESSOR_HARNESS_FILES = {
+    str(PREDECESSOR_TESTS / "Elsa.Etl.Tests.csproj"),
+    str(PREDECESSOR_TESTS / "EtlPublishedWorkflowFixture.cs"),
+    str(PREDECESSOR_TESTS / "EtlPublishedWorkflowJourneyTests.cs"),
+    str(PREDECESSOR_HARNESS),
+}
+ADAPTER = Path("extensions/Etl/tests/Shared/v1-native-upgrade-harness.patch")
+SUCCESSOR_CHANGES = HARNESS_FILES | {"extensions/Etl/tests/Shared/test-v1-native-upgrade.py", str(ADAPTER)}
 
 
 def git(root, *arguments):
@@ -62,9 +70,9 @@ def integrity(root):
 def patch_predecessor(root):
     git(root, "apply", "--check", str(REPOSITORY / ADAPTER))
     git(root, "apply", str(REPOSITORY / ADAPTER))
-    assert not (root / HARNESS).exists()
-    shutil.copyfile(REPOSITORY / HARNESS, root / HARNESS)
-    return HARNESS_FILES
+    assert not (root / PREDECESSOR_HARNESS).exists()
+    shutil.copyfile(REPOSITORY / HARNESS, root / PREDECESSOR_HARNESS)
+    return PREDECESSOR_HARNESS_FILES
 
 
 def verify_predecessor(root, allowed):
@@ -96,10 +104,10 @@ def runtime_migrations(root):
             'SELECT MigrationId FROM "__EFMigrationsHistory_EtlRuntime" ORDER BY MigrationId')]
 
 
-def run_phase(root, evidence, data, phase, test_name):
+def run_phase(root, tests_directory, evidence, data, phase, test_name):
     results = evidence / phase
     results.mkdir()
-    command = ["dotnet", "test", str(root / PROJECT), "-p:EtlV1NativeUpgrade=true",
+    command = ["dotnet", "test", str(root / tests_directory / "Elsa.Etl.Tests.csproj"), "-p:EtlV1NativeUpgrade=true",
                "-p:RestoreLockedMode=true", "--filter", f"FullyQualifiedName~{test_name}",
                "--logger", "trx;LogFileName=result.trx", "--logger", "console;verbosity=minimal",
                "--results-directory", str(results)]
@@ -120,7 +128,7 @@ def run_phase(root, evidence, data, phase, test_name):
     assert len(tests) == 1 and tests[0].get("outcome") == "Passed" and test_name in tests[0].get("testName", "")
     binaries = {}
     for project in ("Tests", "WorkerHost"):
-        directory = root / "Extensions/Etl/tests" / project / "bin/Debug/net10.0"
+        directory = root / tests_directory.parent / project / "bin/Debug/net10.0"
         files = sorted(directory.glob("*.dll"))
         assert files, f"Missing {phase} {project} binaries"
         binaries.update({str(path.relative_to(root)): digest(path) for path in files})
@@ -168,7 +176,7 @@ def main():
         save_json(evidence / "provenance.json", provenance)
         (evidence / "dotnet-info.txt").write_text(
             subprocess.check_output(["dotnet", "--info"], text=True, cwd=predecessor), encoding="utf-8")
-        run_phase(predecessor, evidence, data, "producer",
+        run_phase(predecessor, PREDECESSOR_TESTS, evidence, data, "producer",
                   "EtlPublishedWorkflowJourneyTests.V1_native_upgrade_producer_suspends_before_acceptance")
         assert verify_predecessor(predecessor, allowed) == hashes
         save_json(evidence / "producer-integrity.json", integrity(data))
@@ -182,12 +190,12 @@ def main():
         assert tree_hashes(evidence / "before-upgrade") == before
         assert tree_hashes(data) == before
         assert verify_successor() == successor_hashes
-        run_phase(REPOSITORY, evidence, data, "consumer",
+        run_phase(REPOSITORY, TESTS, evidence, data, "consumer",
                   "EtlPublishedWorkflowJourneyTests.V1_native_upgrade_successor_completes_same_run")
         save_json(evidence / "consumer-integrity.json", integrity(data))
         new_migrations = runtime_migrations(data)
         expected_migrations = sorted(path.stem for path in
-            (REPOSITORY / "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/Runtime").glob("[0-9]*.cs")
+            (REPOSITORY / "extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/Runtime").glob("[0-9]*.cs")
             if not path.name.endswith(".Designer.cs"))
         assert new_migrations == expected_migrations
         assert set(old_migrations) < set(new_migrations), "The successor must apply the additive runtime migrations"

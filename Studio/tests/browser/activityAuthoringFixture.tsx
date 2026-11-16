@@ -1,9 +1,9 @@
-import { agentEditorContributions, register as registerAgents } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/module";
-import { register as registerSecrets } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
-import { register as registerConnections } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
+import { agentEditorContributions, register as registerAgents } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/module";
+import { register as registerSecrets } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
+import { register as registerConnections } from "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
 import { createEndpointContext } from "@elsa-workflows/studio-sdk";
-import { initialAgentManifest } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/agentManifest";
+import { initialAgentManifest } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/agentManifest";
 import { useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnonymousAuthProvider, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
