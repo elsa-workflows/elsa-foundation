@@ -2,8 +2,8 @@
 
 **Branch**: `claude/3052-s11-define-af1366` | **Date**: 2026-11-16 | **Spec**: [spec.md](spec.md)
 
-**Status**: follows the spec. Both ADRs it applies are merged (spec *Approval*). Implementation starts on the
-initiative branch once this spec is approved (D-18).
+**Status**: follows the spec, approved 2026-11-16. Both ADRs it applies are merged (spec *Approval*), so it can be
+implemented on the initiative branch once this spec is merged there (D-18).
 
 ## Summary
 

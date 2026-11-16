@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft — **provisional**. Applies ADR 0093 and ADR 0092 as merged into the initiative branch; waits for @j03y-nxxbz's answers to the open questions below.
+**Status**: Approved — agreed 2026-11-16 by @j03y-nxxbz (the approval plan), with all ten open questions answered as recommended and the built-in assessment confirmed; applies ADR 0093 (`875aa14c7`) and ADR 0092 (`f52a661df`) as merged.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-11**,
 analysis **A-2**.
