@@ -220,8 +220,8 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
     /// <summary>
-    /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
-    /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
+    /// Whether the fence rides in the batch. The default is in the batch on every engine (decided 12 November; SQL Server
+    /// 16 November, with the owned commit: ENGINES.md E9). The checked fence stays selectable.
     /// </summary>
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
