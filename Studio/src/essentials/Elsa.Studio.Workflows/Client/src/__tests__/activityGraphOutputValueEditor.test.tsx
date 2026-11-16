@@ -11,6 +11,7 @@ import { sequenceActivity, sequenceNode } from "./fixtures";
 vi.mock("../api/activityDesign", () => ({ useWorkflowActivities: () => ({ data: { activities: [sequenceActivity] } }) }));
 vi.mock("../api/expressions", () => ({ listExpressionDescriptors: async () => [
   { type: "ActivityResult", displayName: "Activity result", editingMode: "reference" },
+  { type: "Liquid", displayName: "Liquid", editingMode: "code" },
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
   { type: "Variable", displayName: "Variable", editingMode: "reference" }
 ] }));
@@ -59,6 +60,31 @@ describe("unified graph output value source", () => {
   it("defaults a new value to supported Literal instead of unavailable ActivityResult browsing", async () => {
     const view = renderEditor(); await vi.waitFor(() => expect(button(view.container, "Choose value").disabled).toBe(false)); click(button(view.container, "Choose value"));
     expect(view.onChange).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ outputMappings: [{ outputReferenceKey: "sum", source: { syntax: "Literal", value: 0 } }] }) }));
+  });
+  it("only offers expression types the graph output evaluator can run", async () => {
+    const view = renderEditor({ mapping: { syntax: "Literal", value: 42 } });
+    click(button(view.container, "Change value source"));
+    await vi.waitFor(() => expect(view.container.querySelector('option[value="Variable"]')).toBeTruthy());
+    expect(view.container.querySelector<HTMLOptionElement>('option[value="Liquid"]:enabled')).toBeNull();
+    expect(view.container.querySelector<HTMLOptionElement>('option[value="ActivityResult"]:enabled')).toBeNull();
+    expect(view.container.querySelector<HTMLOptionElement>('option[value="Literal"]:enabled')).toBeTruthy();
+    expect(view.onChange).not.toHaveBeenCalled();
+  });
+  it("preserves an unsupported saved expression until the author chooses a replacement", async () => {
+    const view = renderEditor({ mapping: { syntax: "Liquid", value: "existing source" } });
+    await vi.waitFor(() => expect(button(view.container, "Edit existing source")?.disabled).toBe(true));
+    expect(view.container.textContent).toContain("Graph outputs cannot evaluate Liquid");
+    click(button(view.container, "Change value source"));
+    const select = view.container.querySelector<HTMLSelectElement>("select")!;
+    expect(select.value).toBe("Liquid");
+    expect(view.onChange).not.toHaveBeenCalled();
+    flushSync(() => {
+      select.value = "Literal";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(view.onChange).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      outputMappings: [{ outputReferenceKey: "sum", source: { syntax: "Literal", value: 0 } }]
+    }) }));
   });
   it("retains private graph variables in mapped expression authoring", async () => {
     const view = renderEditor({ mapping: { syntax: "Variable", value: { referenceKey: "total", declaringScopeId: "workflow" } } });

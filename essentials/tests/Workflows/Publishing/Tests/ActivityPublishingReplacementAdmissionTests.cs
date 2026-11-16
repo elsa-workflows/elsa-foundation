@@ -29,7 +29,8 @@ public sealed class ActivityPublishingReplacementAdmissionTests
 
     public static IEnumerable<object[]> Contracts() => new[]
     {
-        typeof(IActivityTemplateCompiler), typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),
+        typeof(IActivityTemplateCompiler), typeof(IActivityTemplateInputBindingCompiler),
+        typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),
         typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy)
     }.Select(type => new object[] { type });
 

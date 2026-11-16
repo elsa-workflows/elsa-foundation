@@ -94,5 +94,5 @@ These checks run both when a draft is validated and when the activity compiles:
 |---|---|
 | `activity.graph.argument-malformed` | A node's `inputs` or `outputs` is not a list of arguments, or an argument has no `referenceKey` or a `value` that is not an expression object. An argument without a value is unbound, not malformed |
 | `activity.graph.root-activity-malformed` | The root activity cannot be read as an activity node for any other reason |
-| `activity.graph.set-output-mapping-conflict` | The same public output has both a Set Output assignment and a Designer connection |
+| `activity.graph.set-output-mapping-conflict` | The same public output has both a Set Output assignment and a mapped value |
 | `activity.graph.intrinsic-unsupported` | A node uses an engine intrinsic other than Set Output (such as Set Variable, Correlate or Set Name) ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |

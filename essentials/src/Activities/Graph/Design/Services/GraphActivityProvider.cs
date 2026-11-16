@@ -63,8 +63,8 @@ public sealed class GraphActivityProvider(
 
     IReadOnlyList<ActivityProviderDiagnosticDescriptor> IActivityProviderDiagnosticCatalog.DiagnosticDescriptors { get; } =
     [
-        new("activity.graph.set-output-mapping-conflict", "An output has both a Designer connection and a Set Output assignment.",
-            "Remove the connection in Designer connections or remove the Set Output assignment.", "/outputMappings"),
+        new("activity.graph.set-output-mapping-conflict", "An output has both a mapped value and a Set Output assignment.",
+            "Remove the connection in Outputs or remove the Set Output assignment in the designer.", "/outputMappings"),
         new("activity.graph.set-output-unknown", "Set Output targets an output this activity does not declare.",
             "Select a declared activity output in the Set Output inspector."),
         new("activity.graph.set-output-invalid", "Set Output requires an output name and a value that can be stored.",
@@ -604,7 +604,7 @@ public sealed class GraphActivityProvider(
 
         foreach (var mapping in graph.OutputMappings.Where(x => assignedKeys.Contains(x.OutputReferenceKey)))
             diagnostics.Add(Diagnostic("activity.graph.set-output-mapping-conflict",
-                $"Output '{mapping.OutputReferenceKey}' has both a Designer connection and a Set Output assignment. Choose one source.",
+                $"Output '{mapping.OutputReferenceKey}' has both a mapped value and a Set Output assignment. Choose one source.",
                 subject, "/outputMappings", mapping.OutputReferenceKey));
 
         foreach (var output in contract.Outputs.Where(x => x.IsRequired && !assignedKeys.Contains(x.ReferenceKey)))

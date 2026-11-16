@@ -1131,6 +1131,9 @@ function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<strin
   return new Set(getActivityGraphOutputSetters(root, catalog).flatMap(setter => setter.outputName === null ? [] : [setter.outputName]));
 }
 
+// These are the expression syntaxes evaluated by GraphActivity at its completion checkpoint.
+const graphOutputSyntaxes = new Set(["literal", "object", "input", "variable", "javascript"]);
+
 export function ActivityGraphOutputMappingEditor({
   output,
   mapping,
@@ -1179,8 +1182,10 @@ export function ActivityGraphOutputMappingEditor({
       item.surfaces.inline && item.supports(candidateContext));
     return contribution ? [{ descriptor: expression, contribution }] : [];
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
+  const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
   const currentSyntax = mapping?.source.syntax ?? "";
   const active = available.find(item => item.descriptor.type === currentSyntax);
+  const supportedMapping = graphOutputSyntaxes.has(currentSyntax.toLowerCase());
   const Editor = active?.contribution.surfaces.inline;
   const context = {
     syntax: currentSyntax,
@@ -1193,8 +1198,8 @@ export function ActivityGraphOutputMappingEditor({
   const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
 
   const defaultSource = embedded
-    ? ["Literal", "Input", "Variable"].map(type => available.find(item => item.descriptor.type === type)).find(Boolean) ?? available.find(item => item.descriptor.type !== "ActivityResult")
-    : available[0];
+    ? ["Literal", "Input", "Variable"].map(type => supportedSources.find(item => item.descriptor.type === type)).find(Boolean) ?? supportedSources[0]
+    : supportedSources[0];
   const add = () => {
     const first = defaultSource;
     if (!first) return;
@@ -1205,7 +1210,7 @@ export function ActivityGraphOutputMappingEditor({
     });
   };
   const changeSyntax = (syntax: string) => {
-    const next = available.find(item => item.descriptor.type === syntax);
+    const next = supportedSources.find(item => item.descriptor.type === syntax);
     if (!next) return;
     const nextContext = { ...context, syntax };
     onChange({
@@ -1223,12 +1228,13 @@ export function ActivityGraphOutputMappingEditor({
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type} disabled={embedded && item.descriptor.type === "ActivityResult"}>{item.descriptor.displayName || item.descriptor.type}{embedded && item.descriptor.type === "ActivityResult" ? " · browsing unavailable here" : ""}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
         {Editor ? <Editor
           descriptor={descriptor}
           syntax={currentSyntax}
           value={mapping.source.value}
-          disabled={valueReadOnly}
+          disabled={valueReadOnly || !supportedMapping}
           context={context}
           onChange={nextValue => onChange({ ...mapping.source, value: nextValue })}
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}

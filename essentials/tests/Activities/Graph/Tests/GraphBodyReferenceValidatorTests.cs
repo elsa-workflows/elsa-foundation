@@ -209,8 +209,8 @@ public sealed partial class GraphActivityProviderTests
             var problem = Assert.Single(compilation.Diagnostics, x => x.Code == error);
             if (mapped)
             {
-                Assert.Contains("Designer connection", problem.Message);
-                Assert.Contains("Remove the connection", problem.Remediation);
+                Assert.Contains("mapped value", problem.Message);
+                Assert.Contains("Remove the connection in Outputs", problem.Remediation);
             }
             Assert.Null(compilation.ExecutableRoot);
         }
