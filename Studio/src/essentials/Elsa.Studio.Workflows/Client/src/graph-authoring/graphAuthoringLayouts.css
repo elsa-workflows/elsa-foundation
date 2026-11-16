@@ -134,3 +134,42 @@ html[data-theme-layout="editorial"] .wf-edge-actions:not(.visible):not(:hover):n
 }
 .wf-workbench-panel-content { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
 .wf-workbench-panel-content[hidden] { display: none; }
+
+/* Keep scope navigation and block commands out of the canvas's remaining height. */
+.wf-canvas-context {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.wf-canvas-context-commands { min-width: 0; }
+
+@media (max-width: 800px) {
+  .wf-canvas-context {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+    align-items: center;
+  }
+
+  .wf-canvas-context > .wf-breadcrumb {
+    min-width: 0;
+    overflow-x: auto;
+    padding-inline: 4px;
+    scrollbar-width: thin;
+  }
+
+  .wf-canvas-context > .wf-breadcrumb button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .wf-canvas-context-commands { display: contents; }
+
+  .wf-canvas-context-commands > .wf-block-commands {
+    padding: 4px;
+    scrollbar-width: thin;
+  }
+
+  .wf-canvas-context-commands > .wf-block-command-notice {
+    grid-column: 1 / -1;
+  }
+}

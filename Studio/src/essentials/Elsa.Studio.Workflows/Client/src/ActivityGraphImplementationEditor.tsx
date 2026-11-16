@@ -1000,6 +1000,7 @@ export function ActivityGraphImplementationEditor({
         onSelect: setActiveLeftPanelId
       }}
       canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer">
+        <div className="wf-canvas-context">
         <ScopeBreadcrumb
           frames={presentationScopeFrames(root, scopeFrames, catalogByVersion, value.activityPresentation)}
           onNavigate={nextFrames => {
@@ -1007,6 +1008,7 @@ export function ActivityGraphImplementationEditor({
             setSelectedNodeId(null);
           }}
         />
+        <div className="wf-canvas-context-commands">
         <NativeBlockCommands
           context={{
             document: { rootActivity: root, layout: activityGraphLayoutToDesign(value.layout), activityPresentation: value.activityPresentation ?? [] },
@@ -1030,6 +1032,8 @@ export function ActivityGraphImplementationEditor({
             if (node && child) enterChildSlot(nodeId, child, slotCrumbLabel(resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), child));
           }}
         />
+        </div>
+        </div>
         <div className="ad-graph-scope-label"><span>{resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(owner.nodeId), ownerCatalogItem, "Root")}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
         {isSequenceSlot ? <SequenceDesigner
           nodes={nodes.filter(node => node.type !== "bpmnElement")}
