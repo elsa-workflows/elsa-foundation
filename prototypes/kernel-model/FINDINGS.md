@@ -1893,20 +1893,23 @@ What this round found, beyond COMMIT-SQL.md:
   stays for the failures that remain.
 - **F-B4. The fence-count mutation.** `FenceIgnoresCount` (the owned fence does not compare its matched rows with the
   rows it fenced; `--fence-ignores-count`, `fencecount=0`) is caught by the semantic fence cases exactly as the broken
-  fence is (3 of 3 checked, 1 of 3 in the batch, on every engine: `semantic fence --fence-ignores-count` must exit 1), and
-  by the stress with the fence in the batch on PostgreSQL (I6 on both partitions, I3/I4, 1,708 violations, 58,206
-  definite errors as stale journal rows collide) and MySQL (686), and in both modes on SQL Server and SQLite; not by the
-  stress with the checked fence on PostgreSQL and MySQL (F-B2: no stale commit reaches the fence).
+  fence is (3 of 3 checked, 1 of 3 in the batch, on every engine): **`semantic fence --fence-ignores-count` must exit 1**,
+  and that is the gate. The stress is a pin on SQLite and SQL Server (both modes fail). On PostgreSQL and MySQL the
+  recorded in-batch runs failed once (PostgreSQL I6 on both partitions, I3/I4, 1,708 violations, 58,206 definite errors
+  after 17 stale commits reached the fence; MySQL 686 violations) and the reviewers' reruns held with 0 fenced commits
+  (F-B2: a stale commit rarely reaches the fence there), so those are single-run results, not pins.
 - **F-B5. Connector/NET steps over the statements that return no rows.** A MySQL command of many statements yields one
   result set per SELECT; the owned commit follows every statement with a `SELECT ROW_COUNT()` and registers exactly
   those. Found when the k-row fence probe read "fewer result sets than statements".
+- **F-B6. Grouping rows removes the proxy's extra read.** With one statement per row (the first shape of B1), a
+  1,000-instance flush on PostgreSQL read one TCP round trip more than EF's (5 against 4): the server answers each small
+  statement as it arrives and the client is still sending, which the proxy counts as a second trip. With the rows of one
+  kind as one multi-row statement the server has nothing to answer until the statement is complete: 3 round trips. The
+  same mechanism makes the PostgreSQL cells of the 1,000-instance rows vary by one or two between runs on both paths
+  (the tables carry a note); the Execute-frame and command columns do not vary.
 - **F-B7. A server-side check masks a client-side mutation.** On SQL Server the fence's count is checked by the server
   (`THROW 51010`) and read back by the client; `FenceIgnoresCount` skipped the client's check only, and 3 of 3 fence
   cases passed with it. The mutation now drops both (`8c5e944a5`), and the cases fail as on the other engines. A
   mutation must switch off every copy of the rule it names.
-- **F-B6. Grouping rows removes the proxy's extra read.** With one statement per row (the first shape of B1), a
-  1,000-instance flush on PostgreSQL read one TCP round trip more than EF's (5 against 4): the server answers each small
-  statement as it arrives and the client is still sending, which the proxy counts as a second trip. With the rows of one
-  kind as one multi-row statement the server has nothing to answer until the statement is complete: 3 round trips.
 
 Not done, unverified: COMMIT-SQL.md's last section.

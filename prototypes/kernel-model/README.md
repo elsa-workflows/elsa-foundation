@@ -114,7 +114,7 @@ EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.d
 $EFC sqlite [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] semantic   # no flag: the engine's default fence, below; the owned commit (COMMIT-SQL.md)
 $EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off; it changes nothing on the owned commit (COMMIT-SQL.md), and failed the fence cases on EF's
 $EFC <engine> ... --checked-fence semantic-broken fence                # the fence broken on purpose: the three fence cases must fail (exit 0)
-$EFC <engine> ... --checked-fence --fence-ignores-count semantic-broken fence   # the owned fence's count ignored: the same three must fail
+$EFC <engine> ... --checked-fence --fence-ignores-count semantic fence          # the owned fence's count ignored: the same three must fail (exit 1; semantic-broken would break the fence itself)
 $EFC sqlserver "$MS" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic
 $EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic
 MOR="dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll"

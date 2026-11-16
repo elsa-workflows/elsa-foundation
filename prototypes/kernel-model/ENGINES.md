@@ -333,13 +333,14 @@ What the owned commit changes in the findings above:
 | E1 (a stale owner is told "duplicate key") | Does not arise: the fence is the first statement and the first result the client reads (SQL Server: the server stops the batch at the fence's THROW). `m5=1` changes nothing. |
 | E3, E10 (Connector/NET's round trips per transaction) | Unchanged: the driver's, not the commit's. MySQL stays 6 round trips per in-batch commit. |
 | E4 (EF's savepoints) | Not on this path: no SaveChanges. |
-| E7 (42 statements per command; 2,100 parameters) | No command count; the owned commit chunks at 2,000 parameters on SQL Server (1,000 instances: 6 commands where EF sent 8 in the batch mode, 12 → 10 round trips of 16... see the table) and at 1,000 rows per multi-row statement. |
+| E7 (42 statements per command; 2,100 parameters) | No command count; the owned commit chunks at 2,000 parameters on SQL Server (SQL Server, 1,000 instances started at once: 6 commands where EF sent 12 with the fence in the batch, 8 where EF sent 14 checked; round trips 16 → 10 and 18 → 12) and at 1,000 rows per multi-row statement. |
 | E8 (the take's index) | Unchanged: the take is the same statement. |
 | E9 (SQL Server, fence in the batch: take deadlocks) | **Gone.** The owned in-batch fence is the first lock of the commit, as the take's partition row is the take's: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). SQL Server's default stays the checked fence until the owner moves it. |
 | E11 (Oracle's provider acknowledges a partial batch) | Not on this path: the store's own statements and counts; `MySqlCommandBatchPreparer` serves the `commit=ef` reference only. |
 
 The cost table of "What it costs" on the owned commit, round trips on the TCP stream (EF → owned; SQLite: calls into
-the engine):
+the engine). The PostgreSQL cells of the 1,000-instance rows vary by one or two between runs on both paths (COMMIT-SQL.md,
+FINDINGS 29 F-B6); every other cell reproduces exactly:
 
 | Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

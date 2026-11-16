@@ -44,7 +44,7 @@ are `EfStore.CommitOnceAsync`'s, restated:
 6. **The set-based deletes** of a terminate (every wait of the instance) and a delete (its journal rows) come last, in
    the same command.
 7. **Parameters.** Numbers and booleans are literals; strings and byte arrays are parameters typed as their column
-   (EF's type mapping for the property), so an instance row is 9 parameters and a message 6. SQL Server allows 2,100
+   (EF's type mapping for the property), so an instance row is 9 parameters and a message 3 to 9. SQL Server allows 2,100
    per request; the store starts a new command at 2,000. The fence is in the first command, and a later command is sent
    only after the earlier one's counts were read.
 
@@ -97,7 +97,11 @@ The skipped case is "a row the store refuses" (only PostgreSQL refuses a NUL), a
 ### Round trips: the cost runs, EF → owned
 
 Round trips on the TCP stream (`proxy=1`, the `tcp` column); SQLite: calls into the engine (BEGIN, commands, COMMIT).
-Every row holds or drops.
+Every row holds or drops in every observation. The PostgreSQL cells of the four 1,000-instance rows vary by one or two
+between runs on both paths (observed: EF 1,000 at once in the batch 5, 6, 5; owned 1,000 by poll 7, 8, 7; a second owned
+run read 8 and 7 for the 1,000-by-poll cells shown as 9 and 8): the proxy counts a second trip when the server answers a
+large command while the client is still sending (FINDINGS 29 F-B6). Every other cell, and the Execute-frame and command
+columns, reproduce exactly.
 
 | Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -212,13 +216,20 @@ today).
 - **The fence broken on purpose** (`unfenced=1`, `semantic-broken`): the three semantic fence cases fail with the
   checked fence on every engine (3 of 3); with the fence in the batch 1 of 3 ("a take beside a commit in flight reads the
   true position") fails on the owned commit and 0 of 3 on EF's, where the journal's primary key is the backstop for the
-  other two. The stress with the fence broken holds on PostgreSQL on both paths (FINDINGS 29 F-B2); on SQL Server the stress with the fence in the batch catches it (2,017 violations, 12,458 definite errors as stale
-  rows collide) and with the checked fence holds; on SQLite it catches it in both modes (2,110 and 2,135 violations; its
-  stalls produce stale commits, 128 to 283 fenced per clean run); on MySQL it holds in both modes, as on PostgreSQL.
-- **The owned fence's count ignored** (`FenceIgnoresCount`: `--fence-ignores-count`, `fencecount=0`): the same three
-  cases fail (3 of 3 checked, 1 of 3 in the batch) on every engine; the stress with the fence in the batch on PostgreSQL
-  fails (I6 on both partitions, I3/I4, 1,708 violations, 58,206 definite errors as stale journal rows collide); the
-  stress with the checked fence holds, as F-B2 says it must. On SQL Server and SQLite the stress catches it in both modes (SQL Server 2,157 and 2,191 violations; SQLite 2,196 and 2,215), on MySQL with the fence in the batch (686 violations) and not checked. On SQL Server the mutation had to skip the server's own `IF @@ROWCOUNT <> k THROW` as well as the client's read-back, or the server's check alone masked it (3 of 3 fence cases passed): FINDINGS 29 F-B7.
+  other two. The stress with the fence broken is a pin on SQLite only: there it fails in both modes (2,110 and 2,135
+  violations; its stalls produce stale commits, 128 to 283 fenced per clean run). On SQL Server it failed in the recorded
+  in-batch run (2,017 violations, 12,458 definite errors) and held checked; on PostgreSQL and MySQL it holds on both paths
+  and in both modes, with 0 fenced commits (FINDINGS 29 F-B2): there the stress is not a gate for the fence.
+- **The owned fence's count ignored** (`FenceIgnoresCount`: `--fence-ignores-count`, `fencecount=0`). **The gate is the
+  semantic suite: `semantic fence --fence-ignores-count` must exit 1**, and does on every engine (3 of 3 cases fail with
+  the checked fence, 1 of 3 in the batch). The stress is a pin on SQLite and SQL Server only, where it fails in both modes
+  (SQLite 2,196 and 2,215 violations; SQL Server 2,157 and 2,191). On PostgreSQL and MySQL the recorded in-batch runs
+  failed once (PostgreSQL I6 on both partitions, I3/I4, 1,708 violations, 58,206 definite errors as stale journal rows
+  collided after 17 stale commits reached the fence; MySQL 686 violations), and the checked runs held; both reviewers'
+  reruns held with 0 fenced commits, so those two are single-run results (F-B2), not pins. On SQL Server the mutation
+  had to skip the server's own `IF @@ROWCOUNT <> k THROW` as well as the client's read-back, or the server's check alone
+  masked it (3 of 3 fence cases passed): FINDINGS 29 F-B7. `semantic-broken fence --fence-ignores-count` proves nothing
+  about the count: `semantic-broken` already breaks the fence's predicate.
 - **E1 off** (`--m5`, `m5=1`): changes nothing on the owned commit (3 of 3 fence cases pass on every engine; the stress
   holds with `KeyViolationsAsFence` 0), where EF's path failed 2 of 3 on PostgreSQL. E1 does not arise (above).
 - **The kernel's own gates** (sim, mutations with the 43 and 9 pins, in-memory conformance, graph corpus): unchanged,
@@ -235,3 +246,15 @@ today).
 - Values by reference (decision 10) is untouched: the schema shape did not change.
 - The SQL Server run under amd64 emulation: counts are exact, times are not.
 - The bytes per commit were measured on PostgreSQL only (WRITES.md's method needs `pg_walinspect`).
+- `CommitDialect.ParameterLimit` is 2,000 on SQL Server and unbounded elsewhere, but SQLite refuses more than 32,766
+  variables and PostgreSQL and MySQL 65,535 per statement: a flush of about 3,600 new instances on SQLite (about 7,000
+  on the others) would fail where EF's one statement per row did not. Unreachable with `WorkerOptions.MaxBatch` at its
+  default of 500; the limit should still be per dialect.
+- The seqs of a multi-row message insert rely on identity (PostgreSQL, SQL Server) being assigned in VALUES order, which
+  neither engine documents; the returned seqs are sorted and the conformance case "seqs as stored" passes. MySQL (one
+  insert per message) and SQLite (`max + i`) are exact by construction.
+- A message key named twice in one batch (ENGINES.md: "a batch that names one message twice", a kernel-side input)
+  answers "not landed" on the owned path, where EF's change tracker threw (an unknown outcome): a reset and a retry
+  either way; a `Distinct` on the key list or a `StoreBatchRules` check would make it definite.
+- The k-row fence is two statements in one round trip on the server engines: the Id-ordered lock `SELECT` and the one
+  multi-row `UPDATE` with the count; F-A1's k + 2 round trips become 3 either way. SQLite has the one statement.
