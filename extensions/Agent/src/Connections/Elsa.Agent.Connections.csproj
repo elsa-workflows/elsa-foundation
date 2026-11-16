@@ -2,8 +2,8 @@
   <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Agent.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
   </ItemGroup>
 </Project>

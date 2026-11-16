@@ -6,44 +6,44 @@
   "support_projects": [
     {
       "id": "Elsa.Modularity.Core",
-      "project": "Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
+      "project": "essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
     },
     {
       "id": "Elsa.Modularity.Nuplane",
-      "project": "Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj"
+      "project": "essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj"
     },
     {
       "id": "Elsa.Studio.Preferences.Core",
-      "project": "Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj"
+      "project": "essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj"
     },
     {
       "id": "Elsa.Events",
-      "project": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+      "project": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
       "hosting_required": true
     },
     {
       "id": "Elsa.Events.Core",
-      "project": "Essentials/src/Events/Core/Elsa.Events.Core.csproj",
+      "project": "essentials/src/Events/Core/Elsa.Events.Core.csproj",
       "hosting_required": true
     },
     {
       "id": "Elsa.Events.Strategies",
-      "project": "Essentials/src/Events/Strategies/Elsa.Events.Strategies.csproj",
+      "project": "essentials/src/Events/Strategies/Elsa.Events.Strategies.csproj",
       "hosting_required": true
     },
     {
       "id": "Elsa.Pipelines.Core",
-      "project": "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "project": "essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "hosting_required": true
     },
     {
       "id": "Elsa.Primitives",
-      "project": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "project": "essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
       "hosting_required": true
     },
     {
       "id": "Elsa.Tasks.Core",
-      "project": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "project": "essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
       "hosting_required": true
     }
   ],
@@ -55,26 +55,26 @@
     { "id": "Elsa.Studio.Hosting.Nuplane", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Backends", "project": "Studio/src/essentials/Elsa.Studio.Backends/Elsa.Studio.Backends.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Dashboard", "project": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
-    { "id": "Elsa.Studio.UserTasks", "project": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
+    { "id": "Elsa.Studio.UserTasks", "project": "extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
-    { "id": "Elsa.Studio.Attention", "project": "Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },
-    { "id": "Elsa.Studio.ConsoleStream", "project": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj", "verify_dependency_metadata": true },
-    { "id": "Elsa.Studio.Decisions", "project": "Extensions/Decisions/studio/Elsa.Studio.Decisions/Elsa.Studio.Decisions.csproj", "introduced_after_consolidation": true },
-    { "id": "Elsa.Studio.Diagnostics.OpenTelemetry", "project": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" },
-    { "id": "Elsa.Studio.Diagnostics.StructuredLogs", "project": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" },
-    { "id": "Elsa.Studio.ExpressionEditors.JavaScript", "project": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" },
-    { "id": "Elsa.Studio.ExpressionEditors.Liquid", "project": "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" },
-    { "id": "Elsa.Studio.Etl", "project": "Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj", "introduced_after_consolidation": true },
-    { "id": "Elsa.Studio.ExtensionBuilder", "project": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" },
-    { "id": "Elsa.Studio.FeatureManagement", "project": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" },
-    { "id": "Elsa.Studio.Identity.ExternalAuthentication", "project": "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
-    { "id": "Elsa.Studio.Samples.WeatherForecast", "project": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" },
-    { "id": "Elsa.Studio.Secrets", "project": "Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" },
-    { "id": "Elsa.Studio.Agent", "project": "Extensions/Agent/studio/Elsa.Studio.Agent/Elsa.Studio.Agent.csproj", "introduced_after_consolidation": true },
-    { "id": "Elsa.Studio.Connections", "project": "Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" },
-    { "id": "Elsa.Studio.Weaver.Core", "project": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" },
-    { "id": "Elsa.Studio.Weaver.Workflows", "project": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" },
-    { "id": "Elsa.Studio.Workflows.Dashboard", "project": "Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj" }
+    { "id": "Elsa.Studio.Attention", "project": "extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },
+    { "id": "Elsa.Studio.ConsoleStream", "project": "extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj", "verify_dependency_metadata": true },
+    { "id": "Elsa.Studio.Decisions", "project": "extensions/Decisions/studio/Elsa.Studio.Decisions/Elsa.Studio.Decisions.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.Diagnostics.OpenTelemetry", "project": "extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" },
+    { "id": "Elsa.Studio.Diagnostics.StructuredLogs", "project": "extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" },
+    { "id": "Elsa.Studio.ExpressionEditors.JavaScript", "project": "extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" },
+    { "id": "Elsa.Studio.ExpressionEditors.Liquid", "project": "extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" },
+    { "id": "Elsa.Studio.Etl", "project": "extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.ExtensionBuilder", "project": "extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" },
+    { "id": "Elsa.Studio.FeatureManagement", "project": "extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" },
+    { "id": "Elsa.Studio.Identity.ExternalAuthentication", "project": "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
+    { "id": "Elsa.Studio.Samples.WeatherForecast", "project": "extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" },
+    { "id": "Elsa.Studio.Secrets", "project": "extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" },
+    { "id": "Elsa.Studio.Agent", "project": "extensions/Agent/studio/Elsa.Studio.Agent/Elsa.Studio.Agent.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.Connections", "project": "extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" },
+    { "id": "Elsa.Studio.Weaver.Core", "project": "extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" },
+    { "id": "Elsa.Studio.Weaver.Workflows", "project": "extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" },
+    { "id": "Elsa.Studio.Workflows.Dashboard", "project": "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj" }
   ],
   "non_packable_projects": [
     { "id": "Elsa.Studio.Web", "project": "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" },

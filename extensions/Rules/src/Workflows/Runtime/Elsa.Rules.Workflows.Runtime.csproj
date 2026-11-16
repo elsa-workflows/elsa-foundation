@@ -12,10 +12,10 @@
   <ItemGroup>
     <ProjectReference Include="../../Core/Elsa.Rules.Core.csproj" />
     <ProjectReference Include="../../Runtime/Elsa.Rules.Runtime.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="../../Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Rules.Tests" />
   </ItemGroup>
 </Project>

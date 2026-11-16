@@ -198,7 +198,7 @@ public static partial class TestTierCheck
     {
         var byFolder = projectFiles.ToDictionary(path => Folder(path), StringComparer.OrdinalIgnoreCase);
         var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in repo.ListFiles("Essentials/tests/*.cs", "Extensions/*/tests/*.cs").Where(RepoLayout.IsTestPath))
+        foreach (var file in repo.ListFiles("essentials/tests/*.cs", "extensions/*/tests/*.cs").Where(RepoLayout.IsTestPath))
         {
             for (var folder = Folder(file); folder.Length > 0; folder = Folder(folder))
             {

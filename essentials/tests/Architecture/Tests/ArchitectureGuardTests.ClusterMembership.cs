@@ -153,12 +153,12 @@ public sealed partial class ArchitectureGuardTests
         Assert.Equal(isProvider, IsMembershipProviderPackage(package));
 
     [Theory]
-    [InlineData("Elsa.Cluster.EntityFrameworkCore", "Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj", true)]
-    [InlineData("Elsa.Cluster.Orleans", "Extensions/Orleans/src/Cluster/Elsa.Cluster.Orleans.csproj", true)]
-    [InlineData("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj", true)]
-    [InlineData("Elsa.Cluster.Readability", "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj", true)]
-    [InlineData(InProcessClusterMembership, "Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj", false)]
-    [InlineData("Elsa.Primitives", "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj", false)]
+    [InlineData("Elsa.Cluster.EntityFrameworkCore", "essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj", true)]
+    [InlineData("Elsa.Cluster.Orleans", "extensions/Orleans/src/Cluster/Elsa.Cluster.Orleans.csproj", true)]
+    [InlineData("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj", true)]
+    [InlineData("Elsa.Cluster.Readability", "essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj", true)]
+    [InlineData(InProcessClusterMembership, "essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj", false)]
+    [InlineData("Elsa.Primitives", "essentials/src/Primitives/Primitives/Elsa.Primitives.csproj", false)]
     public void Membership_provider_projects_are_recognized(string name, string path, bool isProvider) =>
         Assert.Equal(isProvider, IsMembershipProviderProject(name, path));
 

@@ -9,7 +9,7 @@ import { absoluteToolPath, assertToolchain, captureToolchain, isExecutableIdenti
 const repo = resolve(import.meta.dirname, "../../..");
 const studioBin = "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0";
 const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj";
-const moduleRoot = "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
+const moduleRoot = "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
 const marker = "elsa-external-auth-ui-build/v1";
 const digest = value => createHash("sha256").update(value).digest("hex");
 function phaseExecutable(phase, tools) {

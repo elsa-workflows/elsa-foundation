@@ -414,7 +414,7 @@ class SourcePairTests(unittest.TestCase):
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
-                dll = root / 'Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = root / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
                 dll.parent.mkdir(parents=True)
                 def command(_args, log, **_kwargs):
                     if log.name == 'backend-build.log': raise RuntimeError('primary build failure')

@@ -69,7 +69,7 @@ try {
   let code;
   try {
     const entry = process.argv.includes("--studio") ? "tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs"
-      : "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs";
+      : "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/scripts/browser.mjs";
     const child = spawn(process.execPath, [join(repo, entry)],
       { cwd: repo, env: { ...process.env, ELSA_EXTERNAL_AUTH_PROBE_ROOT: root }, stdio: ["ignore", log, log] });
     code = await new Promise((done, reject) => { child.once("error", reject); child.once("exit", done); });

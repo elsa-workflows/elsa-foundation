@@ -16,7 +16,7 @@ public sealed partial class EtlRuntimeJourneyTests
     public async Task A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history()
     {
         var fixture = Path.Combine(EtlV1CompatibilityFixture.FindRepositoryRoot(),
-            "Extensions", "Etl", "tests", "Shared", "Fixtures", "Continuous1192", "runtime.db");
+            "extensions", "Etl", "tests", "Shared", "Fixtures", "Continuous1192", "runtime.db");
         await using var files = new RuntimeFiles(CsvJourneySource, new("tenant-fixture", "compaction-1192"));
         var database = Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "runtime.db");
         File.Copy(fixture, database);
