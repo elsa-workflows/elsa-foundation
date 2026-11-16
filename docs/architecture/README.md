@@ -10,7 +10,10 @@ These pages describe the proposed clean-slate execution kernel. They are design 
 2. [The kernel in motion](https://crystal-pellet-h5m3.here.now/): follow a workflow through persistence modes, faults and the fence lab. [HTML source](../reports/clean-slate-kernel/kernel-in-motion.html).
 3. [Storage model](storage-model.md) — **Proposed**: the provider contract, record lifecycles, writers, invariants, query paths, indexes and retention costs.
 4. [Ownership and fencing](ownership-and-fencing.md) — **Proposed**: why leases need a fence, how take and commit interact, and the costs and alternatives.
-5. [Job workers outside the process](job-workers.md) — **Proposed**: one job contract for in-process and remote workers, attempt leases, heartbeats, the effect key, completion through the fenced commit, and the release placement of standalone Jobs.
+5. [Fairness and backpressure](fairness-and-backpressure.md) — **Proposed**: admission at the edge, per-tenant limits, fair turn selection within a pass, and the bound on inbox growth.
+6. [Large fan-out and fan-in](large-fan-out.md) — **Proposed**: the combiner tree with credits, its costs against a single parent, and release 1's cap on a parallel ForEach.
+7. [Data lifecycle](data-lifecycle.md) — **Proposed**: where payloads live, retention and deletion of finished instances, erasure, encryption at rest, and what the journal format must fix now.
+8. [Job workers outside the process](job-workers.md) — **Proposed**: one job contract for in-process and remote workers, attempt leases, heartbeats, the effect key, completion through the fenced commit, and the release placement of standalone Jobs.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 

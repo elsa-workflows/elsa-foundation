@@ -75,12 +75,12 @@ describe("createStudioCodeToolingProjection", () => {
     }]);
   });
 
-  it("retains local context when the catalog is unavailable", async () => {
+  it.each(["unavailable", "stale", "canceled"])("retains local context when the catalog is %s", async state => {
     const authoringContext = { workflowInputs: [{ name: "invoice", kind: "value" }] };
     const projection = createStudioCodeToolingProjection({
       document: { source: "inv" },
       authoringContext,
-      tooling: { getCatalog: vi.fn().mockResolvedValue({ state: "unavailable" }) }
+      tooling: { getCatalog: vi.fn().mockResolvedValue({ state }) }
     });
 
     const completions = await projection.completionProvider({

@@ -42,6 +42,9 @@ export function useWorkflowActivityDataSelection({
   revealActivity
 }: WorkflowActivityDataSelectionParams): ActivityDataSelectionHost | null {
   const [available, setAvailable] = useState(false);
+  const owner = useRef({ endpoint: context, token: Object.freeze({}) });
+  if (owner.current.endpoint !== context) owner.current = { endpoint: context, token: Object.freeze({}) };
+  const ownerContext = owner.current.token;
   const contextRef = useRef(context);
   contextRef.current = context;
   const baseUrl = context.baseUrl ?? "";
@@ -55,7 +58,7 @@ export function useWorkflowActivityDataSelection({
       () => { if (active) setAvailable(false); }
     );
     return () => { active = false; };
-  }, [baseUrl, enabled]);
+  }, [baseUrl, context, enabled]);
 
   const on = available && enabled && draft != null;
   const latest = useRef({ draft, persistedDraft, on });
@@ -86,7 +89,7 @@ export function useWorkflowActivityDataSelection({
     if (!latest.current.on || contextRef.current !== endpoint || !latestDraft || latestDraft.id !== current.id ||
       latestDraft.definitionId !== current.definitionId || getDraftContentRevision(latestDraft) !== revision ||
       acknowledgedRevision(latestDraft, latest.current.persistedDraft) !== base) {
-      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false,
+      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false, expressionParametersEnabled: false,
         target: null, sources: [], hasMoreSources: false };
     }
     return result;
@@ -136,6 +139,8 @@ export function useWorkflowActivityDataSelection({
   }, [findingsCurrent, validationErrors]);
 
   return useMemo(() => on ? {
+    expressionInsertion: true,
+    ownerContext,
     documentRevision,
     baseRevision,
     saving,
@@ -143,7 +148,7 @@ export function useWorkflowActivityDataSelection({
     describeActivity,
     revealActivity,
     findingsFor
-  } : null, [baseRevision, describeActivity, documentRevision, findingsFor, on, requestSources, revealActivity, saving]);
+  } : null, [baseRevision, describeActivity, documentRevision, findingsFor, on, ownerContext, requestSources, revealActivity, saving]);
 }
 
 function acknowledgedRevision(draft: WorkflowDraft | null, saved: WorkflowDraft | null) {

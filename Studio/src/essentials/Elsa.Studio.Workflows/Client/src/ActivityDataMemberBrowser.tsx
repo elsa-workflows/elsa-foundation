@@ -1,13 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { SkeletonRows, StudioField } from "@elsa-workflows/studio-ui";
-import { matchesMemberOffer, type ActivityDataBinding, type ActivityDataContextResult, type ActivityDataSourceFacts, type ActivityDataTarget } from "./api/activityDataSelection";
+import { matchesMemberOffer, matchesParameterOffer, type ActivityDataParameterSource, type ActivityDataBinding, type ActivityDataContextResult, type ActivityDataSourceFacts, type ActivityDataTarget } from "./api/activityDataSelection";
 import type { ActivityDataSelectionHost } from "./activityDataSelection";
 import { activityDataBreadcrumbs, activityDataMemberBrowser, activityDataTypeLabel, appendActivityDataMember,
   describeActivityDataMemberFinding, groupActivityDataSources } from "./activityDataPickerModel";
 
 interface Selection {
-  source: ActivityDataBinding;
+  source?: ActivityDataBinding;
+  parameterSource?: ActivityDataParameterSource;
+  snapshotHash?: string;
   sourceId?: string;
   label: string;
   path: string[];
@@ -17,10 +19,11 @@ interface Selection {
 type Packet = { selection: Selection; result: ActivityDataContextResult; source: ActivityDataSourceFacts };
 
 /** The member-enabled branch of the existing popover. Navigation is transient; only a fresh server offer commits. */
-export function ActivityDataMemberBrowser({ host, target, result, current, refreshing, onSelect, onRefusal, onRefresh }: {
+export function ActivityDataMemberBrowser({ host, target, result, current, refreshing, onSelect, onRefusal, onRefresh, expression }: {
   host: ActivityDataSelectionHost; target: ActivityDataTarget; result: ActivityDataContextResult; current: boolean;
   refreshing: boolean; onSelect(binding: ActivityDataBinding): void;
   onRefusal(result: ActivityDataContextResult): void; onRefresh(): void;
+  expression?: { type: string; onSelect(result: ActivityDataContextResult, source: ActivityDataSourceFacts): void };
 }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [packet, setPacket] = useState<Packet | null>(null);
@@ -30,10 +33,12 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const rootRef = useRef<HTMLDivElement>(null);
   const latest = useRef({ host, target, current, onSelect, onRefusal, onRefresh });
   latest.current = { host, target, current, onSelect, onRefusal, onRefresh };
-  const labels = { describeActivity: host.describeActivity, describeScope: (scope: string) => host.describeActivity(scope)?.label ?? null };
+  const expressionRef = useRef(expression); expressionRef.current = expression;
+  const expressionType = expression?.type;
+  const labels = { expressionType, describeActivity: host.describeActivity, describeScope: (scope: string) => host.describeActivity(scope)?.label ?? null };
   const families = groupActivityDataSources(result, labels);
 
-  const { documentRevision, baseRevision, requestSources } = host;
+  const { documentRevision, baseRevision, requestSources, ownerContext } = host;
   const { nodeId, inputKey } = target;
   useEffect(() => {
     if (!selection) { setPacket(null); setError(null); setPending(false); return; }
@@ -42,10 +47,13 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
     const base = baseRevision;
     setPending(true);
     setError(null);
-    requestSources({ nodeId, inputKey }, controller.signal, 0, { source: selection.source, memberPath: selection.path, includeMemberShapes: true }).then(answer => {
+    requestSources({ nodeId, inputKey }, controller.signal, 0, {
+      ...(expressionType ? { expressionType, parameterSource: selection.parameterSource, expectedSnapshotHash: selection.snapshotHash } : { source: selection.source }),
+      memberPath: selection.path, includeMemberShapes: true
+    }).then(answer => {
       if (controller.signal.aborted) return;
       const now = latest.current;
-      if (now.host.documentRevision !== revision || now.host.baseRevision !== base || now.target.nodeId !== nodeId || now.target.inputKey !== inputKey) return;
+      if (now.host.ownerContext !== ownerContext || now.host.documentRevision !== revision || now.host.baseRevision !== base || now.target.nodeId !== nodeId || now.target.inputKey !== inputKey) return;
       setPending(false);
       if (answer.state !== "supported" && answer.state !== "empty") {
         setPacket(null);
@@ -53,49 +61,63 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         setError(answer.findings?.map(describeActivityDataMemberFinding).join(" ") || "This source cannot be used here.");
         return;
       }
-      if (answer.memberReadsEnabled !== true) { setPacket(null); now.onRefresh(); return; }
+      if (expressionType ? answer.expressionParametersEnabled !== true || answer.expressionType !== expressionType : answer.memberReadsEnabled !== true) { setPacket(null); now.onRefresh(); return; }
       const offered = answer.sources.length === 1 ? answer.sources[0] : undefined;
       if (!offered || answer.documentRevision !== revision || answer.baseRevision !== base ||
-        selection.sourceId && offered.id !== selection.sourceId || offered.binding &&
-        !(selection.path.length ? matchesMemberOffer(selection.source, selection.path, offered.binding) : sameWholeSource(selection.source, offered.binding))) {
+        selection.sourceId && offered.id !== selection.sourceId || (expressionType
+          ? !selection.parameterSource || !matchesParameterOffer(selection.parameterSource, selection.path, offered)
+          : offered.binding && (!selection.source || !(selection.path.length ? matchesMemberOffer(selection.source, selection.path, offered.binding) : sameWholeSource(selection.source, offered.binding))))) {
         setPacket(null); setError("The source changed while loading. Go back and choose it again."); return;
       }
       const next = { selection, result: answer, source: offered };
       setPacket(next);
-      const model = activityDataMemberBrowser(answer, offered.id, selection.path, { describeActivity: now.host.describeActivity });
-      if (selection.choose && selection.documentRevision === revision && now.current && offered.binding && !model.reason)
-        now.onSelect(offered.binding);
+      const model = activityDataMemberBrowser(answer, offered.id, selection.path, { expressionType, describeActivity: now.host.describeActivity });
+      if (selection.choose && selection.documentRevision === revision && now.current && !model.reason) {
+        if (expressionType && offered.parameterSource) expressionRef.current?.onSelect(answer, offered);
+        else if (offered.binding) now.onSelect(offered.binding);
+      }
     }, () => {
       if (!controller.signal.aborted) { setPending(false); setPacket(null); setError("Studio couldn't load the members. Try again."); }
     });
     return () => controller.abort();
-  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result]);
+  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result, expressionType, ownerContext]);
 
   const focusedPath = useRef("");
   useLayoutEffect(() => {
     if (pending || selection && !packet) return;
+    // Focus that moves after this view commits and before the frame runs was moved by the author.
+    const committedFocus = rootRef.current?.ownerDocument.activeElement ?? null;
     const frame = requestAnimationFrame(() => {
       const panel = rootRef.current;
       if (!panel) return;
       const pathKey = packet ? JSON.stringify([packet.source.id, packet.selection.path]) : "sources";
-      if (focusedPath.current === pathKey && panel.contains(panel.ownerDocument.activeElement)) return;
+      // Source rows and detail-view controls can receive explicit focus before this deferred frame runs.
+      // Keep that choice so Enter cannot be redirected to another control while the view settles.
+      const active = panel.ownerDocument.activeElement;
+      if (panel.contains(active) && (pathKey === "sources" || focusedPath.current === pathKey || active !== committedFocus)) {
+        focusedPath.current = pathKey;
+        return;
+      }
       focusedPath.current = pathKey;
       (panel.querySelector<HTMLElement>("[role='option']:not([aria-disabled='true'])") ?? panel.querySelector<HTMLElement>("input:not(:disabled)") ?? panel.querySelector<HTMLElement>("button:not(:disabled)"))?.focus();
     });
     return () => cancelAnimationFrame(frame);
   }, [packet, pending, selection]);
 
-  const open = (source: ActivityDataBinding, sourceId: string | undefined, label: string, path: string[], choose = false) => {
+  const open = (source: ActivityDataBinding | undefined, sourceId: string | undefined, label: string, path: string[], choose = false,
+    parameterSource?: ActivityDataParameterSource, snapshotHash?: string) => {
     setLiteral("");
-    setSelection({ source, sourceId, label, path, choose, documentRevision: host.documentRevision });
+    setSelection({ source, sourceId, label, path, choose, parameterSource, snapshotHash, documentRevision: host.documentRevision });
   };
   const ready = packet && !pending && current && !refreshing && packet.result.documentRevision === host.documentRevision;
   const shown = packet?.selection ?? selection;
   const model = packet ? activityDataMemberBrowser(packet.result, packet.source.id, packet.selection.path, labels) : null;
   const canonicalRoot = packet?.selection.path.length === 0 && packet.source.binding ? packet.source.binding : selection?.source;
+  const canonicalParameter = packet?.source.parameterSource ?? selection?.parameterSource;
   const selectedId = packet?.source.id ?? selection?.sourceId;
   const changePath = (path: string[], choose = false) => {
-    if (canonicalRoot && shown && current) open(canonicalRoot, selectedId, shown.label, path, choose);
+    if ((canonicalRoot || expressionType && canonicalParameter) && shown && current)
+      open(canonicalRoot, selectedId, shown.label, path, choose, canonicalParameter ?? undefined, packet?.result.snapshotHash ?? selection?.snapshotHash);
   };
 
   return <div ref={rootRef} className="wf-data-members" aria-busy={pending || refreshing || undefined}>
@@ -110,7 +132,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
           aria-current={crumb.memberPath.length === shown.path.length ? "location" : undefined}
           disabled={!current || pending} onClick={() => changePath(crumb.memberPath)}>{crumb.label}</button>)}
       </nav>
-      <button type="button" className="wf-data-member-use" disabled={!ready || !!model?.reason || !packet?.source.binding}
+      <button type="button" className="wf-data-member-use" disabled={!ready || !!model?.reason || !(expressionType ? packet?.source.parameterSource : packet?.source.binding)}
         onClick={() => changePath(shown.path, true)}>{shown.path.length ? "Use this value" : "Use whole value"}</button>
       {model?.typeLabel ? <p className="wf-data-chooser-note">{model.typeLabel}{model.typeKnowledge === "deferred" ? " · Checked when the workflow runs" : ""}</p> : null}
       {error ? <div className="wf-data-chooser-notice" role="alert"><span>{error}</span>
@@ -146,9 +168,9 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
           {family.options.map(option => <button key={option.source.id} type="button" role="option" aria-selected={false} tabIndex={-1}
             className="wf-data-chooser-option" aria-disabled={!!option.unavailableReason || !current || undefined} onKeyDown={activateOption}
             onClick={() => {
-              if (!current || option.unavailableReason || !option.source.binding) return;
-              open(option.source.binding, option.source.id, option.label, [],
-                option.source.shape?.kind === "scalar" || option.source.shape?.kind === "collection");
+              if (!current || option.unavailableReason || !(expressionType ? option.source.parameterSource : option.source.binding)) return;
+              open(option.source.binding ?? undefined, option.source.id, option.label, [],
+                option.source.shape?.kind === "scalar" || option.source.shape?.kind === "collection", option.source.parameterSource ?? undefined, result.snapshotHash ?? undefined);
             }}>
             <span className="wf-data-chooser-option-label">{option.label}{option.disambiguation ? ` · ${option.disambiguation}` : ""}{option.shadowed ? " (outer scope)" : ""}</span>
             <span className="wf-data-chooser-option-type" title={option.typeLabel ?? undefined}>{option.typeLabel}</span>

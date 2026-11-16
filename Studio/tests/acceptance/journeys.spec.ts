@@ -27,6 +27,7 @@ import { structuredLogsJourney } from "./structuredLogsJourney";
 import { activityDataCopyJourney } from "./activityDataCopyJourney";
 import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
+import { activityExpressionInsertionJourney, expressionModulePreservationJourney } from "./activityExpressionInsertionJourney";
 import { numericBindingJourney } from "./numericBindingJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
@@ -1054,6 +1055,17 @@ test("Double activity output binds to text", async ({ page }, info) => {
 test("choose data for activity outputs", async ({ page }, info) => {
   await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("insert JavaScript activity data", async ({ page }, info) => {
+  await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "JavaScript");
+});
+test("insert Liquid activity data", async ({ page }, info) => {
+  await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "Liquid");
+});
+if (process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal") {
+  test("preserve expression data without optional modules", async ({ page }, info) => {
+    await expressionModulePreservationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+  });
+}
 
 test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
   await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
