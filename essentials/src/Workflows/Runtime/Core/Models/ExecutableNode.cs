@@ -425,6 +425,12 @@ public enum WorkflowIntrinsicKind
     Finish
 }
 
+/// <summary>Descriptor schema requiring invocation-scoped Set Output support from the runtime.</summary>
+public static class WorkflowIntrinsicDescriptorSchemas
+{
+    public const string ActivityOutput = "2";
+}
+
 public static class WorkflowIntrinsicInputKeys
 {
     public const string Value = "value";

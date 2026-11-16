@@ -6,7 +6,7 @@
     "branch": "agent/codex/1177-http-usability",
     "captureMethod": "ResponseReplayHost --measurement-publication-proof; normal design submit, publication and executable-export APIs. The historical baseline import is separate from this newly published export.",
     "captureMutation": {
-      "relativePath": "essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
+      "relativePath": "Essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
       "change": "Temporarily declare WriteHttpResponse External only for the baseline capture build; restored ReplaySafe immediately after building.",
       "originalSha256": "7a55faafe0260ce2871a43c74779d830fcb2c61355d6e629c49d14de0db9858c",
       "captureSha256": "789ad6e7791c5a3e0a47484deb88080bc7681c281b86388737faf2aebb98a455",
@@ -14,54 +14,54 @@
     },
     "pinnedSourceFiles": [
       {
-        "relativePath": "essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
+        "relativePath": "Essentials/src/Activities/Http/Activities/WriteHttpResponse.cs",
         "sha256": "789ad6e7791c5a3e0a47484deb88080bc7681c281b86388737faf2aebb98a455",
         "byteLength": 2136
       },
       {
-        "relativePath": "essentials/src/Activities/Http/Activities/HttpEndpoint.cs",
+        "relativePath": "Essentials/src/Activities/Http/Activities/HttpEndpoint.cs",
         "sha256": "926921da02f477b0f46c05202ef115024c2e16ce7c2424c5dd652d61f3483199",
         "byteLength": 7184
       },
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/Program.cs",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/Program.cs",
         "sha256": "768fc95e88581c011f1bdfb90f0ebce980d889d56ea0ab2397bf4d1a44aca3d7",
         "byteLength": 19537
       },
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayPublicationHost.cs",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayPublicationHost.cs",
         "sha256": "c9fb507d6dbd0f5014b62204879b4100a56ae5b7cc5757cd9a5b6d0c1698bfbb",
         "byteLength": 91309
       },
       {
-        "relativePath": "essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs",
+        "relativePath": "Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs",
         "sha256": "4cc47b9535e114fc726f8f78ca3b6681420f5d9c785858f711a2bf4bbb0be9b0",
         "byteLength": 56324
       },
       {
-        "relativePath": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs",
+        "relativePath": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs",
         "sha256": "559bbeca12df1f15dd4aa71d1d21f44fea2e02ba40721eb8d6f3ec9a6c3bc198",
         "byteLength": 23273
       }
     ],
     "captureAssemblies": [
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/ResponseReplayHost.dll",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/ResponseReplayHost.dll",
         "sha256": "aeef7ed61d866d0957378e86cf0629d17eb05961d46b676c4ae94ed194846292",
         "byteLength": 331264
       },
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Http.dll",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Http.dll",
         "sha256": "a171a75ac9279f5b6980cfada740049ae2a8c04d1849c121a001c05c696b1943",
         "byteLength": 107008
       },
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
         "sha256": "bee1316b39413b8bbe0ea451bb607f648a2b315d6219717f2c9b7524dc574c85",
         "byteLength": 1745920
       },
       {
-        "relativePath": "essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Design.Reconciliation.Clr.dll",
+        "relativePath": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/bin/Debug/net10.0/Elsa.Activities.Design.Reconciliation.Clr.dll",
         "sha256": "7a933c50699ea9b288f9319e0d6bbce46e3860d09334a3bcf3bc0bff621bf2c7",
         "byteLength": 67584
       }
