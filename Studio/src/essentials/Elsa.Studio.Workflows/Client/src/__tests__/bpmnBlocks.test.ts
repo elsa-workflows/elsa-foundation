@@ -8,7 +8,7 @@ import { describeNativeBlockChange } from "../graph-authoring/nativeBlockPreview
 import { bpmnActivity, writeLine, setVariableActivity } from "./fixtures";
 import type { ActivityNode } from "../workflowTypes";
 import { readFileSync } from "node:fs";
-import { preservesJavaScriptWithAddedVariable } from "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation";
+import { preservesJavaScriptWithAddedVariable } from "../../../../../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation";
 const request = { nodeId: "block", activityVersionId: bpmnActivity.activityVersionId, displayName: "Shipping", selectedNodeIds: ["ea", "eb"] };
 function context(): NativeBlockContext {
   const root = createActivityNode(bpmnActivity, "root");
