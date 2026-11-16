@@ -12,4 +12,9 @@ public interface IActivityTemplateInputBindingCompiler
         string nodeId,
         IEnumerable<InputDefinition> inputDefinitions,
         IEnumerable<ArgumentState> inputStates);
+
+    /// <summary>Uses the canonical variable-frame compiler for a native container inside a reusable body.</summary>
+    IReadOnlyCollection<RuntimeVariableDeclaration> CompileGraphVariables(
+        string nodeId,
+        IEnumerable<VariableDefinition> variables);
 }

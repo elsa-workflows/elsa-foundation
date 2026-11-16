@@ -73,6 +73,53 @@ public sealed class RuntimeInputBindingCompiler(
         return CompileAll(nodeId, inputDefinitions, states);
     }
 
+    IReadOnlyCollection<RuntimeVariableDeclaration> IActivityTemplateInputBindingCompiler.CompileGraphVariables(
+        string nodeId, IEnumerable<VariableDefinition> variables)
+    {
+        var declarations = variables.ToArray();
+        if (declarations.GroupBy(variable => variable.ReferenceKey, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            throw new ArgumentException($"Activity node '{nodeId}' declares a variable more than once.");
+        return declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
+    }
+
+    internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
+    {
+        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
+        // storage profile; Studio advertises this driver for durable variable declarations.
+        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
+            ? null
+            : variable.StorageDriverType;
+        var policy = ValuePolicyCombiner.ToProtectionPolicy(
+            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
+        if (policy.Storage != DurableValueStorage.Inline)
+        {
+            throw new ArgumentException(
+                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
+        }
+        RuntimeInputBinding? initialBinding = null;
+        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
+            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
+        if (variable.Default is not null)
+        {
+            initialBinding = Compile(
+                nodeId,
+                new InputDefinition(
+                    variable.ReferenceKey,
+                    variable.Name,
+                    variable.Type,
+                    storageProfile,
+                    variable.Name,
+                    Category: null,
+                    IsNullable: true),
+                variable.Default);
+            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
+                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
+        }
+
+        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
+    }
+
     /// <summary>
     /// Compiles every input of a node against its catalog input definitions. The credential-literal rule
     /// is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's

@@ -868,43 +868,8 @@ public sealed class ExecutableNodeCompiler(
             .ToArray();
     }
 
-    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
-    {
-        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
-        // storage profile; Studio advertises this driver for durable variable declarations.
-        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-            ? null
-            : variable.StorageDriverType;
-        var policy = ValuePolicyCombiner.ToProtectionPolicy(
-            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
-        if (policy.Storage != DurableValueStorage.Inline)
-        {
-            throw new ArgumentException(
-                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
-        }
-        RuntimeInputBinding? initialBinding = null;
-        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
-            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
-        if (variable.Default is not null)
-        {
-            initialBinding = inputBindingCompiler.Compile(
-                nodeId,
-                new InputDefinition(
-                    variable.ReferenceKey,
-                    variable.Name,
-                    variable.Type,
-                    storageProfile,
-                    variable.Name,
-                    Category: null,
-                    IsNullable: true),
-                variable.Default);
-            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
-                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
-        }
-
-        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
-    }
+    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable) =>
+        inputBindingCompiler.CompileVariableDeclaration(nodeId, variable);
 
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(
         ExecutableNode root,
