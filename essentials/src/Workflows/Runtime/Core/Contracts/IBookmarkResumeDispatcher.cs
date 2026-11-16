@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IBookmarkResumeDispatcher
 {
+    /// <summary>Qualify the actual delivery observer and selected history reader; legacy dispatchers refuse.</summary>
+    bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Qualify the actual source/material/execution services for saved stimulus resumes; legacy dispatchers refuse.</summary>
     bool CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => false;

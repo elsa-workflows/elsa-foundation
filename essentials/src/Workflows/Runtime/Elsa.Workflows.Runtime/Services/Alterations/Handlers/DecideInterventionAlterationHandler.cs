@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.History;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -263,8 +264,11 @@ public sealed class DecideInterventionAlterationHandler(
     internal sealed record DecisionStagedChange(
         string ChangeKey,
         IncidentState Incident,
-        RuntimePostCommitIntent Delivery) : IWorkflowAlterationRuntimeCheckpointStagedChange
+        RuntimePostCommitIntent Delivery) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt) =>
+            [RuntimeHistoryIncidentFacts.Resolved(Incident), RuntimeHistoryIncidentFacts.DecisionApplied(Incident)];
+
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
         {
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal);

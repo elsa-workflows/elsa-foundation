@@ -294,10 +294,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 var inputFailure = BuildInputFailureSnapshot(incident, occurredAt);
                 var projection = _inspectionAccumulator is null
                     ? null
-                    : await _inspectionAccumulator.BuildProjectionAsync(
+                    : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                         associatedState,
                         checkpointId,
                         occurredAt,
+                        () => new ActivityValueCaptureOrigin(workflowExecutionId, record.WorkItemId, ActivityValueCapturePhase.Unknown),
                         incidents: [ActivityExecutionIncidentSummary.From(incident)],
                         valueSnapshots: inputFailure is null ? [] : [inputFailure],
                         metadata: metadata,
@@ -341,7 +342,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: checkpointActivityExecutionIds,
-                Metadata: metadata),
+                Metadata: metadata)
+            { HistoryStartsAtAdmission = unstartedExecution?.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(unstartedExecution.HistoryCapturePolicy) ? true : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: unstartedExecution is null
                     ? null
@@ -369,6 +371,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 ? new RuntimeInitialStartFault(failedInitialWork, record) : null
         };
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => [RuntimeHistoryIncidentFacts.Created(incident, new(SchedulerWorkItemId: record.WorkItemId))], cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
@@ -516,10 +520,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         var repairedAt = incident.CreatedAt;
         var projection = !needsInspectionRepair
             ? null
-            : await _inspectionAccumulator!.BuildProjectionAsync(
+            : await _inspectionAccumulator!.BuildProjectionWithSourceAsync(
                 associatedState,
                 checkpointId,
                 repairedAt,
+                () => new ActivityValueCaptureOrigin(incident.WorkflowExecutionId, workItemId, ActivityValueCapturePhase.Unknown),
                 incidents: [ActivityExecutionIncidentSummary.From(reconciledIncident)],
                 valueSnapshots: inputFailure is null ? [] : [inputFailure],
                 metadata: reconciledIncident.Metadata,
@@ -568,6 +573,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             PostCommitIntents: [],
             Metadata: reconciledIncident.Metadata);
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit,
+            () => [RuntimeHistoryIncidentFacts.ProjectionReconciled(reconciledIncident, repairedAt)], cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 

@@ -1010,6 +1010,7 @@ export function ActivityGraphImplementationEditor({
         />
         <div className="wf-canvas-context-commands">
         <NativeBlockCommands
+          endpoint={context}
           context={{
             document: { rootActivity: root, layout: activityGraphLayoutToDesign(value.layout), activityPresentation: value.activityPresentation ?? [] },
             catalog, scope: scopeFrames, canEdit: !readOnly && blockAuthority?.canEdit === true && !catalogQuery.isPending && !catalogQuery.isError,
@@ -1020,8 +1021,8 @@ export function ActivityGraphImplementationEditor({
           selectedNodeIds={nodes.filter(node => node.selected).map(node => node.id)}
           createPosition={nextNativeBlockPosition(nodes, selectedNodeId)}
           validate={async document => blockAuthority ? blockAuthority.validate({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation }) : { state: "unavailable", messages: [] }}
-          apply={(document, selection) => {
-            if (readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+          apply={(document, selection, isCurrent) => {
+            if (!isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
             commitDocument({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation });
             interactions.selectNodes(selection);
             if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);

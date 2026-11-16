@@ -17,6 +17,8 @@
     </PropertyGroup>
     <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
         <Compile Include="../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
+        <Compile Include="../../tools/ux-acceptance/HistoryQualificationControls.cs" Link="Qualification/HistoryQualificationControls.cs" />
+        <Compile Include="../../tools/ux-acceptance/ActivityPlaybackQualificationControls.cs" Link="Qualification/ActivityPlaybackQualificationControls.cs" />
         <Compile Include="../../tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" Link="Qualification/QualificationPrincipals.cs" />
     </ItemGroup>
 

@@ -25,6 +25,15 @@ public sealed record RuntimeCheckpointCommit(
     }
     private readonly IReadOnlyList<RuntimeHistoryBatch>? _historyBatches;
 
+    /// <summary>Immutable actual-owner inputs captured before history enrichment, outside continuation state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts
+    {
+        get => _historySourceFacts;
+        init => _historySourceFacts = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+    private readonly IReadOnlyList<RuntimeHistorySourceFact>? _historySourceFacts;
+
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelStateChange? ModelState { get; init; }
@@ -555,6 +564,10 @@ public sealed class RuntimePostCommitIntent
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
 
+    /// <summary>Optional immutable diagnostic origin. Source, scope and delivery authority remain separate.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     /// <summary>
     /// The time before which the intent must not be delivered (R-7, spec 261): its outbox item becomes available then
     /// instead of at the commit. Null, or a time at or before the commit, delivers it after the commit as usual. A
@@ -582,6 +595,7 @@ public sealed class RuntimePostCommitIntent
         StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
         WaitFailurePolicy == other.WaitFailurePolicy &&
         NotBefore == other.NotBefore &&
+        HistoryCausation == other.HistoryCausation &&
         (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 

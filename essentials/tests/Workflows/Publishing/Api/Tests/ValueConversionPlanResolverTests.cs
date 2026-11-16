@@ -67,6 +67,29 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Contains("lossy", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Double", "String")]
+    [InlineData("System.Double", "System.String")]
+    public void Auto_pins_a_numeric_to_string_operation_on_a_typed_double(string source, string target)
+    {
+        var plan = resolver.Resolve(Type(source), ValueRepresentation.TypedValue, Type(target));
+
+        Assert.Equal(ValueConversionOperation.NumericToString, plan.Operation);
+        Assert.Equal(ValueConversionMode.Auto, plan.Mode);
+    }
+
+    [Fact]
+    public void Numeric_formatting_requires_the_declared_scalar_contracts_and_auto_mode()
+    {
+        var source = Type("Double");
+        var target = Type("String");
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(source, ValueRepresentation.TypedValue, target, ValueConversionMode.None));
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(target, ValueRepresentation.TextValue, source));
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(source, ValueRepresentation.BinaryContent, target));
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(Type("Double", CollectionKind.Array), ValueRepresentation.TypedValue, target));
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(source, ValueRepresentation.TypedValue, new ValueTypeDescriptor("String", schemaVersion: 1)));
+    }
+
     [Fact]
     public void Explicit_json_profile_requires_declared_formatted_content_and_pins_the_builtin_version()
     {

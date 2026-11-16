@@ -15,6 +15,19 @@ public sealed class RuntimeCheckpointCommitter
 {
     internal IRuntimeHistoryStore? HistoryStore { get; init; }
     internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
+    internal Func<IRuntimeHistorySourceExtension?>? HistorySourceResolver { get; init; }
+
+    /// <summary>Preserves actual owner facts before capture/coalescing. Without the optional source module,
+    /// returns the same commit and never invokes the factory.</summary>
+    public ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(RuntimeCheckpointCommit commit,
+        Func<IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(facts);
+        return HistorySourceResolver?.Invoke() is { } source
+            ? source.AddFactsAsync(commit, _ => facts(), cancellationToken)
+            : ValueTask.FromResult(commit);
+    }
 
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
@@ -103,6 +116,10 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
+
+        if (commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy is { Required: true } &&
+            commit.HistoryBatches is not { Count: > 0 })
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The admitted execution requires its history contribution.");
 
         if (commit.HistoryBatches is { Count: > 0 } history)
         {

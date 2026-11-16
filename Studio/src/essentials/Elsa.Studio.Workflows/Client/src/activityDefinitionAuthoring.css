@@ -72,6 +72,7 @@
 .ad-publication-toolbar-status {
   order: 1;
   grid-column: 1 / -1;
+  contain: inline-size;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   overflow-wrap: anywhere;

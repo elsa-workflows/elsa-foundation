@@ -416,6 +416,7 @@ public sealed class ExecutableNodeCompiler(
                 IsNullable: false,
                 IsRequired: true),
             authoredInputs[key].Value,
+            string.Equals(authoredInputs[key].Value.ExpressionType, "ActivityResult", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(authoredInputs[key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(authoredInputs[key].Value.ExpressionType, "WorkflowRequest", StringComparison.OrdinalIgnoreCase)
                 ? authoredInputs[key].Conversion

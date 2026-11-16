@@ -101,6 +101,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await instructions.fill("Proofread the supplied text.");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
     await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(1);
     await blockers.getByRole("button", { name: "Choose model connection", exact: true }).click();
     const model = editor.getByRole("combobox", { name: /^Model connection/ });
@@ -108,6 +110,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await model.selectOption("azure-openai|proofreader");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
     await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
     await expect(blockers).toHaveCount(0);
     await page.screenshot({ path: info.outputPath("ready.png"), fullPage: true });

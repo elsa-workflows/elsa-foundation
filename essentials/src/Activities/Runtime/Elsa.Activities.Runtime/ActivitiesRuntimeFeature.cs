@@ -6,6 +6,7 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,10 +26,16 @@ namespace Elsa.Activities.Runtime;
 )]
 public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
 {
+    private static readonly RuntimeHistorySourceSupport ContinuationSources = new([
+        RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
+        RuntimeHistorySourceFactKind.ActivityContinuationSuspended, RuntimeHistorySourceFactKind.ActivityContinuationCompleted,
+        RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled]);
+
     public override void ConfigureServices(IServiceCollection services)
     {
         // Resume validators use the canonical Events pipeline in composed and direct library hosts alike.
         base.ConfigureServices(services);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, ContinuationSources))) services.AddSingleton(ContinuationSources);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();

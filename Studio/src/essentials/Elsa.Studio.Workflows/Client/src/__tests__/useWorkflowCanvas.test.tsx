@@ -19,6 +19,14 @@ afterEach(() => {
 });
 
 describe("useWorkflowCanvas BPMN placement", () => {
+  it("uses the authored presentation of a bound BPMN activity on the workflow canvas", () => {
+    const draft = bpmnDraft();
+    draft.activityPresentation = [{ nodeId: "named-task", displayName: "Prepare shipment" }];
+    draft.state.rootActivity!.structure!.payload.activities = [{ nodeId: "named-task", activityVersionId: "writeline@1", inputs: [], outputs: [] }];
+    draft.state.rootActivity!.structure!.payload.elements = [{ elementId: "task-element", elementType: "task", childNodeId: "named-task" }];
+    const harness = renderCanvas({ draft, catalog: [bpmnCatalogItem(), writeLineCatalogItem()], isBpmnDesigner: true });
+    expect(harness.node("task-element")?.data.boundActivity).toMatchObject({ label: "Prepare shipment" });
+  });
   // A BPMN canvas renders from the process ELEMENTS, not from the slot activities. An activity that
   // lands in the slot without a bound element is invisible and gets dropped by the next canvas sync,
   // so every catalog placement in a BPMN scope must stamp an element too.

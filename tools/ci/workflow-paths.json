@@ -74,11 +74,16 @@
     "tools/ci/test_workflow_scope.py"
   ],
   "weaver": [
+    "extensions/*",
+    "extensions/*/studio/**",
     "extensions/Agent/**",
     "extensions/Weaver/**",
     "extensions/FeatureManagement/**",
     "Studio/**",
-    "essentials/**",
+    "essentials/*",
+    "essentials/src/**",
+    "essentials/build/**",
+    "essentials/**/*.csproj",
     "apps/**",
     "tools/studio/Weaver.Conformance.Probe/**",
     "Directory.Build.*",

@@ -82,6 +82,7 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
     internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
@@ -190,14 +191,17 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    internal bool CreationRefused;
     internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
 
     /// <summary>Reply on the consumed delivery's own route when this outcome lands.</summary>
-    public void ReplyTo(Delivery delivery, object? value)
+    public void ReplyTo(Delivery delivery, object? value) => ReplyTo(delivery, value, creationRefusal: false);
+
+    internal void ReplyTo(Delivery delivery, object? value, bool creationRefusal)
     {
         if ((delivery.RequestAddress ?? delivery.Message.ReplyTo) is { } route)
-            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null });
+            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null, RefusedInput = creationRefusal ? delivery.Message : null });
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
@@ -219,6 +223,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
+    internal Message? RefusedInput { get; init; }
 }
 
 /// <summary>
@@ -335,6 +340,8 @@ public sealed class DurableTurn
     public void Add(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
+        if (_input.Creation > 0 && CreationProtocol.IsCompatibleTerminalHandle(message.Id, Origin))
+            throw new ArgumentException("A qualified actor's reserved end handle requires AddTerminalNotice.", nameof(message));
         if (message.Sender == Id) message = message with { SenderCreation = _input.Creation };
         // An actor may compose its own recallable ID. Unrelated caller-chosen IDs stay in ordinary ingress.
         if (message.Id.StartsWith(Origin + "#", StringComparison.Ordinal) && !OwnsHandle(message.Id))
@@ -348,7 +355,7 @@ public sealed class DurableTurn
     public void AddTerminalNotice(Message message)
     {
         Kinds.RequireApplicationSend(message.Kind);
-        if (message.Sender != Id || message.Id != $"{Origin}#{Revision}.end")
+        if (message.Sender != Id || message.Id != CreationProtocol.TerminalNoticeId(Id, _input.Creation, Revision))
             throw new ArgumentException("A terminal notice must use its issuing actor and revision.", nameof(message));
         _sent.Add((message with { SenderCreation = _input.Creation }).AsIssued());
     }

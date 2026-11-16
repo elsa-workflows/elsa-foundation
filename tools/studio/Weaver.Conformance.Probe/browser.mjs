@@ -495,6 +495,7 @@ async function workingDraft(name) {
       const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
       await expect(menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ })).toBeFocused();
       result.evidence.push(retain(name + "-menu-focus", { control: "Autosave", initialFocusObserved: true }));
+      if (["working-after-undo", "working-after-redo"].includes(name)) await screenshot(name + "-menu-focus");
       await nativeEnter(name + "-export", page.getByRole("menuitem", { name: "Export JSON", exact: true }), "Export JSON");
     })()
   ]);
@@ -2149,7 +2150,11 @@ async function workflowRun() {
   await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
   // Verify the exact occurrence through the same copyable execution detail a person can inspect.
   const panel = page.getByLabel("Run details panel", { exact: true });
-  await nativeEnter("inspect-run-activity", panel.getByRole("tab", { name: "Activity", exact: true }), "Activity");
+  // The selected-execution deep link opens Activity. Re-activating it while initial
+  // canvas focus is settling can send Enter to the canvas instead of the inspector.
+  const activityTab = panel.getByRole("tab", { name: "Activity", exact: true });
+  await expect(activityTab).toHaveAttribute("aria-selected", "true", { timeout: 30000 });
+  result.evidence.push(retain("inspect-run-activity", { selected: await activityTab.getAttribute("aria-selected"), source: "deep-link" }));
   const technical = panel.locator(".wf-activity-execution-details");
   await expect(technical).toBeVisible({ timeout: 30000 });
   if (await technical.getAttribute("open") === null)

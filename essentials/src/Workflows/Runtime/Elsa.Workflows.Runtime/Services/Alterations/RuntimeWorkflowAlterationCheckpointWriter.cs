@@ -28,12 +28,17 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
         ArgumentNullException.ThrowIfNull(request.TerminalJobChange);
         ArgumentNullException.ThrowIfNull(request.ProjectedState);
 
-        var workflow = request.ProjectedState.GetRequired<WorkflowExecutionState>();
+        var workflow = request.TerminalJobChange.Status == WorkflowAlterationJobStatus.Succeeded
+            ? request.ProjectedState.GetRequired<WorkflowExecutionState>()
+            : request.ProjectedState.GetRequiredOriginal<WorkflowExecutionState>();
         if (!StringComparer.Ordinal.Equals(workflow.WorkflowExecutionId, request.Job.WorkflowExecutionId))
             throw new InvalidOperationException("The alteration projected workflow state does not belong to the claimed target job.");
 
+        var stagedChanges = request.StagedChanges.ToArray();
+        if (request.TerminalJobChange.Status != WorkflowAlterationJobStatus.Succeeded && stagedChanges.Length != 0)
+            throw new InvalidOperationException("A failed alteration checkpoint cannot apply staged mutations.");
         var builder = new WorkflowAlterationRuntimeCheckpointStateBuilder(workflow);
-        foreach (var stagedChange in request.StagedChanges)
+        foreach (var stagedChange in stagedChanges)
         {
             if (stagedChange is not IWorkflowAlterationRuntimeCheckpointStagedChange checkpointStagedChange)
             {
@@ -51,7 +56,9 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
             ["runtime.alteration.jobId"] = request.Job.JobId,
             ["runtime.alteration.planId"] = request.Job.PlanId
         };
-        var occurredAt = _timeProvider.GetUtcNow();
+        // The terminal request owns this logical operation time. A later callback must rebuild the same
+        // checkpoint and source facts, while physical recording time remains the history provider's concern.
+        var occurredAt = request.TerminalJobChange.CompletedAt;
         var commit = new RuntimeCheckpointCommit(
             request.TerminalJobChange.CheckpointCommitId,
             new RuntimeCheckpoint(
@@ -79,11 +86,19 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
             builder.PostCommitIntents.ToArray(),
             metadata);
 
+        commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            stagedChanges.OfType<IAlterationHistorySource>().SelectMany(change => change.HistoryFacts(occurredAt))
+                .Concat(request.TerminalJobChange.Status == WorkflowAlterationJobStatus.Succeeded && stagedChanges.Length > 0
+                    ? [new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.AlterationApplied, request.Job.JobId, occurredAt, reasonCode: "succeeded")]
+                    : []), cancellationToken);
+
         // The provider-facing checkpoint owns the entire transaction, including the typed terminal job change.
         // An unrestricted alteration-store callback cannot prevent side effects before provider participation.
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
         return new WorkflowAlterationCheckpointWriteResult(request.TerminalJobChange.CheckpointCommitId, request.TerminalJobChange);
     }
+
+    internal bool OwnsHistoryCommitter(RuntimeCheckpointCommitter committer) => ReferenceEquals(_checkpointCommitter, committer);
 
     public async ValueTask<WorkflowAlterationCheckpointWriteResult?> FindCommittedAsync(
         string checkpointCommitId,

@@ -1,5 +1,5 @@
 import "./WorkflowEditorToolbar.css";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronRight, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
@@ -53,15 +53,10 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
     if (restoreFocus) triggerRef.current?.focus();
   };
 
-  useEffect(() => {
-    if (!open) return;
-    // The anchored surface starts hidden until its layout effect has positioned the portal.
-    const frame = requestAnimationFrame(() => {
-      const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-      items?.[openAtEndRef.current ? items.length - 1 : 0]?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
+  const focusInitialMenuItem = () => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+    items?.[openAtEndRef.current ? items.length - 1 : 0]?.focus();
+  };
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" || event.key === "Tab") {
@@ -130,7 +125,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           }}
         ><MoreHorizontal size={18} /></button>
       </div>
-      <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)}>
+      <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)} onPositioned={focusInitialMenuItem}>
         <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
           <div role="group" aria-label="Saving">
             <span className="wf-editor-menu-heading" aria-hidden="true">Saving</span>

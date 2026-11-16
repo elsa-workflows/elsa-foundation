@@ -65,6 +65,10 @@ public sealed class BookmarkResumeDispatchRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedRecipient { get; init; }
 
+    /// <summary>Diagnostic causation only; this pointer supplies no delivery or execution authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
@@ -193,6 +197,10 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
     /// <summary>Optional immutable accepted external source; it carries no expiring delivery claim.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeIngressWaitOrigin? IngressWaitOrigin { get; init; }
+
+/// <summary>Optional safe source-owned event/delivery causation, separate from trigger payload and admission authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }

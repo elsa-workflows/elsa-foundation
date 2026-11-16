@@ -1,0 +1,92 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Workflows.Runtime.Services.History;
+
+/// <summary>Internal implementation of production history enrollment; admission qualifies the actual selected owner/provider chain.</summary>
+internal static class RuntimeHistoryRegistration
+{
+    private static readonly Func<IServiceProvider, object> ObservationFactory = provider => new InMemoryRuntimeHistoryObservationWriter(
+        provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+        RuntimeCoreServiceCollectionExtensions.ResolveUnderlyingStore<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)),
+        provider.GetRequiredService<TimeProvider>());
+
+    internal static bool IsOwnedObservationRegistration(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(IRuntimeHistoryObservationWriter) && descriptor.Lifetime == ServiceLifetime.Scoped &&
+        ReferenceEquals(descriptor.ImplementationFactory, ObservationFactory);
+
+    private static readonly RuntimeHistorySourceSupport CoreSources = new([
+        RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
+        RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
+        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
+        RuntimeHistorySourceFactKind.ControlApplied]);
+
+    internal static readonly RuntimeHistorySourceSupport AlterationSources = new([
+        RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.AlterationApplied]);
+
+    internal static void AddServices(IServiceCollection services, RuntimeHistoryOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton(options ?? new RuntimeHistoryOptions());
+        services.TryAddScoped<IRuntimeHistoryStore, InMemoryRuntimeHistoryStore>();
+        services.TryAdd(ServiceDescriptor.Scoped(typeof(IRuntimeHistoryObservationWriter), ObservationFactory));
+        services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
+        services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, AlterationSources))) services.AddSingleton(AlterationSources);
+    }
+
+    internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        var options = provider.GetService<RuntimeHistoryOptions>();
+        bool? enabled = options is null ? null : options.Enabled;
+        return (enabled == true ? ResolveQualifiedPolicy(provider, workflowExecutionId) : null, enabled);
+    }
+
+    internal static RuntimeHistoryCapturePolicy? ResolvePolicy(IServiceProvider provider, string workflowExecutionId) =>
+        ResolveAdmission(provider, workflowExecutionId).Policy;
+
+    private static RuntimeHistoryCapturePolicy ResolveQualifiedPolicy(IServiceProvider provider, string workflowExecutionId)
+    {
+        try
+        {
+            var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+            var reader = provider.GetRequiredService<IRuntimeHistoryStore>();
+            if (!writer.SupportsHistory || !writer.CanCommitHistory(reader))
+                throw Unavailable("The selected history providers cannot acknowledge one scoped native checkpoint.");
+            var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
+            var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
+                .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName);
+            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
+                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
+            if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
+                throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");
+            return policy;
+        }
+        catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
+        {
+            throw new RuntimeHistoryIntegrityException(workflowExecutionId, "the selected admission history provider could not interpret its retained data", exception);
+        }
+        catch (Exception exception) when (exception is not RuntimeSchedulerWorkUnavailableException && !IsHardOrCancelled(exception) &&
+            !RuntimeHistoryReadFailures.IsMalformed(exception) &&
+            (RuntimeHistoryReadFailures.IsUnavailable(exception) || exception is InvalidOperationException))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The history provider is unavailable for new admission.", exception);
+        }
+    }
+
+    private static bool IsHardOrCancelled(Exception exception) =>
+        exception is ArgumentException or OperationCanceledException || RuntimeCheckpointCommitValidationException.IsCauseOf(exception) ||
+        exception.InnerException is { } inner && IsHardOrCancelled(inner);
+
+    private static RuntimeSchedulerWorkUnavailableException Unavailable(string message) => new("runtime.history.capture-unavailable", message);
+}

@@ -34,17 +34,21 @@ internal sealed class BpmnLinearChildResultAnalysis(IReadOnlyList<string> childr
         return -1;
     }
 
-    public static BpmnLinearChildResultAnalysis? TryCreate(BpmnAuthoredStructure structure)
+    public static BpmnLinearChildResultAnalysis? TryCreate(BpmnAuthoredStructure structure, Func<ActivityNode, bool>? ordinarySubprocess = null)
     {
-        if (structure.IsTransaction || structure.Activities.Count > 10000 || structure.Elements.Count < 3 ||
+        if (structure.IsTransaction || structure.Activities.Count > 10000 || structure.Elements.Count < 2 ||
             structure.Activities.Count != structure.Elements.Count - 2 ||
             structure.SequenceFlows.Count != structure.Elements.Count - 1)
             return null;
 
         var elements = new Dictionary<string, BpmnElement>(StringComparer.Ordinal);
         var activities = new HashSet<string>(StringComparer.Ordinal);
+        var activityNodes = new Dictionary<string, ActivityNode>(StringComparer.Ordinal);
         foreach (var activity in structure.Activities)
+        {
             if (activity is null || string.IsNullOrWhiteSpace(activity.NodeId) || !activities.Add(activity.NodeId)) return null;
+            activityNodes.Add(activity.NodeId, activity);
+        }
 
         var bound = new HashSet<string>(StringComparer.Ordinal);
         BpmnElement? start = null;
@@ -68,8 +72,11 @@ internal sealed class BpmnLinearChildResultAnalysis(IReadOnlyList<string> childr
                     break;
                 case BpmnElementTypes.Task when element.ChildNodeId is { } child && activities.Contains(child) && bound.Add(child):
                     break;
+                case BpmnElementTypes.SubProcess when element.ChildNodeId is { } child && activityNodes.TryGetValue(child, out var subprocess)
+                    && ordinarySubprocess?.Invoke(subprocess) == true && bound.Add(child):
+                    break;
                 default:
-                    // Includes gateways, other task families, subprocesses/calls, listeners and unbound/ambiguous work.
+                    // Includes gateways, other task families, unproved subprocesses/calls, listeners and ambiguous work.
                     return null;
             }
         }

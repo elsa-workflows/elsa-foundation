@@ -57,7 +57,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 Start(m, Events.Delivered(m) ?? throw new InvalidOperationException("Malformed BPMN event-start delivery."));
                 break;
             case BpmnKinds.Timer:
-                Completed(m.Read<TimerDue>().Handle, []);
+                var timerHandle = m.Read<TimerDue>().Handle;
+                if (_s.Live.TryGetValue(timerHandle, out var timer) && timer.Kind == WorkKinds.Timer && InboxKey.Issued(timer.Key) == m.InboxKey)
+                    Completed(timerHandle, []);
                 break;
             case Kinds.Event when m.Start is null && Events.Delivered(m) is { } delivered && _s.Live.TryGetValue(delivered.Wait, out var wait) && wait.Kind == WorkKinds.Message:
                 // A kept event is given to every catch that subscribes within its window; BPMN consumes a message once,
@@ -279,18 +281,25 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
 
     // ---- the journal ---------------------------------------------------------------------------------------------------
 
-    /// <summary>
-    /// What the checks read: each join that fired, with the arrivals it consumed (<c>j element merged-token arrivals</c>,
-    /// an arrival as <c>token/flow</c>; entries are separated by spaces, since token ids hold colons). The arrivals are the tokens at the join that this evaluation consumed.
-    /// </summary>
+    // Waiting and Joined are ordered interpreter decisions, even when an evaluation traverses
+    // the same gateway twice. A firing spends the first waiting token on each arrived flow
+    // in its iteration; the next firing cannot claim an already spent arrival.
     private void Journal(BpmnExecutionState before, BpmnExecutionState after)
     {
-        var consumedBefore = before.Tokens.Where(t => t.Status == BpmnTokenStatus.Consumed).Select(t => t.TokenId).ToHashSet(StringComparer.Ordinal);
-        foreach (var joined in after.Diagnostics.Where(d => d.Kind == BpmnDiagnosticKind.Joined))
+        if (!after.Diagnostics.Any(d => d.Kind == BpmnDiagnosticKind.Joined)) return;
+        var tokens = after.Tokens.ToDictionary(t => t.TokenId, StringComparer.Ordinal);
+        var waiting = before.Tokens.Where(t => t.Status == BpmnTokenStatus.WaitingAtJoin)
+            .Select(t => tokens[t.TokenId]).Where(t => t.Status == BpmnTokenStatus.Consumed).ToList();
+        foreach (var d in after.Diagnostics)
         {
-            var arrivals = after.Tokens.Where(t => t.AtElementId == joined.ElementId && t.FlowId is not null && t.Status == BpmnTokenStatus.Consumed
-                && t.TokenId != joined.TokenId && !consumedBefore.Contains(t.TokenId) && t.IterationKey == after.Tokens.FirstOrDefault(m => m.TokenId == joined.TokenId)?.IterationKey);
-            turn.Record($"j {joined.ElementId} {joined.TokenId} {string.Join(",", arrivals.Select(t => $"{t.TokenId}/{t.FlowId}"))}");
+            if (d.Kind == BpmnDiagnosticKind.Waiting && d.TokenId is { } tokenId && tokens.TryGetValue(tokenId, out var arrival)
+                && arrival.FlowId is not null && arrival.Status == BpmnTokenStatus.Consumed) waiting.Add(arrival);
+            if (d.Kind != BpmnDiagnosticKind.Joined) continue;
+            var merged = tokens[d.TokenId!];
+            var arrivals = waiting.Where(t => t.AtElementId == d.ElementId && t.IterationKey == merged.IterationKey)
+                .DistinctBy(t => t.FlowId).ToArray();
+            foreach (var token in arrivals) waiting.Remove(token);
+            turn.Record($"j {d.ElementId} {d.TokenId} {string.Join(",", arrivals.Select(t => $"{t.TokenId}/{t.FlowId}"))}");
         }
     }
 }

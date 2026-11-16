@@ -27,6 +27,10 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
+    'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
+    'native BPMN reusable blocks preserve reviewed XML bindings': ['reference'] + [f'activity-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
+    'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'captured-input', 'readonly')],
+    'native BPMN reusable blocks retain authoring boundaries': ['reference'] + [f'activity-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'readonly')] + ['activity-bpmn-stale'],
     'activity validation explains and locates graph settings': ['reference', 'variable-blocker', 'variable-focused', 'output-blocker', 'output-focused', 'review-retained', 'review-summary', 'review-focus-return'],
     "native block validation errors and retry": ["reference", "block-validation-invalid", "block-validation-outage-control", "block-validation-retried", "block-validation-persisted"],
     'set output assigns reusable activity output': ['reference', 'set-output-empty', 'set-output-declaration', 'set-output-expression', 'set-output-removed-target', 'set-output-readonly', 'set-output-reopened', 'set-output-connections', 'set-output-conflict-review', 'set-output-conflict-repaired', 'set-output-caller-result'],
@@ -49,6 +53,7 @@ CAPTURES = {
     'workflow template metadata defaults': ['reference', 'create-focused-description', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'definition-frame', 'definition-frame-dock', 'definition-frame-retained', 'definition-frame-scroll-top', 'definition-frame-scroll-middle', 'definition-frame-dock-scroll-top', 'definition-frame-dock-scroll-middle', 'definition-frame-retained-scroll-top', 'definition-frame-retained-scroll-middle', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'Double activity output binds to text': ['reference', 'automatic-conversion', 'incompatible-conversion', 'recovered-conversion'],
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
     'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
     'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
@@ -112,6 +117,7 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
@@ -721,10 +727,15 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             # Preserve main's combined-host receipt keys while retaining each subset's independent provenance.
             report['composedFeatures'] = report['compositions']['combined']['features']
             report['binaryAndConfigHashes'] = report['compositions']['combined']['binaryAndConfigHashes']
+            backend_env = env
+            if selected == {'Double activity output binds to text'}:
+                # Exercise a worker whose decimal separator is a comma.
+                backend_env = dict(env, LANG='nl_NL.UTF-8', LC_ALL='nl_NL.UTF-8')
+                report['backendLocale'] = backend_env['LC_ALL']
             with ExitStack() as owned:
                 for item in hosts:
                     prefix = '' if item['name'] == 'combined' else f"{item['name']}-"
-                    backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", env))
+                    backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
                     owned_processes[f'{prefix}backend'] = backend_process
                     report['ownedPids'][f'{prefix}backend'] = backend_process.pid
                     studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
