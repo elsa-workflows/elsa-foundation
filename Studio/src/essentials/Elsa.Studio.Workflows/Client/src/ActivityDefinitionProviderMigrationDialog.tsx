@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
@@ -67,7 +68,7 @@ export function ActivityDefinitionProviderMigrationDialog({
       <div><dt>Contract</dt><dd>{contractSummary(draft.contract)}</dd></div>
       <div><dt>Provenance</dt><dd>{draft.sourceVersionId ? <>Exact version <code>{draft.sourceVersionId}</code></> : "Blank lineage draft"}</dd></div>
     </dl>
-    <label className="ad-dialog-field"><span>Advertised migration target</span><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a provider schema</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></label>
+    <StudioField className="ad-dialog-field" label={<><span>Advertised migration target</span></>}><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a provider schema</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></StudioField>
     <div className="ad-atomic-review"><strong>Atomic result</strong><span>The backend creates one new parallel draft with the unchanged public contract and migrated opaque provider manifest. It never rewrites this source draft.</span></div>
     {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading advertised provider migrations…</div> : null}
     {capabilitiesQuery.isError || choices.length === 0 ? <div className="ad-inline-error" role="alert">No supported authorable migration target is currently advertised. The existing draft remains available with its exact provider facts.</div> : null}

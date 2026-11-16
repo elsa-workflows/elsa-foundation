@@ -7,6 +7,14 @@ running outside `Development`.
 
 For the design rationale see [`docs/plans/studio-bearer-token-issuance.md`](../plans/studio-bearer-token-issuance.md).
 
+## Upgrade: issuer-qualified external tokens
+
+External subjects are scoped by tenant, provider, validated issuer and opaque subject. Existing issuer-less
+non-user access and refresh tokens are refused after this upgrade; their users must sign in again. Canonical
+Elsa users retain their existing subject-key format. A role/group name supplied by a provider never grants Elsa
+permissions automatically: provisioning policy may assign existing saved Elsa roles when creating a user,
+while later sign-ins preserve saved memberships.
+
 ## The moving parts
 
 | Feature (shells.json key) | Role |
@@ -302,3 +310,25 @@ differently under `ASPNETCORE_ENVIRONMENT=Development` (no `shells.Development.j
 `shells.json` value survives — and the Development environment also satisfies the startup guard above). For a
 non-Development demo host, don't chase the flag: configure a real `SigningKey` per the go-live checklist. For
 a throwaway local demo, run the container with `ASPNETCORE_ENVIRONMENT=Development`.
+
+
+## Optional managed external connections
+
+For deployment-baseline/explicit-override connection settings, Secrets references and programmable provisioning,
+use the [managed Identity module](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
+Its optional [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) documents the
+feature composition, trusted public callback base, existing themed chooser, correlation/antiforgery protocol and
+administrator preview. Its artifact store and Data Protection keys must be shared for the corresponding deployment
+mode. The reference Workbench registers the optional `FoundationIdentityExternalAuthentication`,
+`FoundationIdentityExternalAuthenticationApi`, `FoundationIdentityExternalOidc` and
+`FoundationIdentityExternalAuthenticationEntityFrameworkCore` assemblies. Enable the desired features explicitly
+in shell configuration and configure their IAM, Secrets, persistence and public callback settings as documented
+by the owning API; registration alone does not enable managed sign-in.
+
+Durable selected-session and exact-link validation applies across ordinary cookies, access and refresh tokens.
+The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/README.md) distinguish controlled
+provider, Keycloak, full Studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
+Managed and deployment-only backend modes share their configured Data Protection ring/application name and
+first-party signing key across nodes; the SQLite profile runs on one machine. See the
+[profile evidence](../../specs/1212-external-authentication/evidence.md) for historical modes and limits; the prepared split has no current-source qualification.
+Receipts for one configuration do not establish another deployment mode.

@@ -34,6 +34,8 @@ export interface WorkflowDocumentState {
   // The open draft. null until the definition has loaded.
   draft: WorkflowDraft | null;
   batchTransaction?: { id: string; applied: boolean };
+  /** Request-only acknowledgement for an ordinary reviewed edit; never persisted in the draft. */
+  editTransaction?: { id: string; applied: boolean };
   // Scope navigation breadcrumb: which nested activity slot the canvas is currently showing.
   frames: ScopeFrame[];
   // Selected activity within the current scope (drives the inspector).
@@ -58,6 +60,7 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
+  | { type: "draftComparedAndEdited"; transactionId: string; definitionId: string; expectedRevision: string; expectedSelection: string | null; draft: WorkflowDraft; selectedNodeId: string | null; expectedFrames: ScopeFrame[]; frames: ScopeFrame[]; isCurrent(): boolean }
   // A reviewed Weaver change (spec 1193 FR-008): applied only when the definition, the SHA-256 content revision, the
   // selection and the scope frame are still exactly what the change was bound to; otherwise refused with zero change.
   // The frames the caller computed keep the user's scope when it survives and fall back to its nearest ancestor.
@@ -88,6 +91,14 @@ export type WorkflowDocumentAction =
 
 export function workflowDocumentReducer(state: WorkflowDocumentState, action: WorkflowDocumentAction): WorkflowDocumentState {
   switch (action.type) {
+    case "draftComparedAndEdited": {
+      const applied = action.isCurrent() && !!state.draft && state.draft.definitionId === action.definitionId
+        && getDraftContentRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection
+        && JSON.stringify(state.frames) === JSON.stringify(action.expectedFrames);
+      return applied ? { ...state, draft: action.draft, selectedNodeId: action.selectedNodeId, frames: action.frames,
+        editTransaction: { id: action.transactionId, applied: true } }
+        : { ...state, editTransaction: { id: action.transactionId, applied: false } };
+    }
     case "draftComparedAndReplacedByBatch": {
       const applied = !!state.draft && state.draft.definitionId === action.definitionId
         && getDraftContentRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection
@@ -150,6 +161,10 @@ export function useWorkflowDocument() {
   const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
 
   const actions = useMemo(() => ({
+    compareAndEditDraft(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft,
+      selectedNodeId: string | null, expectedFrames: ScopeFrame[], frames: ScopeFrame[], isCurrent: () => boolean) {
+      dispatch({ type: "draftComparedAndEdited", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames, isCurrent });
+    },
     compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null,
       expectedFrames: ScopeFrame[], frames: ScopeFrame[]) {
       dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames });
