@@ -56,6 +56,13 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
         raise ValueError(f"{wrapper.relative_to(root)} overrides shared Studio package metadata.")
 
 
+def _normalize_layout_target(target: str) -> str:
+    root, separator, remainder = target.partition("/")
+    if root in {"Essentials", "Extensions"}:
+        root = root.lower()
+    return root + separator + remainder
+
+
 def _verify_pinned_layout(root: Path, inventory: dict) -> None:
     manifest_path = root / inventory["layout_manifest"]
     if not manifest_path.is_file():
@@ -64,7 +71,7 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
     if manifest.get("studio_source") != inventory["studio_source_commit"]:
         raise ValueError("Studio package identity list is not pinned to the layout manifest source commit.")
     actual = {
-        item["target"]: (item["package_id"], item["explicit_is_packable"])
+        _normalize_layout_target(item["target"]): (item["package_id"], item["explicit_is_packable"])
         for item in manifest["projects"]
         if item.get("product") == "studio"
     }
