@@ -152,6 +152,70 @@ public sealed class FlowchartInclusiveForkTests
         run.AssertWorkflowCompleted();
     }
 
+    // Spec 1208 (2026-11-13): there is no multi-outcome declaration; any activity may select several of its declared
+    // outcomes. This activity carries nothing but its outcome declarations.
+    [Theory]
+    [InlineData(FlowchartPolicyKinds.DeadPathJoin)]
+    [InlineData(FlowchartPolicyKinds.ReachabilityJoin)]
+    public async Task An_activity_without_any_declaration_selects_two_outcomes_and_the_join_runs_once_after_both(string joinPolicy)
+    {
+        var run = await RunAsync(joinPolicy, fixture => fixture.NewExecutable(
+            children:
+            [
+                Leaf("node-fork", typeof(PlainSelectsAAndB)),
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-join"),
+                fixture.NewProbeNode("node-after-c")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-fork", "node-a", "A"),
+                fixture.NewConnection("node-fork", "node-b", "B"),
+                fixture.NewConnection("node-fork", "node-c", "C"),
+                fixture.NewConnection("node-a", "node-join"),
+                fixture.NewConnection("node-b", "node-join"),
+                fixture.NewConnection("node-c", "node-after-c")
+            ],
+            startNodeId: "node-fork"));
+
+        Assert.True(run.Status == WorkflowExecutionStatus.Completed, $"Status {run.Status}; order: {string.Join(", ", run.Order)}.");
+        Assert.Contains("node-a", run.Order);
+        Assert.Contains("node-b", run.Order);
+        Assert.DoesNotContain("node-c", run.Order);
+        Assert.DoesNotContain("node-after-c", run.Order);
+        Assert.Single(run.Order, node => node == "node-join");
+        var order = run.Order.ToList();
+        Assert.True(order.IndexOf("node-join") > order.IndexOf("node-a") && order.IndexOf("node-join") > order.IndexOf("node-b"),
+            $"The join ran before both selected paths: {string.Join(", ", run.Order)}.");
+    }
+
+    [Fact]
+    public async Task An_activity_without_any_declaration_records_both_selected_outcomes()
+    {
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .Build(Enumerable.Range(0, 16).Select(index => $"actexec-{index:D2}"));
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(Enumerable.Range(0, 16).Select(index => $"actexec-{index:D2}"));
+
+        var executable = fixture.NewExecutable(
+            children: [Leaf("node-fork", typeof(PlainSelectsAAndB)), fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b"), fixture.NewProbeNode("node-c")],
+            connections:
+            [
+                fixture.NewConnection("node-fork", "node-a", "A"),
+                fixture.NewConnection("node-fork", "node-b", "B"),
+                fixture.NewConnection("node-fork", "node-c", "C")
+            ],
+            startNodeId: "node-fork");
+        var run = await harness.RunAsync(executable);
+
+        run.AssertOutcomes("node-fork", "A", "B");
+        run.AssertRan("node-a", "node-b");
+        run.AssertDidNotRun("node-c");
+        run.AssertWorkflowCompleted();
+    }
+
     private static ExecutableNode Leaf(string nodeId, Type activityType) => new(
         executableNodeId: nodeId,
         authoredActivityId: $"authored-{nodeId}",
@@ -162,7 +226,7 @@ public sealed class FlowchartInclusiveForkTests
         inputBindings: new Dictionary<string, RuntimeInputBinding>(),
         metadata: new Dictionary<string, string>());
 
-    /// <summary>Declares A, B and C, may select several, and selects A and B.</summary>
+    /// <summary>Declares A, B and C, guarantees a selection (so it needs no Done), and selects A and B.</summary>
     [ActivityOutcome("A")]
     [ActivityOutcome("B")]
     [ActivityOutcome("C")]
@@ -171,6 +235,16 @@ public sealed class FlowchartInclusiveForkTests
     {
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, OutcomeSelection.Named("A", "B")));
+    }
+
+    /// <summary>Declares A, B and C and nothing else, and selects A and B.</summary>
+    [ActivityOutcome("A")]
+    [ActivityOutcome("B")]
+    [ActivityOutcome("C")]
+    public sealed class PlainSelectsAAndB : Activity<ActivityUnit>
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, new[] { "A", "B" }));
     }
 
     /// <summary>Declares A and Done and completes with an explicitly empty selection.</summary>

@@ -593,6 +593,62 @@ public sealed partial class GraphActivityProviderTests
         Assert.Null(compilation.ExecutableRoot);
     }
 
+    // Spec 1208 FR-032: a Complete node may name several boundary outcomes through a literal 'outcomes' list.
+    [Fact]
+    public async Task Complete_compilation_accepts_a_literal_outcomes_list_and_reaches_each_named_outcome()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","other"]""")),
+            OutcomeContract(("succeed", "Succeeded"), ("fail", "Failed"), ("other", "Other"))));
+
+        Assert.Empty(compilation.Diagnostics);
+        var completeOutcomes = compilation.ExecutableRoot!.Descriptor.Payload.GetProperty("completeOutcomes")
+            .Deserialize<GraphActivityCompleteOutcomeDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(
+            [new GraphActivityCompleteOutcomeDescriptor("fail", "Failed"), new GraphActivityCompleteOutcomeDescriptor("other", "Other")],
+            completeOutcomes!);
+    }
+
+    [Fact]
+    public async Task Complete_compilation_accepts_a_stringified_literal_outcomes_list()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", "\"[\\\"fail\\\",\\\"succeed\\\"]\""))));
+
+        Assert.Empty(compilation.Diagnostics);
+        Assert.NotNull(compilation.ExecutableRoot);
+    }
+
+    [Theory]
+    [InlineData("""["fail","missing"]""", "Literal", "activity.graph.complete.outcome-unknown")]
+    [InlineData("\"['fail']\"", "JavaScript", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""[]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""["fail",""]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""["fail",1]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("\"fail\"", "Literal", "activity.graph.complete.outcome-literal-required")]
+    public async Task Complete_compilation_rejects_an_invalid_outcomes_list(string outcomesJson, string expressionType, string expectedCode)
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", outcomesJson, expressionType))));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == expectedCode);
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
+    public async Task Draft_validation_checks_each_name_in_a_Complete_outcomes_list()
+    {
+        var catalog = new TypeKeyActivityCatalog().Add("activity-ver-complete", GraphActivityProvider.CompleteActivityTypeKey);
+        var provider = ProviderWithCatalog(catalog);
+
+        var valid = await provider.ValidateAsync(CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","succeed"]""")), CompleteContract());
+        var unknown = await provider.ValidateAsync(CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","missing"]""")), CompleteContract());
+
+        Assert.Empty(valid);
+        var diagnostic = Assert.Single(unknown, x => x.Code == "activity.graph.complete.outcome-unknown");
+        Assert.Equal("missing", diagnostic.Location!.ReferenceKey);
+    }
+
     [Fact]
     public async Task Complete_compilation_rejects_a_Complete_node_in_schema_one()
     {
@@ -683,6 +739,17 @@ public sealed partial class GraphActivityProviderTests
           "nodeId": "{{nodeId}}",
           "activityVersionId": "activity-ver-complete",
           "inputs": [{ "referenceKey": "outcome", "value": { "value": "{{outcome}}", "expressionType": "{{expressionType}}" } }],
+          "outputs": [],
+          "structure": null
+        }
+        """;
+
+    // outcomesJson is the raw JSON of the input value: an array, or a JSON string holding one.
+    private static string CompleteNodeWithOutcomesJson(string nodeId, string outcomesJson, string expressionType = "Literal") => $$"""
+        {
+          "nodeId": "{{nodeId}}",
+          "activityVersionId": "activity-ver-complete",
+          "inputs": [{ "referenceKey": "outcomes", "value": { "value": {{outcomesJson}}, "expressionType": "{{expressionType}}" } }],
           "outputs": [],
           "structure": null
         }

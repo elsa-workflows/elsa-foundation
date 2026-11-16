@@ -10371,7 +10371,6 @@ Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Selectio
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Selection.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection?
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.Current = 3 -> int
-const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey = 2 -> int
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete() -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!

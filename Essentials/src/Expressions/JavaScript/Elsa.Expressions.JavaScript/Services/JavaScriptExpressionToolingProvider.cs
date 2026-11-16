@@ -1,7 +1,9 @@
 using Acornima;
+using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
@@ -178,8 +180,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         try
         {
             // Share grammar selection with runtime without evaluating authored code.
-            JavaScriptBindingSyntax.IsExpression(source);
-            return [];
+            Node parsed = JavaScriptBindingSyntax.IsExpression(source)
+                ? new Parser().ParseExpression(source, strict: true)
+                : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            return ReservedNameDiagnostics(parsed, revision);
         }
         catch (ParseErrorException exception)
         {
@@ -196,6 +200,90 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
                         new(line, column),
                         new(line, column + 1)))
             ];
+        }
+    }
+
+    /// <summary>
+    /// <c>complete</c> is a reserved built-in name in every JavaScript surface (spec 1208 FR-007a, ADR 0045 §5): a binding
+    /// that declares it, as a variable, function, class, parameter or catch binding, is refused at design time.
+    /// </summary>
+    private static IReadOnlyList<ExpressionDiagnostic> ReservedNameDiagnostics(Node root, string revision)
+    {
+        var declarations = new List<Identifier>();
+        CollectCompleteDeclarations(root, declarations);
+        return declarations
+            .Select(identifier =>
+            {
+                var start = identifier.Location.Start;
+                var end = identifier.Location.End;
+                return new ExpressionDiagnostic(
+                    "JavaScript/ReservedName",
+                    ExpressionDiagnosticSeverity.Error,
+                    $"'{JavaScriptScriptBuiltIns.Complete}' is a reserved built-in name and cannot be declared in an expression. Rename it.",
+                    revision,
+                    new(
+                        new(Math.Max(0, start.Line - 1), Math.Max(0, start.Column)),
+                        new(Math.Max(0, end.Line - 1), Math.Max(0, end.Column))));
+            })
+            .ToArray();
+    }
+
+    private static void CollectCompleteDeclarations(Node node, List<Identifier> declarations)
+    {
+        switch (node)
+        {
+            case VariableDeclarator declarator:
+                CollectBindings(declarator.Id, declarations);
+                break;
+            case FunctionDeclaration { Id: { } functionId }:
+                CollectBindings(functionId, declarations);
+                break;
+            case FunctionExpression { Id: { } functionExpressionId }:
+                CollectBindings(functionExpressionId, declarations);
+                break;
+            case ClassDeclaration { Id: { } classId }:
+                CollectBindings(classId, declarations);
+                break;
+            case ClassExpression { Id: { } classExpressionId }:
+                CollectBindings(classExpressionId, declarations);
+                break;
+            case CatchClause { Param: { } parameter }:
+                CollectBindings(parameter, declarations);
+                break;
+        }
+
+        if (node is IFunction function)
+        {
+            foreach (var parameter in function.Params)
+                CollectBindings(parameter, declarations);
+        }
+
+        foreach (var child in node.ChildNodes)
+            CollectCompleteDeclarations(child, declarations);
+    }
+
+    // The identifiers a binding pattern declares; a property key in a destructuring pattern declares nothing.
+    private static void CollectBindings(Node? pattern, List<Identifier> declarations)
+    {
+        switch (pattern)
+        {
+            case Identifier identifier when StringComparer.Ordinal.Equals(identifier.Name, JavaScriptScriptBuiltIns.Complete):
+                declarations.Add(identifier);
+                break;
+            case ObjectPattern objectPattern:
+                foreach (var property in objectPattern.Properties)
+                    CollectBindings(property is Property { Value: var value } ? value : property, declarations);
+                break;
+            case ArrayPattern arrayPattern:
+                foreach (var element in arrayPattern.Elements)
+                    CollectBindings(element, declarations);
+                break;
+            case AssignmentPattern assignment:
+                CollectBindings(assignment.Left, declarations);
+                break;
+            case RestElement rest:
+                CollectBindings(rest.Argument, declarations);
+                break;
         }
     }
 }

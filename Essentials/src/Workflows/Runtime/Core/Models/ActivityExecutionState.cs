@@ -51,16 +51,6 @@ public sealed record ActivityExecutionState(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
-    /// <summary>
-    /// The value-flow document version. A document of version
-    /// <see cref="ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey"/> is read as the current version: its only
-    /// difference, the completion's single outcome key, is read as a named selection by <see cref="ActivityCompletion"/>
-    /// (spec 1208 FR-025), and the next write stores the current shape.
-    /// </summary>
-    public int DocumentVersion { get; init; } = DocumentVersion == ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey
-        ? ActivityExecutionValueFlowDocumentVersions.Current
-        : DocumentVersion;
-
     public string InvocationId => Execution.ActivityExecutionId;
 
     /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
