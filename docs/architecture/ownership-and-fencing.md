@@ -135,8 +135,9 @@ drops the repeat, one that does not sees the effect twice. The kernel records no
 prototype's simulation (NATIVE.md, N7) checks that an outbound effect carries its key, that a resend after a lost turn
 result or a takeover carries the same key, that one key belongs to one activation, and that a key never leaves in two
 turns that both landed; a resend's content is not compared, since the receiver keeps the first. Its smoke replays one
-committed state over a shorter and a longer inbox and asserts the same; three mutations (`UnstableEffectKey`,
-`NodelessEffectKey`, `PathlessEffectKey`) show the checks bite.
+committed state over a shorter and a longer inbox and asserts the same; six mutations (`UnstableEffectKey`,
+`NodelessEffectKey`, `PathlessEffectKey`, `TurnLocalJoinOrdinal`, `FreshTurnSwapsLoopKeys` and, in the retry witness,
+`FlatRetryGeneration`) show the checks bite.
 
 ## Alternatives considered
 
