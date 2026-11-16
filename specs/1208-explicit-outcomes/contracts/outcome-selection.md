@@ -52,5 +52,6 @@ Conversion is faithful or refused: no case converts with only a warning, and a b
 needs a separate approved decision (FR-027).
 
 Removed: `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING`, and the `VF-IMP-005` refusals of `setOutcome` / `setOutcomes`.
-Narrowed: `ELS3-ACTIVITY-UNSUPPORTED-MODE` no longer covers Switch `MatchAny` or Complete with several literal
+Narrowed: `ELS3-ACTIVITY-UNSUPPORTED-MODE` no longer covers Switch `MatchAny` without case activities, or a reusable
+workflow's Complete with several literal
 outcomes.
