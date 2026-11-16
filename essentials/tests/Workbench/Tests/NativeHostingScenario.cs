@@ -388,7 +388,7 @@ internal static class NativeHostingScenario
     internal static string CreatePackage(string directory)
     {
         var configuration = typeof(WorkbenchBuild).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
-        var project = Path.Combine(WorkbenchBuild.RepositoryRoot, "Essentials/tests/Workbench/Fixtures/BackgroundActivities");
+        var project = Path.Combine(WorkbenchBuild.RepositoryRoot, "essentials/tests/Workbench/Fixtures/BackgroundActivities");
         var framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
         // Nuplane's immutable acquisition cache may outlive the host's state directory. Give each owned package
         // a unique version so a rebuilt fixture never reuses an older binary from a previous test run.

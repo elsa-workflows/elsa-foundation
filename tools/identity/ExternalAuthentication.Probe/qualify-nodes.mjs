@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 const repo = resolve(import.meta.dirname, "../../..");
 const { request } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
 const { ExternalAuthenticationClient, connectionChanges } = await import(pathToFileURL(join(repo,
-  "Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot/studio/sdk/external-authentication/sdk.js")));
+  "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot/studio/sdk/external-authentication/sdk.js")));
 const sqlite = process.argv.includes("--sqlite"); const managed = !process.argv.includes("--baseline");
 const root = mkdtempSync(join(tmpdir(), `elsa-3579-nodes-${sqlite ? "sqlite" : "postgres"}-${managed ? "managed" : "baseline"}-`));
 const owner = randomUUID(); const marker = "elsa-external-authentication-probe/v1";

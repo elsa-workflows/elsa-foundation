@@ -24,7 +24,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     [Fact]
     public void Identity_core_and_implementation_projects_are_free_of_concrete_persistence_dependencies()
     {
-        var identityRoot = Path.Combine(RepoRoot, "Essentials", "src", "Foundation", "Identity");
+        var identityRoot = Path.Combine(RepoRoot, "essentials", "src", "Foundation", "Identity");
         var implementationRoot = Path.Combine(identityRoot, "Elsa.Foundation.Identity");
         var coreFiles = Directory.EnumerateFiles(Path.Combine(identityRoot, "Core"), "*", SearchOption.AllDirectories);
         var implementationFiles = OwnProjectFiles(implementationRoot).ToArray();
@@ -47,7 +47,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     {
         var root = Path.Combine(
             RepoRoot,
-            "Essentials",
+            "essentials",
             "src",
             "Foundation",
             "Identity",
@@ -68,7 +68,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     /// </summary>
     public void Elsa_OpenIddict_package_has_no_EF_packages_or_wrapper_sources()
     {
-        var openIddictRoot = Path.Combine(RepoRoot, "Essentials", "src", "Foundation", "Identity", "OpenIddict");
+        var openIddictRoot = Path.Combine(RepoRoot, "essentials", "src", "Foundation", "Identity", "OpenIddict");
         var packageRoot = Path.Combine(openIddictRoot, "Elsa.Foundation.Identity.OpenIddict");
         var projectPath = Path.Combine(packageRoot, "Elsa.Foundation.Identity.OpenIddict.csproj");
         var project = XDocument.Load(projectPath);
@@ -100,7 +100,6 @@ public sealed class OpenIddictPersistenceArchitectureTests
     {
         var project = XDocument.Load(Path.Combine(
             RepoRoot,
-            "Essentials",
             "apps",
             "Elsa.Workbench",
             "Elsa.Workbench.csproj"));
@@ -117,7 +116,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
 
         var testProject = XDocument.Load(Path.Combine(
             RepoRoot,
-            "Essentials",
+            "essentials",
             "tests",
             "Foundation",
             "Identity",

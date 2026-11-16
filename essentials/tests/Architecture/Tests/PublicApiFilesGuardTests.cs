@@ -51,7 +51,7 @@ public sealed class PublicApiFilesGuardTests
         var violations = TrackingOutsidePackableProduction(Projects);
 
         Assert.True(violations.Count == 0,
-            $"Only a packable project under Essentials/src or Extensions/*/src has a public surface to track: {string.Join(", ", violations)}");
+            $"Only a packable project under essentials/src or extensions/*/src has a public surface to track: {string.Join(", ", violations)}");
     }
 
     /// <summary>
@@ -63,9 +63,9 @@ public sealed class PublicApiFilesGuardTests
     {
         Assert.Contains(Projects, project => project is { Name: "Elsa.Primitives", Tracks: true });
         Assert.Contains(Projects, project => project is { Name: "Elsa.Events.Core", Tracks: true });
-        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Essentials/tests/", StringComparison.Ordinal));
-        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Essentials/apps/", StringComparison.Ordinal));
-        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Extensions/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("essentials/tests/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("apps/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("extensions/", StringComparison.Ordinal));
         Assert.True(Projects.Count(project => !project.Tracks) > Projects.Count(project => project.Tracks),
             "Expected untracked projects (tests at least) to outnumber tracked ones; the sweep may have stopped finding them.");
     }
@@ -75,14 +75,14 @@ public sealed class PublicApiFilesGuardTests
     public void Each_inconsistent_state_is_flagged_and_the_consistent_one_is_not()
     {
         using var sandbox = new Sandbox();
-        sandbox.Project("Essentials/src/Good/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
-        sandbox.Project("Essentials/src/MissingUnshipped/Core", tracks: true, shipped: true, unshipped: false, lockedAnalyzer: true);
-        sandbox.Project("Essentials/src/NoAnalyzer/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: false);
-        sandbox.Project("Essentials/src/Conditional/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, conditional: true);
-        sandbox.Project("Essentials/src/FilesOnly/Core", tracks: false, shipped: true, unshipped: false, lockedAnalyzer: false);
-        sandbox.Project("Essentials/src/Untracked/Core", tracks: false, shipped: false, unshipped: false, lockedAnalyzer: false);
-        sandbox.Project("Essentials/tests/Good/Tests", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
-        sandbox.Project("Essentials/src/Hidden/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, notPackable: true);
+        sandbox.Project("essentials/src/Good/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
+        sandbox.Project("essentials/src/MissingUnshipped/Core", tracks: true, shipped: true, unshipped: false, lockedAnalyzer: true);
+        sandbox.Project("essentials/src/NoAnalyzer/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: false);
+        sandbox.Project("essentials/src/Conditional/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, conditional: true);
+        sandbox.Project("essentials/src/FilesOnly/Core", tracks: false, shipped: true, unshipped: false, lockedAnalyzer: false);
+        sandbox.Project("essentials/src/Untracked/Core", tracks: false, shipped: false, unshipped: false, lockedAnalyzer: false);
+        sandbox.Project("essentials/tests/Good/Tests", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
+        sandbox.Project("essentials/src/Hidden/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, notPackable: true);
 
         var projects = Inspect(sandbox.Root);
 

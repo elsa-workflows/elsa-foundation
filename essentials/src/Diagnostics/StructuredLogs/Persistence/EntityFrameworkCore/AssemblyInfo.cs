@@ -24,7 +24,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(StructuredLogsEfModule.SchemaFamily, "Diagnostics.StructuredLogs", StructuredLogsEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// Content and integrity columns: see essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // An append operation's outcome embeds the payload of each record it appended. Those payloads are fields of the
 // outcome document, upcast with it by the outcome's upcaster, not a column of their own (#2140).
 [assembly: EfSchemaContent(StructuredLogsEfModule.SchemaFamily, typeof(StructuredLogRecord), nameof(StructuredLogRecord.PayloadJson))]

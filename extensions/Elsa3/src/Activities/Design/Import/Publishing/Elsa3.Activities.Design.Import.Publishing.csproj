@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <!-- The one reference the import itself must not take (framework §2.1): this project is the adapter. -->
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
   </ItemGroup>
 
 </Project>

@@ -150,7 +150,7 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
         {
             if (!File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
                 continue;
-            var path = Path.Combine(directory.FullName, "Extensions", "Etl", "tests", "WorkerHost", "bin", configuration, framework, "Elsa.Etl.WorkerHost.dll");
+            var path = Path.Combine(directory.FullName, "extensions", "Etl", "tests", "WorkerHost", "bin", configuration, framework, "Elsa.Etl.WorkerHost.dll");
             return File.Exists(path) ? path : throw new FileNotFoundException("Build the ETL fixture host before running process tests.", path);
         }
         throw new InvalidOperationException("Could not locate the repository root for the ETL fixture host.");

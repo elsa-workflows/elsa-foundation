@@ -196,7 +196,7 @@ public sealed class DomainManagementApiCompositionTests
             .ToArray();
         Assert.Single(captures.Distinct(StringComparer.Ordinal));
 
-        var baselinePath = Path.Join(RepoRoot, "Essentials", "tests", "Architecture", "Tests", "Baselines", "endpoint-manifest.json");
+        var baselinePath = Path.Join(RepoRoot, "essentials", "tests", "Architecture", "Tests", "Baselines", "endpoint-manifest.json");
         // Git keeps this JSON baseline without a mandated final line ending; compare the
         // serialized document while ignoring only that transport detail.
         Assert.Equal(BaselineFile.Read(baselinePath).TrimEnd(), captures[0].TrimEnd());
@@ -426,7 +426,7 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     private static string StockServerConfigurationPath =>
-        Path.Combine(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "shells.json");
+        Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "shells.json");
 
     [ShellFeature(name: "ApiCapabilities")]
     public sealed class ApiCapabilitiesDependencyFeature : IShellFeature

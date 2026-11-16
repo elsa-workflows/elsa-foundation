@@ -54,7 +54,7 @@ their owning contracts remain in the respective Core packages.
 | Workflows.Runtime.Core `IRuntimeCheckpointCommitEnricher` | `AgentCheckpointEnricher` | Scoped enumerable contribution in default phase0; contributes deterministic application/cancellation responsibility, then validates the final checkpoint envelope; no agent-store writes during enrichment |
 | Workflows.Runtime.Core `IRuntimePostCommitDurableSourceIntentHandler` | `AgentSettlementHandler` | Scoped keyed contribution for `elsa.agent.applied/1` and `elsa.agent.cancel/1`, registered through `AddRuntimePostCommitIntentHandler` with a required physical source and retry-until-acknowledged policy; verifies native/receipt authority before idempotent journal metadata settlement |
 
-The last two contributions use the [owning Workflows.Runtime catalog](../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+The last two contributions use the [owning Workflows.Runtime catalog](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 Application and cancellation settlement preserve accepted history and distinguish process application
 from journal acceptance. Retained-reader/key/codec and complete independent-process durable
 runtime/outbox qualification remain M3 obligations.
