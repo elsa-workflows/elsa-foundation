@@ -3,7 +3,7 @@
 Round 5, item D (kernel program #4229). A report: it changes no kernel code. Terms: a **take** is a node acquiring a
 kernel partition's lease; the **fence** is the check (epoch and position on the `Partitions` row) that stops a stale owner's
 commit; a **pass** is one run of the owner loop (poll, turns, commit); a **VP** is a virtual partition, the fixed-count
-kernel partitions of round 5 A (1,024 or 4,096, no rehash). "Kernel partition" below means a VP under round 5 A. It does three things:
+kernel partitions of round 5 A (1,024 or 4,096, no rehash). "Kernel partition" below means today's partition (64 by default, one `Partitions` row each), which becomes a VP under round 5 A. It does three things:
 
 1. tuning guidance for the four tables whose write pattern matters on PostgreSQL (`Messages`, `Instances`, `Journal`,
    `Partitions`), separating what was measured from what is only recommended;
@@ -158,7 +158,7 @@ select slot_name, active, xmin, catalog_xmin from pg_replication_slots;
 | Fill factor 70 and 90 on Messages: HOT share, burst WAL, heap size | `checkpoint_timeout` 15 min with `max_wal_size` to match; `wal_compression` |
 | Fill factor 70 on Instances: no resolvable effect | Fill factor 50 to 70 on `Partitions` |
 | Per-table fast autovacuum with the default nap: no measurable effect | `lz4` TOAST compression; `toast.*` reloptions |
-| Checkpoint every 30 s against 5 min: +33 % and +25 % WAL via full-page images (one run each) | Indexing the sweep predicate |
+| Checkpoint every 30 s against 5 min: +34 % (small state) and +27 % (4 kB pad) WAL via full-page images (small state one run each; pad baseline two runs) | Indexing the sweep predicate |
 | TOAST growth to 2.1 to 2.3 times live data with an incompressible 4 kB state; files do not shrink | Behaviour with a pinned horizon, replicas, or a real 1,000 commits/s |
 | 14 Nov (scoped keys, batch fence, defaults): 919 / 711 / 1,953 B per landed commit; padded 5,659 / 5,251 / 6,492 B | Anything on steady state, week-long vacuum, latency |
 
@@ -238,7 +238,7 @@ partitioned by VP on PostgreSQL, and what would that require of the store's keys
 - `Messages` key: `(Id, InboxScope)` on PostgreSQL and SQLite (`(Id, InboxScope, IssuedWire)` on SQL Server and
   MySQL). `InboxScope` is zero for ordinary messages and a negative or private value for issued, job, child and event
   identities. Other indexes: `(Partition, Seq)`. `Seq` is an identity column.
-- `Messages.Partition` is the **destination** instance's VP, not a function of `Id`. A caller chooses the `Id`.
+- `Messages.Partition` is the **destination** instance's kernel partition, not a function of `Id`. A caller chooses the `Id`.
 - Ordinary add is `INSERT ... ON CONFLICT ("Id","InboxScope") DO NOTHING`. Its meaning is store-wide
   deduplication of a caller-supplied id: a second add of the same `Id` is a no-op wherever the target is.
 - Statements that carry the partition: the poll (`WHERE "Partition" = p ...`) and the take's trial update (`Partition`
