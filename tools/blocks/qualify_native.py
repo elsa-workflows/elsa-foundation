@@ -67,7 +67,7 @@ def verify_owned_run(processes=None):
         ):
             raise ValueError("An owned child identity changed")
     directories = {
-        "workbench": REPO / "Essentials/apps/Elsa.Workbench/bin/Debug/net10.0",
+        "workbench": REPO / "apps/Elsa.Workbench/bin/Debug/net10.0",
         "studio": REPO / "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0",
     }
     for role, product_set in ready["products"].items():

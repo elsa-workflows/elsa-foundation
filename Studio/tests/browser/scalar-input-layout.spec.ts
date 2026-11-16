@@ -9,6 +9,8 @@ for (const [theme, width] of [["light", 900], ["dark", 900], ["dark", 320]] as c
       const field = page.getByLabel(name, { exact: true });
       const picker = page.getByRole("button", { name: new RegExp(`^${name} expression syntax:`) });
       await field.scrollIntoViewIfNeeded();
+      await expect(field).toHaveAttribute("data-studio-field-control", "");
+      expect(await field.evaluate(element => getComputedStyle(element.closest(".studio-form-control")!).borderTopStyle)).toBe("solid");
       const fieldBox = (await field.boundingBox())!;
       const pickerBox = (await picker.boundingBox())!;
       expect(Math.abs(fieldBox.y + fieldBox.height / 2 - pickerBox.y - pickerBox.height / 2), `${name}: ${JSON.stringify({ fieldBox, pickerBox })}`).toBeLessThanOrEqual(1);

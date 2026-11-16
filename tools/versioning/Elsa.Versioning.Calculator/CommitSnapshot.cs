@@ -114,7 +114,10 @@ internal sealed class CommitSnapshot
     /// </remarks>
     public IEnumerable<string> ProjectFiles()
     {
-        var consolidatedLayout = tree.Keys.Any(path => path.StartsWith("Essentials/", StringComparison.Ordinal) ||
+        var consolidatedLayout = tree.Keys.Any(path => path.StartsWith("essentials/", StringComparison.Ordinal) ||
+                                                       path.StartsWith("extensions/", StringComparison.Ordinal) ||
+                                                       path.StartsWith("apps/", StringComparison.Ordinal) ||
+                                                       path.StartsWith("Essentials/", StringComparison.Ordinal) ||
                                                        path.StartsWith("Extensions/", StringComparison.Ordinal));
         if (consolidatedLayout && tree.Keys.Any(IsLegacyProjectPath))
             throw new InvalidOperationException(
@@ -128,16 +131,7 @@ internal sealed class CommitSnapshot
         path.EndsWith(".csproj", StringComparison.Ordinal) &&
         (path.StartsWith("src/", StringComparison.Ordinal) || path.StartsWith("tests/", StringComparison.Ordinal));
 
-    private static bool IsConsolidatedProjectPath(string path)
-    {
-        if (path.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
-            path.StartsWith("Essentials/apps/", StringComparison.Ordinal) ||
-            path.StartsWith("Essentials/tests/", StringComparison.Ordinal))
-            return true;
-
-        var segments = path.Split('/');
-        return segments.Length >= 4 && segments[0] == "Extensions" && segments[2] is "src" or "tests";
-    }
+    private static bool IsConsolidatedProjectPath(string path) => RepoLayout.IsProjectPath(path);
 
     /// <summary>The MSBuild facts of a file in this commit, or null when the commit has no such file.</summary>
     public MsBuildFile? BuildFile(string path) => tree.TryGetValue(path, out var entry) ? objects.Parse(entry.ObjectId) : null;

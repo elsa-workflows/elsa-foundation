@@ -14,7 +14,7 @@ Usage:
   bash tools/etl/generate-etl-design-migrations.sh <MigrationName> <PostgreSql|SqlServer|MySql> [design|runtime]
 
 The store defaults to design. Each context retains its own migration set under
-Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/<EtlDesign|EtlRuntime>/<Provider>/.
+extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/<EtlDesign|EtlRuntime>/<Provider>/.
 USAGE
 }
 
@@ -46,16 +46,16 @@ case "$store" in
   *) fail "Unsupported ETL store '$store' (design or runtime)." ;;
 esac
 context="${store_name}${provider}DbContext"
-project_rel="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
+project_rel="extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
 project="${project_rel}"
-project_dir="$root/Extensions/Etl/src/Persistence/EntityFrameworkCore"
+project_dir="$root/extensions/Etl/src/Persistence/EntityFrameworkCore"
 context_source="$project_dir/$context_file"
-tooling="Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj"
-factory_source="Extensions/Etl/src/Tooling/${context}Factory.cs"
+tooling="extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj"
+factory_source="extensions/Etl/src/Tooling/${context}Factory.cs"
 output_dir="Migrations/$store_name/$provider"
 namespace="Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.$store_name.$provider"
 destination="$project_dir/$output_dir"
-expected_destination="$root/Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/$store_name/$provider"
+expected_destination="$root/extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/$store_name/$provider"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 [[ "$destination" == "$expected_destination" ]] || fail "Unexpected ETL migration destination."
@@ -72,8 +72,8 @@ grep -Fq "ModuleDesignTimeFactory<$context>" "$factory_source" ||
   fail "The ETL tooling factory does not target the supported context."
 
 # Refuse redirected destinations and non-directory path components before restore/build/scaffolding.
-for path in "$root/Extensions" "$root/Extensions/Etl" "$root/Extensions/Etl/src" \
-            "$root/Extensions/Etl/src/Persistence" "$project_dir" \
+for path in "$root/extensions" "$root/extensions/Etl" "$root/extensions/Etl/src" \
+            "$root/extensions/Etl/src/Persistence" "$project_dir" \
             "$project_dir/Migrations" "$project_dir/Migrations/$store_name" "$destination"; do
   [[ ! -L "$path" ]] || fail "Migration path components must not be symlinks: $path."
   [[ ! -e "$path" || -d "$path" ]] || fail "Migration path component is not a directory: $path."
