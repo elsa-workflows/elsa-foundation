@@ -76,6 +76,25 @@ class WorkflowScopeTests(unittest.TestCase):
         pushed = self.selected('push', ['Studio/src/Feature.ts'])
         self.assertTrue(pushed['studio'] and pushed['studio-heavy'])
 
+    def test_weaver_skips_foundation_test_sources_but_keeps_product_build_and_project_inputs(self):
+        for event_name, event in [('push', {}), ('merge_group', {'merge_group': {}}),
+                                  ('pull_request', {'action': 'ready_for_review', 'pull_request': {'draft': False}})]:
+            for path in ['essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs',
+                         'essentials/tests/Cluster/Readability/Tests/README.md']:
+                with self.subTest(event=event_name, path=path):
+                    self.assertFalse(self.selected(event_name, [path], **event)['weaver'])
+            for path in ['essentials/src/Workflows/Runtime/Core/Runtime.cs',
+                         'essentials/build/Analyzers/Analyzer.cs',
+                         'essentials/Directory.Build.props', 'essentials/Directory.Build.targets',
+                         'essentials/Directory.Packages.props', 'essentials/Example.csproj',
+                         'essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
+                         'Studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
+                         'extensions/Directory.Build.props',
+                         'extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.ts',
+                         'Directory.Build.props', 'tools/studio/Weaver.Conformance.Probe/browser.mjs']:
+                with self.subTest(event=event_name, path=path):
+                    self.assertTrue(self.selected(event_name, [path], **event)['weaver'])
+
     def test_draft_skips_only_the_heavy_studio_proofs(self):
         draft = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize', pull_request={'draft': True})
         ready = self.selected(paths=['Studio/src/Feature.ts'], action='ready_for_review', pull_request={'draft': False})

@@ -43,7 +43,9 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
 
 Focused source proofs also run as jobs in `CI`: Studio frontend/browser/.NET validation, the
 Ubuntu/Windows backend source journeys, Weaver package conformance, and the pinned published-image
-pair. `tools/ci/workflow-paths.json` retains their path scopes. Workflows unit-order checks run in
+pair. `tools/ci/workflow-paths.json` retains their path scopes. Weaver's package witness follows
+production sources, build tooling and relevant project-file changes; Foundation test-source-only
+edits retain their backend shard checks without rebuilding the package witness. Workflows unit-order checks run in
 the nightly CI run and when the validation routing changes. The full composed Studio UX suite runs nightly,
 on a manual `suite=studio` request, or for an affected ready PR carrying `full-tier`.
 `CI_FULL_TIER_EVERY_PUSH=true` also opts affected ready pushes into that suite. Ordinary PR and main
