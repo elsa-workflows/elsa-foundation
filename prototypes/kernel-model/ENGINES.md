@@ -283,8 +283,9 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 - **Decided 16 November (round 5 B, COMMIT-SQL.md):** with the owned commit the batch opens with the fence, so the
   partition row is the commit's first lock as it is the take's and the cycle above cannot form: 0 deadlocks in the 40 s
   runs against EF's 74. SQL Server's default is the fence in the batch again, as on every other engine
-  (`SqlServerEngine.FenceInBatchByDefault` true); `fence=checked` (`--checked-fence`) stays selectable as the 13 November
-  fallback. One round trip less per commit (the "SQL Server batch" column of the cost tables is now the default's).
+  (`SqlServerEngine.FenceInBatchByDefault(ownedCommit)` true for the owned commit); `fence=checked` (`--checked-fence`)
+  stays selectable as the 13 November fallback and stays the default for the EF reference path (`commit=ef`), whose batch
+  still writes message rows before the fence (a reviewer measured 8 take deadlocks in 40 s with it in the batch). One round trip less per commit (the "SQL Server batch" column of the cost tables is now the default's).
   Gates of the flip, on its head (SQL Server 2022, RCSI unless said, amd64 emulation, owned commit): conformance with
   the default (now in the batch) 87 pass and 1 skipped, `--checked-fence` the same; `semantic fence --fence-ignores-count`
   exits 1 (default 1 of 3 fail, checked 3 of 3); `semantic-broken fence` default 1 of 3 fail, checked 3 of 3; two 40 s and
