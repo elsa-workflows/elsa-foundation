@@ -157,6 +157,8 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
         await inverse.getByRole("button", { name: "Preview change", exact: true }).click(); await expect(inverse.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled(); await inverse.getByRole("button", { name: "Apply change", exact: true }).click(); await expect(inverse).toBeHidden(); await expect(element(selected)).toHaveCount(0); await capture(page, info, `${host}-bpmn-empty-ungrouped`);
         await undoAction.click(); await expect(element(selected)).toBeVisible(); await redoAction.click(); await expect(element(selected)).toHaveCount(0); await undoAction.click(); await expect(element(selected)).toBeVisible();
         const beforeRefusal = await saved(), refusalUndo = await undoAction.isEnabled();
+        await canvas();
+        if ((page.viewportSize()?.width ?? 1000) <= 600) await page.getByRole("button", { name: "Fit View", exact: true }).click();
         await element("start").click(); await page.getByRole("button", { name: "Extract block…", exact: true }).click(); const refuse = page.getByRole("dialog", { name: "Extract named block", exact: true });
         await refuse.getByRole("textbox", { name: "Name", exact: true }).fill("Unsupported event selection"); await refuse.getByRole("button", { name: "Preview change", exact: true }).click();
         await expect(refuse.getByRole("alert")).toContainText("without gateways or events"); await expect(refuse.getByRole("button", { name: "Apply change", exact: true })).toBeDisabled(); await capture(page, info, `${host}-bpmn-refused`); await refuse.press("Escape");
@@ -194,7 +196,11 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
         }
         await canvas(); await expect(element(selected)).toBeVisible();
         for (const action of ["Create BPMN subprocess", "Extract block…", "Ungroup…", "Import BPMN body…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
-        await element(selected).click(); await page.getByRole("button", { name: `Open ${renamed} (0 steps)`, exact: true }).click(); await expect(page.locator(".wf-breadcrumb")).toContainText(renamed); await capture(page, info, `${host}-bpmn-readonly`);
+        await element(selected).click();
+        if (host === "workflow" && (page.viewportSize()?.width ?? 1000) <= 600) await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+        await canvas(); await page.getByRole("button", { name: `Open ${renamed} (0 steps)`, exact: true }).click(); await expect(page.locator(".wf-breadcrumb")).toContainText(renamed);
+        await expect(page.getByText("Resolving execution scope…", { exact: true })).toHaveCount(0);
+        await capture(page, info, `${host}-bpmn-readonly`);
         proof.push({ host, kind: "authoring-boundaries", original, saved: await saved(), blockId: id, blockElementId: selected }); continue;
       }
       await expect(element("element-one")).toBeVisible(); await element("element-one").click(); await element("element-two").click({ modifiers: [multipleKey] });
