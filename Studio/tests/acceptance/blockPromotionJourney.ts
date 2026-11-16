@@ -46,7 +46,10 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     const publication = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${promoted.id}/publish`, "POST", {});
     const started = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${publication.artifactId}/execute`, "POST", { inputs, sourceReferenceId: publication.sourceReferenceId });
     runIds.push(started.workflowExecutionId);
-    await expect.poll(async () => (await api<{ instance: { status: string } }>(`/runtime/workflows/instances/${started.workflowExecutionId}`)).instance.status).toBe("Completed");
+    let instance: { instance: { status: string }; incidents?: unknown[] } | undefined;
+    try {
+      await expect.poll(async () => (instance = await api<{ instance: { status: string }; incidents?: unknown[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
+    } finally { proof[`run-${started.workflowExecutionId}`] = instance; }
     const executions = await api<{ items: { execution: { activityExecutionId: string; executableNodeId: string; authoredActivityId: string; status: string } }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions`);
     // The reusable body's WriteLine keeps its relative authored id; its placement names the call that ran it.
     const inside: { call: string; text: string }[] = [];
