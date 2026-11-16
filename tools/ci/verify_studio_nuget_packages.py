@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -64,7 +65,8 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
     if manifest.get("studio_source") != inventory["studio_source_commit"]:
         raise ValueError("Studio package identity list is not pinned to the layout manifest source commit.")
     actual = {
-        item["target"]: (item["package_id"], item["explicit_is_packable"])
+        # The historical manifest predates the move from Extensions/ to extensions/.
+        re.sub(r"^Extensions/", "extensions/", item["target"]): (item["package_id"], item["explicit_is_packable"])
         for item in manifest["projects"]
         if item.get("product") == "studio"
     }
