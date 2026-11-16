@@ -16,7 +16,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 | Catalog | Owner project | Domain | Sections | Extension-point headings | Kind lines | Known implementation blocks | Root indexed |
 |---|---|---|---|---|---|---:|---|
-| [EXTENSION_POINTS.md](https://github.com/elsa-workflows/elsa-foundation/blob/b449aa7ff89f53a740f780656c0e561125253d25/EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs<br>Studio | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Integrations<br>Secrets<br>Connections<br>Persistence<br>Activities<br>Workflows<br>Rules<br>ETL<br>Decisions<br>Legacy<br>Diagnostics | - | 0 | root |
+| [EXTENSION_POINTS.md](https://github.com/elsa-workflows/elsa-foundation/blob/e3b384e3339ee63bb2eac2744a889ba55e0e3bd6/EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs<br>Studio | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Integrations<br>Secrets<br>Connections<br>Persistence<br>Activities<br>Workflows<br>Rules<br>ETL<br>Decisions<br>Legacy<br>Diagnostics | - | 0 | root |
 
 ## Root Index Coverage
 
