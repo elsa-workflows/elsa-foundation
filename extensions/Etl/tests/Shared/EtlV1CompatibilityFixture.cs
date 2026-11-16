@@ -54,7 +54,7 @@ internal sealed class EtlV1CompatibilityFixture
 
     public static EtlV1CompatibilityFixture Open()
     {
-        var root = Path.Combine(FindRepositoryRoot(), "Extensions", "Etl", "tests", "Shared", "Fixtures", "V1", "data");
+        var root = Path.Combine(FindRepositoryRoot(), "extensions", "Etl", "tests", "Shared", "Fixtures", "V1", "data");
         var manifestPath = Path.Combine(root, "manifest.json");
         var manifest = JsonSerializer.Deserialize<EtlV1CompatibilityManifest>(File.ReadAllBytes(manifestPath), WebJson)
             ?? throw new InvalidDataException("The retained ETL V1 compatibility manifest is empty.");

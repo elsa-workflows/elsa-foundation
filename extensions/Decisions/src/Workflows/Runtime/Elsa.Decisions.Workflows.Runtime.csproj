@@ -5,9 +5,9 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <ProjectReference Include="../../Core/Elsa.Decisions.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Decisions.Workflows.Tests" />
   </ItemGroup>
 </Project>

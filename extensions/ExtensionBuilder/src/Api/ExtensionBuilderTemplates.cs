@@ -190,7 +190,7 @@ internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplat
             ExtensionTemplateScope.Solution,
             [".sln", ".slnx"],
             [
-                new("name", "Solution name", true, "Extensions")
+                new("name", "Solution name", true, "extensions")
             ],
             "Elsa.ExtensionBuilder.Solution",
             "0.1.0",

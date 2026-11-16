@@ -19,7 +19,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
 /// How the EF command budgets run their reference workflows: the host composition, one runner per workflow and the
-/// check that a run left nothing behind. The command-cost measurement in <c>Essentials/tests/Activities/Http/CommandCost</c>
+/// check that a run left nothing behind. The command-cost measurement in <c>essentials/tests/Activities/Http/CommandCost</c>
 /// compiles this file in, so both count the same runs. A runner hands each span of the run that counts to the caller's
 /// <c>measure</c>; host start, publication and the assertions on the outcome stay outside those spans.
 /// </summary>

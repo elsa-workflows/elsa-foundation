@@ -3,7 +3,7 @@
 # Every number is a cheap, deterministic count over the working tree; trends matter, not exact values.
 #
 # Usage: quality-metrics.sh [repo-root] [--by-domain]
-#   --by-domain  also prints the public-type count per domain folder of Essentials/src, each Workflows.* folder
+#   --by-domain  also prints the public-type count per domain folder of essentials/src, each Workflows.* folder
 #                counted as its own domain, as the before/after evidence of a domain's internal-by-default change.
 # Called by tools/repo-hygiene/hygiene.sh for the weekly report; safe to run locally.
 
@@ -25,9 +25,9 @@ grep_ok() { grep "$@" || [[ $? -eq 1 ]]; }
 # /dev/null keeps grep and cat off stdin when a file list is empty.
 count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; }
 
-mapfile -t essentials < <(cs_files Essentials/src)
+mapfile -t essentials < <(cs_files essentials/src)
 # Production and test files are disjoint, so a file under src/**/tests is counted once, as a test.
-backend_roots=(Essentials/src Essentials/apps Essentials/tests Extensions)
+backend_roots=(essentials/src apps essentials/tests Extensions)
 mapfile -t src_all < <(cs_files "${backend_roots[@]}" -not -path '*/tests/*' -not -path '*/studio/*')
 mapfile -t tests_all < <(cs_files "${backend_roots[@]}" -path '*/tests/*' -not -path '*/studio/*')
 # Test classes can sit in a Migrations folder (EF migration tests); count their methods, not generated migration LOC.
@@ -60,10 +60,10 @@ kb() {
     du -sk --exclude=bin --exclude=obj "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'
   fi
 }
-meta_kb=$(kb '' docs specs); code_kb=$(kb '^Extensions/[^/]+/studio/' Essentials Extensions)
+meta_kb=$(kb '' docs specs); code_kb=$(kb '^extensions/[^/]+/studio/' essentials apps extensions)
 meta_pct=$(( meta_kb * 100 / (meta_kb + code_kb) ))
 
-budget_file=$(find Essentials/tests Extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
+budget_file=$(find essentials/tests Extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
 if [[ -n "$budget_file" ]] && command -v jq >/dev/null; then
   ef=$(jq -r 'to_entries | map("\(.key): \(.value)") | join("; ")' "$budget_file" 2>/dev/null || echo "unreadable")
 else
@@ -75,7 +75,7 @@ cat <<MD
 
 | Metric | Value | Target |
 |---|---|---|
-| Public types in \`Essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | none, reported only (ADR 0080 D3) |
+| Public types in \`essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | none, reported only (ADR 0080 D3) |
 | Production projects | $prod_projects | ~100 |
 | Test LOC / test methods | $test_loc / $test_methods | trend down |
 | \`[Obsolete]\` members in backend source | $obsolete | 0 |
@@ -95,12 +95,12 @@ domain_row() {
 if $by_domain; then
   cat <<MD
 
-### Public types per domain in \`Essentials/src\` (excluding migrations)
+### Public types per domain in \`essentials/src\` (excluding migrations)
 
 | Domain | Public types | All types |
 |---|---|---|
 MD
-  for dir in Essentials/src/*/; do
+  for dir in essentials/src/*/; do
     domain=$(basename "$dir")
     if [[ "$domain" == Workflows ]]; then
       for sub in "$dir"*/; do domain_row "Workflows.$(basename "$sub")" "$sub"; done

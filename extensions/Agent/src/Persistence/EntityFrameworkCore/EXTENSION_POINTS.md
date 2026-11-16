@@ -22,4 +22,4 @@ shared `EfSourceRevisions` implementation in a consumer-owned context mapping `A
 without enabling the turn runtime. The existing combined journal registration includes source ports.
 Use one built-in context configuration per shell. The scoped context may have no pending unrelated
 writes when a source operation starts; domain-owned transactions use shared staged operations instead.
-See [README](README.md#agent-source-authoring) and the [shared capability](../../../../../Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md#shared-source-revisions).
+See [README](README.md#agent-source-authoring) and the [shared capability](../../../../../essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md#shared-source-revisions).

@@ -10,10 +10,10 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="../../src/Acme.Processing/Module/Acme.Processing.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
   </ItemGroup>
 </Project>

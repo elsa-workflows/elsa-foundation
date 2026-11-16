@@ -79,7 +79,7 @@ public sealed class TemplateTests
     }
 
     private static string TemplateRoot() =>
-        Path.GetFullPath(Path.Combine(RepoRoot(), "Extensions", "Integrations", "templates", "elsa-connector"));
+        Path.GetFullPath(Path.Combine(RepoRoot(), "extensions", "Integrations", "templates", "elsa-connector"));
 
     private static string RepoRoot()
     {

@@ -113,7 +113,7 @@ def verify_stale_acceptance(receipt, evidence, deployment, executable, create_da
 def verify_persistence_controls(receipt, evidence, source, feed, deployment, executable, run, create_database):
     directory = evidence / 'persistence-controls'
     directory.mkdir()
-    project = source / 'Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj'
+    project = source / 'extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj'
     built_asset = project.parent / 'bin/Release/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll'
     deployed_asset = deployment / built_asset.name
     original_asset = deployed_asset.read_bytes()

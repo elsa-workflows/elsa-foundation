@@ -34,6 +34,32 @@ public sealed class DerivedDatasetTests : IDisposable
     }
 
     [Fact]
+    public void A_current_layout_commit_derives_apps_and_lowercase_modules_and_excludes_studio_and_templates()
+    {
+        using var current = new SyntheticRepository { WriteLockFiles = true };
+        const string library = "essentials/src/Tasks/Elsa.Tasks.csproj";
+        const string extension = "extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj";
+        const string host = "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        const string test = "extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj";
+        current.AddProject(library);
+        current.AddProject(extension, references: [library]);
+        current.AddProject(host, packable: false, references: [extension]);
+        current.AddProject(test, packable: false, references: [library]);
+        current.Write("extensions/Weaver/studio/src/Studio.csproj", "<Project />");
+        current.Write("extensions/Weaver/templates/src/Template.csproj", "<Project />");
+        var commit = current.Commit();
+        using var objects = new ObjectCache(current.Calculator);
+
+        var snapshot = new CommitSnapshot(objects, commit, DatasetSource.Derived);
+
+        Assert.True(snapshot.MapDerived);
+        Assert.Equal(new[] { library, extension, host, test }.Order(StringComparer.Ordinal),
+            snapshot.Map.Nodes.Select(node => node.Path).Order(StringComparer.Ordinal));
+        Assert.Contains(snapshot.Map.ByPath[host].Edges,
+            edge => edge is { Kind: MapEdgeKind.Internal, Path: extension });
+    }
+
+    [Fact]
     public void Auto_reads_the_committed_map_when_the_commit_has_one()
     {
         repo.Commit();
@@ -152,7 +178,7 @@ public sealed class DerivedDatasetTests : IDisposable
     public void The_map_derived_from_head_is_what_the_generator_writes_from_a_clean_checkout()
     {
         var workingTree = RepoContext.Discover(AppContext.BaseDirectory);
-        var status = Git(workingTree.Root, "status", "--porcelain", "--", "Essentials", "Extensions", "Directory.Build.props", "Directory.Packages.props", "VersionLines.props");
+        var status = Git(workingTree.Root, "status", "--porcelain", "--", "essentials", "extensions", "apps", "Essentials", "Extensions", "Directory.Build.props", "Directory.Packages.props", "VersionLines.props");
         if (status.Length > 0)
             return;
 

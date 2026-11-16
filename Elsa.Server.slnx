@@ -223,9 +223,9 @@
     <Project Path="extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/essentials/" />
-  <Folder Name="/essentials/apps/">
-    <Project Path="essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
-    <Project Path="essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />
+  <Folder Name="/apps/">
+    <Project Path="apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
+    <Project Path="apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
   <Folder Name="/essentials/build/">
     <Project Path="essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj" />

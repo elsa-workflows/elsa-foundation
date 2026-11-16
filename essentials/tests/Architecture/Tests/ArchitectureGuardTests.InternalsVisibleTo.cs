@@ -46,7 +46,7 @@ public sealed partial class ArchitectureGuardTests
     public void Every_production_project_is_built_before_the_architecture_tests()
     {
         var built = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "Essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
+        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
         while (pending.TryPop(out var project))
         {
             if (built.Add(project))
@@ -88,7 +88,7 @@ public sealed partial class ArchitectureGuardTests
     {
         using var sandbox = new GrantSandbox();
         var assembly = sandbox.Assembly(
-            "Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
+            "essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
             """
             using Grant = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
 
@@ -112,7 +112,7 @@ public sealed partial class ArchitectureGuardTests
         using var sandbox = new GrantSandbox();
         sandbox.Project(GrantProjects.TasksTests);
         sandbox.Project(GrantProjects.EventsTests);
-        sandbox.Project("Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj");
+        sandbox.Project("essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj");
         sandbox.Project(GrantProjects.ModularityTests);
 
         // Declared in the project file for one target; the other grant has no declaration the scan can see.
@@ -120,7 +120,7 @@ public sealed partial class ArchitectureGuardTests
             GrantProjects.Tasks,
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
         sandbox.Assembly(
-            "Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
+            "essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
             """
             using Grant = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
             [assembly: Grant("Elsa.Tasks.Tests")]
@@ -136,22 +136,22 @@ public sealed partial class ArchitectureGuardTests
             namespace Tasks { internal static class Marker { } }
             """;
         sandbox.Project(GrantProjects.Events);
-        sandbox.File("Essentials/src/Events/Elsa.Events/AssemblyInfo.cs", computed);
-        sandbox.Assembly("Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll", computed);
+        sandbox.File("essentials/src/Events/Elsa.Events/AssemblyInfo.cs", computed);
+        sandbox.Assembly("essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll", computed);
 
         // A production project that was never built.
-        sandbox.Project("Essentials/src/Locking/Core/Elsa.Locking.Core.csproj");
+        sandbox.Project("essentials/src/Locking/Core/Elsa.Locking.Core.csproj");
 
         sandbox.Project(GrantProjects.DesignCore);
         sandbox.Assembly(
-            "Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll",
+            "essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll",
             """[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Workflows.Runtime.Tests")]""");
 
         sandbox.Project(
             GrantProjects.Workbench,
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Modularity.Tests" /><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
         sandbox.Assembly(
-            "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+            "apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
             """
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Modularity.Tests")]
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Tasks.Tests")]
@@ -159,10 +159,10 @@ public sealed partial class ArchitectureGuardTests
 
         // A test project's grants are read from source: decoys in a comment and a string are no grant, and a
         // computed argument fails closed.
-        sandbox.File("Essentials/tests/Tasks/Tests/Commented.cs", """// [assembly: InternalsVisibleTo("Elsa.Tasks")]""");
-        sandbox.File("Essentials/tests/Tasks/Tests/Quoted.cs", """class Quoted { const string Text = "[assembly: InternalsVisibleTo(\"Elsa.Tasks\")]"; }""");
+        sandbox.File("essentials/tests/Tasks/Tests/Commented.cs", """// [assembly: InternalsVisibleTo("Elsa.Tasks")]""");
+        sandbox.File("essentials/tests/Tasks/Tests/Quoted.cs", """class Quoted { const string Text = "[assembly: InternalsVisibleTo(\"Elsa.Tasks\")]"; }""");
         sandbox.File(
-            "Essentials/tests/Tasks/Tests/Grants.cs",
+            "essentials/tests/Tasks/Tests/Grants.cs",
             """
             using Opens = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
             [assembly: Opens(Names.Target)]
@@ -172,23 +172,23 @@ public sealed partial class ArchitectureGuardTests
         sandbox.File("Directory.Build.props", """<Project><ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup></Project>""");
 
         // A source changed after the last build, so the compiled assembly no longer says what the source declares.
-        sandbox.Project("Essentials/src/Caching/Core/Elsa.Caching.Core.csproj");
-        var stale = sandbox.Assembly("Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll", "internal static class Cache { }");
-        sandbox.File("Essentials/src/Caching/Core/Cache.cs", "internal static class Cache { }");
-        File.SetLastWriteTimeUtc(Path.Join(sandbox.Root, "Essentials/src/Caching/Core/Cache.cs"), File.GetLastWriteTimeUtc(stale).AddHours(1));
+        sandbox.Project("essentials/src/Caching/Core/Elsa.Caching.Core.csproj");
+        var stale = sandbox.Assembly("essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll", "internal static class Cache { }");
+        sandbox.File("essentials/src/Caching/Core/Cache.cs", "internal static class Cache { }");
+        File.SetLastWriteTimeUtc(Path.Join(sandbox.Root, "essentials/src/Caching/Core/Cache.cs"), File.GetLastWriteTimeUtc(stale).AddHours(1));
 
         var violations = InternalsVisibleToGrants.Violations(sandbox.Root, "Release", InternalsVisibleToExceptions);
 
         Assert.Equal(
         [
             "Directory.Build.props declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead",
-            "Elsa.Caching.Core: the compiled assembly at Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll is older than Essentials/src/Caching/Core/Cache.cs; build it again, because a stale assembly can hide a grant or report one that is gone",
-            "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is in domain 'Tasks', not the granting project's domain 'Events'; a production project opens its internals only to production projects of its own domain, so make the type a public extension point, or move it to where it is needed",
-            "Elsa.Locking.Core: no compiled assembly at Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
-            "Elsa.Tasks -> Elsa.Events.Tests (compiled into Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
-            "Elsa.Tasks.Tests (Essentials/tests/Tasks/Tests/Grants.cs): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal",
-            "Elsa.Workbench -> Elsa.Tasks.Tests (Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj): Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies or same-domain projects to grant to",
-            "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (compiled into Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
+            "Elsa.Caching.Core: the compiled assembly at essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll is older than essentials/src/Caching/Core/Cache.cs; build it again, because a stale assembly can hide a grant or report one that is gone",
+            "Elsa.Events -> Elsa.Tasks (essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is in domain 'Tasks', not the granting project's domain 'Events'; a production project opens its internals only to production projects of its own domain, so make the type a public extension point, or move it to where it is needed",
+            "Elsa.Locking.Core: no compiled assembly at essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
+            "Elsa.Tasks -> Elsa.Events.Tests (compiled into essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
+            "Elsa.Tasks.Tests (essentials/tests/Tasks/Tests/Grants.cs): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal",
+            "Elsa.Workbench -> Elsa.Tasks.Tests (apps/Elsa.Workbench/Elsa.Workbench.csproj): apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies or same-domain projects to grant to",
+            "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (compiled into essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
         ],
             violations);
     }
@@ -206,7 +206,7 @@ public sealed partial class ArchitectureGuardTests
     [Theory]
     [InlineData(GrantProjects.Events, GrantProjects.Tasks, "is in domain 'Tasks', not the granting project's domain 'Events'; a production project opens its internals only to production projects of its own domain, so make the type a public extension point, or move it")]
     [InlineData(GrantProjects.DesignCore, GrantProjects.Runtime, "is in domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'")]
-    [InlineData(GrantProjects.ExtensionBuilderApi, GrantProjects.Tasks, "is in domain 'Tasks', not the granting project's domain 'Extensions/ExtensionBuilder'")]
+    [InlineData(GrantProjects.ExtensionBuilderApi, GrantProjects.Tasks, "is in domain 'Tasks', not the granting project's domain 'extensions/ExtensionBuilder'")]
     [InlineData(GrantProjects.Tasks, GrantProjects.Workbench, "is in no domain, not the granting project's domain 'Tasks'")]
     [InlineData(GrantProjects.Workbench, GrantProjects.FoundationHost, "belongs to no domain, so it has no own test assemblies or same-domain projects to grant to")]
     [InlineData(GrantProjects.Tasks, GrantProjects.EventsTests, "tests domain 'Events', not the granting project's domain 'Tasks'")]
@@ -227,19 +227,19 @@ public sealed partial class ArchitectureGuardTests
     /// <summary>Sandbox paths for the one-grant proofs, each where the repository keeps a project of that kind.</summary>
     private static class GrantProjects
     {
-        public const string Tasks = "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj";
-        public const string TasksCore = "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj";
-        public const string TasksTests = "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj";
-        public const string Events = "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj";
-        public const string EventsTests = "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
-        public const string DesignCore = "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
-        public const string Runtime = "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
-        public const string RuntimeHttp = "Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
-        public const string ExtensionBuilderApi = "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
-        public const string ExtensionBuilderCore = "Extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
-        public const string ModularityTests = "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
-        public const string Workbench = "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj";
-        public const string FoundationHost = "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+        public const string Tasks = "essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj";
+        public const string TasksCore = "essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj";
+        public const string TasksTests = "essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj";
+        public const string Events = "essentials/src/Events/Elsa.Events/Elsa.Events.csproj";
+        public const string EventsTests = "essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
+        public const string DesignCore = "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
+        public const string Runtime = "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
+        public const string RuntimeHttp = "essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
+        public const string ExtensionBuilderApi = "extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
+        public const string ExtensionBuilderCore = "extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
+        public const string ModularityTests = "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
+        public const string Workbench = "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        public const string FoundationHost = "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
         public const string MapsGenerator = "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj";
     }
 
@@ -247,11 +247,11 @@ public sealed partial class ArchitectureGuardTests
     [InlineData(GrantProjects.Tasks, "Tasks")]
     [InlineData(GrantProjects.TasksTests, "Tasks")]
     [InlineData(GrantProjects.RuntimeHttp, "Workflows.Runtime")]
-    [InlineData("Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
-    [InlineData(GrantProjects.ExtensionBuilderApi, "Extensions/ExtensionBuilder")]
-    [InlineData("Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "Extensions/ExtensionBuilder")]
+    [InlineData("essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
+    [InlineData(GrantProjects.ExtensionBuilderApi, "extensions/ExtensionBuilder")]
+    [InlineData("extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "extensions/ExtensionBuilder")]
     [InlineData(GrantProjects.Workbench, null)]
-    [InlineData("Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", null)]
+    [InlineData("essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", null)]
     [InlineData(GrantProjects.MapsGenerator, null)]
     public void A_path_maps_to_its_domain(string path, string? domain) =>
         Assert.Equal(domain, ElsaDomains.Of(path));
