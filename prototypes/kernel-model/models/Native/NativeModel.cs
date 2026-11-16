@@ -32,6 +32,7 @@ public enum NativeFlaw
     NoRoundReset = 1 << 6,      // a loop-closing connection opens no new round
     DeadPathRunsNode = 1 << 7,  // a node whose every inbound arrived dead is run
     CancelLeavesPaths = 1 << 8, // a first-wins race completes without cancelling its losers
+    UnstableEffectKey = 1 << 9, // round 5 C: the effect key is minted per execution, not derived from the committed frame and attempt
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
@@ -55,6 +56,12 @@ public sealed class NativeOptions
     /// turn may have run before (the kernel's <see cref="ITurn.Redelivered"/>, friction F-N6).
     /// </summary>
     public Action<InstanceRef, string, string, int, bool>? OnExternal { get; init; }
+    /// <summary>
+    /// The host's transport for an outbound effect (round 5 C): the instance, frame, node and attempt it belongs to, and
+    /// the effect with the key the activity put in it. Called where the effect would be sent, inside the turn, before its
+    /// commit: at least once.
+    /// </summary>
+    public Action<InstanceInfo, string, string, int, OutboundEffect>? OnOutbound { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
@@ -400,7 +407,10 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         Apply(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource);
+    // The effect key is derived from committed facts (EffectKey.For); only the MUTATION mints one per execution.
+    private static long _unstableKeys;
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource,
+        Has(NativeFlaw.UnstableEffectKey) ? EffectKey.For(turn.Instance, frame.Id, frame.Attempt) + "." + Interlocked.Increment(ref _unstableKeys) : null);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -477,6 +487,11 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 // The kernel's live output: it knows who waits (the reply addresses of the messages this instance
                 // consumed), releases it after this turn's commit, and a request takes only its first response.
                 turn.Emit(e.Channel, e.Item);
+                break;
+            case OutboundEffect o:
+                // Round 5 C: the host sends it now, with the key the activity put in it. Nothing is recorded for it: the
+                // key is derived from the frame and attempt the commit already carries, so a replay re-derives it.
+                model.Options.OnOutbound?.Invoke(turn.Instance, frame.Id, frame.Node, frame.Attempt, o);
                 break;
         }
     }

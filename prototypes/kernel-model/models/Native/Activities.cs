@@ -44,6 +44,47 @@ public sealed class SendNotification : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Complete());
 }
 
+/// <summary>
+/// An outbound HTTP request (round 5 C). Not replay-safe, so External; the host sends it. The activity puts its effect key
+/// in the <c>Idempotency-Key</c> header, the convention of the IETF idempotency-key draft and of Stripe and the like: a
+/// receiver that keeps the keys it has seen drops a repeat. The kernel sends it at least once and drops nothing itself.
+/// </summary>
+[External]
+public sealed class SendHttpRequest : Activity
+{
+    public const string IdempotencyKeyHeader = "Idempotency-Key";
+
+    [Input] public string Url { get; set; } = "";
+    [Input] public string Method { get; set; } = "POST";
+    [Input] public JsonNode? Body { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    {
+        var request = new OutboundHttpRequest(Method, Url, Body, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [IdempotencyKeyHeader] = context.EffectKey });
+        return new(Complete().With(new HttpSendEffect(request)));
+    }
+}
+
+/// <summary>
+/// An outbound email (round 5 C). Not replay-safe, so External; the host sends it. The effect key is the local part of the
+/// message's <c>Message-ID</c>, so a mail server or client that deduplicates by it keeps one copy of a repeat. The
+/// domain is the prototype's constant; in a product it is the sending host's.
+/// </summary>
+[External]
+public sealed class SendEmail : Activity
+{
+    public const string MessageIdDomain = "workflows.elsa.invalid";
+
+    [Input] public string To { get; set; } = "";
+    [Input] public string Subject { get; set; } = "";
+    [Input] public string Body { get; set; } = "";
+
+    public static string MessageId(string effectKey) => $"<{effectKey}@{MessageIdDomain}>";
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
+        new(Complete().With(new EmailSendEffect(new OutboundEmail(To, Subject, Body, MessageId(context.EffectKey)))));
+}
+
 /// <summary>Slow external work. Background: it runs as the kernel's background job, so the instance still takes a cancel or a timer meanwhile.</summary>
 [Background]
 public sealed class CallService : Activity<string>

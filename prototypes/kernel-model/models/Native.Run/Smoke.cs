@@ -25,6 +25,7 @@ public static class Smoke
                     [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", Gateway.ParallelJoin)),
                 Call("svc", "quotes").Capture("quote"),
                 Notify("notify", "hello"),
+                Http("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", "order", "sent"),
                 Dispatch("child", "smoke-child", wait: true).Capture("childOut", "Output"),
                 Dispatch("fire", "smoke-child", wait: false),
                 Publish("ping", Expr("'ping-' + input.key"), "hi"),
@@ -66,7 +67,9 @@ public static class Smoke
         {
             Console.WriteLine($"every activity, {mode}");
             var store = new InMemoryStore(1, () => Environment.TickCount64);
-            var owner = new Owner("n1", 0, store, registry, new Network());
+            // Round 5 C: the host's transport sees each outbound effect with the key its activity put in it.
+            var outbound = new List<(InstanceInfo Instance, string Frame, string Node, int Attempt, OutboundEffect Effect)>();
+            var owner = new Owner("n1", 0, store, registry, new Network(), native: new NativeOptions { OnOutbound = (i, f, n, a, e) => outbound.Add((i, f, n, a, e)) });
             await owner.StartAsync();
             var key = new JsonObject { ["key"] = "k-" + mode };
             owner.Worker.Post(new Message("m1", InstanceRef.In(0, "listener"), Kinds.Start, Start: NativeModel.Spec("smoke-listener", mode, key)), fresh: true);
@@ -80,6 +83,17 @@ public static class Smoke
             Check(store.Instances.Values.Count(i => i.Definition == "smoke-child" && i.Status == InstanceStatus.Finished) == 2, "two children finished, one waited for, one detached");
             Check(store.Subscriptions.Count == 0 && store.Messages.Values.All(m => m.Done), "no subscription and no message left");
             Check(state.Frames.Count == 0 && state.Agenda.Count == 0 && state.Waits.Count == 0, "no frame, work or wait left in the state");
+            var http = outbound.SingleOrDefault(o => o.Effect is HttpSendEffect);
+            var mail = outbound.SingleOrDefault(o => o.Effect is EmailSendEffect);
+            Check(outbound.Count == 2 && http.Effect is not null && mail.Effect is not null, $"one HTTP request and one email went out ({outbound.Count} outbound effects)");
+            if (http.Effect is null || mail.Effect is null) continue;
+            var attempt = mode == Modes.Durable ? 1 : 0;      // Durable commits an External activity's attempt before it runs
+            Check(http.Attempt == attempt && mail.Attempt == attempt, $"both ran under attempt {attempt}");
+            var httpKey = EffectKey.For(http.Instance, http.Frame, http.Attempt);
+            Check(((HttpSendEffect)http.Effect).Request.Headers[SendHttpRequest.IdempotencyKeyHeader] == httpKey, $"the request's {SendHttpRequest.IdempotencyKeyHeader} is its effect key {httpKey}");
+            var mailKey = EffectKey.For(mail.Instance, mail.Frame, mail.Attempt);
+            Check(((EmailSendEffect)mail.Effect).Mail.MessageId == SendEmail.MessageId(mailKey), $"the email's Message-ID is {SendEmail.MessageId(mailKey)}");
+            Check(httpKey != mailKey && http.Frame != mail.Frame, "two activations, two keys");
         }
 
         Console.WriteLine("cancel");

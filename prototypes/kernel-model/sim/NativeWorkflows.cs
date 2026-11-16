@@ -28,6 +28,8 @@ public static class NativeWorkflows
         registry.Add(Workflow("n-seq", Sequence("root",
                 WriteLine("w1", "one"), Set("s1", "count", Expr("count + 1")), WriteLine("w2", Expr("'count ' + count")),
                 Notify("notify", Expr("'hello ' + input.key")), Set("s2", "count", Expr("count + 1")),
+                // Round 5 C: the two outbound activities that carry the effect key (N7 reads it from the host's transport).
+                Http("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", Expr("'order ' + input.key"), "sent"),
                 If("if", Expr("count == 2"), Set("then", "branch", "then"), Set("else", "branch", "else")),
                 Set("out", "output", Expr("branch + ' ' + count"))),
             ("count", 0), ("branch", null), ("output", null)));

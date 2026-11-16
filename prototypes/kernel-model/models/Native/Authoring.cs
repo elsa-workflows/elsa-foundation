@@ -126,6 +126,29 @@ public sealed record PublishEffect(string Event, JsonNode? Payload) : Effect;   
 public sealed record DispatchEffect(string Workflow, JsonNode? Input, string Mode) : Effect; // a detached start
 public sealed record EmitEffect(string Channel, JsonNode? Item) : Effect;                 // live, not durable: the kernel's Emit
 
+/// <summary>
+/// An effect on the outside world that is not replay-safe, performed by the host (round 5 C). <see cref="Key"/> is the
+/// effect key the activity put where the receiver looks for a repeat: an HTTP request's <c>Idempotency-Key</c> header,
+/// an email's <c>Message-ID</c>. The activity derives it from <see cref="ActivityContext.EffectKey"/>; the host sends it
+/// as it is. It runs at least once: whether a repeat is dropped is the receiver's business.
+/// </summary>
+public abstract record OutboundEffect : Effect
+{
+    public abstract string Key { get; }
+}
+
+public sealed record OutboundHttpRequest(string Method, string Url, JsonNode? Body, IReadOnlyDictionary<string, string> Headers);
+public sealed record HttpSendEffect(OutboundHttpRequest Request) : OutboundEffect
+{
+    public override string Key => Request.Headers[SendHttpRequest.IdempotencyKeyHeader];
+}
+
+public sealed record OutboundEmail(string To, string Subject, string Body, string MessageId);
+public sealed record EmailSendEffect(OutboundEmail Mail) : OutboundEffect
+{
+    public override string Key => Mail.MessageId;
+}
+
 /// <summary>The closed set of what an activation can end in. Not generic: the typed result is serialized by the helper.</summary>
 public sealed record Transition(
     TransitionKind Kind, JsonNode? Result = null, string Outcome = "Done", ActivityFault? Fault = null, JsonNode? State = null,
@@ -143,8 +166,9 @@ public class ActivityContext
     internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation = 0, string? operationKey = null)
         : this(instance, frame, node, attempt, cancellationToken, creation, operationKey, null) { }
 
-    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource)
-        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource) = (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource);
+    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource, string? effectKey = null)
+        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource, EffectKey) =
+            (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource, effectKey ?? Kernel.Workflows.EffectKey.For(instance.Id, creation, frame, attempt));
 
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
@@ -154,13 +178,19 @@ public class ActivityContext
     public string NodeId { get; }
     /// <summary>The committed attempt of an External activity in Durable mode; 0 otherwise.</summary>
     public int Attempt { get; }
+    /// <summary>
+    /// The stable key of this attempt's external effect (<see cref="Kernel.Workflows.EffectKey"/>): the same string
+    /// whenever this frame and attempt run, on whichever owner, and a different one for any other activation. What an
+    /// activity hands a partner so that the partner can drop a repeat; the kernel itself drops nothing.
+    /// </summary>
+    public string EffectKey { get; }
     public CancellationToken CancellationToken { get; }
 }
 
 public sealed class StartContext<TTrigger> : ActivityContext
 {
     private readonly JsonNode? _trigger;
-    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource)
+    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.EffectKey)
         => (IsTriggerDelivery, _trigger) = (delivery, trigger);
 
     /// <summary>This activation is the workflow's start trigger being delivered (an HTTP request, an event).</summary>
@@ -175,7 +205,7 @@ public sealed class StartContext<TTrigger> : ActivityContext
 
 public sealed class ResumeContext<TState, TTrigger> : ActivityContext
 {
-    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource)
+    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource, c.EffectKey)
         => (State, Trigger) = (state, trigger);
 
     public TState State { get; }
