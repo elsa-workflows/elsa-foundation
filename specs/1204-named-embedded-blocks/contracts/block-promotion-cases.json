@@ -460,7 +460,7 @@
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
-                                      "memberKey": "greeting"
+                                      "memberKey": "Greeting"
                                     }
                                   }
                                 }
@@ -1342,7 +1342,7 @@
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
-                                      "memberKey": "greeting"
+                                      "memberKey": "Greeting"
                                     }
                                   }
                                 }
@@ -2397,7 +2397,7 @@
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
-                                      "memberKey": "greeting"
+                                      "memberKey": "Greeting"
                                     }
                                   }
                                 }

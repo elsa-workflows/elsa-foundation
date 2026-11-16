@@ -25,7 +25,7 @@ const safeActivities = new Set([
 const loopKinds = new Set(["elsa.do.structure", "elsa.for.structure", "elsa.foreach.structure", "elsa.while.structure"]);
 
 export function blockPromotionSource(context: BlockPromotionContext) {
-  return JSON.stringify([context.sourceKey, context.canEdit, context.scope, context.document, context.referenceContext,
+  return JSON.stringify([context.resourceKind, context.sourceKey, context.canEdit, context.scope, context.document, context.referenceContext,
     context.catalog, context.publicInputs, context.capabilities, context.expressionBoundary?.revision]);
 }
 
@@ -40,6 +40,8 @@ export function planBlockPromotion(context: BlockPromotionContext, blockNodeId: 
 }
 
 function analyze(context: BlockPromotionContext, blockNodeId: string, requestedName?: string): ReadyBlockPromotion {
+  if (!["workflow-definition", "activity-definition-graph"].includes(context.resourceKind))
+    refuse("missing-resource-kind", "resource", "Reload the owning resource's reference contract before promotion.");
   if (!context.canEdit) refuse("read-only", "authority", "Open an editable draft before promoting a block.");
   const provider = context.capabilities.providers.find(item => item.providerKey === "elsa.activity-graph");
   if (!provider?.manifestSchemas.some(schema => schema.schemaVersion === "2" && schema.isAuthorable))
@@ -93,12 +95,15 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
     let valueType: ActivityTypeReference;
     let label: string;
     let nullable = true;
+    let sourceInputKey: string | undefined;
     if (reference.kind === "input") {
-      const declaration = context.publicInputs.filter(item => item.referenceKey === reference.key);
+      const requestName = "memberKey" in reference.authored && context.resourceKind === "workflow-definition";
+      const declaration = context.publicInputs.filter(item => (requestName ? item.name : item.referenceKey) === reference.key);
       if (declaration.length !== 1) refuse("unknown-input", path, "This read does not name one current public input declaration.");
       if (declaration[0].isRequired !== true && !record(declaration[0].default))
         refuse("unpreserved-input-availability", path, "This optional input may be absent until its original read. Use a required input or an ordinary input default before promotion.");
       valueType = type(declaration[0].type, path); label = declaration[0].name; nullable = declaration[0].isNullable === true;
+      sourceInputKey = declaration[0].referenceKey;
     } else {
       const producer = all.get(reference.key);
       if (!producer || body.has(reference.key)) refuse("unknown-producer", path, "This external result producer is unavailable.");
@@ -114,7 +119,7 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
     let binding = inputBySource.get(key);
     if (!binding) {
       const referenceKey = `input-${inputs.length + 1}`;
-      const source = reference.kind === "input" ? { expressionType: "Input", value: { referenceKey: reference.key } }
+      const source = reference.kind === "input" ? { expressionType: "Input", value: { referenceKey: sourceInputKey } }
         : { expressionType: "ActivityResult", value: clone(argumentReference(reference)) };
       binding = { referenceKey, name: label, type: valueType, source, uses: [] };
       inputs.push(binding); inputBySource.set(key, binding);
@@ -136,6 +141,14 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
   };
   for (const { node, parent } of body.values()) {
     const entry = descriptor(node), at = `nodes.${node.nodeId}`;
+    if (entry.activityTypeKey === "Elsa.Activities.Primitives.Activities.Event") {
+      const startKey = entry.inputs.find(input => record(input) && input.name === "CanStartWorkflow") as Fields | undefined;
+      const starts = startKey && node.inputs.find(input => record(input) && input.referenceKey === (startKey.referenceKey ?? startKey.name)) as Fields | undefined;
+      const binding = starts && record(starts.value) ? starts.value : undefined;
+      if (!binding || typeof binding.expressionType !== "string" || binding.expressionType.toLowerCase() !== "literal"
+        || binding.value !== false || starts?.evaluatorType != null || starts?.autoEvaluate === false || starts?.conversion != null)
+        refuse("start-trigger-boundary", `${at}.inputs.CanStartWorkflow`, "A starting Event cannot keep its trigger-entry path through a reusable graph. Turn off Start new workflows explicitly or keep the block embedded.");
+    }
     if (entry.activityTypeKey === "Elsa.Activities.Graph.Runtime.Activities.Complete")
       refuse("changed-complete-target", at, "Complete would target the new reusable boundary. Keep this block embedded.");
     if (entry.activityTypeKey === "Elsa.Activities.Primitives.Activities.Break") {

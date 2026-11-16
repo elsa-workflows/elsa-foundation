@@ -1,9 +1,11 @@
 import type { ActivityAuthoringCapabilities, ActivityContract, ActivityDefinitionLayoutRecord, ActivityProviderManifest } from "../activityDefinitionTypes";
 import type { ActivityNode, ActivityPresentationRecord, ArgumentType } from "../workflowTypes";
 import type { NativeBlockContext, NativeBlockDiagnostic, NativeBlockDocument } from "./nativeBlocks";
+import type { GraphAuthoringResourceKind } from "./graphDocumentAdapter";
 import type { PromotionExpressionSupport } from "./promotionExpressionSupport";
 
 export interface BlockPromotionContext extends NativeBlockContext {
+  resourceKind: GraphAuthoringResourceKind;
   /** The owning resource's immutable request declarations, not labels inferred from consumers. */
   publicInputs: readonly { referenceKey: string; name: string; type: ArgumentType; isRequired?: boolean; isNullable?: boolean; default?: unknown }[];
   capabilities: ActivityAuthoringCapabilities;

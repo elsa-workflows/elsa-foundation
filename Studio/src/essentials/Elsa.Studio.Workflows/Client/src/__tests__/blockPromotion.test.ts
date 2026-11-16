@@ -68,3 +68,39 @@ it("refuses Complete and a Break whose original loop is outside the block", () =
     expect(planBlockPromotion(ctx, "block")).toMatchObject({ status: "refused", diagnostics: [{ code, path: "nodes.control" }] });
   }
 });
+it("resolves workflow request members by public name while retaining the declaration key in call bindings", () => {
+  const ctx = Object.assign(context(), { resourceKind: "workflow-definition" });
+  children(selected(ctx))[0].inputs = [argument({ expressionType: "WorkflowRequest", value: { memberKey: "Greeting" } })];
+  const plan = ready(ctx);
+  expect(plan.callSite.inputs).toEqual([{ referenceKey: "input-1", value: { expressionType: "Input", value: { referenceKey: "greeting" } } }]);
+});
+it("does not confuse a workflow request member name with its declaration key", () => {
+  const ctx = Object.assign(context(), { resourceKind: "workflow-definition" });
+  children(selected(ctx))[0].inputs = [argument({ expressionType: "WorkflowRequest", value: { memberKey: "greeting" } })];
+  expect(planBlockPromotion(ctx, "block")).toMatchObject({ status: "refused", diagnostics: [{ code: "unknown-input" }] });
+});
+it("retains reference-key request reads inside an existing reusable graph", () => {
+  const ctx = Object.assign(context(), { resourceKind: "activity-definition-graph" });
+  children(selected(ctx))[0].inputs = [argument({ expressionType: "WorkflowRequest", value: { memberKey: "greeting" } })];
+  expect(ready(ctx).callSite.inputs).toEqual([{ referenceKey: "input-1", value: { expressionType: "Input", value: { referenceKey: "greeting" } } }]);
+});
+it("refuses a starting Event before introducing an unsupported trigger-entry boundary", () => {
+  for (const flag of [undefined, true, "false"]) {
+    const ctx = context(); ctx.publicInputs = [];
+    ctx.catalog.push({ ...descriptor("event", "Elsa.Activities.Primitives.Activities.Event"), inputs: [{ referenceKey: "CanStartWorkflow", name: "CanStartWorkflow", typeName: "Boolean", defaultValue: true }] });
+    const event = node("event", "event"); event.inputs = [{ referenceKey: "EventName", value: literal("named-blocks-probe") }];
+    if (flag !== undefined) event.inputs.push({ referenceKey: "CanStartWorkflow", value: literal(flag) });
+    selected(ctx).structure!.payload.activities = [event];
+    expect(planBlockPromotion(ctx, "block")).toMatchObject({ status: "refused", diagnostics: [{ code: "start-trigger-boundary" }] });
+  }
+});
+
+it("permits an explicitly non-starting Event while refusing deferred start flags", () => {
+  const ctx = context(); ctx.publicInputs = [];
+  ctx.catalog.push({ ...descriptor("event", "Elsa.Activities.Primitives.Activities.Event"), inputs: [{ referenceKey: "CanStartWorkflow", name: "CanStartWorkflow", typeName: "Boolean", defaultValue: true }] });
+  const event = node("event", "event"); event.inputs = [{ referenceKey: "EventName", value: literal("named-blocks-probe") }, { referenceKey: "CanStartWorkflow", value: literal(false) }];
+  selected(ctx).structure!.payload.activities = [event];
+  expect(ready(ctx).candidate.contract.inputs).toEqual([]);
+  event.inputs[1] = { referenceKey: "CanStartWorkflow", value: literal(false), autoEvaluate: false };
+  expect(planBlockPromotion(ctx, "block")).toMatchObject({ status: "refused", diagnostics: [{ code: "start-trigger-boundary" }] });
+});

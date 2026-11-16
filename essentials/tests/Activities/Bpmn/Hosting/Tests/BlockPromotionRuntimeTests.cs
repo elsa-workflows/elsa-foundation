@@ -39,7 +39,7 @@ public sealed class BlockPromotionRuntimeTests
                 var observer = Output("observe-local", "answer", new JsonObject { ["expressionType"] = "Variable", ["value"] = new JsonObject { ["referenceKey"] = "local", ["declaringScopeId"] = "block" } });
                 Append(body, observer, entry["kind"]!.GetValue<string>());
                 Remap(baseline);
-                var view = await Run(baseline, entry["inputs"]!.DeepClone(), new Dictionary<string, string> { ["greeting"] = expected });
+                var view = await Run(baseline, entry["inputs"]!.DeepClone(), new Dictionary<string, string> { ["Greeting"] = expected });
                 Assert.Equal(expected, Read(view, "answer"));
             }
 
