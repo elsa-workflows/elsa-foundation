@@ -14,7 +14,7 @@ try {
   const planner = await server.ssrLoadModule(resolve(client, "src/graph-authoring/nativeBlocks.ts"));
   const bpmn = await server.ssrLoadModule(resolve(client, "src/graph-authoring/bpmnBlocks.ts"));
   const adapter = await server.ssrLoadModule(resolve(client, "src/workflowAdapter.ts"));
-  const { preservesJavaScriptWithAddedVariable } = await server.ssrLoadModule(resolve(repository, "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation.ts"));
+  const { preservesJavaScriptWithAddedVariable } = await server.ssrLoadModule(resolve(repository, "extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation.ts"));
   const expressionScopePreservation = { revision: "javascript-variable-addition-v1", allowsVariableAddition: preservesJavaScriptWithAddedVariable };
   const fixtures = await server.ssrLoadModule(resolve(client, "src/__tests__/fixtures.ts"));
   const whileActivity = { ...fixtures.whileActivity, activityTypeKey: "Elsa.Activities.While.Activities.While" };
