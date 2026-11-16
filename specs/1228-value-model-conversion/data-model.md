@@ -18,7 +18,8 @@
 | Element (new) | Optional type reference for a nested collection |
 
 Rules: `Object`, `System.Object` and `Elsa.Any` read as `Any`. `DateOnly` and `TimeOnly` are bare aliases.
-Example: `IDictionary<string, string[]>` = alias `String`, kind dictionary, element { kind array }.
+Example: `IDictionary<string, string[]>` = kind dictionary, element { alias `String`, kind array }. The alias sits on
+the innermost element.
 
 ## Entry record (new, per script run, not stored)
 
@@ -33,7 +34,7 @@ Example: `IDictionary<string, string[]>` = alias `String`, kind dictionary, elem
 | Field | Meaning |
 |---|---|
 | Value key | What changed |
-| Kind | Member change (partial update), whole assignment (replace), whole array |
+| Kind | Member change (partial update) or whole assignment (replace); a changed array is a whole assignment of that array |
 | Path | The changed path |
 | New value | Core value to write |
 | Lossy paths carried | Lossy entered numbers that the new value contains |

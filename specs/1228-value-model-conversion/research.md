@@ -12,6 +12,17 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Results out.** `JintResultMaterializer.Materialize` (32–73) runs the intrinsic `JSON.stringify` and parses the text
   back to a `JsonElement`. No CLR objects.
 - **No writes.** No `setVariable`, no writable `variables`. Script writes do not exist today.
+- **Run JavaScript has no variables surface.** `RunJavaScript` receives only `args`
+  (`Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs:13`); `JintJavaScriptScriptEvaluator.cs:18` calls
+  only `SetReadOnlyArgs`. Only input expressions get `SetReadOnlyVariables` (`JintPortableJavaScriptEvaluator.cs:45`).
+  S-4 (spec 1222) adds the script body's read surface and session reads.
+- **`getVariable` and `get<Name>()`** return captured values (`IsolatedJintEngine.cs:122-136`), so they do not follow
+  a reassigned `variables.x`. FR-003 requires one value per evaluation for every read path.
+- **Protection of input expressions** already folds the protection of referenced variables into the result
+  (`RuntimePortableExpressionEvaluator.cs:65-70`, over-approximating for computed access). US7 only adds script body
+  session reads.
+- **Project references.** The Jint project references only `Essentials/src/Expressions/JavaScript/Core`; new
+  contracts go there.
 - **No CLR surface.** No `AllowClr` or proxy setting exists. D-16 holds already.
 - **ForEach and snapshots** keep exact numbers since #3424 (`e0cc6433a`). Only the Jint part of #3421 is left.
 - **Dynamic names.** `Object` maps to `typeof(object)` (`DefaultVariableTypeDescriptorProvider.cs:31`,
@@ -46,10 +57,15 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 ## R-2 Checking a number for loss (ADR 0046 V9, settled)
 
-- **Decision**: parse the JSON number text as a decimal (or as a big integer when it has no fraction or exponent),
-  convert the double back to the shortest round-trip text, and compare values. Different value → lossy.
-- **Rationale**: `10.50` and `10.5` are the same value; `9007199254740993` and `9007199254740992` are not. The check
-  runs once per number at entry.
+- **Decision**: parse the JSON number text exactly, as a big-integer mantissa and a base-10 exponent; take the
+  double the engine would hold and its exact value; compare the two exact values. Different value → lossy. A number
+  that becomes `Infinity` is lossy.
+- **Rationale**: `10.50` and `10.5` are the same value; `9007199254740993` and `9007199254740992` are not. `System.Decimal`
+  is not enough: it keeps about 28 digits and does not parse `1e30` or `1e400`. The check runs once per number at
+  entry.
+- **Matching in a written value (FR-011a)**: an unchanged entered value is written from its original JSON, so a pass-
+  through never loses. Otherwise a written number that equals, as a double, the double of a lossy entered number
+  carries that loss.
 - **Alternatives considered**: a plain magnitude check (`|n| > 2^53 − 1`) misses long decimals such as
   `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely.
 
@@ -76,7 +92,7 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 - **Decision**: record, per JSON kind and per typed target, what Elsa 3.6.3's `ObjectConverter.ConvertTo` produced.
   Convert where Elsa 4 gives the same value; refuse at import otherwise.
 - **To do in implementation**: read the Elsa 3 source (release/3.6.3, checked against 3.5.3), as spec 267 did, and
-  fill the table in the plan's task. Fix #3167 first and re-measure; it may make the JSON route work for more cases.
+  fill the table here (task T036). Fix #3167 first and re-measure; it may make the JSON route work for more cases.
 
 ## R-6 One dynamic kind (settled)
 

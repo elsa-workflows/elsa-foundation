@@ -38,9 +38,10 @@ Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 
 | Case | Default | Diagnostic |
 |---|---|---|
-| A lossy number reaches a write | Refused (policy) | Path, stored, written; "JavaScript cannot hold this number exactly: it exceeds 9007199254740991"; remedy: hold it as a string |
+| A lossy number reaches a write | Refused (policy) | Path, stored, written; integer: "exceeds 9007199254740991"; decimal: "has more digits than a JavaScript number holds"; remedy: hold it as a string |
 | A lossy element in a written array | Refused (policy) | Array path, "written as a whole", each lossy element with both values, remedy |
-| A lossy number only computed with | Warning | Path and stored value |
+| A lossy number read but not written | One warning per evaluation (instance diagnostic) | Lossy paths and stored values |
+| A value returned or written unchanged | Written from the original JSON | No diagnostic |
 | A lossy number passed to a host function | Logged warning | Function, argument path |
 | An input expression assigns a variable or a member of one | Refused at publish | Node, input, variable, path; "input expressions only read"; use a script activity |
 | An input expression changes a read value (not visible at publish) | Evaluation fails | Same as above |

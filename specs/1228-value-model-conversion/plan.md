@@ -59,7 +59,7 @@ type check; the Elsa 3 lowerer and its type shapes.
 | §E2.6.1 executable-always-runs | PASS | Before 4.0, reset and republish (ADR 0046 V3). The new adapter version is pinned in new executables. |
 | §E5 / §4.2 versioning | ACTION | `TypeReference` gains a nested element; the executable gains the adapter version. Document and schema versions increase. |
 | Extension-point catalog | ACTION | The bridge and the precision policy are new replacement contracts: `EXTENSION_POINTS.md` and the generated map change. |
-| §2.22 docs | ACTION | The adapter contracts (FR-026) and the JavaScript value docs. |
+| §2.22 docs | ACTION | The adapter contracts (FR-027) and the JavaScript value docs. |
 | §2.23 tests | PASS | One test per acceptance scenario, the precision suite, the registration test for the policy feature. |
 | ADR 0046 amendment (#3422) | WAIT | Applied at `ba99ca02d`; agreed, not yet merged into the branch. Implementation starts once it is merged (D-18). |
 | ADR 0090 (accepted) | PASS | C1–C4 applied; the step write path is S-7's. |
@@ -90,7 +90,7 @@ Essentials/src/Expressions/JavaScript/Jint/Services/
 ├── JintResultMaterializer.cs          # result out through the policy
 └── (new) CopyComparePatchValueBridge.cs  # default bridge: entry record, lossy marks, copy, compare, patch, metric
 
-Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/
+Essentials/src/Expressions/JavaScript/Core/
 └── (new) IScriptValueBridge, IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy; registered by the feature
 
 Essentials/src/Primitives/Primitives/Models/
@@ -105,10 +105,11 @@ Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/
 
 Extensions/Elsa3/src/Mapping/          # Object → Any; TypesMatch; per-kind conversion or refusal
 Essentials/tests/...                   # precision suite, change detection, end-to-end, Elsa 3 fixture
-docs/reference/value-adapters.md       # adapter contracts (FR-026)
+docs/reference/value-adapters.md       # adapter contracts (FR-027)
 ```
 
-**Structure Decision**: libraries only. The JavaScript adapter and the policy live in the JavaScript expression
+**Structure Decision**: libraries only. New contracts go in `Essentials/src/Expressions/JavaScript/Core`, which the
+Jint project already references. The script body read surface is S-4's (spec 1222); S-8 builds on it. The JavaScript adapter and the policy live in the JavaScript expression
 modules. The kinds live in Primitives. Publication and the Elsa 3 converter change at the sites listed.
 
 ## Decisions
@@ -121,6 +122,7 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 | P-4 | Change detection | FR-003–FR-005. After the run, convert each original JSON afresh and compare it with the script's value, JavaScript with JavaScript (ADR 0090 C2): equal → unchanged; a changed member → member change; a reassigned variable → whole assignment; a changed array → whole. Unchanged members come from the original JSON. |
 | P-5 | Cost metric | FR-010. The bridge records enter and collect durations and the bytes converted per evaluation as a histogram on the JavaScript expression meter; the benchmark of SC-007 uses the same numbers. |
 | P-6 | Precision policy | FR-012–FR-015. `IJavaScriptPrecisionPolicy` is a replacement contract with one built-in `RefusingPrecisionPolicy`, installed by the JavaScript feature, with no options and no node or workflow override. Called at a write with the lossy paths it carries. Computing and host-function arguments only warn. |
+| P-6a | Old executables | FR-028. An executable without a JavaScript adapter version is refused at run time with a republish diagnostic. |
 | P-7 | Hand-off to S-7 | FR-006, FR-007, Q1. A script activity passes its changes to the step write path (S-7) with the read-set base (ADR 0092); the bridge raises the C2 visibility warning. Until S-7's path is on the branch, User Story 3 is tested at the bridge level. |
 | P-7a | Input expressions never write | FR-006a, Q6. Publish: the JavaScript binding compiler (ADR 0083 grammar) refuses an assignment whose target is `variables.<name>` or a member path under it, with a new stable `VF-` code. Run time: `JintPortableJavaScriptEvaluator` fails the evaluation when the bridge reports any change, with the same code and the path. |
 | P-8 | One dynamic kind | FR-017–FR-020. `TypeAliasConvention` registers `Any` and resolves `Object`, `System.Object` and `Elsa.Any` to it; `object` is no longer a variable type. The `Elsa.Any` constants and the `Alias is "Object" or "Elsa.Any"` checks go through one `IsDynamicKind`. `DateOnly` and `TimeOnly` register as bare aliases. |

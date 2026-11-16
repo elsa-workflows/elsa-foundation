@@ -31,6 +31,15 @@ or are refused at import, never at publish. .NET objects stay out of scripts.
 | ADR 0090, accepted as amended | C1–C4: a read creates no write; a write is explicit, member changes in scripts included; the write keeps what the step did not touch; the two equalities | on the initiative branch |
 | ADR 0092 | The read set; a write of a value the script read is a read-modify-write | on the initiative branch |
 | ADR 0035 | The alias registry the kinds live in | on the initiative branch |
+| ADR 0083 | `binding-readonly-v1`: a binding reads and never changes workflow state | on the initiative branch |
+
+**Depends on S-4 (spec 1222).** Today Run JavaScript receives only `args`. S-4 gives a script body `variables.X`,
+`getVariable` and `get<Name>()`, read through its variable session with read-your-writes (ADR 0089, ADR 0092). S-8
+builds on that surface: User Stories 3 and 7, and the variable scenarios of User Story 1, need it.
+
+**Known ADR text inconsistency.** ADR 0090's *What it changes* says input-binding expressions never get host interop;
+D-15 gives scripts and input expressions one switch. It does not affect S-8 (no interop); it is for the coordinator
+to tidy with #4103.
 
 **Settled decisions this spec applies:**
 - **One dynamic kind.** `Object` is retired in favour of `Any`, shown in Studio as JSON, with the spec 264
@@ -91,13 +100,15 @@ value. A loss is declared or refused, never silent.
 **Out of scope**:
 - .NET objects in scripts or input expressions: the opt-in is #4103 (D-16). S-1 refuses Elsa 3 scripts that need them.
 - The step write path of ADR 0090: assembling the intent from the base (C3), committing with the step, conflicts
-  (C5) and `setVariable`/C# `Set`. That is S-7. S-8 hands it the changes a script made (Q2).
+  (C5) and `setVariable`/C# `Set`. That is S-7. S-8 hands it the changes a script made (Q1).
 - Files and other resources (#3194). It is a linked defect, not S-8.
 - How dates are interpreted at the JSON to .NET boundary, unmatched keys, member casing and the shared serializer
   baseline: S-9 (spec 1207). S-8 uses those rules and adds none.
 - `undefined`, `NaN` and `Infinity`: S-2 (spec 1216).
 - Host functions, the clock and `Date` in scripts: S-1 (spec 1223).
 - Versions, lost updates and the write history: S-10 (spec 1221).
+- The script body's read surface (`variables.X`, `getVariable`, `get<Name>()`), its session reads and read-your-writes:
+  S-4 (spec 1222).
 - #3167 (the JSON alias inference). It is an S-0 defect that User Story 6 needs first.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -260,6 +271,8 @@ gave, it publishes and branches as before. Where it cannot, the import refuses w
 A script reads a sensitive variable and returns part of it. The result carries the same protection.
 
 **Why this priority**: *Kinds* (secrets). The read set of ADR 0092 records the reads for protection (ADR 0090 C1).
+Input expressions already fold the protection of the variables they reference into their result; this story adds
+the same for a script body's session reads (S-4).
 
 **Independent Test**: mark a variable sensitive, return a member of it from a script, and check the stored result is
 sensitive and redacted where the variable is.
@@ -283,6 +296,11 @@ sensitive and redacted where the variable is.
 - Liquid reads JSON numbers as decimals and does not narrow; it needs no precision policy.
 - A local copy (`{...variables.order}`) changed by a script or an input expression is not a change to `order`.
 - An input expression that changes a value and changes it back reports no change and succeeds.
+- A script that returns a value it read, unchanged (`return variables.order;`), writes the original JSON: a lossy
+  number inside it is not a loss, because it was never converted back.
+- Changing `args` is local to the evaluation, in scripts and input expressions alike. `args` are inputs, not
+  variables; a change to them is never a write and never refused.
+- A script that assigns a variable it never read reports a whole assignment.
 
 ## Requirements *(mandatory)*
 
@@ -293,8 +311,10 @@ sensitive and redacted where the variable is.
 - **FR-001**: Values MUST enter scripts and JavaScript input expressions as plain, changeable JavaScript objects and
   real arrays, through the same bridge. The frozen-value contract of spec 095 is replaced.
 - **FR-002**: Reading a value MUST NOT change its stored text or version (ADR 0090 C1).
-- **FR-003**: After a script runs, the bridge MUST report what it changed: for each value read, unchanged, a member
-  change, or a whole assignment (Q2). Unchanged members are reported from the original JSON, not from JavaScript.
+- **FR-003**: After a script runs, the bridge MUST report what it changed: for each variable read or assigned,
+  unchanged, a member change, or a whole assignment (Q2). Unchanged members are reported from the original JSON, not
+  from JavaScript. Every read path (`variables.x`, `getVariable('x')`, `get<Name>()`) MUST give the same JavaScript
+  value in one evaluation, so a change through any of them is seen.
 - **FR-004**: A changed array MUST be reported as a whole.
 - **FR-005**: A member set to a value equal, as a JavaScript value, to what was read MUST count as unchanged. A whole
   assignment MUST be reported as a write; S-7 judges it by meaning in the canonical form (ADR 0090 C2, C4).
@@ -303,6 +323,9 @@ sensitive and redacted where the variable is.
   read from it, MUST be refused at publish where the expression shows it, and MUST fail the evaluation at run time
   when the bridge reports any change. The diagnostic names the node, the input, the variable and the path, and says
   input expressions only read; it suggests a script activity for writes. A change is never dropped silently (Q6).
+  The publish check covers assignment and compound assignment (`=`, `+=`, …), `++`, `--` and `delete` on a target
+  rooted at `variables.<name>`, `variables['<literal>']`, `getVariable('<literal>')` or `get<Name>()`. Anything else
+  is caught at run time.
 - **FR-007**: A member change without a whole assignment MUST produce the visibility warning of ADR 0090 C2.
 - **FR-008**: No .NET object, CLR type or CLR member MUST be reachable from a script or a JavaScript input expression
   (D-16).
@@ -313,17 +336,25 @@ sensitive and redacted where the variable is.
 
 **Precision (V9, D-17)**
 
-- **FR-011**: The bridge MUST know, when a number enters, whether JavaScript holds it exactly (ADR 0046 V9).
+- **FR-011**: The bridge MUST know, when a number enters, whether JavaScript holds it exactly (ADR 0046 V9). The
+  comparison MUST be exact for any JSON number: very long decimals and large exponents included. A number that
+  becomes `Infinity` is a loss.
+- **FR-011a**: A written value MUST be checked for loss as follows. A value returned or written unchanged (the same
+  entered value, not changed) is written from its original JSON and carries no loss. Otherwise, each number in the
+  written value that equals, as a double, the double of a lossy entered number carries that loss. The diagnostic
+  names both paths.
 - **FR-012**: Precision handling MUST be one replaceable host-wide policy, provided by a feature, at the .NET → Jint
   boundary. There MUST be no per-workflow or per-node override.
 - **FR-013**: Elsa MUST ship one policy, with no options, that refuses a write that carries a precision loss. The
   refusal is an instance diagnostic visible in Studio, not only a log line. It names the path, the stored value and
-  the written value, and says the number exceeds the largest integer a JavaScript number holds exactly
-  (2^53 − 1, `9007199254740991`).
+  the written value, and says why: for an integer, that it exceeds the largest integer a JavaScript number holds
+  exactly (2^53 − 1, `9007199254740991`); for a decimal, that it has more digits than a JavaScript number holds.
 - **FR-014**: For a whole-array write, the refusal MUST name the array path, say it was written as a whole, list each
   lossy element with both values, and give the remedy.
-- **FR-015**: A loss that is only computed with MUST give a warning, not a refusal. A loss passed to a host function
-  MUST log a warning and not refuse the call.
+- **FR-015**: A lossy number read but not written MUST give one warning per evaluation, as an instance diagnostic
+  listing the lossy paths; it is never a refusal. A lossy number passed to a host function MUST log a warning naming
+  the function and the argument path, and not refuse the call. The host function argument conversion is S-1's; S-8
+  supplies the loss information it checks.
 - **FR-016**: Elsa MUST never turn a number into a string by itself.
 
 **Kinds (*Kinds*)**
@@ -340,8 +371,8 @@ sensitive and redacted where the variable is.
 **Binding and types (#3287, #3202)**
 
 - **FR-021**: Publication MUST treat `Any`, `JsonElement`, `JsonElement?`, `JsonNode` and their full .NET names as
-  the same kind when it checks an expression's declared type against an input's. `JsonObject` accepts `Any` and
-  checks the shape at run time.
+  the same kind when it checks an expression's declared type against an input's. `JsonObject` and `JsonArray`
+  accept `Any` and check the shape at run time. They stay JSON (structured) representations; only the shape differs.
 - **FR-022**: A type MUST be able to describe nested collections, such as a dictionary of string arrays, and
   diagnostics MUST show the whole type (Q3).
 
@@ -356,15 +387,18 @@ sensitive and redacted where the variable is.
 
 **Protection**
 
-- **FR-026**: A script result MUST carry the strongest protection policy of the values the script read, taken from
-  its read set (Q5).
+- **FR-026**: A script result MUST carry the strongest protection policy of the values the script body read, taken
+  from its session reads in the read set (Q5). Input expressions keep today's rule, which already folds the
+  referenced variables' protection into the result.
 
 **Contracts**
 
 - **FR-027**: The adapter contracts for JavaScript, activity inputs and outputs, and Liquid MUST be written down: what
   each accepts, what it produces, what is lossless, lossy or refused, and the diagnostic for each refusal.
 - **FR-028**: A change to an adapter rule MUST ship as a new pinned version, never as an edit of an existing one. A
-  published executable keeps the version it was published with.
+  published executable keeps the version it was published with. An executable published before this spec (no
+  JavaScript adapter version) MUST be refused at run time with a diagnostic that asks to republish it. Before 4.0,
+  reset and republish is enough (ADR 0046 V3); Elsa does not keep the old frozen adapter.
 
 ### Key Entities
 
@@ -393,7 +427,8 @@ sensitive and redacted where the variable is.
 - **SC-006**: A `WriteHttpResponse` with a header map publishes and sends the headers.
 - **SC-007**: The bridge's cost is visible: the metric of FR-010 exists, and a benchmark records the time on 1 KB,
   100 KB and 1 MB inputs against today's engine. The first implementation stays within twice today's time on 1 MB;
-  a larger cost is reported before the spec is marked implemented.
+  a larger cost fails the check and needs the coordinator's acceptance, recorded in the PR, before the spec is marked
+  implemented.
 - **SC-008**: The JTest corpus converts and publishes at least as many definitions as before this spec.
 
 ## Spec decisions
