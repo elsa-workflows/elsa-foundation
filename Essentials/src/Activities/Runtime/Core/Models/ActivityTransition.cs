@@ -24,7 +24,7 @@ public abstract record ActivityTransition
     public static ActivityTransition<TResult> Complete<TResult>(TResult result, string outcome) =>
         new CompleteActivityTransition<TResult>(result, OutcomeSelection.Named(outcome));
 
-    /// <summary>Completes and selects several named outcomes; the node's outcome set must allow several.</summary>
+    /// <summary>Completes and selects several named outcomes, each declared in the node's outcome set.</summary>
     public static ActivityTransition<TResult> Complete<TResult>(TResult result, IReadOnlyCollection<string> outcomes) =>
         new CompleteActivityTransition<TResult>(result, OutcomeSelection.Named(outcomes));
 
@@ -115,7 +115,7 @@ public abstract record ActivityTransition<TResult, TState> : ActivityTransition<
     public static ActivityTransition<TResult, TState> Complete(TResult result, string outcome) =>
         new CompleteStatefulActivityTransition(result, OutcomeSelection.Named(outcome));
 
-    /// <summary>Completes and selects several named outcomes; the node's outcome set must allow several.</summary>
+    /// <summary>Completes and selects several named outcomes, each declared in the node's outcome set.</summary>
     public static ActivityTransition<TResult, TState> Complete(TResult result, IReadOnlyCollection<string> outcomes) =>
         new CompleteStatefulActivityTransition(result, OutcomeSelection.Named(outcomes));
 
