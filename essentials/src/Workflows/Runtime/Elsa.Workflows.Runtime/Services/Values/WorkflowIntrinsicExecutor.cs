@@ -25,6 +25,20 @@ public sealed class WorkflowIntrinsicExecutor(
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
     IWorkflowExecutableInputValidator? inputValidator = null)
 {
+    private readonly IRuntimeDurableValueStorageDriverRegistry? _storageDrivers;
+
+    public WorkflowIntrinsicExecutor(IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IActivityExecutionStateStore activityExecutionStateStore, IRuntimeInputBindingResolver inputBindingResolver,
+        IDurableValueStateStore durableValueStateStore, IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+        TimeProvider timeProvider, IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        IExternalPayloadStore? externalPayloadStore = null, IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IRuntimeValueConversionExecutor? valueConversionExecutor = null, IWorkflowExecutableInputValidator? inputValidator = null)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, inputBindingResolver, durableValueStateStore,
+            inspectionAccumulator, timeProvider, externalPayloadStore, portableExpressionEvaluator, valueConversionExecutor, inputValidator)
+    {
+        _storageDrivers = storageDrivers;
+    }
+
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
@@ -284,19 +298,20 @@ public sealed class WorkflowIntrinsicExecutor(
         if (nameBinding.Source != RuntimeInputBindingSource.Literal || nameBinding.Literal is not { } nameLiteral)
             throw new InvalidOperationException($"SetOutput intrinsic '{node.ExecutableNodeId}' requires a literal output name.");
         var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicInputKeys.Name, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
-        var value = await MaterializeRequiredInputAsync(
-            WorkflowIntrinsicInputKeys.Value,
-            startWorkItem,
-            executable,
-            node,
-            intrinsicState,
-            cancellationToken);
-        var durableChange = NewWorkflowOutputChange(
-            startWorkItem.WorkflowExecutionId,
-            intrinsicState.InvocationId,
-            outputName,
-            value,
-            timeProvider.GetUtcNow());
+        var workflowId = startWorkItem.WorkflowExecutionId;
+        var workflow = await workflowExecutionStateStore.FindAsync(workflowId, cancellationToken)
+            ?? throw new InvalidOperationException($"SetOutput intrinsic references missing workflow execution '{workflowId}'.");
+        var runtimeView = await activityExecutionStateStore.ListAllAsync(workflowId, cancellationToken);
+        var scoped = node.Descriptor.SchemaVersion == WorkflowIntrinsicDescriptorSchemas.ActivityOutput;
+        var boundaryId = scoped
+            ? RuntimeClosedScope.NearestBoundaryId(intrinsicState, runtimeView.ToDictionary(x => x.InvocationId, StringComparer.Ordinal))
+              ?? throw new InvalidOperationException($"Set Output '{node.ExecutableNodeId}' has no enclosing activity invocation.")
+            : null;
+        var value = await MaterializeValueAsync(node.InputBindings[WorkflowIntrinsicInputKeys.Value], workflow, intrinsicState,
+            executable, runtimeView, cancellationToken, validateAssignmentPayload: scoped);
+        var durableChange = boundaryId is null
+            ? NewWorkflowOutputChange(workflowId, intrinsicState.InvocationId, outputName, value, timeProvider.GetUtcNow())
+            : await NewBoundaryOutputChangeAsync(workflowId, boundaryId, node.Descriptor.Payload, outputName, value, cancellationToken);
 
         return await CompleteIntrinsicAsync(
             startWorkItem,
@@ -312,6 +327,34 @@ public sealed class WorkflowIntrinsicExecutor(
             metadataAdditions: null,
             cancellationToken,
             [durableChange]);
+    }
+
+    private async ValueTask<RuntimeStateChange<DurableValueState>> NewBoundaryOutputChangeAsync(
+        string workflowId, string boundaryId, JsonElement descriptor,
+        string outputName, ValueEnvelope value, CancellationToken cancellationToken)
+    {
+        var referenceKey = descriptor.GetProperty("referenceKey").GetString()!;
+        ThrowIfWithheld(value, WorkflowIntrinsicInputKeys.Value);
+        if (value.Presence == ValuePresence.ExplicitNull && !descriptor.GetProperty("isNullable").GetBoolean())
+            throw new InvalidOperationException($"Activity output '{outputName}' does not accept null.");
+
+        if (value.Policy.HidesValue() || value.Policy.RedactionMode is not null || value.Policy.RetentionPolicy is not null)
+            throw new InvalidOperationException($"Activity output '{outputName}' cannot return a value whose protection policy its result contract does not preserve.");
+        var driverKey = descriptor.GetProperty("storageDriverKey").GetString()!;
+        var type = new RuntimeValueTypeDescriptor(value.Type.Alias, driverKey, descriptor.GetProperty("type"));
+        var driver = (_storageDrivers ?? throw new InvalidOperationException("Activity outputs require a durable value storage driver registry.")).GetRequired(driverKey);
+        var payload = value.ExternalReference is { } external
+            ? await (externalPayloadStore ?? throw new InvalidOperationException($"Activity output '{outputName}' requires an external payload store."))
+                .ReadAsync(external, cancellationToken)
+            : value.InlineValue;
+        var encoding = await driver.EncodeAsync(payload, type, cancellationToken);
+        if (value.Policy.Storage == DurableValueStorage.External && encoding.Storage == DurableValueStorage.Inline)
+            throw new InvalidOperationException($"Activity output '{outputName}' cannot store an external-only value inline.");
+        var metadata = ActivityExecutionScopeValues.Metadata(boundaryId, ActivityExecutionScopeValues.OutputRole, referenceKey, driverKey);
+        var id = ActivityExecutionScopeKeys.Output(boundaryId, referenceKey);
+        var state = new DurableValueState(id, workflowId, id, type, DurableValueLifecycle.Instance, encoding.Storage,
+            encoding.InlineValue, encoding.ExternalReference, boundaryId, timeProvider.GetUtcNow(), metadata);
+        return new(id, RuntimeStateChangeOperation.Upsert, state, metadata);
     }
 
     private async ValueTask<RuntimeCheckpointCommit> ExecuteFinishAsync(

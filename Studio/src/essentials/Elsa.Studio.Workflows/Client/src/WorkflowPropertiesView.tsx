@@ -403,7 +403,7 @@ function ArgumentsEditor({
         // JSON defaults keep their raw syntax for scalar values and collections alike.
         const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
-          <tr key={index} role="row">
+          <tr key={index} role="row" data-variable-index={columns.default ? index : undefined}>
             <td role="cell" data-label="Name">
               <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
@@ -425,7 +425,7 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td role="cell" data-label="Default">
+              <td role="cell" data-label="Default" data-variable-default>
                 {/* Only Variables render this column; the value is their ArgumentValue default. */}
                 <DefaultValueCell
                   ariaLabel={`${namePrefix} default value`}

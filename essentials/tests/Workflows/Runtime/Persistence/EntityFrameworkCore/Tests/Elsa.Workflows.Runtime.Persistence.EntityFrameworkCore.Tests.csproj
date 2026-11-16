@@ -24,7 +24,7 @@
     <Compile Include="../../../../../Activities/Bpmn/Tests/BpmnRuntimeFixture.cs" Link="Fixtures/BpmnRuntimeFixture.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="../../../../../../../specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz"
+    <Content Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
              Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
