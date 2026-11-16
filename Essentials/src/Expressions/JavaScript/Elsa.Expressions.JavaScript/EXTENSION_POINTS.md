@@ -34,7 +34,9 @@ with portable expression evaluation.
   binding, through any destructuring, default or rest pattern) is refused at design time with
   `JavaScript/ReservedName`.
 
-## IJavaScriptScriptOutcomeAnalyzer (design-time contract)
+## Overridable contracts
+
+### IJavaScriptScriptOutcomeAnalyzer *(Core — Elsa.Expressions.JavaScript.Core)*
 
 - **Contract:** `Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer` —
   `Analyze(script)` parses a script-activity program (never evaluates it) and returns a
@@ -45,11 +47,13 @@ with portable expression evaluation.
   - `ReservedNameDeclarations` — zero-based ranges of every declaration of `complete`.
   Computed names and aliased `complete` calls are not reported; they are checked at run time.
 - **Implementation:** `JavaScriptScriptOutcomeAnalyzer` (internal), registered as a singleton by
-  `JavaScriptFeature`. It shares the reserved-name collector with the expression tooling provider.
+  `JavaScriptFeature`: it is stateless, holds no scoped dependency and only parses. It shares the reserved-name collector
+  with the expression tooling provider.
 - **Consumer:** `ScriptOutcomeValidator` in `Elsa.Workflows.Design.Validations` takes it as an
   optional dependency, so that project needs no JavaScript parser; with no analyzer registered,
   scripts are not checked.
-- **Cardinality:** a replacement contract — one analyzer per host.
+- **Override when:** a host uses another JavaScript parser or dialect for script activities. Register one analyzer; a
+  later registration replaces the default, as for `IJavaScriptScriptEvaluator`.
 
 ## Cross-references
 

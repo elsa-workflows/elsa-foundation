@@ -52,11 +52,6 @@ public sealed class GraphActivity(
     /// </summary>
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
 
-    /// <summary>
-    /// The fault code when the entry completes with a selection none of whose names has an outcome mapping — including
-    /// an explicitly empty selection.
-    /// </summary>
-    public const string EntryOutcomeUnmappedFaultCode = "activity.graph.entry-outcome-unmapped";
 
     private string? _selectedOutcomeName;
     private OutcomeSelection? _completeSelection;
@@ -132,8 +127,9 @@ public sealed class GraphActivity(
         }
 
         // The entry may select several of its outcomes or none (spec 1208): every selected name that has a mapping
-        // selects its boundary outcome, in selection order. A selection with no mapped name leaves the boundary
-        // nothing to select, which is a fault of this body rather than an invented outcome.
+        // selects its boundary outcome, in selection order. A name without a mapping is like an unconnected outcome: its
+        // path ends there (FR-020). With no mapped name the boundary completes with an empty selection, so its caller
+        // follows no outgoing connection (FR-004).
         var boundaryOutcomeNames = context.OutcomeNames
             .SelectMany(outcomeName => Descriptor.OutcomeMappings.Where(mapping => StringComparer.Ordinal.Equals(mapping.SourceOutcomeName, outcomeName)))
             .Select(mapping => mapping.BoundaryOutcomeName)
@@ -141,9 +137,8 @@ public sealed class GraphActivity(
             .ToArray();
         if (boundaryOutcomeNames.Length == 0)
         {
-            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
-                EntryOutcomeUnmappedFaultCode,
-                $"Graph entry '{Descriptor.EntryNodeId}' completed with outcome(s) [{string.Join(", ", context.OutcomeNames)}], none of which has an outcome mapping, so the boundary has no outcome to select.")));
+            _mappedSelection = OutcomeSelection.Empty;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_mappedSelection));
         }
 
         _mappedSelection = OutcomeSelection.Named(boundaryOutcomeNames);

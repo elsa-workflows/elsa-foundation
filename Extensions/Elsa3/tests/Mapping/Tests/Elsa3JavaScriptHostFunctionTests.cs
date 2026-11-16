@@ -248,6 +248,23 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains("Rename", diagnostic.Guidance, StringComparison.Ordinal);
     }
 
+    // Review round 2: 'complete' is reserved in every JavaScript surface, so an input expression that declares it is
+    // refused at import too, rather than importing and failing draft validation (JavaScript/ReservedName).
+    [Theory]
+    [InlineData("(function () { var complete = 'x'; return complete; })()")]
+    [InlineData("((complete) => complete)('x')")]
+    public async Task An_expression_declaring_complete_is_refused_with_rename_guidance(string expression)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains("'complete'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Rename", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Spec 1208 FR-027: a computed name declares the catch-all on the possible outcomes whichever order the members
     /// have, and the possible outcomes are published as a JSON list, not as text Elsa 4 would split at its commas.

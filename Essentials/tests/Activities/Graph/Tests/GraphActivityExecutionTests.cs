@@ -157,7 +157,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     [Theory]
     [InlineData()]
     [InlineData("Unknown")]
-    public async Task ChildCompletion_FaultsWhenNoSelectedOutcomeHasAMapping(params string[] outcomes)
+    public async Task ChildCompletion_WithNoMappedOutcome_CompletesWithAnEmptySelection(params string[] outcomes)
     {
         var descriptor = Descriptor(outcomeMappings:
         [
@@ -170,9 +170,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var continuation = await graph.OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes));
 
-        Assert.NotNull(continuation.Fault);
-        Assert.Equal(GraphActivity.EntryOutcomeUnmappedFaultCode, continuation.Fault!.Code);
-        Assert.Contains("none of which has an outcome mapping", continuation.Fault.Message, StringComparison.Ordinal);
+        // An unmapped outcome ends its path like an unconnected one (FR-020); none mapped is an empty selection (FR-004).
+        Assert.Null(continuation.Fault);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(OutcomeSelection.Empty, continuation.Selection);
     }
 
     [Fact]

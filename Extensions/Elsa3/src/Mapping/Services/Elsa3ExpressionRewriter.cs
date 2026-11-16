@@ -94,13 +94,14 @@ public sealed class Elsa3ExpressionRewriter
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
 
-        // Elsa 4 reserves 'complete' in a script activity, setter or not: a script that declares it would import and
-        // then fail draft validation (Scripts/ReservedName), so the import refuses it with the rename up front.
-        if (mode == Elsa3JavaScriptMode.Script && analyzer.DeclaresComplete)
+        // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
+        // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
+        // refuses it with the rename up front.
+        if (analyzer.DeclaresComplete)
         {
             return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                "JavaScript declares its own 'complete', which Elsa 4 reserves in a script activity for the returned completion form 'complete(result, outcomes)' (and which 'setOutcome' converts to).",
+                "JavaScript declares its own 'complete', which Elsa 4 reserves in every JavaScript surface for the returned completion form 'complete(result, outcomes)' (and which 'setOutcome' converts to).",
                 "Rename the script's 'complete' in the Elsa 3 workflow before import."));
         }
 
