@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Services.History;
 internal sealed class InMemoryRuntimeHistoryStore(
     InMemoryRuntimeCheckpointStoreState state,
     IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec codec) : IRuntimeHistoryStore
+    IRuntimeRecoveryContinuationCodec codec) : IRuntimeHistoryDetailsStore
 {
     private const string EventPurpose = "runtime-history-events-v1";
     private const string BookmarkPurpose = "runtime-history-bookmarks-v1";
@@ -45,26 +45,7 @@ internal sealed class InMemoryRuntimeHistoryStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(historyEventId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = Scope;
-        lock (state.SyncRoot)
-        {
-            var item = state.HistoryEventsById.GetValueOrDefault((scope, workflowExecutionId, historyEventId));
-            var head = state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId));
-            ValidateHead(workflowExecutionId, head);
-            if (item is null && state.HistoryReceiptPositions.TryGetValue((scope, workflowExecutionId, historyEventId), out var position))
-            {
-                if (head is null || position <= 0 || position > head.LastSequence || position > head.PurgedThroughSequence)
-                    throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event receipt has unacknowledged missing content");
-            }
-            if (item is not null && (item.WorkflowExecutionId != workflowExecutionId || item.HistoryEventId != historyEventId))
-                throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event projection names a different resource");
-            if (item is not null)
-            {
-                if (head is null || item.Sequence <= 0 || item.Sequence < head.FirstSequence ||
-                    item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
-                    throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event has no acknowledged retained position");
-            }
-            return ValueTask.FromResult(item);
-        }
+        lock (state.SyncRoot) return ValueTask.FromResult(FindEvent(scope, workflowExecutionId, historyEventId));
     }
 
     public ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string workflowExecutionId, string bookmarkId,
@@ -74,14 +55,64 @@ internal sealed class InMemoryRuntimeHistoryStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = Scope;
+        lock (state.SyncRoot) return ValueTask.FromResult(FindBookmark(scope, workflowExecutionId, bookmarkId));
+    }
+
+    public ValueTask<(RuntimeHistoryHead? Head, RuntimeHistoryEvent? Event)> FindEventDetailsAsync(
+        string workflowExecutionId, string historyEventId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(historyEventId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = Scope;
         lock (state.SyncRoot)
         {
-            var item = state.HistoryBookmarks.GetValueOrDefault((scope, workflowExecutionId, bookmarkId));
-            ValidateBookmarkIdentity(workflowExecutionId, bookmarkId, item);
-            if (item is not null)
-                ValidateBookmarkPosition(workflowExecutionId, item, state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId)));
-            return ValueTask.FromResult(item);
+            var item = FindEvent(scope, workflowExecutionId, historyEventId);
+            return ValueTask.FromResult((state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId)), item));
         }
+    }
+
+    public ValueTask<(RuntimeHistoryHead? Head, RuntimeHistoryBookmark? Bookmark)> FindBookmarkDetailsAsync(
+        string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = Scope;
+        lock (state.SyncRoot)
+        {
+            var item = FindBookmark(scope, workflowExecutionId, bookmarkId);
+            return ValueTask.FromResult((state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId)), item));
+        }
+    }
+
+    // Caller owns the lock and its one captured scope for both projection and head.
+    private RuntimeHistoryEvent? FindEvent(string scope, string workflowExecutionId, string historyEventId)
+    {
+        var item = state.HistoryEventsById.GetValueOrDefault((scope, workflowExecutionId, historyEventId));
+        var head = state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId));
+        ValidateHead(workflowExecutionId, head);
+        if (item is null && state.HistoryReceiptPositions.TryGetValue((scope, workflowExecutionId, historyEventId), out var position))
+        {
+            if (head is null || position <= 0 || position > head.LastSequence || position > head.PurgedThroughSequence)
+                throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event receipt has unacknowledged missing content");
+        }
+        if (item is not null && (item.WorkflowExecutionId != workflowExecutionId || item.HistoryEventId != historyEventId))
+            throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event projection names a different resource");
+        if (item is not null && (head is null || item.Sequence <= 0 || item.Sequence < head.FirstSequence ||
+            item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence))
+            throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event has no acknowledged retained position");
+        return item;
+    }
+
+    private RuntimeHistoryBookmark? FindBookmark(string scope, string workflowExecutionId, string bookmarkId)
+    {
+        var item = state.HistoryBookmarks.GetValueOrDefault((scope, workflowExecutionId, bookmarkId));
+        var head = state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId));
+        ValidateHead(workflowExecutionId, head);
+        ValidateBookmarkIdentity(workflowExecutionId, bookmarkId, item);
+        if (item is not null) ValidateBookmarkPosition(workflowExecutionId, item, head);
+        return item;
     }
 
     public ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken cancellationToken = default)
