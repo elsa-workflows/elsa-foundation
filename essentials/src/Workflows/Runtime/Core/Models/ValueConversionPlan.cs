@@ -25,7 +25,8 @@ public enum ValueConversionOperation
     NumericWidening,
     RecursiveCollection,
     CanonicalAny,
-    Profile
+    Profile,
+    NumericToString
 }
 
 /// <summary>Stable identity of a conversion profile selected at publication.</summary>

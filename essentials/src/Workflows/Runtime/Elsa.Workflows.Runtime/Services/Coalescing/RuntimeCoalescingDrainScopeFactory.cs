@@ -93,7 +93,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // An uncertain outcome must retry exactly the same identity/timestamp/envelope. A fresh synthetic commit
             // would mint another canonical source after a peer may already have delivered the first one.
             var flushCommit = preparedFlush ??= BuildFlushCommit();
-            session.PrepareQuiescenceFlush(flushCommit.CommitId);
+            session.PrepareQuiescenceFlush(flushCommit);
 
             // Routed through the committer so ownership fencing gates the single durable write. The coalescing
             // commit-store decorator recognises the CoalescedFlush marker, applies the folded state to the durable

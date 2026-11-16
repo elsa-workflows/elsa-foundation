@@ -46,6 +46,9 @@ public sealed class RuntimeHistoryEvent
     public string HistoryEventId { get; }
     public string WorkflowExecutionId { get; }
     public long Sequence { get; }
+    /// <summary>False when the source supplied only a canonical reference time. RecordedAt remains a separate durable instant.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? OccurredAtKnown { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? CheckpointOrdinal { get; init; }
     public int SchemaVersion { get; init; } = 1;
