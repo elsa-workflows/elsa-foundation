@@ -20,4 +20,8 @@
 .wf-block-promotion-target{border:0;margin:0 0 .75rem;padding:0;display:flex;flex-wrap:wrap;gap:.25rem 1.25rem}
 .wf-block-promotion-target legend{padding:0;margin-bottom:.35rem;font-weight:600}
 .wf-block-promotion-target label{display:inline-flex;align-items:center;gap:.5rem;min-height:44px}
-.wf-block-promotion-target input[type="radio"]{width:1rem;height:1rem;margin:0}
+/* Reset the shell's text-input chrome (border, padding, focus ring, transition): with it the radio's size followed
+   focus, so a press moved the side-by-side choice from under the pointer and the click was lost. */
+.wf-block-promotion-target input[type="radio"]{flex:0 0 auto;width:1rem;height:1rem;margin:0;padding:0;border:0;border-radius:50%;box-shadow:none;transition:none}
+.wf-block-promotion-target input[type="radio"]:focus{box-shadow:none}
+.wf-block-promotion-target input[type="radio"]:focus-visible{outline:2px solid var(--studio-focus);outline-offset:2px}
