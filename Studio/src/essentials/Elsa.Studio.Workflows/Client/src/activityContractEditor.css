@@ -520,7 +520,7 @@
 .ad-provider-public-interface[hidden] { display: none; }
 
 /* Output declaration and assignment share one selected member; other contract editors retain their layout. */
-.ad-output-editor .ad-contract-workbench { grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr); gap: 20px; }
+.ad-output-editor .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr); gap: 20px; }
 .ad-output-editor .ad-contract-workbench-list { padding-right: 20px; }
 .ad-output-member-header > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
 .ad-output-member-header > div > span { color: var(--studio-text-muted); font-size: var(--studio-small-size); }

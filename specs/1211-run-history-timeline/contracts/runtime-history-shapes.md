@@ -42,6 +42,8 @@ IRuntimeHistoryStore exposes separate read methods:
 - ListBookmarksAsync(RuntimeHistoryBookmarkQuery, cancellationToken)
 - FindBookmarkAsync(workflowExecutionId, bookmarkId, cancellationToken)
 
+For exact API target details, an optional `IRuntimeHistoryDetailsStore : IRuntimeHistoryStore` returns `(Head, Event)` or `(Head, Bookmark)` from one committed provider snapshot through FindEventDetailsAsync/FindBookmarkDetailsAsync. Do not combine independent exact-target and head reads into a complete-looking response. Base readers remain compatible; advertise exact-detail relations only for a reader that supplies this composite contract. The same provider/store owns both shapes; this adds no execution authority.
+
 Committed transition append remains internal to checkpoint writers. IRuntimeHistoryObservationWriter.RecordAsync(RuntimeHistoryObservation, cancellationToken) is separate and accepts only policy-safe DeliveryObservation data, no bookmark mutation. It shares exact run/deletion guard and head allocation but never claims target execution/admission atomicity without the actual owner transaction.
 
 Retention mutation is a separately named operation/port owned by existing retention/deletion integration; it cannot be invoked merely by inspecting history.
@@ -88,4 +90,7 @@ Optional modules contribute through Core's `IRuntimeHistorySourceExtension`, wit
 
 Owner-observation support is bound to an exact post-commit intent kind. The selected `IRuntimePostCommitIntentDispatcher.CanRecordHistory` must qualify the actual selected receiver and writer/read pairing; its default is false. A declaration alone does not qualify an old constructor, custom dispatcher or replacement receiver. Stamped delivery rechecks that boundary before effects. Source policy-read IO, timeout or unavailable-provider failures remain infrastructure unavailability; malformed policy, conflicting facts and actual effect failures keep their distinct behavior.
 
+### HTTP common-envelope occurrence
+
+The event view carries nullable `occurredAt`, nullable `occurredAtKnown` and nullable `activityAncestryKnown`. When the source explicitly reports `OccurredAtKnown=false`, `occurredAt` is null; its canonical reference instant must not be displayed as operation time or used to compute a duration. `recordedAt` retains the independent durable observation instant. An absent occurrence flag preserves the older known-time envelope. Unknown kinds/schema versions retain these common fields, without releasing raw event payloads or widening the closed metadata vocabulary.
 History source agreement is separate from historical durable checkpoint replay identity. It preserves exact CLR string identities, canonicalizes unordered checkpoint participants and object keys, binds every native state-change participant plus handler-retention intent, and preserves meaningful history-fact/candidate order. Compatibility omissions in older durable replay shapes cannot omit fields from this source proof. Native semantic owners complete their contributions before the final history observer; later mutation is refused before persistence.

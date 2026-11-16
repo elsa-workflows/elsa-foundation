@@ -77,8 +77,8 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
         var inspections = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>(plan.CancelledStates.Count);
         foreach (var state in plan.CancelledStates)
         {
-            var projection = await inspectionAccumulator.BuildProjectionAsync(
-                state, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
+            var projection = await inspectionAccumulator.BuildProjectionWithSourceAsync(
+                state, checkpointId, occurredAt, () => ActivityValueCaptureOrigin.FromWorkItem(workItem), metadata: metadata, cancellationToken: cancellationToken);
             inspections.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                 state.Execution.ActivityExecutionId,
                 RuntimeStateChangeOperation.Upsert,
@@ -86,7 +86,7 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                 metadata));
         }
 
-        return new RuntimeCheckpointCommit(
+        var commit = new RuntimeCheckpointCommit(
             $"commit:{workItem.WorkItemId}:activity-scope-cancelled:{command.ExecutionScopeId}",
             new RuntimeCheckpoint(
                 checkpointId,
@@ -115,6 +115,12 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                 activityScopeCleanups: [plan.Cleanup]),
             PostCommitIntents: [],
             Metadata: metadata);
+
+        return await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            plan.IncidentChanges.Select(incident => RuntimeHistoryIncidentFacts.Suppressed(incident))
+                .Append(new(RuntimeHistorySourceFactKind.ControlApplied, workItem.WorkItemId, occurredAt,
+                    outer.InvocationId, causation: new(CommandId: workItem.CommandId, SchedulerWorkItemId: workItem.WorkItemId),
+                    reasonCode: "activity-scope-cancelled")), cancellationToken);
     }
 
     private static CancelActivityScopeCommand Deserialize(RuntimeSchedulerWorkItem workItem)

@@ -1020,10 +1020,11 @@ for (const theme of ["light", "dark"]) {
       releaseFailure();
       await expect(dialog.getByRole("alert")).toContainText("Publication preflight could not be confirmed");
       await dialog.getByRole("button", { name: "Close publication review" }).click();
-      await expect(toolbar.getByRole("status")).toBeVisible();
+      await expect(toolbar.getByRole("alert")).toContainText("Publication preflight could not be confirmed");
       observations.push({ state: "failed", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
       await page.unroute(preflightPath, failPreflight);
       await actions[0].click();
+      await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
       await dialog.getByRole("button", { name: "Close publication review" }).click();
       await expect(actions[0]).toHaveText("Continue publication review");

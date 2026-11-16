@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
@@ -395,7 +396,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IIncidentStateStore>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
                 serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
-        services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
+        services.TryAddScoped<IActivityScopeCleanupStore>(provider => provider.GetService<RuntimeHistoryOptions>() is null
+            ? new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>())
+            : new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(), provider.GetRequiredService<IWorkflowExecutionStateStore>()));
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddSingleton<DrainControlContext>();
@@ -609,7 +612,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
+            { HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId) };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();
@@ -641,7 +645,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         return services;
     }
 
-    private static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
+    internal static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
         where TStore : class
     {
         var selected = serviceProvider.GetRequiredService<TStore>();
