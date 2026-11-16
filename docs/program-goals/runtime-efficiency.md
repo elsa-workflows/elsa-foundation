@@ -88,7 +88,8 @@ They are not product budgets.
 Fresh receipt on main `6f275e16c`, Release, run locally on 16 November: the M2 and M3 tests named above and the ID burst
 control all pass (48 passed, 0 failed, 0 skipped). This is a correctness receipt, not a timing result.
 
-The open children were closed as superseded by the kernel: #3698, #3700, #3703, #3939 and #4043. Each closing comment
+The open children #3698, #3700, #3703 and #3939, and #4043 (filed as part of this program, not a sub-issue), were
+closed as superseded by the kernel. Each closing comment
 names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905, #3915 and #3941 were
 closed unmerged, with their branches and evidence kept. The sections above remain the charter as it stood while the
 program ran.
