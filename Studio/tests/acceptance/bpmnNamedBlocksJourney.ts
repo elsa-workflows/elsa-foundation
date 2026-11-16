@@ -119,6 +119,20 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
       const redoAction = page.getByRole("button", { name: host === "workflow" ? "Redo" : "Redo Activity Graph edit", exact: true });
       if (profile === "authoring") {
         const original = await saved(), undoBefore = await undoAction.isEnabled();
+        await element("element-one").click(); await details();
+        await page.getByRole("tablist", { name: "Activity inspector sections", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
+        await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+        await expect.poll(() => page.getByRole("group", { name: "Named block commands", exact: true }).evaluate(async commands => {
+          const boundary = commands.closest(".wf-canvas-shell")!.getBoundingClientRect();
+          const buttons = [...commands.querySelectorAll("button")];
+          const entries = await new Promise<IntersectionObserverEntry[]>(resolve => {
+            const observer = new IntersectionObserver(entries => { observer.disconnect(); resolve(entries); });
+            buttons.forEach(button => observer.observe(button));
+          });
+          return entries.length === buttons.length && entries.every(entry => !entry.isIntersecting
+            || entry.intersectionRect.left >= boundary.left - 1 && entry.intersectionRect.right <= boundary.right + 1);
+        })).toBe(true);
+        await capture(page, info, `${host}-bpmn-inspector-toolbar`); await canvas();
         const name = `Empty shipment ${host}`;
         const create = page.getByRole("dialog", { name: "Create BPMN subprocess", exact: true });
         const createButton = page.getByRole("button", { name: "Create BPMN subprocess", exact: true });
@@ -133,7 +147,7 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
         const id = current!.activityPresentation.find(item => item.displayName === name)!.nodeId;
         const selected = (body(current!).structure!.payload.elements as { elementId: string; childNodeId?: string }[]).find(item => item.childNodeId === id)!.elementId;
         await undoAction.click(); await expect(element(selected)).toHaveCount(0); await expect.poll(async () => (await saved()).activityPresentation.some(item => item.nodeId === id)).toBe(false);
-        await redoAction.click(); await expect(element(selected)).toBeVisible();
+        await redoAction.click(); await expect(element(selected)).toBeVisible(); await element(selected).click();
         await page.getByRole("button", { name: `Open ${name} (0 steps)`, exact: true }).click(); await expect(page.locator(".react-flow__node")).toHaveCount(2); await capture(page, info, `${host}-bpmn-empty-nested`);
         await details(); const renamed = `${name} renamed`; const label = page.getByRole("textbox", { name: "Display name", exact: true }); await label.fill(renamed); await label.press("Tab");
         await expect.poll(async () => (await saved()).activityPresentation.find(item => item.nodeId === id)?.displayName).toBe(renamed);

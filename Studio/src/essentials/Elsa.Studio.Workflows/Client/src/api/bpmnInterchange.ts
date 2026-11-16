@@ -1,4 +1,5 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { canonicalizeStateForWire } from "../activityInputWire";
 import type { ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { readBpmnElements } from "../bpmn/bpmnAdapter";
@@ -46,7 +47,8 @@ export function importBpmnDocument(context: StudioEndpointContext, xml: string, 
 }
 
 export async function exportBpmnDocument(context: StudioEndpointContext, processNode: ActivityNode, processId?: string, signal?: AbortSignal) {
-  const result = await context.http.postJson<{ xml: string; omissions?: { elementId: string; code: string; message: string; referenceKey?: string | null }[] }>(`${root}/export`, { processNode, processId }, signal ? { signal } : undefined);
+  const wireNode = canonicalizeStateForWire({ rootActivity: processNode }).rootActivity;
+  const result = await context.http.postJson<{ xml: string; omissions?: { elementId: string; code: string; message: string; referenceKey?: string | null }[] }>(`${root}/export`, { processNode: wireNode, processId }, signal ? { signal } : undefined);
   if (result.omissions?.length)
     throw new Error(`BPMN export was refused because authored bindings could not be preserved: ${result.omissions.map(item => `${item.elementId}: ${item.message}${item.referenceKey ? ` (${item.referenceKey})` : ""}`).join("; ")}. The current process is unchanged.`);
   return result.xml;

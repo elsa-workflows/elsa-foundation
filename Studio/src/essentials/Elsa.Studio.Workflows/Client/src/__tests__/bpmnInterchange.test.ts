@@ -20,6 +20,23 @@ function context(response: unknown) {
 it("returns an export whose native bindings were all retained", async () => {
   await expect(exportBpmnDocument(context({ xml: "<definitions/>", omissions: [] }), source())).resolves.toBe("<definitions/>");
 });
+it("exports expanded editor inputs as wire bindings throughout nested subprocesses without mutating the editor", async () => {
+  const node = source();
+  const child = (node.structure!.payload.activities as typeof node[])[0];
+  child.structure!.payload.activities = [{ nodeId: "task", activityVersionId: "line-version", inputs: [], outputs: [],
+    text: { typeName: "String", expression: { type: "Literal", value: "Keep this input" } } }];
+  node.CanStartWorkflow = { typeName: "Boolean", expression: { type: "Literal", value: "false" } };
+  const original = structuredClone(node);
+  const endpoint = context({ xml: "<definitions/>", omissions: [] });
+  await exportBpmnDocument(endpoint, node);
+  const request = vi.mocked(endpoint.http.postJson).mock.calls[0][1] as { processNode: typeof node };
+  expect(request.processNode.inputs).toEqual([{ referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: "false" } }]);
+  const importedChild = (request.processNode.structure!.payload.activities as typeof node[])[0];
+  const task = (importedChild.structure!.payload.activities as typeof node[])[0];
+  expect(task.inputs).toEqual([{ referenceKey: "text", value: { expressionType: "Literal", value: "Keep this input" } }]);
+  expect(task).not.toHaveProperty("text");
+  expect(node).toEqual(original);
+});
 it("refuses a download that would silently omit an authored native binding", async () => {
   await expect(exportBpmnDocument(context({ xml: "<unsafe/>", omissions: [{ elementId: "inner", code: "sensitive-input", message: "This credential input cannot travel.", referenceKey: "credential" }] }), source()))
     .rejects.toThrow("inner: This credential input cannot travel.");
