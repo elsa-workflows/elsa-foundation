@@ -33,10 +33,14 @@ internal sealed class OwnedCommand(CommitDialect dialect)
         return name;
     }
 
-    public void Statement(string sql, Expect expect = Expect.Skip, int count = 0)
+    /// <summary>A statement that yields no result set the reader must step over.</summary>
+    public void Statement(string sql) => Text.Append(dialect.Quote(sql)).Append(";\n");
+
+    /// <summary>A statement that yields one result set, read as <paramref name="expect"/> says (<see cref="Expect.Skip"/>: stepped over).</summary>
+    public void Statement(string sql, Expect expect, int count = 0)
     {
-        Text.Append(dialect.Quote(sql)).Append(";\n");
-        if (expect != Expect.Skip || dialect.ResultPerStatement) Results.Add((expect, count));
+        Statement(sql);
+        Results.Add((expect, count));
     }
 }
 
@@ -51,9 +55,6 @@ internal abstract class CommitDialect
     public virtual string Quote(string sql) => sql;
     public abstract string True { get; }
     public abstract string False { get; }
-
-    /// <summary>Whether a statement that asks for no count still yields a result set the reader must step over.</summary>
-    public abstract bool ResultPerStatement { get; }
 
     /// <summary>Parameters one command may carry; the store starts a new command before it is passed (SQL Server: 2,100).</summary>
     public virtual int ParameterLimit => int.MaxValue;
@@ -120,7 +121,6 @@ internal abstract class ReturningDialect(string now, string @true, string @false
     public override string Now => now;
     public override string True => @true;
     public override string False => @false;
-    public override bool ResultPerStatement => true;
 
     public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced)
     {
@@ -138,7 +138,7 @@ internal abstract class ReturningDialect(string now, string @true, string @false
     }
 
     public override void Checked(OwnedCommand c, string dml, int count) => c.Statement(dml + " RETURNING 1", Expect.Count, count);
-    public override void Free(OwnedCommand c, string dml) => c.Statement(dml + " RETURNING 1");
+    public override void Free(OwnedCommand c, string dml) => c.Statement(dml + " RETURNING 1", Expect.Skip);
     public override void InsertMessages(OwnedCommand c, string insert, int count) => c.Statement(insert + " RETURNING \"Seq\"", Expect.Seq, count);
     /// <summary>A row-value IN over a VALUES list: PostgreSQL and SQLite both take it as a subquery.</summary>
     public override void KeyedMessages(OwnedCommand c, string action, IReadOnlyList<string[]> keys, bool exact) =>
@@ -159,13 +159,14 @@ internal abstract class ReturningDialect(string now, string @true, string @false
 /// <summary>PostgreSQL (Npgsql): one command of many statements is one round trip; identity assigns seq; RETURNING rows come in VALUES order.</summary>
 internal sealed class PgCommitDialect() : ReturningDialect("(extract(epoch from clock_timestamp()) * 1000)::bigint", "true", "false")
 {
-    /// <summary>The engine's dialect, or null where the store still commits through EF (MySQL: round 5 B4).</summary>
-    public static CommitDialect? For(Engine? engine, bool postgres) => engine switch
+    /// <summary>The engine's dialect of the owned commit (COMMIT-SQL.md); every engine has one since round 5 B4.</summary>
+    public static CommitDialect For(Engine? engine, bool postgres) => engine switch
     {
         null when postgres => new PgCommitDialect(),
         null => new SqliteCommitDialect(),
         SqlServerEngine => new SqlServerCommitDialect(),
-        _ => null,
+        MySqlEngine => new MySqlCommitDialect(),
+        _ => throw new NotSupportedException($"No owned commit dialect for {engine.GetType().Name}."),
     };
 }
 
@@ -182,7 +183,6 @@ internal sealed class SqlServerCommitDialect : CommitDialect
     public override string Now => "DATEDIFF_BIG(millisecond, '1970-01-01', SYSUTCDATETIME())";
     public override string True => "1";
     public override string False => "0";
-    public override bool ResultPerStatement => false;
     /// <summary>2,100 parameters per request; the fence and the prelude need none, the rows at most 16 each.</summary>
     public override int ParameterLimit => 2000;
     /// <summary>XACT_ABORT: any error, THROW included, ends the batch and rolls the transaction back; the client never sends COMMIT after one.</summary>
