@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3748-embedded-blocks-plan`
 **Created**: 2026-11-03
-**Status**: Implemented — S001 and T001–T006 merged with resulting-main acceptance (latest T006, main `f2405a42575440108c6e321ce349327cdc0b94ee`); the program-exit qualification and user documentation are delivered by PR [#4697](https://github.com/elsa-workflows/elsa-foundation/pull/4697), with known limits tracked in [#4700](https://github.com/elsa-workflows/elsa-foundation/issues/4700).
+**Status**: Implemented — S001 and T001–T007 merged with resulting-main acceptance; Program #3610 closed 16 November. The program exit and user documentation are PR [#4697](https://github.com/elsa-workflows/elsa-foundation/pull/4697), main `35f80d82c22c3e6801e1a032a71dad227304c54e`, with [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4697#issuecomment-6930258874). Known limits are tracked in [#4700](https://github.com/elsa-workflows/elsa-foundation/issues/4700).
 **Input**: Program [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610) and the owner's 3 November instruction to persist the durable breakdown and deliver the program end to end.
 
 ## User Scenarios & Testing

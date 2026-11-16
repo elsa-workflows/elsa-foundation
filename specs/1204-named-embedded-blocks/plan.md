@@ -7,7 +7,7 @@
 
 Delivered **Block** creation, bounded extraction, nested editing, safe Ungroup and promotion to ordinary reusable Activity Graphs, using the existing Sequence, Flowchart and BPMN process composites. No Block runtime activity, private definition catalog or implicit isolation/retry/transaction/compensation boundary was introduced.
 
-The owner approved this scope and autonomous end-to-end delivery on 3 November. Establishment persisted the plan and issue hierarchy, and a real-host prototype proved the composition before production work. S001 and T001–T006 have merged, exact-head and resulting-main evidence. The program-exit qualification is PR [#4697](https://github.com/elsa-workflows/elsa-foundation/pull/4697); the program closes after its resulting-main acceptance, with the known limits in [#4700](https://github.com/elsa-workflows/elsa-foundation/issues/4700).
+The owner approved this scope and autonomous end-to-end delivery on 3 November. Establishment persisted the plan and issue hierarchy, and a real-host prototype proved the composition before production work. S001 and T001–T007 have merged, exact-head and resulting-main evidence. The program-exit qualification, PR [#4697](https://github.com/elsa-workflows/elsa-foundation/pull/4697), passed its [resulting-main acceptance](https://github.com/elsa-workflows/elsa-foundation/pull/4697#issuecomment-6930258874) and the program closed on 16 November, with the known limits in [#4700](https://github.com/elsa-workflows/elsa-foundation/issues/4700).
 
 ## Technical Context
 
