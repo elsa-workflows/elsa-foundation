@@ -1,6 +1,7 @@
 # Delivery tasks
 
-Closed 16 November 2026. The [charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026)
+Closed 16 November 2026, except the run-command cleanup in the last task, which waits on an owner decision. The
+[charter closeout](../../docs/program-goals/runtime-efficiency.md#closeout-16-november-2026)
 records each outcome.
 
 - [x] M0: audit and reconcile every older open child against its acceptance and current code/evidence.
@@ -11,7 +12,8 @@ records each outcome.
 - [x] M5: handed to kernel release 1 qualification (#4229 gate 3); not run on the current core.
 - [x] Review full integration; whole affected suites, accounting, architecture/maps and rebuilt backend e2e (#3601 and its leaves).
 - [x] Exact reviewed-head hosted gates; merge and qualify containing main (#3601 containing main `bd0749d86`).
-- [x] Remove owned fixtures, restore the existing runner state, publish results and complete program bookkeeping.
+- [ ] Remove owned fixtures, restore the existing runner state, publish results and complete program bookkeeping.
+  **Open, waiting on an owner decision:** results are published and bookkeeping is complete, and the fixture groups are gone. The run commands below remain.
   The task fixture groups were deleted by 3 November (#2531 [cleanup record](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6615399245)).
   Read on 16 November: every VM in the subscription is deallocated, including the shared Codex dev fleet that holds
   `elsa-dev-09`. Known leftover: 21 of this program's run commands on `elsa-dev-09` report provisioning Succeeded and

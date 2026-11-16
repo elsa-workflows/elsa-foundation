@@ -92,5 +92,7 @@ control all pass (48 passed, 0 failed, 0 skipped). It is a correctness receipt a
 The open children #3698, #3700, #3703 and #3939, and #4043 (filed as part of this program, not a sub-issue), were
 closed as superseded by the kernel. Each closing comment
 names the kernel mechanism that removes the defect. Codex's drafts #3841, #3848, #3868, #3905 and #3915, and its ready PR #3941,
-were closed unmerged, with their branches and evidence kept. The sections above remain the charter as it stood while the
+were closed unmerged, with their branches and evidence kept. One leftover waits on an owner decision: 21 of this program's run commands on the deallocated
+VM `elsa-dev-09` are still execution Pending, and Azure refuses to delete them while it is deallocated. The list and
+the risk are in [spec 1183's tasks](../../specs/1183-runtime-efficiency-program/tasks.md). The sections above remain the charter as it stood while the
 program ran.
