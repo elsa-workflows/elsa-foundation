@@ -580,3 +580,6 @@ The first finite publication Runtime compile stopped before test execution becau
 
 
 The first executable current publication Runtime run passed4380 and failed2 at the final inspection step of deliberately unscoped legacy-source controls. Current native FindDurableAsync correctly refuses their absent committed scope witness. These controls now assert that hard refusal explicitly and inspect the same retained row through ordinary scoped FindAsync; original not-Delivered/zero-attempt/no-handler assertions remain unchanged. No production guard is weakened. Corrected whole owning qualification remains pending.
+
+
+The publication whole Runtime suite now passes4382/4382 at `88bdd86d275f5484c75606fb962cdd9253cc7a76`, zero skips, after preserving the two deliberate unscoped-source inspection assertions. The first Activities compile stopped before tests at a missing namespace import for the real drain-scope factory in the newly integrated quiescence control; the import is corrected without production or assertion changes. Activities execution and current combined review remain pending.

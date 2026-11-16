@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
