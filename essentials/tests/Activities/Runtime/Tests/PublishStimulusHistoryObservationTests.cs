@@ -20,6 +20,30 @@ public sealed class PublishStimulusHistoryObservationTests
     private static readonly PersistenceScope Scope = new("tenant");
     private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["StimulusPublicationCommitted", Attempt, Disposition]);
 
+    [Theory]
+    [InlineData("sealed")]
+    [InlineData("unsealed")]
+    [InlineData("foreign-partition")]
+    [InlineData("test-run")]
+    public async Task Retained_publisher_scope_preserves_sealed_logical_tenancy_and_refuses_unbound_owners(string mode)
+    {
+        using var f = new Fixture();
+        f.Owner.State = f.Owner.State with { TenantId = "logical-tenant", Partition = new(mode == "foreign-partition" ? "elsewhere" : Scope.Value),
+            RunKind = mode == "test-run" ? WorkflowRunKind.TestRun : WorkflowRunKind.PublishedRun,
+            Authority = new("publisher", "publisher"),
+            StimulusDeliveryOrigin = mode == "unsealed" ? null : new(1, Scope, "prior:send", new string('a', 64), "binding") };
+        if (mode == "sealed")
+        {
+            await f.Deliver();
+            Assert.Equal(2, f.Writer.Stored.Count); Assert.Equal(1, f.Router.Calls);
+        }
+        else
+        {
+            var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(f.Deliver);
+            Assert.False(failure.IsUnavailable); Assert.Empty(f.Writer.Stored); Assert.Equal(0, f.Router.Calls);
+        }
+    }
+
     [Fact]
     public async Task Actual_feature_handler_records_attempt_before_routing_and_links_its_observed_disposition()
     {

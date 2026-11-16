@@ -1,8 +1,11 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Primitives.Services;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +20,61 @@ public sealed class PublishStimulusHistoryOwnerInputTests
     private static readonly PersistenceScope Scope = new("tenant");
     private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"]);
     private static readonly RuntimeHistoryCausation Incoming = new("receipt", "publisher", "incoming", "command", "work");
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Actual_standalone_rows_are_screened_before_unchanged_workflow_source_refusal(bool withPublication)
+    {
+        using var f = new Fixture(Policy);
+        var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
+        var payload = JsonSerializer.SerializeToElement(new { value = 42 });
+        var actor = new WorkflowExecutionAuthoritySnapshot("standalone-trigger", "actor");
+        var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(Scope, "tenant", "trigger", "Test.Source", "request", schema, payload, actor);
+        var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", At, Scope, "tenant", new("partition"),
+            "trigger", 1, 1, "Test.Source", "request", fingerprint, schema, payload, RuntimeIngressAdmissionPolicy.RequireAll, actor);
+        var recipient = new RuntimeSubscriptionRecipient("subscription", "subscription", 1, 1, "definition", "native", "slot", 1, "activation",
+            new("artifact", "producer", "version", "1", new string('a', 64)),
+            new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot"),
+            new string('a', 64), 1, 1, new Dictionary<string, JsonElement>(), actor, "tenant", new("partition"), new(1, Scope, source.OutboxItemId, "subscription"));
+        var delivery = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, Scope, [recipient], [], [new(recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
+        var item = RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, delivery, RuntimePostCommitRetryPolicy.None);
+        Assert.Null(item.Intent);
+        var original = Commit(false);
+        var commit = original with { PostCommitIntents = withPublication ? original.PostCommitIntents : [],
+            StateChanges = original.StateChanges.WithPostCommitOutbox([new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, original.Metadata)]) };
+        var enriched = await f.EnrichAsync(commit);
+        Assert.Same(item, Assert.Single(enriched.StateChanges.PostCommitOutbox).State);
+        Assert.Null(item.Intent);
+        var refusal = Assert.Throws<RuntimeCheckpointCommitValidationException>(() => RuntimeCheckpointCommitValidator.Validate(enriched));
+        Assert.Contains("standalone sources", refusal.Message);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Current_materialized_publication_keeps_subscription_protocol_when_origin_is_first_stamped(bool withLogicalIntent)
+    {
+        using var f = new Fixture(Policy);
+        var original = Commit(false);
+        var intent = Assert.Single(original.PostCommitIntents);
+        var contribution = new RuntimePostCommitIntentHandlerContribution(intent.Kind, typeof(PublishStimulusExecutor),
+            RuntimePostCommitRetryPolicy.None, true, StimulusDeliverySnapshot.CurrentVersion,
+            RuntimeDeliverySourceKind.WorkflowCheckpoint, RuntimeSubscriptionDelivery.CurrentVersion);
+        var item = RuntimePostCommitOutboxItems.CreatePending(original, intent, [contribution], Scope);
+        Assert.Equal(RuntimeSubscriptionDelivery.CurrentVersion, item.SubscriptionDeliveryProtocolVersion);
+        var commit = original with { PostCommitIntents = withLogicalIntent ? original.PostCommitIntents : [],
+            StateChanges = original.StateChanges.WithPostCommitOutbox([new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, original.Metadata)]) };
+        var enriched = await f.EnrichAsync(commit);
+        var stamped = Assert.Single(enriched.StateChanges.PostCommitOutbox).State;
+        Assert.Equal(item.SubscriptionDeliveryProtocolVersion, stamped.SubscriptionDeliveryProtocolVersion);
+        Assert.Equal(item.StimulusDeliveryProtocolVersion, stamped.StimulusDeliveryProtocolVersion);
+        Assert.Equal(item.SourceKind, stamped.SourceKind);
+        Assert.Equal(Scope, stamped.StimulusDeliverySourceScope);
+        Assert.NotNull(stamped.Intent.HistoryCausation);
+        Assert.Null(stamped.SubscriptionDelivery);
+        Assert.Null(stamped.RecipientSnapshot);
+        Assert.Null(stamped.SavedStimulusStarts);
+        RuntimeCheckpointCommitValidator.Validate(enriched);
+    }
 
     [Theory]
     [InlineData(false)]
