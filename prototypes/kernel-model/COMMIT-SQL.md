@@ -97,11 +97,11 @@ The skipped case is "a row the store refuses" (only PostgreSQL refuses a NUL), a
 ### Round trips: the cost runs, EF → owned
 
 Round trips on the TCP stream (`proxy=1`, the `tcp` column); SQLite: calls into the engine (BEGIN, commands, COMMIT).
-Every row holds or drops in every observation. The PostgreSQL cells of the four 1,000-instance rows vary by one or two
-between runs on both paths (observed: EF 1,000 at once in the batch 5, 6, 5; owned 1,000 by poll 7, 8, 7; a second owned
-run read 8 and 7 for the 1,000-by-poll cells shown as 9 and 8): the proxy counts a second trip when the server answers a
-large command while the client is still sending (FINDINGS 29 F-B6). Every other cell, and the Execute-frame and command
-columns, reproduce exactly.
+Every row holds or drops in the recorded run. The PostgreSQL cells of the 100- and 1,000-instance rows vary by one or two
+between runs on both paths (observed: EF 1,000 at once in the batch 5, 6, 5; EF 100 at once in the batch 2, 3, 3; EF 100 by
+poll 7, 7, 8; owned 1,000 by poll 7, 8, 7; a second owned run read 8 and 7 for the 1,000-by-poll cells shown as 9 and 8): the
+proxy counts a second trip when the server answers a large command while the client is still sending (FINDINGS 29 F-B6).
+Every other cell, and the Execute-frame and command columns, reproduce exactly.
 
 | Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -246,10 +246,10 @@ today).
 - Values by reference (decision 10) is untouched: the schema shape did not change.
 - The SQL Server run under amd64 emulation: counts are exact, times are not.
 - The bytes per commit were measured on PostgreSQL only (WRITES.md's method needs `pg_walinspect`).
-- `CommitDialect.ParameterLimit` is 2,000 on SQL Server and unbounded elsewhere, but SQLite refuses more than 32,766
-  variables and PostgreSQL and MySQL 65,535 per statement: a flush of about 3,600 new instances on SQLite (about 7,000
-  on the others) would fail where EF's one statement per row did not. Unreachable with `WorkerOptions.MaxBatch` at its
-  default of 500; the limit should still be per dialect.
+- `CommitDialect.ParameterLimit` is 2,000 on SQL Server and unbounded elsewhere. SQLite's 32,766 variables and
+  PostgreSQL's 65,535 are per statement, and `RowsPerStatement` chunks every multi-row statement at 1,000 rows (at most
+  about 16,000 parameters), so neither is reached; the bound that remains is the command's text size, which no batch the
+  Worker builds (`MaxBatch` 500) approaches. A limit per dialect would still state it.
 - The seqs of a multi-row message insert rely on identity (PostgreSQL, SQL Server) being assigned in VALUES order, which
   neither engine documents; the returned seqs are sorted and the conformance case "seqs as stored" passes. MySQL (one
   insert per message) and SQLite (`max + i`) are exact by construction.
