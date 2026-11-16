@@ -54,9 +54,7 @@ provider. No bookmark lifecycle or occurrence is inferred from a delivery observ
 registered by this helper.
 
 The isolated schema/mapping/checkpoint tests cover private projections and relational staging without enabling a selected history provider. The model/migration unit adds normal Runtime targets;
-actual native entry-point/marker integration, scoped readers,
-observation append, occurrence projection, retention/deletion, generated migrations and production qualification
-remain open.
+Actual native entry-point/marker integration, selected reader/observation/retention/deletion binding and production qualification remain with their owning delivery units. This unit supplies all four initial generated migration sets; publication and resulting-main qualification follow the review.
 
 
 ## Private history read adapter
@@ -109,8 +107,8 @@ occurrence/ordinary-reader contributions. The existing public native checkpoint 
 that one scoped reader when no explicit history reader exists, replacing only the owned volatile
 default. Explicit foreign registrations remain untouched. All read facets share the selected instance
 and actual context/access/declared chain. No independent details/occurrence backend or capture feature
-is added. Native SupportsHistory/pairing and independent mutation/deletion admission remain unadvertised
-until their full provider binding qualifies.
+is added. Native history pairing and independent mutation/deletion admission now qualify the actual owned
+model and same selected chain; capture enrollment remains a separate semantic-owner composition.
 
 
 The internal independent mutation owner implements the existing observation and retention ports with
@@ -119,7 +117,8 @@ work and caller/ambient/enlisted transactions. A result leaves only after a comm
 receipt reconciliation. Purged replay retains its original acknowledgement without restoring content;
 purge reconciliation pins the boundary actually staged and never broadens it to later arrivals. Failed
 write and acknowledgement reads preserve their causes; access retirement and hard integrity remain
-separate. This source does not register these ports or enable capture/deletion capability.
+separate. The native aggregate now registers these ports only beside its owned selected reader. This helper
+selects no capture options or retention policy.
 
 
 Native execution deletion retires all eight history shapes inside the same root lock/ownership
@@ -134,12 +133,12 @@ The existing public native aggregate selects one scoped independent EF mutation 
 observation and retention only alongside its owned selected EF reader. Stable known default factory
 identity supports either registration order; explicit foreign readers/independent ports are preserved
 without invoking factories during selection. This installs no capture options or source profile and
-leaves native capture capability unadvertised pending complete provider/default-owner qualification.
+qualifies native pairing without enrolling new admissions; production defaults remain a separate owner.
 
-Production hosts enroll semantic metadata history with AddWorkflowRuntimeHistory. It preserves retained
-capture policy, requires qualified actual source/native/read support at admission and selects no
-persistence or payload capture. Native EF registration alone adds no history options; EF capability
-remains separately qualified. The same public entry supports the default-order integration controls.
+The public semantic-history enrollment entry and default host feature are supplied with the actual
+alteration/source-owner integration. This native binding unit intentionally uses the existing internal
+`RuntimeHistoryRegistration.AddServices` composition in its registration-order controls. Native EF
+registration alone adds no capture options, source profile, persistence choice or payload authority.
 
 Native history support now qualifies the actual reader/context/accessor/owner chain, ordinary scope
 and complete declared projection model. Independent observation uses that same metadata-only model

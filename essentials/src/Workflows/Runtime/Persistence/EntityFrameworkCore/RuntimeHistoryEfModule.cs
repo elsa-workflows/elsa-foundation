@@ -34,9 +34,16 @@ internal static class RuntimeHistoryEfModule
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
             foreach (var required in shape.Indexes)
-                if (!indexes.Any(index => (!required.Unique || index.IsUnique) &&
+                if (!indexes.Any(index => (required.Unique == index.IsUnique) &&
                     (required.Unique ? index.Properties.Count == required.Properties.Length : index.Properties.Count >= required.Properties.Length) &&
                     index.Properties.Take(required.Properties.Length).Select(property => property.Name).SequenceEqual(required.Properties))) return false;
+            // An extra uniqueness constraint may reject valid history even when all required indexes remain.
+            // A superset of an owned unique key is redundant and adds no restriction.
+            var uniqueKeys = shape.Indexes.Where(index => index.Unique).Select(index => index.Properties).Append(shape.Key).ToArray();
+            bool IsCompatible(IEnumerable<IProperty> properties) => uniqueKeys.Any(owned =>
+                owned.All(name => properties.Any(property => property.Name == name)));
+            if (indexes.Where(index => index.IsUnique).Any(index => !IsCompatible(index.Properties)) ||
+                entity.GetKeys().Any(actual => !IsCompatible(actual.Properties))) return false;
         }
         return Shapes.Length > 0;
     }
