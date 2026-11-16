@@ -9,7 +9,8 @@ name: Kernel prototype
 #   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, Orleans adapter,
 #     EF on SQLite in both fence modes) and the native smoke and cost runs.
 #
-# Database engines that need containers (PostgreSQL, SQL Server, MySQL, MongoDB) stay manual: see the README.
+# The database engines that run in containers (PostgreSQL, SQL Server, MySQL and the document database) stay manual:
+# see the README.
 # Nothing here is a required check; the names below are new and do not replace any in ci.yml.
 
 on:
@@ -57,6 +58,8 @@ jobs:
         working-directory: prototypes/kernel-model
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -66,15 +69,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/*.csproj', 'prototypes/kernel-model/Directory.Packages.props') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
-      # One project at a time: they share obj/ folders through project references (README, Build).
+      # One project at a time: they share obj/ folders through project references (README, Build). Every project
+      # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
           for p in sim conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
-            dotnet build "$p" -c Release
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
           done
 
       - name: Simulation, kernel and native, plus the lease witness
@@ -84,13 +89,15 @@ jobs:
           $SIM --native --seeds 10000
           $SIM --lease-check
 
-      # Both checks break the model on purpose, one flaw at a time. 10,000 seeds catch every kernel mutation except the
-      # two FINDINGS documents as caught only with the rule that covers them; 5,000 seeds miss NoWriteFirst.
+      # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
+      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 6946, a seed that has drifted before, so a smaller
+      # size would sit too close to it. Every kernel mutation is caught except the two FINDINGS documents as caught only
+      # with the rule that covers them. --expect-total pins the number of mutations, so one dropped or added fails.
       - name: Mutation checks
         run: |
-          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 10000
-          python3 ../../tools/ci/kernel_prototype_gate.py -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 41 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
 
       - name: Store conformance, in memory
@@ -113,6 +120,8 @@ jobs:
         working-directory: prototypes/kernel-model
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -122,16 +131,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/*.csproj', 'prototypes/kernel-model/Directory.Packages.props') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in sim models/Native.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do
-            dotnet build "$p" -c Release
+          for p in sim models/Native.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
           done
-          dotnet build models/Graph.Tests -c Release
 
       # The sizes of the README's refactor gates (The gates of a refactor).
       - name: Simulation, full sizes
@@ -145,9 +154,9 @@ jobs:
 
       - name: Mutation checks, full size
         run: |
-          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 41 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py -- \
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 9 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes
