@@ -356,7 +356,9 @@ beyond the plan.**
 
 ```
 docker run -d --rm -P -e POSTGRES_PASSWORD=probe --name km-r5d-probe-<unique> postgres:17
-for i in $(seq 1 30); do docker exec km-r5d-probe-<unique> pg_isready -h 127.0.0.1 -U postgres && break; sleep 1; done
+ready=0
+for i in $(seq 1 30); do docker exec km-r5d-probe-<unique> pg_isready -h 127.0.0.1 -U postgres && { ready=1; break; }; sleep 1; done
+if [ "$ready" != 1 ]; then echo "PostgreSQL did not become ready in 30 s; stopping" >&2; docker stop km-r5d-probe-<unique>; exit 1; fi
 docker exec -i km-r5d-probe-<unique> psql -U postgres < prototypes/kernel-model/measurements/partitioned-inbox-probe-2026-11-16/probe.sql
 docker stop km-r5d-probe-<unique>
 ```
