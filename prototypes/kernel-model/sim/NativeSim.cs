@@ -27,7 +27,8 @@ public sealed class NativeOracle
     // out under each frame number, to count the frame numbers a replay handed on; and a record of every activation's key.
     public readonly Dictionary<string, HashSet<string>> Sent = new(StringComparer.Ordinal);         // instance -> node/path sent
     public readonly HashSet<string> KeysSeen = new(StringComparer.Ordinal);                          // instance|key
-    public readonly HashSet<string> LandedKeys = new(StringComparer.Ordinal);                        // instance|key whose turn's commit the kernel saw land
+    public readonly HashSet<string> LandedKeys = new(StringComparer.Ordinal);                        // instance|key whose turn's commit the store landed
+    public readonly Dictionary<string, string> ContentKeys = new(StringComparer.Ordinal);           // instance|node|content -> key, every sending, lost turns included
     public readonly Dictionary<string, string> FrameOwners = new(StringComparer.Ordinal);           // instance|frame:attempt -> node/path
     public readonly Dictionary<string, (string Key, string Content)> Outbound = new(StringComparer.Ordinal); // instance|node|path:attempt -> first key and content (a record for the witnesses)
     // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
@@ -275,6 +276,15 @@ public sealed partial class World
     {
         var (node, frame, path, attempt, key, effect) = (s.Node, s.Frame, s.IterationPath, s.Attempt, s.EffectKey, s.Effect);
         actor.PendingSendings.Add((s.Instance.Ref.Id, key));
+        // The lost-turn half: an activation is named here by its node and the content it alone determines (the mix's rule:
+        // bodies name the iteration), and that name has one key in every sending, in a turn that lands or in one that is
+        // lost. A lost turn that sent another activation's valid key is seen here and nowhere else.
+        if (NativeWorkflows.ContentNamesActivation.Contains(s.Node))
+        {
+            var named = $"{s.Instance.Ref.Id}|{s.Node}|{(effect switch { HttpSendEffect h => h.Request.Body?.ToJsonString() ?? "null", EmailSendEffect e => e.Mail.Subject + "|" + e.Mail.Body, _ => "" })}";
+            if (!Native.ContentKeys.TryAdd(named, key) && Native.ContentKeys[named] != key)
+                Faults.Add($"N7 {s.Instance.Ref.Id}: {s.Node} with '{named.Split('|', 3)[2]}' was sent under two keys, {Native.ContentKeys[named]} and {key}: a sending used another activation's key");
+        }
         var what = effect switch
         {
             HttpSendEffect h => h.Request.Headers.TryGetValue(SendHttpRequest.IdempotencyKeyHeader, out var header) && header == key ? null
@@ -296,16 +306,20 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// N7 (round 5 C), the landed half: a second sending of a key is a redelivery only while the kernel cannot know that
-    /// the first one's turn landed (its commit was lost, refused, unanswered, or never made because its owner died). When
-    /// the kernel saw both turns land, the key left in two turns that are not a redelivery of each other: two activations
-    /// under one key, whatever the reference run says (its one run takes every available event in one turn, so a
-    /// collision that needs two turns hides from it). Called by the wire when a commit's answer says it landed.
+    /// N7 (round 5 C), the landed half: a second sending of a key is a redelivery only while the first one's turn did not
+    /// land (its commit was lost, refused, or never made because its owner died). When both turns landed, the key left in
+    /// two turns that are not a redelivery of each other: two activations under one key, whatever the reference run says
+    /// (its one run takes every available event in one turn, so a collision that needs two turns hides from it). Called by
+    /// the wire at the moment the store lands the commit, so a commit whose answer is then lost still counts.
     /// </summary>
     public void Landed((string Instance, string Key)[] sendings)
     {
-        foreach (var (instance, key) in sendings)
-            if (!Native.LandedKeys.Add($"{instance}|{key}")) Faults.Add($"N7 {instance}: the key {key} left in two turns that both landed and are not a redelivery of each other");
+        foreach (var group in sendings.GroupBy(s => $"{s.Instance}|{s.Key}"))
+        {
+            var (instance, key) = group.First();
+            if (group.Count() > 1) Faults.Add($"N7 {instance}: the key {key} left twice in one landed turn");
+            if (!Native.LandedKeys.Add(group.Key) && group.Count() == 1) Faults.Add($"N7 {instance}: the key {key} left in two turns that both landed and are not a redelivery of each other");
+        }
     }
 
     /// <summary>
@@ -405,6 +419,7 @@ public static class NativeSwitch
         [NativeFlaw.NoDeadPaths] = "G3", [NativeFlaw.NoRoundReset] = "G2", [NativeFlaw.DeadPathRunsNode] = "G1", [NativeFlaw.CancelLeavesPaths] = "G5",
         [NativeFlaw.UnstableEffectKey] = "N7", [NativeFlaw.NodelessEffectKey] = "N7", [NativeFlaw.PathlessEffectKey] = "N7", [NativeFlaw.TurnLocalJoinOrdinal] = "N7",
         [NativeFlaw.FlatRetryGeneration] = "N7",   // the sweep's mix has no retry; the smoke's double-retry shape shows it bites (NATIVE.md)
+        [NativeFlaw.FreshTurnSwapsLoopKeys] = "N7",
     };
 }
 
