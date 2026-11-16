@@ -1,4 +1,7 @@
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,4 +17,10 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
     internal bool DeliveryInputs() => services.GetService<IRuntimeHistoryObservationWriter>() is { } writer &&
         services.GetService<IRuntimeHistoryStore>() is { } reader && writer.CanRecordHistory(reader) &&
         services.GetService<IBookmarkResumeDispatcher>()?.CanRecordHistory(writer, reader) == true;
+
+    internal bool SourceOwner(RuntimeHistorySourceSupport owner) => owner.SourceIntentKind is null &&
+        (!ReferenceEquals(owner, RuntimeHistoryRegistration.AlterationSources) ||
+         services.GetService<IWorkflowAlterationCheckpointWriter>() is RuntimeWorkflowAlterationCheckpointWriter writer &&
+         services.GetService<RuntimeCheckpointCommitter>() is { } committer && writer.OwnsHistoryCommitter(committer));
+
 }

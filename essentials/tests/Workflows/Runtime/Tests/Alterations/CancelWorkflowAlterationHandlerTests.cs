@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
-public sealed class CancelWorkflowAlterationHandlerTests
+public sealed partial class CancelWorkflowAlterationHandlerTests
 {
     [Fact]
     public async Task PreflightAsync_StagesOnlyLiveWorkflow_AndPreservesTerminalNoOp()
@@ -28,6 +28,11 @@ public sealed class CancelWorkflowAlterationHandlerTests
         var builder = new WorkflowAlterationRuntimeCheckpointStateBuilder(Workflow(WorkflowExecutionStatus.Running));
         change.Apply(builder);
         Assert.Equal(WorkflowExecutionStatus.Cancelled, builder.WorkflowExecution.Status);
+        var fact = Assert.Single(Assert.IsAssignableFrom<IAlterationHistorySource>(change).HistoryFacts(DateTimeOffset.UnixEpoch));
+        Assert.Equal(RuntimeHistorySourceFactKind.ControlApplied, fact.Kind);
+        Assert.Equal(builder.WorkflowExecution.WorkflowExecutionId, fact.SubjectId);
+        Assert.Equal(builder.WorkflowExecution.CompletedAt, fact.OccurredAt);
+        Assert.Equal("workflow-cancelled", fact.ReasonCode);
 
         var terminalStaging = new Staging();
         var terminal = await handler.PreflightAsync(Context(WorkflowExecutionStatus.Completed, terminalStaging));

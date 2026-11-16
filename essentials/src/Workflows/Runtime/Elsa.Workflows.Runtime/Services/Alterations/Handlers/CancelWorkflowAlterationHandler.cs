@@ -23,7 +23,7 @@ public sealed class CancelWorkflowAlterationHandler(
 
         var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();
         var activities = context.ProjectedState.GetRequired<WorkflowAlterationActorCommandExecutor.WorkflowAlterationActivityExecutionProjection>();
-        var checkpointId = $"checkpoint:alteration:{context.Job.JobId}:{context.Job.AttemptCount}";
+        var checkpointId = $"checkpoint:{WorkflowAlterationIdentity.CreateCheckpointCommitId(context.Job.JobId, context.Job.AttemptCount)}";
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [RuntimeMetadataKeys.CheckpointReason] = "WorkflowCancellation",
@@ -39,8 +39,12 @@ public sealed class CancelWorkflowAlterationHandler(
     private static bool IsEmptyPayload(JsonElement payload) =>
         payload.ValueKind == JsonValueKind.Object && !payload.EnumerateObject().Any();
 
-    private sealed record CancelWorkflowStagedChange(WorkflowCancellationPlan Plan) : IWorkflowAlterationRuntimeCheckpointStagedChange
+    private sealed record CancelWorkflowStagedChange(WorkflowCancellationPlan Plan) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt) =>
+            [new(RuntimeHistorySourceFactKind.ControlApplied, Plan.WorkflowExecution.WorkflowExecutionId,
+                Plan.WorkflowExecution.CompletedAt!.Value, reasonCode: "workflow-cancelled")];
+
         public string ChangeKey => "runtime.alteration.cancel-workflow";
 
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)

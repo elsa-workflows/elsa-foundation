@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -196,6 +198,32 @@ public sealed class RuntimeHistoryCompositionTests
         var caught = Record.Exception(() => RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "admission-run"));
         if (kind == "provider") Assert.Same(failure, Assert.IsType<RuntimeSchedulerWorkUnavailableException>(caught).InnerException);
         else Assert.Same(failure, caught);
+    }
+
+    [Theory]
+    [InlineData("default")] [InlineData("foreign")] [InlineData("other-committer")]
+    public void Alteration_vocabulary_requires_the_selected_default_writer_and_same_history_committer(string owner)
+    {
+        var services = Services(new Access());
+        RuntimeHistoryRegistration.AddServices(services);
+        if (owner == "foreign") services.AddScoped<IWorkflowAlterationCheckpointWriter, ForeignAlterationWriter>();
+        if (owner == "other-committer") services.AddScoped<IWorkflowAlterationCheckpointWriter>(provider =>
+            new RuntimeWorkflowAlterationCheckpointWriter(new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(),
+                new LegacyWriter(), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+                provider.GetRequiredService<IWorkflowAlterationStore>(), provider.GetRequiredService<TimeProvider>()));
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "alteration-admission")!;
+        Assert.Equal(owner == "default", policy.SupportedKinds.Contains("ActivityRetryScheduled"));
+        Assert.Equal(owner == "default", policy.SupportedKinds.Contains("AlterationApplied"));
+    }
+
+    private sealed class ForeignAlterationWriter : IWorkflowAlterationCheckpointWriter
+    {
+        public ValueTask<WorkflowAlterationCheckpointWriteResult> CommitAsync(WorkflowAlterationCheckpointWriteRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public ValueTask<WorkflowAlterationCheckpointWriteResult?> FindCommittedAsync(string checkpointCommitId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowAlterationCheckpointWriteResult?>(null);
     }
 
     private static ServiceCollection Services(Access? access = null)

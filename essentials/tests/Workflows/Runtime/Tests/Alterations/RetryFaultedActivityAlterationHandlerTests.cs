@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
-public sealed class RetryFaultedActivityAlterationHandlerTests
+public sealed partial class RetryFaultedActivityAlterationHandlerTests
 {
     private static readonly DateTimeOffset IncidentCreatedAt = DateTimeOffset.UnixEpoch;
 
@@ -218,6 +218,14 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         var builder = Apply(Assert.Single(staging.StagedChanges));
         var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == "source").State;
         var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != "source").State;
+        var facts = Assert.IsAssignableFrom<IAlterationHistorySource>(Assert.Single(staging.StagedChanges)).HistoryFacts(DateTimeOffset.UnixEpoch).ToArray();
+        Assert.Equal(new[] { RuntimeHistorySourceFactKind.ControlApplied, RuntimeHistorySourceFactKind.IncidentResolved,
+            RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.ControlApplied }, facts.Select(fact => fact.Kind));
+        Assert.Equal("source", facts[0].ActivityExecutionId); Assert.Equal(successor.InvocationId, facts[0].RelatedActivityExecutionId);
+        Assert.Equal("incident", facts[1].IncidentId); Assert.Equal("source", facts[2].ActivityExecutionId);
+        Assert.Equal(successor.InvocationId, facts[2].RelatedActivityExecutionId);
+        Assert.Equal(successor.InvocationId, facts[3].ActivityExecutionId); Assert.Equal("successor-started", facts[3].ReasonCode);
+        Assert.DoesNotContain("Delivery service restored", JsonSerializer.Serialize(facts), StringComparison.Ordinal);
         Assert.Equal(ActivityExecutionStatus.Superseded, superseded.Status);
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
 
