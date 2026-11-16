@@ -55,6 +55,7 @@ type ActivityDefinitionContractEditorProps = {
   baselineUnavailable: boolean;
   readOnly: boolean;
   capabilitiesUnavailable: boolean;
+  renderOutputValue?(output: ActivityOutputContract): ReactNode;
   onChange(contract: ActivityContract): void;
   onLocalValidityChange(valid: boolean): void;
 };
@@ -70,6 +71,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   baselineUnavailable,
   readOnly,
   capabilitiesUnavailable,
+  renderOutputValue,
   onChange,
   onLocalValidityChange
 }: ActivityDefinitionContractEditorProps, ref) {
@@ -293,10 +295,8 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const description = memberKind === "input" ? "Define the values this activity receives."
     : memberKind === "output" ? "Define the values this activity returns."
       : "Define the completion paths callers can follow.";
-  return <section ref={collectionElementRef} className="ad-contract-editor" aria-label={`${title} editor`}>
-    <header className="ad-contract-header">
-      <div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div>
-    </header>
+  return <section ref={collectionElementRef} className={`ad-contract-editor${memberKind === "output" ? " ad-output-editor" : ""}`} aria-label={`${title} editor`}>
+    {memberKind !== "output" ? <header className="ad-contract-header"><div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div></header> : null}
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
     {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Published baseline unavailable.</strong> Existing-member changes are conservatively guarded as potentially breaking until the exact immutable baseline can be loaded.</span></div> : null}
@@ -342,6 +342,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
               selected={selected}
               nameInputRef={focusNewMemberId.current === entry.id ? newMemberNameInputRef : undefined}
               member={entry.member}
+              valueEditor={selected ? renderOutputValue?.(entry.member) : null}
               index={entry.index}
               capabilities={capabilities}
               authorableTypes={authorableTypes}
@@ -495,7 +496,8 @@ function InputEditor({ member, index, selected, nameInputRef, capabilities, auth
   </section>;
 }
 
-function OutputEditor({ member, index, selected, nameInputRef, capabilities, authorableTypes, categories, readOnly, onChange, onReferenceKeyChange, onRemove }: {
+function OutputEditor({ member, valueEditor, index, selected, nameInputRef, capabilities, authorableTypes, categories, readOnly, onChange, onReferenceKeyChange, onRemove }: {
+  valueEditor?: ReactNode;
   member: ActivityOutputContract;
   index: number;
   selected: boolean;
@@ -511,20 +513,24 @@ function OutputEditor({ member, index, selected, nameInputRef, capabilities, aut
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-output-${index}-title`} data-contract-kind="output" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Output</span><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove output</button></header>
+    <header className="ad-contract-workbench-member-header ad-output-member-header"><div><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"}</h3><span>{member.type.collectionKind === "Single" ? member.type.alias : `${member.type.collectionKind}<${member.type.alias}>`}</span><span>{member.isRequired ? "Required" : "Optional"}</span></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove output</button></header>
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
-    <MemberFieldTabs general={<div className="ad-contract-fields">
-      <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
-      <TypeFields member={member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
-      <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required</span><small>The activity must produce this output.</small></label>
+    <div className={`ad-output-primary${valueEditor ? " has-value-editor" : ""}`}>
+      <div className="ad-contract-fields ad-output-declaration">
+        <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
+        <TypeFields member={member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
+        <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
+        <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required</span><small>The activity must produce this output.</small></label>
+      </div>
+      {valueEditor}
     </div>
-    } presentation={<PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} />} advanced={<div className="ad-contract-fields">
+    <details className="ad-output-disclosure"><summary>Presentation</summary><PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} /></details>
+    <details className="ad-output-disclosure"><summary>Advanced</summary><div className="ad-contract-fields">
       <NullabilityField member={member} type={type} readOnly={readOnly} onChange={onChange} />
       <AdvancedTypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
       <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
-    </div>} />
+    </div></details>
   </section>;
 }
 

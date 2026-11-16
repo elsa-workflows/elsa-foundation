@@ -5,6 +5,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
+          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="CShells" />
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />

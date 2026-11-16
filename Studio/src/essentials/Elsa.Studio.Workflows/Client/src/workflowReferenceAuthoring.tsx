@@ -5,6 +5,7 @@ import type { ArgumentType, VisibleVariableView, WorkflowDefinitionState, Workfl
 import { isJsonTypeName } from "./jsonType";
 
 interface WorkflowReferenceAuthoringState {
+  inputBindingTarget?: "name" | "referenceKey";
   workflowState: WorkflowDefinitionState;
   workflowInputs: WorkflowInput[];
   visibleVariables: VisibleVariableView[];
@@ -15,6 +16,7 @@ interface WorkflowReferenceAuthoringState {
 const WorkflowReferenceAuthoringContext = createContext<WorkflowReferenceAuthoringState | null>(null);
 
 export function WorkflowReferenceAuthoringProvider({
+  inputBindingTarget,
   workflowState,
   workflowInputs,
   visibleVariables,
@@ -22,8 +24,9 @@ export function WorkflowReferenceAuthoringProvider({
   retry,
   children
 }: WorkflowReferenceAuthoringState & { children: ReactNode }) {
+  const inherited = useContext(WorkflowReferenceAuthoringContext);
   return (
-    <WorkflowReferenceAuthoringContext.Provider value={{ workflowState, workflowInputs, visibleVariables, status, retry }}>
+    <WorkflowReferenceAuthoringContext.Provider value={{ workflowState, workflowInputs, visibleVariables, status, retry, inputBindingTarget: inputBindingTarget ?? inherited?.inputBindingTarget ?? "name" }}>
       {children}
     </WorkflowReferenceAuthoringContext.Provider>
   );

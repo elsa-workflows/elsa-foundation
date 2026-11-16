@@ -51,6 +51,40 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal(original, payload.GetRawText());
     }
 
+    [Theory]
+    [InlineData("variables", "activity.graph.variable.initial-value-invalid", "/variables/0/initialValue", "null")]
+    [InlineData("variables", "activity.graph.variable.initial-value-invalid", "/variables/0/initialValue", "{\"syntax\":null,\"value\":1}")]
+    [InlineData("variables", "activity.graph.variable.initial-value-invalid", "/variables/0/initialValue", "{\"syntax\":\"Literal\"}")]
+    [InlineData("outputMappings", "activity.graph.output.source-invalid", "/outputMappings/0/source", "null")]
+    [InlineData("outputMappings", "activity.graph.output.source-invalid", "/outputMappings/0/source", "{\"syntax\":null,\"value\":1}")]
+    [InlineData("outputMappings", "activity.graph.output.source-invalid", "/outputMappings/0/source", "{\"syntax\":\"Literal\"}")]
+    public async Task Malformed_expressions_retain_authorizable_root_and_safe_specific_guidance(string setting, string code, string pointer, string expression)
+    {
+        var payload = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"rootActivity":{"nodeId":"body","activityVersionId":"exact-version","inputs":[],"outputs":[]},
+             "variables":[],"outputMappings":[]}
+            """)!;
+        payload[setting] = System.Text.Json.Nodes.JsonNode.Parse(setting == "variables"
+            ? """[{"referenceKey":"PRIVATE","name":"PRIVATE","type":{"alias":"String","collectionKind":"Single"},"storageDriverKey":"json","initialValue":null}]"""
+            : """[{"outputReferenceKey":"PRIVATE","source":null}]""");
+        payload[setting]![0]![setting == "variables" ? "initialValue" : "source"] = System.Text.Json.Nodes.JsonNode.Parse(expression);
+        var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(payload));
+        var contract = new ActivityContract("1", [], [], []);
+        var rejected = await Assert.ThrowsAsync<ActivityDataSelectionRejectedException>(() =>
+            _provider.TryProjectAsync(manifest, contract, "draft", "revision").AsTask());
+        Assert.Equal("exact-version", rejected.Document!.RootActivity!.ActivityVersionId);
+        Assert.Equal("draft", rejected.Document.ResourceId);
+        Assert.Equal("revision", rejected.Document.ContractRevision);
+        var registry = new ActivityProviderRegistry([_provider]);
+        var diagnostics = await registry.Resolve(GraphActivityProvider.Key, "1").ValidateAsync(manifest, contract);
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(code, diagnostic.Code);
+        Assert.Equal(ActivityDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(pointer, diagnostic.Location!.JsonPointer);
+        Assert.NotNull(diagnostic.Remediation);
+        Assert.DoesNotContain("PRIVATE", JsonSerializer.Serialize(diagnostic));
+    }
+
     [Fact]
     public async Task Data_analysis_returns_null_only_for_a_different_provider()
     {

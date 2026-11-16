@@ -62,6 +62,31 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Null((await harness.Service.GetDraftViewAsync(draft.DraftId, default)).Validation);
     }
 
+    [Theory]
+    [InlineData(null, "invalid")]
+    [InlineData("hidden-version", "denied")]
+    [InlineData("permission", "denied")]
+    [InlineData("catalog", "stale")]
+    public async Task Expected_projection_rejection_returns_normal_diagnostics_only_after_authority_checks(string? change, string state)
+    {
+        var catalog = new CandidateCatalog();
+        Harness? harness = null;
+        harness = new Harness(invalidValidation: true, candidateCatalog: catalog,
+            candidateProjector: new RejectedCandidateProjector(change == "hidden-version"),
+            candidateValidation: _ => {
+                if (change == "permission") harness!.RevokeManagement();
+                if (change == "catalog") catalog.Entries = [new("other", "other", "1", "Other", null, null, true, null, [])];
+            });
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+        var result = await harness.Service.ValidateCandidateAsync(new(draft.DraftId, draft.Revision, draft.Contract,
+            Harness.Manifest("{}"), draft.Layout), default);
+        Assert.Equal(state, result.State);
+        if (state == "invalid") Assert.Equal("activity.test.invalid", Assert.Single(result.Validation!.Diagnostics).Code);
+        else Assert.Null(result.Validation);
+        Assert.Null((await harness.Service.GetDraftViewAsync(draft.DraftId, default)).Validation);
+    }
+
     [Fact]
     public async Task Candidate_validation_refuses_a_source_owned_draft_before_the_normal_validator()
     {
@@ -1165,7 +1190,8 @@ public sealed class ReusableActivityDraftCommandTests
             Func<IApplyActivityForkCandidateCommand, IApplyActivityForkCandidateCommand>? decorateApplyCommand = null,
             IActivityProvider? targetProvider = null,
             CandidateCatalog? candidateCatalog = null,
-            Action<ActivityDraftValidationRequest>? candidateValidation = null)
+            Action<ActivityDraftValidationRequest>? candidateValidation = null,
+            IActivityDataSelectionDocumentProjector? candidateProjector = null)
         {
             _ids = new(tenantId ?? "global");
             _context = new(tenantId, canReadProviderPayload, canAuthorProvider, actorId, authorizationProfile);
@@ -1198,7 +1224,7 @@ public sealed class ReusableActivityDraftCommandTests
                 _time,
                 _context,
                 candidateCatalog is null ? [] : [candidateCatalog],
-                [new CandidateProjector()],
+                [candidateProjector ?? new CandidateProjector()],
                 new DefaultActivityStructureService([]));
             Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(contractCapabilities), Service, _context);
             Forks = new(
@@ -1525,6 +1551,16 @@ public sealed class ReusableActivityDraftCommandTests
     {
         public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(ActivityProviderManifest manifest, ActivityContract contract, string resourceId, string contractRevision, CancellationToken ct = default) =>
             ValueTask.FromResult<ActivityDataSelectionDocument?>(new("ActivityDefinition", resourceId, contractRevision, null, [], [], []));
+    }
+
+    private sealed class RejectedCandidateProjector(bool hiddenVersion) : IActivityDataSelectionDocumentProjector
+    {
+        public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(ActivityProviderManifest manifest, ActivityContract contract, string resourceId, string contractRevision, CancellationToken ct = default) =>
+            throw new ActivityDataSelectionRejectedException([new("PRIVATE", "PRIVATE", "PRIVATE")])
+            {
+                Document = new("ActivityDefinition", resourceId, contractRevision,
+                    hiddenVersion ? new Elsa.Workflows.Design.Core.Models.ActivityNode("node", "hidden-version", [], []) : null, [], [], [])
+            };
     }
 
     private sealed class StubValidator(TimeProvider timeProvider, bool invalid, Action<ActivityDraftValidationRequest>? callback = null) : IActivityDraftValidator

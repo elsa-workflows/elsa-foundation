@@ -2606,3 +2606,6 @@ virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.<Clone>$() -> E
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.EqualityContract.get -> System.Type!
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.Equals(Elsa.Activities.Design.Core.Models.ActivityArgumentState? other) -> bool
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.PrintMembers(System.Text.StringBuilder! builder) -> bool
+
+Elsa.Activities.Design.Core.Models.ActivityProviderDiagnosticDescriptor.JsonPointerPattern.get -> string?
+Elsa.Activities.Design.Core.Models.ActivityProviderDiagnosticDescriptor.JsonPointerPattern.init -> void
