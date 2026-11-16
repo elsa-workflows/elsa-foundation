@@ -14,7 +14,8 @@ These pages describe the proposed clean-slate execution kernel. They are design 
 6. [Large fan-out and fan-in](large-fan-out.md) — **Proposed**: the combiner tree with credits, its costs against a single parent, and release 1's cap on a parallel ForEach.
 7. [Data lifecycle](data-lifecycle.md) — **Proposed**: where payloads live, retention and deletion of finished instances, erasure, encryption at rest, and what the journal format must fix now.
 8. [Write volume and bloat](write-volume.md) — **Proposed**: bytes per commit and dead tuples before and after the mitigations, values by reference as release 1's priority, and the lazy-snapshot fallback.
-10. [Observability and operator actions](observability.md) — **Proposed**: trace context on every message, stable metric names, inspect, retry and discard of parked work, and the read models operators use.
+9. [Migrating running instances](migrating-running-instances.md) — **Proposed**: state versions per model and per activity, the migration command and each container's hook, what in-flight work does, and release 1's simple cases.
+11. [Observability and operator actions](observability.md) — **Proposed**: trace context on every message, stable metric names, inspect, retry and discard of parked work, and the read models operators use.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 
