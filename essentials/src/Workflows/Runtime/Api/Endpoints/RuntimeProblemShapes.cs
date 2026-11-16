@@ -67,14 +67,16 @@ internal sealed class AlterationSubmitProblemsAttribute : Attribute, IEndpointCo
 }
 
 /// <summary>The activity-inspection problem family (bare problem+json with trace id and error codes).</summary>
-internal sealed class ActivityInspectionProblemShapeMetadata(string operation)
+internal sealed class ActivityInspectionProblemShapeMetadata(string operation, bool history = false)
 {
+    public bool History { get; } = history;
     public string Operation { get; } = operation;
 }
 
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 internal sealed class ActivityInspectionProblemsAttribute(string operation) : Attribute, IEndpointConventionAttribute
 {
+    public bool History { get; set; }
     public void Apply(IEndpointConventionBuilder builder) =>
-        builder.WithMetadata(new ActivityInspectionProblemShapeMetadata(operation));
+        builder.WithMetadata(new ActivityInspectionProblemShapeMetadata(operation, History));
 }

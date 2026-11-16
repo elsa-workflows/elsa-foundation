@@ -59,6 +59,8 @@ export interface ActivityDataSourceQuery {
   source?: ActivityDataBinding;
   memberPath?: readonly string[];
   includeMemberShapes?: boolean;
+  /** Ask only about the binding already stored at this input in the supplied snapshot. */
+  previewBindingConversion?: boolean;
 }
 
 export interface ActivityDataSourceFacts {
@@ -125,6 +127,12 @@ export interface ActivityDataContextResult {
   snapshotHash?: string | null;
   contextRevision?: string | null;
   contractRevision?: string | null;
+  bindingConversion?: {
+    sourceType: ActivityDataType;
+    targetType: ActivityDataType;
+    operation: string | null;
+    rejection: string | null;
+  };
 }
 
 /**
@@ -251,6 +259,13 @@ export function readActivityDataContextResult(response: unknown, requestedDocume
   if (state === "invalid") return result;
   result.memberReadsEnabled = analysis?.memberReadsEnabled === true;
   result.target = readTarget(asRecord(analysis?.target));
+  const conversion = asRecord(analysis?.bindingConversion);
+  const sourceType = readType(conversion?.sourceType);
+  const targetType = readType(conversion?.targetType);
+  const operation = readString(conversion?.operation);
+  const rejection = readString(conversion?.rejection);
+  if (result.target?.target && sourceType && targetType && !!operation !== !!rejection)
+    result.bindingConversion = { sourceType, targetType, operation, rejection };
   const budget = { members: memberShapeLimits.maximumMembers };
   result.sources = Array.isArray(analysis?.sources) ? analysis.sources.slice(0, 100).flatMap(source => readSource(source, budget)) : [];
   result.hasMoreSources = analysis?.hasMoreSources === true || (Array.isArray(analysis?.sources) && analysis.sources.length > 100);
@@ -330,6 +345,7 @@ function sourceQuery(request: { skip?: number; query?: ActivityDataSourceQuery }
   }
   return {
     ...wholeValueSourceQuery,
+    ...(options?.previewBindingConversion ? { includeSources: false, previewBindingConversion: true } : {}),
     skip: request.skip ?? 0,
     memberPath,
     ...(options?.source ? { source: options.source } : {}),

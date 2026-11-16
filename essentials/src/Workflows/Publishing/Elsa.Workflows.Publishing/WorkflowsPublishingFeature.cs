@@ -8,6 +8,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Reconciliation;
@@ -127,6 +128,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
         services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
         services.TryAddScoped<ValueConversionPlanResolver>();
+        services.TryAddScoped<IActivityBindingConversionPreviewer, ActivityBindingConversionPreviewer>();
         services.TryAddScoped<ActivityResultConversionPlanLinker>();
         services.TryAddScoped<RuntimeInputBindingCompiler>();
         services.TryAddScoped<IActivityTemplateInputBindingCompiler>(sp => sp.GetRequiredService<RuntimeInputBindingCompiler>());

@@ -1,5 +1,6 @@
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,13 +17,14 @@ internal sealed class ValidateActivityPublishingReplacementContractsStartupTask(
         typeof(IActivityPublicationCandidateEvaluator),
         typeof(IActivityPublicationReadiness),
         typeof(IActivityCatalogProjection),
-        typeof(IActivityPublicationVersionPolicy)
+        typeof(IActivityPublicationVersionPolicy),
+        typeof(IActivityBindingConversionPreviewer)
     ];
 
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var invalid = Contracts.Select(type => (Type: type, Count: services.Count(x => x.ServiceType == type)))
+        var invalid = Contracts.Select(type => (Type: type, Count: services.Count(x => x.ServiceType == type && !x.IsKeyedService)))
             .Where(x => x.Count != 1)
             .Select(x => $"{x.Type.Name} ({x.Count} registrations)").Order(StringComparer.Ordinal).ToArray();
         if (invalid.Length != 0)

@@ -108,10 +108,11 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         var metadata = RuntimeModelMetadata.Snapshot(commitMetadata);
         var inspection = _inspectionAccumulator is null
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 request.ActivityExecutionState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(request.ResumeWorkItem),
                 outcomeNames: ReadOutcomeNames(request.ActivityExecutionState),
                 valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,
@@ -124,7 +125,9 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 WorkflowExecutionId: request.ResumeWorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [request.ActivityExecutionState.Execution.ActivityExecutionId],
-                Metadata: metadata),
+                Metadata: metadata)
+            { HistoryCausation = request.ResumePayload.HistoryCausation is { } sourceCause ? sourceCause with
+                { CommandId = request.ResumeWorkItem.CommandId, SchedulerWorkItemId = request.ResumeWorkItem.WorkItemId } : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: workflowChange,
                 scheduler: null,
@@ -179,6 +182,8 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 BookmarkResumeCheckpointTransitionKind.RedeliveryClaim
         };
 
+        if (request.HistorySourceFacts is { Count: > 0 })
+            commit = await _checkpointCommitter.AddHistorySourceFactsAsync(commit, () => request.HistorySourceFacts, cancellationToken);
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
 
         // Notify bookmark-lifecycle observers AFTER the durable commit deleted the bookmark.

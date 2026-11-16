@@ -1716,6 +1716,28 @@ public sealed class WorkflowExecutableCompilerTests
             executable.StorageDriverRequirements);
     }
 
+    [Fact]
+    public async Task Intrinsic_activity_result_binding_preserves_explicit_none()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        var alias = TypeAliasConvention.CanonicalAlias(typeof(OutputProducingActivity));
+        registry.RegisterType(typeof(OutputProducingActivity), alias);
+        registry.RegisterType(typeof(SequenceActivity), typeof(SequenceActivity).FullName!);
+        var sourceVersion = ClrActivityVersion("activity-output-producer", "Test.OutputProducer", alias);
+        sourceVersion.Outputs = [new("Value", "Value", new TypeReference("String"), null, "Value", null, false)];
+        var source = new ActivityNode("producer", sourceVersion.Id, [], []);
+        var set = DynamicSetIntrinsicNode("set-text", "text", new { producerNodeId = "producer", projectionKey = "Value" }, "ActivityResult");
+        set = set with { Inputs = [set.Inputs.Single() with { Conversion = new(AuthoredValueConversionMode.None) }] };
+        var workflow = WorkflowVersion(SequenceNode("root", [source, set]),
+            variables: [new("text", "Text", new TypeReference("String"), null, null)]);
+        var compiler = TestCompiler.Create(new FakeVersionStore(workflow), new FakeActivityVersionStore([sourceVersion, _sequenceActivity]),
+            _activityStructureService, registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(ValueConversionMode.None, executable.NodesById["set-text"].InputBindings["value"].ConversionPlan!.Mode);
+    }
+
     private static RuntimeOutputCaptureCompiler LeafOutputCompiler() =>
         new(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
 

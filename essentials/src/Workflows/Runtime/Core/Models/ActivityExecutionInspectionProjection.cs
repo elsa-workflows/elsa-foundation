@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -30,6 +32,10 @@ public sealed record ActivityExecutionInspectionProjection(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
+    /// <summary>Raw checkpoint/work-bound value delta supplied by its owner; never reconstructed from a later projection.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeCheckpointValueCapture? CheckpointValueCapture { get; init; }
+
     /// <summary>The hierarchy scope containing this projection when its own execution scope is nested.</summary>
     public string? EnclosingExecutionScopeId { get; init; }
 
@@ -107,6 +113,9 @@ public sealed record ActivityExecutionInspectionProjection(
             CompletedAt = state.CompletedAt,
             LastCheckpointId = checkpointId,
             LastCommittedAt = committedAt,
+            // A raw delta belongs only to its original checkpoint. A capable owner supplies a new one explicitly.
+            CheckpointValueCapture = LastCheckpointId == checkpointId && CheckpointValueCapture?.CheckpointId == checkpointId
+                ? CheckpointValueCapture : null,
             Provenance = state.Provenance,
             ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
             Attempt = state.Attempt ?? state.Provenance.Attempt,

@@ -145,7 +145,12 @@ public static class RuntimeCheckpointCommitFingerprint
         return (negative ? "-" : "") + coefficient + "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }
 
-    public static string Compute(RuntimeCheckpointCommit commit)
+    public static string Compute(RuntimeCheckpointCommit commit) => ComputeCore(commit, exactHistorySource: false);
+
+    /// <summary>Canonical exact source agreement for history capture, separate from durable replay identity.</summary>
+    public static string ComputeHistorySource(RuntimeCheckpointCommit commit) => ComputeCore(commit, exactHistorySource: true);
+
+    private static string ComputeCore(RuntimeCheckpointCommit commit, bool exactHistorySource)
     {
         ArgumentNullException.ThrowIfNull(commit);
 
@@ -154,7 +159,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // Consumed scheduler work items only appear on the atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
-        object stateChanges = !commit.StateChanges.BackgroundActivityWork.IsEmpty
+        // Source agreement covers every participant, even when historical durable replay selected an older shape.
+        object stateChanges = exactHistorySource || !commit.StateChanges.BackgroundActivityWork.IsEmpty
             ? new
             {
                 commit.StateChanges.WorkflowExecution,
@@ -185,7 +191,7 @@ public static class RuntimeCheckpointCommitFingerprint
                         .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
                     Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
                         .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds), StringComparer.Ordinal)
+                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds, exactHistorySource ? ExactBookmarkOptions : null), StringComparer.Ordinal)
                         .ToArray()
                 },
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
@@ -272,11 +278,31 @@ public static class RuntimeCheckpointCommitFingerprint
             commit.Metadata
         };
 
-        var element = commit.ExpectedBookmarkResume is null
-            ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        JsonElement element;
+        if (commit.ExpectedBookmarkResume is not null)
+            element = JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        else if (commit.StateChanges.ActivityExecutionInspections.Any(change => change.State.CheckpointValueCapture is not null))
+            // Preserve the new raw owner identifiers before the historical JSON conversion can replace UTF-16 units.
+            element = JsonSerializer.SerializeToElement(new { CheckpointValueCaptureVersion = 1, Payload = payload }, ExactBookmarkOptions);
+        else
+            element = JsonSerializer.SerializeToElement(payload, exactHistorySource ? ExactBookmarkOptions : SerializerOptions);
         if (commit.IngressWaitOrigin is not null)
             element = JsonSerializer.SerializeToElement(new { IngressWaitOriginVersion = 1, Payload = element, commit.IngressWaitOrigin }, ExactBookmarkOptions);
+        if (commit.Checkpoint.HistoryCausation is { } cause)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistoryCausationVersion = 1, Payload = element, Cause = cause }, ExactBookmarkOptions);
+        if (commit.HistorySourceFacts is { Count: > 0 } facts)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
+        // Preserve legacy cleanup marker bytes. New history-owner input must also bind the exact native
+        // cleanup inventory; older payload branches do not all contain ActivityScopeCleanups.
+        if (commit.StateChanges.ActivityScopeCleanups.Count > 0 &&
+            (commit.HistorySourceFacts is not null || commit.HistoryBatches is { Count: > 0 } ||
+             commit.StateChanges.ActivityScopeCleanups.Any(request => request.HistoryBookmarks is not null)))
+            element = JsonSerializer.SerializeToElement(new
+            {
+                RuntimeHistoryCleanupSourceVersion = 1, Payload = element,
+                Cleanups = commit.StateChanges.ActivityScopeCleanups.OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal).ToArray()
+            }, ExactBookmarkOptions);
         if (commit.HistoryBatches is { Count: > 0 } history)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistoryVersion = 1, Payload = element, HistoryBatches = history }, ExactBookmarkOptions);
         if (commit.ModelState is not null)
@@ -288,6 +314,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // in WorkflowExecutionState.ModelWorkOrigin, which already participates in the decision identity.
         // ExpectedModelParentWait is likewise only a refreshed physical condition. The model-owned state
         // retains its immutable native invocation/result address and participates in this fingerprint.
+        if (exactHistorySource)
+            element = JsonSerializer.SerializeToElement(new { HistoryCaptureSourceVersion = 1, Payload = element, commit.RetainSchedulerWork }, SerializerOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

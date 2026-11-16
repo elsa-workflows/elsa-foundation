@@ -8,6 +8,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IActivityScopeCleanupStore
 {
+    /// <summary>Whether exact original bookmark summaries, including a known empty set, are supplied before the selected native cleanup.</summary>
+    bool SupportsHistoryBookmarks => false;
+
     ValueTask<ActivityScopeCleanupRequest> CaptureAsync(
         string workflowExecutionId,
         string executionScopeId,

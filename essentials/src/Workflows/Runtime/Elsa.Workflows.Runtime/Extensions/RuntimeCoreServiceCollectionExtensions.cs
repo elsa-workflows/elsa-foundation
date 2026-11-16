@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
@@ -26,6 +27,7 @@ using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Pipelines;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -229,7 +231,16 @@ public static class RuntimeCoreServiceCollectionExtensions
             services.AddSingleton<InMemoryActivityExecutionInspectionStore>();
         services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
-        services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
+        services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator>(serviceProvider =>
+        {
+            var inspections = serviceProvider.GetRequiredService<IActivityExecutionInspectionStore>();
+            // Module absence must not resolve native policy storage. Enabled controls new admissions;
+            // a configured but disabled module still reads the original policy of retained runs.
+            return serviceProvider.GetService<RuntimeHistoryOptions>() is { } history
+                ? new RuntimeActivityExecutionInspectionAccumulator(inspections,
+                    serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), history)
+                : new RuntimeActivityExecutionInspectionAccumulator(inspections);
+        });
         BookmarkStateStoreBackend.TryRegisterDefaultStateStore(
             services,
             ServiceDescriptor.Singleton<IBookmarkStateStore, InMemoryBookmarkStateStore>());
@@ -385,7 +396,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IIncidentStateStore>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
                 serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
-        services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
+        services.TryAddScoped<IActivityScopeCleanupStore>(provider => provider.GetService<RuntimeHistoryOptions>() is null
+            ? new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>())
+            : new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(), provider.GetRequiredService<IWorkflowExecutionStateStore>()));
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddSingleton<DrainControlContext>();
@@ -523,7 +536,11 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
-                serviceProvider.GetService<IPersistenceAccessContextAccessor>()));
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>())
+            {
+                HistoryStoreResolver = () => serviceProvider.GetService<IRuntimeHistoryStore>(),
+                HistorySourceResolver = () => serviceProvider.GetService<IRuntimeHistorySourceExtension>()
+            });
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
@@ -595,7 +612,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
+            { HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId) };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

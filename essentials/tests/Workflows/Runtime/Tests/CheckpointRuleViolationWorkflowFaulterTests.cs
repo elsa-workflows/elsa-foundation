@@ -28,6 +28,32 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         new("scope-child", Now.AddHours(1), "tenant-child", new WorkflowExecutionPartition("partition-child"));
     private static readonly DateTimeOffset Now = new(2026, 9, 17, 9, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeCheckpointCommitValidationException Refusal = new("The checkpoint broke a rule.");
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Accepted_state_fault_checkpoint_supplies_its_actual_incident_creation_without_recreating_it_on_replay(bool captured)
+    {
+        var execution = await SaveExecutionAsync(WorkflowExecutionStatus.Running);
+        // Exercises owner input only; physical history capture is not enabled by this non-required test profile.
+        await _executions.SaveAsync(execution with
+        {
+            HistoryCapturePolicy = captured ? new("runtime-history-v3", 3, false, ["IncidentRecorded"]) : null
+        });
+        await _faulter.FaultIfCheckpointRuleViolatedAsync(WorkflowExecutionId, DrainResult(checkpointRuleViolation: true), null);
+        await _faulter.FaultIfCheckpointRuleViolatedAsync(WorkflowExecutionId, DrainResult(checkpointRuleViolation: true), null);
+        var commit = Assert.Single(_store.ListCommits()).Commit;
+        if (!captured) { Assert.Null(commit.HistorySourceFacts); return; }
+        var fact = Assert.Single(commit.HistorySourceFacts!);
+        Assert.Equal(RuntimeHistorySourceFactKind.IncidentCreated, fact.Kind);
+        Assert.Equal(Assert.Single(commit.StateChanges.Incidents).StateId, fact.IncidentId);
+        Assert.Equal(Now, fact.OccurredAt);
+        Assert.Null(fact.ReasonCode);
+        var gap = Assert.Single(_executions.CheckpointState.HistoryHeads).Value;
+        Assert.True(gap.HasGaps);
+        Assert.False(gap.CapturedFromStart);
+        Assert.Equal(0, gap.LastSequence); // Owner inputs alone are not captured transition events.
+    }
     private readonly InMemoryWorkflowExecutionStateStore _executions = new();
     private readonly InMemoryIncidentStateStore _incidents = new();
     private readonly InMemoryRuntimeCheckpointCommitStore _store;
@@ -39,7 +65,9 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         _store = new InMemoryRuntimeCheckpointCommitStore(
             _executions,
             incidentStateStore: _incidents,
-            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                state: _executions.CheckpointState,
+                persistenceAccessContextAccessor: new RuntimeHistoryTestAccess());
         _faulter = NewFaulter(_dispatches);
     }
 
