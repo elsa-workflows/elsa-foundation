@@ -22,7 +22,7 @@ Add Previous/Next, Play/Pause, four presentation speeds and ordinal scrubbing to
 
 **Testing**: Vitest behavior/controller tests, isolated Playwright regressions, relevant runtime API/provider suites for the prerequisite, and owned composed-host journeys with independent visual review. Existing-code corrections earn causal red/green controls. Foundation uses risk-based tests (framework §2.21/2.23); no TDD cadence is declared or inferred for new UI code.
 
-**Target Platform**: Composed Studio/Workbench in Chromium, desktop and320px, light/dark, keyboard/pointer/reduced motion.
+**Target Platform**: Composed Studio/Workbench in Chromium, desktop,320px and390px, light/dark, keyboard/pointer/reduced motion.
 
 **Project Type**: Existing web-app feature with an explicitly blocking runtime-history dependency.
 
@@ -30,7 +30,7 @@ Add Previous/Next, Play/Pause, four presentation speeds and ordinal scrubbing to
 
 **Constraints**: Exact execution identity, authenticated context retirement, signed server-owned continuations, truthful capture/retention coverage, recorded order without fabricated causation, no runtime mutation, and no independent takeover of #3849's active capture/provider/read slices.
 
-**Scale/Scope**: Four mandatory control groups and27FRs; four composed journeys × four existing projects =16 planned executions. New playback journeys use320px in narrow projects without changing inherited journeys. Dependency implementation remains with its owning source/slice and needs its own coherent tests/review.
+**Scale/Scope**: Four mandatory control groups and27FRs; four composed journeys × six standard projects =24 planned playback executions, plus12 Timeline/history prerequisite executions. Original narrow variants use320px; new390px variants retain390px without omitting inherited projects. Dependency implementation remains with its owning source/slice and needs its own coherent tests/review.
 
 ## Constitution Check
 
@@ -68,7 +68,7 @@ The runtime-history owner qualified the concrete local read facet and handed it 
 
 **States**: Unavailable/denied/empty/one-step/populated/paused/playing/buffering/ended/gap/retry; repeated and nested occurrences; concurrent branches; live appends; missing diagram; context/access loss; explicit Activity inspection. No runtime re-execution or event-level lifecycle replay.
 
-**Coverage**: [quickstart.md](quickstart.md) defines the16 real-host cases and supporting controls. Real ordering, coverage and gap facts must come from actual owner records. A backend clock witness creates an actual52-minute recorded wait; browser clock mocks qualify cadence only. A held-retry seed uses the actual public alteration path. All16 playback plus8 affected prerequisite cases pass locally at60a0 (research R34); no final independent or shared delivery acceptance is claimed.
+**Coverage**: [quickstart.md](quickstart.md) defines the current36-case matrix (24 playback and12 prerequisites) and supporting controls. Real ordering, coverage and gap facts must come from actual owner records. A backend clock witness creates an actual52-minute recorded wait; browser clock mocks qualify cadence only. A held-retry seed uses the actual public alteration path. Historical16 playback plus8 affected prerequisite cases pass locally at60a0 (research R34); no final independent or shared delivery acceptance is claimed.
 
 ## Complexity Tracking
 

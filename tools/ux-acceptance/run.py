@@ -488,9 +488,8 @@ def prepare_host(project, destination):
         shutil.copy2(project.parent / name, destination / name)
 
 
-def playback_profiles(stack, data, backend_project, studio_project, output, env, owned_processes):
+def playback_profiles(stack, data, backend_project, studio_project, output, env, owned_processes, owned_pids, profiles):
     """Separate normal compositions, never a live switch of one host's capture singleton."""
-    profiles = {}
     for name in ('disabled', 'uncaptured', 'unsupported'):
         directory = data / f'playback-{name}'
         backend, studio = directory / 'workbench', directory / 'studio'
@@ -517,14 +516,20 @@ def playback_profiles(stack, data, backend_project, studio_project, output, env,
                 features.pop(feature, None)
         (backend / 'appsettings.json').write_text(json.dumps(settings))
         (backend / 'shells.json').write_text(json.dumps(shells))
+        studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
+        # Retain the actual private configuration before startup, including failed readiness.
+        profiles[name] = {'backendUrl': backend_url, 'studioUrl': studio_url, 'removedFeatures': removed,
+                          'captureSetting': False if name == 'disabled' else None,
+                          'historyReaderOmission': 'PlaybackQualificationWithoutHistory' if name == 'unsupported' else None,
+                          'features': {'backend': sorted(features), 'studio': sorted(studio_shells['CShells']['Shells']['Default']['Features'])},
+                          'binaryAndConfigHashes': {'backend': fingerprints(backend), 'studio': fingerprints(studio)}}
         backend_process = stack.enter_context(host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
         owned_processes[f'playback-{name}-backend'] = backend_process
+        owned_pids[f'playback-{name}-backend'] = backend_process.pid
         studio_process = stack.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
                                  dict(env, Studio__BackendBaseUrl=backend_url)))
         owned_processes[f'playback-{name}-studio'] = studio_process
-        profiles[name] = {'backendUrl': backend_url, 'studioUrl': studio_url, 'removedFeatures': removed,
-                          'captureSetting': False if name == 'disabled' else None,
-                          'historyReaderOmission': 'PlaybackQualificationWithoutHistory' if name == 'unsupported' else None}
+        owned_pids[f'playback-{name}-studio'] = studio_process.pid
     return profiles
 
 
@@ -789,11 +794,11 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                                              dict(env, Studio__BackendBaseUrl=item['backendUrl'])))
                     owned_processes[f'{prefix}studio'] = studio_process
                     report['ownedPids'][f'{prefix}studio'] = studio_process.pid
-                profiles = playback_profiles(owned, data, backend_project, studio_project, output, env, owned_processes) if coverage_profiles else {}
-                if profiles:
+                if coverage_profiles:
+                    profiles = {}
                     report['playbackHostProfiles'] = profiles
                     report['playbackPinReadPolicy'] = 'Owned default copy has executable cache disabled for an exact native READ fault'
-                    report['ownedPids'].update({key: process.pid for key, process in owned_processes.items()})
+                    playback_profiles(owned, data, backend_project, studio_project, output, env, owned_processes, report['ownedPids'], profiles)
                     browser_env['UX_PLAYBACK_PROFILES'] = json.dumps(profiles)
                 report['stage'] = 'journeys'
                 browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']

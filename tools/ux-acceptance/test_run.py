@@ -1,4 +1,4 @@
-from contextlib import closing, contextmanager, redirect_stdout
+from contextlib import closing, contextmanager, ExitStack, redirect_stdout
 import copy
 import importlib.util
 import io
@@ -552,12 +552,14 @@ class OrchestrationTests(unittest.TestCase):
             @contextmanager
             def fake_host(directory, dll, url, ready, log, env):
                 seed = None
+                features = {}
                 if dll == 'Elsa.Workbench.dll':
                     shells = json.loads((directory / 'shells.json').read_text())
-                    seed = shells['CShells']['Shells']['default']['Features'][acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
+                    features = shells['CShells']['Shells']['default']['Features']
+                    seed = features[acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
                 settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.dll' else {}
                 principals = settings.get('Qualification', {}).get('Principals', [])
-                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready))
+                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready, tuple(sorted(item['username'] for item in principals)), {'history': features.get('WorkflowsRuntimeHistory'), 'omitted': 'PlaybackQualificationWithoutHistory' in features, 'cache': features.get('WorkflowsRuntimeEntityFrameworkCore', {}).get('CacheWorkflowExecutables')}))
                 process = SimpleNamespace(pid=1000 + len(events), returncode=None)
                 try:
                     yield process
@@ -601,11 +603,13 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
         self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
         self.assertEqual(0, seed[7], 'The first-boot seed must not create the Dashboard reader before grant narrowing')
-        self.assertEqual(1, owned[0][7], 'Only the combined acceptance boot creates the independent Dashboard reader')
+        self.assertEqual(2, owned[0][7], 'Combined acceptance has only the independent Dashboard and history readers')
+        self.assertEqual(('dashboard-reader', 'history-reader'), owned[0][9])
+        self.assertIs(owned[0][10]['cache'], False)
         self.assertEqual('/__qualification/ready', owned[0][8])
         self.assertEqual(0, owned[2][7], 'The runtime-only subset does not receive Dashboard qualification principals')
         self.assertEqual(('restrict', 'workbench'), events[2])
-        self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'],
+        self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'] + ['workbench', 'studio'] * 3,
                          [event[1] for event in owned])
         self.assertEqual(seed[3], owned[0][3], 'The seed boot uses the combined host origin it later serves')
         self.assertTrue(all(event[5] in ('admin', None) for event in owned), 'Acceptance boots seed only the ordinary admin')
@@ -613,6 +617,23 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(owned[2][3], owned[3][6])
         browser = next(event[1] for event in events if event[0] == 'browser')
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
+        profiles = json.loads(browser['UX_PLAYBACK_PROFILES'])
+        self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+        for index, name in enumerate(('disabled', 'uncaptured', 'unsupported')):
+            backend, studio = owned[4 + index * 2:6 + index * 2]
+            self.assertEqual(('dashboard-reader', 'history-reader'), backend[9])
+            self.assertEqual('/__qualification/ready', backend[8])
+            self.assertEqual(backend[3], studio[6])
+            self.assertEqual((backend[3], studio[3]), (profiles[name]['backendUrl'], profiles[name]['studioUrl']))
+            self.assertTrue(all(profiles[name]['binaryAndConfigHashes'].values()))
+        self.assertEqual({'Enabled': False}, owned[4][10]['history'])
+        self.assertIsNone(owned[6][10]['history'])
+        self.assertIs(owned[8][10]['omitted'], True)
+        expected_processes = {'restrictedSeedBackend', 'backend', 'studio', 'runtime-api-subset-backend', 'runtime-api-subset-studio'} | {
+            f'playback-{name}-{kind}' for name in profiles for kind in ('backend', 'studio')}
+        self.assertEqual(expected_processes, set(report['ownedPids']))
+        self.assertEqual(expected_processes, set(report['hostExitCodes']))
+        self.assertTrue(all(code == 0 for code in report['hostExitCodes'].values()))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual((acceptance.RESTRICTED_USER, 'reader-id'), (browser['UX_RESTRICTED_USER'], browser['UX_RESTRICTED_SUBJECT']))
         self.assertTrue(browser['UX_RESTRICTED_PASSWORD'])
@@ -621,6 +642,46 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(list(reversed([event[1] for event in owned])), stops, 'Every owned host stops, newest first')
         self.assertEqual({'combined', 'runtime-api-subset'}, set(report['compositions']))
         self.assertEqual(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'], report['compositions']['runtime-api-subset']['removedFeatures'])
+
+    def test_failed_playback_profile_keeps_started_process_and_configuration_receipts(self):
+        processes, pids, profiles, stopped = {}, {}, {}, []
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+
+            def prepare(project, destination):
+                destination.mkdir(parents=True)
+                for name in ('appsettings.json', 'shells.json'):
+                    (destination / name).write_bytes((project.parent / name).read_bytes())
+
+            @contextmanager
+            def failing_host(_directory, _dll, _url, _ready, log, _env):
+                if log.name == 'playback-unsupported-backend.log':
+                    raise RuntimeError('Unsupported host readiness failed')
+                process = SimpleNamespace(pid=3000 + len(processes), returncode=None)
+                try:
+                    yield process
+                finally:
+                    process.returncode = 0
+                    stopped.append(process.pid)
+
+            with patch.object(acceptance, 'prepare_host', prepare), patch.object(acceptance, 'host', failing_host):
+                with self.assertRaisesRegex(RuntimeError, 'Unsupported host readiness failed'), ExitStack() as stack:
+                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj',
+                        acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj', data, {}, processes, pids, profiles)
+            expected = {f'playback-{name}-{kind}' for name in ('disabled', 'uncaptured') for kind in ('backend', 'studio')}
+            self.assertEqual(expected, set(pids))
+            self.assertEqual(expected, set(processes))
+            self.assertEqual([process.pid for process in reversed(list(processes.values()))], stopped)
+            self.assertTrue(all(process.returncode == 0 for process in processes.values()))
+            self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+            for profile in profiles.values():
+                for kind in ('backend', 'studio'):
+                    self.assertTrue(profile['features'][kind])
+                    hashes = profile['binaryAndConfigHashes'][kind]
+                    self.assertEqual({'appsettings.json', 'shells.json'}, set(hashes))
+                    self.assertTrue(all(len(value) == 64 for value in hashes.values()))
+            self.assertNotIn('WorkflowsRuntimeHistory', profiles['uncaptured']['features']['backend'])
+            self.assertIn('PlaybackQualificationWithoutHistory', profiles['unsupported']['features']['backend'])
 
     def test_scoped_ordinary_journey_starts_only_the_combined_hosts(self):
         starts = []
