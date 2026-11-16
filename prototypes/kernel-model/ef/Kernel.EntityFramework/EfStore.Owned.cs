@@ -76,7 +76,7 @@ public sealed partial class EfStore
             else rows.Checked(kind, $"""{action} WHERE "Id" = {k[0]} AND "InboxScope" = {k[1]}{(exact ? $" AND \"IssuedWire\" = {k[2]}" : "")} AND "EventMatch" = {c.P(messages.FindProperty("EventMatch")!, key.EventMatch)} AND "Done" = {dialect.False}""");
         }
 
-        var position = batch.Position;
+        var (position, sent) = (batch.Position, 0);
         foreach (var turn in batch.Turns)
         {
             if (turn.Delete && turn.Row is not { Retired: true })
@@ -110,9 +110,10 @@ public sealed partial class EfStore
             {
                 Room(9);
                 var m = ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, 0);
+                // seq: identity on the server engines; on SQLite the store assigns max + i inside the statement (SqliteCommitDialect.Seq).
                 rows.Row(RowGroups.Kind.MessageInsert, RowGroups.Messages, [Lit(m.InboxScope), c.P(messages.FindProperty("Id")!, m.Id), Lit(m.Partition), c.P(messages.FindProperty("Target")!, m.Target), c.P(messages.FindProperty("Kind")!, m.Kind), Text(messages, "Payload", m.Payload), Text(messages, "Sender", m.Sender), Text(messages, "Start", m.Start),
                     Lit(m.Due), Lit(m.Seen), "0", "0", m.KeepUntil is { } keep ? Lit(keep) : "NULL", dialect.False, Text(messages, "ReplyTo", m.ReplyTo), m.EventMatch is null ? "NULL" : c.P(messages.FindProperty("EventMatch")!, m.EventMatch),
-                    .. exact ? [c.P(messages.FindProperty("IssuedWire")!, m.IssuedWire)] : Array.Empty<string>()]);
+                    .. exact ? [c.P(messages.FindProperty("IssuedWire")!, m.IssuedWire)] : Array.Empty<string>(), .. dialect.Seq(++sent) is { } seq ? [seq] : Array.Empty<string>()]);
             }
             if (turn.Journal is not null)
             {
@@ -250,12 +251,12 @@ internal sealed class RowGroups(CommitDialect dialect, bool exact)
     {
         foreach (var (kind, items) in _groups)
         {
-            foreach (var chunk in items.OfType<string[]>().Chunk(dialect.RowsPerStatement))
+            foreach (var chunk in items.OfType<string[]>().Chunk(kind == Kind.MessageInsert ? dialect.MessageRowsPerStatement : dialect.RowsPerStatement))
             {
                 var values = string.Join(", ", chunk.Select(r => "(" + string.Join(", ", r) + ")"));
                 switch (kind)
                 {
-                    case Kind.MessageInsert: dialect.InsertMessages(c, Messages + (exact ? ", \"IssuedWire\") VALUES " : ") VALUES ") + values, chunk.Length); break;
+                    case Kind.MessageInsert: dialect.InsertMessages(c, Messages + (exact ? ", \"IssuedWire\"" : "") + (dialect.Seq(1) is null ? "" : ", \"Seq\"") + ") VALUES " + values, chunk.Length); break;
                     case Kind.InstanceInsert: dialect.Checked(c, Instances + values, chunk.Length); break;
                     case Kind.JournalInsert: dialect.Checked(c, Journal + values, chunk.Length); break;
                     default: dialect.KeyedMessages(c, _actions[kind], chunk, exact); break;
