@@ -188,10 +188,11 @@ There are no setters.
 - [x] T034 [P] Update the documents in research R-10, and replace spec 247 FR-019 with a pointer to FR-027 (FR-033)
 - [x] T035 [P] Update `docs/reference/elsa3-migration-readiness.md` L24, L80 and `Extensions/Elsa3/src/Mapping/README.md`
   L97, L213 for the newly convertible constructs
-- [ ] T036 Run quickstart.md by hand in the Workbench and Studio
-  - Not run: needs the Workbench and Studio started by hand; left for the coordinator's verification.
-- [ ] T037 Set the spec's status per the spec lifecycle in the finishing PR
-  - Status stays Approved until T036 is checked by hand.
+- [x] T036 Run quickstart.md by hand in the Workbench and Studio
+  - Waived by the coordinator on 2026-11-17: not run by hand. The quickstart's steps are covered by the convert,
+    publish and run tests (`ExplicitOutcomesRunTests`), the publication-check tests and the Studio port tests.
+- [x] T037 Set the spec's status per the spec lifecycle in the finishing PR
+  - Implemented, set in #4314.
 
 ## Dependencies
 
