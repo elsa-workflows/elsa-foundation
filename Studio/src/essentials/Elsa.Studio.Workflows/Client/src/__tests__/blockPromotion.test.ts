@@ -104,3 +104,10 @@ it("permits an explicitly non-starting Event while refusing deferred start flags
   event.inputs[1] = { referenceKey: "CanStartWorkflow", value: literal(false), autoEvaluate: false };
   expect(planBlockPromotion(ctx, "block")).toMatchObject({ status: "refused", diagnostics: [{ code: "start-trigger-boundary" }] });
 });
+
+it("refuses native local scopes whose identity is reserved by graph placement", () => {
+  const ctx = context(), block = selected(ctx);
+  block.nodeId = "activity-graph";
+  block.structure!.payload.variables = [{ referenceKey: "local", name: "Local", type: { alias: "String", collectionKind: "Single" }, default: literal("") }];
+  expect(planBlockPromotion(ctx, "activity-graph", "Prepare shipment")).toMatchObject({ status: "refused", diagnostics: [{ code: "reserved-local-scope" }] });
+});

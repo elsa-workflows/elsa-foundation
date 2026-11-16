@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -17,4 +18,7 @@ public interface IActivityTemplateInputBindingCompiler
     IReadOnlyCollection<RuntimeVariableDeclaration> CompileGraphVariables(
         string nodeId,
         IEnumerable<VariableDefinition> variables);
+
+    /// <summary>Pins the normal assignment conversion using the actual declared source type.</summary>
+    RuntimeInputBinding PinAssignmentSourceConversion(string nodeId, RuntimeInputBinding binding, TypeReference? sourceType);
 }

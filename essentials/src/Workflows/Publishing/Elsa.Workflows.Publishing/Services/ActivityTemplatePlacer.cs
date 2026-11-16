@@ -69,7 +69,8 @@ public sealed class ActivityTemplatePlacer(
         ExecutableNode root,
         IEnumerable<string> publicRequestNames,
         Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionDocument? source,
-        IActivityStructureService? structures)
+        IActivityStructureService? structures,
+        IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation>? occurrences = null)
     {
         var declarations = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         if (source is not null)
@@ -80,7 +81,69 @@ public sealed class ActivityTemplatePlacer(
                            !SameKeys(source.Inputs.Select(x => x.ReferenceKey), root.ActivityContract.Inputs.Keys)))
                 throw Rejected(root.AuthoredActivityId, "ActivityDataSelection/InputDeclarationMismatch", "The compiled closed body does not preserve its actual public input declarations.");
         }
-        return DescribeDataSelectionFacts(root, publicRequestNames, declarations, source?.RootActivity, structures);
+        var facts = DescribeDataSelectionFacts(root, publicRequestNames, declarations, source?.RootActivity, structures);
+        return DescribeOriginalLocalScopes(root, source, structures, occurrences, facts);
+    }
+
+    // Graph-local intrinsics are staged beside the boundary until dependency placement reconstructs
+    // their native ancestors. Only the actual authored ancestry plus matching canonical overlays can
+    // supply those scopes here. Placed-tree validation continues to derive scopes from the real tree.
+    private static ActivityTemplateDataSelectionFacts DescribeOriginalLocalScopes(
+        ExecutableNode root,
+        Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionDocument? source,
+        IActivityStructureService? structures,
+        IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation>? occurrences,
+        ActivityTemplateDataSelectionFacts facts)
+    {
+        if (!IsClosedScope(root.Descriptor) || source?.RootActivity is null || structures is null || occurrences is null)
+            return facts;
+        var authored = new Dictionary<string, (ActivityNode Node, string? Parent)>(StringComparer.Ordinal);
+        var pending = new Stack<(ActivityNode Node, string? Parent)>();
+        pending.Push((source.RootActivity, null));
+        while (pending.TryPop(out var entry))
+        {
+            if (!authored.TryAdd(entry.Node.NodeId, entry))
+                throw Rejected(entry.Node.NodeId, "ActivityDataSelection/VariableScopeAmbiguous", "The authored scope identity is not unique.");
+            foreach (var child in structures.ProjectChildren(entry.Node).SelectMany(slot => slot.Activities))
+                pending.Push((child, entry.Node.NodeId));
+        }
+        var overlays = occurrences.GroupBy(occurrence => occurrence.OccurrenceId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var declarations = facts.VariableDeclarations.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        var visible = facts.VisibleVariableScopesByConsumer.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        foreach (var consumer in root.ChildSlots.Where(slot => slot.Name == "graph-local-nodes").SelectMany(slot => slot.Activities))
+        {
+            if (!authored.TryGetValue(consumer.AuthoredActivityId, out var original) ||
+                !(consumer.IntrinsicKind == WorkflowIntrinsicKind.SetOutput && original.Node.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.SetOutput && original.Node.ActivityVersionId == "elsa.intrinsic.set-output@1" ||
+                  consumer.IntrinsicKind == WorkflowIntrinsicKind.Set && original.Node.Intrinsic?.Kind == AuthoredWorkflowIntrinsicKind.Set && original.Node.ActivityVersionId == "elsa.intrinsic.set@1"))
+                continue;
+            var scopes = visible[consumer.ExecutableNodeId].ToList();
+            var parentId = original.Parent;
+            while (parentId is not null)
+            {
+                var parent = authored[parentId];
+                var keys = structures.ProjectScopedVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                if (keys.Length != 0)
+                {
+                    if (!overlays.TryGetValue(parentId, out var candidates) || candidates.Length != 1)
+                        throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationUnavailable", "The native scope has no exact compiled occurrence.");
+                    var compiledKeys = ReadCompiledVariableKeys(candidates[0].Structure?.Payload, parentId);
+                    if (!SameKeys(keys, compiledKeys))
+                        throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled native scope does not preserve its actual declarations.");
+                    if (declarations.TryGetValue(parentId, out var existing) && !SameKeys(keys, existing))
+                        throw Rejected(parentId, "ActivityDataSelection/VariableScopeAmbiguous", "The native scope collides with another declaration owner.");
+                    declarations[parentId] = keys;
+                    scopes.Add(parentId);
+                }
+                parentId = parent.Parent;
+            }
+            visible[consumer.ExecutableNodeId] = scopes.Distinct(StringComparer.Ordinal).ToArray();
+        }
+        return facts with
+        {
+            VariableDeclarations = new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(declarations),
+            VisibleVariableScopesByConsumer = new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(visible)
+        };
     }
 
     /// <summary>Projects read admission facts using the same contracts that placement/runtime scopes own.</summary>
@@ -176,10 +239,13 @@ public sealed class ActivityTemplatePlacer(
         }
     }
 
-    private static IReadOnlyCollection<string> ReadCompiledVariableKeys(ExecutableNode node)
+    private static IReadOnlyCollection<string> ReadCompiledVariableKeys(ExecutableNode node) =>
+        ReadCompiledVariableKeys(node.Structure?.Payload, node.AuthoredActivityId);
+
+    private static IReadOnlyCollection<string> ReadCompiledVariableKeys(JsonElement? payload, string origin)
     {
-        if (node.Structure?.Payload.ValueKind != JsonValueKind.Object ||
-            !node.Structure.Payload.TryGetProperty("variables", out var value) || value.ValueKind == JsonValueKind.Null)
+        if (payload is not { ValueKind: JsonValueKind.Object } structure ||
+            !structure.TryGetProperty("variables", out var value) || value.ValueKind == JsonValueKind.Null)
             return [];
         try
         {
@@ -190,7 +256,7 @@ public sealed class ActivityTemplatePlacer(
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
         {
-            throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled variable declarations do not match their owned contract.");
+            throw Rejected(origin, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled variable declarations do not match their owned contract.");
         }
     }
 

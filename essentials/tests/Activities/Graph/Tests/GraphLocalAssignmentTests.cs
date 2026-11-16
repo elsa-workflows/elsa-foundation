@@ -11,20 +11,21 @@ namespace Elsa.Activities.Graph.Tests;
 public sealed partial class GraphActivityProviderTests
 {
     [Theory]
-    [InlineData("body", "local", false)]
-    [InlineData("workflow", "local", true)]
-    [InlineData("activity-graph", "local", true)]
-    [InlineData("foreign", "local", true)]
-    [InlineData("sibling", "local", true)]
-    [InlineData("assign", "local", true)]
-    [InlineData("body", "missing", true)]
-    public async Task Local_set_requires_one_declared_native_ancestor_below_the_graph_boundary(string scope, string key, bool refused)
+    [InlineData("body", "local", false, "body")]
+    [InlineData("workflow", "local", true, "body")]
+    [InlineData("activity-graph", "local", true, "body")]
+    [InlineData("foreign", "local", true, "body")]
+    [InlineData("sibling", "local", true, "body")]
+    [InlineData("assign", "local", true, "body")]
+    [InlineData("body", "missing", true, "body")]
+    [InlineData("activity-graph", "local", true, "activity-graph")]
+    public async Task Local_set_requires_one_declared_native_ancestor_below_the_graph_boundary(string scope, string key, bool refused, string bodyId)
     {
         var provider = new GraphActivityProvider(new TestActivityStructureService
         {
             ScopedVariables = new Dictionary<string, IReadOnlyCollection<VariableDefinition>>
             {
-                ["body"] = [new("local", "Local", new("Decimal"), null, new ArgumentValue(0m, "Literal"))],
+                [bodyId] = [new("local", "Local", new("Decimal"), null, new ArgumentValue(0m, "Literal"))],
                 ["sibling"] = [new("local", "Sibling local", new("Decimal"), null, new ArgumentValue(0m, "Literal"))]
             }
         }, new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
@@ -36,6 +37,7 @@ public sealed partial class GraphActivityProviderTests
                 {"nodeId":"sibling","activityVersionId":"sequence-version","inputs":[],"outputs":[]}
               ]}}},"variables":[],"outputMappings":[]}
             """)!;
+        payload["rootActivity"]!["nodeId"] = bodyId;
         var target = payload["rootActivity"]!["structure"]!["payload"]!["activities"]![0]!["intrinsic"]!["variable"]!;
         target["referenceKey"] = key; target["declaringScopeId"] = scope;
         var diagnostics = await provider.ValidateAsync(new(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(payload)), OutcomeContract(("done", "Done")));

@@ -264,7 +264,7 @@ public sealed class GraphActivityProvider(
                 if (node.IsSetOutput)
                     localNodes.Add(CompileSetOutput(node, request.Contract.Outputs.Single(output => output.Name == ReadLiteralInput(node, WorkflowIntrinsicInputKeys.Name)), compiler!));
                 else if (node.IsSetVariable)
-                    localNodes.Add(CompileLocalSet(node, LocalVariableTarget(node, nodes)!, compiler!));
+                    localNodes.Add(CompileLocalSet(node, LocalVariableTarget(node, nodes)!, graph, nodes, request.Contract, compiler!));
                 else
                     structures.Add(node.NodeId, CompileBodyStructure(node, compiler));
             }
@@ -276,9 +276,12 @@ public sealed class GraphActivityProvider(
         }
         if (diagnostics.Any(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error))
             return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics)));
+        var occupied = nodes.Select(node => node.NodeId).Concat(localNodes.Select(node => node.ExecutableNodeId)).ToHashSet(StringComparer.Ordinal);
+        var boundaryId = "graph-boundary";
+        for (var suffix = 1; occupied.Contains(boundaryId); suffix++) boundaryId = $"graph-boundary:{suffix}";
         var executableRoot = new ExecutableNode(
-            "graph-boundary",
-            "graph-boundary",
+            boundaryId,
+            boundaryId,
             RuntimeConsumerKey,
             RuntimeDescriptorSchemaVersion,
             new RuntimeActivityDescriptor(RuntimeConsumerKey, RuntimeDescriptorSchemaVersion, descriptorPayload),
@@ -891,7 +894,7 @@ public sealed class GraphActivityProvider(
     private VariableDefinition? LocalVariableTarget(GraphNode node, IReadOnlyList<GraphNode> nodes)
     {
         var target = node.Activity.Intrinsic?.Variable;
-        if (target is null || target.IsWorkflowScope) return null;
+        if (target is null || target.IsWorkflowScope || target.DeclaringScopeId == "activity-graph") return null;
         var parentId = node.ParentOccurrenceId;
         var visited = new HashSet<string>(StringComparer.Ordinal);
         while (parentId is not null && visited.Add(parentId))
@@ -919,11 +922,24 @@ public sealed class GraphActivityProvider(
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
     }
 
-    private static ExecutableNode CompileLocalSet(GraphNode node, VariableDefinition target, IActivityTemplateInputBindingCompiler compiler)
+    private ExecutableNode CompileLocalSet(GraphNode node, VariableDefinition target, ActivityGraphManifest graph, IReadOnlyList<GraphNode> nodes, DesignActivityContract contract, IActivityTemplateInputBindingCompiler compiler)
     {
         var bindings = compiler.CompileGraphInputs(node.NodeId,
             [new InputDefinition(WorkflowIntrinsicInputKeys.Value, WorkflowIntrinsicInputKeys.Value, target.Type, null,
-                target.Name, null, IsNullable: false, IsRequired: true)], node.Activity.Inputs);
+                target.Name, null, IsNullable: false, IsRequired: true)], node.Activity.Inputs).ToDictionary(binding => binding.Key, binding => binding.Value, StringComparer.Ordinal);
+        var value = bindings[WorkflowIntrinsicInputKeys.Value];
+        TypeReference? sourceType = null;
+        if (value.Source == RuntimeInputBindingSource.VariableRead && value.Variable is { } variable)
+        {
+            var sourceDeclarations = variable.DeclaringScopeId is "workflow" or "activity-graph"
+                ? graph.Variables.Where(item => item.ReferenceKey == variable.VariableKey).Select(item => item.Type).ToArray()
+                : nodes.Where(owner => owner.NodeId == variable.DeclaringScopeId).SelectMany(owner => activityStructureService.ProjectScopedVariables(owner.Activity))
+                    .Where(item => item.ReferenceKey == variable.VariableKey).Select(item => item.Type).ToArray();
+            if (sourceDeclarations.Length == 1) sourceType = sourceDeclarations[0];
+        }
+        else if (value.Source == RuntimeInputBindingSource.WorkflowRequest && string.IsNullOrWhiteSpace(value.WorkflowRequest!.Path))
+            sourceType = contract.Inputs.FirstOrDefault(input => input.ReferenceKey == value.WorkflowRequest.MemberKey)?.Type;
+        bindings[WorkflowIntrinsicInputKeys.Value] = compiler.PinAssignmentSourceConversion(node.NodeId, value, sourceType);
         var payload = JsonSerializer.SerializeToElement(new
         {
             kind = "Set", schemaVersion = "1.0.0", node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex

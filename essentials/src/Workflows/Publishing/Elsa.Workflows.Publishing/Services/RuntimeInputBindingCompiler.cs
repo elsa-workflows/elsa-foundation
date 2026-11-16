@@ -120,6 +120,42 @@ public sealed class RuntimeInputBindingCompiler(
         return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
     }
 
+    RuntimeInputBinding IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(
+        string nodeId, RuntimeInputBinding binding, TypeReference? sourceType) =>
+        PinAssignmentSourceConversion(nodeId, binding, sourceType);
+
+    internal RuntimeInputBinding PinAssignmentSourceConversion(
+        string nodeId, RuntimeInputBinding binding, TypeReference? sourceType, ValueConversionPlanResolver? resolver = null)
+    {
+        // A member read has no static source contract here (a result member's is planned by the linker, a variable
+        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
+        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember)
+            return binding;
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
+        if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
+            return binding;
+
+        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
+        // the destination contract before storage; do not invent a source type or parse string content.
+        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+            return binding;
+        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
+        try
+        {
+            var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
+            var plan = (resolver ?? resolvedConversionPlanResolver).Resolve(source, ValueRepresentationDefaults.Infer(source),
+                binding.TargetType, binding: context);
+            return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
+                binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
+                plan, binding.ConversionRequest, binding.Secret);
+        }
+        catch (ValueConversionPublicationException exception)
+        {
+            throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
+        }
+    }
+
     /// <summary>
     /// Compiles every input of a node against its catalog input definitions. The credential-literal rule
     /// is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's

@@ -464,12 +464,6 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs)
     {
-        // A member read has no static source contract here (a result member's is planned by the linker, a variable
-        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
-        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember)
-            return binding;
-        if (binding.Selection is not null)
-            throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
         TypeReference? sourceType = binding.Source switch
         {
             RuntimeInputBindingSource.VariableRead => ResolveIntrinsicVariableType(nodeId,
@@ -478,27 +472,7 @@ public sealed class ExecutableNodeCompiler(
                 workflowInputs.SingleOrDefault(input => StringComparer.Ordinal.Equals(input.Name, binding.WorkflowRequest.MemberKey))?.Type,
             _ => null
         };
-        if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
-            return binding;
-
-        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
-        // the destination contract before storage; do not invent a source type or parse string content.
-        if (sourceType is null || sourceType.Alias == "Elsa.Any")
-            return binding;
-        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
-        try
-        {
-            var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
-            var plan = _conversionPlanResolver.Resolve(source, ValueRepresentationDefaults.Infer(source),
-                binding.TargetType, binding: context);
-            return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
-                binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
-                plan, binding.ConversionRequest, binding.Secret);
-        }
-        catch (ValueConversionPublicationException exception)
-        {
-            throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
-        }
+        return inputBindingCompiler.PinAssignmentSourceConversion(nodeId, binding, sourceType, _conversionPlanResolver);
     }
 
     private TypeReference ResolveIntrinsicVariableType(

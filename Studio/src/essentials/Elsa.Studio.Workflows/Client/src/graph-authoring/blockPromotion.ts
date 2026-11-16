@@ -141,6 +141,8 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
   };
   for (const { node, parent } of body.values()) {
     const entry = descriptor(node), at = `nodes.${node.nodeId}`;
+    if (node.nodeId === "activity-graph" && Array.isArray(node.structure?.payload.variables) && node.structure.payload.variables.length)
+      refuse("reserved-local-scope", at, "This local scope uses a reserved reusable identity. Keep the block embedded.");
     if (entry.activityTypeKey === "Elsa.Activities.Primitives.Activities.Event") {
       const startKey = entry.inputs.find(input => record(input) && input.name === "CanStartWorkflow") as Fields | undefined;
       const starts = startKey && node.inputs.find(input => record(input) && input.referenceKey === (startKey.referenceKey ?? startKey.name)) as Fields | undefined;
