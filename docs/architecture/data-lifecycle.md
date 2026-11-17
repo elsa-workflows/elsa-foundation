@@ -54,10 +54,50 @@ public sealed record RetentionPolicy(
 - **`PurgePayloads`** carries over an idea from Elsa.Jobs (design sketch, "Standalone jobs"): remove the payload bytes and keep identities, digests, outcomes and attempts. With the envelope split of format item 1, a run's shape stays available for audit after its data is gone.
 - **Parked work has its own window.** A parked instance is Faulted, but it awaits recovery, so the `Faulted` window never applies to it. The retention worker tells the two apart through the parked-work read model of the observability page (PR #4710). `Parked` (by default null: kept until an operator recovers or discards it) is also the window that Park's kept deliveries use ([observability](observability.md#what-park-keeps), decision 2a). Their `keep_until` is the Park's time plus `Parked`, or no expiry when it is null. The sweep removes only `Done` rows past `keep_until`, and the built delete removes no done markers, so a later step must end them: recover (in either mode), discard and delete set the kept deliveries' `keep_until` to the ordinary outside-command window from that moment, or remove them in the same commit. Until that is built, they stay, and the Delete row of the erasure table lists them. A recovered instance runs again; a discarded one ends and falls under `Faulted` from the discard.
 - **Where it is set.** On the definition, with a host default per tenant. A shortened policy also applies to instances that have already ended, with a guard: the API reports how many instances the change would delete and requires confirmation above a threshold, and the worker deletes at a bounded rate (decision 2).
-- **How it runs (decision 1).** A retention worker in the host reads the instance-list read model for instances whose end time is past their policy, and adds a `kernel.delete` per instance. The worker uses read models and message adds only, so it is host-neutral layer-3 code. Every delete is the built delete, in the owner's fenced commit.
-- **Repeats.** The delete's id is derived from instance and end revision, and it is an outside command with `keep_until`. A repeat inside that window meets the duplicate id. After the window, read-model lag can make a later sweep add a delete for an instance that is already gone. That delete is dropped and journalled as a revision-0 row, which compaction (format item 5) removes. So the worker sets `keep_until` above its sweep interval plus the projector's expected lag.
-- **Refused deletes.** A delete refused by `ProtectsDeletion` is consumed with no change. A later sweep issues it again once its window has passed.
-- **The same path serves operators.** Delete one instance, delete by filter (definition, tenant, status, age), and terminate-then-delete for a running instance (two messages from one sender, applied in order).
+- **How it runs (decision 1).** A retention worker in the host reads the instance-list read model for instances whose end time is past their policy, and adds one qualified delete per instance ([The qualified delete](#proposed-the-qualified-delete)). The worker uses read models and message adds only, so it is host-neutral layer-3 code. The owner decides, in its fenced commit; the worker only proposes.
+- **Repeats.** The delete's id is derived from tenant, instance, creation and terminal mark, and it is an outside command with `keep_until`, so a repeat inside that window meets the duplicate id. A repeat after the window, or a stale selection, is refused by the owner's identity checks below, or dropped as a message to a missing target and journalled as a revision-0 row, which compaction (format item 5) removes.
+- **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
+- **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
+
+### Proposed: the qualified delete
+
+> **Counterexample and answer** ([Astra High gate 2 review, B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)). The trace: the projection reports an expired finished run A under caller key K. A is removed. Run B reuses K and finishes, with its retention period still ahead. A delayed retention worker then submits the selected delete by K. The built handler checks only that the row has ended and is not protected, and deletes at the revision it has just loaded (`Control` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)), so it deletes B and its history. A message id derived from A's end revision only deduplicates submissions, and B can end at the same revision. The same creation can also change eligibility: a parked run recovered and ended again, or a policy extended after the selection.
+>
+> The answer, step by step:
+> 1. The selection names the run. The worker reads A's tenant, creation and terminal mark from the read model and puts them in the delete.
+> 2. B is a new run under K, so it has a different creation. A delete that names A's creation reaches B's row, and the owner refuses it as a different run. B's end revision plays no part.
+> 3. If A is recovered and ends again, its creation is the same but its terminal mark changes. A delete naming the old mark is refused as a different transition.
+> 4. If the policy was extended, the owner computes eligibility from the policy in force when the delete arrives. A not-yet-eligible run is refused.
+> 5. Only after all its checks pass does the owner delete, at the revision it loaded, in the same turn and commit. The single writer and the revision guard ensure nothing changes between the check and the delete.
+
+Every delete names the run and the transition it means:
+
+```csharp
+// The payload of kernel.delete. Every field is required.
+public sealed record DeleteSelection(
+    string Tenant, long Creation,          // the run: tenant and immutable creation
+    long TerminalRevision,                 // the end, Park or discard transition the selector saw
+    DeleteReason Reason);                  // Retention or Operator
+```
+
+- **The terminal mark.** The commit that ends, parks or discards an instance records `(revision, time)` on the instance row. Later commits to the ended row leave the mark unchanged: a late child result, a metadata turn, an archive request. Recovery clears it, and the next end, Park or discard writes a new one. The lifecycle entries (format item 4) carry tenant, creation and the mark, so the instance-list read model has all three.
+- **The owner's checks,** in the workflow actor's command turn, in this order. The owner refuses on the first that fails:
+  1. the selection's tenant equals the row's tenant;
+  2. the selection's creation equals the row's creation, and both are known;
+  3. the selection's terminal revision equals the row's current terminal mark;
+  4. the reason allows it. For Retention, the policy in force is read from the host's definition registry and tenant defaults (configuration the actor already holds to run turns; no read-model read), and its window for the row's status, or `Parked` for parked work (its `KeptBy` marker is set), must have elapsed since the mark's time on the owner's clock. Clock skew can move a deletion by at most the skew. Operator needs no policy;
+  5. `ProtectsDeletion` does not protect the row, as built.
+- **Refusing ambiguous selections.** A delete without these fields, naming creation 0, or reaching a row whose creation or terminal mark is unknown is refused as ambiguous. This holds for generated ids too, although they are never reused (walkthrough decision 7): one rule for every delete. There is no id-only path for deletion. The migration page's id-only fallback ([migration](migrating-running-instances.md#plans-and-bulk-migration)) does not extend to erasure.
+- **Terminate, then delete** is one command, `kernel.terminate` with `ThenDelete`, naming tenant and creation. The owner terminates and, unless `ProtectsDeletion` protects the row, deletes in the same turn and commit. No separate delete message ever waits for a terminal mark it cannot name.
+- **What the store must hold.** The checks need the row's tenant, its creation and its terminal mark persisted on every provider.
+  - The tenant column is already a release 1 store change (fairness).
+  - Persisted creation headers are the same store change that migration needs ("Persisted creation headers on every provider" in the program plan's K3 list). For deletion it is a precondition, with no fallback.
+  - The terminal mark is a new column pair.
+  - All three are kernel behaviour, with two reviews when built, and they fit a MongoDB document as well as an EF row.
+  - Today only the in-memory store persists creation; EF rows carry creation 0 ([storage model](storage-model.md#physical-records)). Until K3 lands, a delete of a caller-keyed instance on EF is refused as ambiguous.
+  - Release 1 starts from empty databases (owner, 17 November), and every new run gets a creation once K3 lands, so release 1 never meets an ambiguous row.
+- **Observability.** A refusal adds no journal row, as for other no-op commands. It counts in a layer-3 metric, `elsa.kernel.delete.refused`, by reason: tenant, run, transition, not eligible, protected, ambiguous.
+
 - **What stays after a delete:**
   - the retirement marker, for generated ids;
   - the journal's deletion marker;
@@ -107,7 +147,7 @@ Erasing a person's data means finding every instance that holds it and removing 
 | **Per-instance data keys** (crypto-shredding) | Everything encrypted under the instance's key, in every copy: rows, projected history, archives, values, backups and replicas | Data written in clear before encryption was turned on; copies in other instances | See encryption below |
 
 - **Finding the instances.** A person's data is spread over instances by application logic, and the kernel cannot search inside state (trade-off 10). An application that needs erasure tags instances with a subject key, published as an indexed field into the instance-list read model. Erasure then deletes by that filter.
-- **Running instances.** The basic form is terminate, then delete. Redacting one value inside a running instance is model-specific and comes later.
+- **Running instances.** The basic form is terminate, then delete, as one command (`ThenDelete`). Redacting one value inside a running instance is model-specific and comes later.
 - **Ids and keys.** Generated instance ids, positions and the kernel's own message ids carry no payload values. Caller-named instance ids and correlation keys can, and through them so can the derived message ids, `EventMatch`, effect keys sent to other systems, and the markers that keep an instance id indefinitely. Release 1 documents a contract that caller keys and correlation keys carry no personal data, with a warning in Studio where keys are configured (decision 4). Keys declared sensitive are stored as keyed hashes (`h:` prefix, HMAC with a per-tenant key, computed at the API boundary on both the subscribe and the publish side) from 1.x, and the format reserves the prefix now (decision 5).
 
 ## Encryption of state at rest
@@ -148,7 +188,8 @@ Costs, all unmeasured:
 
 | Piece | Layer | Depends on |
 |---|---|---|
-| Delete and its refusal rules | 3, the workflow actor's command turn | The turn contract; layer 2's commit removes the rows |
+| The qualified delete, its checks and refusal rules | 3, the workflow actor's command turn | The turn contract and the persisted tenant, creation and terminal mark; layer 2's commit removes the rows |
+| Tenant, creation and terminal mark persisted on the instance row | 2, the store (kernel behaviour) | Every provider |
 | Retention worker, delete by filter, subject tags, a later option b value sweeper | 3, host services | Read models, message adds and the value store only |
 | Archive command and archiver | 3, with the command-kind seam in layer 2 (kernel behaviour) | The viewer's read API and `IArchiveSink`; nothing in the commit |
 | Value rows removed with their instance (option a) | 2, the store's delete | Kernel behaviour |
@@ -163,7 +204,7 @@ These cost little now and require rewriting stored history later:
 1. **Journal entries split into a clear envelope and an opaque payload.** The envelope has generic fields that layer 2 never interprets: an element id, a parent element id, kind, time and outcome, all opaque strings the model fills in. The projector expands entries from the envelope and the viewer shows it; the payload is the model's. Encryption, by-reference values and erasure then act on payloads only, and a run's shape survives erasure. The design sketch's history section already gives entries "a common envelope (node, parent node, kind, time)". Walkthrough decision 12 records the journal as model-agnostic with opaque entries; decision 6 adopts this envelope beside it, and layer 2 still interprets nothing.
 2. **Every payload carries a codec header:** plain, by reference, or encrypted with a key id. Rows written before a codec is switched on read as plain, so encryption and references can be enabled per definition without rewriting old rows. The same header goes on state, message payloads, start input, event payloads, value records and projected history payloads.
 3. **The rule for values in ids and keys** (decisions 4 and 5), with the `h:` keyed-hash form reserved for caller keys and correlation keys from the start.
-4. **Lifecycle transitions are journalled at every history level** (created, ended, migrated, deleted) as envelope-only entries. The instance-list read model then sees every instance's end, which the retention worker needs. Today a turn at State history writes `[]` and at Minimal writes no row; only deletes and dropped or missing-target drops are journalled at every level. So this changes both State and Minimal (decision 1).
+4. **Lifecycle transitions are journalled at every history level** (created, ended, migrated, deleted) as envelope-only entries carrying tenant, creation and, for an end, Park or discard, the terminal mark. The instance-list read model then sees every instance's end and the identity a delete must name, which the retention worker needs. Today a turn at State history writes `[]` and at Minimal writes no row; only deletes and dropped or missing-target drops are journalled at every level. So this changes both State and Minimal (decision 1).
    - **One rule with Park's journalling.** Park, recover and discard are journalled at every history level for the parked-work read model ([observability](observability.md), decision 2a). That is the same mechanism with more transitions, and the two land as one rule (decision 1).
 5. **Non-positive journal rows are compactable below the projector's cursor,** with invariant 6 restated.
 6. **Done markers keep only the id and window.** The consuming commit already updates the row to mark it done (`UPDATE "Messages" SET "Done"` in the owned commit). Clearing `Payload` and `Start` in the same update leaves no copy of a handled command's input, and duplicate detection needs only the id. This changes the commit's consume step (step 4), so it is kernel behaviour.
@@ -173,7 +214,7 @@ These cost little now and require rewriting stored history later:
 
 "Retention and delete" in a basic form ([release 1 scope](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)):
 
-- delete of one ended instance, delete by filter, and terminate-then-delete, through the runtime API, on the built delete path;
+- delete of one ended instance, delete by filter, and terminate-then-delete, through the runtime API, as qualified deletes that the owner checks against tenant, creation, terminal mark and policy;
 - retention policies per definition with a host default, by end status, enforced by the retention worker (decision 1), with the guard for a shortened policy (decision 2);
 - removal of by-reference value rows with their instance, in the delete commit (option a): a delete must not leave them behind;
 - the format items 1 to 4 and 6; for item 5, only the rule that no reader needs non-positive rows below the cursor (the compaction job comes after release 1, decision 8);
@@ -186,6 +227,7 @@ Later: archiving; payload encryption and per-instance keys; redaction inside run
 | Item | Cost | Status |
 |---|---|---|
 | Delete of one ended instance | One delete commit, batched with the partition's turns. The outside delete message adds one insert and one mark-before-run commit, and a load when the instance is not in memory (`ProtectsDeletion` reads the state). PostgreSQL sample: 4 observed TCP edges, and 512 WAL bytes per raw delete or 656 per retirement | Built; bounded sample measured |
+| The qualified delete's checks | In memory, in the turn that already loads the row: no extra database call. The ending, Park and discard commits write the two terminal-mark columns; the lifecycle entry carries the identity | Proposed |
 | Retained after delete | One retirement marker per generated id (101 bytes in the sample), one deletion marker journal row per instance, done markers until their window | Built |
 | Retention worker (decision 1, chosen) | One read-model page read per sweep page and one outside message per expired instance, with its mark-before-run commit | Proposed |
 | Retention timer (decision 1, rejected) | One inbox row per ended instance for its whole retention period, inserted in the ending commit. When it fires weeks later, a takeover in between is likely, so it usually pays a mark-before-run commit as well | Not adopted |
@@ -194,9 +236,30 @@ Later: archiving; payload encryption and per-instance keys; redaction inside run
 | Payload encryption | Batched key-ring calls, CPU, about 40 bytes per payload, loss of compression unless the codec compresses first | Proposed, unmeasured |
 | Dead rows | Deleting journal rows leaves dead tuples for vacuum (peaks of 769 to 1,059 in the stress run, from aborted inserts and deletes) | Measured in WRITES.md |
 
+## Acceptance cases
+
+For [B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272). Milestones are those of the [program plan](../program-goals/clean-slate-kernel.md).
+
+- **K3:** each case runs on the prototype's in-memory store and in the simulation. The simulation gains the invariant "a delete removes only the run and terminal transition it names", and a mutation `DeleteIgnoresSelection` (today's behaviour: delete whatever ended row the id loads) must fail it.
+- **K4:** the same cases run on every provider.
+- **K9 and K11:** cover the read model and the worker.
+
+| Case | Order of events | Expected | Milestone |
+|---|---|---|---|
+| RD1 Lagging projection, key reuse | Select A (key K, creation cA, mark r). Delete A by hand. Start B under K after the window. B ends at revision r. Deliver the delayed retention delete | Refused as a different run; B's row, journal, subscriptions and values are intact; the refusal metric counts "run" | K3, K4 |
+| RD2 Equal end revisions | As RD1, with A and B both ending at the same revision and the same status | Refused; the decision does not depend on revision equality | K3, K4 |
+| RD3 Policy extended before execution | Select A under a 30-day window. Change the policy to 90 days. Deliver the delete on day 31 | Refused as not eligible; a sweep after day 90 selects and deletes A | K3, K11 |
+| RD4 Recovery after selection | Park A (mark r1); the worker selects it under `Parked`. Recover A, which then ends at r2. Deliver the old delete | Refused as a different transition; a later sweep deletes under r2's window | K3, K11 |
+| RD5 Tenant mismatch | Two tenants; a delete naming tenant T1 reaches T2's row with the same id | Refused as tenant | K3, K4 |
+| RD6 Ambiguous selection | A delete without creation or mark; a delete of a caller-keyed row whose creation is unknown (EF before K3) | Refused as ambiguous; nothing deleted | K3, K4 |
+| RD7 Generated id | A generated-id instance with matching creation and mark; then the same selection again after its window | Deleted, leaving its retirement marker; the repeat deletes nothing more | K3, K4 |
+| RD8 Terminate then delete | `kernel.terminate` with `ThenDelete` on a running instance; once unprotected, once with `ProtectsDeletion` true | Terminated and deleted in one commit; when protected, terminated only and reported | K11 |
+| RD9 Shortened policy guard | Shorten a policy over N ended instances | The API reports N and requires confirmation above the threshold; deletes proceed at the bounded rate, each still checked by the owner | K11 |
+| RD10 Read model carries identity | End, Park, recover and discard at every history level | The instance-list read model shows tenant, creation and the current terminal mark after each | K9 |
+
 ## Unverified
 
-- **Not built:** the retention worker, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
+- **Not built:** the qualified delete and its checks, the terminal mark, persisted creation on EF and MongoDB, the retention worker, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
 - **Done markers:** clearing their payloads assumes no reader uses them. The event-start acceptance receipt and the outside-command duplicate answer must be checked before it is built.
 - **Value store:** its crash durability, pruning and erasure are unqualified (VALUES.md). Decision 10's acceptance run, the `pad=` case against a reference on PostgreSQL with option a, is unrun (POSTGRES.md; write volume decision 2).
 - **Estimates:** all encryption costs.
@@ -225,3 +288,10 @@ options are kept for the record.
    readers. Kernel behaviour, two-review tier when built.
 8. **Non-positive journal rows below the projector's cursor are compacted after release 1 (format item 5),** with the
    restated invariant 6 checked in the simulation. Kernel behaviour.
+
+### Open for the owner (from the B1 fix)
+
+9. **Every delete is qualified.**
+   - **A:** the runtime API resolves an id to the current run through the read model and sends the qualified delete; there is no "delete whatever run this id has now".
+   - **B:** as A, plus an operator-only `Force` that deletes the current run of an id without a creation or mark.
+   - **Recommendation: A.** B reopens the B1 trace for operators.

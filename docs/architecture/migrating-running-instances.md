@@ -170,7 +170,9 @@ All of it lands or none of it does (invariant 2). A commit refused by the fence 
 - **Closing.** An operator action, "close plan", ends a plan with pending instances; the plan-outcomes read model lists them as unanswered. Release 1 documents that a plan may stay open until it is closed. An outcome that arrives after the close is still counted and recorded.
 - **Identity.** A selection names an instance by id and creation, and the `Migrate` message carries `TargetCreation`. With it set, a deleted target, or a fresh run under a reused caller key (refused as `WrongCreation`), is refused by the durable layer's creation check (`CreationError` in Worker.cs, `CreationProtocol.TargetError` and `Refuse` in [Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)). The message is consumed with no journal row and no reply, because sends made inside a turn carry no reply address. The instance stays pending.
 - **The dependency.** `TargetCreation` needs persisted creation headers, and today only the in-memory store has them ([storage model](storage-model.md#physical-records)). The EF store refuses a qualified message with a definite `StoreException` (`RejectUnsupported` in Creation.cs), which would park the plan. A row with creation 0 refuses every `TargetCreation`. Persisting creation headers on every provider is a store change and kernel behaviour, which needs the two-review tier when built.
-- **Release 1's fallback.** Until then, and for rows with creation 0, the plan addresses instances by id only. The risk is that a fresh run under a reused caller key can be migrated by an old selection, and its outcome is counted for the old run. The `From` guard and the simple-case checks bound it: the fresh run must be at the source version and pass the same checks, so it is migrated exactly as a newly selected instance would be. Release 1 documents this risk for caller-keyed instances; generated ids are never reused (walkthrough decision 7), so they carry no such risk.
+- **Creation-qualified dispatch first.** The plan chooses per instance. When the provider persists creation headers and the selected row's creation is known, `Migrate` carries `TargetCreation`. Only otherwise does the plan address by id. Once K3 persists creation headers on every provider, every new run has a creation. Release 1 starts from empty databases (owner, 17 November), so release 1 dispatches every `Migrate` qualified, and the id-only path stays only as the rule for a row without a creation.
+- **The id-only fallback.** This covers rows without a creation, and every row before K3 lands. Its risk is that a fresh run under a reused caller key can be migrated by an old selection, and its outcome counted for the old run. The `From` guard and the simple-case checks bound it: the fresh run must be at the source version and pass the same checks, so it is migrated exactly as a newly selected instance would be. Generated ids are never reused (walkthrough decision 7), so they carry no such risk. The fallback is a migration rule only; deletion has no id-only path ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)).
+- **Fallback outcomes are shown to the operator.** Each outcome message carries the creation of the run that answered, or 0 when it is unknown, and whether its `Migrate` was qualified. The plan counts id-only dispatches beside its outcome counts. The plan-outcomes read model lists id-only outcomes separately. It flags one whose answering creation differs from the selected creation as "a different run answered". The operator API returns both.
 - **Later.** Reconciling unanswered instances automatically (a job of the plan that reads both read models and returns the missing id and creation pairs to a later plan turn, where a decisive outcome arriving afterwards replaces "target missing") is deferred.
 
 The instance's own journal records a "not at source" answer only at Full history. After the plan consumes the outcome message, only the plan's journal entry and the read model remain. For very large plans, the aggregating pattern of question 4 (large fan-out and fan-in, PR #4708) applies: combiners between the instances and the plan.
@@ -209,6 +211,17 @@ Later: explicit node, path and state maps; frame cancellation by map; re-registe
   - a simulated migration under takeovers: it lands once, a refusal changes nothing, effect keys of replayed activations are unchanged, invariant 8 holds, and an older owner never writes a newer state back;
   - mutations that forget a frame's parent chain, accept a reordered Sequence prefix, map a ForEach to a target with a different child, ignore a join's inbound set, drop a `Results` node, or consume a `Migrate` on an older owner.
 
+## Acceptance cases
+
+From the [Astra High gate 2 review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272). Its note on this page asks for creation-qualified dispatch and visible fallback outcomes. Milestones are those of the [program plan](../program-goals/clean-slate-kernel.md).
+
+| Case | Order of events | Expected | Milestone |
+|---|---|---|---|
+| MP1 Qualified dispatch | A plan over runs with known creations on a provider that persists creation headers | Every `Migrate` carries `TargetCreation`; the plan's id-only count is 0 | K3, K11 |
+| MP2 Reused key, qualified | Select A under key K; delete A; start B under K at the source version; deliver A's `Migrate` | Refused as `WrongCreation`; B is not migrated; A stays pending | K3, K4 |
+| MP3 Reused key, id only | As MP2, on a row without a creation | B is migrated (the documented risk); the outcome is listed among id-only outcomes and the plan's id-only count is 1 | K11 |
+| MP4 Release 1 database | A fresh release 1 database after K3 | No row has creation 0; no plan dispatches id-only | K4, K12 |
+
 ## Decisions (owner, 16–17 November 2026)
 
 The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with
@@ -227,4 +240,4 @@ the rest of the kernel's. Rejected options are kept for the record.
    (A).** Rejected: (B) running instances and tickets only, with a "definition removed" fallback for older history.
 
 **Accepted with the recommendations:** until creation headers are persisted, a plan addresses instances by id only,
-and release 1 documents the reused-caller-key risk ("Release 1's fallback" above).
+and release 1 documents the reused-caller-key risk ("The id-only fallback" above). Dispatch is creation-qualified wherever the provider and row allow it, and fallback outcomes are shown to the operator (added for the Astra High gate 2 review).
