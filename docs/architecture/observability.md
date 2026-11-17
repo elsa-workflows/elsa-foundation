@@ -632,7 +632,7 @@ calls one new model hook.
   turns change its kept rows (the sweep skips them), and its turns are serial under the partition fence, so what the
   lookup sees is what the open commit and the later drain pages write against. The writes still carry the lookups as
   preconditions, as a defence against a defect: a restarted ticket is a create-only insert under its new generation's
-  key, a re-arm is the count-checked revive-or-insert below, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
+  key, a re-arm is the count-checked delete-and-insert, or the insert, below, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
   computes the step again from the rows as they are, under the same operation id; a failed create-only insert is a
   definite error, which parks the instance again under the commit's failure rule, and the operator can repeat the
   recover.
