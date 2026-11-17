@@ -6,6 +6,22 @@ namespace Elsa.Integrations.Connectors.Slack.Tests;
 
 public sealed class SlackSecretAndManifestTests
 {
+    // Spec 1230 US5: the connector activities the built-in assessment marks; the others either cannot promise C7
+    // (a re-run repeats an external effect) or wait on an implementation fix filed as an issue.
+    private static readonly Type[] BackgroundSafe = [typeof(ListChannels), typeof(LookupChannel), typeof(LookupUserByEmail), typeof(UpdateMessage)];
+
+    [Fact]
+    public void Only_the_assessed_reads_are_background_safe()
+    {
+        var marked = typeof(SendMessage).Assembly.GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false } &&
+                           type.IsDefined(typeof(Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafeAttribute), inherit: true))
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(BackgroundSafe.Select(type => type.FullName!).Order(StringComparer.Ordinal), marked);
+    }
+
     [Fact]
     public async Task Token_is_absent_from_logs_outputs_and_faults()
     {
@@ -43,7 +59,8 @@ public sealed class SlackSecretAndManifestTests
         foreach (var type in expected)
         {
             var entry = Assert.Single(manifest.Activities, activity => activity.TypeName == type.FullName);
-            Assert.Equal("1.0.0", entry.Version);
+            // Spec 1230: the reads marked [BackgroundExecutionSafe] moved to 1.1.0 (their contract fingerprint changed).
+            Assert.Equal(BackgroundSafe.Contains(type) ? "1.1.0" : "1.0.0", entry.Version);
             Assert.False(string.IsNullOrWhiteSpace(entry.Icon));
             Assert.False(entry.IsTrigger);
             Assert.Contains(entry.Inputs, input => input.Key == "Connection" && input.DisplayName == "Connection");

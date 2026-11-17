@@ -59,7 +59,7 @@ public sealed partial class AgentPublicationTests
         IActivityDraftTestRunService service = new ActivityDraftTestRunService(fixture.Stores, fixture.Stores, fixture.Stores, fixture.Compiler, new Access(),
             fixture.Templates, fixture.Sources,
             new ActivityTemplatePlacer(fixture.Stores, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(), new DefaultActivityStructureService([]),
-                new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers)),
+                new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types),
             new Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher(), provider.GetRequiredService<IWorkflowExecutableStore>(),
             dispatcher, provider.GetRequiredService<IWorkflowTestScopeStore>(),
             provider.GetRequiredService<IWorkflowExecutionPartitionAccessor>(), new InMemoryActivityDraftTestRunStore(),

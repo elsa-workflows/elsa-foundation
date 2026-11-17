@@ -5,8 +5,10 @@ using Elsa.Integrations.Connectors.Microsoft365.Models;
 
 namespace Elsa.Integrations.Connectors.Microsoft365.Activities;
 
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a read; the request observes the cancellation token; a result above the receipt limit faults with BG-ACT-006.
+[BackgroundExecutionSafe]
 [Activity(Icon = "download")]
-[Version("1.0.0")]
+[Version("1.1.0")]
 public sealed class DownloadFile(
     IHttpClientFactory httpClientFactory,
     IHttpConnectionApplicator connectionApplicator)

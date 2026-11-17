@@ -17,6 +17,8 @@ namespace Elsa.Activities.Primitives.Activities;
 // A crash before the next commit writes the lines again; no workflow state differs.
 // The lines are written out of the workflow to the console, so a secret binding is refused there with that reason
 // (the list type would refuse one too, with a less helpful message).
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a re-run writes the console lines again, no workflow state differs; synchronous.
+[BackgroundExecutionSafe]
 [RefusesSecretBinding(nameof(Lines), SecretBindingRefusalReason.EchoedToOutput)]
 [Activity(Icon = "Terminal")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

@@ -21,6 +21,8 @@ namespace Elsa.Activities.Primitives.Activities;
 [Activity(Icon = "TriangleAlert")]
 // ReplaySafe (#2581): the body builds the same fault from the same inputs and performs no I/O. The
 // incident it causes is committed by the mandatory IncidentRecorded boundary after the body, not by the body.
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: returns a fault built from its inputs, no external effect.
+[BackgroundExecutionSafe]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Fault : Activity<ActivityUnit>
 {

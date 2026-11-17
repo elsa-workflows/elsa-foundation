@@ -6,8 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Integrations.Connectors.Slack.Activities;
 
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: sets the message text, so a re-run leaves the same result; the request observes the cancellation token.
+[BackgroundExecutionSafe]
 [Activity(Icon = "pencil")]
-[Version("1.0.0")]
+[Version("1.1.0")]
 [RefusesSecretBinding(nameof(Text), SecretBindingRefusalReason.EchoedToOutput)]
 [RefusesSecretBinding(nameof(Blocks), SecretBindingRefusalReason.EchoedToOutput)]
 public sealed class UpdateMessage(

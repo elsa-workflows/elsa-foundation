@@ -33,6 +33,8 @@ namespace Elsa.Activities.Scripting.Activities;
 /// completes successfully; a fault discards it.
 /// </para>
 /// </remarks>
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a closed sandbox with no variable access; the evaluator observes the cancellation token.
+[BackgroundExecutionSafe]
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
 [ActivityScriptOutcomes("script")]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>

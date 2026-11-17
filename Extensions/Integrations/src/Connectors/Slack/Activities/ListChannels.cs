@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Integrations.Connectors.Slack.Activities;
 
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a read; the request observes the cancellation token.
+[BackgroundExecutionSafe]
 [Activity(Icon = "hash")]
-[Version("1.0.0")]
+[Version("1.1.0")]
 public sealed class ListChannels(
     IHttpClientFactory httpClientFactory,
     IHttpConnectionApplicator connectionApplicator,
