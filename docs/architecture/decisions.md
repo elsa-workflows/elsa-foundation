@@ -138,7 +138,7 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | Gateway keys | `{worker}/{request id}` with a `keep_until`. | Job workers 3 |
 | Standalone effect key | `{job origin}/job/-/0`. | Job workers 4 |
 | Recovery | In place (same id, next revision), plus intervention: faults the model can hold stay Running with a blocking incident. | [Observability](observability.md#decisions-owner-1617-november-2026) 1 |
-| Park | Extended: consumed deliveries and arrivals kept as done rows under the `Parked` window, marked by a per-row kept reason in `KeptBy` (non-null only while its Park is unresolved) and named by a delivery handle of the full message key, journalled at every level; the restore clears `Done`, and every resolution is a bounded drain under a durable cursor. Discard and delete of a parked child send its parent a final Faulted notice. | Observability 2 |
+| Park | Extended: consumed deliveries and arrivals kept as done rows under the `Parked` window, marked by a per-row kept reason in `KeptBy` (non-null only while its Park is unresolved) and named by a delivery handle of the full message key, journalled at every level; the restore clears `Done`, and every resolution is a bounded drain under a durable cursor. Every resolution sends a waiting parent exactly one final notice: discard (Faulted), expiry (Faulted, an automatic discard), terminate (Cancelled) and delete. | Observability 2 |
 
 ## Process
 
