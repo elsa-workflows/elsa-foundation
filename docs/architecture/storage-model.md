@@ -93,7 +93,7 @@ SQL row mutations also check the expected match, so a reused physical scope cann
 | Private issued IDs on SQL Server/MySQL | Raw big-endian UTF-16 in `IssuedWire`, with empty text `Id`; ordinary/event IDs retain native text. Declared binary limits are 900/1,020 bytes respectively; ordinary IDs retain 450 UTF-16 units on SQL Server and 255 Unicode scalar values on MySQL. This is not an unbounded-key guarantee. |
 | Private issued IDs on PostgreSQL/SQLite | NUL or unpaired UTF-16 units use reversible binary/base64 encoding with a distinct scope. Representable issued IDs retain text. No ordinary caller prefix is reserved by this encoding. |
 | Opaque keys in JSON | `DurableKeyJson` preserves unsupported UTF-16 units and escapes tagged property names. It applies to annotated framework keys and registries, not every application state field. |
-| Projected message metadata (proposed) | Every field a recovery page reads (full key, `Kind`, `Sender` and the fixed fields) has an admission limit checked at every ingress, giving a per-row maximum `M` = 16 KiB below the page bound `B` = 4 MiB ([observability](observability.md#resolving-a-park-a-bounded-drain)). The kernel's limit is the tighter one where a provider declares its own. Unmeasured until K4. |
+| Projected message metadata (proposed) | Every field a recovery page reads (full key, `Kind`, `Sender` and the fixed fields) has an admission limit checked at every ingress, giving a per-row maximum `M` = 24 KiB below the page bound `B` = 4 MiB ([observability](observability.md#resolving-a-park-a-bounded-drain)). The kernel's limit is the tighter one where a provider declares its own. Unmeasured until K4. |
 
 Child addresses are bounded issuer identities containing destination partition, issuer partition, fenced epoch
 and checked ordinal. They do not recursively concatenate their parent's address. Event starts use a provider
@@ -139,7 +139,7 @@ The separate [values-by-reference witness](../../prototypes/kernel-model/models/
 collection to `KernelDb` or `MongoStore`; it uses an external directory through existing jobs.
 MongoDB's [document-size experiment](../../prototypes/kernel-model/MONGO.md#5-findings)
 records a 16 MiB document limit: the instance envelope shares that limit with its state string. This is a provider
-constraint, not a chosen inline-value threshold. The proposed recovery reserve keeps every committed envelope 296 KiB below that limit, so a
+constraint, not a chosen inline-value threshold. The proposed recovery reserve keeps every committed envelope 312 KiB below that limit, so a
 recover's `ParkRecord` always fits ([observability](observability.md#recover)).
 
 ### Optional commit-time facts
