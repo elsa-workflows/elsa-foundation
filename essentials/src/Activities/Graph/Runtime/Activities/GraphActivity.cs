@@ -317,10 +317,6 @@ public sealed class GraphActivity(
                 return CoerceExpressionResult(captured.Value, expectedType);
             }
 
-            if (!StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "JavaScript"))
-                throw new InvalidOperationException(
-                    $"Graph expression syntax '{expression.Syntax}' is unsupported at runtime. Supported syntaxes are Literal, Object, Input, and portable JavaScript. Output mappings also support Variable.");
-
             var portableEvaluator = _portableExpressionEvaluator
                 ?? throw new InvalidOperationException(
                     $"Graph expression syntax '{expression.Syntax}' requires a registered '{nameof(IPortableExpressionEvaluator)}'.");
@@ -328,17 +324,12 @@ public sealed class GraphActivity(
             var parameterValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var parameterBindings = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
             var argumentNames = new HashSet<string>(StringComparer.Ordinal);
-            var source = expression.Value;
-            var useReferenceKeys = evaluatingOutputs && source.ValueKind == JsonValueKind.Object &&
-                source.TryGetProperty("inputBinding", out var binding) && binding.ValueKind == JsonValueKind.String &&
-                StringComparer.Ordinal.Equals(binding.GetString(), "referenceKey") &&
-                source.TryGetProperty("source", out source);
-            if (source.ValueKind != JsonValueKind.String)
-                throw new InvalidOperationException("A graph JavaScript expression requires source text.");
+            if (!PortableExpressionSource.TryRead(expression.Value, evaluatingOutputs, out var source))
+                throw new InvalidOperationException($"Graph expression syntax '{expression.Syntax}' requires portable source text.");
 
             foreach (var input in Descriptor.Inputs)
             {
-                var name = useReferenceKeys ? input.ReferenceKey : input.Name ?? input.ReferenceKey;
+                var name = source.UsesReferenceKeys ? input.ReferenceKey : input.Name ?? input.ReferenceKey;
                 if (string.IsNullOrWhiteSpace(name) || !argumentNames.Add(name))
                     throw new InvalidOperationException($"Graph argument name '{name}' is blank or declared more than once.");
 
@@ -364,8 +355,8 @@ public sealed class GraphActivity(
             }
 
             var definition = new ExpressionDefinition(
-                "JavaScript",
-                source.GetString()!,
+                expression.Syntax,
+                source.Text,
                 expected.ToTypeReference(),
                 parameterBindings,
                 JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),

@@ -19,6 +19,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,8 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector, IActivityProviderDiagnosticCatalog
+    IServiceScopeFactory? scopeFactory = null,
+    IEnumerable<IPortableExpressionSourceValidator>? expressionValidators = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector, IActivityProviderDiagnosticCatalog
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
@@ -51,7 +53,7 @@ public sealed class GraphActivityProvider(
     public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/5.2.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/5.1.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
@@ -1101,7 +1103,7 @@ public sealed class GraphActivityProvider(
         }
     }
 
-    private static void ValidateBoundaryInputReads(ActivityGraphManifest graph, DesignActivityContract contract,
+    private void ValidateBoundaryInputReads(ActivityGraphManifest graph, DesignActivityContract contract,
         ActivityDiagnosticSubject subject, ICollection<ActivityDiagnostic> diagnostics)
     {
         var inputs = contract.Inputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
@@ -1113,14 +1115,22 @@ public sealed class GraphActivityProvider(
             var pointer = $"/outputMappings/{index}/source";
             var source = mapping.Source;
             Check(source, pointer, mapping.OutputReferenceKey);
-            if (StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "JavaScript") &&
-                source.Value.ValueKind == JsonValueKind.Object &&
-                source.Value.TryGetProperty("source", out var text) && text.ValueKind == JsonValueKind.String &&
-                string.IsNullOrWhiteSpace(text.GetString()))
+            var validators = (expressionValidators ?? []).Where(validator =>
+                StringComparer.OrdinalIgnoreCase.Equals(validator.Language, source.Syntax)).ToArray();
+            if (validators.Length == 0)
+                continue;
+
+            if (!PortableExpressionSource.TryRead(source.Value, allowReferenceKeys: true, out var portableSource))
             {
                 diagnostics.Add(Diagnostic("activity.graph.output.source-invalid",
-                    "Enter a JavaScript expression for this output before publishing.", subject, pointer, mapping.OutputReferenceKey));
+                    "Enter source text or source text with explicit reference-key binding for this output.",
+                    subject, pointer, mapping.OutputReferenceKey));
+                continue;
             }
+
+            foreach (var validator in validators)
+            foreach (var finding in validator.Validate(portableSource))
+                diagnostics.Add(Diagnostic("activity.graph.output.source-invalid", finding, subject, pointer, mapping.OutputReferenceKey));
         }
 
         void Check(ActivityInputDefault? source, string pointer, string referenceKey)
