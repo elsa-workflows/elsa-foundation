@@ -86,8 +86,22 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 - [ ] T022 Measurement SC-004 (10,000 activity executions, first page; instance details unchanged); if it fails, record
   it and propose the projection fallback (research R-2) on the PR.
 - [ ] T023 Run [quickstart.md](quickstart.md) on the Workbench; access tests for SC-005.
-- [ ] T024 Hand the API contract to elsa-studio for the presentation (instance diagnostics badge, history, journal,
-  comparison views).
+- [ ] T024 Move the Studio items to Phase 9 (T025–T029); nothing is handed to another repository.
+
+## Phase 9: Studio presentation (FR-017), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
+
+Builds on #4735 (spec 1221's activity-level items) and on this spec's endpoints (T008, T011, T014, T017).
+
+- [ ] T025 [P] API client and types for the variables, variable-writes, journal and compare endpoints next to
+  `workflowInstanceInspection.ts`, with cursor paging.
+- [ ] T026 [US2] Instance diagnostics badge for the lost-update count on the instance view (`WorkflowInstanceTimeline.tsx`),
+  opening the write history filtered to lost updates.
+- [ ] T027 [US1] [US2] Write history view per variable: writers, versions, commit order, lost-update and
+  concurrent-overwrite marks, values through `RuntimeValueEvidence.tsx` (value states, payload read).
+- [ ] T028 [US3] [US4] Journal view in commit order (stamps, input refreshes, writes) and the comparison view of two
+  instances (first divergence, differing variables, digests only).
+- [ ] T029 [P] Tests in `__tests__/` (vitest) for the client paging and each view's states, including omitted and
+  redacted values and a legacy instance with no history.
 
 ## Dependencies
 

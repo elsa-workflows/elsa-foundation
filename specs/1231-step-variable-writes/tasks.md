@@ -84,6 +84,16 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 - [ ] T044 Map every ADR 0090 *Required evidence* item in scope to its test in the PR body (SC-001); list the host-interop items as out of scope (#4103).
 - [ ] T045 Set the spec's `Status: Implemented` in the finishing PR; update spec 1221's tasks.md notes for T015/T016 to point at this PR, and spec 1222 T047/T050 and spec 1228 T026/T028 if they can now proceed.
 
+## Phase 10: Studio presentation (FR-036), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
+
+- [ ] T046 Variable-reference input editor: bind a `VariableReference<T>` / `ReadOnlyVariableReference<T>` input to a
+  declared variable in scope, reusing `variableTargetPicker.tsx` and `variableReferenceContribution.tsx`; read-only
+  references are labelled as reads.
+- [ ] T047 Show a node's may-write set in `ActivityPropertiesPanel.tsx`, and a marker for an activity carrying
+  `[AccessesUndeclaredVariables]` ("may write any visible variable"), from the authoring descriptor.
+- [ ] T048 [P] Tests in `__tests__/` (vitest): the picker offers only declared variables in scope, the may-write set and
+  the marker render from the descriptor.
+
 ## Dependencies
 
 - Phase 2 → all stories. Phase 3 needs Phase 2 only (test activities). Phase 4 → Phase 6 (same PR). Phase 5 needs

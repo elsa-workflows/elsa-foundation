@@ -83,9 +83,10 @@ board row, S-13 (Q1).
 - A variable session for structural activities (Q4); they keep `IRuntimeScopedVariableReader`.
 - A variable session for background steps: C9 stays a refusal (ADR 0093 *Limits*). ADR 0090 open question 7 is
   therefore not reached.
-- Studio presentation of variable-reference inputs, the may-write set and the free-name marker (ADR 0090 open
-  question 2): its own elsa-foundation-studio work against the authoring descriptor this spec extends.
 - Liquid writes (ADR 0090 open question 5). Merge and Reduce semantics. #3023 (Q7).
+
+**Studio.** The presentation of variable-reference inputs, the may-write set and the free-name marker (ADR 0090 open
+question 2) is part of this spec, built in `Studio/` against the authoring descriptor it extends (FR-036).
 
 ## Clarifications
 
@@ -431,6 +432,12 @@ and run the converted scripts.
 
 - **FR-035**: The cost of a step write MUST be measured against a large payload and a hot loop: serialization of
   written variables only (a read serializes nothing), the canonical comparison of FR-012, and the session-read record.
+
+**Studio**
+
+- **FR-036**: Studio MUST let an author bind a `VariableReference<T>` or `ReadOnlyVariableReference<T>` input to a
+  declared variable in scope, show a node's may-write set in its properties, and mark an activity that carries
+  `[AccessesUndeclaredVariables]`, from the authoring descriptor, in `Studio/`.
 
 ### Key Entities
 
