@@ -1,6 +1,6 @@
 # Contract: Elsa 3 converter — variable reads
 
-**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Reconciles spec 247 with the D-7 read model:
+**Spec**: [../spec.md](../spec.md) · Approved 2026-11-17 (initiative #3052). Reconciles spec 247 with the D-7 read model:
 static pinning for literal names plus a run-time fallback for computed names.
 
 ## Emission

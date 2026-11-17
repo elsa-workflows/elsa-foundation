@@ -1,6 +1,6 @@
 # Data Model: Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · Draft (initiative #3052)
+**Spec**: [spec.md](spec.md) · Approved 2026-11-17 (initiative #3052)
 
 These are conceptual entities for the read model, not storage schemas. Reads add no new persisted state beyond the
 existing input snapshot, which now also holds the reads recorded by the run-time fallback.

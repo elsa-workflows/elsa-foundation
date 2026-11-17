@@ -4,8 +4,8 @@
 
 **Input**: Feature specification from `specs/1222-scripts-read-by-name/spec.md`
 
-**Status**: Draft (initiative #3052), awaiting the coordinator's approval of the spec. This plan applies ADR 0089 as
-accepted and merged (`0a381a812a`), with ADR 0090 and ADR 0092 (both accepted). Once the spec is approved it is
+**Status**: follows the spec, approved 2026-11-17 (initiative #3052). This plan applies ADR 0089 as
+accepted and merged (`0a381a812a`), with ADR 0090 and ADR 0092 (both accepted). It is
 implemented on the initiative branch (D-18); the gates below are enforced in those implementation PRs.
 
 ## Summary

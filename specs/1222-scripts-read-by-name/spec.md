@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-09
 
-**Status**: Draft — defined and awaiting the coordinator's approval. Every ADR it applies is accepted and merged into the initiative branch; the open questions below need answers.
+**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with all six open questions answered as recommended. Every ADR it applies is accepted and merged into the initiative branch.
 
 **Spec number**: 1222
 

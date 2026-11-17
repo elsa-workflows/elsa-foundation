@@ -1,6 +1,6 @@
 # Quickstart: validating Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · Draft (initiative #3052)
+**Spec**: [spec.md](spec.md) · Approved 2026-11-17 (initiative #3052)
 
 How to confirm the read model once implemented. Each maps to a spec success criterion.
 

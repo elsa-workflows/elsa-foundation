@@ -1,6 +1,6 @@
 # Research: Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · Draft (initiative #3052)
+**Spec**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · Approved 2026-11-17 (initiative #3052)
 
 This resolves the plan's open questions and the mechanism choices, grounded in the current code. The read model is
 decision **D-7**, recorded in ADR 0089 as accepted (amendment R1–R4 of decisions 4 and 5).

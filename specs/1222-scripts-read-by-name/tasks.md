@@ -8,8 +8,8 @@ description: "Task list for Scripts Read Variables By Name (spec 1222)"
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 
-**Status**: Draft (initiative #3052). ADR 0089 is accepted and merged (`0a381a812a`); these tasks are implemented on
-the initiative branch once the spec is approved (D-18). External prerequisites: #3171 (side track on `main`) for the
+**Status**: follows the spec, approved 2026-11-17 (initiative #3052). ADR 0089 is accepted and merged (`0a381a812a`); these tasks are implemented on
+the initiative branch (D-18). External prerequisites: #3171 (side track on `main`) for the
 parser parity; spec 1216 / S-2 FR-025–FR-027 for the missing-name behaviour. The former #3287 tasks (T026, T030) are
 dropped: #4315 fixed the `arguments` type. Spec 1228 (S-8) User Stories 3 and 7 wait on Phase 8 (T039, T045–T048).
 

@@ -1,6 +1,6 @@
 # Contract: The `variables` read surface, publish read-set and run-time fallback
 
-**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Amends spec 095 expression contract §1, §2, §3 and §6.
+**Spec**: [../spec.md](../spec.md) · Approved 2026-11-17 (initiative #3052). Amends spec 095 expression contract §1, §2, §3 and §6.
 Implements decision D-7 as ADR 0089 records it (accepted).
 
 ## Authoring surface
