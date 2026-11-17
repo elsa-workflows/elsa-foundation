@@ -78,5 +78,6 @@ A `Break` that ends a Flowchart cancels the other paths' running activities, so 
 Seeing the actual run order is not available yet: per-variable write history and the winning write
 ([#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290)), a commit-ordered journal and instance
 comparison ([#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291)) and a run-time trace of overwrites
-([#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292)) are separate work. Until they ship, the
+([#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292)) are separate work, specified in
+[spec 1229](../../specs/1229-variable-lifecycle-inspection/spec.md). Until they ship, the
 warning names the declared writers but gives no run-time evidence.
