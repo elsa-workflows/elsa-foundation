@@ -183,5 +183,5 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
   accept.
-- The write history is data; the read API that presents it is spec S-6, and Studio presents it in its own work
-  (elsa-workflows/elsa-foundation-studio#601).
+- The write history is data; the read API that presents it is spec S-6, and the Studio screens are follow-up work in
+  this repository's `Studio/` (#4734, #4735).

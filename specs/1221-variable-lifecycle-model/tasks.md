@@ -55,7 +55,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   `ClosedScopeVariableRows`); a refused row write refuses the completion. Intrinsics cannot write a closed scope's
   variables yet, so captures are the only row writers.
 - **T021a:** the warning is its write-history entry, with both writers, both versions and the overwritten value; the
-  API that exposes it is S-6 and Studio presentation is its own elsa-foundation-studio work (spec *Scope moved*). A
+  API that exposes it is S-6, and the Studio presentation is follow-up work in this repository's `Studio/` (#4735; spec
+  *Scope moved*). A
   warning incident was not used: an incident in a commit ends the coalescing session and would re-open the inline gap
   for later leaves.
 - **T033:** resume keeps the snapshot and read set and starts with no refresh. Advancing own-write bases on resume

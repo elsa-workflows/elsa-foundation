@@ -5,8 +5,8 @@
 **Created**: 2026-11-09
 
 **Status**: Implemented — in #4316 (2026-11-17). Approved 2026-11-12, together with ADR 0092 (#3411, merged as
-`f52a661df`). Session reads and own-write bases moved to S-7 and Studio presentation to elsa-foundation-studio
-(*Scope moved*).
+`f52a661df`). Session reads and own-write bases moved to S-7; the Studio presentation is follow-up work in this
+repository's `Studio/` (#4734, #4735; *Scope moved*).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-10**,
 analysis **A-2**, decisions **D-8** and **D-9**.
@@ -113,9 +113,11 @@ the publish-time warning itself (spec 266, S-5), apart from its pointer to the `
   own-write base advancement (an invocation's applied write moves its own base, ADR 0090 §6 order), and the session
   write as a write site under FR-010. This spec delivers the input read set, the commit rule every write site uses, and
   the base held by a suspended step; S-7 reuses them.
-- **Studio presentation goes to its own work in elsa-foundation-studio**, specified there against the API: the
-  distinct operator action names (FR-014) and showing the lost-update warning (FR-011). In this spec the warning *is*
-  its write-history entry (FR-024); exposing that history through an API is S-6 (spec 1229).
+- **Studio presentation is follow-up work in this repository**, not part of this PR. Studio lives here under `Studio/`
+  (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
+  showing the lost-update warning, accepted completions, background input refreshes, the node settings and the
+  `variableWrites` diagnostics setting (FR-011, #4735). In this spec the warning *is* its write-history entry (FR-024);
+  the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*
 
