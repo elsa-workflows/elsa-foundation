@@ -332,8 +332,8 @@ Background activities: eligibility is now decided by one component (ADR 0093), a
 (`VF-BG-001 (C<n>): …`); an activity that does not declare `[BackgroundExecutionSafe]` is refused as such. Run time now checks the same criteria as publication, so a background node pinned before this
 release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
-without a secret reference (C10) is refused at admission with an incident (Q5). Publication now also refuses a background result typed
-`Any` or `System.Object` (C3), which it previously let through. No shipped activity was marked
+without a secret reference (C10) is refused at admission with an incident (Q5). Template placement now checks a template provider's background nodes against the same criteria (FR-012), so a
+template node with an `Any` or `System.Object` result (C3), for example, is refused where it was copied through before. No shipped activity was marked
 before (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so only custom activities are affected. Five built-ins are now `[BackgroundExecutionSafe]`: `Break`, `Fault`, `WriteLine`, `WriteLines` and `BpmnDecision`. The
 Microsoft 365 and Slack activities that qualify stay unmarked until their background runs pass (#4737). `RunJavaScript` is not marked: scripts read and write variables by
 name, and a background worker has no access to variables (C9).

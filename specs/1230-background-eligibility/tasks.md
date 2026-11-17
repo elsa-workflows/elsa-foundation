@@ -83,8 +83,8 @@
   test per assessed-but-unmarked category, naming its criterion. *Done as:* the five Essentials built-ins publish in
   the background and run end to end on a worker (`WriteLine` and `Fault` on both persistence modes; `Break`,
   `WriteLines`, `BpmnDecision` on EF Core; `BpmnDecision` with an outcome from its pinned set), the unmarked categories with Essentials
-  representatives are refused naming why (`BuiltInBackgroundAssessmentTests`: C1, C3, C9, the Q8 cases and the C7/C8
-  category). The implementation-gap and qualifies-by-reading categories are connector or decision activities without a
+  representatives are refused naming why (`BuiltInBackgroundAssessmentTests`: C1, C3, C9 (`RunJavaScript`, refused as
+  undeclared), the Q8 cases and the C7/C8 category). The implementation-gap and qualifies-by-reading categories are connector or decision activities without a
   declaration; they are refused the same way as any undeclared type (`VF-BG-001: … does not declare`). The eight connector activities are not marked, so they have no run
   here: #4737 runs them on a worker and marks the ones that pass (Q10).
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
