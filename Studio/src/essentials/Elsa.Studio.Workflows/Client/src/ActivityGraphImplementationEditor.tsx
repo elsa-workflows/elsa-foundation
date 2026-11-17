@@ -1232,6 +1232,7 @@ export function ActivityGraphOutputMappingEditor({
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
   const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
   const [replacementSource, setReplacementSource] = useState<string | null>(null);
+  const outputSource = useRef<HTMLDivElement>(null);
   const replacementInput = useRef<HTMLTextAreaElement>(null);
   const replacementButton = useRef<HTMLButtonElement>(null);
   const replacementOpen = replacementSource !== null;
@@ -1287,7 +1288,7 @@ export function ActivityGraphOutputMappingEditor({
     <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
       {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
       {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
-      <div data-output-source>{!mapping ? <>
+      <div data-output-source ref={outputSource} tabIndex={-1}>{!mapping ? <>
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
@@ -1302,6 +1303,7 @@ export function ActivityGraphOutputMappingEditor({
             <StudioButton size="sm" disabled={!replacementSource.trim()} onClick={() => {
               onChange({ ...mapping.source, value: storeValue(currentSyntax, replacementSource, true) });
               setReplacementSource(null);
+              requestAnimationFrame(() => outputSource.current?.focus());
             }}>Apply replacement</StudioButton>
             <StudioButton size="sm" onClick={() => {
               setReplacementSource(null);

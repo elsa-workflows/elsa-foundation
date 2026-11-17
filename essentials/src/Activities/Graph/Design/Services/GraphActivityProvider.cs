@@ -1108,7 +1108,20 @@ public sealed class GraphActivityProvider(
         for (var index = 0; index < graph.Variables.Count; index++)
             Check(graph.Variables[index].InitialValue, $"/variables/{index}/initialValue", graph.Variables[index].ReferenceKey);
         for (var index = 0; index < graph.OutputMappings.Count; index++)
-            Check(graph.OutputMappings[index].Source, $"/outputMappings/{index}/source", graph.OutputMappings[index].OutputReferenceKey);
+        {
+            var mapping = graph.OutputMappings[index];
+            var pointer = $"/outputMappings/{index}/source";
+            var source = mapping.Source;
+            Check(source, pointer, mapping.OutputReferenceKey);
+            if (StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "JavaScript") &&
+                source.Value.ValueKind == JsonValueKind.Object &&
+                source.Value.TryGetProperty("source", out var text) && text.ValueKind == JsonValueKind.String &&
+                string.IsNullOrWhiteSpace(text.GetString()))
+            {
+                diagnostics.Add(Diagnostic("activity.graph.output.source-invalid",
+                    "Enter a JavaScript expression for this output before publishing.", subject, pointer, mapping.OutputReferenceKey));
+            }
+        }
 
         void Check(ActivityInputDefault? source, string pointer, string referenceKey)
         {

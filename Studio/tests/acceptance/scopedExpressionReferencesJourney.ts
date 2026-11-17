@@ -41,14 +41,20 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await expect.poll(savedValue).toBe(legacy);
   const switchKeys = source.getByRole("button", { name: "Replace with stable-key expression", exact: true });
   await switchKeys.scrollIntoViewIfNeeded();
-  await capture(page, info, "sum-binding-mode");
   await switchKeys.press("Enter");
   const replacement = source.getByRole("textbox", { name: "Expression using stable input keys", exact: true });
   await expect(replacement).toBeFocused();
   await expect(source.getByRole("button", { name: "Apply replacement", exact: true })).toBeDisabled();
+  await replacement.fill(stable);
+  await capture(page, info, "sum-binding-mode");
+  await source.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+  await expect(switchKeys).toBeFocused();
   await expect.poll(savedValue).toBe(legacy);
+  await switchKeys.press("Enter");
+  await expect(replacement).toHaveValue("");
   await replacement.fill(stable);
   await source.getByRole("button", { name: "Apply replacement", exact: true }).press("Enter");
+  await expect(source.locator("[data-output-source]")).toBeFocused();
   await expect.poll(savedValue).toEqual({ source: stable, inputBinding: "referenceKey" });
   await source.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   await expression.fill(legacy);
@@ -62,9 +68,9 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await expect(expression).toBeFocused();
   await expect.poll(savedValue).toEqual({ source: stable, inputBinding: "referenceKey" });
   await expression.press("ControlOrMeta+z");
-  await expect.poll(savedSource).toBe(legacy);
+  await expect.poll(savedValue).toEqual({ source: legacy, inputBinding: "referenceKey" });
   await expression.press("ControlOrMeta+Shift+z");
-  await expect.poll(savedSource).toBe(stable);
+  await expect.poll(savedValue).toEqual({ source: stable, inputBinding: "referenceKey" });
 
   await expression.fill("0");
   await expression.press("ControlOrMeta+a");
