@@ -63,10 +63,18 @@ internal sealed class BpmnTimeRelationAnalysis
         if (!forward && !backward)
             return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
 
-        // Two nodes that reach each other only around a cycle are ordered when one dominates the other (it runs first on
-        // every pass); otherwise they sit on branches of one pass that run side by side.
-        if (forward && backward && !Dominates(first, second) && !Dominates(second, first))
-            return ActivityChildTimeRelation.Unordered;
+        // Two nodes that reach each other around a cycle: what counts is whether each reaches the other within one pass,
+        // without going back through a node that dominates it (the way into the next pass). Both: one sequential path.
+        // One: that one runs first. Neither: they sit on branches of one pass that run side by side.
+        if (forward && backward)
+        {
+            var firstToSecond = ReachesWithinPass(first, second);
+            var secondToFirst = ReachesWithinPass(second, first);
+            if (!firstToSecond && !secondToFirst)
+                return ActivityChildTimeRelation.Unordered;
+            forward = firstToSecond || Dominates(first, second);
+            backward = !forward;
+        }
         var firstEarlier = forward && (!backward || Dominates(first, second));
         var (earlier, later) = firstEarlier ? (first, second) : (second, first);
         if (!OrderedThroughJoins(earlier, later) || (ForkCycleRuns().TryGetValue(later, out var forks) && forks.Any(fork => IsReachable(earlier, fork) && IsReachable(fork, earlier))))
@@ -215,6 +223,26 @@ internal sealed class BpmnTimeRelationAnalysis
         if (avoid is null)
             _reachable[(source, target)] = found;
         return found;
+    }
+
+    // Whether target is reachable from source without entering a node that dominates source (other than source itself).
+    private bool ReachesWithinPass(string source, string target)
+    {
+        _dominators ??= ComputeDominators();
+        var blocked = _dominators.TryGetValue(source, out var dominators) ? dominators : [];
+        var visited = new HashSet<string>(StringComparer.Ordinal) { source };
+        var pending = new Stack<string>([source]);
+        while (pending.Count > 0)
+            foreach (var edge in _outgoing.GetValueOrDefault(pending.Pop(), []))
+            {
+                if (blocked.Contains(edge.Target) || !visited.Add(edge.Target))
+                    continue;
+                if (StringComparer.Ordinal.Equals(edge.Target, target))
+                    return true;
+                pending.Push(edge.Target);
+            }
+
+        return false;
     }
 
     private bool Dominates(string candidate, string node)

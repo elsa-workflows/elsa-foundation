@@ -61,6 +61,8 @@ Each structure declares how its children relate in time; the warning has no list
 - **Loops that fork**: when a pass of a Flowchart or BPMN cycle forks off the cycle, the branch can still run while
   the next pass runs, so it is unordered with itself and with the cycle. In a Flowchart this includes a loop whose
   decision repeats through one port and leaves through another, because the decision may select both.
+  Two branches of one pass that both lead back into the loop are unordered with each other too; a waiting join
+  that closes the loop still follows both.
 - **A structure that declares nothing** is treated as unordered, and the warning says that it does not declare how
   its children are ordered.
 

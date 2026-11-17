@@ -162,16 +162,37 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "j"));
     }
 
-    // A writer on an earlier loop is not on the later forking cycle, so it stays ordered before that cycle's branch;
-    // its own exit (Done) is a fork on its own cycle and runs on every pass of that loop.
+    // Under D-2a as amended the retry node p is a fork on its own cycle (it may select Retry and Done together), so its
+    // next pass can overlap everything after Done; a later cycle's off-cycle branch overlaps that cycle's next pass.
     [Fact]
-    public void A_writer_on_an_unrelated_earlier_loop_stays_ordered_before_a_later_fork_cycle_branch()
+    public void Two_forking_loops_in_a_row_overlap_their_later_paths()
     {
         var flow = Flowchart(["p", "a", "loop", "b"],
             [("p", "p", "Retry"), ("p", "a", "Done"), ("a", "loop", null), ("loop", "a", null), ("a", "b", null)], "p");
 
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
-        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "p", "a"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "p", "b"));
+    }
+
+    // A waiting join that closes a loop runs after both branches of its pass, and the next pass starts after it.
+    [Fact]
+    public void A_waiting_join_that_closes_a_loop_follows_its_branches()
+    {
+        var flow = Flowchart(["start", "f", "a", "b", "j"],
+            [("start", "f", null), ("f", "a", null), ("f", "b", null), ("a", "j", null), ("b", "j", null), ("j", "f", null)]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "a", "j"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
+    }
+
+    // A cycle entered from either of two exclusive triggers runs as one sequential path in every run.
+    [Fact]
+    public void A_cycle_entered_from_two_triggers_stays_sequential()
+    {
+        var flow = Flowchart(["t1", "t2", "a", "b"],
+            [("t1", "a", null), ("t2", "b", null), ("a", "b", null), ("b", "a", null)], "t1");
+
+        Assert.NotEqual(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
     }
 
     // The exit port of a loop is a fork on the cycle like any other (D-2a as amended).
