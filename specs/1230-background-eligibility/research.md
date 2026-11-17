@@ -75,7 +75,7 @@ this plan:
 - **`PublishEvent`** stages through the same stager the worker inspects, so C6 refuses it after the body, by design.
 - **Unknowns** (T022): the connection tenant partition on a worker (`HttpConnectionApplicator.cs:40` reads
   `IWorkflowExecutionPartitionAccessor.Current`); secret-bound inputs without `[RefusesSecretBinding]` (for example
-  `RunJavaScript.Arguments`) on the worker; `DownloadFile` results against `BG-ACT-006`.
+  a script argument) on the worker; `DownloadFile` results against `BG-ACT-006`.
 - **Issue candidates**: M365 `CreateEvent` (Graph `transactionId` from `InvocationId`), M365 `UploadFile` (conflict
   behaviour and its `byte[]` input), Slack `AddReaction` (`already_reacted` as success), `EvaluateDecision` (pin
   re-verification on a worker). Optional: an opt-in `Idempotency-Key` from `InvocationId` on `SendHttpRequest`.
@@ -121,12 +121,17 @@ the initiative branch first; no logic overlaps.
     `IWorkflowExecutionPartitionAccessor.Current`, which comes from the persistence access context. The worker runs the
     body inside `scopeFactory.CreateAsync(claimScope)`, so both resolve the claim's partition. Not run against a live
     connector.
-  - Secret-bound `RunJavaScript.Arguments`: publication admits it in the background (C10 lets a secret reference
-    through; the snapshot keeps the withheld envelope) — `BuiltInBackgroundAssessmentTests`. Activation-time
+  - Secret-bound inputs: publication admits them in the background (C10 lets a secret reference through; the snapshot
+    keeps the withheld envelope) — `BackgroundEligibilityPublicationTests`. Activation-time
     resolution on the worker uses the same resolver as inline.
   - `DownloadFile` above the receipt limit: `BackgroundActivityCompletionCodec` refuses a result above
     `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault. Accepted; documented on the mark.
-  - None failed, so all 15 are marked (Q10).
+  - None failed, so all that qualify are marked (Q10).
+- **`RunJavaScript` is not marked (C9).** Specs 1222 (S-4) and S-7 give the script body variable reads by name
+  (ADR 0089, including a run-time lookup for computed names) and writes by name (ADR 0090 decision 3). A background
+  worker has no access to variables, so the activity does not meet C9. C9 checks the activity type and a script's
+  variable access differs per node; rather than a per-node rule, the activity is not marked. Marking it needs an
+  isolated worker to get variable access (the variable session that lifts C9). The 14 remaining marks stand.
 - **Declaration order (data-model deviation).** The declaration check runs **after** the engine-checked criteria, not
   before C1, so an unmarked activity that also fails C1–C10 is refused naming that criterion (US5 acceptance 2:
   `Sequence` → C1, `Inline` → C3). An unmarked activity that passes them all is refused as "does not declare

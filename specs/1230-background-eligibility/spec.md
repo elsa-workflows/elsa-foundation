@@ -254,15 +254,15 @@ structural activity and child handler fails C1 (16 types, including `BpmnProcess
 
 | Verdict | Activities | Why |
 |---|---|---|
-| **Mark** (meets C1–C10; C7 and C8 hold by reading the code) | Primitives: `Break`, `Fault`, `WriteLine`, `WriteLines`. Scripting: `RunJavaScript`. BPMN: `BpmnDecision`. M365: `GetUser`, `ListEvents`, `ListMessages`, `DownloadFile`. Slack: `ListChannels`, `LookupChannel`, `LookupUserByEmail`, `UpdateMessage` | Pure, read-only or naturally idempotent bodies that observe the token or are synchronous. `RunJavaScript` is the main use: CPU-heavy scripts in a closed sandbox with no variable access. The connector reads are marked only after T022 (Q10). |
+| **Mark** (meets C1–C10; C7 and C8 hold by reading the code) | Primitives: `Break`, `Fault`, `WriteLine`, `WriteLines`. BPMN: `BpmnDecision`. M365: `GetUser`, `ListEvents`, `ListMessages`, `DownloadFile`. Slack: `ListChannels`, `LookupChannel`, `LookupUserByEmail`, `UpdateMessage` | Pure, read-only or naturally idempotent bodies that observe the token or are synchronous. The connector reads are marked only after T022 (Q10). |
 | **Already marked** | Agent: `AgentModelTurn` (internal, not discoverable) | Meets C1–C10 (journal keyed on `InvocationId`, linked token, no inputs). Its background node is built by hand in `AgentActivityProvider`, so publication never checks it (FR-012, Q9). |
 | **Not marked: meets C1–C10, but background makes no sense** | `WriteHttpResponse`; triggers `Cron`, `Timer` | The HTTP response is delivered only from a result committed during the synchronous inline drain; a background result would arrive too late and be lost. A trigger's body gets no trigger payload on the worker. No criterion catches either; not marking them is enough (Q8). |
 | **Not marked: C7 or C8 cannot be promised** | `SendHttpRequest`, `ReadLine`; M365 `SendMail`, `PostTeamsChannelMessage`; Slack `SendMessage`, `ReplyInThread`, `UploadFile` | Arbitrary or non-idempotent external effects (a re-run sends twice); `ReadLine` also ignores its token. |
 | **Not marked: implementation gap → issue** (FR-009) | M365 `CreateEvent` (no idempotency key from `InvocationId`; #4721), M365 `UploadFile` (conflict behaviour `rename` duplicates on a re-run; its `byte[]` input needs a C10 answer; #4722), Slack `AddReaction` (a re-run faults on `already_reacted`; #4723), `EvaluateDecision` (the body re-reads coordinator stores and a live-burst overlay; unproven on a worker; #4724) | Each could qualify after a small change. |
-| **Ineligible** | `Inline` (C3: `object` result; lifts with S-8), `PublishEvent` (C6, by design) | |
+| **Ineligible** | `Inline` (C3: `object` result; lifts with S-8), `PublishEvent` (C6, by design), `RunJavaScript` (C9) | `RunJavaScript`: a script reads variables by name (ADR 0089) and writes them (ADR 0090 decision 3), and a background worker has no access to variables. C9 checks the activity type, and a script's variable access differs per node, so the activity is not marked; a background placement is refused for the missing declaration. Marking it needs an isolated worker to get variable access first (ADR 0093, limits of today's support for C9). |
 
 Unverified, checked before marking (T022): whether connection-based activities resolve their tenant partition on a
-worker, whether a secret-bound input (for example `RunJavaScript`'s `Arguments`) resolves on the worker (C10), and
+worker, whether a secret-bound input resolves on the worker (C10), and
 whether a large `DownloadFile` result hits the receipt size limit (`BG-ACT-006`).
 
 ## Open questions for the approver
@@ -281,7 +281,7 @@ them.
 | Q7 | **Commit-order evidence (FR-010).** Is S-10's write history (one record per applied write, in commit order, PR #4316) enough as "an inspectable record of the actual commit order", or is a separate record needed? | **S-10's write history plus the checkpoint sequence is enough**; no new store. The tests read it back on both providers. This makes US6 depend on PR #4316 being merged. |
 | Q8 | **Two gaps no criterion catches.** `WriteHttpResponse` only works inline (its result is delivered during the inline drain), and a trigger activity (`Cron`, `Timer`) gets no trigger payload on the worker. Add criteria to ADR 0093, or only leave them unmarked? | **Leave them unmarked, no ADR change.** Only a marked type can be placed in the background, and marking is the author's declaration, so not marking closes both gaps for the built-ins. The attribute's documentation adds both as things an author checks before marking (FR-008). If a third-party activity hits them, a criterion is proposed then, in its own ADR 0093 amendment PR. |
 | Q9 | **Template providers build their own background nodes.** The agent template compiles its model-turn node itself (`AgentActivityProvider.CompileAsync`, current on `main`), and `ActivityTemplatePlacer` copies the placement without an eligibility check, so any template provider can bypass publication. Route these nodes through the check (FR-012), or accept the bypass because the agent activity is internal? | **Route them through the check, in the template placer**, so it holds for every template provider, not only the agent. ADR 0093 decision 3 says no other code decides eligibility. The run-time check at admission and on the worker already applies to these nodes. |
-| Q10 | **Which qualifying activities are marked?** 15 meet C1–C10 by reading; some (`Break`, `Fault`) have little use in the background. | **Mark all 15** once the unknowns are checked (T022): ADR 0093 decision 4 marks what qualifies, not what seems useful, and placement stays the workflow author's choice. A connector read whose partition does not resolve on a worker gets an issue instead. |
+| Q10 | **Which qualifying activities are marked?** 15 meet C1–C10 by reading (14 after `RunJavaScript` was moved to ineligible under C9, see the table); some (`Break`, `Fault`) have little use in the background. | **Mark all that qualify** once the unknowns are checked (T022): ADR 0093 decision 4 marks what qualifies, not what seems useful, and placement stays the workflow author's choice. A connector read whose partition does not resolve on a worker gets an issue instead. |
 
 ## Success Criteria *(mandatory)*
 
@@ -315,5 +315,6 @@ Background activities: eligibility is now decided by one component (ADR 0093), a
 release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
 without a secret reference (C10) is refused at admission with an incident (Q5). No shipped activity was marked
-before, so only custom activities are affected. Fifteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
-365 and Slack reads among them move to version 1.1.0.
+before, so only custom activities are affected. Fourteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
+365 and Slack reads among them move to version 1.1.0. `RunJavaScript` is not marked: scripts read and write variables by
+name, and a background worker has no access to variables (C9).

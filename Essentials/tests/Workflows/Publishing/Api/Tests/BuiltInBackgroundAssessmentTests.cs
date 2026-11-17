@@ -25,7 +25,7 @@ public sealed class BuiltInBackgroundAssessmentTests
 {
     private static readonly Type[] Marked =
     [
-        typeof(Break), typeof(Fault), typeof(WriteLine), typeof(WriteLines), typeof(RunJavaScript), typeof(BpmnDecision)
+        typeof(Break), typeof(Fault), typeof(WriteLine), typeof(WriteLines), typeof(BpmnDecision)
     ];
 
     public static TheoryData<Type> MarkedActivities => new(Marked);
@@ -40,20 +40,10 @@ public sealed class BuiltInBackgroundAssessmentTests
         Assert.True(executable.RootActivity.ActivityContract!.SupportsBackgroundExecution);
     }
 
-    [Fact]
-    public async Task RunJavaScript_admits_secret_bound_arguments_in_the_background()
-    {
-        // C10: the secret travels as a withheld reference and resolves at worker activation.
-        var executable = await SecretBindingCompilerFixture.CompileAsync(
-            Background(typeof(RunJavaScript), [.. RequiredInputs(typeof(RunJavaScript)), SecretBindingCompilerFixture.Secret("arguments")]),
-            [typeof(RunJavaScript)]);
-
-        Assert.Equal(RuntimeInputBindingSource.SecretRead, executable.RootActivity.InputBindings["arguments"].Source);
-    }
-
     [Theory]
     [InlineData(typeof(SequenceActivity), "VF-BG-001 (C1):")]
     [InlineData(typeof(Inline), "VF-BG-001 (C3):")]
+    [InlineData(typeof(RunJavaScript), "does not declare BackgroundExecutionSafe")] // C9: scripts read and write variables by name
     [InlineData(typeof(WriteHttpResponse), "does not declare BackgroundExecutionSafe")]
     [InlineData(typeof(SendHttpRequest), "does not declare BackgroundExecutionSafe")]
     [InlineData(typeof(ReadLine), "does not declare BackgroundExecutionSafe")]

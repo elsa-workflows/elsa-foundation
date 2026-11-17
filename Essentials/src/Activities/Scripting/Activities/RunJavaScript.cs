@@ -33,8 +33,8 @@ namespace Elsa.Activities.Scripting.Activities;
 /// completes successfully; a fault discards it.
 /// </para>
 /// </remarks>
-// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a closed sandbox with no variable access; the evaluator observes the cancellation token.
-[BackgroundExecutionSafe]
+// Deliberately not [BackgroundExecutionSafe] (ADR 0093 C9, spec 1230): a script reads variables by name (ADR 0089) and
+// writes them (ADR 0090 decision 3), and a background worker has no access to variables. Marking it needs that access first.
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
 [ActivityScriptOutcomes("script")]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>

@@ -72,7 +72,7 @@
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
   changes); regenerate the contract surface baselines.
 - [ ] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
-  read resolves its connection's tenant partition on a worker; a secret-bound `RunJavaScript.Arguments` resolves on the
+  read resolves its connection's tenant partition on a worker; a secret-bound input resolves on the
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
   activity that fails gets an issue instead of the mark (Q10).
 - [x] T023 [US1] **(test-first)** Call `CheckPublication` in `ActivityTemplatePlacer` for every background node a
@@ -120,5 +120,5 @@
   policy. T015 — an `Any`/JSON input publishes in the background and an `Any` result is refused (C3); no worker run
   of the `Any` input yet. T022 — the partition and secret unknowns were settled by reading the code and a
   publication test, not by background runs against a live connector; the `DownloadFile` limit by reading the codec.
-  The 15 marks rest on that reading (Q10).
+  The 14 marks rest on that reading (Q10); `RunJavaScript` is not marked (C9, research).
 - **Held:** US6 (T024–T026) until S-10's PR #4316 is merged into the initiative branch (Q7). T031 waits on US6.
