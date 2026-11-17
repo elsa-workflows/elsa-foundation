@@ -50,7 +50,10 @@ it.each([
   "args.Count = 5",
   "args.Count.member = 5",
   "args.Count++",
-  "delete args.Count"
+  "delete args.Count",
+  "++args.Count",
+  "for (args.Count of list) {}",
+  "for (args.Count in list) {}"
 ])("does not offer a read repair for %s", source => {
   expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" }))).toEqual([]);
 });
@@ -69,3 +72,10 @@ it.each([
   expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" })))
     .toEqual([{ from: 0, to: source.length, current: source, replacement }]);
 });
+
+it.each(["+args.Count", "-args.Count", "for (value of args.Count) {}", "const {args: other} = record; args.Count"])(
+  "offers a repair for a read in %s", source => {
+    expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" })))
+      .toMatchObject([{ current: "args.Count", replacement: "args.count" }]);
+  }
+);

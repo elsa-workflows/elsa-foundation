@@ -41,7 +41,7 @@ export const javaScriptSourceInsertion: StudioExpressionSourceInsertion = {
     let parseError = false;
     tree.iterate({ enter({ node, name, from, to, type }) {
       if (type.isError) parseError = true;
-      if (name !== "MemberExpression" || isWriteTarget(node)) return;
+      if (name !== "MemberExpression" || isWriteTarget(node, source)) return;
       const receiver = node.firstChild;
       if (receiver?.name !== "VariableName" || source.slice(receiver.from, receiver.to) !== "args") return;
       const operator = receiver.nextSibling;
@@ -64,26 +64,31 @@ type JavaScriptNode = JavaScriptTree["topNode"];
 
 function shadowedNamespaces(source: string, tree: JavaScriptTree) {
   const shadowed = new Set<string>();
-  tree.iterate({ enter({ name, type, from, to }) {
+  tree.iterate({ enter({ node, name, type, from, to }) {
     const syntax = source.slice(from, to);
     if (type.isError && syntax.includes("\\")) {
       // The grammar can split Unicode-escaped identifiers into errors and partial bindings.
       shadowed.add("args");
       shadowed.add("variables");
     }
-    if (name === "VariableDefinition" || name === "ObjectPattern" || name === "ImportDeclaration") {
-      for (const namespace of ["args", "variables"])
-        if (new RegExp(`\\b${namespace}\\b`).test(syntax)) shadowed.add(namespace);
-    }
+    if (name === "VariableDefinition") shadowed.add(syntax);
+    const property = name === "PatternProperty" ? node.firstChild : null;
+    if (property?.name === "PropertyName" && property.nextSibling?.name !== ":")
+      shadowed.add(source.slice(property.from, property.to));
   } });
   return shadowed;
 }
 
-function isWriteTarget(node: JavaScriptNode) {
+function isWriteTarget(node: JavaScriptNode, source: string) {
   for (let parent = node.parent; parent; parent = parent.parent) {
-    if (parent.name === "AssignmentExpression") return node.to <= (parent.firstChild?.to ?? -1);
-    if (parent.name === "PostfixExpression" ||
-        parent.name === "UnaryExpression" && ["delete", "ArithOp"].includes(parent.firstChild?.name ?? "")) return true;
+    if (parent.name === "AssignmentExpression" && node.to <= (parent.firstChild?.to ?? -1)) return true;
+    if (parent.name === "ForOfSpec" || parent.name === "ForInSpec") {
+      const separator = parent.getChild("of") ?? parent.getChild("in");
+      if (separator && node.to <= separator.from) return true;
+    }
+    const operator = parent.firstChild;
+    if (parent.name === "PostfixExpression" || parent.name === "UnaryExpression" && operator &&
+        ["delete", "++", "--"].includes(source.slice(operator.from, operator.to))) return true;
   }
   return false;
 }

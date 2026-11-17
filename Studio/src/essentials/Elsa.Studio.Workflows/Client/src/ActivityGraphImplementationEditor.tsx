@@ -1231,8 +1231,16 @@ export function ActivityGraphOutputMappingEditor({
     return contribution ? [{ descriptor: expression, contribution }] : [];
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
   const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
-  const currentSyntax = mapping?.source.syntax ?? "";
-  const javaScript = currentSyntax === "JavaScript";
+  const [replacementSource, setReplacementSource] = useState<string | null>(null);
+  const replacementInput = useRef<HTMLTextAreaElement>(null);
+  const replacementButton = useRef<HTMLButtonElement>(null);
+  const replacementOpen = replacementSource !== null;
+  useEffect(() => {
+    if (replacementOpen) replacementInput.current?.focus();
+  }, [replacementOpen]);
+  const authoredSyntax = mapping?.source.syntax ?? "";
+  const javaScript = authoredSyntax.toLowerCase() === "javascript";
+  const currentSyntax = javaScript ? "JavaScript" : authoredSyntax;
   const storedValue = mapping?.source.value;
   const stableInputKeys = javaScript && isRecord(storedValue) && storedValue.inputBinding === "referenceKey" && typeof storedValue.source === "string";
   const expressionValue = stableInputKeys ? storedValue.source : storedValue;
@@ -1285,9 +1293,21 @@ export function ActivityGraphOutputMappingEditor({
       </> : <>
         {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
         {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
-        {javaScript && !stableInputKeys && typeof expressionValue === "string" && !valueReadOnly ? <div>
-          <p className="wf-muted">This expression uses input names. If you switch to stable keys, review its input references before publishing.</p>
-          <StudioButton size="sm" onClick={() => onChange({ ...mapping.source, value: storeValue(currentSyntax, expressionValue, true) })}>Use stable input keys</StudioButton>
+        {javaScript && Editor && !stableInputKeys && typeof expressionValue === "string" && !valueReadOnly ? <div>
+          <p className="wf-muted">This expression uses input names.</p>
+          {replacementSource === null ? <StudioButton ref={replacementButton} size="sm" onClick={() => setReplacementSource("")}>Replace with stable-key expression</StudioButton> : <>
+            <StudioField label="Expression using stable input keys">
+              <textarea ref={replacementInput} value={replacementSource} onChange={event => setReplacementSource(event.target.value)} />
+            </StudioField>
+            <StudioButton size="sm" disabled={!replacementSource.trim()} onClick={() => {
+              onChange({ ...mapping.source, value: storeValue(currentSyntax, replacementSource, true) });
+              setReplacementSource(null);
+            }}>Apply replacement</StudioButton>
+            <StudioButton size="sm" onClick={() => {
+              setReplacementSource(null);
+              requestAnimationFrame(() => replacementButton.current?.focus());
+            }}>Cancel</StudioButton>
+          </>}
         </div> : null}
         {Editor ? <ExpressionEditorWithDataInsertion
           key={output.referenceKey}

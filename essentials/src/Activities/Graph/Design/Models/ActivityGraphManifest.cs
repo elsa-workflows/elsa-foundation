@@ -231,8 +231,20 @@ public sealed record ActivityGraphManifest(
 
             var referenceKey = ReadRequiredString(element, "outputReferenceKey", $"{pointer}/outputReferenceKey", findings);
             var source = ReadRequiredExpression(element, "source", $"{pointer}/source", findings);
-            if (referenceKey is not null && source is not null)
+            if (source is not null && StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "JavaScript") &&
+                source.Value.ValueKind != JsonValueKind.String &&
+                (source.Value.ValueKind != JsonValueKind.Object ||
+                 !source.Value.TryGetProperty("inputBinding", out var binding) || binding.ValueKind != JsonValueKind.String ||
+                 !StringComparer.Ordinal.Equals(binding.GetString(), "referenceKey") ||
+                 !source.Value.TryGetProperty("source", out var text) || text.ValueKind != JsonValueKind.String))
+            {
+                findings.Add(new("activity.graph.output.source-invalid", $"{pointer}/source",
+                    "A graph JavaScript output requires source text or source text with explicit reference-key binding."));
+            }
+            else if (referenceKey is not null && source is not null)
+            {
                 mappings.Add(new(referenceKey, source));
+            }
 
             index++;
         }
