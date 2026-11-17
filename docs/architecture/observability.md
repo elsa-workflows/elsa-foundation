@@ -239,9 +239,13 @@ Park decision.
   `ParkRecord.Resolution` is cleared, so the Park is resolved and no row keeps `KeptBy`. The end itself is the built
   one: its own turn writes the end status and terminal mark and sends the parent its one notice, so Complete sends
   none. A turn that throws before the end is a re-park, handled under "Interruption" above.
-  - **After the end, nothing reopens the Park.** A late delivery that reaches `MaxAttempts` meets the ended row
-    through the built path for a failed late input: the row records the failure and stays ended, the drain continues,
-    and no new Park opens, so keeping does not resume on an ended instance.
+  - **After the end, nothing reopens the Park.** The end's turn records the model's end in the open
+    `ParkRecord.Resolution`. That is how the kernel tells the two cases apart, since the built `WorkflowInstance.Park`
+    treats every status other than Running as ended, and a parked row and a model that ended Faulted share a status:
+    a recover Resolution that records the model's end means a later delivery that reaches `MaxAttempts` is a failed
+    late input, so the row records the failure and stays ended, the drain continues, and no new Park opens; an
+    unresolved Park with no Resolution that records an end means a re-park, which continues the Park. Keeping never
+    resumes on an ended instance.
   - **A delete after the end takes the drain over,** as it does for discard, expiry and terminate (below). Without
     that, the trace is: the model finishes, rows above the cursor still carry `KeptBy`, a delete removes the ended row,
     the next `kernel.drain` finds no target and is dropped, and the remaining rows keep `KeptBy` for good, since the
@@ -276,16 +280,19 @@ Park decision.
   them. The gate is read from durable state, so every owner evaluates it the same way:
   - `ParkRecord.Resolution` records the handle of the last row the previous page restored. Restored rows are delivered
     in their target's `seq` order, so that row is the last of its page to be seen.
-  - A page waits, by sending its `kernel.drain` with a delay, while that row is still undelivered: still not done and
-    still unseen (`Seen = 0`). The owner knows this from memory; a new owner after a takeover reads it with one point
-    lookup by full key, so a takeover adds no free page.
+  - A page waits, by sending its `kernel.drain` with a delay, until that row is **taken up**: done, or marked seen by
+    a poll at the current owner's epoch (`Seen = e`). Taken up means a poll has reached it; a turn may not have
+    consumed it yet. A row marked at a lost owner's epoch keeps its old non-zero `Seen`, since a take never resets it,
+    so it does not count until the new owner's re-poll marks it at `e`. A row that is absent (consumed, done and swept
+    after its window) counts as taken up. The owner knows this from memory; a new owner after a takeover reads it with
+    one point lookup by full key, so a takeover adds no free page.
   - **While the instance is suspended the gate waits.** Resume is a control kind that passes withholding, so it always
     reaches the instance and releases the gate; suspension cannot deadlock the drain.
-  - **A row the model holds counts as delivered**, because a held row may wait for a later row, perhaps one above the
-    cursor that only Complete releases. Counting it as undelivered could stall the drain for good.
-  - **The bound, stated honestly:** the drain's own addition to due depth is at most one page of undelivered restored
-    rows plus the rows the model holds. Held rows stay due and unconsumed, and the built `Hold` hands them back to
-    every turn (FINDINGS section 14), so a model that defers everything (a StateMachine during a suspended action) can
+  - **A row the model holds counts as taken up**, because a held row may wait for a later row, perhaps one above the
+    cursor that only Complete releases. Counting it otherwise could stall the drain for good.
+  - **The bound, stated honestly:** the drain's own addition to due depth is at most one page of restored rows not
+    yet taken up plus the rows the model holds. Held rows stay due and unconsumed, and the built `Hold` hands them
+    back to every turn (FINDINGS section 14), so a model that defers everything (a StateMachine during a suspended action) can
     hold the whole backlog in memory, as it would hold the same rows arriving live. A cap on held restored rows was
     rejected: reaching it with no progress would need its own incident path, and its cost would fall on exactly the
     models that hold for a later row. The `elsa.kernel.drain.held` gauge reports held restored rows, so an operator
@@ -491,8 +498,8 @@ faults in the Park and recovery design. Each trace is restated, then followed th
    selection. Each page is bounded by `P` rows and `B` bytes, and nothing goes into memory ahead of the disk.
 3. Arrivals stop being kept at the open, so the drain ends. The cursor survives crashes and takeovers.
 4. Restored rows rejoin due depth one page at a time. A page waits while the previous page's last restored row is
-   undelivered, read from durable state, and while the instance is suspended, so the drain adds at most one page of
-   undelivered rows plus the rows the model holds. The gate never waits on the partition's backlog, which the drain's
+   not yet taken up, read from durable state, and while the instance is suspended, so the drain adds at most one page of
+   rows not yet taken up plus the rows the model holds. The gate never waits on the partition's backlog, which the drain's
    own withheld rows inflate; waiting on it could block the drain for good. Unrelated
    ingress stays under the [ingress threshold](fairness-and-backpressure.md#a-bound-on-inbox-growth).
 
@@ -519,15 +526,15 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-2 | Ownership changes at a page boundary, and a page commit has an unknown outcome. The drain continues from the committed cursor, with no row restored twice or skipped | K3, K4 |
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
-| M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is undelivered or the instance is suspended, and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
+| M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is not yet taken up (done, or seen at the current epoch) or the instance is suspended, and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
 | M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain is refused with no change; a delete during a discard, expiry or terminate drain takes the drain over; at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
-| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. A late delivery reaching `MaxAttempts` after the end records a failed input, opens no Park and leaves the drain running. A turn that throws before the end is a re-park (M3-6) | K3, K6 |
+| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, is a re-park. A turn that throws before the end is a re-park (M3-6) | K3, K6 |
 | M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
-| M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup | K3, K7, K12 |
+| M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
 | R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap | K6, K7 |
 | R-2 | Inspect, retry, resume and discard through the operator API on the parked-work read model, by handle | K9, K11 |
 
