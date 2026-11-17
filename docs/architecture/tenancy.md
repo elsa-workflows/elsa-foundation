@@ -131,15 +131,17 @@ tenant, as it is today. The K3 store change and the K4 migrations create the pin
 **Measured on the pin.** The reviewer's confirmation run
 ([recorded on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060)), in databases whose
 default is Hungarian on both engines: the seven names `ccs_x`, `cscs_x`, `ssz_x`, `szsz_x`, `ab_x`, `a-b_x` and
-`a_b_x` insert as seven distinct primary-key rows, and each `=` or parameter lookup finds exactly one; the same names
-in unpinned columns collide; and joining an unpinned value to a pinned column is an error, never a silent match. T15
-makes this a standing case.
+`a_b_x` insert as seven distinct primary-key rows, and each `=` or parameter lookup finds exactly one. In unpinned
+columns the Hungarian pairs collide (`ccs_x`/`cscs_x` is a duplicate key on both engines, and `ssz_x`/`szsz_x` compares
+equal); the punctuation names `ab_x`, `a-b_x` and `a_b_x` are distinct with or without the pin. Joining an unpinned
+value to a pinned column is an error, never a silent match. T15 makes this a standing case.
 
 **Every expression uses the pin.** A query-level `COLLATE` overrides a column's collation, so the pin holds only if
 every SQL expression that compares with, joins to, partitions by or hashes a pinned column uses the pinned collation
-and never `DATABASE_DEFAULT`. The rule covers the owned SQL and the EF path, and table-valued inputs such as `OPENJSON`
-and `JSON_TABLE` whose values meet a pinned column. Two prototype sites break it today. They are evidence, unchanged
-here, and the kernel build must not carry them over:
+and never `DATABASE_DEFAULT`. The rule covers the owned SQL and the EF path, table-valued inputs such as `OPENJSON`
+and `JSON_TABLE` whose values meet a pinned column, and the routine parameters, local variables and procedure bodies
+of kernel routines: each string parameter or variable that carries a pinned value declares the pinned collation. Three
+prototype sites break it today. They are evidence, unchanged here, and the kernel build must not carry them over:
 
 - **The actor-alias lookup,** `EfStore.LoadActorsAsync` on SQL Server, joins `OPENJSON` values cast `COLLATE
   DATABASE_DEFAULT` to `Instances.Id`, and partitions by that value for the alias canonical spelling and
@@ -151,6 +153,11 @@ here, and the kernel build must not carry them over:
   `CHECKSUM(... COLLATE DATABASE_DEFAULT)`. Under a case-sensitive default, `Q(a, X)` and `Q(a, x)` are equal under the
   pin and can checksum differently, so two concurrent inserts of one match would take different locks and are not
   serialized. This is reasoned and not run.
+- **The MySQL event-insert procedure,** `kernel_insert_event` in `EventInsert.cs` (`InstallMySql`), declares
+  `IN wire VARCHAR(255)` with no `COLLATE`, so in a Hungarian-default database the parameter takes
+  `utf8mb4_hu_0900_ai_ci`. Measured by the reviewer: `WHERE Id=wire` raises ERROR 1267 against a pinned
+  `Messages.Id`, so event-start insertion fails loudly on a pinned, locale-default MySQL database; and the stripe
+  `MOD(CRC32(WEIGHT_STRING(wire)),64)` is computed under the locale collation, so `ccs_x` and `cscs_x` share stripe 10.
 
 **`_` is a `LIKE` wildcard.** Selecting a tenant's rows uses the `tenant` column, or a prefix match with `_` escaped;
 an unescaped `LIKE 'acme_%'` would also match `acmex...`, so no query uses one.
@@ -256,9 +263,10 @@ administrator who must inspect a tenant's work enters that tenant through the su
   the conformance cases below. Fairness's tenant column on the instance row is part of this.
 - **Kernel-behaviour store change for K3 (two reviews):** the collation pin (decision 6) on every pinned column, created
   by the schema and the migrations of every relational provider, and the pinned collation in every expression that
-  compares with, joins to, partitions by or hashes a pinned column, with T16 and T17. The two known prototype sites
-  that use `DATABASE_DEFAULT`, the actor-alias lookup in `EfStore.LoadActorsAsync` and the stripe in `EventInsert`,
-  are not carried over.
+  compares with, joins to, partitions by or hashes a pinned column, and in every kernel routine's string parameters
+  and variables, with T16 and T17. The three known prototype sites are not carried over: the actor-alias lookup in
+  `EfStore.LoadActorsAsync` and the SQL Server stripe in `EventInsert`, both `DATABASE_DEFAULT`, and the MySQL
+  procedure `kernel_insert_event`, whose `wire` parameter has no `COLLATE`.
 
 ## Acceptance cases
 
@@ -283,7 +291,7 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 | T14 | T2 to T11 in Embedded with the fixed tenant, and in Cluster with two nodes and two tenants | All pass on both profiles | K12 |
 | T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id. Then T2 and T3 run against the pinned schema on SQL Server 2022 in databases whose default collation is `SQL_Latin1_General_CP1_CI_AS` (SQL Server's default, accent-sensitive) and `Hungarian_100_CI_AS`, and on MySQL 8.4 with database defaults `utf8mb4_0900_ai_ci` and `utf8mb4_hu_0900_ai_ci`. Tenant pairs: `ab`/`a-b`, `a`/`a-b` (`a_b_x` against `a-b_x`), `ccs`/`cscs` and `ssz`/`szsz` | The four ids are refused at the binder; every pair stays two rows, two matches and two answers, including `ccs_x` and `cscs_x` in the Hungarian-default databases | K4 |
 | T16 | Inspect the schema the K3 store change and the K4 migrations create, on SQL Server and MySQL, in a database with a locale default collation | Every pinned column has the pinned collation; a column created without it fails the check | K3, K4 |
-| T17 | In a Hungarian-default database on SQL Server and MySQL, run T2 and T3 through the actor-alias lookup (keyed commands to `ccs_x` and `cscs_x`, each with its own row) and through event-start insertion; on SQL Server, also in a case-sensitive-default database, insert one event match concurrently under two spellings equal under the pin. A guard greps the owned and EF SQL for `COLLATE DATABASE_DEFAULT` applied to a pinned value | Each lookup resolves to its own tenant's row; the two concurrent inserts are serialized and land one match; the guard finds no such expression | K3, K4 |
+| T17 | In a Hungarian-default database on SQL Server and MySQL, run T2 and T3 through the actor-alias lookup (keyed commands to `ccs_x` and `cscs_x`, each with its own row) and through event-start insertion; on SQL Server, also in a case-sensitive-default database, insert one event match concurrently under two spellings equal under the pin. A guard over the owned and EF SQL flags `COLLATE DATABASE_DEFAULT` applied to a pinned value, and any string parameter or local variable of a kernel routine declared without the pinned `COLLATE` | Each lookup resolves to its own tenant's row; MySQL event-start insertion succeeds, and its stripe is the hash of the value under the pinned collation; the two concurrent inserts are serialized and land one match; the guard flags nothing | K3, K4 |
 
 The two-tenant fairness run of K12 measures latency and refusals; it does not replace these cases.
 
@@ -303,7 +311,8 @@ The two-tenant fairness run of K12 measures latency and refusals; it does not re
    created.
 6. **A pinned collation on every column that holds a tenant-qualified name:** one fixed, non-locale, case-insensitive
    collation, `Latin1_General_100_CI_AS_SC_UTF8` on SQL Server and `utf8mb4_0900_ai_ci` on MySQL, so `Q` stays
-   injective whatever the database default is, and matching within a tenant stays case-insensitive.
+   injective whatever the database default is, with the pinned collation in every expression (T17), and matching
+   within a tenant stays case-insensitive.
 
 ADR 0097's own questions (Q3 tenancy model, Q4 no agnostic tenant, Q7 support context) are pending owner there. This
 page follows their recommended defaults; decisions 4 and 5 touch 0097's section (a) and its tenant catalog, and 0097's
