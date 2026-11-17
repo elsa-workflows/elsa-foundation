@@ -198,7 +198,7 @@ until then the listed ADRs keep governing the current core.
 | [0047](0047-replaysafe-activities-execute-as-fused-hops-with-precomputed-routing.md) ReplaySafe fused hops | Supersede | A turn runs many activities in memory; there are no hops to fuse |
 | [0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md) alterations as snapshotted atomic jobs | Supersede | Owner, 17 November: migration widens to running instances at a turn boundary, through a plan actor |
 | [0084](0084-runtime-commit-journal.md) commit journal | Supersede | The kernel's per-partition journal is the commit journal it proposed |
-| 0098 journal-first core (PR #4176, not on main) | Supersede | Replaced by this ADR on 12 November |
+| 0098 journal-first core (PR #4176, not on main) | Supersede | Superseded by the clean-slate decision of 12 November |
 | 0096 Elsa.Jobs (Codex branch, not on main) | Supersede | Standalone Jobs are rebuilt as a job actor type in 1.x |
 | [0073](0073-ef-core-is-the-only-first-party-persistence-family.md) EF Core only | Amend | The kernel's commit SQL is hand-written per engine; a MongoDB provider is first-party from 1.1 |
 | [0074](0074-first-party-ef-stores-retry-in-bounded-application-loops.md) bounded EF retry | Amend | The kernel's commit classifies failures itself (reset, retry as is, park); 0074 keeps governing other stores |
