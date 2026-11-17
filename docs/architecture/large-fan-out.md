@@ -156,7 +156,8 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
 - **FailFast:** the combiner sends a terminate to each outstanding child (at most C) and faults with the first fault,
   in one turn. Its parent receives a Faulted notice and does the same, so a fault reaches the root and cancels every
   live subtree. A model may send the kernel's terminate kind through `ITurn.Send` (`Kinds.RequireApplicationSend`
-  refuses only job and event tickets). The send path stamps the sender and its creation from the committing actor, so
+  refuses only job and event tickets today; the proposed reserved kinds leave `kernel.terminate` open). The send path
+  stamps the sender and its creation from the committing actor, so
   a child accepts a terminate whose stamped sender and creation equal its recorded parent's, including when the child
   is parked ([observability](observability.md#every-park-operation-names-its-park)). Proposed, not built.
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
