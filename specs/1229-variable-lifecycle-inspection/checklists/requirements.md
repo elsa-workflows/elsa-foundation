@@ -32,4 +32,4 @@
 
 ## Notes
 
-- Q1 and Q9 depend on the shape spec 1221's implementation lands with; recheck them when it merges.
+- The write-time data in the data model's first table is recorded by spec 1221; task T001 rechecks it.

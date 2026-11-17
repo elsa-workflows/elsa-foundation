@@ -6,10 +6,10 @@ Validates the spec end to end on a Workbench or Foundation host built from the i
    has a `Set` that sets `count` to 100 (a blind write; a script `setVariable` behaves the same once session writes
    exist).
 2. Run it twice.
-3. `GET runtime/workflows/instances/{id}`: `lostUpdateWarningCount` is 1 and `concurrentOverwriteCount` ≥ 1.
+3. `GET runtime/workflows/instances/{id}`: `lostUpdateWarningCount` is 1.
 4. `GET …/variable-writes?variableKey=count`: entries in commit order; the last applied one has `isCurrentValue: true`;
-   the stale-base write is `lostUpdateWarning` with both writers; the `Set` write is marked as a concurrent overwrite.
-5. `GET …/variable-writes?overwrites=true`: only concurrent overwrites.
+   the stale-base write is `lostUpdateWarning` with both writers; whichever of the `Set` write and the write it met came second is marked as a concurrent overwrite.
+5. `GET …/variable-writes?overwrites=true`: only concurrent overwrites, with `concurrentOverwriteTotal` ≥ 1.
 6. `GET …/journal`: commits in order with each branch's transitions and writes.
 7. `GET …/compare/{otherId}`: if the branches committed in a different order, the first divergence and `count` are
    reported; values are not included.

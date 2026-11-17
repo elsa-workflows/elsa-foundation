@@ -1,82 +1,97 @@
 # Research: Variable lifecycle inspection
 
-Each item records the decision the plan follows, why, and the alternatives weighed. Alternatives for the lifecycle
-itself are in ADR 0092; these are this spec's own design choices.
+Each item records the decision, why, and the alternatives weighed. Alternatives for the lifecycle itself are in ADR
+0092; these are this spec's own design choices.
 
 ## R-1 — Instance commit sequence (Q1)
 
-- **Decision**: a per-instance `long` counter. The last value lives on the workflow execution state; the committer
-  increments it inside the fenced commit and stamps the commit's records. In a coalescing drain each logical
-  checkpoint takes its number when it is taken (the drain is single-threaded per instance), and the folded durable
-  commit stores the highest. Background results commit through the same fenced path, so the order stays total.
-- **Rationale**: the write record's `CommitOrder` is the frame revision. It orders one frame's writes only; root and
-  container variables live in different frames, and lifecycle transitions are not in a frame at all. Timestamps are not
-  a total order (equal or skewed clocks across nodes).
-- **Alternatives**: frame revision plus timestamp (not total; rejected); the scheduler's `ExecutionSequence` (scheduling
-  order, not commit order, per #3291; rejected); a global database sequence (cross-instance cost, provider-specific;
-  rejected).
-- **To verify in the first task**: that every commit path (inline drain, background result, alteration, recovery) goes
-  through `RuntimeCheckpointCommitter` under the instance fence. A path that does not is listed and given the stamp.
+- **Decision**: spec 1221 records it (FR-024, "the instance commit order"). A per-instance `long` counter, held with
+  the instance under its fence and persisted on the workflow execution state. `RuntimeCheckpointCommitter` assigns the
+  next number to each logical checkpoint and stamps the records and lifecycle stamps the handlers built before
+  `CommitAsync`. In coalescing mode the coalescing store sits below the committer, so each logical checkpoint is
+  numbered before the fold. Background results and alterations commit through the same committer.
+- **Rationale**: the frame revision orders one frame only; timestamps are not a total order; the scheduler's
+  `ExecutionSequence` is scheduling order, not commit order.
+- **Cost**: the workflow execution change is optional in a commit today; a numbered commit now always writes that row.
+  Spec 1221 measures this with its benchmark.
+- **Alternatives**: frame revision plus timestamp (not total); a global database sequence (cross-instance cost,
+  provider-specific).
+- **To verify**: recovery and deletion paths (task T002).
 
 ## R-2 — Derived read model, no new store (Q2)
 
-- **Decision**: read the instance's activity execution states page by page, flatten write records and lifecycle
-  stamps, merge alteration records, sort by commit sequence. Paging uses the commit sequence as the continuation.
-- **Rationale**: spec 1221 measured and chose records on the writer's state; a second copy would double write cost.
-- **Alternatives**: a write-history table or projection (extra rows per write; kept as the fallback if SC-004 fails);
-  ADR 0084's commit journal (about commit cost; not the same record).
-- **Risk**: sorting across pages needs the rows ordered by first commit sequence; if the store cannot, the service reads
-  the instance's rows in batches and merges. Measured for SC-004.
+- **Decision**: page an instance's activity execution rows by their commit-sequence range (`FirstCommitSequence`,
+  `LastCommitSequence`): a page from cursor C reads the rows whose range reaches past C, flattens their stamps and
+  records, merges alteration records, sorts by (commit sequence, position) and cuts at the page size. The cursor is
+  (commit sequence, position), so a page may end inside a commit.
+- **Rationale**: spec 1221 measured and chose records on the writer's state; a second copy would double write cost. A
+  row's records span many commits (a container appends on each callback), so ordering rows by their first sequence is
+  not enough; the range is.
+- **Alternatives**: a write-history table or projection (kept as the fallback if SC-004 fails); ADR 0084's commit
+  journal (about commit cost; not the same record).
+- **Legacy**: rows without a range are read once, ordered by frame revision and time, and come before the sequenced
+  records.
 
 ## R-3 — Concurrent overwrite rule (Q3, Q4)
 
-- **Decision**: entry W2 (logical invocation I2) replaced the value of entry W1 (logical invocation I1). W1 is the
-  previous applied entry for the same variable in commit order (or the version's writer, for an alteration). W2 is a
-  concurrent overwrite when I1 ≠ I2 and W1's commit does not happen before I2. Happens-before is walked backwards from
-  I2 over scheduling provenance: the scheduling activity, the parent (for a parent callback) and, new, the arrivals
-  that satisfied a join. W1 happens before I2 when the walk reaches I1 through a scheduling commit whose sequence is at
-  or after W1's commit sequence. The walk stops at commit sequences below W1's, so it is bounded.
-- **Rationale**: covers scripts, C# writes, sub-workflows and run-time paths (#3292) without structural analysis.
-  Read time only, except the join arrivals.
-- **Alternatives**: "W1 committed after I2 started" (never flags an intrinsic `Set` or an inline leaf without a gap,
-  which start and write in one dispatch; rejected); spec 266's static unordered-writer pairs (miss everything static
-  analysis cannot see); branch ids alone (nested forks and loops reuse or nest branches; insufficient); recording the
-  overwrite at write time (run-time cost for something derivable).
-- **Gap found**: `ActivitySchedulingProvenance` holds one `SchedulingActivityExecutionId`. A join completed by the last
-  of several arrivals names only that one, so without the change every write after a join would look concurrent with
-  the other branches. The plan adds the satisfying arrivals to provenance, for join completions only.
-- **Container writes**: a container that writes on a later step while its child runs, and the child that writes too,
-  are concurrent unless one was scheduled by the other's writing commit. This is intended.
+- **Decision**: entry W2 (writer row R2, logical invocation I2) replaced entry W1 (the previous applied entry of the
+  same variable instance). W2 is a concurrent overwrite when W2 is applied, I1 ≠ I2, and W1's commit does not happen
+  before I2.
+- **Happens before**: walk backwards from R2's scheduled stamp over provenance edges. Each edge goes from a row to the
+  row that scheduled it (`SchedulingActivityExecutionId`) and to each row in `CausedBy`, labelled with the commit
+  sequence of the scheduling. W1 (commit c1, row R1) happens before R2 when the walk reaches a row of I1 over an edge
+  labelled ≥ c1, or reaches an alteration-scheduled row at a commit ≥ c1 for an alteration W1. The walk prunes edges
+  labelled below c1, so it is bounded by the commits between W1 and W2.
+- **Why `CausedBy`**: `Do`, `While`, `For` and `ForEach` schedule each iteration with the loop as scheduler; a parent
+  callback does not name the child whose completion triggered it; a join or `Parallel` completion names one arrival.
+  Without the causes every loop write, every write after a `Parallel` and every write after a join would be flagged.
+  `Sequence` already passes the completed child.
+- **Why the scheduled stamp**: a container schedules a child at commit 3, writes at 5, the child starts at 6 and
+  overwrites. The child was scheduled before the container's write, so it is concurrent; using the start commit would
+  call it ordered.
+- **Lost updates**: an applied lost update (warning, accepted override) satisfies the rule. A refused `Fault` write
+  replaced nothing and is never an overwrite.
+- **Alternatives**: "W1 committed after I2 started" (never flags an intrinsic `Set` or a gap-free inline leaf);
+  spec 266's static unordered-writer pairs (miss what static analysis cannot see); branch ids alone (nested forks and
+  loops); recording the overwrite at write time (run-time cost for something derivable).
 
 ## R-4 — Values (Q5)
 
-- **Decision**: map each historical value to `captured`, `omitted`, `redacted` or `expired`, reusing the capture and
-  access states of `ActivityExecutionInspectionValueSnapshotView`; payloads only via the existing value-payload read
-  with its permission.
-- **Rationale**: one disclosure path; ADR 0092 decision 13 needs the four states distinct from `null`.
-- **Alternatives**: inline values in the history view (a second disclosure path; rejected).
+- **Decision**: map each value to a value state and read payloads through an authorized payload read extended to
+  write-record values (written, overwritten, refused), addressed by owner (activity execution or alteration), entry and
+  which value, under the existing payload permission.
+- **Mapping from the existing activity value-evidence states**: `notCaptured`, `metadataOnly` → `omitted`;
+  `payloadCaptured`, `diagnosticSnapshotCaptured` with access → `captured`; access `redacted` → `redacted`; a value
+  removed by spec 1221's retention → `expired` (new; FR-025).
+- **Alternatives**: inline values in the history view (a second disclosure path); the existing route only (needs an
+  activity execution id and resolves only activity value evidence, so it cannot reach write-record values or
+  alterations).
 
 ## R-5 — Comparison (Q6)
 
-- **Decision**: same `WorkflowExecutableIdentity` only. Match activity executions by executable node id and invocation
-  origin path; walk both journals in commit order and report the first commit whose matched transitions differ. Compare
-  final values and write sequences by digest.
-- **Alternatives**: cross-version comparison by authored activity id (node ids and structure may change; out of scope).
+- **Decision**: same `WorkflowExecutableIdentity` only. A row's run-time path is the list of (executable node id,
+  occurrence) from the root down, where occurrence numbers the rows of that node under the same parent row in order of
+  their scheduled commit. Match rows by run-time path; walk both journals in commit order and report the first commit
+  whose matched transitions differ. Per variable instance (frame's run-time path and key), compare the final digest
+  and the list of written digests.
+- **Rationale**: row ids and iteration ids embed row ids and differ per instance; the static invocation origin has no
+  iteration segment.
+- **Alternatives**: cross-version comparison by authored activity id (node ids and structure may change).
 
 ## R-6 — Lost-update diagnostic (Q7)
 
-- **Decision**: counts on the instance details view; filters on the history. No incident.
-- **Rationale**: spec 1221's implementation found an incident in a commit ends the coalescing session, reopening the
-  inline gap.
+- **Decision**: a lost-update warning count kept on the instance by spec 1221 in the committing write; concurrent
+  overwrites counted by the filtered history. No incident.
+- **Rationale**: computing derived counts on every details read would run the whole read model; an incident in a
+  commit ends the coalescing session and would reopen the inline gap.
 
 ## R-7 — Alteration write record (Q9)
 
-- **Decision**: the `ModifyVariable` handler builds a `VariableWriteRecord` (source `Alteration`, writer = operator
-  alteration id) and stores it on the alteration job outcome, stamped with the commit sequence of the alteration's
-  checkpoint.
-- **Alternatives**: infer from the version's writer only (shows the last alteration, not each; rejected).
+- **Decision**: spec 1221's `ModifyVariable` handler records a `VariableWriteRecord` (source `Alteration`, writer the
+  alteration) on the alteration job outcome with commit sequence, frame and digest; the read model merges it.
 
-## R-8 — Legacy records
+## R-8 — Applied and current value
 
-- **Decision**: records without a commit sequence are ordered by frame revision then time and marked approximate;
-  instances without records show "no history recorded".
+- **Decision**: applied means the write changed the version; the current value is the applied entry whose new version
+  equals the variable instance's current version. Writes that changed nothing are not recorded by spec 1221 (an
+  unchanged value writes nothing) and are skipped if met in older records.

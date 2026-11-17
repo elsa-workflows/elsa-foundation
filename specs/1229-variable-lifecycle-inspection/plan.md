@@ -2,8 +2,8 @@
 
 **Branch**: `claude/3052-s6-define-b4bd05` | **Date**: 2026-11-16 | **Spec**: [spec.md](spec.md)
 
-**Status**: approved with the spec (2026-11-17). Written to the answers of Q1–Q9 (as recommended). Implemented on the initiative branch
-(D-18) after spec 1221's implementation of the write history has merged there.
+**Status**: approved with the spec. Implemented on the initiative branch (D-18) after spec 1221's implementation of
+the write history, including the write-time data this plan reads, has merged there.
 
 ## Summary
 
@@ -11,18 +11,17 @@ Read the write history spec 1221 records and present it through the runtime insp
 the winning write, lost updates and concurrent overwrites, a commit-ordered journal, and a comparison of two instances
 of one version. Research R-1 to R-8 hold the reasons.
 
-- **One instance commit sequence (Q1, R-1).** A per-instance counter, assigned to each logical checkpoint in the
-  committer under the instance fence, stamped on write records and activity lifecycle transitions. Coalesced commits
-  keep each logical checkpoint's number.
-- **Derived read model (Q2, R-2).** A runtime-API service reads one instance's activity execution states (paged),
-  flattens their write records and transitions, merges alteration records, and orders by commit sequence. No new store.
-- **Concurrent overwrite marking (Q3, Q4, R-3).** Computed when read: the replaced value's commit does not happen
-  before the overwriting invocation by scheduling provenance. Provenance gains the arrivals that satisfied a join.
-- **Values by state only (Q5, R-4).** Reuse the existing value-evidence states and the authorized payload read. Until
-  spec 1221 FR-025 lands, non-operational values read `omitted`.
-- **Comparison by node, origin path and digest (Q6, R-5).**
-- **Counts on instance details, no incident (Q7, R-6).**
-- **Existing permission (Q8).** **Alteration write records (Q9, R-7).**
+- **Write-time data from spec 1221 (Q1, Q7, Q9, R-1).** The instance commit sequence on write records and lifecycle
+  stamps (including the scheduling commit), frame and digest on write records, each row's commit-sequence range, the
+  alteration write record, and the lost-update warning count. This plan only reads them.
+- **Scheduling causes (Q3, R-3).** The one run-time change of this plan: provenance records the completions that
+  caused a scheduling (a callback's or next iteration's completed child, a join's arrivals).
+- **Derived read model (Q2, R-2).** Rows paged by their commit-sequence range, stamps and records flattened, alteration
+  records merged, ordered by (commit sequence, position). No new store.
+- **Concurrent overwrite marking (Q3, Q4, R-3).** A bounded happens-before walk over provenance, when read.
+- **Values by state, payload read extended to write records (Q5, R-4).**
+- **Comparison by run-time path and digest (Q6, R-5).**
+- **Lost-update count on instance details, no incident (Q7, R-6).** **Existing permission (Q8).**
 
 ## Technical Context
 
@@ -31,32 +30,32 @@ of one version. Research R-1 to R-8 hold the reasons.
 **Primary Dependencies**: the existing runtime API endpoints in `Elsa.Workflows.Runtime.Api`,
 System.Text.Json source-generated context `WorkflowsRuntimeJsonContext`; no new external dependency.
 
-**Storage**: no new store. Two additive optional members: the commit sequence on `VariableWriteRecord` and on the
-activity lifecycle stamps of `ActivityExecutionState`; the instance's last commit sequence on the workflow execution
-state; an alteration write record on the alteration job outcome. Older records read back with the members absent.
+**Storage**: no new store. One additive optional member of its own: `CausedBy` on `ActivitySchedulingProvenance`.
+Everything else it reads is recorded by spec 1221. Older records read back with members absent.
 
 **Testing**: xUnit (no FluentAssertions). Read-model unit tests over built record sets; runtime drives (parallel
-branches, script blind write, suspension, `Fault`, coalesced segments, `ModifyVariable`); endpoint tests for paging,
-filters, access and refusal; one read-time measurement for SC-004.
+branches, blind `Set`, joins, `Parallel`, loops, suspension, `Fault`, accepted completion, coalesced segments,
+`ModifyVariable`); endpoint tests for paging, filters, access and refusal; read-time measurement for SC-004 and the
+causes overhead for SC-006.
 
 **Target Platform**: Elsa 4 server hosts (Foundation host, Workbench).
 
-**Project Type**: libraries — `Elsa.Workflows.Runtime.Core` (record members), `Elsa.Workflows.Runtime` (committer
-stamp, alteration record), `Elsa.Workflows.Runtime.Api` (read model, endpoints, views).
+**Project Type**: libraries — `Elsa.Workflows.Runtime.Core` (provenance member), `Elsa.Activities.Runtime` and the
+control-flow activities (scheduling causes where callbacks, iterations and joins schedule), `Elsa.Workflows.Runtime.Api`
+(read model, payload read, endpoints, views).
 
-**Performance Goals**: run time: one counter increment per logical checkpoint one number per write record and
-transition, and the arrival ids on a join completion (SC-006). Read time: first page of history/journal for 10,000 activity executions within the existing
-activity-list read time on the same store (SC-004).
+**Performance Goals**: run time: the cause ids on a callback, iteration or join scheduling (SC-006). Read time: first
+page of history/journal for 10,000 activity executions within the existing activity-list read time on the same store,
+and an unchanged instance-details read (SC-004).
 
 **Constraints**:
 - Runtime takes no Design reference (§E2.2); comparison matches by executable node id, which the executable carries.
-- No value leaves the API except through the existing authorized payload read (SC-005).
-- The write-history physical storage stays as spec 1221 measured it (Open question B there).
-- Spec 1221's implementation is not edited by this plan; where its shapes are missing a member, this plan adds it as an
-  optional member (keeping positional signatures, as that implementation's review asked).
+- No value leaves the API except through the authorized payload read (SC-005).
+- The write-history physical storage stays as spec 1221 chose it.
+- New members are optional; positional signatures of spec 1221's records stay as they are.
 
-**Scale/Scope**: one stamp site (`RuntimeCheckpointCommitter`, plus the coalescing drain for logical checkpoints), the
-join-completion scheduling site (join arrivals), one alteration site (`ModifyVariableAlterationHandler` / alteration outcome), one read-model service and five endpoints.
+**Scale/Scope**: the scheduling sites that act on a completion (parent callbacks, loop iterations, join and `Parallel`
+completion), one read-model service, one payload-read extension and five endpoints.
 
 ## Constitution Check
 
@@ -70,7 +69,7 @@ join-completion scheduling site (join arrivals), one alteration site (`ModifyVar
 | ADR 0080 internal by default | PASS | Read model and services internal; only views and route contracts are public. |
 | ADR 0080 risk-based tests | PASS | Tests on ordering, overwrite marking, access and paging; no tests for plain view mapping. |
 | Extension-point catalog | PASS | No new extension point; `EXTENSION_POINTS.md` unchanged unless the read model is made replaceable (not planned). |
-| Sensitive values | PASS | Value states and the existing payload read only (FR-006, FR-012, FR-013). |
+| Sensitive values | PASS | Value states and the authorized payload read, extended to write records under the existing payload permission (FR-006, FR-012, FR-013). |
 | No FluentAssertions | PASS | xUnit only. |
 
 ## Project Structure
@@ -95,19 +94,14 @@ specs/1229-variable-lifecycle-inspection/
 
 ```text
 Essentials/src/Workflows/Runtime/Core/Models/
-├── VariableLifecycleModels.cs          # + CommitSequence on VariableWriteRecord (optional)
-├── ActivityExecutionState.cs           # + lifecycle transition stamps with commit sequence (optional)
-├── ActivitySchedulingProvenance.cs     # + join arrivals (optional)
-└── Alterations/WorkflowAlterationModels.cs  # + alteration write record on the outcome (optional)
-Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/
-├── Checkpoints/RuntimeCheckpointCommitter.cs     # assign the sequence under the fence
-├── Coalescing/                                   # number logical checkpoints before folding
-└── Alterations/Handlers/ModifyVariableAlterationHandler.cs  # alteration write record
+└── ActivitySchedulingProvenance.cs     # + CausedBy (optional)
+Essentials/src/Activities/…                       # scheduling causes at callbacks, loop iterations, joins, Parallel
 Essentials/src/Workflows/Runtime/Api/
 ├── Services/VariableLifecycleInspection.cs       # derived read model (history, trace, journal, comparison)
 ├── Handlers/VariableLifecycleInspectionService.cs
 ├── Models/VariableLifecycleViews.cs
-└── Endpoints/Instances/{Variables,VariableWrites,Journal,Compare}/Endpoint.cs
+├── Services/VariableWritePayloadReader.cs        # payload read for write-record values
+└── Endpoints/Instances/{Variables,VariableWrites,VariableWritePayload,Journal,Compare}/Endpoint.cs
 Essentials/test/…/Runtime.Api.Tests and Runtime.Tests   # VariableLifecycleInspection/*
 docs/runtime-variable-lifecycle.md       # inspection section
 ```
