@@ -37,7 +37,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const expressionType = expression?.type;
   // Owner decision (17 Nov): like the native chooser, expression insertion browses members only where the server
   // enables member reads. Otherwise every source inserts its whole value; the author can still write member access.
-  const memberNavigation = !expressionType || result.memberReadsEnabled === true;
+  const listedMemberReads = !expressionType || result.memberReadsEnabled === true;
   const labels = { expressionType, describeActivity: host.describeActivity, describeScope: (scope: string) => host.describeActivity(scope)?.label ?? null };
   const families = groupActivityDataSources(result, labels);
 
@@ -52,7 +52,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
     setError(null);
     requestSources({ nodeId, inputKey }, controller.signal, 0, {
       ...(expressionType ? { expressionType, parameterSource: selection.parameterSource, expectedSnapshotHash: selection.snapshotHash } : { source: selection.source }),
-      memberPath: selection.path, ...(memberNavigation ? { includeMemberShapes: true } : {})
+      memberPath: selection.path, ...(listedMemberReads ? { includeMemberShapes: true } : {})
     }).then(answer => {
       if (controller.signal.aborted) return;
       const now = latest.current;
@@ -64,7 +64,12 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         setError(answer.findings?.map(describeActivityDataMemberFinding).join(" ") || "This source cannot be used here.");
         return;
       }
-      if (expressionType ? answer.expressionParametersEnabled !== true || answer.expressionType !== expressionType || selection.path.length > 0 && answer.memberReadsEnabled !== true
+      if (expressionType && selection.path.length > 0 && answer.memberReadsEnabled !== true) {
+        // Member reads were withdrawn: drop the member path and go back to the sources before the one refresh, so the
+        // refreshed listing never re-asks for the stale path.
+        setPacket(null); setSelection(null); now.onRefresh(); return;
+      }
+      if (expressionType ? answer.expressionParametersEnabled !== true || answer.expressionType !== expressionType
         : answer.memberReadsEnabled !== true) { setPacket(null); now.onRefresh(); return; }
       const offered = answer.sources.length === 1 ? answer.sources[0] : undefined;
       if (!offered || answer.documentRevision !== revision || answer.baseRevision !== base ||
@@ -84,7 +89,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
       if (!controller.signal.aborted) { setPending(false); setPacket(null); setError("Studio couldn't load the members. Try again."); }
     });
     return () => controller.abort();
-  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result, expressionType, ownerContext, memberNavigation]);
+  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result, expressionType, ownerContext, listedMemberReads]);
 
   const focusedPath = useRef("");
   useLayoutEffect(() => {
@@ -115,7 +120,10 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   };
   const ready = packet && !pending && current && !refreshing && packet.result.documentRevision === host.documentRevision;
   const shown = packet?.selection ?? selection;
-  const model = packet ? activityDataMemberBrowser(packet.result, packet.source.id, packet.selection.path, labels) : null;
+  // Members are browsable only while both the listing and the focused answer enable member reads.
+  const memberNavigation = listedMemberReads && (!expressionType || !packet || packet.result.memberReadsEnabled === true);
+  const model = packet ? activityDataMemberBrowser(memberNavigation ? packet.result : { ...packet.result, memberReadsEnabled: false },
+    packet.source.id, packet.selection.path, labels) : null;
   const canonicalRoot = packet?.selection.path.length === 0 && packet.source.binding ? packet.source.binding : selection?.source;
   const canonicalParameter = packet?.source.parameterSource ?? selection?.parameterSource;
   const selectedId = packet?.source.id ?? selection?.sourceId;
@@ -129,7 +137,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
     {result.target?.type ? <p className="wf-data-chooser-note">Input type: {activityDataTypeLabel(result.target.type)}</p> : null}
     {shown ? <>
       <div className="wf-data-member-heading">
-        <button type="button" onClick={() => (selection?.path ?? shown.path).length ? changePath((selection?.path ?? shown.path).slice(0, -1)) : setSelection(null)}>Back</button>
+        <button type="button" onClick={() => memberNavigation && (selection?.path ?? shown.path).length ? changePath((selection?.path ?? shown.path).slice(0, -1)) : setSelection(null)}>Back</button>
         <strong>{shown.label}</strong>
       </div>
       {memberNavigation ? <nav aria-label="Member path" className="wf-data-member-path">
