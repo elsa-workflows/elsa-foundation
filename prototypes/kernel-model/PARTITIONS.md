@@ -254,7 +254,13 @@ The decisions that were the owner's, with what the numbers said:
   as one multi-row statement. **That multi-row checked fence is now in B's scope.**
 - **Count: 1,024 virtual partitions.** The code keeps `VirtualPartitions.Provisional = 4096` as written on 15 November
   (no code changed in this round's documentation fix); the Worker refactor to range ownership will use 1,024.
-- Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) remain open.
+- Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) stayed open on 16 November. The owner
+  answered them on 17 November:
+  - **Rebalance strategy: fewest moves.** A node's partitions may be scattered, which costs nothing with a fence per
+    partition.
+  - **The Worker refactor** to range ownership of the 1,024 virtual partitions, with a journal per virtual partition,
+    is release 1's first milestone, right after design approval and before product wiring. It is kernel behaviour, so
+    it needs two independent reviews.
 - **Delivered by round 5 B ([COMMIT-SQL.md](COMMIT-SQL.md)):** the checked fence over k rows is one statement with an
   affected-row check on every engine (`EfStore.FenceAsync`, probe `x fence`), so F-A1's k + 2 round trips become 3; the
   kernel still fences one row per commit until the Worker refactor.

@@ -33,25 +33,26 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 
 ## Milestones
 
-Each milestone closes when its acceptance holds on main. K1 to K11 are gate 3 (release 1); K12 is gate 4; K13 is
+Each milestone closes when its acceptance holds on main. K1 to K12 are gate 3 (release 1); K13 is gate 4; K14 is
 gate 5.
 
 | # | Milestone | Acceptance |
 |---|---|---|
 | K0 | **Design approval** (gate 2) | ADR 0099, the register, the seven answers and the supersede list reviewed by the independent architecture review; every material finding resolved; the owner's delegated approval recorded on #4229 |
-| K1 | **Contracts package and storage contract** | Layer 3's contracts package (turn contract, the four seams, read models) and the store contract with the in-memory store; an architecture guard fails any layer 3 reference to layers 1 and 2; the store conformance suite passes on the in-memory store |
-| K2 | **Store changes the answer pages flag** (each its own PR, two reviews) | See "Store and kernel changes" below; each with conformance cases on every engine and a simulation invariant or mutation that fails without it |
-| K3 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine; MongoDB conformance in CI on a replica set. **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned |
-| K4 | **Durable layer, built-in runtime, profiles** | Embedded and Cluster; 1,024 virtual partitions; the wake signal; the runtime conformance suite; graceful stop ends owned work before persistence is disposed (#3939's row) |
-| K5 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported |
-| K6 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4; both in Embedded and Cluster |
-| K7 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits |
-| K8 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
-| K9 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
-| K10 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans; parked-work inspect, retry and discard; values by reference |
-| K11 | **Qualification** | See "Release 1 qualification" below |
-| K12 | **Default switch** (gate 4) | **Release acceptance:** K1 to K11 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
-| K13 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
+| K1 | **Worker refactor to range ownership** (two reviews) | The prototype's Worker owns ranges of the 1,024 virtual partitions, with a fence row and a journal per virtual partition and `VirtualPartitions` at 1,024; rebalance moves the fewest partitions, so a node's partitions may be scattered; the simulation at both sizes, the mutations and store conformance pass, with take, beat, takeover and rebalance costs measured against [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md). It comes right after design approval and before product wiring (owner, 17 November) |
+| K2 | **Contracts package and storage contract** | Layer 3's contracts package (turn contract, the four seams, read models) and the store contract with the in-memory store; an architecture guard fails any layer 3 reference to layers 1 and 2; the store conformance suite passes on the in-memory store |
+| K3 | **Store changes the answer pages flag** (each its own PR, two reviews) | See "Store and kernel changes" below; each with conformance cases on every engine and a simulation invariant or mutation that fails without it |
+| K4 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine; MongoDB conformance in CI on a replica set. **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned |
+| K5 | **Durable layer, built-in runtime, profiles** | Embedded and Cluster; 1,024 virtual partitions; the wake signal; the runtime conformance suite; graceful stop ends owned work before persistence is disposed (#3939's row) |
+| K6 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported |
+| K7 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4; both in Embedded and Cluster |
+| K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits |
+| K9 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
+| K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
+| K11 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans; parked-work inspect, retry and discard; values by reference |
+| K12 | **Qualification** | See "Release 1 qualification" below |
+| K13 | **Default switch** (gate 4) | **Release acceptance:** K1 to K12 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
+| K14 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
 
 ### Store and kernel changes the answer pages flag
 
@@ -110,21 +111,22 @@ stress test with admission on and off. No Azure or multi-machine spend without t
 ones on developers' machines. So there are no live runs to carry over, no data migration and no old tables to keep:
 "we'll simply delete the database and have it regenerated."
 
-- Until K12 the kernel is built in its own packages behind a host switch, with the old core the default. The two never
+- Until K13 the kernel is built in its own packages behind a host switch, with the old core the default. The two never
   read each other's tables.
 - The switch PR makes the kernel the default. Developers delete their local databases and let the kernel's migrations
   create them again.
 - **Rollback** is a revert of the switch PR, followed by the same database reset. There is no data rollback, because
   no user data exists.
 
-## Open owner items
+## Owner answers of 17 November
 
-Asked of the owner on 17 November; this plan records the answers when they come.
-
-- **Rebalance strategy** for virtual partitions ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026), decision 4).
-- **When the Worker refactor to range ownership happens** (PARTITIONS.md, decision 5).
-- **The disposition of the Unified Execution program** [#2892](unified-execution.md), whose shared durable host the
-  kernel replaces.
+- **Rebalance strategy** ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026), decision 4): fewest
+  moves. A node's partitions may be scattered, which costs nothing with a fence per partition.
+- **The Worker refactor** (PARTITIONS.md, decision 5): range ownership of the 1,024 virtual partitions, with a journal
+  per virtual partition, is release 1's first milestone (K1), right after design approval and before product wiring.
+  It is kernel behaviour, so two reviews.
+- **Unified Execution** [#2892](unified-execution.md) was closed on 14 November, superseded by the kernel; no
+  decision was needed.
 
 ## Retirement (proposed)
 
@@ -146,7 +148,7 @@ list; the owner sees it first):
 | [how-a-workflow-executes.md](../how-a-workflow-executes.md) | Rewrite as a turn, a commit and the projector |
 | [runtime-durable-resumption.md](../runtime-durable-resumption.md) | Retire; resumption is a message to the instance |
 | [runtime-durable-timers.md](../runtime-durable-timers.md) | Retire; timers are messages with a due time |
-| [bookmark-expiration.md](../bookmark-expiration.md) | Rewrite or retire after K5 shows how waits expire |
+| [bookmark-expiration.md](../bookmark-expiration.md) | Rewrite or retire after K6 shows how waits expire |
 | [runtime-fault-behavior.md](../runtime-fault-behavior.md) | Rewrite on Park, recovery and intervention |
 
 The fresh inventory adds any other page that describes the old core (candidates: [seams.md](../seams.md),

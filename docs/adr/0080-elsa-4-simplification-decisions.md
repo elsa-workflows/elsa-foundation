@@ -47,8 +47,8 @@ is an active program, under the owner's goal of 12 November 2026 and his instruc
 with the proposal. Its scope is the goal's: build the kernel, prove it in the prototype, get the design approved
 ([ADR 0099](0099-clean-slate-execution-kernel.md), proposed), ship release 1 on it, switch Elsa's default and delete the
 old core, in small PRs. Product code waits for design approval at gate 2. It runs beside the active programs and
-preserves consolidation's priority one. It reactivates no parked work; the disposition of
-[Unified Execution #2892](../program-goals/unified-execution.md) is an open owner item. Azure or multi-machine spend,
+preserves consolidation's priority one. It reactivates no parked work. [Unified Execution #2892](../program-goals/unified-execution.md)
+was closed on 14 November, superseded by the kernel. Azure or multi-machine spend,
 releases, deployments and production credentials are outside it without the owner's approval.
 
 **Owner amendment, 9 November 2026 (triage review):** the owner recorded eight end-to-end delivery
