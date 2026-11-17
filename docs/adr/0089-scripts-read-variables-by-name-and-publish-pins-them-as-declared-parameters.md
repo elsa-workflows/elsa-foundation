@@ -1,15 +1,11 @@
 # Scripts Read Variables By Name And Publish Pins Them As Declared Parameters
 
-Status: proposed (2026-10-23, amended 2026-10-24). Sipke Schoorstra, the decision holder, chose this option on
-[#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) (US2), and on 2026-10-24 settled the
-converter output and the former open questions on the Liquid root and on unset and transient variables.
-Acceptance needs agreement with @j03y-nxxbz per #3204; it does not wait for the full review of
-[ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure)
-(#3026), and this ADR changes with it if that review reads §5 more strictly. Its "Writes are unchanged: scripts do
-not write variables" would be superseded by
-[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) if that is accepted.
-Its read model, decisions 4 and 5 included, would then cover input-binding expressions only; RunJavaScript would
-read through ADR 0090's step sessions.
+Status: accepted (2026-11-17), amended by the run-time fallback below. It does not wait for a stricter reading of
+[ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure);
+this ADR changes with §5 if §5 is read more strictly.
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) is accepted, so the read
+model of decisions 4 and 5 covers input-binding expressions, and RunJavaScript reads through ADR 0090's step
+sessions.
 
 Amended: **static pinning plus a run-time fallback.** Publish still resolves and pins every variable read it can
 resolve statically (decisions 1 to 4). A computed variable name and a variable read made inside an opaque host
@@ -103,10 +99,10 @@ spec decides.)
 never binds `undefined`, which the evaluator refuses as a result. A pinned variable parameter is therefore never an
 absent required parameter in spec 095's sense: it binds `null` when its variable has no value.
 
-Writes are unchanged: scripts do not write variables. A change goes through an output capture or the `Set`
-intrinsic (ADR 0045 §4). (Proposed amendment:
-[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
-would let activities, RunJavaScript included, change variables; input-binding expressions would stay read-only.)
+Input-binding expressions do not write variables. A change goes through an output capture, the `Set` intrinsic
+(ADR 0045 §4), or an activity's step session
+([ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)), which RunJavaScript
+uses.
 
 ## Amendment: static pinning plus a run-time fallback
 
@@ -149,6 +145,9 @@ publish cannot see. For these:
 - **A computed name that matches no visible variable reads `undefined`.** A warning is recorded and the read is marked
   absent. It is not `null`, which would erase the difference between a variable that is null and one that does not
   exist. This applies to variable names only; it does not make other missing values optional.
+- **A computed name that resolves to a transient variable faults the step.** A transient value cannot be part of
+  the input snapshot, so the read cannot be replayed. The fault names the node and the variable. Reading `undefined`
+  instead would hide the failure behind a value the script may treat as valid.
 
 A literal name that resolves to no visible variable, and a literal read of a transient variable, stay publish
 diagnostics (decision 5).
