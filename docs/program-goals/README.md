@@ -29,7 +29,6 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Isolated rehearsal and qualification under #2510 from captured copies; live cutover remains gated |
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
-| [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October; outcome clarified 9 November | A shared durable host and its ports for native workflows, BPMN, Decisions and agent collaboration; ETL and Rules as separately owned domains with native integration | Sipke | SQLite native/BPMN milestone delivered (#3998); ETL/Rules restart witnesses, the Decisions driver and port locking next under #2892 |
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | Released-semantics adoption #2735 delivered; import safeguards #2736 remain open |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 | [Studio Expression Developer Experience](studio-expression-developer-experience.md) | Active; owner authorization, 23 October | Studio activity-input code authoring and Foundation expression tooling | Sipke | Program #2310; plan #2367 and the permission-hash fix first; milestones 2 and 3 wait on the #3204 read-model ADR |
@@ -46,6 +45,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 4 StateMachine](state-machine.md) | Active; owner authorization, 4 November; design first | Generic root/nested hierarchical and parallel state machines, Studio and durable execution | Sipke | Program #3815; establishment #3826, then M0 contract #3820 before production implementation |
 | [Activity Data Selection](activity-data-selection.md) | Active; Foundation first, one implementation worker | Eligible activity-input data selection and causal result bindings | Sipke | Program #3882; research #3884 and production agreement #3885 closed; Foundation #3922 / PR #3948 (T004–T010 integration, qualification and review); reuse #3094 afterward |
 | [Entity-aware Integrations](entity-aware-integrations.md) | Active; owner authorization, 6 November; research/design first | Optional source metadata, record references, operations/events and authoring | Sipke | Canonical #3608; service connections first; source proof before production design agreement; record backend explicitly follows in #3916 |
+| [Clean-slate execution kernel](clean-slate-kernel.md) | Active; owner goal, 12 November; recorded 17 November | The execution core: actor runtime, durable actors, execution models, storage providers, the API read path and Studio's run views | Sipke | Program #4229, ADR 0099 (proposed); gate 2 design approval, then release 1 |
 
 The Active table above is the complete list of active programs; the eight rows recorded on 9 November 2026 carry owner authorizations given in issue comments between 4 and 6 November and are now recorded in ADR 0080 D0. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
@@ -59,7 +59,8 @@ superseded.
 |---|---|
 | [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
-| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; named #2892 continuation active |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; its #2892 continuation closed 14 November, superseded by the [clean-slate kernel](clean-slate-kernel.md) |
+| [Unified Execution](unified-execution.md) | Closed; Program #2892 closed 14 November, superseded by the [clean-slate kernel](clean-slate-kernel.md) #4229 |
 | [Runtime Efficiency](runtime-efficiency.md) | Completed; Program #2531 closed 16 November; old-core objectives superseded by the kernel, M5 handed to #4229 |
 | [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
 | [Runtime Throughput](runtime-throughput.md) | Merged into Runtime Efficiency |
