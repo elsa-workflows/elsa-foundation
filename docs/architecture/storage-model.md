@@ -139,7 +139,8 @@ The separate [values-by-reference witness](../../prototypes/kernel-model/models/
 collection to `KernelDb` or `MongoStore`; it uses an external directory through existing jobs.
 MongoDB's [document-size experiment](../../prototypes/kernel-model/MONGO.md#5-findings)
 records a 16 MiB document limit: the instance envelope shares that limit with its state string. This is a provider
-constraint, not a chosen inline-value threshold.
+constraint, not a chosen inline-value threshold. The proposed recovery reserve keeps every committed envelope 296 KiB below that limit, so a
+recover's `ParkRecord` always fits ([observability](observability.md#recover)).
 
 ### Optional commit-time facts
 
