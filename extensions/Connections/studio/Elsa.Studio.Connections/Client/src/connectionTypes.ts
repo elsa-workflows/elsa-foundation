@@ -61,6 +61,7 @@ export interface ConnectionSecretPickerMetadata {
 
 /** Local authoring state. The selected metadata is never part of a create request. */
 export type ConnectionCredentialInput =
+  | { source: "unchanged" }
   | { source: "secret"; existingSecretName: string; selectedSecret?: ConnectionSecretPickerMetadata }
   | { source: "value"; value: string };
 

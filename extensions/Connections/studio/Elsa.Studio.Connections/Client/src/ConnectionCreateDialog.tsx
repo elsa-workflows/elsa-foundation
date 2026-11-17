@@ -31,6 +31,8 @@ export function ConnectionCreateDialog({
 }) {
   const isEdit = !!initialConnection;
   const [name, setName] = useState(() => initialConnection?.name ?? "");
+  const [displayName, setDisplayName] = useState(() => initialConnection?.displayName ?? "");
+  const [tags, setTags] = useState(() => initialConnection?.tags.join(", ") ?? "");
   const [typeName, setTypeName] = useState(() => initialConnection?.typeName ?? initialTypeName(descriptors));
   const [authScheme, setAuthScheme] = useState(() => {
     if (initialConnection) return initialConnection.authScheme;
@@ -121,6 +123,7 @@ export function ConnectionCreateDialog({
   const validRequiredSchemeSettings = nonSensitiveSchemeFields.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validCredentials = sensitiveFields.every(field => {
     const input = visibleCredentials[field.name] ?? defaultCredentialInput();
+    if (input.source === "unchanged") return isEdit && !!initialConnection?.secretFieldNames.includes(field.name);
     if (input.source === "value") return !field.required || input.value.trim().length > 0;
     if (!input.existingSecretName) return !field.required;
     return input.selectedSecret?.name === input.existingSecretName
@@ -152,6 +155,8 @@ export function ConnectionCreateDialog({
     if (boundContext === context) return;
     setBoundContext(context);
     setName(initialConnection?.name ?? "");
+    setDisplayName(initialConnection?.displayName ?? "");
+    setTags(initialConnection?.tags.join(", ") ?? "");
     const nextTypeName = initialConnection?.typeName ?? initialTypeName(descriptors);
     setTypeName(nextTypeName);
     setAuthScheme(initialConnection?.authScheme ?? initialSchemeName(descriptors, nextTypeName));
@@ -235,6 +240,8 @@ export function ConnectionCreateDialog({
 
       if (isEdit) {
         const updateRequest: UpdateConnectionRequest = {
+          displayName: displayName.trim(),
+          tags: tags.split(",").map(tag => tag.trim()).filter(Boolean),
           settings: filteredSettings,
           secretFields: secretFields!
         };
@@ -404,6 +411,7 @@ export function ConnectionCreateDialog({
           context={context}
           field={field}
           value={visibleCredentials[field.name] ?? defaultCredentialInput()}
+          allowUnchanged={isEdit && initialConnection.secretFieldNames.includes(field.name)}
           disabled={!contextIsCurrent || submitting}
           error={fieldErrors[`secretFields.${field.name}`]}
           onChange={input => setCredentialInput(field.name, input)}
@@ -498,6 +506,19 @@ export function ConnectionCreateDialog({
                 <small id={`${nameId}-help`}>{isEdit ? "Name cannot be changed." : "Use letters, numbers, dots, dashes or underscores. Maximum 128 characters."}</small>
                 {visibleNameError ? <span id={`${nameId}-error`} className="connections-create-field-error">{visibleNameError}</span> : null}
               </StudioField></div>
+              {isEdit ? <>
+                <div className="connections-create-field"><StudioField controlId={`${nameId}-display-name`} label="Display name">
+                  <input id={`${nameId}-display-name`} value={contextIsCurrent ? displayName : ""}
+                    disabled={!contextIsCurrent || submitting}
+                    onChange={event => setDisplayName(event.target.value)} />
+                </StudioField></div>
+                <div className="connections-create-field"><StudioField controlId={`${nameId}-tags`} label="Tags">
+                  <input id={`${nameId}-tags`} value={contextIsCurrent ? tags : ""}
+                    aria-describedby={`${nameId}-tags-help`} disabled={!contextIsCurrent || submitting}
+                    onChange={event => setTags(event.target.value)} />
+                  <small id={`${nameId}-tags-help`}>Separate tags with commas.</small>
+                </StudioField></div>
+              </> : null}
               <div className="connections-create-field"><StudioField controlId={typeId} label="Type">
 
                 <select
@@ -612,7 +633,7 @@ function defaultCredentialInput(): ConnectionCredentialInput {
 function buildInitialCredentials(connection: ConnectionMetadata): Record<string, ConnectionCredentialInput> {
   const credentials: Record<string, ConnectionCredentialInput> = {};
   for (const fieldName of connection.secretFieldNames) {
-    credentials[fieldName] = { source: "secret", existingSecretName: "" };
+    credentials[fieldName] = { source: "unchanged" };
   }
   return credentials;
 }

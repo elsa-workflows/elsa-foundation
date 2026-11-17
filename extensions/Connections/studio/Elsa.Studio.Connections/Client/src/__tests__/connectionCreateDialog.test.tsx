@@ -15,6 +15,66 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("connection editing", () => {
+  function renderEdit(secretFieldNames = ["apiKey"]) {
+    const initialConnection = createdConnection({ displayName: "Payments", tags: ["production", "billing"],
+      authScheme: "api-key", secretFieldNames, settings: { baseUrl: "https://api.example" } });
+    const context = endpointContext(vi.fn(async () => pickerResponse()));
+    const putJson = vi.fn(async () => initialConnection);
+    context.http.putJson = putJson as typeof context.http.putJson;
+    return { ...renderDialog({ context, descriptors: apiKeyDescriptors, initialConnection }), putJson };
+  }
+
+  it.each(["updated, finance", ""])("saves edited metadata and preserves stored credentials with tags %j", async tags => {
+    const { container, putJson } = renderEdit();
+    expect(control<HTMLInputElement>(container, "Display name").value).toBe("Payments");
+    expect(control<HTMLInputElement>(container, "Tags").value).toBe("production, billing");
+    expect(container.querySelector('input[value="unchanged"]')).toHaveProperty("checked", true);
+    expect(button(container, "Save changes").disabled).toBe(false);
+    expect(container.querySelector("form")!.checkValidity()).toBe(true);
+    changeText(container, "Display name", "Updated payments");
+    changeText(container, "Tags", tags);
+    clickButton(container, "Save changes");
+    await waitFor(() => putJson.mock.calls.length === 1);
+    expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", {
+      displayName: "Updated payments", tags: tags ? ["updated", "finance"] : [],
+      settings: { baseUrl: "https://api.example" }, secretFields: {}
+    });
+  });
+
+  it("validates replacement credentials and allows returning to the stored credential", async () => {
+    const { container, putJson } = renderEdit();
+    chooseRadio(container, "New value");
+    expect(button(container, "Save changes").disabled).toBe(true);
+    changeText(container, "New value for API key", "   ");
+    expect(button(container, "Save changes").disabled).toBe(true);
+    chooseRadio(container, "Existing Secret");
+    expect(button(container, "Save changes").disabled).toBe(true);
+    chooseRadio(container, "Keep stored credential");
+    expect(button(container, "Save changes").disabled).toBe(false);
+    chooseRadio(container, "New value");
+    changeText(container, "New value for API key", "replacement");
+    clickButton(container, "Save changes");
+    await waitFor(() => putJson.mock.calls.length === 1);
+    expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
+      secretFields: { apiKey: { value: "replacement" } }
+    }));
+  });
+
+  it("requires a credential when the edited connection has no stored credential", async () => {
+    const { container, putJson } = renderEdit([]);
+    expect(container.querySelector('input[value="unchanged"]')).toBeNull();
+    expect(button(container, "Save changes").disabled).toBe(true);
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    chooseSecret(container, "API key", "payments.api");
+    clickButton(container, "Save changes");
+    await waitFor(() => putJson.mock.calls.length === 1);
+    expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
+      secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "payments.api" } }
+    }));
+  });
+});
+
 describe("connection credential creation", () => {
   it.each(["Backend API", "api/key", "café", "a".repeat(129), "   "])("explains and blocks invalid connection name %j", async name => {
     const { container, calls } = renderApiKeyDialog();
@@ -900,6 +960,7 @@ function installConnectionList(context: StudioEndpointContext, connection: Conne
 function renderDialog(options: {
   context?: StudioEndpointContext;
   descriptors?: ConnectionDescriptorsResponse;
+  initialConnection?: ConnectionMetadata;
   onCancel?: () => void;
   onCreated?: (connection: ConnectionMetadata) => void;
 } = {}) {
@@ -912,6 +973,7 @@ function renderDialog(options: {
   const render = (overrides: { context?: StudioEndpointContext } = {}) => {
     flushSync(() => root.render(
       <ConnectionCreateDialog
+        initialConnection={options.initialConnection}
         context={overrides.context ?? initialContext}
         descriptors={options.descriptors ?? testDescriptors}
         onCancel={onCancel}
