@@ -17,7 +17,7 @@ import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCurs
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, formatRunPageTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
@@ -833,7 +833,7 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate, onRunTitleChange }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], incidentRootCauseProviders = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate, onRunTitleChange }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
@@ -841,6 +841,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   workflowExecutionId: string;
   initialActivityExecutionId?: string | null;
   initialInspectorTab?: InstanceInspectorTab;
@@ -1752,7 +1753,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
-            backendSession={backendSession} runRelatedLinks={runRelatedLinks}
+            backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
@@ -2377,6 +2378,7 @@ function WorkflowInstanceInspector({
   expressionEditors = [],
   backendSession,
   runRelatedLinks = [],
+  incidentRootCauseProviders = [],
   collapsed = false,
   expanded = true,
   maximized = false,
@@ -2419,6 +2421,7 @@ function WorkflowInstanceInspector({
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   collapsed?: boolean;
   expanded?: boolean;
   maximized?: boolean;
@@ -2558,6 +2561,7 @@ function WorkflowInstanceInspector({
                     renderIncidentActions={renderIncidentActions}
                     context={context}
                     summary={summary}
+                    incidentRootCauseProviders={incidentRootCauseProviders}
                     guidanceForIncident={guidanceForIncident}
                     onOpenDefinition={onOpenDefinition}
                     definitionAccess={definitionAccess}
@@ -2681,7 +2685,34 @@ function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
   return incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim() || null;
 }
 
-export function getIncidentRootCause(incident: IncidentStateSummary) {
+export function getIncidentRootCause(incident: IncidentStateSummary, providers: StudioIncidentRootCauseProviderContribution[] = []) {
+  // Try registered providers first (filtered by failureTypes / metadataKeyPrefixes)
+  const matchedProviders = providers.filter(provider => {
+    if (provider.failureTypes && provider.failureTypes.length > 0) {
+      if (!provider.failureTypes.includes(incident.failureType)) return false;
+    }
+    if (provider.metadataKeyPrefixes && provider.metadataKeyPrefixes.length > 0 && incident.metadata) {
+      const hasMatchingKey = Object.keys(incident.metadata).some(key =>
+        provider.metadataKeyPrefixes!.some(prefix => key.startsWith(prefix))
+      );
+      if (!hasMatchingKey) return false;
+    }
+    return true;
+  });
+  for (const provider of matchedProviders) {
+    const result = provider.getRootCause({
+      incidentId: incident.incidentId,
+      failureType: incident.failureType,
+      message: incident.message,
+      metadata: incident.metadata,
+      severity: incident.severity,
+      status: incident.status,
+      isBlocking: incident.isBlocking,
+      createdAt: incident.createdAt
+    });
+    if (result) return result;
+  }
+  // Fall back to default logic
   const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
   const message = rootCause || incident.message;
   const child = message.match(/^Flowchart faulted because child node '([^']+)' faulted:/);
@@ -2766,6 +2797,7 @@ export function WorkflowIncidentList({
   onViewInput,
   onLoadMoreIncidentAssociations,
   renderIncidentActions,
+  incidentRootCauseProviders = [],
   guidanceForIncident,
   onOpenDefinition,
   definitionAccess
@@ -2788,6 +2820,7 @@ export function WorkflowIncidentList({
   onLoadMoreIncidentAssociations?(): Promise<void>;
   /** Spec 260: the operator actions of a waiting incident, shown in its details dialog. */
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
   onOpenDefinition?(definitionId: string): void;
   definitionAccess?: DefinitionAccessObservation;
@@ -2874,7 +2907,7 @@ export function WorkflowIncidentList({
                 onClick={() => onSelectEvidence?.(incident.incidentId)}
               >
                 <strong>{activityLabel ? `${activityLabel}${inputLabel ? ` · ${inputLabel}` : ""}` : inputLabel ? `Input · ${inputLabel}` : incident.failureType}</strong>
-                <p className="wf-instance-incident-cause">{getIncidentRootCause(incident)}</p>
+                <p className="wf-instance-incident-cause">{getIncidentRootCause(incident, incidentRootCauseProviders)}</p>
                 <span className="wf-instance-incident-status" data-health={incident.isBlocking && isActiveIncident(incident) ? "blocking" : "neutral"}>{incidentHealthLabel} · {incident.status}</span>
                 {expressionLanguage ? <small>Expression language · {expressionLanguage}</small> : null}
               </button>
@@ -2915,6 +2948,7 @@ export function WorkflowIncidentList({
           guidance={incidentGuidance}
           onOpenDefinition={onOpenDefinition}
           definitionAccess={definitionAccess}
+          incidentRootCauseProviders={incidentRootCauseProviders}
           onClose={() => setIncidentDetailsId(null)}
           actions={renderIncidentActions?.(
             incidentDetails,
@@ -3037,7 +3071,7 @@ function incidentActivityLabel(
   return getIncidentActivityLabel(association?.activityExecution ?? activityFacts, activityCatalog, activityFacts?.presentation) ?? incident.failureType;
 }
 
-function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDefinition, definitionAccess, onClose, actions }: {
+function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDefinition, definitionAccess, onClose, actions, incidentRootCauseProviders = [] }: {
   incident: IncidentStateSummary;
   context?: StudioEndpointContext;
   summary?: WorkflowInstanceSummary | null;
@@ -3046,6 +3080,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
   definitionAccess?: DefinitionAccessObservation;
   onClose(): void;
   actions?: ReactNode;
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -3074,7 +3109,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
           <div>
             <span>Workflow incident</span>
             <h3 id={titleId}>Incident details</h3>
-            <p>{getIncidentRootCause(incident)}</p>
+            <p>{getIncidentRootCause(incident, incidentRootCauseProviders)}</p>
           </div>
           <button type="button" className="wf-incident-details-close" aria-label="Close incident details" onClick={onClose}>Close</button>
         </header>
