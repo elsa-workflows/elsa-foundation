@@ -1,0 +1,79 @@
+# Contract: The `variables` read surface, publish read-set and run-time fallback
+
+**Spec**: [../spec.md](../spec.md) · Approved 2026-11-17 (initiative #3052). Amends spec 095 expression contract §1, §2, §3 and §6.
+Implements decision D-7 as ADR 0089 records it (accepted).
+
+## Authoring surface
+
+A script reads a workflow variable by name:
+
+- JavaScript literal: `variables.X`, `variables['X']` (string literal), `getVariable('X')` (string literal argument).
+- JavaScript computed: `variables[expr]`, `getVariable(expr)` (non-literal).
+- Liquid: `{{ variables.X }}`; computed access where Liquid allows it.
+- Host functions that read variables not named in source (opaque reads).
+
+`input.X` and `workflow.correlationId` / `workflow.instanceId` continue to read as today (via `args`). The
+`activities.<name>.<output>` root is NOT provided by this contract (out of scope).
+
+## Publish (name resolution and validation)
+
+1. Parse the source with the language parser (no regex). Collect literal variable names; detect computed access,
+   including `variables` or `getVariable` used as a value (aliased, passed, enumerated or spread), and calls to host
+   functions registered as reading variables.
+2. Resolve each literal name to its nearest declaring scope: iteration scope → enclosing container → outer containers →
+   workflow; innermost declaration shadows an outer one.
+3. For each resolved literal name, add a pinned `Variable` parameter with `surface = variables`, keyed
+   `variables.<name>` in the parameter map, recording `declaringScopeNodeId` + `variableKey`. The authored source is
+   not rewritten. For a `RunJavaScript` `script` input the same targets and marker form the step's **body read plan**,
+   kept apart from the input snapshot.
+4. For an expression with computed or opaque reads, add the fallback marker with the conservative read report (the
+   variables visible at that point). Publish succeeds.
+5. Refuse (publish diagnostic) when:
+   - a literal name resolves to no visible declaration (spec 1216 FR-027);
+   - a literal name resolves to a transient (non-durable) variable (retained rule).
+6. Warn when a literal name now resolves to a different declaration than in the previously published version; warn
+   when a computed read's candidates include a protected or a transient variable.
+7. A literal read of a protected (secret) variable is protection-checked here (the name is known).
+
+## Run time (evaluation)
+
+- The evaluator installs a frozen `variables` object (frozen values until spec 1228's bridge replaces them, FR-037).
+  A pinned name returns its pinned (snapshot) value; an unset declared variable reads JSON `null` (never `undefined`).
+- Within one evaluation every read path to one variable returns the same JavaScript value (FR-034).
+- On an expression with the fallback marker, the candidate set is made readable before evaluation. A computed or opaque
+  read then resolves the name nearest-scope-first over the candidates, is protection-checked for the variable actually
+  read, and is recorded (name, declaring scope, present/absent).
+- A computed name that matches no visible variable reads `undefined` in JavaScript and nil in Liquid, records a warning,
+  and is recorded as absent (spec 1216 FR-025/FR-026).
+- A withheld (no-permission) value is not provided; the step faults with the protection diagnostic.
+- A computed name that resolves to a transient variable faults the step; the fault names the node and the variable
+  (ADR 0089 R3).
+- The recorded reads are returned with the evaluation result. For an input-binding expression they are stored in the
+  step's input snapshot; for a `RunJavaScript` body they go into its session reads (ADR 0092 decision 3).
+- A transient or withheld match is recorded on the host side and faults the step even if the script catches the
+  JavaScript exception.
+- An expression without the marker loads only the variables it names; there is no frame-chain projection for it.
+- `getVariable` remains as a runtime function (literal argument → pinned value; otherwise → fallback). Generated
+  `get<Name>()` accessors are not provided.
+- The `args` object is built from the remaining parameters, as a separate object.
+- Secret values are redacted from any log, diagnostic or recorded-read output.
+
+## Input snapshot vs RunJavaScript body session
+
+- Input-binding expressions read the step's input snapshot (pinned values plus recorded reads) and never see pending
+  writes.
+- The `RunJavaScript` body gets `variables` and `getVariable` (today it gets only `args`). It reads — literal and
+  computed — through its variable **session** (ADR 0090 decision 2, ADR 0092), which returns the committed value plus
+  the body's own pending writes. Every read goes into the session reads of the read set (ADR 0092 decision 3, not the
+  input snapshot) with the variable's protection policy (FR-035), which spec 1228 uses for result protection. Writes are
+  ADR 0090 / S-7, out of scope here.
+
+## spec 095 contract changes (recorded; flow to #3420 / spec 095)
+
+- **§1**: the compiled binding's parameter gains a `surface` flag (`variables` | `args`, default `args`); the compiled
+  binding gains an optional fallback marker carrying the conservative read report; the evaluation request exposes a
+  `variables` root over the `surface = variables` parameters plus the fallback lookup; the evaluation result returns the
+  recorded reads.
+- **§6**: the importer keeps `variables.X` (does not lower it to `args.X`) and keeps computed `getVariable(expr)` /
+  `variables[expr]` (served by the fallback) instead of failing on them; it still lowers `input`, activity results and
+  instance metadata to `args`.
