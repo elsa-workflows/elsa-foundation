@@ -19,6 +19,7 @@ import {
   WorkflowIncidentList
 } from "../workflow-editor/WorkflowInstances";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowExecutableDetails, WorkflowExecutableNode, WorkflowInstanceDetails } from "../workflowTypes";
+import type { StudioIncidentRootCauseProviderContribution, StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 
@@ -580,6 +581,81 @@ describe("Runtime-pinned workflow instance rendering", () => {
     expect(resolveIncidentActivityAssociation(runLevel, [])).toBeNull();
     expect(getIncidentRootCause(runLevel)).toBe("The input expression referenced a missing variable.");
     expect(getIncidentRootCause(incident({ metadata: {} }))).toBe("Wrapper failure");
+  });
+
+  it("uses registered provider when failure type matches", () => {
+    const testIncident = incident({
+      failureType: "AgentTurnFailed",
+      message: "The agent turn failed.",
+      metadata: { "runtime.agentTurnCode": "model.unreachable" }
+    });
+    const provider: StudioIncidentRootCauseProviderContribution = {
+      id: "test-agent-provider",
+      failureTypes: ["AgentTurnFailed"],
+      getRootCause: (i: StudioIncidentStateSummary) => i.failureType === "AgentTurnFailed" ? "Agent model call failed." : null
+    };
+    expect(getIncidentRootCause(testIncident, [provider])).toBe("Agent model call failed.");
+  });
+
+  it("uses registered provider when metadata key prefix matches", () => {
+    const testIncident = incident({
+      failureType: "ActivityInputFailed",
+      message: "Expression evaluation failed.",
+      metadata: { "agent.turnCode": "timeout" }
+    });
+    const provider: StudioIncidentRootCauseProviderContribution = {
+      id: "test-metadata-provider",
+      metadataKeyPrefixes: ["agent."],
+      getRootCause: (i: StudioIncidentStateSummary) => i.metadata?.["agent.turnCode"] ? `Agent timeout: ${i.metadata["agent.turnCode"]}` : null
+    };
+    expect(getIncidentRootCause(testIncident, [provider])).toBe("Agent timeout: timeout");
+  });
+
+  it("skips provider when failure type does not match", () => {
+    const testIncident = incident({
+      failureType: "ActivityInputFailed",
+      message: "Expression evaluation failed."
+    });
+    const provider: StudioIncidentRootCauseProviderContribution = {
+      id: "test-agent-only",
+      failureTypes: ["AgentTurnFailed"],
+      getRootCause: () => "Should not appear"
+    };
+    expect(getIncidentRootCause(testIncident, [provider])).toBe("Expression evaluation failed.");
+  });
+
+  it("falls back to default logic when provider returns null", () => {
+    const testIncident = incident({
+      failureType: "AgentTurnFailed",
+      message: "The agent turn failed.",
+      metadata: { "runtime.faultInnerMessage": "Inner error details" }
+    });
+    const provider: StudioIncidentRootCauseProviderContribution = {
+      id: "test-decline",
+      failureTypes: ["AgentTurnFailed"],
+      getRootCause: () => null
+    };
+    expect(getIncidentRootCause(testIncident, [provider])).toBe("Inner error details");
+  });
+
+  it("first non-null provider result wins", () => {
+    const testIncident = incident({
+      failureType: "AgentTurnFailed",
+      message: "The agent turn failed."
+    });
+    const providers: StudioIncidentRootCauseProviderContribution[] = [
+      {
+        id: "provider-1",
+        failureTypes: ["AgentTurnFailed"],
+        getRootCause: () => null
+      },
+      {
+        id: "provider-2",
+        failureTypes: ["AgentTurnFailed"],
+        getRootCause: () => "Second provider message"
+      }
+    ];
+    expect(getIncidentRootCause(testIncident, providers)).toBe("Second provider message");
   });
 
   it("offers input navigation from structured incident metadata and labels run-level evidence honestly", () => {

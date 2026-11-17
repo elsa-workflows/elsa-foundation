@@ -1710,6 +1710,7 @@ export const studioSlotIds = {
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
+  incidentRootCauseProviders: "workflow.incident.root-cause-providers",
   settingEditors: "studio.setting-editors",
   weaverContextProviders: "studio.weaver.context-providers",
   weaverPromptStarters: "studio.weaver.prompt-starters",
@@ -1804,6 +1805,7 @@ export const studioSlots = {
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
+  incidentRootCauseProviders: defineStudioSlot({ id: studioSlotIds.incidentRootCauseProviders, kind: "incident-root-cause-provider", title: "Incident root cause providers", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   weaverContextProviders: defineStudioSlot({ id: studioSlotIds.weaverContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   weaverPromptStarters: defineStudioSlot({ id: studioSlotIds.weaverPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -2085,6 +2087,29 @@ export interface StudioWorkflowRunRelatedLink {
   path: string;
 }
 
+/** Minimal incident shape passed to root cause providers so they don't depend on the full Workflows module types. */
+export interface StudioIncidentStateSummary {
+  incidentId: string;
+  failureType: string;
+  message: string;
+  metadata?: Record<string, string>;
+  severity: string;
+  status: string;
+  isBlocking: boolean;
+  createdAt: string;
+}
+
+export interface StudioIncidentRootCauseProviderContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  /** Failure types this provider handles; empty or absent means all. */
+  failureTypes?: readonly string[];
+  /** Metadata key prefixes this provider cares about. */
+  metadataKeyPrefixes?: readonly string[];
+  /** Returns a tailored root cause message, or null to decline. */
+  getRootCause(incident: StudioIncidentStateSummary): string | null;
+}
+
 export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendAwareContribution {
   id: string;
   order?: number;
@@ -2127,6 +2152,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
   readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
+  /** Optional on older hosts. Modules register tailored root cause messages for specific incident types. */
+  readonly incidentRootCauseProviders?: StudioContributionRegistry<StudioIncidentRootCauseProviderContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly weaver: StudioWeaverRegistry;
   readonly workflowDesigner: {
