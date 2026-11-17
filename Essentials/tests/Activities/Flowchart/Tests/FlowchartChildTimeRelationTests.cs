@@ -182,6 +182,17 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "after", "after"));
     }
 
+    // Since spec 1208 (FR-022) a completion schedules each target once, so two connections from one node into a merge
+    // are one arrival, not two overlapping runs.
+    [Fact]
+    public void Two_connections_from_one_node_into_a_merge_are_one_arrival()
+    {
+        var flow = Flowchart(["decision", "m"], [("decision", "m", "Yes"), ("decision", "m", "No")], "decision",
+            new Dictionary<string, FlowchartNodeMetadata> { ["m"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "m", "m"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

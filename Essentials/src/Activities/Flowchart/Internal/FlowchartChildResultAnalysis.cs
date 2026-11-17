@@ -132,9 +132,8 @@ internal sealed class FlowchartChildResultAnalysis(
             !IsReachable(earlier, source) &&
             !AreExclusive(source, earlier));
 
-    // A non-waiting join runs once per arrival. Two arrivals can be in flight together when two of its inbound
-    // connections come from one node (it may select several outcomes) or from two nodes that are neither ordered nor
-    // exclusive. Every node reachable from such a join runs once per join run.
+    // A non-waiting join runs once per arrival. Two arrivals can be in flight together when they come from two nodes
+    // that are neither ordered nor exclusive. Every node reachable from such a join runs once per join run.
     private bool SelfOverlaps(string node) =>
         ForkCycleRuns().ContainsKey(node) ||
         _nonWaitingJoins.Any(join =>
@@ -142,11 +141,10 @@ internal sealed class FlowchartChildResultAnalysis(
 
     private bool ArrivalsCanOverlap(string join)
     {
-        var sources = _inboundSources.GetValueOrDefault(join, []);
-        if (sources.Count != sources.Distinct(StringComparer.Ordinal).Count())
-            return true;
-        for (var left = 0; left < sources.Count; left++)
-        for (var right = left + 1; right < sources.Count; right++)
+        // Two connections from one source are one arrival: a completion schedules each target once (spec 1208 FR-022).
+        var sources = _inboundSources.GetValueOrDefault(join, []).Distinct(StringComparer.Ordinal).ToArray();
+        for (var left = 0; left < sources.Length; left++)
+        for (var right = left + 1; right < sources.Length; right++)
         {
             // The first arrival runs the join while the path to the second is still in flight, unless the second source
             // is only reached through the join itself (a loop back into it) or excludes the first.
