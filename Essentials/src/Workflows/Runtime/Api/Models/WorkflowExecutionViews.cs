@@ -187,6 +187,33 @@ public sealed record ActivityExecutionInspectionView(
             ActivityExecutionAttemptView.From(attemptNavigation, projection.Attempt ?? projection.Provenance.Attempt),
             ActivityExecutionBoundaryView.From(boundary),
             ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues));
+
+    /// <summary>
+    /// The write-history records of this execution (spec 1221 FR-024): applied writes, lost-update warnings and
+    /// <c>Fault</c> refusals, each value as a state only. Absent when the execution wrote no variable.
+    /// </summary>
+    public IReadOnlyCollection<VariableWriteRecordView>? VariableWrites { get; init; }
+
+    /// <summary>The completion a <c>Fault</c> lost update refused, which <c>AcceptRecordedCompletion/1</c> applies (spec 1221 FR-017).</summary>
+    public RecordedCompletionView? RecordedCompletion { get; init; }
+
+    /// <summary>The input evaluations a background admission refresh superseded (spec 1221 FR-018, FR-020).</summary>
+    public IReadOnlyCollection<ActivityInputRefreshView>? InputRefreshes { get; init; }
+
+    /// <summary>Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view.</summary>
+    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state) =>
+        state is null
+            ? this
+            : this with
+            {
+                VariableWrites = state.VariableWrites is { Count: > 0 } writes
+                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots)).ToArray()
+                    : null,
+                RecordedCompletion = RecordedCompletionView.From(state.RecordedCompletion),
+                InputRefreshes = state.InputRefreshes is { Count: > 0 } refreshes
+                    ? refreshes.Select(ActivityInputRefreshView.From).ToArray()
+                    : null
+            };
 }
 
 public sealed record ActivityExecutionAttemptView(
