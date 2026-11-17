@@ -7,12 +7,28 @@ import { ActivityDataBrowser, focusBeside, useActivityDataSelectionHost } from "
 import type { ActivityDataContextResult, ActivityDataSourceFacts } from "./api/activityDataSelection";
 import { expressionEditingState, expressionValueFromHistory, planActivityExpressionInsertion } from "./activityExpressionInsertion";
 
+type Props = StudioExpressionEditorProps & {
+  editor: ComponentType<StudioExpressionEditorProps>;
+  contribution: StudioExpressionEditorContribution | null;
+  ownerValue: unknown;
+  reusableOutput?: boolean;
+};
+
 /** One surface of the current owner. Chooser state, cursor tokens and controllers are never authored data. */
-export function ExpressionEditorWithDataInsertion({ editor: Editor, contribution, ownerValue, reusableOutput = false, ...props }: StudioExpressionEditorProps & {
-  editor: ComponentType<StudioExpressionEditorProps>; contribution: StudioExpressionEditorContribution | null; ownerValue: unknown; reusableOutput?: boolean;
+export function ExpressionEditorWithDataInsertion(props: Props) {
+  return props.contribution?.sourceInsertion?.findArgumentFixes
+    ? <ScopedExpressionEditor {...props} />
+    : <ExpressionEditor {...props} />;
+}
+
+function ScopedExpressionEditor(props: Props) {
+  return <ExpressionEditor {...props} references={useWorkflowReferenceAuthoring()} />;
+}
+
+function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOutput = false, references, ...props }: Props & {
+  references?: ReturnType<typeof useWorkflowReferenceAuthoring>;
 }) {
   const host = useActivityDataSelectionHost();
-  const references = useWorkflowReferenceAuthoring();
   const chooserId = useId();
   const chooserPanel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -38,7 +54,8 @@ export function ExpressionEditorWithDataInsertion({ editor: Editor, contribution
   const hasScope = !hasEarlierOutputs && (inputs.length > 0 || variables.length > 0);
   const available = textMode && (hasEarlierOutputs || hasScope);
   const editable = available && !props.disabled && !props.context.readOnly;
-  const state = expressionEditingState(ownerValue, props.syntax);
+  const emptyOutput = reusableOutput && scoped && ownerValue == null;
+  const state = expressionEditingState(emptyOutput ? "" : ownerValue, props.syntax);
   const capable = editable && !!adapter && state.supported;
   const sourceText = typeof props.value === "string" ? props.value : "";
   const fixes = useMemo(() => {

@@ -29,7 +29,7 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   const read = () => s.api<{ revision: number; provider: { payload: { outputMappings: { source: { value: string } }[] } } }>(draft);
   const savedSource = async () => (await read()).provider.payload.outputMappings[0].source.value;
   const route = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
-  const outputs = page.getByRole("tab", { name: /^Outputs/ });
+  const outputs = page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Outputs/ });
   const source = page.getByRole("region", { name: "Value source for Sum" });
   const expression = source.getByRole("textbox", { name: "JavaScript expression" });
   await page.goto(route);
@@ -96,7 +96,13 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await expect(variable).toBeVisible();
   await capture(page, info, "write-line-picker");
   await variable.press("Enter");
-  await data.getByRole("button", { name: "Use whole value", exact: true }).press("Enter");
+  const useWhole = data.getByRole("button", { name: "Use whole value", exact: true });
+  await expect(useWhole.or(text)).toBeVisible();
+  if (await useWhole.isVisible()) {
+    // Scalar sources can commit immediately, while other shapes open the whole-value control.
+    await expect.poll(async () => await useWhole.isEnabled().catch(() => false) || !await data.isVisible()).toBe(true);
+    if (await data.isVisible()) await useWhole.press("Enter");
+  }
   await expect.poll(() => s.stored(caller)).toMatchObject({
     expressionType: "JavaScript",
     value: { source: '"Sum: " + args.data', parameters: { data: { kind: "Variable", variableKey: "variable-1" } } }
