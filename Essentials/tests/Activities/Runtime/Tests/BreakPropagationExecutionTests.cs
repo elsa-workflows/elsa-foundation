@@ -12,6 +12,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -162,6 +163,35 @@ public sealed class BreakPropagationExecutionTests
         run.AssertDidNotRun("node-start");
         run.AssertOutcomes("node-for", ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
+    }
+
+    // Spec 266 (research R-3): a Break ends the Flowchart and cancels the other paths' running activities in the same
+    // commit, so a suspended sibling can no longer complete and commit its writes after the Flowchart completed.
+    [Fact]
+    public async Task Break_in_a_flowchart_cancels_a_running_sibling_path()
+    {
+        await using var harness = NewHarness(Enumerable.Range(1, 8).Select(index => $"actexec-{index}").ToArray());
+
+        var flowchart = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-fork"),
+                StructuralExecutionTestSupport.NewWaitingNode("node-wait"),
+                WorkflowExecutionHarness.NewProbeNode("node-break", [ActivityOutcomes.Break])
+            ],
+            connections: [NewConnection("node-fork", "node-wait"), NewConnection("node-fork", "node-break")],
+            startNodeId: "node-fork");
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(flowchart, waitingNodeIds: ["node-wait"]));
+
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes("node-flowchart", ActivityOutcomes.Break);
+        var waiting = run.State("node-wait");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, waiting.Status);
+        Assert.Equal("ParentCancelled", waiting.SubStatus);
+        Assert.Equal("flowchart-break", waiting.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Empty(await harness.Services.GetRequiredService<IBookmarkStateStore>()
+            .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId));
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>

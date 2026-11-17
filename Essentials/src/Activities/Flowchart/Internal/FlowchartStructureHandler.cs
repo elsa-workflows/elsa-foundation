@@ -59,8 +59,8 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
     private sealed record TimeRelationHolder(FlowchartChildResultAnalysis? Analysis);
 
     // A first-wins race marks the losing paths cancelled in the Flowchart's state, but their running activities are not
-    // cancelled: the Flowchart can complete while they still run and commit. A Break does the same, but whether a child
-    // ends with Break cannot be seen at design time (spec 266 research R-3).
+    // cancelled: the Flowchart can complete while they still run and commit (join initiative #4193). A Break cancels
+    // the running activities of the other paths (spec 266 research R-3, F-2).
     public bool? CompletesAfterItsChildren(ActivityNode activity) =>
         !ReadAuthoredStructure(activity).NodeMetadata.Values.Any(metadata =>
             StringComparer.Ordinal.Equals(metadata?.PolicyKind, Policies.FlowchartPolicyKinds.FirstWins));

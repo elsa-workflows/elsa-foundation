@@ -160,7 +160,11 @@ internal static class StructuralParentEvaluationSupport
         if (continuation.Kind is RuntimeStructuralContinuationKind.Fault or RuntimeStructuralContinuationKind.Cancel)
             throw new InvalidOperationException("A faulting or cancelling structural decision cannot also cancel child subtrees in the same child-completion evaluation.");
 
-        var duplicateTarget = requests.GroupBy(request => request.ChildActivityExecutionId, StringComparer.Ordinal)
+        var everyLiveChild = requests.Where(request => request.TargetsEveryLiveChild).ToArray();
+        if (everyLiveChild.Length > 1)
+            throw new InvalidOperationException("Child subtree cancellation of every live child is requested more than once.");
+        var targeted = requests.Where(request => !request.TargetsEveryLiveChild).ToArray();
+        var duplicateTarget = targeted.GroupBy(request => request.ChildActivityExecutionId, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicateTarget is not null)
             throw new InvalidOperationException($"Child subtree cancellation targets activity execution '{duplicateTarget.Key}' more than once.");
@@ -170,7 +174,17 @@ internal static class StructuralParentEvaluationSupport
         var byId = allStates.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
         var occurredAt = timeProvider.GetUtcNow();
         var plans = new List<ActivitySubtreeCancellationPlan>(requests.Count);
-        foreach (var request in requests)
+        // A request for every live child expands here, over the states already loaded, into one request per
+        // non-terminal direct child that no request targets by id.
+        var targetedIds = targeted.Select(request => request.ChildActivityExecutionId).ToHashSet(StringComparer.Ordinal);
+        var expanded = everyLiveChild is [var every]
+            ? targeted.Concat(allStates
+                .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parentActivityExecutionId) &&
+                                !targetedIds.Contains(state.Execution.ActivityExecutionId) &&
+                                state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered))
+                .Select(state => new RuntimeChildSubtreeCancellationRequest(state.Execution.ActivityExecutionId, every.Reason, every.Metadata)))
+            : targeted;
+        foreach (var request in expanded)
         {
             if (!byId.TryGetValue(request.ChildActivityExecutionId, out var target))
                 throw new InvalidOperationException($"Child subtree cancellation references missing activity execution '{request.ChildActivityExecutionId}'.");

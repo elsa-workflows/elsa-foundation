@@ -46,8 +46,9 @@ A research pass over the runtime (`WorkflowParentActivityCompletionSchedulerWork
   is skipped.
 - `Parallel` with a threshold below its branch count completes when the threshold is met and leaves the other
   branches running. Their captures commit after the Parallel's successor started.
-- `Flowchart` after a `Break`, and after a first-wins race, marks the other paths cancelled in its own state but does
-  not cancel the running activities. Their captures commit late.
+- `Flowchart` after a `Break`, and after a first-wins race, marked the other paths cancelled in its own state but did
+  not cancel the running activities. Their captures committed late. For `Break` this contradicted its documentation
+  ("cancels any other in-flight paths") and is fixed in this delivery (F-2 below).
 
 Decision: a structure also declares whether it **completes only after every child run it started has ended**
 (`CompletesAfterItsChildren`). A pair ordered by an ancestor (one child before the other) is still unordered when a
@@ -55,11 +56,13 @@ structure between the earlier write and that ancestor can complete early. This i
 join sentence require across levels, for example a threshold Parallel inside a Sequence.
 
 - Parallel declares `false` when a threshold is set below its branch count, otherwise `true`.
-- Flowchart declares `false` when a node uses the `firstWins` policy, otherwise `true`. A `Break` cannot be seen at
-  design time without catalog facts (any child may propagate it). **Finding F-2** (defect, not this spec): the Break
-  documentation says the Flowchart "cancels any other in-flight paths", but the running activities are not cancelled
-  and their captures commit after the Flowchart completed. The same holds for a threshold Parallel; whether that is
-  intended is for the join initiative (#4193).
+- Flowchart declares `false` when a node uses the `firstWins` policy, otherwise `true`.
+- **Finding F-2.** A `Break` cannot be seen at design time (any child may propagate it), so it is fixed at run time
+  instead (decided by the coordinator, 2026-11-17): a Flowchart that ends on `Break` stages
+  `RequestLiveChildrenSubtreeCancellation`, a new runtime request that cancels every still-live child in the same
+  commit, resolved by the cancellation planner over the states it already loads, so it costs nothing unless a
+  `Break` fires. The first-wins race and the threshold Parallel are join behaviour and stay with the join initiative
+  (#4193, comment 6943318941); when that initiative changes them, the two declarations above change with them.
 - BPMN and CompensationScope cancel their live children; they declare `true`. Sequence, If, Switch and the loops run
   one child at a time and declare `true`.
 
@@ -129,4 +132,7 @@ The BPMN handler analyses the element graph (sequence flows) with a virtual root
 - **Put the rule in the shared data selection analyzer.** Rejected: activity compilation drops its warnings (R-1),
   and the analyzer is about reads.
 - **Detect Break in a Flowchart through catalog version ids.** Rejected: Break propagates through Sequence, If and
-  Switch, so a static check would be partial and catalog-dependent. Recorded as F-2 instead.
+  Switch, so a static check would be partial and catalog-dependent. Fixed at run time instead (F-2).
+- **Cancel Break's live children through the `IRuntimeLiveChildActivityConsumer` marker.** Rejected: the marker
+  lists every child of the Flowchart on each child completion, which grows with every pass of a long-running
+  Flowchart, to serve a rare `Break`.

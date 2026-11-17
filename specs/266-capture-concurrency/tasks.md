@@ -91,6 +91,10 @@ implementation within each phase.
 - [X] T024 Review rounds 1-2: the composition check for exactly one singleton analyzer
   (`DataSelectionAnalyzerCompositionCheck`), `GraphActivitiesDesignFeature` requiring it, kept constructor overloads,
   and registration tests in `Essentials/tests/Workflows/Design/Tests/Unit/ValidationsFeatureRegistrationTests.cs`
+- [X] T025 F-2 for `Break` (coordinator, 2026-11-17): `IRuntimeActivityExecutionContext.RequestLiveChildrenSubtreeCancellation`
+  planned in `StructuralParentEvaluationSupport`, staged by `FlowchartExecutionEngine` on `Break`; tests in
+  `Essentials/tests/Activities/Runtime/Tests/BreakPropagationExecutionTests.cs` and `ChildSubtreeCancellationExecutionTests.cs`.
+  First-wins race and threshold Parallel handed to #4193
 - [X] T023 Build the touched projects and run their tests; set the spec's Status to Implemented
 
 ## Dependencies

@@ -65,8 +65,8 @@ Each structure declares how its children relate in time; the warning has no list
 ## Limits
 
 The analysis sees only declared writes. It does not see a script's `setVariable`, a C# activity writing through its
-execution context, or writes inside sub-workflows and graph activities. It cannot see a `Break` that ends a Flowchart
-while other paths still run. No warning does not mean no write conflict.
+execution context, or writes inside sub-workflows and graph activities. No warning does not mean no write conflict.
+A `Break` that ends a Flowchart cancels the other paths' running activities, so they commit nothing afterwards.
 
 Seeing the actual run order is not available yet: per-variable write history and the winning write
 ([#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290)), a commit-ordered journal and instance
