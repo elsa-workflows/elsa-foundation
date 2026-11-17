@@ -227,6 +227,7 @@ provider.
 | K9 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD10; [Observability](../architecture/observability.md#acceptance-cases): M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T6 |
 | K11 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD3, RD4, RD4b, RD8, RD8b, RD8c, RD9; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP1, MP3; [Observability](../architecture/observability.md#acceptance-cases): B2-5, M1-3, M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T9, T10, T11, T12 |
 | K12 | [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP4; [Observability](../architecture/observability.md#acceptance-cases): M3-1, M3-3, M3-5, M3-11, M3-13; [Tenancy](../architecture/tenancy.md#acceptance-cases): T14 |
+| After release 1 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T12b, with the forced handover |
 
 ## The switch
 
