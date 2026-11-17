@@ -10,7 +10,7 @@ The kernel keeps an instance's data in its checkpoint and in an append-only jour
 - how payloads are encrypted;
 - which parts of the record format must be settled now, because they are expensive to change later.
 
-The [storage model](storage-model.md) is the reference for the records themselves. Where values by reference are stored in release 1 is an owner decision set out on the write-volume page (PR #4711, decision 1). This page gives the purge, erasure and costs for both of its options.
+The [storage model](storage-model.md) is the reference for the records themselves. Values by reference live in the same database in release 1 ([write volume](write-volume.md), decision 1a); this page gives their purge, erasure and costs, with the external store kept as a later adapter.
 
 ## Where data lives
 
@@ -23,7 +23,7 @@ The [storage model](storage-model.md) is the reference for the records themselve
 | `Events.Payload` | Published event payloads that were kept | Swept after `keep_until` | Built |
 | `Subscriptions.Key`, `Events.Key`, `Messages.EventMatch` | Correlation values, for example an order number or an e-mail address used as a key. `EventMatch` encodes the subscription key | Subscriptions go with the instance's delete; events and matches go by sweep | Built |
 | Ids | A caller-named instance id is the caller's value. Message ids derive from the sender's id. The effect key starts with the instance origin and leaves the system as `Idempotency-Key` and `Message-ID` ([EffectKey.cs](../../prototypes/kernel-model/src/Kernel.Workflows/EffectKey.cs)) | Deletion markers, revision-0 rows and retirement markers keep the instance id indefinitely | Built |
-| Values by reference (decision 10) | Large values; the checkpoint and journal keep length and SHA-256 digest | Not at all in the witness: pruning, reference tracking and erasure are unqualified | Witness only ([VALUES.md](../../prototypes/kernel-model/models/Values/VALUES.md)), an external content-addressed directory |
+| Values by reference (decision 10) | Large values; the checkpoint and journal keep length and SHA-256 digest | Not at all in the witness: pruning, reference tracking and erasure are unqualified. Release 1: with the instance's delete, as value rows | Witness only ([VALUES.md](../../prototypes/kernel-model/models/Values/VALUES.md)), an external content-addressed directory; release 1's value rows are decided and not built |
 | Retirement marker | A deleted generated-id instance keeps id, status and revision, with blank model, definition and state, so the id is never reused (walkthrough decision 7) | Never | Built ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs) `Retire`, EF and in-memory stores) |
 | Database backups, WAL archives, replicas | Every row above, as it was | Outside the kernel | Not the kernel's |
 
@@ -52,8 +52,8 @@ public sealed record RetentionPolicy(
 ```
 
 - **`PurgePayloads`** carries over an idea from Elsa.Jobs (design sketch, "Standalone jobs"): remove the payload bytes and keep identities, digests, outcomes and attempts. With the envelope split of format item 1, a run's shape stays available for audit after its data is gone.
-- **Parked work has its own window.** A parked instance is Faulted, but it awaits recovery, so the `Faulted` window never applies to it. The retention worker tells the two apart through the parked-work read model of the observability page (PR #4710). `Parked` (by default null: kept until an operator recovers or discards it) is also the window that #4710's kept deliveries use. Their `keep_until` is the Park's time plus `Parked`, or no expiry when it is null. The sweep removes only `Done` rows past `keep_until`, and the built delete removes no done markers, so a later step must end them: recover (in either mode) and delete set the kept deliveries' `keep_until` to the ordinary outside-command window from that moment, or remove them in the same commit. Until that is built, they stay, and the Delete row of the erasure table lists them. Park keeping deliveries at all is #4710's decision 2. A recovered instance runs again; a discarded one ends and falls under `Faulted` from the discard.
-- **Where it is set.** On the definition, with a host default per tenant. Whether a shortened policy also applies to instances that have already ended is decision 2.
+- **Parked work has its own window.** A parked instance is Faulted, but it awaits recovery, so the `Faulted` window never applies to it. The retention worker tells the two apart through the parked-work read model of the observability page (PR #4710). `Parked` (by default null: kept until an operator recovers or discards it) is also the window that Park's kept deliveries use ([observability](observability.md#what-park-keeps), decision 2a). Their `keep_until` is the Park's time plus `Parked`, or no expiry when it is null. The sweep removes only `Done` rows past `keep_until`, and the built delete removes no done markers, so a later step must end them: recover (in either mode), discard and delete set the kept deliveries' `keep_until` to the ordinary outside-command window from that moment, or remove them in the same commit. Until that is built, they stay, and the Delete row of the erasure table lists them. A recovered instance runs again; a discarded one ends and falls under `Faulted` from the discard.
+- **Where it is set.** On the definition, with a host default per tenant. A shortened policy also applies to instances that have already ended, with a guard: the API reports how many instances the change would delete and requires confirmation above a threshold, and the worker deletes at a bounded rate (decision 2).
 - **How it runs (decision 1).** A retention worker in the host reads the instance-list read model for instances whose end time is past their policy, and adds a `kernel.delete` per instance. The worker uses read models and message adds only, so it is host-neutral layer-3 code. Every delete is the built delete, in the owner's fenced commit.
 - **Repeats.** The delete's id is derived from instance and end revision, and it is an outside command with `keep_until`. A repeat inside that window meets the duplicate id. After the window, read-model lag can make a later sweep add a delete for an instance that is already gone. That delete is dropped and journalled as a revision-0 row, which compaction (format item 5) removes. So the worker sets `keep_until` above its sweep interval plus the projector's expected lag.
 - **Refused deletes.** A delete refused by `ProtectsDeletion` is consumed with no change. A later sweep issues it again once its window has passed.
@@ -64,9 +64,11 @@ public sealed record RetentionPolicy(
   - done markers, until their window passes;
   - anything in backups.
 
-### Values held by reference, under either storage option
+### Values held by reference
 
-| | **a. A values record in the same provider** (#4711's recommendation) | **b. An external value store** (the built witness) |
+Release 1 uses option a ([write volume](write-volume.md), decision 1a). Option b stays as a later value-store adapter, so the table keeps both.
+
+| | **a. A values record in the same provider** (release 1) | **b. An external value store** (the built witness; a later adapter) |
 |---|---|---|
 | Naming | Keyed by instance and digest | The witness names objects by SHA-256 of their content alone (`DirectoryValues` in [ValueStore.cs](../../prototypes/kernel-model/models/Values/ValueStore.cs)), and two writers of one digest share an object. Erasure needs names scoped to the instance (instance origin plus digest), which gives up cross-instance deduplication and changes the witness |
 | Purge | In the delete commit: the store's delete removes the instance's value rows as it removes its journal rows. This adds the value rows to the delete step, which is kernel behaviour (layer 2) | After the delete commit, by a layer-3 value sweeper: the projector's handling of the deletion marker feeds a "deleted instances" read model, and the sweeper deletes that instance's objects. An ended instance runs no model turns, so "a purge job, then delete" would need a new kernel path; the sweeper avoids it |
@@ -100,13 +102,13 @@ Erasing a person's data means finding every instance that holds it and removing 
 
 | Mechanism | What it erases | What it misses | Cost |
 |---|---|---|---|
-| **Delete** (built) | Checkpoint, positive journal rows, subscriptions; projected history after the projector passes the marker | Values under option b until the sweeper runs; done-marker payloads until their window (format item 6 closes this); a parked instance's kept deliveries, which with a null `Parked` window never expire until recover and delete end them; kept event payloads until their window; copies other instances received by message; caller values in ids (decision 4); backups and WAL | One delete commit per instance, batched, plus a load when it is not in memory |
+| **Delete** (built) | Checkpoint, positive journal rows, subscriptions; projected history after the projector passes the marker | Values under a later option b store until the sweeper runs; done-marker payloads until their window (format item 6 closes this); a parked instance's kept deliveries, which with a null `Parked` window never expire until recover, discard or delete end them; kept event payloads until their window; copies other instances received by message; caller values in ids (decision 4); backups and WAL | One delete commit per instance, batched, plus a load when it is not in memory |
 | **Values by reference** (decision 10) | A value held only by reference is erased with its row (option a) or object (option b), even while the instance and its journal keep the reference | The reference's digest stays. A plain SHA-256 of a short value (an e-mail address) can be found by guessing, so the digest must be keyed (HMAC with a per-tenant key) for values that need erasure | See the values table above |
 | **Per-instance data keys** (crypto-shredding) | Everything encrypted under the instance's key, in every copy: rows, projected history, archives, values, backups and replicas | Data written in clear before encryption was turned on; copies in other instances | See encryption below |
 
 - **Finding the instances.** A person's data is spread over instances by application logic, and the kernel cannot search inside state (trade-off 10). An application that needs erasure tags instances with a subject key, published as an indexed field into the instance-list read model. Erasure then deletes by that filter.
 - **Running instances.** The basic form is terminate, then delete. Redacting one value inside a running instance is model-specific and comes later.
-- **Ids and keys.** Generated instance ids, positions and the kernel's own message ids carry no payload values. Caller-named instance ids and correlation keys can, and through them so can the derived message ids, `EventMatch`, effect keys sent to other systems, and the markers that keep an instance id indefinitely. Decision 4 settles the rule for caller keys and correlation keys. Decision 5 settles whether release 1 already stores keys declared sensitive as keyed hashes (`h:` prefix, HMAC with a per-tenant key, computed at the API boundary on both the subscribe and the publish side). Either way the format reserves the prefix now.
+- **Ids and keys.** Generated instance ids, positions and the kernel's own message ids carry no payload values. Caller-named instance ids and correlation keys can, and through them so can the derived message ids, `EventMatch`, effect keys sent to other systems, and the markers that keep an instance id indefinitely. Release 1 documents a contract that caller keys and correlation keys carry no personal data, with a warning in Studio where keys are configured (decision 4). Keys declared sensitive are stored as keyed hashes (`h:` prefix, HMAC with a per-tenant key, computed at the API boundary on both the subscribe and the publish side) from 1.x, and the format reserves the prefix now (decision 5).
 
 ## Encryption of state at rest
 
@@ -134,7 +136,7 @@ public interface IInstanceKeyRing
 - **Order.** The key is created before the first commit that writes ciphertext. An orphan key from a commit that never landed is harmless and swept. Ephemeral instances that never commit need no key.
 - **The projector needs no key.** It expands entries from their clear envelopes and copies payloads as they are. The API decrypts one run's payloads when the viewer reads it.
 - **After erasure** the viewer still shows the run's shape (which elements ran, when, with which outcome) with payloads marked erased.
-- **Encryption makes states incompressible.** Ciphertext does not compress, and text columns add a third in base64. PostgreSQL's TOAST compression then no longer helps: every encrypted state above about 2 kB pays the incompressible cost that [POSTGRES.md](../../prototypes/kernel-model/POSTGRES.md#decision-10-values-by-reference-a-release-1-priority) measured, about 4.5 to 4.8 kB more WAL per commit for a 4 kB state. The codec therefore compresses before it encrypts. Values by reference keep large values out of the state in either option.
+- **Encryption makes states incompressible.** Ciphertext does not compress, and text columns add a third in base64. PostgreSQL's TOAST compression then no longer helps: every encrypted state above about 2 kB pays the incompressible cost that [POSTGRES.md](../../prototypes/kernel-model/POSTGRES.md#decision-10-values-by-reference-a-release-1-priority) measured, about 4.5 to 4.8 kB more WAL per commit for a 4 kB state. The codec therefore compresses before it encrypts. Values by reference keep large values out of the state.
 
 Costs, all unmeasured:
 
@@ -147,7 +149,7 @@ Costs, all unmeasured:
 | Piece | Layer | Depends on |
 |---|---|---|
 | Delete and its refusal rules | 3, the workflow actor's command turn | The turn contract; layer 2's commit removes the rows |
-| Retention worker, delete by filter, subject tags, the option b value sweeper | 3, host services | Read models, message adds and the value store only |
+| Retention worker, delete by filter, subject tags, a later option b value sweeper | 3, host services | Read models, message adds and the value store only |
 | Archive command and archiver | 3, with the command-kind seam in layer 2 (kernel behaviour) | The viewer's read API and `IArchiveSink`; nothing in the commit |
 | Value rows removed with their instance (option a) | 2, the store's delete | Kernel behaviour |
 | Compaction of non-positive journal rows | 2, maintenance beside the sweep | Positions and projection cursors; kernel behaviour |
@@ -158,23 +160,23 @@ Costs, all unmeasured:
 
 These cost little now and require rewriting stored history later:
 
-1. **Journal entries split into a clear envelope and an opaque payload.** The envelope has generic fields that layer 2 never interprets: an element id, a parent element id, kind, time and outcome, all opaque strings the model fills in. The projector expands entries from the envelope and the viewer shows it; the payload is the model's. Encryption, by-reference values and erasure then act on payloads only, and a run's shape survives erasure. The design sketch's history section already gives entries "a common envelope (node, parent node, kind, time)". Walkthrough decision 12 records the journal as model-agnostic with opaque entries, so this is decision 6.
+1. **Journal entries split into a clear envelope and an opaque payload.** The envelope has generic fields that layer 2 never interprets: an element id, a parent element id, kind, time and outcome, all opaque strings the model fills in. The projector expands entries from the envelope and the viewer shows it; the payload is the model's. Encryption, by-reference values and erasure then act on payloads only, and a run's shape survives erasure. The design sketch's history section already gives entries "a common envelope (node, parent node, kind, time)". Walkthrough decision 12 records the journal as model-agnostic with opaque entries; decision 6 adopts this envelope beside it, and layer 2 still interprets nothing.
 2. **Every payload carries a codec header:** plain, by reference, or encrypted with a key id. Rows written before a codec is switched on read as plain, so encryption and references can be enabled per definition without rewriting old rows. The same header goes on state, message payloads, start input, event payloads, value records and projected history payloads.
 3. **The rule for values in ids and keys** (decisions 4 and 5), with the `h:` keyed-hash form reserved for caller keys and correlation keys from the start.
 4. **Lifecycle transitions are journalled at every history level** (created, ended, migrated, deleted) as envelope-only entries. The instance-list read model then sees every instance's end, which the retention worker needs. Today a turn at State history writes `[]` and at Minimal writes no row; only deletes and dropped or missing-target drops are journalled at every level. So this changes both State and Minimal (decision 1).
-   - **Overlap with #4710.** The observability page (PR #4710) proposes that Park, recover and discard are journalled at every history level for the parked-work read model. That is the same mechanism with more transitions, and the two should land as one rule.
+   - **One rule with Park's journalling.** Park, recover and discard are journalled at every history level for the parked-work read model ([observability](observability.md), decision 2a). That is the same mechanism with more transitions, and the two land as one rule (decision 1).
 5. **Non-positive journal rows are compactable below the projector's cursor,** with invariant 6 restated.
 6. **Done markers keep only the id and window.** The consuming commit already updates the row to mark it done (`UPDATE "Messages" SET "Done"` in the owned commit). Clearing `Payload` and `Start` in the same update leaves no copy of a handled command's input, and duplicate detection needs only the id. This changes the commit's consume step (step 4), so it is kernel behaviour.
-   - **Park's kept deliveries.** #4710's decision 2 proposes that Park keeps its consumed deliveries as done rows with `keep_until` (the `Parked` window) so a retry can deliver them again. If that is adopted, the rows a Park keeps retain their payloads until the instance is recovered or discarded. The clearing applies to ordinary consumption only.
+   - **Park's kept deliveries are excepted.** Park keeps its consumed deliveries as done rows with `keep_until` (the `Parked` window) so a retry can deliver them again ([observability](observability.md), decision 2a). The rows a Park keeps retain their payloads until the instance is recovered, discarded or deleted, or, with a finite `Parked` window, until the sweep removes them after that window; a recovery after that cannot deliver them again ([observability](observability.md#recover)). The clearing applies to ordinary consumption only.
 
 ## What release 1 ships
 
 "Retention and delete" in a basic form ([release 1 scope](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)):
 
 - delete of one ended instance, delete by filter, and terminate-then-delete, through the runtime API, on the built delete path;
-- retention policies per definition with a host default, by end status, enforced as decision 1 chooses;
-- removal of by-reference values with their instance, under whichever storage option #4711's decision chooses: a delete must not leave them behind;
-- the format items, as the owner decides them: items 1 to 3; items 4 and 6 subject to decisions 1 and 7; and for item 5, only the rule that no reader needs non-positive rows below the cursor (the compaction job comes later);
+- retention policies per definition with a host default, by end status, enforced by the retention worker (decision 1), with the guard for a shortened policy (decision 2);
+- removal of by-reference value rows with their instance, in the delete commit (option a): a delete must not leave them behind;
+- the format items 1 to 4 and 6; for item 5, only the rule that no reader needs non-positive rows below the cursor (the compaction job comes after release 1, decision 8);
 - storage encryption documented per provider.
 
 Later: archiving; payload encryption and per-instance keys; redaction inside running instances; compaction of non-positive journal rows and of retirement markers; history caps for long-lived instances.
@@ -185,49 +187,41 @@ Later: archiving; payload encryption and per-instance keys; redaction inside run
 |---|---|---|
 | Delete of one ended instance | One delete commit, batched with the partition's turns. The outside delete message adds one insert and one mark-before-run commit, and a load when the instance is not in memory (`ProtectsDeletion` reads the state). PostgreSQL sample: 4 observed TCP edges, and 512 WAL bytes per raw delete or 656 per retirement | Built; bounded sample measured |
 | Retained after delete | One retirement marker per generated id (101 bytes in the sample), one deletion marker journal row per instance, done markers until their window | Built |
-| Retention worker (decision 1 B) | One read-model page read per sweep page and one outside message per expired instance, with its mark-before-run commit | Proposed |
-| Retention timer (decision 1 A) | One inbox row per ended instance for its whole retention period, inserted in the ending commit. When it fires weeks later, a takeover in between is likely, so it usually pays a mark-before-run commit as well | Proposed |
-| Values by reference | Per option, in the values table above | Witness measured for option b; option a not built |
+| Retention worker (decision 1, chosen) | One read-model page read per sweep page and one outside message per expired instance, with its mark-before-run commit | Proposed |
+| Retention timer (decision 1, rejected) | One inbox row per ended instance for its whole retention period, inserted in the ending commit. When it fires weeks later, a takeover in between is likely, so it usually pays a mark-before-run commit as well | Not adopted |
+| Values by reference | Option a, in the values table above | Witness measured for option b; option a not built |
 | Lifecycle entries at State and Minimal | About one extra journal row per instance lifetime (start and end often share a commit). For scale: under the stress test's chaos the journal accounted for about 0.29 kB of WAL per landed instance commit, a whole-workload share and no row size | Proposed; the share is from [WRITES.md](../../prototypes/kernel-model/WRITES.md) |
 | Payload encryption | Batched key-ring calls, CPU, about 40 bytes per payload, loss of compression unless the codec compresses first | Proposed, unmeasured |
 | Dead rows | Deleting journal rows leaves dead tuples for vacuum (peaks of 769 to 1,059 in the stress run, from aborted inserts and deletes) | Measured in WRITES.md |
 
 ## Unverified
 
-- **Not built:** the retention worker, the option a value rows, the option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
+- **Not built:** the retention worker, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
 - **Done markers:** clearing their payloads assumes no reader uses them. The event-start acceptance receipt and the outside-command duplicate answer must be checked before it is built.
-- **Value store:** its crash durability, pruning and erasure are unqualified (VALUES.md). Decision 10's acceptance run, the `pad=` case against a reference on PostgreSQL, is unrun (POSTGRES.md).
+- **Value store:** its crash durability, pruning and erasure are unqualified (VALUES.md). Decision 10's acceptance run, the `pad=` case against a reference on PostgreSQL with option a, is unrun (POSTGRES.md; write volume decision 2).
 - **Estimates:** all encryption costs.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-Where values by reference live is decided on the write-volume page (PR #4711, decision 1) and is not repeated here.
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with the rest of
+the kernel's. Values by reference live in the same database ([write volume](write-volume.md), decision 1a). Rejected
+options are kept for the record.
 
-1. **What triggers retention.**
-   - **A: a retention timer** per ended instance, sent in its ending commit. It needs no read model. The inbox holds one future row per ended instance for its whole retention period, the timer usually pays a mark-before-run commit when it fires, and a changed policy does not reach timers already sent.
-   - **B: a retention worker** over the instance-list read model, adding deletes. The inbox stays small, and the same path serves operator and erasure deletes. It costs one outside message and its mark-before-run commit per instance, and it needs format item 4, which changes what State and Minimal history write.
-   - **Recommendation: B, with lifecycle entries at every history level,** landed as one rule with #4710's Park journalling.
-2. **A shortened policy and instances that already ended.**
-   - **A:** it applies to them. A configuration change can then delete many instances at once.
-   - **B:** it applies only to instances that end after the change.
-   - **C:** A, with a guard: the API reports how many instances the change would delete and requires confirmation above a threshold, and the worker deletes at a bounded rate.
-   - **Recommendation: C.**
-3. **The erasure mechanism.**
-   - **A:** delete plus values by reference only. Backups and replicas keep data until they expire.
-   - **B:** A in release 1, then per-instance data keys (crypto-shredding) as an opt-in per definition in 1.x, with keys outside the kernel's database.
-   - **C:** keys per tenant or per data subject: fewer keys, coarser erasure.
-   - **Recommendation: B,** with the format items in release 1 so that B needs no history rewrite.
-4. **Personal data in caller keys and correlation keys.**
-   - **A:** a documented contract that they carry none, with a warning in Studio where keys are configured.
-   - **B:** the API stores keys declared sensitive as keyed hashes. The ids, message ids, `EventMatch` and effect keys derived from them then carry only the hash. Studio shows the hash, and the readable key lives in state, where it is erased with the instance.
-   - **Recommendation: A in release 1, with B available per definition once decision 5 provides the keys.**
-5. **Keyed hashes and their HMAC key management in release 1.**
-   - **A:** release 1 reserves the `h:` form only, and keyed hashes come with the key ring in 1.x.
-   - **B:** release 1 ships keyed hashes with a per-tenant HMAC key from a host-configured key provider, including rotation (a rotated key needs both hashes while subscriptions from the old key live).
-   - **Recommendation: A,** because B brings key management into release 1 for a feature decision 4 A does not need.
-6. **A clear journal envelope against walkthrough decision 12** (the journal is model-agnostic, entries opaque).
-   - **A:** adopt format item 1. The envelope's fields are generic opaque strings the model fills in, so layer 2 still interprets nothing, and the sketch's "common envelope" becomes a format rule.
-   - **B:** keep entries fully opaque. Encryption, erasure and `PurgePayloads` then lose the run's shape, and the projector needs the instance keys to read them.
-   - **Recommendation: A.**
-7. **Done markers without payloads** (format item 6, with Park's kept deliveries excepted). **Recommendation: adopt it,** after checking its readers. It is kernel behaviour and needs the two-review tier when built.
-8. **Compacting non-positive journal rows below the projector's cursor** (format item 5). Positive journal rows stay until their instance is deleted. **Recommendation: adopt it after release 1,** with the restated invariant 6 checked in the simulation. It is kernel behaviour.
+1. **Retention runs as a retention worker over the instance-list read model (B),** with lifecycle entries at every
+   history level (format item 4), landed as one rule with Park's journalling. State and Minimal write a little more.
+   Rejected: (A) a retention timer per ended instance.
+2. **A shortened policy applies to ended instances, with a guard (C):** a count, confirmation above a threshold, and
+   deletes at a bounded rate. Rejected: (A) apply without a guard; (B) apply only to instances that end later.
+3. **Erasure: delete now, keys in 1.x (B).** Release 1 has delete plus values by reference, and the format items are
+   fixed now; per-instance data keys come in 1.x as an opt-in per definition, kept outside the kernel's database.
+   Rejected: (A) delete and values by reference only, with no keys later; (C) keys per tenant or per data subject.
+4. **Caller keys and correlation keys carry no personal data (A):** a documented contract with a Studio warning.
+   Rejected for release 1: (B) keyed hashes for keys declared sensitive, which comes with decision 5's key ring.
+5. **Release 1 reserves the `h:` form only (A);** keyed hashes and their key management come in 1.x. Rejected: (B)
+   keyed hashes with a per-tenant HMAC key in release 1.
+6. **The journal has a clear envelope (A),** adopted beside walkthrough decision 12: generic opaque fields the model
+   fills in. Rejected: (B) fully opaque entries.
+7. **Done markers keep no payloads (format item 6),** with Park's kept deliveries excepted, after checking the
+   readers. Kernel behaviour, two-review tier when built.
+8. **Non-positive journal rows below the projector's cursor are compacted after release 1 (format item 5),** with the
+   restated invariant 6 checked in the simulation. Kernel behaviour.

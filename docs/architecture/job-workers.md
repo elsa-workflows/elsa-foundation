@@ -8,7 +8,7 @@
 asks for job workers that run outside the kernel's process, written in any language, that pull jobs over gRPC or HTTP
 with a lease, a heartbeat and a timeout, as Zeebe's job workers do. This page proposes one job contract for the
 in-process jobs of release 1 and the remote workers of 1.x: who owns an attempt, how it times out and retries, the key
-the worker receives, and how a completion re-enters the fenced commit. It ends with the decisions it needs, among them
+the worker receives, and how a completion re-enters the fenced commit. It ends with the owner's decisions, among them
 the release placement of standalone Jobs.
 
 ## Terms
@@ -169,8 +169,14 @@ enum Disposition { Granted, Empty, Accepted, Duplicate, Stale, Refused, Unknown 
 | Late report | A Complete or Fail for an attempt that expired or was replaced is recorded as stale evidence and answered `Stale`. It changes no result and no permit. |
 
 Every answer distinguishes granted, empty, accepted, duplicate, stale, refused and unknown. A worker whose request ends
-in a broken connection resends the same request id; it never invents a new attempt id. How the gateway turns a request
-id into a message id is decision 3.
+in a broken connection resends the same request id; it never invents a new attempt id. The gateway turns a request id
+into the message id `{worker}/{request id}` (decision 3). `{worker}` is the worker's authenticated principal, which
+stays the same across reconnects; the gateway takes it from authentication for every request (Activate, Renew,
+Complete, Fail), never from the connection or the request body, so the request records need no `Worker` field. A
+resent Activate within its `keep_until` meets the duplicate id and is answered `Unknown` with no grants: the grants
+of the lost answer are not replayed. They expire by their attempt lease, and the jobs are granted again, as in
+Zeebe, so such jobs wait at most one attempt lease. A resent Renew, Complete or Fail gets its recorded disposition
+through a read-only `job.status` message.
 
 ## The effect key the worker receives
 
@@ -182,7 +188,8 @@ lost.
   `{instance origin}/{node}/{iteration path}/{attempt}` from `EffectKey.For`. The final segment is the Durable-mode
   attempt (0 or 1) of the activity. A model-level retry of the activity is a new generation in the iteration path, so it
   gets a new key; a retry of the same invocation by its job actor keeps the key.
-- **A standalone job** has no node or iteration path in the owner's sense. Its key is decision 4.
+- **A standalone job** has no node or iteration path in the owner's sense. Its key is `{job origin}/job/-/0`: the
+  owner's shape with fixed parts (decision 4).
 - **The attempt number and attempt id** travel separately, for logs and for receivers that want them. A worker sends
   the effect key where its receiver looks for a repeat: the `Idempotency-Key` header for HTTP, the local part of a
   `Message-ID` for email. Deduplication remains the receiver's job; no mode makes a side effect exactly once.
@@ -226,7 +233,8 @@ keeps it in memory. The rules that keep it inside the commit contract:
 - **A lost renewal shortens a lease.** The worker learns it from its next renewal (`Stale`) and stops; another attempt
   may already run, which at-least-once allows.
 
-The owner decides between the two (decision 2).
+A renewal travels in memory over the runtime's transport under these rules, with a durable message as the fallback when
+the gateway cannot reach the owner (decision 2).
 
 ## Standalone Jobs
 
@@ -272,7 +280,8 @@ this contract:
 - `StartJob` accepts an optional timeout. The kernel writes a timer message to the instance in the same commit and
   recalls it when the result arrives; on expiry it cancels the job and gives the model a timeout result. That costs one
   timer row per job that asks for a timeout.
-- No job actor, queue actor, gateway, remote protocol or attempt lease. Standalone Jobs per decision 1.
+- No job actor, queue actor, gateway, remote protocol or attempt lease. Standalone Jobs ship in 1.x with the worker
+  protocol (decision 1).
 
 ## Costs
 
@@ -300,65 +309,20 @@ spike the sketch asks for measures submit, claim, complete and result delivered 
 - Throughput of one queue shard, and the shard count a queue needs.
 - The three open limits of the candidate topology, above.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-### 1. Release placement of standalone Jobs
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them
+with the rest of the kernel's. Rejected options are kept for the record.
 
-| Option | What ships | For | Against |
-|---|---|---|---|
-| A. Release 1 | The job actor, the queue actor and local handlers in release 1; the remote protocol in 1.x | Elsa.Jobs users get the kernel early | Builds the attempt model before its remote half exists in code; adds two actor types to release 1; the spike and the lookup card below must be settled before release 1's build |
-| **B. 1.x, with the worker protocol** | Release 1 ships workflow background jobs only; 1.x ships the job actor, the queue actor, local handlers and the remote protocol together | One delivery builds one attempt model for local and remote workers; release 1's scope stays as decided; the spike and the card are settled on the way to 1.x | Standalone Elsa.Jobs users wait for 1.x |
-| C. After 1.x | Workflow jobs only until then | Smallest scope | Leaves Elsa.Jobs without a home on the kernel |
-
-**Recommendation: B.** Background jobs inside workflows ship in release 1 either way.
-
-The open owner card on the cost of a standalone job's first-use lookup bears on A and B. The facts:
-
-- **Built:** an actor type may name a self-reference in a delivery (`IActorType.SelfReference`,
-  [Turns.cs](../../prototypes/kernel-model/src/Kernel.Durable/Turns.cs)). On a store with provider-equal actor aliases
-  the worker resolves a spelling it has not seen with an identity lookup and keeps the answer for the slot's lifetime
-  (`Worker.cs`, `SelfReferences`). Only MySQL and SQL Server have such aliases, through their case-insensitive
-  collations (`HasActorAliases` in [EfStore.cs](../../prototypes/kernel-model/ef/Kernel.EntityFramework/EfStore.cs));
-  the default is false ([Store.cs](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs)), so PostgreSQL, SQLite
-  and MongoDB pay nothing.
-- **Measured:** on the frozen Jobs foundation `cd5d08bd` (integrated with main `1c8557063d`), the existing workflow
-  load-command counts on MySQL and SQL Server matched main: 1 cold, 0 first-hot and 0 repeat-hot. The comment calls
-  them scoped method and count comparisons and sets no universal wire budget with them
-  ([#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6878087759)).
-- **Pending:** the card is recorded as "the one first-use MySQL/SQL Server identity lookup decision" for the standalone
-  actor ([#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6876735446)).
-  That the lookup comes from the self-reference path above is this page's reading; neither comment says so, the
-  candidate is not on main, and this page measured nothing. Under B the card is answered with the 1.x spike; under A it
-  must be answered before release 1's build.
-
-### 2. How a heartbeat reaches the job actor
-
-| Option | Cost | Behaviour |
-|---|---|---|
-| a. A durable message per renewal | One inbox row and its commits per heartbeat | Survives any failover; no new seam |
-| **b. Over the runtime's transport, in memory, with the rules under "Heartbeats"** | No database work per renewal; one timer re-arm commit per lease period per attempt | Needs a volatile delivery to an actor's owner beside the wake signal; a lost renewal can expire an attempt early, which at-least-once already allows |
-
-**Recommendation: b**, falling back to a when the gateway cannot reach the owner. Both are 1.x work.
-
-### 3. How the gateway keys its messages
-
-The owner's ingress rule is "an idempotent message insertion keyed by the source's event ID".
-
-| Option | How a resend is recognised | Cost |
-|---|---|---|
-| **a. The worker and its request id as the message id (`{worker}/{request id}`, the worker taken from its authenticated identity), with a `keep_until`** | At the insert, as for every outside message: a resend gets a duplicate-key answer. The gateway then asks the job actor for the recorded disposition with a read-only `job.status` message. An Activate whose answer was lost answers `Unknown`; its grants expire by lease and the jobs are granted again, as in Zeebe | Each request keeps a done row until its window (about 1.6 kB of WAL per outside message with its marks on PostgreSQL, the outside-start row of WRITES.md); a resend after a lost answer costs a status message |
-| b. A fresh message id per request, deduplicated in actor state | The job actor recognises the request id in its attempt list | About 0.5 kB less per request, since a consumed row is deleted; departs from the ingress rule |
-
-**Recommendation: a.** It follows the adopted rule, and the window bounds how long a resend is recognised.
-
-### 4. The effect key of a standalone job
-
-The owner's shape is `{instance origin}/{node}/{iteration path}/{attempt}`. A standalone job has one effect and no
-definition.
-
-| Option | Key | Note |
-|---|---|---|
-| **a. The owner's shape with fixed parts** | `{job origin}/job/-/0`: the job actor's origin (its id with its creation), node `job`, the root path `-`, attempt 0 | Every key in the system keeps one shape; receivers parse nothing |
-| b. The job actor's origin alone | `{job origin}` | Shorter; an extension of the owner's shape |
-
-**Recommendation: a.**
+1. **Standalone Elsa.Jobs ships in 1.x, together with the remote worker protocol (B).** Release 1 ships workflow
+   background jobs only; 1.x ships the job actor, the queue actor, local handlers and the remote protocol together. The
+   open card on the first-use MySQL/SQL Server identity lookup of a standalone job
+   ([#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6876735446)) is settled in
+   the 1.x spike. Rejected: (A) standalone Jobs in release 1; (C) after 1.x.
+2. **A heartbeat reaches the job actor in memory over the runtime's transport (b),** with a durable message per renewal
+   as the fallback when the gateway cannot reach the owner. Both are 1.x work. Rejected as the default: (a) a durable
+   message per renewal.
+3. **The gateway keys its messages `{worker}/{request id}` with a `keep_until` (a),** following the ingress rule.
+   Rejected: (b) a fresh message id per request, deduplicated in actor state.
+4. **A standalone job's effect key is `{job origin}/job/-/0` (a),** the owner's shape with fixed parts. Rejected: (b)
+   the job actor's origin alone.

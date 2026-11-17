@@ -15,8 +15,8 @@ evidence lives in [WRITES.md](../../prototypes/kernel-model/WRITES.md) (measurem
 **The answer in short.** Snapshot plus journal stays the default. At small states a commit costs about 0.7 to 2.3 kB of
 WAL; in the measured windows bloat stayed small and autovacuum cleared it. Large states are the cost: an incompressible
 4 kB state adds about 4.5 to 4.8 kB of WAL to every commit and doubles its TOAST table. Values by reference
-(decision 10) is the fix and a release 1 priority; where its values live and how it is accepted are owner decisions,
-and its acceptance run is still to do. Fill factor is a deployment note, the partitioned inbox stays out
+(decision 10) is the fix and a release 1 priority. Its values live in the same database, and it counts as delivered
+after the `pad=` PostgreSQL run (decisions 1 and 2); that run is still to do. Fill factor is a deployment note, the partitioned inbox stays out
 of release 1, and the lazy snapshot remains a sketch.
 
 ## What was measured
@@ -90,7 +90,8 @@ question 2 (data lifecycle) owns their retention.
    log-only store. Those stay off the default; the Log profile stays a later plan.
 2. **Decision 10 is release 1's write-volume priority.** The whole state is one value, and PostgreSQL rewrites a large
    value whole through TOAST at every commit. Values by reference is the one mitigation that removes that cost for
-   values that do not change every turn. Where its values live is decision 1, and how it is accepted is decision 2. If a
+   values that do not change every turn. Its values live in the same database (decision 1), and the `pad=` run accepts
+   it (decision 2). If a
    payload codec encrypts states ([data lifecycle](data-lifecycle.md#encryption-of-state-at-rest), later), it must compress before it encrypts, or every encrypted state above
    about 2 kB pays the incompressible cost measured here.
 3. **Fill factor and vacuum settings are deployment notes**, written in POSTGRES.md's
@@ -121,10 +122,10 @@ first, as the sketch requires.
 ## What release 1 does
 
 - Snapshot plus journal, Full history by default, State and Minimal per workflow, as decided.
-- Values by reference for large values, stored as decision 1 says and accepted as decision 2 says; a size benchmark
-  stays in the cost runs.
+- Values by reference for large values, as value rows in the same database (decision 1), accepted by the `pad=`
+  PostgreSQL run (decision 2); a size benchmark stays in the cost runs.
 - The owned commit on PostgreSQL, SQL Server, SQLite and MySQL, as built.
-- Default table settings, with POSTGRES.md's guidance published as a PostgreSQL operations note.
+- Default table settings, with POSTGRES.md's guidance published as a PostgreSQL operations note (decision 3).
 - No partitioned inbox, no lazy snapshot, no new tuning default.
 - A write-volume run on the release's final schema before release, since every later field, index and guard changes
   bytes and the old figures do not carry over to it.
@@ -138,39 +139,18 @@ first, as the sketch requires.
 - The WAL saving of values by reference, and the reference's own write, read and lifetime costs.
 - Latency, checkpoint stalls, replication lag and a pinned transaction horizon.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-### 1. Where values by reference live
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with the
+rest of the kernel's. Rejected options are kept for the record.
 
-This is one decision for this page and for the data-lifecycle page
-([values held by reference](data-lifecycle.md#values-held-by-reference-under-either-storage-option)), which sets out the
-purge, erasure and costs of both options and defers the choice to this decision.
-
-**What is built.** [ValueStore.cs](../../prototypes/kernel-model/models/Values/ValueStore.cs) is a witness: `ValueRef`
-is a SHA-256 digest (upper-case hex) with a length; `DirectoryValues` keeps one file per digest in one directory,
-written to a temporary file, flushed and renamed, and verified on every read. It is content-addressed across the whole
-directory, so two instances that store the same bytes share one object, and nothing in it is scoped by instance or
-tenant. The model learns the reference from a job's result and commits it afterwards
-([VALUES.md](../../prototypes/kernel-model/models/Values/VALUES.md)). Durability, pruning, reference tracking, tenant
-scoping, encryption and erasure are unqualified there.
-
-| Option | Write path | Lifecycle | For | Against |
-|---|---|---|---|---|
-| a. A values record in the same provider | An immutable row per value, keyed by instance and digest, written in the same fenced batch as the reference; read with the instance on load | No orphans: the row commits with its reference. A changed value writes a new row; superseded rows that Full-history journal rows still reference stay until the instance is deleted, and go with it | One store, one commit, one backup; MongoDB can do the same with a document | Large values still pass through the database once, with their own TOAST and WAL per value; superseded values accumulate for the instance's lifetime |
-| b. An external content-addressed store | The value is written before the commit, as the witness does through a job ticket; the commit records the reference | Orphans after a lost commit need a sweep. For the data lifecycle page's purge by instance and erasure, objects must be named per instance (or the digest keyed per instance or tenant), which differs from the witness's store-wide content addressing; shared objects would otherwise need reference counting | Keeps large bytes out of the database | A second store to run, secure and back up; erasure spans two systems; extra calls (the witness: 5 against 13 engine calls to the first value-bearing commit, 12 against 20 for a fresh owner) |
-
-**Recommendation: a for release 1**, with b as a later value-store adapter for deployments that need large bytes kept
-out of the database.
-
-### 2. How decision 10 is accepted
-
-POSTGRES.md proposes ([its owner decisions, item 2](../../prototypes/kernel-model/POSTGRES.md#owner-decisions-this-report-raises))
-that values by reference count as delivered only after a run: the existing `pad=` case against a reference, on
-PostgreSQL, measuring WAL per commit, TOAST growth and the load path's round trips, with the value changing every turn
-and not. **Recommendation: adopt it**, with the run on the option chosen in decision 1.
-
-### 3. Tuning as a note or a shipped profile
-
-POSTGRES.md raises it: whether its guidance stays an operations note or becomes a DDL profile the PostgreSQL
-initializer applies (fill factor on `Messages`, say). **Recommendation: an operations note for release 1**; a profile
-needs a run on the current schema first.
+1. **Values by reference live in the same database (a):** an immutable values row per instance and digest, written in
+   the same fenced batch as the reference and removed with the instance
+   ([data lifecycle](data-lifecycle.md#values-held-by-reference)). An external content-addressed store comes later as
+   a value-store adapter. Rejected for release 1: (b) an external store, as the built witness
+   ([ValueStore.cs](../../prototypes/kernel-model/models/Values/ValueStore.cs)) does.
+2. **Decision 10 counts as delivered after the `pad=` PostgreSQL run** against a reference, on option a, measuring WAL
+   per commit, TOAST growth and the load path's round trips, with the value changing every turn and not
+   ([POSTGRES.md](../../prototypes/kernel-model/POSTGRES.md#owner-decisions-this-report-raises), item 2).
+3. **PostgreSQL tuning is an operations note for release 1.** Rejected: a DDL profile the initializer applies, which
+   needs a run on the current schema first.
