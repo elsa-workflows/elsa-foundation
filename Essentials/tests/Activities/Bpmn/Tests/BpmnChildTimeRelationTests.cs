@@ -303,6 +303,27 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
     }
 
+    // A waiting join fed by a sibling branch of an earlier fork after the task: that branch's token is already there, so
+    // the later fork's branch fires the waiting join while the fork also runs the task again.
+    [Theory]
+    [InlineData(BpmnElementTypes.InclusiveGateway)]
+    [InlineData(BpmnElementTypes.ParallelGateway)]
+    public void A_waiting_join_fed_by_an_earlier_forks_sibling_branch_does_not_hold_the_branch(string waitingJoin)
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("d", "entry"), Task("j", "join"), Element("xg", BpmnElementTypes.ExclusiveGateway),
+                Element("p", BpmnElementTypes.ParallelGateway), Task("s", "left"), Element("f", BpmnElementTypes.ParallelGateway), Task("b", "right"),
+                Element("w", waitingJoin), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "d"), Flow("d", "j"), Flow("j", "xg"), Flow("xg", "p"), Flow("xg", "end"), Flow("p", "s"), Flow("p", "f"),
+                Flow("f", "j"), Flow("f", "b"), Flow("s", "w"), Flow("b", "w"), Flow("w", "d")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
+    }
+
     // A non-interrupting boundary that leads back into its host runs the host again while it is still active.
     [Fact]
     public void A_non_interrupting_boundary_leading_back_into_its_host_overlaps_the_host()
