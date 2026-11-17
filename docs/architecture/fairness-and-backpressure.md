@@ -126,6 +126,14 @@ them. The store never refuses an insert for depth:
 - Two instances with full inboxes that send to each other would deadlock.
 - The inbox alone says what is owed. A refused completion or job result would lose work.
 
+**Kept rows of a parked instance.** Arrivals that a parked instance consumes become done rows kept for its recovery
+([observability](observability.md#what-park-keeps)). While parked they are outside due depth and add no poll delay;
+their growth is storage, which ends when the Park is resolved. Recovery restores them page by page. A page waits while
+the previous page's last restored row is not yet taken up by a poll and while the instance is suspended, so a drain adds at most one
+page of rows not yet taken up plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
+The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
+would hold it above the high water mark for good.
+
 **The estimate (proposed).** The owner of a virtual partition knows its due depth exactly while its last poll came back
 short: every due row is then in its memory. While polls come back full, it samples a capped count once per sample
 interval:
