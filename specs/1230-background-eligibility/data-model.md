@@ -28,7 +28,7 @@ marked `TypeCheckedAtRunTime` skips the CLR-type checks (C1 interfaces, C2, C9 a
 | node id | yes | yes | yes |
 | is intrinsic / is reusable boundary | yes (authored node) | intrinsic only (pinned `IntrinsicKind`); a boundary is refused at publication | intrinsic only |
 | has structure or child slots | yes | yes | yes |
-| CLR activity type | resolved | well-known type registry | activated object's type |
+| CLR activity type | resolved | well-known type registry | well-known type registry before activation; the activated object's type after it |
 | pinned activity contract (declaration, result type, policies, representations, inputs) | yes | yes | yes |
 | input bindings (for C10) | yes | the pinned node's bindings | the pinned node's bindings |
 | staged coordinator effects (for C6) | — | — | yes |

@@ -17,7 +17,8 @@
 - [x] T002 Add `BackgroundEligibilityCriterion`, `BackgroundEligibilitySubject` and `BackgroundEligibilityRefusal` in
   `Essentials/src/Workflows/Runtime/Core/Background/BackgroundEligibility.cs` (data-model.md).
 - [x] T003 Add `BackgroundEligibility.CheckPublication` and `CheckRunTime` with the ordered criteria C1–C5 taken over
-  unchanged from `ExecutableNodeCompiler.ValidateBackgroundExecution` (R-1), the declaration precondition, and the
+  from `ExecutableNodeCompiler.ValidateBackgroundExecution` (R-1; C3 now also refuses the `Any` and `System.Object`
+  aliases, as ADR 0093 C3 and US1 scenario 1 require), the declaration precondition, and the
   rendered message `VF-BG-001 (C<n>): …` (R-5). Add the public API to `PublicAPI.Unshipped.txt`.
 - [x] T004 [P] Unit tests in `Essentials/tests/Workflows/Runtime/Tests/Background/BackgroundEligibilityTests.cs`: one
   subject failing exactly one criterion per C1–C5, at both entry points; several failing → the first is reported (P-2).
@@ -25,7 +26,7 @@
 ## Phase 3: User Story 1 — one set of rules (P1) 🎯 MVP
 
 - [x] T005 [US1] **(test-first)** In `WorkflowExecutableCompilerTests.cs`, one publish refusal per C1–C5 asserting the
-  criterion id in the message.
+  criterion id in the message. *Done as:* C1, C3, C4 and C5 there; C2 in `BackgroundEligibilityPublicationTests`.
 - [x] T006 [US1] **(test-first)** In `BackgroundActivityWorkerTests.cs`, a pinned node with an `Any` result (C3) and one
   with a transient-resource projection (C4) are refused at run time naming the criterion (today they pass).
 - [x] T007 [US1] Replace `ExecutableNodeCompiler.ValidateBackgroundExecution` and the intrinsic/boundary checks at

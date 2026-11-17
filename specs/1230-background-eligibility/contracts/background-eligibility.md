@@ -21,7 +21,7 @@ here once this spec is implemented.
   placing host cannot resolve the CLR type, the placer sets `TypeCheckedAtRunTime`: the type-only checks (C1's
   handler interfaces, C2, C9, the CLR parts of C3 and C4) are left to `CheckRunTime`, which never defers them.
 - `CheckRunTime(subject)` — C1–C5, C9, C10, and C6 when the subject carries staged effects. Called at admission
-  (`BackgroundActivityCoordinator`), before activation and after the body on the worker
+  (`BackgroundActivityCoordinator`), before activation, on the activated object and after the body on the worker
   (`BackgroundActivityWorker`).
 
 Both return the first refusal in criterion order, or none. Callers throw; no other code decides eligibility.

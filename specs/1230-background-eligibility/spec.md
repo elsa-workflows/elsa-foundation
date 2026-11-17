@@ -217,8 +217,9 @@ read-modify-write) and that the recorded commit order matches the order applied.
   type) and one for run time (with the pinned node and the activated activity), but the criteria MUST be defined
   once (ADR 0093 decision 3).
 - **FR-003**: Every refusal MUST carry `VF-BG-001`, the criterion id (`C1` … `C10`) and a plain reason. The one
-  exception is a missing `[BackgroundExecutionSafe]` declaration, which is not a criterion: its refusal carries
-  `VF-BG-001` and says the activity does not declare it. When several
+  exceptions are the checks outside C1–C10: a missing `[BackgroundExecutionSafe]` declaration and the placement
+  preconditions (an undefined placement, a node not placed in the background). Their refusals carry `VF-BG-001` and
+  say what failed, without a criterion id. When several
   criteria fail, the first in criterion order MUST be reported.
 - **FR-004**: The run-time check MUST cover the same criteria as publication (C1–C5, C9, C10), closing today's gaps:
   C3 (typed result) and C4 (stream and transient-resource results) at run time.
@@ -323,7 +324,8 @@ Background activities: eligibility is now decided by one component (ADR 0093), a
 (`VF-BG-001 (C<n>): …`); an activity that does not declare `[BackgroundExecutionSafe]` is refused as such. Run time now checks the same criteria as publication, so a background node pinned before this
 release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
-without a secret reference (C10) is refused at admission with an incident (Q5). No shipped activity was marked
+without a secret reference (C10) is refused at admission with an incident (Q5). Publication now also refuses a background result typed
+`Any` or `System.Object` (C3), which it previously let through. No shipped activity was marked
 before, so only custom activities are affected. Thirteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
 365 and Slack activities among them move to version 1.1.0. `RunJavaScript` is not marked: scripts read and write variables by
 name, and a background worker has no access to variables (C9).
