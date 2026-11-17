@@ -110,7 +110,7 @@ keeps its record on the alteration job's outcome.
 - **Order.** The committer numbers every checkpoint of an instance under its execution lease: the lease's fencing token
   (one higher on every acquisition) followed by the checkpoint's ordinal within the lease. Each new record, and each
   lifecycle transition of an activity (`Transitions`: scheduled, started, suspended, resumed, completed, faulted,
-  cancelled), carries that number. Numbers grow with commit order and are not dense. A record also names its frame and
+  cancelled, superseded), carries that number. Numbers grow with commit order and are not dense. A record also names its frame and
   the digest of the value it left, and an activity row keeps the first and last number on it (`FirstCommitSequence`,
   `LastCommitSequence`). A write of an equal value leaves no record unless it was a lost update. A coalescing drain numbers each
   logical checkpoint before folding them, so writes inside one folded segment keep their own order. Code:

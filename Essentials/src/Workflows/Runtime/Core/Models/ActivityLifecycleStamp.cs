@@ -11,7 +11,8 @@ public enum ActivityLifecycleTransitionKind
     Resumed,
     Completed,
     Faulted,
-    Cancelled
+    Cancelled,
+    Superseded
 }
 
 /// <summary>

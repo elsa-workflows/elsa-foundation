@@ -91,7 +91,8 @@ internal static class RuntimeCommitSequenceStamper
         ActivityExecutionStatus.Completed => ActivityLifecycleTransitionKind.Completed,
         ActivityExecutionStatus.Faulted => ActivityLifecycleTransitionKind.Faulted,
         ActivityExecutionStatus.Cancelled => ActivityLifecycleTransitionKind.Cancelled,
-        // A superseded row keeps its last stamp; the successor row records its own lifecycle.
+        // The successor row records its own lifecycle from its own Scheduled or Started stamp.
+        ActivityExecutionStatus.Superseded => ActivityLifecycleTransitionKind.Superseded,
         _ => null
     };
 
