@@ -1,8 +1,8 @@
 # Runtime Execution Seam
 
-> **Historical objectives parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The owner-authorized [unified execution continuation](unified-execution.md) is active within its named scope.
+> **Historical objectives parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The owner-authorized [unified execution continuation](unified-execution.md) closed on 14 November 2026, superseded by the [clean-slate kernel](clean-slate-kernel.md) (#4229).
 
-Status: Historical objectives parked until 2026-11-21; Program #2892 continuation active by owner authorization.
+Status: Historical objectives parked until 2026-11-21; the Program #2892 continuation closed on 14 November 2026, superseded by the clean-slate kernel (#4229).
 
 Area: Workflows Runtime architecture / executable artifact seam.
 

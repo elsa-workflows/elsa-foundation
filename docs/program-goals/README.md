@@ -59,7 +59,7 @@ superseded.
 |---|---|
 | [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
-| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; named #2892 continuation active |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; its #2892 continuation closed 14 November, superseded by the [clean-slate kernel](clean-slate-kernel.md) |
 | [Unified Execution](unified-execution.md) | Closed; Program #2892 closed 14 November, superseded by the [clean-slate kernel](clean-slate-kernel.md) #4229 |
 | [Runtime Efficiency](runtime-efficiency.md) | Completed; Program #2531 closed 16 November; old-core objectives superseded by the kernel, M5 handed to #4229 |
 | [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
