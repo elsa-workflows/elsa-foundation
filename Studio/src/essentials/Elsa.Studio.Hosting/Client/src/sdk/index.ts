@@ -1247,8 +1247,29 @@ export interface StudioExpressionSourceRenderer {
   expanded: ComponentType<StudioExpressionSourceRendererProps>;
 }
 
+export interface StudioExpressionResultType {
+  alias: string;
+  collectionKind?: string | null;
+}
+
+export interface StudioExpressionResultDiagnostic {
+  message: string;
+  /** A source-only edit with UTF-16 offsets into the analyzed source. */
+  fix?: { from: number; to: number; replacement: string; label: string };
+}
+
+/** The editor host offers type facts for bound parameters. The language owns result inference and edits. */
+export interface StudioExpressionResultCheck {
+  check(request: {
+    source: string;
+    expectedType: StudioExpressionResultType;
+    resolveParameterType(name: string, memberPath: readonly string[]): Promise<StudioExpressionResultType | undefined>;
+  }): Promise<StudioExpressionResultDiagnostic | undefined>;
+}
+
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
   sourceInsertion?: StudioExpressionSourceInsertion;
+  resultCheck?: StudioExpressionResultCheck;
   id: string;
   /** Language-owned proof that adding an unrelated lexical variable preserves this authored expression. */
   variableAdditionPreservation?: {

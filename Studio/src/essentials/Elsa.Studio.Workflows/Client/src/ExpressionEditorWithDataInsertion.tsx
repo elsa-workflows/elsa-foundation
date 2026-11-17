@@ -5,7 +5,10 @@ import { readPortableExpressionDefinition } from "./activityProperties";
 import { formatArgumentType, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
 import { ActivityDataBrowser, focusBeside, useActivityDataSelectionHost } from "./ActivityDataChooser";
 import type { ActivityDataContextResult, ActivityDataSourceFacts } from "./api/activityDataSelection";
+import { useExpressionResultDiagnostic } from "./useExpressionResultDiagnostic";
 import { expressionEditingState, expressionValueFromHistory, planActivityExpressionInsertion } from "./activityExpressionInsertion";
+
+type SourceFix = Pick<StudioExpressionReferenceFix, "from" | "to" | "replacement">;
 
 type Props = StudioExpressionEditorProps & {
   editor: ComponentType<StudioExpressionEditorProps>;
@@ -34,7 +37,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
   const trigger = useRef<HTMLButtonElement>(null);
   const controller = useRef<StudioExpressionEditorController | null>(null);
   const snapshot = useRef<StudioExpressionEditorSnapshot | null>(null);
-  const pending = useRef<"picker" | { fix: StudioExpressionReferenceFix; source: string } | null>(null);
+  const pending = useRef<"picker" | { fix: SourceFix; source: string } | null>(null);
   const openedIdentity = useRef<string | null>(null);
   const openedOwner = useRef<object | undefined>(undefined);
   const [activating, setActivating] = useState(false);
@@ -53,13 +56,20 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
   const hasEarlierOutputs = !reusableOutput && host?.expressionInsertion === true && !!document;
   const hasScope = !hasEarlierOutputs && (inputs.length > 0 || variables.length > 0);
   const available = textMode && (hasEarlierOutputs || hasScope);
-  const editable = available && !props.disabled && !props.context.readOnly;
+  const editable = textMode && !props.disabled && !props.context.readOnly;
   const emptyOutput = reusableOutput && scoped && ownerValue == null;
   const state = expressionEditingState(emptyOutput ? "" : ownerValue, props.syntax);
-  const capable = editable && !!adapter && state.supported;
+  const canInsert = available && editable && !!adapter && state.supported;
   const sourceText = typeof props.value === "string" ? props.value : "";
+  const diagnostic = useExpressionResultDiagnostic(
+    editable && state.supported && !reusableOutput && !props.descriptor.isSensitive && !props.descriptor.isCredential
+      ? contribution?.resultCheck : undefined,
+    sourceText, props.syntax, props.descriptor, ownerValue, target, host
+  );
+  const resultFix = diagnostic?.fix;
+  const capable = canInsert || !!resultFix;
   const fixes = useMemo(() => {
-    if (!scoped || !capable || !adapter?.findArgumentFixes || !sourceText.includes("args")) return [];
+    if (!scoped || !canInsert || !adapter?.findArgumentFixes || !sourceText.includes("args")) return [];
     const parameters = readPortableExpressionDefinition(ownerValue, props.syntax)?.parameters ?? {};
     return adapter.findArgumentFixes(sourceText, name => {
       if (reusableOutput) {
@@ -73,14 +83,14 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
         return { namespace: "variables", name };
       }
     });
-  }, [adapter, capable, inputs, ownerValue, props.syntax, reusableOutput, scoped, sourceText, variables]);
-  const current = useRef({ props, ownerValue, host, target, identity, capable, contribution, hasScope, state, sourceText });
-  current.current = { props, ownerValue, host, target, identity, capable, contribution, hasScope, state, sourceText };
+  }, [adapter, canInsert, inputs, ownerValue, props.syntax, reusableOutput, scoped, sourceText, variables]);
+  const current = useRef({ props, ownerValue, host, target, identity, capable, contribution, hasScope, state, sourceText, fixes, diagnostic });
+  current.current = { props, ownerValue, host, target, identity, capable, contribution, hasScope, state, sourceText, fixes, diagnostic };
 
-  const applyFix = useCallback((fix: StudioExpressionReferenceFix, source: string, editor: StudioExpressionEditorController) => {
+  const applyFix = useCallback((fix: SourceFix, source: string, editor: StudioExpressionEditorController) => {
     const now = current.current;
     const captured = editor.capture();
-    if (!now.capable || !now.state.supported || !captured || captured.source !== source || now.sourceText !== source ||
+    if (!now.capable || !now.state.supported || (now.diagnostic?.fix !== fix && !now.fixes.some(offered => offered === fix)) || !captured || captured.source !== source || now.sourceText !== source ||
         !editor.apply({ expected: captured, range: fix, insert: fix.replacement, historyValue: now.state.historyValue }))
       setNotice("The expression changed. Review the available fix again.");
   }, []);
@@ -111,7 +121,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
   }, [close]);
 
   const begin = () => {
-    if (!current.current.capable) return;
+    if (!canInsert) return;
     setNotice(null);
     openedIdentity.current = current.current.identity;
     openedOwner.current = current.current.host?.ownerContext;
@@ -155,12 +165,17 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
     }
     close("none");
   };
-  const action = available ? <>
-    <button ref={trigger} type="button" className="wf-choose-data-trigger wf-expression-insert-data" aria-haspopup="dialog"
-      aria-expanded={open || scopeOpen} disabled={!capable} title={!contribution?.sourceInsertion ? "This editor does not support data insertion." : !state.supported ? state.reason : "Insert a reference at the current selection"}
+  const startFix = (fix: SourceFix) => {
+    setNotice(null);
+    if (controller.current) applyFix(fix, sourceText, controller.current);
+    else { pending.current = { fix, source: sourceText }; setActivating(true); }
+  };
+  const action = available || diagnostic ? <>
+    {available ? <button ref={trigger} type="button" className="wf-choose-data-trigger wf-expression-insert-data" aria-haspopup="dialog"
+      aria-expanded={open || scopeOpen} disabled={!canInsert} title={!contribution?.sourceInsertion ? "This editor does not support data insertion." : !state.supported ? state.reason : "Insert a reference at the current selection"}
       onPointerDown={event => { if (controller.current?.capture()) event.preventDefault(); }} onClick={() => open || scopeOpen ? close("opener") : begin()}>
       Insert data
-    </button>
+    </button> : null}
     {scopeOpen && hasScope ? <AnchoredPopover anchorRef={trigger}
       portalContainer={trigger.current?.closest(".wf-property-editor-dialog")} open className="wf-data-chooser"
       minWidth={220} onDismiss={() => close("none")} onPositioned={() => chooserPanel.current?.querySelector("button")?.focus()}>
@@ -194,22 +209,22 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
       {reusableOutput
         ? <span>Prefer the stable input key for <code>{fix.current}</code>.</span>
         : <span><code>{fix.current}</code> is unavailable here.</span>}
-      <StudioButton variant="ghost" size="sm" onClick={() => {
-        setNotice(null);
-        if (controller.current) applyFix(fix, sourceText, controller.current);
-        else { pending.current = { fix, source: sourceText }; setActivating(true); }
-      }}>Use <code>{fix.replacement}</code></StudioButton>
+      <StudioButton variant="ghost" size="sm" onClick={() => startFix(fix)}>Use <code>{fix.replacement}</code></StudioButton>
     </div>)}
+    {diagnostic ? <div className="wf-expression-reference-fix">
+      <span role="status">{diagnostic.message}</span>
+      {resultFix ? <StudioButton variant="ghost" size="sm" onClick={() => startFix(resultFix)}>{resultFix.label}</StudioButton> : null}
+    </div> : null}
     {activating ? <span role="status">Opening expression editor…</span> : null}
     {notice ? <span role="alert">{notice}</span> : null}
     {open && host && host.ownerContext === openedOwner.current ? <ActivityDataBrowser key={identity} host={host} target={target} inputLabel={props.descriptor.displayName || props.descriptor.name}
       anchorRef={trigger} open current={null} onSelect={() => {}} onClose={close} expression={{ type: props.syntax, onSelect: choose }} /> : null}
   </> : undefined;
-  return <><Editor {...props} actions={action} documentEditing={capable && state.supported ? {
+  return <><Editor {...props} actions={action} documentEditing={(capable || editable && !!contribution?.resultCheck) && state.supported ? {
     historyValue: state.historyValue, interactionActive: open || scopeOpen || activating, onController: register
   } : undefined} onChange={(value, edit) => {
     if (current.current.props.disabled || current.current.props.context.readOnly) return;
-    if (!edit || !current.current.capable) { props.onChange(value); return; }
+    if (!edit) { props.onChange(value); return; }
     const restored = typeof value === "string" ? expressionValueFromHistory(value, edit.historyValue, props.syntax) : null;
     if (restored) props.onChange(restored.value, edit);
   }} />{available && !props.disabled && !props.context.readOnly && (!contribution?.sourceInsertion || !state.supported)

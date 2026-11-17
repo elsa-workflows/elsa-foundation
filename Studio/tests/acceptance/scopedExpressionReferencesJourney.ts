@@ -129,22 +129,47 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await s.publishRun(caller, "Sum: 10", {}, true, "expression");
   await capture(page, info, "calculator-direct-repair");
   await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
-  await text.fill('"Sum: " + ');
-  await text.press("ControlOrMeta+End");
+  await text.fill("0");
+  await text.press("ControlOrMeta+a");
   await page.getByRole("button", { name: "Insert data", exact: true }).press("Enter");
   const data = page.getByRole("dialog", { name: "Choose data for Text", exact: true });
-  const variable = data.getByRole("group", { name: "Variables", exact: true }).getByRole("option", { name: /Variable1/ });
-  await expect(variable).toBeVisible();
+  const boundOutput = data.getByRole("group", { name: "Activity outputs", exact: true }).getByRole("option").filter({
+    has: page.locator(".wf-data-chooser-option-label", { hasText: /› Sum$/ })
+  });
+  await expect(boundOutput).toBeVisible();
   await capture(page, info, "write-line-picker");
-  await variable.press("Enter");
+  await boundOutput.press("Enter");
   const useWhole = data.getByRole("button", { name: "Use whole value", exact: true });
   // Scalar sources can commit immediately. Other shapes ask the author to use the whole value.
   await expect.poll(async () => !await data.isVisible() || (await useWhole.isVisible() && await useWhole.isEnabled())).toBe(true);
   if (await data.isVisible()) await useWhole.press("Enter");
   await expect.poll(() => s.stored(caller)).toMatchObject({
     expressionType: "JavaScript",
-    value: { source: '"Sum: " + args.data', parameters: { data: { kind: "Variable", variableKey: "variable-1" } } }
+    value: { source: "args.data", parameters: { data: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "sum" } } }
   });
-  await s.publishRun(caller, "Sum: 10", {}, true, "expression");
+  const beforeFix = (await s.stored(caller))!.value as Record<string, unknown>;
+  await page.reload();
+  await s.open(caller);
+  const warning = page.getByText("This expression returns Double. This field expects String.", { exact: true });
+  const fix = page.getByRole("button", { name: "Wrap in String(…)", exact: true });
+  await expect(warning).toBeVisible();
+  await fix.scrollIntoViewIfNeeded();
+  await capture(page, info, "write-line-result-warning");
+  await fix.press("Enter");
+  await expect(text).toBeFocused();
+  const fixed = { expressionType: "JavaScript", value: { ...beforeFix, source: "String(args.data)" } };
+  await expect.poll(() => s.stored(caller)).toEqual(fixed);
+  await expect(warning).toHaveCount(0);
+  await text.press("ControlOrMeta+z");
+  await expect.poll(() => s.stored(caller)).toEqual({ expressionType: "JavaScript", value: beforeFix });
+  const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
+  await text.press(mac ? "Meta+Shift+z" : "Control+y");
+  await expect.poll(() => s.stored(caller)).toEqual(fixed);
+  await page.reload();
+  await s.open(caller);
+  await expect(page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText("String(args.data)");
+  await expect(fix).toHaveCount(0);
+  await capture(page, info, "write-line-result-fixed");
+  await s.publishRun(caller, "10", {}, true, "expression");
   await capture(page, info, "calculator-completed");
 }
