@@ -429,6 +429,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var refusal = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C1):", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("structural activities and nodes with children", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -445,6 +446,7 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
         var structural = await AssertBackgroundRefusedAsync(structuralCompiler);
+        Assert.Contains("VF-BG-001 (C1):", structural.Message, StringComparison.Ordinal);
         Assert.Contains("structural activities and nodes with children", structural.Message, StringComparison.Ordinal);
 
         var intrinsicCompiler = TestCompiler.Create(
@@ -459,18 +461,20 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
         var intrinsic = await AssertBackgroundRefusedAsync(intrinsicCompiler);
-        Assert.Contains("engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-BG-001 (C1): Background execution is not eligible for activity node 'intrinsic': engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
 
         var untyped = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeObjectActivity),
             "activity-background-object",
             ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C3):", untyped.Message, StringComparison.Ordinal);
         Assert.Contains("untyped object results are not supported", untyped.Message, StringComparison.Ordinal);
 
         var transient = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeStreamActivity),
             "activity-background-stream",
             ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C4):", transient.Message, StringComparison.Ordinal);
         Assert.Contains("transient result values are not supported", transient.Message, StringComparison.Ordinal);
 
         var sensitive = await AssertBackgroundRefusedAsync(BackgroundCompiler(
@@ -488,6 +492,7 @@ public sealed class WorkflowExecutableCompilerTests
                     IsSensitive: true)
             ],
             variables: [new("result-value", "Result Value", new TypeReference("String"), null, null)]));
+        Assert.Contains("VF-BG-001 (C5):", sensitive.Message, StringComparison.Ordinal);
         Assert.Contains("sensitive or encryption-required result values are not supported", sensitive.Message, StringComparison.Ordinal);
     }
 
@@ -886,6 +891,7 @@ public sealed class WorkflowExecutableCompilerTests
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
         Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-BG-001 (C1):", exception.Message, StringComparison.Ordinal);
         Assert.Contains("reusable activity boundaries are not supported", exception.Message, StringComparison.Ordinal);
     }
 

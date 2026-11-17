@@ -265,7 +265,7 @@ public static class BackgroundEligibility
                 continue;
             if (!input.Policy.IsPersistable)
                 return $"input '{input.Key}' has no durable representation to carry it to a worker";
-            if (ValueRepresentationDefaults.Infer(input.Type) == ValueRepresentation.TransientResource)
+            if (IsLiveResource(input.Type) || (binding is not null && IsLiveResource(binding.TargetType)))
                 return $"input '{input.Key}' is a live resource that cannot be materialized on a worker";
             if (input.Policy.HidesValue() || binding?.EffectivePolicy.HidesValue() == true)
                 return $"input '{input.Key}' is sensitive or encryption-required and would lose its protection on the way to a worker; bind it to a secret reference instead";
@@ -273,6 +273,12 @@ public static class BackgroundEligibility
 
         return null;
     }
+
+    // A stream is pinned under its canonical CLR alias (System.IO.Stream), which the representation defaults do not
+    // map to a transient resource, so both spellings are read here.
+    private static bool IsLiveResource(ValueTypeDescriptor type) =>
+        ValueRepresentationDefaults.Infer(type) == ValueRepresentation.TransientResource ||
+        StringComparer.Ordinal.Equals(type.Alias, typeof(Stream).FullName);
 
     private static bool DeclaresBackgroundExecutionSafe(BackgroundEligibilitySubject subject) =>
         subject.Contract?.SupportsBackgroundExecution == true &&

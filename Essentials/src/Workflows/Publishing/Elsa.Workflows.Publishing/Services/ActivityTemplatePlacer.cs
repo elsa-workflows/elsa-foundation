@@ -365,9 +365,11 @@ public sealed class ActivityTemplatePlacer(
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
             // FR-012 (spec 1230): a background node a template provider compiled itself passes the same publication
-            // check as an authored one before it reaches a pinned executable.
+            // check as an authored one before it reaches a pinned executable. A source-owned occurrence's template
+            // root is the authored node itself, so being a frame's root does not make a node a reusable boundary;
+            // an authored node that references a reusable definition is refused by the workflow compiler.
             if (current.Node.ExecutionPlacement == ActivityExecutionPlacement.Background)
-                EnsureTemplateNodeBackgroundEligible(current.Node, isBoundary);
+                EnsureTemplateNodeBackgroundEligible(current.Node);
             placedNodes[current.Node.ExecutableNodeId] = new(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -526,12 +528,12 @@ public sealed class ActivityTemplatePlacer(
             .ToArray();
     }
 
-    private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node, bool isBoundary)
+    private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node)
     {
         var subject = typeRegistry is null
             ? BackgroundEligibilitySubject.ForPinnedNode(node, activityType: null)
             : BackgroundEligibilitySubject.ForPinnedNode(node, typeRegistry);
-        if (BackgroundEligibility.CheckPublication(subject with { IsReusableBoundary = isBoundary }) is { } refusal)
+        if (BackgroundEligibility.CheckPublication(subject) is { } refusal)
             throw new InvalidOperationException(refusal.Message);
     }
 

@@ -96,6 +96,8 @@ public sealed class BackgroundEligibilityTests
         AssertRefused(entryPoint, BackgroundEligibilityCriterion.C10,
             Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("content", "Stream")])), "cannot be materialized");
         AssertRefused(entryPoint, BackgroundEligibilityCriterion.C10,
+            Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("content", "System.IO.Stream")])), "cannot be materialized");
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C10,
             Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("password", "String", ActivityValuePolicy.Default with { IsSensitive = true })])),
             "lose its protection");
     }

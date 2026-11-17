@@ -107,7 +107,7 @@ public sealed class ActivityTemplatePlacementTests
         var writeTemplate = Template(
             "template-write",
             "hash-write",
-            Node("source-owned-root", ActivityExecutionPlacement.Background));
+            BackgroundLeaf("source-owned-root"));
         var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
         var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
         var writePublication = Publication("definition-write", "version-write", "type.write", writeTemplate);
@@ -145,6 +145,31 @@ public sealed class ActivityTemplatePlacementTests
         var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
         var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
         Assert.Equal([write.ExecutableNodeId], orderedChildIds);
+    }
+
+    [Fact]
+    public async Task Placement_refuses_a_template_background_node_that_fails_a_criterion()
+    {
+        // FR-012 (spec 1230): a template provider's own background nodes pass the publication check when placed.
+        foreach (var (leaf, criterion) in new[]
+                 {
+                     (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'reader'"),
+                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C1): Background execution is not eligible for activity node 'bare'")
+                 })
+        {
+            var template = Template("template-root", "hash-root", Node("root", leaf));
+            var publication = Publication("definition-root", "version-root", "type.root", template);
+            var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+            var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+                new Sha256ActivityPlacementHasher());
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+                publication, template, reference,
+                new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+                publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+            Assert.StartsWith(criterion, exception.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -783,7 +808,43 @@ public sealed class ActivityTemplatePlacementTests
         hasher,
         new SequenceOccurrenceStructureService(),
         new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
-        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
+        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])),
+        BackgroundLeafTypes());
+
+    private static Elsa.Serialization.Core.IWellKnownTypeRegistry BackgroundLeafTypes()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(BackgroundWriteLeaf), BackgroundWriteLeafAlias);
+        registry.RegisterType(typeof(BackgroundVariableReaderLeaf), BackgroundVariableReaderLeafAlias);
+        return registry;
+    }
+
+    private const string BackgroundWriteLeafAlias = "test.background-write-leaf";
+    private const string BackgroundVariableReaderLeafAlias = "test.background-variable-reader-leaf";
+
+    // An eligible background leaf as a template provider compiles it: a pinned contract naming a registered,
+    // [BackgroundExecutionSafe] CLR type through its activation capability.
+    private static ExecutableNode BackgroundLeaf(string id, string alias = BackgroundWriteLeafAlias) => new(
+        id, id, alias, "1", new(WellKnownRuntimeActivityConsumers.ClrActivity, "1", Json("{}")),
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+        activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            alias, "1", "clr", Json("{}"), [],
+            new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default, []), ["Done"],
+            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution: true));
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundWriteLeaf : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundVariableReaderLeaf : Activity<int>, IRuntimeScopedVariableReader
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
 
     private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),

@@ -112,7 +112,8 @@ public sealed class BackgroundActivityWorkerTests
 
         Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
         Assert.Equal("BackgroundActivityFaulted", harness.Store.Item.Result.Fault!.Code);
-        Assert.Contains("pinned background-safe leaf contract", harness.Store.Item.Result.Fault.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-BG-001 (C1):", harness.Store.Item.Result.Fault.Message, StringComparison.Ordinal);
+        Assert.Contains("structural activities and nodes with children are not supported", harness.Store.Item.Result.Fault.Message, StringComparison.Ordinal);
         Assert.Equal(0, probe.Executions);
         Assert.Equal(1, probe.Disposals);
     }
@@ -288,6 +289,80 @@ public sealed class BackgroundActivityWorkerTests
         Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
     }
 
+    [Fact]
+    public async Task Refuses_a_pinned_node_with_an_untyped_Any_result_naming_C3()
+    {
+        // Spec 1230 FR-004: an executable pinned before run time checked C3 is refused on the worker.
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        await using var harness = await Harness.CreateAsync<int>(probe, "1",
+            configureResult: result => new ActivityResultContract(new ValueTypeDescriptor("Any"), true, ActivityValuePolicy.Default, []));
+
+        await harness.RunAsync();
+
+        AssertRefused(harness, "C3", "untyped object results are not supported");
+        Assert.Equal(0, probe.Executions);
+    }
+
+    [Fact]
+    public async Task Refuses_a_pinned_node_with_a_transient_resource_projection_naming_C4()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        await using var harness = await Harness.CreateAsync<int>(probe, "1",
+            configureResult: result => new ActivityResultContract(result.Type, true, ActivityValuePolicy.Default,
+                [new ActivityResultProjectionContract("Handle", "$", new ValueTypeDescriptor("Int32"), true, ActivityValuePolicy.Default, ValueRepresentation.TransientResource)]));
+
+        await harness.RunAsync();
+
+        AssertRefused(harness, "C4", "transient result values are not supported");
+        Assert.Equal(0, probe.Executions);
+    }
+
+    [Fact]
+    public async Task Refuses_a_body_that_staged_a_workflow_dispatch_or_published_stimuli_naming_C6()
+    {
+        foreach (var staging in new[] { "dispatch", "publish" })
+        {
+            var probe = new Probe(_ => ActivityTransition.Complete(1));
+            await using var harness = await Harness.CreateAsync<int>(probe, "1", configureServices: services =>
+            {
+                if (staging == "dispatch")
+                    services.Replace(ServiceDescriptor.Singleton<IWorkflowDispatchStagingAccessor>(new StagedDispatchAccessor()));
+                else
+                    services.Replace(ServiceDescriptor.Singleton<IPublishStimulusStagingAccessor>(new StagedStimulusAccessor()));
+            });
+
+            await harness.RunAsync();
+
+            AssertRefused(harness, "C6", "the body staged a workflow dispatch or published stimuli");
+            Assert.Equal(1, probe.Executions);
+        }
+    }
+
+    private static void AssertRefused(Harness harness, string criterion, string reason)
+    {
+        var result = harness.Store.Item!.Result!;
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, result.Kind);
+        Assert.StartsWith($"VF-BG-001 ({criterion}): Background execution is not eligible for activity node 'node-1': ", result.Fault!.Message, StringComparison.Ordinal);
+        Assert.Contains(reason, result.Fault.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class StagedDispatchAccessor : IWorkflowDispatchStagingAccessor
+    {
+        public void Reset(string workflowExecutionId, string activityExecutionId) { }
+
+        // The worker only asks whether the body staged a dispatch; the request's contents do not matter here.
+        public WorkflowDispatchCheckpointRequest? TakeWorkflowDispatch(string workflowExecutionId, string activityExecutionId) =>
+            (WorkflowDispatchCheckpointRequest)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(WorkflowDispatchCheckpointRequest));
+    }
+
+    private sealed class StagedStimulusAccessor : IPublishStimulusStagingAccessor
+    {
+        public void Reset(string workflowExecutionId, string activityExecutionId) { }
+
+        public IReadOnlyList<RuntimePostCommitIntent> TakePublishStimuli(string workflowExecutionId, string activityExecutionId) =>
+            [new RuntimePostCommitIntent("intent-1", workflowExecutionId, "test.stimulus", DateTimeOffset.UnixEpoch, activityExecutionId, null, null)];
+    }
+
     private sealed record WorkerDto(string Name, int Count);
 
     private abstract class ProbeActivityCore<TResult>(Probe probe) : Activity<TResult>, IDisposable
@@ -362,7 +437,9 @@ public sealed class BackgroundActivityWorkerTests
             Func<IActivity>? activationOverride = null,
             WorkflowExecutableIdentity? requestIdentityOverride = null,
             IWorkflowExecutableReader? executableReaderOverride = null,
-            Func<BackgroundActivityWorkRequest, BackgroundActivityWorkRequest>? configureRequest = null)
+            Func<BackgroundActivityWorkRequest, BackgroundActivityWorkRequest>? configureRequest = null,
+            Func<ActivityResultContract, ActivityResultContract>? configureResult = null,
+            Action<IServiceCollection>? configureServices = null)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
@@ -389,6 +466,7 @@ public sealed class BackgroundActivityWorkerTests
             services.Replace(ServiceDescriptor.Singleton<IActivityActivator>(new ProbeActivator(
                 activationOverride ?? (() => new ProbeActivity<TResult>(probe)))));
             services.Configure<BackgroundActivityWorkerOptions>(options => options.MaximumResultBytes = 4096);
+            configureServices?.Invoke(services);
             var provider = services.BuildServiceProvider();
 
             var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
@@ -402,7 +480,8 @@ public sealed class BackgroundActivityWorkerTests
                 typeof(ClrActivityDescriptor).FullName!,
                 descriptorPayload,
                 [],
-                new ActivityResultContract(new ValueTypeDescriptor(resultAlias), true, ActivityValuePolicy.Default, []),
+                configureResult?.Invoke(new ActivityResultContract(new ValueTypeDescriptor(resultAlias), true, ActivityValuePolicy.Default, []))
+                    ?? new ActivityResultContract(new ValueTypeDescriptor(resultAlias), true, ActivityValuePolicy.Default, []),
                 ["Done"],
                 new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, activityAlias),
                 SideEffectProfile.External,
