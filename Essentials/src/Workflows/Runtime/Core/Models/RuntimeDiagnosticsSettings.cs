@@ -184,9 +184,11 @@ public static class RuntimeDiagnosticsSettingsResolver
     public static RuntimeDiagnosticsEvidenceLevel GetEffectiveLevel(RuntimeDiagnosticsSettingsView view, RuntimePayloadCaptureSubject subject)
     {
         var subjectId = RuntimeDiagnosticsSubjects.FromCaptureSubject(subject);
-        return view.Effective.SubjectOverrides.TryGetValue(subjectId, out var level)
-            ? level
-            : view.Effective.DefaultLevel;
+        if (view.Effective.SubjectOverrides.TryGetValue(subjectId, out var level))
+            return level;
+        // Spec 1221 FR-025: write-history values are opt-in. Without their own setting they stay off, even when saved
+        // settings change the default level for everything else.
+        return subject == RuntimePayloadCaptureSubject.VariableWrite ? RuntimeDiagnosticsEvidenceLevel.Off : view.Effective.DefaultLevel;
     }
 
     public static RuntimePayloadCaptureMode ToCaptureMode(RuntimeDiagnosticsEvidenceLevel level) =>

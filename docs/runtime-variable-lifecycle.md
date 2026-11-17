@@ -118,7 +118,8 @@ keeps its record on the alteration job's outcome.
 - **Values.** The value a leaf's capture or an intrinsic wrote is an inspection value of the writing step (the other
   write sites are listed under *What is not covered yet*) (subject `VariableWrite`; name =
   variable key, phase = scope id, sequence = the version it produced), decided by the payload capture policy under the
-  `variableWrites` diagnostics setting, which is off unless configured. A value not captured has no payload and its
+  `variableWrites` diagnostics setting. It is off unless that setting itself is given a level: the default level for the
+  other subjects does not apply to it. A value not captured has no payload and its
   capture mode says why; a sensitive one is withheld; retention applies as for any inspection value. None of these
   reads as `null`.
 - **Operational data.** The value a lost-update warning overwrote (`OverwrittenValue`), a refused write
