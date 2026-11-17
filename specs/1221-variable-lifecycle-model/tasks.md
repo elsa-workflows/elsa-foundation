@@ -4,7 +4,7 @@
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 
 **Status**: implemented in #4316 (2026-11-17). Every task is done there, moved (T015, T016 to S-7; T024a to S-5), or
-the coordinator's post on #3411 (T028).
+posted (T028).
 
 **Tests / cadence**: Elsa uses xUnit, no FluentAssertions (constitution). The two reproduction drives (US1, US2) and the
 no-gap proof (US4) are **test-first** — the ADR's *Required evidence* needs them failing before and passing after. Other
@@ -47,8 +47,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   `Fault`, and two background branches (T010a) total `1` with a warning on the second commit.
 - **T024a: delivered by S-5** (coordinator, 2026-11-17): spec 266's unordered-writer warning is S-5's (#4669), so
   the pointer to the `Fault` opt-in goes into that warning there; S-10 does not wait for it.
-- **T028:** the PoC result (feasible: inline `External` and `ReplaySafe` leaves fuse) is in #4316's description; posting
-  it on #3411 is the coordinator's step. **T042:** checked against the merged ADR text.
+- **T028:** the PoC result (feasible: inline `External` and `ReplaySafe` leaves fuse) is posted on #3411. **T042:**
+  checked against the merged ADR text.
 - **T003:** versions and digests are on frames and on closed-scope variable rows (row metadata
   `runtime.variable.version/digest/writer`). A body node reads rows through a frame that carries those versions, so its
   read set records them, and a capture into a row is judged by the commit rule (`RuntimeOutputCaptureProjector`,
@@ -152,7 +152,7 @@ default of FR-011 depends on it (FR-013a).
 - [x] T025 [US4] **(test-first / PoC)** Prove no other branch's work item runs between an `External` inline leaf's input materialization, body and transition commit, with claim/fence/durability intact and no DB transaction around user code. In `.../Tests/VariableLifecycle/InlineNoGapTests.cs`.
 - [x] T026 [US4] Extend the single-work-item dispatch to `External` leaves in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs` (and the start path), keeping `ActivityAttemptClaimed` claim/flush as intermediate commits.
 - [x] T027 [P] [US4] Parallel test for `ReplaySafe` leaves (already fused) confirming the same no-gap guarantee.
-- [ ] T028 [US4] **Flow finding back to #3411**: post the PoC result (feasible / not) as a comment on ADR 0092; if infeasible without weakening ADR 0032 R2, it reopens decision 10 and the default of decision 6 (FR-013a), before this spec is approved.
+- [x] T028 [US4] **Posted 2026-11-17: [#3411 comment](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6945308445), feasible.** **Flow finding back to #3411**: post the PoC result (feasible / not) as a comment on ADR 0092; if infeasible without weakening ADR 0032 R2, it reopens decision 10 and the default of decision 6 (FR-013a), before this spec is approved.
 
 ---
 
