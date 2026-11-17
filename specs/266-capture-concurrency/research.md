@@ -31,8 +31,9 @@ Spec: [spec.md](spec.md). Branch base: `initiative/3052-elsa3-to-elsa4-conversio
   node, so **paths that leave different ports of any Flowchart node are unordered** (they are what an inclusive fork
   is). This keeps today's port-blind behaviour. The final treatment of such nodes belongs to the join initiative
   (#4193). Consequence for the spec: Story 2 scenario 5's "no warning" case cannot occur today; its parenthetical
-  (several outcomes → warning) is what applies. **Finding F-1** (amendment to spec 266): scenario 5 and FR-003's
-  "paths that leave different outcome ports of a node without a fork policy" should read as decided by #4193.
+  (several outcomes → warning) is what applies. **Finding F-1**: amended in spec 266 by
+  [#4720](https://github.com/elsa-workflows/elsa-foundation/pull/4720) (D-2a, FR-003, Story 2 scenario 5); narrowing is
+  for #4193.
 - Exclusivity inside a Flowchart remains for branches that start at different trigger entries, as today.
 
 ## R-3 Early release: a structure that completes while its children still run
