@@ -112,7 +112,7 @@ public sealed class DecisionWorkflowTests
         {
             var result = Assert.IsAssignableFrom<IActivityCompletionTransition>(await ((IActivity)fixture.CreateActivity()).ExecuteAsync(fixture.Context));
             Assert.NotEqual("Success", Assert.IsType<DecisionEvaluation>(result.Result).Status);
-            Assert.Equal("Refused", result.Outcome);
+            Assert.Equal(new[] { "Refused" }, result.Selection.ResolveNames());
         }
         else await Assert.ThrowsAsync<DecisionInvocationException>(async () => await ((IActivity)fixture.CreateActivity()).ExecuteAsync(fixture.Context));
     }
@@ -189,7 +189,7 @@ public sealed class DecisionWorkflowTests
         fixture.Executable = fixture.CreateExecutable(await fixture.PublishAsync());
         var transition = Assert.IsAssignableFrom<IActivityCompletionTransition>(await ((IActivity)fixture.CreateActivity()).ExecuteAsync(fixture.Context));
         var result = Assert.IsType<DecisionEvaluation>(transition.Result);
-        Assert.Equal("Done", transition.Outcome);
+        Assert.Equal(new[] { "Done" }, transition.Selection.ResolveNames());
         Assert.Equal("Automatic", result.Result.GetProperty("value").GetString());
         Assert.Equal("automatic", Assert.Single(result.Trace, trace => trace.Selected).RuleId);
     }

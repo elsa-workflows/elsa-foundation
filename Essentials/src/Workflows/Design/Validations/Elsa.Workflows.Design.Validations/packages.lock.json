@@ -55,6 +55,12 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {

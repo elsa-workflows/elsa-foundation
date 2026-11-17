@@ -117,7 +117,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         BackgroundActivityWorkTerminalResult result) => result.Kind switch
     {
         BackgroundActivityWorkResultKind.Complete => services.GetRequiredService<BackgroundActivityCompletionCodec>().Deserialize(
-            contract, result.ResultJson ?? "null", result.Outcome,
+            contract, result.ResultJson ?? "null", result.Selection ?? OutcomeSelection.Unspecified,
             services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes),
         BackgroundActivityWorkResultKind.Fault => ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
             result.Fault!.Code, result.Fault.Message, result.Fault.IsRetryable,
@@ -334,7 +334,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 stagedState = RuntimeStructuralStateProjector.Apply(stagedState, structuralContinuation, TimeProvider.GetUtcNow());
                 returnedTransition = structuralContinuation.Kind switch
                 {
-                    RuntimeStructuralContinuationKind.Complete => ActivityTransition.Complete(ActivityUnit.Value, structuralContinuation.OutcomeName!),
+                    RuntimeStructuralContinuationKind.Complete => ActivityTransition.Complete(ActivityUnit.Value, structuralContinuation.Selection!),
                     RuntimeStructuralContinuationKind.Fault => ActivityTransition.Fault<ActivityUnit>(structuralContinuation.Fault!),
                     RuntimeStructuralContinuationKind.Cancel => ActivityTransition.Cancel<ActivityUnit>(structuralContinuation.CancellationReason!),
                     RuntimeStructuralContinuationKind.Defer => null,
@@ -440,10 +440,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                         cancellationToken);
                     var completionTransition = (IActivityCompletionTransition)completionPreparation.Transition;
                     if (structuralContinuation?.IsComplete == true &&
-                        !StringComparer.Ordinal.Equals(completionTransition.Outcome, structuralContinuation.OutcomeName))
+                        !completionTransition.Selection.Equals(structuralContinuation.Selection))
                     {
                         throw new InvalidOperationException(
-                            $"Checkpoint participant completion outcome '{completionTransition.Outcome}' does not match structural continuation outcome '{structuralContinuation.OutcomeName}'.");
+                            $"Checkpoint participant completion outcome '{completionTransition.Selection}' does not match structural continuation outcome '{structuralContinuation.Selection}'.");
                     }
 
                     returnedTransition = completionPreparation.Transition;
@@ -459,11 +459,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt));
                 }
 
-                string[] outcomeNames = valueFlowCompletion is not null
-                    ? [valueFlowCompletion.Completion.OutcomeKey]
+                var outcomeNames = valueFlowCompletion is not null
+                    ? valueFlowCompletion.Completion.OutcomeNames
                     : structuralContinuation?.IsComplete == true
-                        ? [structuralContinuation.OutcomeName!]
-                        : [ActivityOutcomes.Done];
+                        ? structuralContinuation.OutcomeNames
+                        : OutcomeSelection.Unspecified.ResolveNames();
                 completedState = CompleteActivity(workItem, invokePayload, stagedState, outcomeNames, skipped: false);
                 if (valueFlowCompletion is not null)
                 {

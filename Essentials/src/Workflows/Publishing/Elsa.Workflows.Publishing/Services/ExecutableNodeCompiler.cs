@@ -156,6 +156,9 @@ public sealed class ExecutableNodeCompiler(
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
             ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
 
+        EnsureConnectedOutcomesDeclared(activity, childSlots);
+        EnsureOutcomeSelectionGuaranteed(activity, clrActivityType, activityType, activityContract, outcomeProjection);
+
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
 
         return new ExecutableNode(
@@ -607,6 +610,62 @@ public sealed class ExecutableNodeCompiler(
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
+    /// <summary>
+    /// <c>VF-AUTH-011</c> (spec 1208 FR-019): every connection a structure owns must leave its source child on a port in
+    /// that child's pinned outcome set. A connection on an undeclared port would publish and never be followed.
+    /// Children without a pinned contract (intrinsics, structural activities without a result) are not checked here.
+    /// </summary>
+    private void EnsureConnectedOutcomesDeclared(ActivityNode activity, IEnumerable<ExecutableChildSlot> childSlots)
+    {
+        var usages = activityStructureService.ProjectChildContractMemberUsage(activity);
+        if (usages.Count == 0)
+            return;
+
+        var children = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
+        foreach (var child in childSlots.SelectMany(slot => slot.Activities))
+            children.TryAdd(child.ExecutableNodeId, child);
+
+        foreach (var usage in usages)
+        {
+            if (!children.TryGetValue(usage.NodeId, out var child) || child.ActivityContract is not { } contract)
+                continue;
+
+            foreach (var port in usage.MemberUsage.Where(member => member.MemberKind == "Outcome").Select(member => member.ReferenceKey))
+            {
+                if (!contract.Outcomes.Contains(port, StringComparer.Ordinal))
+                    throw new ArgumentException(
+                        $"VF-AUTH-011: A connection in activity node '{activity.NodeId}' leaves '{usage.NodeId}' on port '{port}', which is not in its " +
+                        $"outcome set [{string.Join(", ", contract.Outcomes.Select(name => $"'{name}'"))}]. Connect it from a declared outcome, or remove it.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>VF-AUTH-013</c> (spec 1208 FR-002b): a node whose pinned outcome set has no <c>Done</c> must belong to an activity
+    /// that selects an outcome on every successful completion, or an unspecified completion would fault at run time.
+    /// </summary>
+    private static void EnsureOutcomeSelectionGuaranteed(
+        ActivityNode activity,
+        Type? clrActivityType,
+        string activityTypeKey,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? contract,
+        ActivityChildOutcomeProjection? outcomeProjection)
+    {
+        if (contract is null || clrActivityType is null || contract.Outcomes.Contains(ActivityOutcomes.Done, StringComparer.Ordinal))
+            return;
+        if (clrActivityType.IsDefined(typeof(SelectsOutcomeOnEveryCompletionAttribute), inherit: true))
+            return;
+        if (clrActivityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true) is { SelectsOnEveryCompletion: true })
+            return;
+        if (outcomeProjection is not null && StringComparer.Ordinal.Equals(outcomeProjection.ActivityTypeKey, activityTypeKey))
+            return;
+
+        throw new ArgumentException(
+            $"VF-AUTH-013: Activity node '{activity.NodeId}' ({activityTypeKey}) has no 'Done' outcome, and its activity does not guarantee that every " +
+            "successful completion selects one of its outcomes, so a completion without a selection would fault. Declare 'Done' on the activity, " +
+            "or select an outcome on every path and mark it [SelectsOutcomeOnEveryCompletion].");
+    }
+
     // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
     private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
@@ -638,6 +697,10 @@ public sealed class ExecutableNodeCompiler(
                     yield return value;
     }
 
+    /// <summary>
+    /// A node's outcome set, resolved at publication from the activity's static declarations and its configuration
+    /// (ADR 0045 §6; spec 1208 FR-010, FR-011). The same rules drive Studio's ports.
+    /// </summary>
     private static IReadOnlyCollection<string> ResolveOutcomes(
         Type activityType,
         ExecutableActivityStructure? structure,
@@ -669,10 +732,12 @@ public sealed class ExecutableNodeCompiler(
 
     /// <summary>
     /// Pins the per-node outcome ports an activity derives from an authored collection input (see
-    /// <see cref="ActivityValueOutcomesAttribute"/>): one outcome named after each configured item plus the
-    /// unmatched catch-all. Reads the compiled literal binding so the pinned names match exactly what the runtime
-    /// emits. When the source input has no authored items the activity keeps only its statically declared outcomes,
-    /// preserving back-compat for an unconfigured node (#926).
+    /// <see cref="ActivityValueOutcomesAttribute"/>): one outcome named after each configured item plus the declared
+    /// catch-all, if any. Names are pinned exactly as written. Reads the compiled literal binding so the pinned names
+    /// match exactly what the runtime emits. When the source input has no authored items the activity keeps only its
+    /// statically declared outcomes, preserving back-compat for an unconfigured node (#926). With items configured, the
+    /// <c>Done</c> rule applies: an activity that selects on every completion has no <c>Done</c>, and one that may
+    /// complete without choosing keeps it next to the items (ADR 0045 §6; spec 1208 FR-012, FR-012a).
     /// </summary>
     private static void AddValueDerivedOutcomes(
         Type activityType,
@@ -701,8 +766,15 @@ public sealed class ExecutableNodeCompiler(
                 added = true;
         }
 
-        if (added)
-            outcomes.Add(declaration.UnmatchedOutcome);
+        if (!added)
+            return;
+
+        if (declaration.UnmatchedOutcome is { } unmatched)
+            outcomes.Add(unmatched);
+        if (declaration.SelectsOnEveryCompletion)
+            outcomes.Remove(ActivityOutcomes.Done);
+        else
+            outcomes.Add(ActivityOutcomes.Done);
     }
 
     private static Type? FindTypedActivityResult(Type activityType)

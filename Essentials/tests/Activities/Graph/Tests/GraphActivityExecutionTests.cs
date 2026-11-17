@@ -74,7 +74,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
 
         Assert.True(completion.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, completion.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, completion.OutcomeNames);
         var preparation = await graph.PrepareCompletionCheckpointAsync(
             context,
             [],
@@ -100,10 +100,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Declined", completion.OutcomeName);
-        Assert.Equal(
-            "Declined",
-            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Declined" }, completion.OutcomeNames);
+        Assert.Equal(new[] { 
+            "Declined" },
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Fact]
@@ -121,18 +121,19 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Accepted", completion.OutcomeName);
-        Assert.Equal(
-            "Accepted",
-            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Accepted" }, completion.OutcomeNames);
+        Assert.Equal(new[] { 
+            "Accepted" },
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
+    // Spec 1208: the entry may select several outcomes. Every selected name with a mapping selects its boundary
+    // outcome, in selection order; a name without one is not routed.
     [Theory]
-    [InlineData()]
-    [InlineData("Unknown")]
-    [InlineData("Approved", "Unknown")]
-    [InlineData("Approved", "Rejected")]
-    public async Task ChildCompletion_RejectsAnOutcomeWithoutExactlyOneMapping(params string[] outcomes)
+    [InlineData(new[] { "Approved", "Unknown" }, new[] { "Accepted" })]
+    [InlineData(new[] { "Approved", "Rejected" }, new[] { "Accepted", "Declined" })]
+    [InlineData(new[] { "Rejected", "Approved" }, new[] { "Declined", "Accepted" })]
+    public async Task ChildCompletion_MapsEverySelectedOutcomeThatHasAMapping(string[] outcomes, string[] expected)
     {
         var descriptor = Descriptor(outcomeMappings:
         [
@@ -142,10 +143,37 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var graph = NewGraph(descriptor);
         var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => graph.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes)).AsTask());
+        var completion = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Contains("exactly one mapped outcome", exception.Message, StringComparison.Ordinal);
+        Assert.True(completion.IsComplete);
+        Assert.Equal(expected, completion.OutcomeNames);
+        Assert.Equal(expected, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
+    }
+
+    // Spec 1208: a selection none of whose names is mapped, including an explicitly empty one, faults the boundary
+    // with a clear code rather than throwing.
+    [Theory]
+    [InlineData()]
+    [InlineData("Unknown")]
+    public async Task ChildCompletion_WithNoMappedOutcome_CompletesWithAnEmptySelection(params string[] outcomes)
+    {
+        var descriptor = Descriptor(outcomeMappings:
+        [
+            new("Approved", "Accepted"),
+            new("Rejected", "Declined")
+        ]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes));
+
+        // An unmapped outcome ends its path like an unconnected one (FR-020); none mapped is an empty selection (FR-004).
+        Assert.Null(continuation.Fault);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(OutcomeSelection.Empty, continuation.Selection);
     }
 
     [Fact]
@@ -178,8 +206,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Failed", continuation.OutcomeName);
-        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Failed" }, continuation.OutcomeNames);
+        Assert.Equal(new[] { "Failed" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
         var cancellation = Assert.Single(context.GetChildSubtreeCancellationRequests());
         Assert.Equal("entry-execution", cancellation.ChildActivityExecutionId);
     }
@@ -196,7 +224,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Failed" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Fact]
@@ -210,6 +238,43 @@ public sealed class GraphActivityExecutionTests : IDisposable
 
         Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, continuation.Fault!.Code);
         Assert.Empty(context.GetChildSubtreeCancellationRequests());
+    }
+
+    // Local Code Review of PR #4314: a Complete payload that names no boundary outcome, or names one by a non-string,
+    // faults as an unknown outcome instead of reading a null reference key.
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"outcomes":[]}""")]
+    [InlineData("""{"outcomes":[1]}""")]
+    [InlineData("""{"outcomes":["fail",null]}""")]
+    public async Task CompleteNotification_FaultsWhenItNamesNoValidReferenceKey(string payload)
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(context, new ActivityChildNotifiedContext(
+            "complete-execution", "complete", "elsa.graph.complete", payload: JsonDocument.Parse(payload).RootElement));
+
+        Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, continuation.Fault!.Code);
+        Assert.Empty(context.GetChildSubtreeCancellationRequests());
+    }
+
+    // The same review removed the boundary's separate "selected outcome name" field: the checkpoint after a mapped
+    // entry completion and after a Complete exit reads the selection itself.
+    [Fact]
+    public async Task CompleteNotification_WithSeveralOutcomes_CheckpointsEveryOne()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed"), new("other", "Other")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        await graph.OnChildNotifiedAsync(context, new ActivityChildNotifiedContext(
+            "complete-execution", "complete", "elsa.graph.complete",
+            payload: JsonDocument.Parse("""{"outcome":"fail","outcomes":["fail","other"]}""").RootElement));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(new[] { "Failed", "Other" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Fact]
@@ -391,7 +456,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
 
         Assert.Single(preparation.DurableValueChanges);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
-        Assert.Equal(ActivityOutcomes.Done, completion.Outcome);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, completion.Selection.ResolveNames());
         var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
         Assert.Equal("completed", Assert.IsType<JsonElement>(result["result"]).GetString());
     }
@@ -420,7 +485,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
         var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
         Assert.Equal(42, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
-        Assert.Equal("Calculated", completion.Outcome);
+        Assert.Equal(new[] { "Calculated" }, completion.Selection.ResolveNames());
     }
 
     [Fact]

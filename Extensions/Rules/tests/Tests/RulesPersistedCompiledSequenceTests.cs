@@ -163,7 +163,7 @@ public sealed class RulesPersistedCompiledSequenceTests
         var states = await fixture.ActivityStatesAsync();
         var rules = RulesPersistedNativeFixture.StateFor(states, RulesCompiledPublicationFixture.RulesNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, rules.Status);
-        Assert.Equal("Refused", rules.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Refused" }, rules.Completion!.OutcomeNames);
         var delivered = JsonSerializer.Deserialize<RuleTerminalResult>(rules.Completion.Result.InlineValue!.Value, WebJson);
         Assert.NotNull(delivered);
         Assert.Equal(RuleRecordCodec.TerminalBytes(terminal.Result), RuleRecordCodec.TerminalBytes(delivered!));

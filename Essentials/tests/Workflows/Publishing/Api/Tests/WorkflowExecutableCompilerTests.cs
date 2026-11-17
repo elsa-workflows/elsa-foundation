@@ -3302,9 +3302,11 @@ public sealed class WorkflowExecutableCompilerTests
             IReadOnlyCollection<DurableValueState> persistedValues,
             DateTimeOffset capturedAt,
             CancellationToken cancellationToken = default)
+            // Spec 1208: the checkpoint completion carries the same unspecified selection as the structural
+            // continuation above (as GraphActivity does); a named Done would not match it.
             => ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
                 [],
-                ActivityTransition.Complete(outputValue, ActivityOutcomes.Done)));
+                ActivityTransition.Complete(outputValue)));
     }
 
     private sealed class OpaqueOutput(string value)

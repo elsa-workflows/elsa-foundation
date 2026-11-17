@@ -17,9 +17,10 @@ internal sealed class SwitchNavigator
     private readonly IReadOnlyDictionary<string, SwitchCase> _casesByNodeId;
     private readonly bool _usesStructureInputs;
 
-    private SwitchNavigator(IReadOnlyList<SwitchCase> cases, ExecutableNode? @default, bool usesStructureInputs = false)
+    private SwitchNavigator(IReadOnlyList<SwitchCase> cases, ExecutableNode? @default, bool usesStructureInputs = false, bool matchesAny = false)
     {
         _cases = cases;
+        MatchesAny = matchesAny;
         Default = @default;
         _usesStructureInputs = usesStructureInputs;
 
@@ -35,6 +36,9 @@ internal sealed class SwitchNavigator
 
     public ExecutableNode? Default { get; }
     public IReadOnlyList<SwitchCase> Cases => _cases;
+
+    /// <summary>Whether the Switch selects every matching case (<see cref="SwitchModes.MatchAny"/>).</summary>
+    public bool MatchesAny { get; }
 
     public static SwitchNavigator From(ExecutableNode executableNode)
     {
@@ -74,22 +78,34 @@ internal sealed class SwitchNavigator
             structure.Default,
             SwitchActivity.DefaultSlotName);
 
-        return new SwitchNavigator(cases, @default, version == SwitchActivity.StructureSchemaVersion);
+        if (structure.MatchesAny && cases.Any(@case => @case.Branch is not null))
+            throw Fail($"A Switch in '{SwitchModes.MatchAny}' mode cannot hold case activities.");
+
+        return new SwitchNavigator(cases, @default, version == SwitchActivity.StructureSchemaVersion, structure.MatchesAny);
     }
 
     public (ExecutableNode? Branch, string Outcome) Select(string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs)
     {
         foreach (var item in _cases)
         {
-            var matches = item.ConditionInputKey is { } conditionKey
-                ? SwitchConditionValues.Boolean(RequireInput(inputs, conditionKey), conditionKey)
-                : StringComparer.Ordinal.Equals(item.Match, _usesStructureInputs
-                    ? SwitchConditionValues.String(RequireInput(inputs, nameof(SwitchActivity.Value)), nameof(SwitchActivity.Value))
-                    : value);
-            if (matches) return (item.Branch, item.Match);
+            if (Matches(item, value, inputs)) return (item.Branch, item.Match);
         }
         return (Default, Workflows.Runtime.Core.Constants.ActivityOutcomes.Default);
     }
+
+    /// <summary>
+    /// <see cref="SwitchModes.MatchAny"/>: every matching case's label, in case order, or none. Each case's condition is
+    /// read once, like <see cref="Select(string?, IReadOnlyDictionary{string, ValueEnvelope})"/> reads the ones it reaches.
+    /// </summary>
+    public IReadOnlyList<string> SelectAll(string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs) =>
+        _cases.Where(item => Matches(item, value, inputs)).Select(item => item.Match).ToArray();
+
+    private bool Matches(SwitchCase item, string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs) =>
+        item.ConditionInputKey is { } conditionKey
+            ? SwitchConditionValues.Boolean(RequireInput(inputs, conditionKey), conditionKey)
+            : StringComparer.Ordinal.Equals(item.Match, _usesStructureInputs
+                ? SwitchConditionValues.String(RequireInput(inputs, nameof(SwitchActivity.Value)), nameof(SwitchActivity.Value))
+                : value);
 
     private static ValueEnvelope RequireInput(IReadOnlyDictionary<string, ValueEnvelope> inputs, string key) =>
         inputs.TryGetValue(key, out var value) ? value : throw Fail($"Switch input '{key}' is absent from its pinned snapshot.");

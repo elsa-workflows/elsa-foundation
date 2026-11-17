@@ -155,7 +155,7 @@ public sealed partial class AgentPublicationTests
         var completion = root.Completion!;
         var sensitive = ValueEnvelope.Inline(completion.Result.Type, completion.Result.InlineValue!.Value,
             new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true));
-        await states.SaveAsync(root with { Completion = new(completion.InvocationId, completion.AttemptId, sensitive, completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint) });
+        await states.SaveAsync(root with { Completion = new(completion.InvocationId, completion.AttemptId, sensitive, completion.Selection, completion.CompletedAt, completion.ContractFingerprint) });
         capture.Mode = RuntimePayloadCaptureMode.Payload;
         capture.IgnoreSensitivity = true;
         capture.Requests.Clear();

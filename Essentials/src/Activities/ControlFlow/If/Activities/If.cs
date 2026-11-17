@@ -28,6 +28,7 @@ namespace Elsa.Activities.If.Activities;
 [ActivityOutcome(ActivityOutcomes.True)]
 [ActivityOutcome(ActivityOutcomes.False)]
 [ActivityOutcome(ActivityOutcomes.Break)]
+[SelectsOutcomeOnEveryCompletion]
 [ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
 [ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

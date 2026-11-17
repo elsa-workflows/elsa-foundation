@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -95,7 +96,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
         var activity = await rawActivities.FindAsync(task.WorkflowExecutionId, task.InvocationId, ct);
         if (execution is not null && execution.TenantId != task.TenantId) throw Refuse("The task's owning execution differs.");
         if (task.Decision is { } decision && activity?.Status == ActivityExecutionStatus.Completed && activity.Completion is { } completion &&
-            completion.InvocationId == task.InvocationId && completion.OutcomeKey == decision.Response.Action)
+            completion.InvocationId == task.InvocationId && completion.Selection.Equals(OutcomeSelection.Named(decision.Response.Action)))
         {
             var result = completion.Result.InlineValue ?? (completion.Result.ExternalReference is { } reference ? await (payloads ?? throw Refuse("The external task result reader is unavailable.")).ReadAsync(reference, ct) : (JsonElement?)null);
             if (result is null || !JsonElement.DeepEquals(result.Value, JsonSerializer.SerializeToElement(decision.Response)))

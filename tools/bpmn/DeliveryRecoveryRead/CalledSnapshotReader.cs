@@ -102,7 +102,7 @@ internal static class CalledSnapshotReader
                     linked.Status == (fault ? WorkflowDispatchStatus.Faulted : WorkflowDispatchStatus.Completed) &&
                     physical.Count == 0 && parentIncidents.Count == 0 && call.Fault is null,
                     "Actual legacy ordinary-result completion or child truth differs.");
-                Require(call.Completion?.OutcomeKey == (fault ? "Faulted" : "Completed"), "Legacy call result outcome changed.");
+                Require(call.Completion?.OutcomeNames.SequenceEqual([fault ? "Faulted" : "Completed"]) == true, "Legacy call result outcome changed.");
                 var tail = childStates.Single(state => state.Execution.ExecutableNodeId == "node-child-tail");
                 Require(tail.ParentActivityExecutionId == childRoot.InvocationId && tail.Status == (fault ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed), "The original child did not execute its intended tail.");
                 if (fault)
