@@ -762,14 +762,15 @@ for (const theme of ["light", "dark"]) {
       expect(a.height).toBe(b.height);
       if (width > 760) expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
       await page.screenshot({ path: info.outputPath("presentation.png"), fullPage: true });
-      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      await general.click();
       const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
       await key.fill("writing-topic");
       const apply = member.getByRole("button", { name: "Apply key", exact: true });
       expect((await apply.boundingBox())!.x).toBeGreaterThan((await key.boundingBox())!.x);
-      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
       await apply.click();
       await expect(apply).toBeDisabled();
+      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
       await general.click();
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
