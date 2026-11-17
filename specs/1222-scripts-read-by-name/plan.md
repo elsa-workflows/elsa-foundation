@@ -16,7 +16,8 @@ Scripts read workflow variables by name in JavaScript and Liquid. A **literal** 
 (`variables[expr]`, `getVariable(expr)`) or an opaque host-function read falls back to a **run-time lookup**: publish
 reports which variables it could read, and each actual read is recorded, protection-checked and added to the step's
 input snapshot; a name that matches nothing reads `undefined` (nil in Liquid) with a warning and the read marked absent
-(spec 1216 FR-025–FR-027). The fallback reuses today's ambient visible-variable projection, confined to expressions that
+(spec 1216 FR-025–FR-027). The fallback extends today's ambient visible-variable projection (adding each candidate's
+declaring scope and a transient marker), confined to expressions that
 need it. The Elsa 3 converter emits `variables.X` for literal reads, keeps computed `getVariable(expr)` (served by the
 fallback) instead of refusing it, drops the `args` rewrite for variable reads (fixing #3296), and emits unwrapped
 statement bodies (#3010). The `arguments` type fix (#3287) already landed with #4315. A `RunJavaScript` body gets the
@@ -30,6 +31,9 @@ by the loop node (spec Q1). This is decision D-7, as ADR 0089 records it.
 
 **Primary Dependencies**: Jint (isolated JS engine); the spec 095 value-flow model (declared parameters, `Variable`
 binding); ADR 0090 / ADR 0092 variable session; Studio `ScopedVariableResolver`; the Elsa 3 converter (spec 247).
+
+**Dependencies on other specs**: S-10 (spec 1221, PR #4316) builds the read set and the body's session reads that
+FR-033–FR-035 need; S-7 builds session writes; spec 1216 (S-2) FR-025–FR-027 is not yet on the initiative branch.
 
 **Storage**: N/A for reads (values come from the pinned input snapshot / external payload store as today).
 
@@ -57,8 +61,9 @@ spec 095 contract edit + the `RunJavaScript` body read surface that spec 1228 bu
 
 Relevant gates (from `.specify/memory/constitution.md`, `constitution-framework.md`, and `review-checklist.md`):
 
-- **§E2.2 Runtime ⊄ Design** — the publish-time read-set resolver reuses the runtime scoped reader
-  (`TryReadScopedVariableValue`) and Studio's `ScopedVariableResolver` on the Design side; the runtime path must not
+- **§E2.2 Runtime ⊄ Design** — the publish-time read-set resolver reuses Studio's `ScopedVariableResolver` on the
+  Design side, with loop iteration declarations from a new default-empty structure-handler member implemented in the
+  loop module (which references only Design.Core); the runtime path must not
   add a Design reference (`ArchitectureGuardTests.Runtime_projects_do_not_add_design_references`). Plan keeps
   resolution split: Studio/publish (Design) resolves literal names and computes the conservative report; runtime reads
   pinned values and runs the fallback lookup over its own visible-variable frames (no Design types).
@@ -110,8 +115,11 @@ Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/
 ├── RuntimePortableExpressionEvaluator.cs  # Remove regex read-detection; keep the visible-variable projection only for
 │                                          # expressions marked as needing the fallback; per-read protection check
-└── RuntimeActivityInputMaterializer.cs    # Selective load of named variables into pinned params; add recorded fallback
-                                           # reads to the step's input snapshot
+├── RuntimeContainerScopeService.cs        # Ambient projection gains declaring scope + transient marker per candidate
+├── RuntimeActivityInputSnapshotMaterializer.cs, WorkflowIntrinsicExecutor.cs
+│                                          # Where the projection is wired today; selective load of named variables;
+│                                          # add recorded fallback reads to the step's input snapshot
+└── RuntimeLoopIterationFrameFactory.cs    # Pinned parameters whose declaring scope is a loop node read the current pass
 
 Essentials/src/Expressions/Liquid/...      # `variables` root over pinned params + fallback; missing computed name → nil + warning
 
@@ -124,7 +132,7 @@ Essentials/src/Workflows/Design/...        # Publish-time read-set resolver: par
 Extensions/Elsa3/src/Mapping/
 ├── Services/Elsa3ExpressionRewriter.cs    # Emit variables.X for literal reads; keep getVariable(expr)/variables[expr] for
 │                                          # computed reads; refuse on author `args` collision (#3296)
-├── Services/Elsa3ValueFlowLowerer.cs      # no IIFE for body (#3010); faithfulness check
+├── Services/Elsa3ValueFlowLowerer.cs      # faithfulness check (the #3010 IIFE is emitted in Elsa3ExpressionRewriter)
 └── Internal/Elsa3JavaScriptNames.cs       # Naming rule for converted get<Name>() (decision 6)
 
 specs/095-value-flow-redesign/contracts/expression-and-import-contract.md

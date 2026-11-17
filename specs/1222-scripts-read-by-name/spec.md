@@ -61,8 +61,8 @@ innermost-first.
    workflow is published and run, **Then** the script reads the workflow-level `order` value.
 2. **Given** a container that declares its own `order` and a script inside it reading `variables.order`, **When** it
    runs, **Then** it reads the container's `order`, not the workflow's (nearest scope wins).
-3. **Given** a loop body whose iteration scope declares `item` and a script reading `variables.item`, **When** it
-   runs, **Then** it reads the iteration value.
+3. **Given** a ForEach body and a script reading `variables.currentItem`, **When** it runs, **Then** each pass reads
+   its own item (FR-004a).
 4. **Given** `getVariable('order')` and `variables['order']` (string literals), **When** published, **Then** both
    resolve, pin and read the same variable as `variables.order`.
 5. **Given** a Liquid template `{{ variables.order }}`, **When** published and run, **Then** it reads `order` from the
@@ -230,8 +230,13 @@ value and confirm it is not provided.
 - **FR-004a**: A loop item or index (ADR 0028) MUST resolve like any other variable: its declaring scope is the loop
   node and its key is the loop's variable key (`currentItem` and `currentIndex` for ForEach, `index` for For). Publish
   MUST add the loop's iteration declarations as the innermost scope of every node in the loop body, and pin the read
-  to the loop node and key. At run time the value MUST come from the current pass's iteration scope, so each pass reads
-  its own item; the read is recorded per step execution like any pinned read (Q1).
+  to the loop node and key. The declarations come from a new, default-empty iteration-projection member on the
+  activity structure handler, implemented for ForEach and For only (While and Do have no iteration scope), and kept
+  apart from container variables so the runtime builds no container frame for them. `currentIndex` is declared only
+  when ForEach's `ExposeIndex` is a literal `true`; when `ExposeIndex` is bound to an expression, a literal read of
+  `currentIndex` is a publish diagnostic with guidance. At run time the pinned value MUST be materialized from the
+  current pass's iteration frame, so each pass reads its own item; the read is recorded per step execution like any
+  pinned read. BPMN multi-instance iteration frames are out of scope (Q1).
 - **FR-005**: Liquid templates MUST read variables through the same `variables` root and the same nearest-scope
   resolution as JavaScript.
 - **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`.
@@ -246,7 +251,8 @@ value and confirm it is not provided.
 - **FR-009**: Publish MUST report each expression with a computed or opaque read conservatively: the set of variables
   it could read (the variables visible at that point), so dependency, protection and rename tooling can use it.
 - **FR-010**: Each actual run-time read MUST be recorded (name, resolved declaring scope, and whether it was present),
-  checked for protection, and made part of the step's input snapshot.
+  checked for protection, and made part of the step's input snapshot (for an input-binding expression; a
+  `RunJavaScript` body's reads go into its session reads instead, FR-033).
 - **FR-011**: A computed name that matches no visible variable MUST read as `undefined` in JavaScript (never `null`)
   and nil in Liquid, MUST record a warning, and MUST mark the read absent (spec 1216 FR-025/FR-026).
 - **FR-012**: A literal name that matches no visible variable MUST remain a publish diagnostic (spec 1216 FR-027).
@@ -268,6 +274,8 @@ value and confirm it is not provided.
   because its value cannot be snapshotted. A computed read that resolves at run time to a transient variable MUST fault
   the step, and the fault MUST name the node and the variable (ADR 0089 R3). It MUST NOT read `undefined`. Host-interop
   mode (ADR 0090 decision 8), in which a body may read transient variables, is out of scope here.
+- **FR-017a**: The transient-match fault (FR-017) and the withheld-value fault (FR-020) MUST be recorded on the host
+  side when the read happens and MUST fault the step even when the script catches the JavaScript exception.
 - **FR-018**: A literal read of a protected (secret) variable MUST be protection-checked at publish (the name is
   known); a computed or opaque read MUST be protection-checked at run time for the variable actually read.
 - **FR-019**: Secret variable values MUST NOT appear in logs or diagnostics (redaction) at publish or run time,
@@ -309,17 +317,22 @@ value and confirm it is not provided.
   fallback reads) and MUST NOT see pending writes.
 - **FR-033**: A `RunJavaScript` body MUST get the `variables` root and `getVariable` (today it gets only `args`).
   Its reads — literal and computed — MUST go through the body's variable session (ADR 0089 R2, ADR 0090 decision 2,
-  ADR 0092), which returns the committed value plus the step's own pending writes; the recorded reads of the body MUST
-  still enter its input snapshot. Writes themselves are out of scope (ADR 0090 / S-7); until S-7 lands the session
-  has no pending writes and equals the committed state.
+  ADR 0092), which returns the committed value plus the step's own pending writes. The body's reads, literal and
+  computed, go into the body's **session reads** (ADR 0092 decision 3), recorded per attempt, not into the input snapshot (ADR 0090 decision 2: a body read is never the pinned input snapshot). Only
+  input-binding reads, pinned and fallback, join the input snapshot. Neither the session nor the read set exists in
+  code yet: S-10 (spec 1221) builds the read set and session reads, and S-7 the session writes. This spec's body
+  surface (T045–T047) therefore waits on S-10; until S-7 lands the session has no pending writes and equals the
+  committed state.
 - **FR-034**: Within one evaluation, every read path to the same variable (`variables.x`, `variables['x']`,
   `getVariable('x')`, and a computed name that resolves to `x`) MUST return the same JavaScript value, so spec 1228
   can see a change made through any of them (spec 1228 FR-003).
-- **FR-035**: Every body read MUST be recorded in the read set (ADR 0092 decision 3) with the variable's protection
-  policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
-- **FR-035a**: A script MUST read a workflow variable through `variables` (`variables.X`, `variables['X']`,
-  `getVariable(...)`), in input expressions and in the `RunJavaScript` body alike. Variable reads are no longer lowered
-  to `args`; `args` carries inputs, activity results and instance metadata. A `RunJavaScript` body therefore gets a
+- **FR-035**: Every body read MUST be recorded in the session reads of S-10's read set (ADR 0092 decision 3) with the
+  variable's protection policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
+- **FR-035a**: A script reads a workflow variable through `variables` (`variables.X`, `variables['X']`,
+  `getVariable(...)`), in input expressions and in the `RunJavaScript` body alike: the converter, editor completions
+  and documentation MUST use this form. Variable reads are no longer lowered to `args`; `args` carries inputs, activity
+  results and instance metadata. Whether an author may still declare an explicit `args` parameter bound to a variable,
+  which ADR 0089 decision 7 allows, is Q6. A `RunJavaScript` body therefore gets a
   `variables` root next to its `args` (T047). ADR 0089 decision 7's refusal of a variable declared both ways is dropped,
   because the roots are separate objects (Q4).
 - **FR-036**: The runtime MUST NOT provide generated `get<Name>()` accessors (ADR 0089 decision 6; ADR 0090
@@ -396,13 +409,15 @@ value and confirm it is not provided.
 
 ## Open questions for the approver
 
-Each question had a recommended answer. **@j03y-nxxbz accepted all five on 2026-11-17**, Q3 on the condition that
-spec 1228 records it must replace the frozen values (done in its FR-001 and T007); the requirements follow them.
+Each question had a recommended answer. **@j03y-nxxbz accepted Q1–Q5 on 2026-11-17**, Q3 on the condition that
+spec 1228 records it must replace the frozen values (done in its FR-001 and T007); the requirements follow them. Q6
+came out of the independent review and is open.
 
 | # | Question | Answer (accepted) |
 |---|---|---|
-| Q1 | **Loop iteration values (ADR 0028), delegated by ADR 0089.** How is a loop item or index pinned at publish and read at run time? | **As an ordinary variable declared by the loop node** (FR-004a). Publish adds the loop's iteration declarations (`currentItem`, `currentIndex` for ForEach; `index` for For) as the innermost scope of the body, which Studio's `ScopedVariableResolver` does not do today, and pins the read to the loop node and key. At run time the scoped reader takes the value from the current pass's iteration scope, so each pass reads its own item, and the fallback walks the same chain. The value is durable (ADR 0028), so it is snapshotted, not treated as transient; in a body it is frozen and untracked (ADR 0090 decision 2). No ADR change. |
-| Q2 | **`get<Name>()` in a script body.** Spec 1228 lists `get<Name>()` as a read path (its FR-003 and FR-006a, and its dependency note). ADR 0089 decision 6 and ADR 0090 decision 3 remove it from the runtime. Which holds? | **The ADRs.** The runtime gives `variables.X`, `variables['X']` and `getVariable(...)`; `get<Name>()` is only an Elsa 3 import form the converter rewrites to `variables.Name` (FR-036). Spec 1228's mentions are read as the converted form; its text is corrected in its implementation PR (a wording fix, no ADR change). Keeping `get<Name>()` at run time would need an ADR 0089 amendment. |
+| Q1 | **Loop iteration values (ADR 0028), delegated by ADR 0089.** How is a loop item or index pinned at publish and read at run time? | **As an ordinary variable declared by the loop node** (FR-004a). Publish adds the loop's iteration declarations (`currentItem`, `currentIndex` for ForEach; `index` for For) as the innermost scope of the body, which Studio's `ScopedVariableResolver` does not do today, and pins the read to the loop node and key. At run time the pinned parameter is materialized from the current pass's iteration frame, so each pass reads its own item, and the fallback walks the same chain. Mechanics refined after review (FR-004a): a default-empty iteration projection on the structure handler, `currentIndex` only for a literal `ExposeIndex`, no BPMN multi-instance. The value is durable (ADR 0028), so it is snapshotted, not treated as transient; in a body it is frozen and untracked (ADR 0090 decision 2). No ADR change. |
+| Q2 | **`get<Name>()` in a script body.** Spec 1228 listed `get<Name>()` as a read path. ADR 0089 decision 6 and ADR 0090 decision 3 remove it from the runtime. Which holds? | **The ADRs.** The runtime gives `variables.X`, `variables['X']` and `getVariable(...)`; `get<Name>()` is only an Elsa 3 import form the converter rewrites to `variables.Name` (FR-036). Spec 1228's text is corrected in this PR (no ADR change). |
 | Q3 | **Frozen or changeable values.** Spec 1228 FR-001 replaces the frozen-value contract; this spec lands first. What does S-4 deliver? | **Today's frozen values** (FR-037), left alone on purpose. Without a write path a changeable value would drop a change silently; frozen values fail loudly. Spec 1228 records that it must replace them on every surface this spec adds (its FR-001 and T007), and FR-034 (one value per variable per evaluation) is what it relies on. |
 | Q4 | **ADR 0089 decision 7's "declared both ways" refusal.** The ADR lets the implementing spec drop it once the roots are separate. Drop it? | **Drop it** (research R-7). Variables are read as `variables.X` in input expressions and in the `RunJavaScript` body, not through `args`, so the body gets a `variables` root next to `args` (FR-035a, T047). The roots are separate objects and cannot collide. |
+| Q6 | **Explicit `args` parameters bound to a variable.** ADR 0089 decision 7 lets an author write `args.X` for an explicit parameter, which may be bound to a variable. The Q4 answer says variables are read as `variables.X`, not `args`. Keep the explicit `args` option, or refuse a variable-bound `args` parameter? | *Open, added after review.* **Recommended: keep it**, as ADR 0089 decision 7 says: everything this spec produces (converter, completions, docs) uses `variables.X`, and an explicitly declared `args` parameter stays a deliberate author choice. Refusing it would need an ADR 0089 amendment in its own small PR. |
 | Q5 | **How the fallback is served.** ADR 0089 R3 leaves it to this spec: load the conservatively reported set before evaluation, or load on demand? | **Load the reported set before evaluation** (research R-4). Jint reads synchronously and values may be stored externally, so on-demand loading would block inside the script. The cost falls only on expressions with a computed or opaque read. On-demand loading of inline-stored values can come later as an optimization. |

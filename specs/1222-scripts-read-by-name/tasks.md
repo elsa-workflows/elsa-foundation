@@ -37,8 +37,8 @@ story and may be written alongside implementation (no failing-run gate assumed).
 **⚠️ Blocks all user stories.**
 
 - [ ] T003 Add a per-parameter `surface` flag (`variables` | `args`, default `args`) to the compiled spec 095 `Variable` parameter, and an optional expression-level fallback marker carrying the conservative read report, in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and the binding model, per contracts/variables-read-surface.md (R-2).
-- [ ] T004 Update `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` §1 (surface flag, fallback marker, `variables` root, recorded reads in the evaluation result) and §6 (importer keeps `variables.X` and computed `getVariable(expr)`), recorded as a contract change flowing to #3420 / spec 095.
-- [ ] T005 Build the publish-time read-set resolver (Design side): parse JS/Liquid source with the language parser, resolve each literal name nearest-scope-first by reusing `ScopedVariableResolver` and adding the loop's iteration declarations (`currentItem`, `currentIndex`, `index`; declaring scope = loop node) as the innermost scope of the body (ADR 0028, FR-004a, Q1), and detect computed/opaque access to set the fallback marker, in `Essentials/src/Workflows/Design/...`. No regex (R-6).
+- [ ] T004 Update `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` §1 (surface flag, fallback marker, `variables` root, recorded reads in the evaluation result), §2 (serialized shape), §3 (drop the list that forbids `variables`/`getVariable` until ADR 0089 is accepted) and §6 (importer keeps `variables.X` and computed `getVariable(expr)`), recorded as a contract change flowing to #3420 / spec 095.
+- [ ] T005 Build the publish-time read-set resolver (Design side): parse JS/Liquid source with the language parser, resolve each literal name nearest-scope-first by reusing `ScopedVariableResolver` and adding, through a new default-empty iteration-projection member on `IActivityStructureHandler` implemented for ForEach and For only (not While/Do; extension-point catalog update), the loop's iteration declarations (`currentItem`, `currentIndex`, `index`; declaring scope = loop node) as the innermost scope of the body (ADR 0028, FR-004a, Q1), and detect computed/opaque access to set the fallback marker, in `Essentials/src/Workflows/Design/...`. No regex (R-6).
 
 **Checkpoint**: the surface flag, marker, contract and resolver exist; user stories can proceed.
 
@@ -62,7 +62,7 @@ script sees the nearest-scope value; an unset variable reads `null`; only named 
 - [ ] T009 [US1] Pin each resolved literal read as a `Variable` parameter with `surface = variables` (name not rewritten) in the publish/compile path (`RuntimeInputBindingCompiler` / the resolver output). Depends on T003, T005.
 - [ ] T010 [US1] Build the run-time `variables` root from `surface = variables` pinned params, with unset → JSON `null`, in `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (replace `SetReadOnlyVariables`' ambient build) and `JintPortableJavaScriptEvaluator.cs`.
 - [ ] T011 [US1] Remove the run-time regex read-detection (`IsAmbientVariableReferenced`, `HasComputedAmbientAccess`) from `RuntimePortableExpressionEvaluator.cs`; literal-only expressions get no frame-chain projection.
-- [ ] T012 [US1] Materialize only the named variables into pinned params in `RuntimeActivityInputMaterializer.cs` (no load-all for literal-only expressions).
+- [ ] T012 [US1] Materialize only the named variables into pinned params (`RuntimePortableExpressionEvaluator.MaterializeParametersAsync`; the projection is wired in `RuntimeActivityInputSnapshotMaterializer.cs` and `WorkflowIntrinsicExecutor.cs`), with no load-all for literal-only expressions; a parameter whose declaring scope is a loop node reads the current pass's iteration frame (FR-004a). Refuse a literal `currentIndex` read when `ExposeIndex` is not a literal `true`.
 - [ ] T013 [US1] Remove the generated `get<Name>()` functions and getter completions (decision 6) from `IsolatedJintEngine.cs` and `JavaScriptExpressionToolingProvider`; keep `getVariable` as a runtime function (literal argument → pinned value).
 - [ ] T014 [US1] Apply the same `variables` root + nearest-scope reads to Liquid (`variables.X`), reusing the resolver.
 
@@ -88,9 +88,9 @@ reads the right value, records the read in the input snapshot, and reads `undefi
 ### Implementation for User Story 2
 
 - [ ] T019 [US2] In the publish resolver (T005), set the fallback marker with the conservative read report for expressions with computed or opaque reads; emit the "computed read reported", "possible protected read" and "transient candidate" diagnostics (R-4, R-5).
-- [ ] T020 [US2] In `RuntimePortableExpressionEvaluator.cs`, make the candidate set readable before evaluation only for marked expressions, reusing the existing visible-variable projection (R-4 step 2).
+- [ ] T020 [US2] In `RuntimePortableExpressionEvaluator.cs`, make the candidate set readable before evaluation only for marked expressions, extending `RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes` to carry each candidate's declaring scope and a transient marker instead of silently omitting transient candidates (R-4 step 2).
 - [ ] T021 [US2] In `IsolatedJintEngine.cs`, back the `variables` root and `getVariable` with the fallback lookup for unpinned names: resolve nearest-scope-first, check protection for the variable actually read, record each read, return `undefined` + warning + absent for a missing name, and fault on a transient match.
-- [ ] T022 [US2] Return recorded reads from `JintPortableJavaScriptEvaluator.cs` and the Liquid evaluator, and add them to the step's input snapshot in `RuntimeActivityInputMaterializer.cs`.
+- [ ] T022 [US2] Return recorded reads from `JintPortableJavaScriptEvaluator.cs` and the Liquid evaluator, and add an input-binding expression's reads to the step's input snapshot in `RuntimeActivityInputSnapshotMaterializer.cs`. Record a transient or withheld match on the host side so it faults the step even if the script catches it (FR-017a).
 - [ ] T023 [US2] Route host-function variable reads through the same fallback lookup so they are recorded, checked and snapshotted the same way.
 
 **Checkpoint**: computed and opaque reads work through the fallback; literal-only expressions pay no fallback cost.
@@ -166,10 +166,10 @@ not provided.
 
 ## Phase 8: Input snapshot vs body session; the body read surface for S-8 (cross-cutting)
 
-- [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the body's variable session (ADR 0090 decision 2, ADR 0092) while their recorded reads still enter the input snapshot; record the write assumptions for verification against S-7 (R-10).
-- [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the read set with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
+- [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the body's variable session (ADR 0090 decision 2, ADR 0092) and land in the session reads, not the input snapshot; record the write assumptions for verification against S-7 (R-10).
+- [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the session reads with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
 - [ ] T046 [P] Cover that every read path to one variable returns the same JavaScript value within one evaluation (FR-034), and that values stay frozen until spec 1228's bridge lands (FR-037).
-- [ ] T047 Add a `variables` root and `getVariable` to the `RunJavaScript` body, next to its `args` (spec Q4, FR-035a), served by the step's variable session and recorded in the read set, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, the script evaluation request and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010 and T021.
+- [ ] T047 Add a `variables` root and `getVariable` to the `RunJavaScript` body, next to its `args` (spec Q4, FR-035a), served by the step's variable session and recorded in the read set, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, the script evaluation request and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010, T021 and S-10's read set and session reads (spec 1221, PR #4316).
 - [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7, and its T007 that replaces the frozen values) when T047 is merged.
 
 ---
@@ -193,7 +193,7 @@ not provided.
 - **US3 (P2)** after US1's pinning/`variables` root (T009–T010) and US2's fallback (T021) for computed conversions.
 - **US4 (P3)** after T005/T009/T019 (resolver, pinning, conservative report).
 - **US5 (P3)** after T009 and T021 (pinned reads, fallback check).
-- **Phase 8** after US1 and US2. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
+- **Phase 8** after US1 and US2; T045–T047 also after S-10 (spec 1221) lands the read set and session reads. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
 - **Polish** after the desired stories.
 
 ### Parallel opportunities

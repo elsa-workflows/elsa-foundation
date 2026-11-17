@@ -41,7 +41,8 @@ One actual read served by the fallback lookup.
 | `declaringScopeNodeId` / `variableKey` | Where it resolved, nearest scope first; empty when absent. |
 | `present` | `false` when the name matched no visible variable (the script read `undefined` / nil, a warning was recorded). |
 
-Recorded reads are protection-checked as they happen and stored in the step's input snapshot with the pinned values;
+Recorded reads are protection-checked as they happen. An input-binding expression's reads are stored in the step's
+input snapshot with the pinned values; a `RunJavaScript` body's reads go into its session reads (ADR 0092 decision 3);
 secret values are redacted wherever a recorded read is logged.
 
 ### `variables` root (run time)
@@ -91,4 +92,4 @@ provided to the script.
 
 None. A read is pure; it produces no write (writes are ADR 0090 / S-7). Input-binding expressions read the input
 snapshot and never see pending writes. The `RunJavaScript` body reads through its session view (ADR 0092), which shows
-its own pending writes; its recorded reads still enter its input snapshot.
+its own pending writes; its reads go into its session reads (ADR 0092 decision 3), not the input snapshot.

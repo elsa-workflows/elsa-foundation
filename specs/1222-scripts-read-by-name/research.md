@@ -57,15 +57,24 @@ result) and §6 (the importer keeps `variables.X` and computed `getVariable(expr
 containers and the workflow, not loop iteration scopes. ADR 0028 makes the iteration scope the innermost scope of the
 body, with the loop node as declaring scope; the loop variables are `currentItem` and `currentIndex` (ForEach) and
 `index` (For), and the Elsa 3 converter already lowers `CurrentValue` to them (`Elsa3LoopVariableReferencesRewrite`).
-At run time `RuntimeLoopIterationScopeFactory.BuildIterationScope` builds one scope per pass, and
-`TryReadScopedVariableValue` resolves through it. Iteration values follow the normal checkpoint boundary (ADR 0028), so
+At run time `RuntimeLoopIterationFrameFactory.Create` (ADR 0028 still names it `RuntimeLoopIterationScopeFactory`)
+builds one frame per pass, and the ambient projection already includes iteration frames, innermost first. Pinned
+`Variable` parameters are materialized by `RuntimePortableExpressionEvaluator.MaterializeParametersAsync`, which must
+learn to read a parameter whose declaring scope is a loop node from the current pass's frame. On the Design side,
+declarations reach `ScopedVariableResolver` only through `IActivityStructureHandler.ProjectScopedVariables`, which
+compile into container variables; the loop module's `LoopStructureHandler` (shared with While and Do) has no
+iteration projection. ForEach declares `currentIndex` only when `ExposeIndex` is true, and that input may be bound to
+an expression. Iteration values follow the normal checkpoint boundary (ADR 0028), so
 they are durable. ADR 0090 decision 2 makes a loop item frozen and untracked in a script. Spec 265 projects graph
 variables through synthetic frames.
 
 **Decision (spec Q1, accepted).** The publish-time resolver adds the loop's iteration declarations as the innermost
 scope of every node in the loop body, resolves an iteration-scope variable as the nearest scope (innermost first) and
-pins it as a `Variable` parameter recording the loop node id + key. At run time the pinned value is taken
-from the iteration frame, through the same scoped reader the runtime already has. The fallback lookup walks the same
+pins it as a `Variable` parameter recording the loop node id + key. The iteration declarations come from a new,
+default-empty iteration-projection member on the structure handler, implemented for ForEach and For only and kept
+apart from container variables (an extension-point catalog change). `currentIndex` is declared only for a literal
+`ExposeIndex = true`; otherwise a literal read of it is a publish diagnostic. BPMN multi-instance is out of scope. At
+run time the pinned value is materialized from the current pass's iteration frame. The fallback lookup walks the same
 frame chain, innermost first, so a computed name sees the iteration value the same way.
 
 ## R-4: The run-time fallback for computed and opaque reads
@@ -79,12 +88,18 @@ projecting all visible variables when it detects computed access.
 1. **Publish** marks the expression as needing the fallback and reports conservatively which variables it could read
    (the visible variables at that point). The report feeds dependency tooling, the rename flag (FR-022) and a
    "possible protected read" diagnostic (FR-018), not a refusal.
-2. **Before evaluation** the runtime makes the candidate set readable (reusing the visible-variable projection). This
-   is the accepted cost of a computed read; it is confined to marked expressions.
+2. **Before evaluation** the runtime makes the candidate set readable. This starts from the visible-variable
+   projection (`RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes`), which today returns only
+   name → envelope, skips unresolvable frames and silently omits transient candidates; it must be extended to carry
+   each candidate's declaring scope and a transient marker, so a read can be recorded with its scope (FR-010) and a
+   transient match can fault (FR-017). This is the accepted cost of a computed read; it is confined to marked
+   expressions.
 3. **During evaluation** each computed or host-function read resolves the name nearest-scope-first over the candidates,
    checks protection for the variable actually read (a withheld value is not provided; the step faults with the
-   protection diagnostic), and records the read (name, declaring scope, present/absent).
-4. **After evaluation** the recorded reads enter the step's input snapshot alongside the pinned values. Candidates that
+   protection diagnostic), and records the read (name, declaring scope, present/absent). A transient or withheld match
+   is recorded on the host side and faults the step even if the script catches the JavaScript exception (FR-017a).
+4. **After evaluation** the recorded reads of an input-binding expression enter the step's input snapshot alongside
+   the pinned values; a body's reads go into its session reads instead (R-10). Candidates that
    were made readable but not read are not recorded.
 5. **A missing name** reads `undefined` in JavaScript (never `null`) and nil in Liquid, records a warning, and marks
    the read absent (spec 1216 FR-025/FR-026). A missing **literal** name stays a publish diagnostic (FR-027).
@@ -146,7 +161,9 @@ previously published version is a publish warning. Published versions never chan
 
 **Decision.** Input-binding expressions read the step's input snapshot (pinned values plus recorded fallback reads) and
 never see pending writes. The `RunJavaScript` body reads — literal and computed — go through its variable **session**
-view (ADR 0092), which shows the body's own pending writes; its recorded reads still enter its input snapshot. Writes
+(ADR 0090 decision 2, ADR 0092), which shows the body's own pending writes. Its reads go into the body's **session reads** (ADR 0092 decision 3), recorded per attempt, not into the input snapshot; ADR 0089
+R3's "part of the input snapshot" applies to input-binding expressions. The session and the read set are built by
+S-10 (spec 1221); this spec's body surface waits on it. Writes
 (ADR 0090 / S-7) are out of scope; the spec records the write assumptions it relies on (writes commit at output
 evaluation; the session shows pending writes; a computed write to a non-existent variable refuses) to be verified
 against S-7. This is the distinction D-7 asks to preserve explicitly.
@@ -164,7 +181,8 @@ against S-7. This is the distinction D-7 asks to preserve explicitly.
   Variable reads no longer lower to `args`, so they no longer collide.
 - **#3287** (the `arguments` type) is already fixed by #4315 (`Elsa3ValueFlowLowerer.Lower` takes the node's input
   contract type); nothing left here.
-- **#3010:** emit statement bodies without the IIFE wrapper on the `RunJavaScript` body path (already done for Script
+- **#3010:** emit statement bodies without the IIFE wrapper on the `RunJavaScript` body path. The wrapper is emitted in
+  `Elsa3ExpressionRewriter` (not the lowerer); Script mode already emits without it through `EndScript` (already done for Script
   mode; confirm no regression).
 - Faithfulness: refuse a literal read when Elsa 4's nearest-scope resolution picks a different declaration than Elsa
   3's. For a computed read, record an import warning when a candidate name is declared in more than one visible scope

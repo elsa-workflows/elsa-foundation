@@ -10,7 +10,7 @@ How to confirm the read model once implemented. Each maps to a spec success crit
    Expect: the script sees the workflow `order`.
 2. Nest a container declaring its own `order`; a script inside reads `variables.order`. Expect: the container's `order`
    (nearest scope wins).
-3. In a loop body, read `variables.item` where `item` is the iteration variable. Expect: the iteration value.
+3. In a ForEach body, read `variables.currentItem`. Expect: each pass reads its own item.
 4. Use `getVariable('order')` and `variables['order']`. Expect: same value as `variables.order`, pinned at publish.
 5. Liquid `{{ variables.order }}`. Expect: resolves to the nearest-scope `order`.
 6. Declare `order` with no value; read it. Expect: JSON `null`.

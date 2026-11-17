@@ -1,6 +1,6 @@
 # Contract: The `variables` read surface, publish read-set and run-time fallback
 
-**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Amends spec 095 expression contract §1 and §6.
+**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Amends spec 095 expression contract §1, §2, §3 and §6.
 Implements decision D-7 as ADR 0089 records it (accepted).
 
 ## Authoring surface
@@ -44,7 +44,10 @@ A script reads a workflow variable by name:
 - A withheld (no-permission) value is not provided; the step faults with the protection diagnostic.
 - A computed name that resolves to a transient variable faults the step; the fault names the node and the variable
   (ADR 0089 R3).
-- The recorded reads are returned with the evaluation result and stored in the step's input snapshot.
+- The recorded reads are returned with the evaluation result. For an input-binding expression they are stored in the
+  step's input snapshot; for a `RunJavaScript` body they go into its session reads (ADR 0092 decision 3).
+- A transient or withheld match is recorded on the host side and faults the step even if the script catches the
+  JavaScript exception.
 - An expression without the marker loads only the variables it names; there is no frame-chain projection for it.
 - `getVariable` remains as a runtime function (literal argument → pinned value; otherwise → fallback). Generated
   `get<Name>()` accessors are not provided.
@@ -57,8 +60,8 @@ A script reads a workflow variable by name:
   writes.
 - The `RunJavaScript` body gets `variables` and `getVariable` (today it gets only `args`). It reads — literal and
   computed — through its variable **session** (ADR 0090 decision 2, ADR 0092), which returns the committed value plus
-  the body's own pending writes. Its recorded reads still enter its input snapshot, and every read is recorded in the
-  read set with the variable's protection policy (FR-035), which spec 1228 uses for result protection. Writes are
+  the body's own pending writes. Every read goes into the session reads of the read set (ADR 0092 decision 3, not the
+  input snapshot) with the variable's protection policy (FR-035), which spec 1228 uses for result protection. Writes are
   ADR 0090 / S-7, out of scope here.
 
 ## spec 095 contract changes (recorded; flow to #3420 / spec 095)
