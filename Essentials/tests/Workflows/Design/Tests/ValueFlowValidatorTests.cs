@@ -377,7 +377,7 @@ public sealed class ValueFlowValidatorTests
         Assert.Contains("'capture-left', 'capture-right'", warning.Message, StringComparison.Ordinal);
         Assert.Contains("last successfully committed write wins", warning.Message, StringComparison.Ordinal);
         Assert.Contains("order the branches, capture into separate variables, or combine them with one write after the join", warning.Message, StringComparison.Ordinal);
-        Assert.Contains("Fault lost-update mode", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("set this node's lost-update mode to Fault (node setting LostUpdateMode, or [ActivityLostUpdateMode(LostUpdateMode.Fault)] on the activity type)", warning.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(errors, error => error.Severity == "Error" && error.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
     }
 

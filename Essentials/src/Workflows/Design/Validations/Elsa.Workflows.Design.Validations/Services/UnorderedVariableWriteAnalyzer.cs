@@ -105,7 +105,7 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
         return text +
                " The last successfully committed write wins, so the final value can differ between runs." +
                " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join." +
-               " A step that reads the variable and writes it back is a read-modify-write: opt it in to the Fault lost-update mode where an overwrite must stop the step (ADR 0092).";
+               " A step that reads the variable and writes it back is a read-modify-write (ADR 0092). If an update must never be lost (a counter, a balance), set this node's lost-update mode to Fault (node setting LostUpdateMode, or [ActivityLostUpdateMode(LostUpdateMode.Fault)] on the activity type): a write on a stale base then faults instead of applying with a warning. See docs/runtime-variable-lifecycle.md.";
     }
 
     private static string DuplicateMessage(string nodeId, string scopeId, string referenceKey, IReadOnlyList<string> outputKeys) =>
