@@ -34,8 +34,15 @@ or are refused at import, never at publish. .NET objects stay out of scripts.
 | ADR 0083 | `binding-readonly-v1`: a binding reads and never changes workflow state | on the initiative branch |
 
 **Depends on S-4 (spec 1222).** Today Run JavaScript receives only `args`. S-4 gives a script body `variables.X`,
-`getVariable` and `get<Name>()`, read through its variable session with read-your-writes (ADR 0089, ADR 0092). S-8
-builds on that surface: User Stories 3 and 7, and the variable scenarios of User Story 1, need it.
+`variables['X']` and `getVariable`, read through its variable session with read-your-writes (ADR 0089, ADR 0092). The
+runtime has no generated `get<Name>()`: it is only an Elsa 3 form the converter rewrites to `variables.Name` (ADR 0089
+decision 6, ADR 0090 decision 3). S-8 builds on that surface: User Stories 3 and 7, and the variable scenarios of User
+Story 1, need it.
+
+**S-4 leaves values frozen; S-8 replaces them.** S-4 delivers the `variables` root and `getVariable`, in input
+expressions and in the script body, with today's frozen values on purpose (spec 1222 FR-037): with no write path yet,
+a changeable value would drop a change silently. S-8 MUST replace those frozen values with its bridge on every surface
+S-4 adds, not only on `args` (FR-001, T007).
 
 **Known ADR text inconsistency.** ADR 0090's *What it changes* says input-binding expressions never get host interop;
 D-15 gives scripts and input expressions one switch. It does not affect S-8 (no interop); it is for the coordinator
@@ -107,8 +114,8 @@ value. A loss is declared or refused, never silent.
 - `undefined`, `NaN` and `Infinity`: S-2 (spec 1216).
 - Host functions, the clock and `Date` in scripts: S-1 (spec 1223).
 - Versions, lost updates and the write history: S-10 (spec 1221).
-- The script body's read surface (`variables.X`, `getVariable`, `get<Name>()`), its session reads and read-your-writes:
-  S-4 (spec 1222).
+- The script body's read surface (`variables.X`, `variables['X']`, `getVariable`), its session reads and
+  read-your-writes: S-4 (spec 1222).
 - #3167 (the JSON alias inference). It is an S-0 defect that User Story 6 needs first.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -309,11 +316,12 @@ sensitive and redacted where the variable is.
 **Script value bridge (V9, V12, D-15)**
 
 - **FR-001**: Values MUST enter scripts and JavaScript input expressions as plain, changeable JavaScript objects and
-  real arrays, through the same bridge. The frozen-value contract of spec 095 is replaced.
+  real arrays, through the same bridge. The frozen-value contract of spec 095 is replaced, including the frozen
+  values S-4 (spec 1222) leaves on the `variables` root and `getVariable`, in input expressions and the script body.
 - **FR-002**: Reading a value MUST NOT change its stored text or version (ADR 0090 C1).
 - **FR-003**: After a script runs, the bridge MUST report what it changed: for each variable read or assigned,
   unchanged, a member change, or a whole assignment (Q2). Unchanged members are reported from the original JSON, not
-  from JavaScript. Every read path (`variables.x`, `getVariable('x')`, `get<Name>()`) MUST give the same JavaScript
+  from JavaScript. Every read path (`variables.x`, `variables['x']`, `getVariable('x')`) MUST give the same JavaScript
   value in one evaluation, so a change through any of them is seen.
 - **FR-004**: A changed array MUST be reported as a whole.
 - **FR-005**: A member set to a value equal, as a JavaScript value, to what was read MUST count as unchanged. A whole
@@ -324,7 +332,7 @@ sensitive and redacted where the variable is.
   when the bridge reports any change. The diagnostic names the node, the input, the variable and the path, and says
   input expressions only read; it suggests a script activity for writes. A change is never dropped silently (Q6).
   The publish check covers assignment and compound assignment (`=`, `+=`, …), `++`, `--` and `delete` on a target
-  rooted at `variables.<name>`, `variables['<literal>']`, `getVariable('<literal>')` or `get<Name>()`. Anything else
+  rooted at `variables.<name>`, `variables['<literal>']` or `getVariable('<literal>')`. Anything else
   is caught at run time.
 - **FR-007**: A member change without a whole assignment MUST produce the visibility warning of ADR 0090 C2.
 - **FR-008**: No .NET object, CLR type or CLR member MUST be reachable from a script or a JavaScript input expression
