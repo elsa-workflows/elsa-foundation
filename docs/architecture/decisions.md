@@ -59,7 +59,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 16 Nov | SQL Server's owned commit uses the fence in the batch; the EF reference path keeps the checked fence. | [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#defaults) (#4698) |
 | 12 Nov | Snapshot plus journal stays the default; a lazy snapshot is the fallback spike if measurements demand it. | [Write volume](write-volume.md) |
 | 12 Nov | Large values are stored by reference (decision 10), with a size benchmark in the cost runs. | Sketch, decisions (walkthrough 10) |
-| 15 Nov | The message table stays the inbox queue; a partitioned inbox is revisited once virtual partitions change the keys, and stays out of release 1 (round 5 D). | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219); [write volume](write-volume.md) |
+| 15 Nov | The message table stays the inbox queue; the fit of a partitioned inbox is reported once virtual partitions change the keys, and it is built only if cheap (round 5 D). The write-volume page proposes keeping it out of release 1. | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219); [write volume](write-volume.md) |
 
 ## Messages, jobs, events and recovery
 
@@ -145,5 +145,8 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | 13 Nov | Architecture references live in `docs/architecture/` with a Proposed banner until approval; a shorter published section goes into `website/docs/` at the switch. | [Sketch, architecture documentation](../reports/clean-slate-kernel/design-sketch-draft-5.md#architecture-documentation-owner-decision-12-november) |
 | 12 Nov | The owner sees the list before any ADR or old-core page is retired. | Sketch, architecture documentation |
 | 15 Nov | The simulation runs permanently in CI: path filters, a fast simulation and mutation PR gate, and the heavy suites nightly (round 5 F, delivered in #4670). | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219) |
-| 14 Nov | Unified Execution (#2892) is closed, superseded by the kernel; no decision was needed. | [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) (closed 14 November) |
+| 17 Nov | Unified Execution (#2892), closed on 14 November, is recorded as superseded by the kernel; no decision was needed. | Owner card; [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) closed 14 November |
+| 17 Nov | The switch has no live runs to handle: the old core is unreleased and holds no user data. | Owner card |
+| 17 Nov | No old-core tables are kept: everything is on developers' local databases, which are deleted and regenerated. | Owner card |
+| 17 Nov | The ADR 0080 D0 amendment and the program-registry row for the kernel go in now, with the proposal. | Owner card |
 | 16 Nov | Kernel behaviour (commit, fence, ownership, delivery, timers, recovery) needs two independent reviews; tests, docs, CI and tooling need a self-review plus one. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
