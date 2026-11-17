@@ -8,6 +8,9 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -58,7 +61,8 @@ public sealed class ActivityTemplatePlacer(
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler outputCaptureCompiler)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler,
+    IWellKnownTypeRegistry? typeRegistry = null)
 {
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -360,6 +364,10 @@ public sealed class ActivityTemplatePlacer(
                     frame.Publication.Version,
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
+            // FR-012 (spec 1230): a background node a template provider compiled itself passes the same publication
+            // check as an authored one before it reaches a pinned executable.
+            if (current.Node.ExecutionPlacement == ActivityExecutionPlacement.Background)
+                EnsureTemplateNodeBackgroundEligible(current.Node, isBoundary);
             placedNodes[current.Node.ExecutableNodeId] = new(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -516,6 +524,15 @@ public sealed class ActivityTemplatePlacer(
             .ThenBy(x => x.ChildIndex)
             .Select(x => rebuilt[x.OccurrenceId!])
             .ToArray();
+    }
+
+    private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node, bool isBoundary)
+    {
+        var subject = typeRegistry is null
+            ? BackgroundEligibilitySubject.ForPinnedNode(node, activityType: null)
+            : BackgroundEligibilitySubject.ForPinnedNode(node, typeRegistry);
+        if (BackgroundEligibility.CheckPublication(subject with { IsReusableBoundary = isBoundary }) is { } refusal)
+            throw new InvalidOperationException(refusal.Message);
     }
 
     // A closed-scope body node's authored outputs capture into the graph's own variables.

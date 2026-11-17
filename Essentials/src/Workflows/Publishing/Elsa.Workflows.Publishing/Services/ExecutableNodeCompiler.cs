@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Attributes;
+using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -107,19 +108,18 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<InputDefinition> workflowInputs,
         ActivityChildOutcomeProjection? outcomeProjection = null)
     {
-        if (!Enum.IsDefined(activity.ExecutionPlacement))
-            throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
+        var placedBoundary = placedActivities.TryGetValue(activity.NodeId, out var placed);
+        if (!Enum.IsDefined(activity.ExecutionPlacement) ||
+            (activity.ExecutionPlacement == ActivityExecutionPlacement.Background && (activity.Intrinsic is not null || placedBoundary)))
+            EnsureBackgroundEligible(new BackgroundEligibilitySubject(activity.NodeId)
+            {
+                Placement = activity.ExecutionPlacement,
+                IsIntrinsic = activity.Intrinsic is not null,
+                IsReusableBoundary = placedBoundary
+            });
 
-        if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background && activity.Intrinsic is not null)
-            throw BackgroundExecutionNotEligible(activity, "engine intrinsics cannot run as background activities");
-
-        if (placedActivities.TryGetValue(activity.NodeId, out var placed))
-        {
-            if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
-                throw BackgroundExecutionNotEligible(activity, "reusable activity boundaries are not supported");
-
-            return placed;
-        }
+        if (placedBoundary)
+            return placed!;
 
         if (activity.Intrinsic is not null)
             return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs);
@@ -154,7 +154,14 @@ public sealed class ExecutableNodeCompiler(
                 structureInputKeys: projectedInputs.StructureKeys);
 
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
-            ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
+            EnsureBackgroundEligible(new BackgroundEligibilitySubject(activity.NodeId)
+            {
+                ActivityType = clrActivityType,
+                HasStructure = structure is not null,
+                HasChildren = childSlots.Count > 0,
+                Contract = activityContract,
+                InputBindings = inputBindings
+            });
 
         EnsureConnectedOutcomesDeclared(activity, childSlots);
         EnsureOutcomeSelectionGuaranteed(activity, clrActivityType, activityType, activityContract, outcomeProjection);
@@ -240,64 +247,12 @@ public sealed class ExecutableNodeCompiler(
         return null;
     }
 
-    private static void ValidateBackgroundExecution(
-        ActivityNode activity,
-        Type? clrActivityType,
-        IReadOnlyCollection<ExecutableChildSlot> childSlots,
-        ExecutableActivityStructure? structure,
-        Elsa.Activities.Runtime.Core.Models.ActivityContract? activityContract)
+    // ADR 0093 decision 3: the eligibility component decides; publication only refuses what it reports.
+    private static void EnsureBackgroundEligible(BackgroundEligibilitySubject subject)
     {
-        if (clrActivityType is null)
-            throw BackgroundExecutionNotEligible(activity, "the activity type is not a registered CLR activity");
-
-        if (structure is not null || childSlots.Count > 0 ||
-            typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
-            typeof(IRuntimeActivityChildCompletionHandler).IsAssignableFrom(clrActivityType) ||
-            typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
-            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType) ||
-            typeof(IRuntimeActivityChildNotificationHandler).IsAssignableFrom(clrActivityType))
-        {
-            throw BackgroundExecutionNotEligible(activity, "structural activities and nodes with children are not supported");
-        }
-
-        if (typeof(IStatefulActivity).IsAssignableFrom(clrActivityType))
-            throw BackgroundExecutionNotEligible(activity, "stateful activities are not supported");
-
-        if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(clrActivityType))
-            throw BackgroundExecutionNotEligible(activity, "checkpoint-participating activities are not supported");
-
-        if (activityContract is null)
-            throw BackgroundExecutionNotEligible(activity, "the activity has no pinned typed result contract");
-
-        if (!activityContract.SupportsBackgroundExecution)
-            throw BackgroundExecutionNotEligible(activity, "the activity type does not declare BackgroundExecutionSafe");
-
-        var resultClrType = FindTypedActivityResult(clrActivityType);
-        if (resultClrType == typeof(object) ||
-            activityContract.Result.Type.Alias is "Object" or "Elsa.Any")
-        {
-            throw BackgroundExecutionNotEligible(activity, "untyped object results are not supported");
-        }
-
-        var resultRepresentations = activityContract.Result.Projections.Values
-            .Select(projection => projection.EffectiveSourceRepresentation)
-            .Prepend(activityContract.Result.EffectiveSourceRepresentation);
-        if (typeof(Stream).IsAssignableFrom(resultClrType) ||
-            resultRepresentations.Any(representation => representation == ValueRepresentation.TransientResource))
-            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
-
-        var resultPolicies = activityContract.Result.Projections.Values
-            .Select(projection => projection.Policy)
-            .Prepend(activityContract.Result.Policy);
-        if (resultPolicies.Any(policy => !policy.IsPersistable))
-            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
-
-        if (resultPolicies.Any(policy => policy.IsSensitive || policy.RequiresEncryption))
-            throw BackgroundExecutionNotEligible(activity, "sensitive or encryption-required result values are not supported");
+        if (BackgroundEligibility.CheckPublication(subject) is { } refusal)
+            throw new InvalidOperationException(refusal.Message);
     }
-
-    private static InvalidOperationException BackgroundExecutionNotEligible(ActivityNode activity, string reason) =>
-        new($"VF-BG-001: Background execution is not eligible for activity node '{activity.NodeId}': {reason}.");
 
     /// <summary>
     /// Turns a leaf activity's authored outputs (<see cref="ActivityNode.Outputs"/>) into durable output captures

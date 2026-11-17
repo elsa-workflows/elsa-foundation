@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,6 +16,7 @@ internal sealed class BackgroundActivityCoordinator(
     IWorkflowExecutionStateStore workflowStateStore,
     TimeProvider timeProvider,
     IOptions<BackgroundActivityWorkerOptions> options,
+    IWellKnownTypeRegistry typeRegistry,
     IBackgroundActivityWorkStore? store = null)
 {
     public async ValueTask<BackgroundActivityWorkItem?> GetResultOrAdmitAsync(
@@ -28,7 +30,7 @@ internal sealed class BackgroundActivityCoordinator(
             throw new BackgroundActivityValidationException("BG-ACT-001: Enable BackgroundActivities on this coordinator; remote worker deployments can set RunWorkers to false.");
         if (store is null)
             throw new BackgroundActivityValidationException("BG-ACT-001: Background activities require a checkpoint-integrated work store.");
-        BackgroundActivityEligibility.Validate(node);
+        BackgroundActivityEligibility.EnsureEligible(node, typeRegistry);
         codec.ResolveResultType(node.ActivityContract!);
         if (state.Metadata.TryGetValue(BackgroundActivityEligibility.WorkIdMetadataKey, out var workId))
         {

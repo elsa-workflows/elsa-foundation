@@ -1,34 +1,34 @@
-using System.Reflection;
-using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Services;
 
+/// <summary>
+/// The background runtime's keys, and its thin calls into <see cref="BackgroundEligibility"/>, the one component that
+/// decides eligibility (ADR 0093 decision 3).
+/// </summary>
 internal static class BackgroundActivityEligibility
 {
     public const string WorkIdMetadataKey = RuntimeMetadataKeys.BackgroundActivityWorkId;
     public const string ResultReason = "BackgroundActivityResult";
 
-    public static void Validate(ExecutableNode node)
-    {
-        if (node.ExecutionPlacement != ActivityExecutionPlacement.Background ||
-            node.ActivityContract?.SupportsBackgroundExecution != true ||
-            node.IntrinsicKind is not null || node.Structure is not null || node.ChildSlots.Count > 0 ||
-            !node.ActivityContract.Result.Policy.IsPersistable || node.ActivityContract.Result.Policy.HidesValue() ||
-            node.ActivityContract.Result.Projections.Values.Any(projection => !projection.Policy.IsPersistable || projection.Policy.HidesValue()))
-            throw new BackgroundActivityValidationException("VF-BG-001: The pinned activity is not eligible for background execution.");
-    }
+    /// <summary>The run-time re-check of a pinned node, with its CLR type resolved from the pinned activation capability.</summary>
+    public static void EnsureEligible(ExecutableNode node, IWellKnownTypeRegistry typeRegistry) =>
+        Throw(BackgroundEligibility.CheckRunTime(BackgroundEligibilitySubject.ForPinnedNode(node, typeRegistry)));
 
-    public static void Validate(IActivity activity)
+    /// <summary>The run-time re-check against the activated object, and C6 once the body ran.</summary>
+    public static void EnsureEligible(ExecutableNode node, IActivity activity, bool? stagedCoordinatorEffects = null) =>
+        Throw(BackgroundEligibility.CheckRunTime(BackgroundEligibilitySubject.ForPinnedNode(node, activity.GetType()) with
+        {
+            StagedCoordinatorEffects = stagedCoordinatorEffects
+        }));
+
+    private static void Throw(BackgroundEligibilityRefusal? refusal)
     {
-        if (activity.GetType().GetCustomAttribute<BackgroundExecutionSafeAttribute>() is null ||
-            activity is IRuntimeStructuralActivity or IRuntimeActivityCheckpointParticipant or IStatefulActivity or
-                IRuntimeActivityChildCompletionHandler or IRuntimeActivityChildFaultHandler or IRuntimeActivityChildNotificationHandler or
-                IRuntimeActivityChildOutcomeHandler)
-            throw new BackgroundActivityValidationException("VF-BG-001: The activated activity does not implement the pinned background-safe leaf contract.");
+        if (refusal is not null)
+            throw new BackgroundActivityValidationException(refusal.Message) { Criterion = refusal.Criterion };
     }
 }

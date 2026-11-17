@@ -10375,3 +10375,68 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey = 2 -> int
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibility
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C1 = 1 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C10 = 10 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C2 = 2 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C3 = 3 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C4 = 4 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C5 = 5 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C6 = 6 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C7 = 7 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C8 = 8 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion.C9 = 9 -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.<Clone>$() -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.BackgroundEligibilityRefusal(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion? Criterion, string! NodeId, string! Reason) -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Criterion.get -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion?
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Criterion.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Deconstruct(out Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityCriterion? Criterion, out string! NodeId, out string! Reason) -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Equals(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal? other) -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Message.get -> string!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.NodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.NodeId.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Reason.get -> string!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Reason.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.<Clone>$() -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ActivityType.get -> System.Type?
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ActivityType.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.BackgroundEligibilitySubject(string! NodeId) -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Contract.get -> Elsa.Activities.Runtime.Core.Models.ActivityContract?
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Contract.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Deconstruct(out string! NodeId) -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Equals(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? other) -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.HasChildren.get -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.HasChildren.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.HasStructure.get -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.HasStructure.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.InputBindings.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.InputBindings.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.IsIntrinsic.get -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.IsIntrinsic.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.IsReusableBoundary.get -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.IsReusableBoundary.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.NodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.NodeId.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Placement.get -> Elsa.Primitives.Models.ActivityExecutionPlacement
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Placement.init -> void
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.StagedCoordinatorEffects.get -> bool?
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.StagedCoordinatorEffects.init -> void
+const Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Code = "VF-BG-001" -> string!
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibility.AccessesVariablesByName(System.Type! activityType) -> bool
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibility.CheckPublication(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject! subject) -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal?
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibility.CheckRunTime(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject! subject) -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal?
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.operator !=(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal? right) -> bool
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal.operator ==(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilityRefusal? right) -> bool
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ForPinnedNode(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node, Elsa.Serialization.Core.IWellKnownTypeRegistry! typeRegistry) -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject!
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ForPinnedNode(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node, System.Type? activityType) -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject!
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.operator !=(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? right) -> bool
+static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.operator ==(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? right) -> bool
