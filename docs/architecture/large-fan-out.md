@@ -172,10 +172,14 @@ generation-tracked parent refuses it as `UnknownChildCreation`; an untracked par
 This holds for every waiting parent, a Native `DispatchWorkflow` that waits for its child included (a fire-and-forget
 dispatch gets no notice). Decision 5 changes the rule for every waiting parent: a parked child's notice says it was
 parked, and the parent keeps the child in its registry, and a combiner keeps it in `Outstanding` with its credit, until
-a later notice or a discard. Discard and delete of a parked child send the parent a final Faulted notice, so its wait
-ends ([observability](observability.md#recover)). A tree with parked leaves visibly waits, and a retried leaf's result
-is merged. The change
-is in `WorkflowInstance`'s registry and notice (layer 3) and is not built.
+a later notice or a discard. `WorkflowInstance` consumes a parked notice in its registry, marking the child parked,
+before any model turn: no waiting activity sees it, so a Native `DispatchWorkflow` (whose `ResumeAsync` today completes
+for every `ChildDone` status) and a combiner stay waiting. Discard and delete of a parked child send the parent a final
+Faulted notice, so its wait ends ([observability](observability.md#recover)). That notice is the ordinary Faulted
+notice, so each parent applies its own fault policy to it: a combiner under FailFast faults and terminates its
+outstanding children, under Collect it counts the fault and frees the credit, and a waiting `DispatchWorkflow` receives
+it as it receives any faulted child's notice. A tree with parked leaves visibly waits, and a retried leaf's result is
+merged. The change is in `WorkflowInstance`'s registry and notice (layer 3) and is not built.
 
 **Retries.** A leaf's activity retries inside the leaf: each retry is a new generation in its iteration path, so a new
 effect key (the owner's rule of 16 November). A combiner may retry a failed child by starting a new child for the same
@@ -207,7 +211,7 @@ inputs and two limits:
 | Input | Meaning | Limit |
 |---|---|---|
 | `Items` | The collection | At most `MaxParallelItems`, 1,000 (decision 1). The activity faults with `ParallelForEachCapExceeded` when the evaluated collection is larger. Designer validation flags a literal collection above the cap. |
-| `MaxDegreeOfParallelism` | Bodies running at once: the ForEach's credit | Default 16; at most 64 (decision 1) |
+| `MaxDegreeOfParallelism` | Bodies running at once: the ForEach's credit | Default 16; from 1 to 64 (decision 1). A value outside that range faults the activity when it is evaluated, and designer validation flags a literal outside it |
 
 Why a cap is needed in this form: the items and every running body live in one instance's state, rewritten at each of
 its commits. Every body that waits (a job, a timer, an event) resumes through that one instance's inbox. With the

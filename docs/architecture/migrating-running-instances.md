@@ -223,7 +223,7 @@ the rest of the kernel's. Rejected options are kept for the record.
 4. **ADR 0049's quiescent-only rule is widened to running instances (B).** Release 1 migrates running and suspended
    instances at a turn boundary; a plan can still require suspension. ADR 0049 goes on the list of ADRs the new core
    supersedes. Rejected: (A) suspended instances only.
-5. **A source definition version is kept while any running instance, job ticket or retained history refers to it
+5. **A source definition version is kept while any running or suspended instance, job ticket or retained history refers to it
    (A).** Rejected: (B) running instances and tickets only, with a "definition removed" fallback for older history.
 
 **Accepted with the recommendations:** until creation headers are persisted, a plan addresses instances by id only,
