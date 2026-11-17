@@ -3096,12 +3096,12 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     flex-wrap: wrap;
   }
 
-  .topbar-actions > button.agent-launcher {
+  .topbar-actions > button.weaver-launcher {
     height: auto;
     min-height: 36px;
   }
 
-  .topbar-actions .agent-session-indicator {
+  .topbar-actions .weaver-session-indicator {
     flex-wrap: wrap;
     padding: 4px 0;
   }
@@ -3633,7 +3633,7 @@ html[data-theme-material] .feature-management-setting-group {
   box-shadow: var(--studio-material-inset-low);
 }
 
-html[data-theme-material] .wf-toolbar button,
+html[data-theme-material] .wf-toolbar button:where(:not(.studio-button)),
 html[data-theme-material] .wf-toolbar-field select,
 html[data-theme-material] .wf-page-controls button,
 html[data-theme-material] .wf-page-size select,

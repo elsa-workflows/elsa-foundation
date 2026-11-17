@@ -40,7 +40,7 @@ public sealed class DomainApiCapabilityRegistrationTests
         { typeof(Elsa.Connections.Api.Features.ConnectionsApiFeature), new("elsa.api.connections",1,[new("connections","connections"),new("connection-picker","connections/picker")],"ConnectionsApi") },
         { typeof(Elsa.Secrets.Api.Features.SecretsApiFeature), new("elsa.api.secrets",1,[new("secrets","secrets"),new("secret-picker","secrets/picker")],"SecretsApi") },
         { typeof(Elsa.Attention.Api.AttentionApiFeature), new("elsa.api.attention",1,[new("attention-items","_elsa/attention/items")],"AttentionApi") },
-        { typeof(Elsa.Agent.Api.FoundationAgentApiFeature), new("elsa.api.agent",1,[new("agent-bootstrap","_elsa/agent/bootstrap"),new("agent-sessions","_elsa/agent/sessions")],"FoundationAgentApi") },
+        { typeof(Elsa.Weaver.Api.WeaverApiFeature), new("elsa.api.weaver",1,[new("weaver-bootstrap","_elsa/weaver/bootstrap"),new("weaver-sessions","_elsa/weaver/sessions")],"WeaverApi") },
         { typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature), new("elsa.api.open-telemetry",1,[new("telemetry-resources","diagnostics/opentelemetry/resources/search")],"DiagnosticsOpenTelemetry") },
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },

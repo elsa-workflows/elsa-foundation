@@ -273,11 +273,11 @@ class VersionTurnTests(unittest.TestCase):
                                              check_item=check, text=text)
 
     def test_admission_refusals_name_their_own_cause(self):
-        value = {"error": {"code": "agent.context.incomplete", "message": TEXTS["version-not-found"]}}
-        self.assertEqual("agent.context.incomplete", require_admission_refused(Response(400, value), TEXTS["version-not-found"])["code"])
+        value = {"error": {"code": "weaver.context.incomplete", "message": TEXTS["version-not-found"]}}
+        self.assertEqual("weaver.context.incomplete", require_admission_refused(Response(400, value), TEXTS["version-not-found"])["code"])
         for response, text in ((Response(200, value), TEXTS["version-not-found"]), (Response(400, value), TEXTS["version-denied"]),
                                (Response(503, value), TEXTS["version-not-found"]),
-                               (Response(400, {"error": {"code": "agent.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
+                               (Response(400, {"error": {"code": "weaver.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
             with self.assertRaises(RuntimeError): require_admission_refused(response, text)
 
 
@@ -353,7 +353,7 @@ class GateTests(unittest.TestCase):
                        lambda name, value: value["native"]["edit-refused"].update(unchanged=False),
                        lambda name, value: value["native"]["edit-refused"].update(offered=[BATCH_TOOL]),
                        lambda name, value: value["native"]["edit-refused"].pop("offered"),
-                       lambda name, value: value["native"].pop("design-agent-absent" if name.endswith("versions") else "runtime-agent-absent"),
+                       lambda name, value: value["native"].pop("design-weaver-absent" if name.endswith("versions") else "runtime-weaver-absent"),
                        lambda name, value: value["native"]["stale-hash" if name.endswith("executables") else "compare"].update(control="other"),
                        lambda name, value: value["browser"]["observations"].update(readOnly=False),
                        lambda name, value: value.update(adapter="other")):

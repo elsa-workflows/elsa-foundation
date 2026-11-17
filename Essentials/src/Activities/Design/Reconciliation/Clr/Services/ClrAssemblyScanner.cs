@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
@@ -50,6 +49,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string ActivityScriptOutcomesAttributeFullName = typeof(ActivityScriptOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
@@ -354,6 +354,7 @@ public sealed class ClrAssemblyScanner(
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
+        string? scriptInput = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
@@ -362,6 +363,13 @@ public sealed class ClrAssemblyScanner(
                 if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
                 {
                     valueOutcomes ??= attribute;
+                    continue;
+                }
+
+
+                if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
+                {
+                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string scriptKey }] ? scriptKey : null;
                     continue;
                 }
 
@@ -374,14 +382,17 @@ public sealed class ClrAssemblyScanner(
         }
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
-        if (outcomes.Count == 0 && dynamicOutcomes is null)
+        if (outcomes.Count == 0 && dynamicOutcomes is null && scriptInput is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = dynamicOutcomes is null
-            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
-        return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+        var payload = new Dictionary<string, object> { ["ports"] = ports };
+        if (dynamicOutcomes is not null)
+            payload["dynamicOutcomes"] = dynamicOutcomes;
+        // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
+        if (!string.IsNullOrWhiteSpace(scriptInput))
+            payload["scriptInput"] = scriptInput;
+        return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     /// <summary>
@@ -396,14 +407,26 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(sourceInput))
             return null;
 
-        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
-        return new
+        // Absent means the attribute's default catch-all; an explicit null declares none (a RunJavaScript, spec 1208).
+        // A default CustomAttributeNamedArgument has no member, so look the arguments up by name instead of FirstOrDefault.
+        var named = attribute.NamedArguments.ToDictionary(argument => argument.MemberName, argument => argument.TypedValue.Value, StringComparer.Ordinal);
+        var unmatched = named.TryGetValue(nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome), out var unmatchedValue)
+            ? unmatchedValue as string
+            : "Unmatched";
+        var selectsOnEveryCompletion = !named.TryGetValue(nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion), out var selects) || selects is true;
+        var descriptor = new Dictionary<string, object>
         {
-            kind = "valuePerItem",
-            source = sourceInput,
-            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+            ["kind"] = "valuePerItem",
+            ["source"] = sourceInput,
+            // With items configured: true drops Done (every completion selects an item or the catch-all), false keeps
+            // Done next to the items (the Done rule, ADR 0045 §6).
+            ["selectsOnEveryCompletion"] = selectsOnEveryCompletion
         };
+        if (!string.IsNullOrWhiteSpace(unmatched))
+            descriptor["unmatched"] = unmatched;
+        return descriptor;
     }
+
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
         new(
@@ -953,8 +976,40 @@ public sealed class ClrAssemblyScanner(
             return JsonSerializer.SerializeToElement(doubleValue);
         if (typeName == typeof(decimal).FullName && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
             return JsonSerializer.SerializeToElement(decimalValue);
+        if (IsJsonType(valueType) && TryParseJson(value, out var jsonValue))
+            return jsonValue;
 
         return JsonSerializer.SerializeToElement(value);
+    }
+
+    // A JSON-typed input declares its default as JSON text (`DefaultValue = "{}"`). Read it as that JSON value,
+    // not as a JSON string holding the text: an unbound input compiles its default as a literal, so a string
+    // here would reach the activity as a string instead of an object (issue #3195).
+    private static bool IsJsonType(Type? valueType)
+    {
+        if (valueType is { IsGenericType: true } &&
+            StringComparer.Ordinal.Equals(valueType.GetGenericTypeDefinition().FullName, typeof(Nullable<>).FullName))
+            valueType = valueType.GetGenericArguments()[0];
+
+        return valueType?.FullName is "System.Text.Json.JsonElement"
+            or "System.Text.Json.Nodes.JsonNode"
+            or "System.Text.Json.Nodes.JsonObject"
+            or "System.Text.Json.Nodes.JsonArray";
+    }
+
+    private static bool TryParseJson(string value, out JsonElement element)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            element = document.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            element = default;
+            return false;
+        }
     }
 
     private sealed record ActivityInputMetadata(
@@ -980,113 +1035,6 @@ public sealed class ClrAssemblyScanner(
             ? new TypeReference("Object")
             : TypeReferenceFactory.FromClrType(valueType, TypeAliasConvention.CanonicalAlias);
 
-    // The host's own dependency closure (base directory, trusted-platform-assemblies, runtime
-    // directory) is enumerated from disk and is process-lifetime-invariant, so it is read once and
-    // cached instead of re-globbing on every Scan() call (issue #417 item 2). AppDomain assemblies
-    // are NOT cached here: that set can grow as assemblies load lazily, and enumerating it is
-    // in-memory (no disk IO), so it stays live per call to preserve resolution behaviour exactly.
-    private static readonly Lazy<IReadOnlyList<string>> InvariantFrameworkPaths = new(CollectInvariantFrameworkPaths);
-
-    // Instance method (not static): the collision path logs through the injected logger. Precedence
-    // is unchanged (first-wins: folder → AppDomain → cached framework closure); we only surface the
-    // drop that was previously silent (issue #417 item 4).
-    private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
-    {
-        var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
-
-        void Add(string path)
-        {
-            if (!seenPaths.Add(path))
-                return;
-
-            var name = Path.GetFileNameWithoutExtension(path);
-            if (string.IsNullOrEmpty(name))
-                return;
-
-            if (byName.TryGetValue(name, out var existing))
-            {
-                // A later source (AppDomain or framework closure) offers the same simple-name as an
-                // already-registered path. First-wins is intentional. Another copy of the same identity is the
-                // normal layout of one package (a bin-root copy beside its runtimes/<rid>/lib asset) and hides
-                // nothing. A divergent copy can mask a version the author shipped, so that drop must not be silent.
-                if (HaveSameIdentity(existing, path))
-                {
-                    logger.LogDebug(
-                        "Assembly '{AssemblyName}' has an identical copy at '{SkippedPath}'; keeping '{KeptPath}' for reflection-only resolution.",
-                        name, path, existing);
-                    return;
-                }
-
-                logger.LogWarning(
-                    "Duplicate assembly name '{AssemblyName}' during reflection-only resolver setup; keeping '{KeptPath}' and skipping '{SkippedPath}'.",
-                    name, existing, path);
-                return;
-            }
-
-            byName[name] = path;
-        }
-
-        // Author assemblies win over framework copies so we read the version the author shipped.
-        foreach (var dll in folderDlls)
-            Add(dll);
-
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (assembly.IsDynamic)
-                continue;
-
-            var location = assembly.Location;
-            if (!string.IsNullOrEmpty(location) && File.Exists(location))
-                Add(location);
-        }
-
-        // Cached framework closure (base directory → TPA → runtime directory), in the same
-        // first-wins order as before; folder + AppDomain entries above still take precedence.
-        foreach (var dll in InvariantFrameworkPaths.Value)
-            Add(dll);
-
-        return byName.Values;
-    }
-
-    /// <summary>
-    /// Whether two files carry the same assembly identity: simple name, version, culture, and public key token. Reads
-    /// metadata only, without loading either assembly. A file whose identity cannot be read is treated as divergent so
-    /// the caller still warns about it.
-    /// </summary>
-    private static bool HaveSameIdentity(string firstPath, string secondPath)
-    {
-        try
-        {
-            var first = AssemblyName.GetAssemblyName(firstPath);
-            var second = AssemblyName.GetAssemblyName(secondPath);
-            return string.Equals(first.Name, second.Name, StringComparison.OrdinalIgnoreCase) &&
-                   first.Version == second.Version &&
-                   string.Equals(first.CultureName ?? string.Empty, second.CultureName ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
-                   (first.GetPublicKeyToken() ?? []).AsSpan().SequenceEqual(second.GetPublicKeyToken() ?? []);
-        }
-        catch (Exception exception) when (exception is IOException or BadImageFormatException or ArgumentException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            return false;
-        }
-    }
-
-    private static IReadOnlyList<string> CollectInvariantFrameworkPaths()
-    {
-        var paths = new List<string>();
-
-        // The host's own dependency closure (e.g. the activity base types and their references)
-        // lives next to the host binary; these are not necessarily loaded into the AppDomain yet,
-        // so add them explicitly to satisfy reflection-only base-type/reference resolution.
-        var baseDirectory = AppContext.BaseDirectory;
-        if (!string.IsNullOrEmpty(baseDirectory) && Directory.Exists(baseDirectory))
-            paths.AddRange(Directory.EnumerateFiles(baseDirectory, "*.dll"));
-
-        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trustedPlatformAssemblies)
-            paths.AddRange(trustedPlatformAssemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-
-        paths.AddRange(Directory.EnumerateFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll"));
-
-        return paths;
-    }
+    private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls) =>
+        ClrMetadataResolver.BuildResolverPaths(folderDlls, logger);
 }

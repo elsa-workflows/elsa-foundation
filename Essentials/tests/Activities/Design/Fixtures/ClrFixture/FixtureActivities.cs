@@ -387,3 +387,32 @@ public class ImplementationOnlyFixtureActivity : FixtureActivity;
 
 /// <summary>Inherits the ordinary ActivityAttribute discovery policy.</summary>
 public sealed class ImplementationOnlyDerivedFixtureActivity : ImplementationOnlyFixtureActivity;
+
+/// <summary>
+/// JSON-typed inputs whose declared defaults are JSON text. The scanner must read each default as the JSON value
+/// it spells, not as a JSON string holding the text (issue #3195). <see cref="NotJson"/> keeps the string
+/// fallback for a default that is not valid JSON.
+/// </summary>
+public sealed class JsonDefaultFixtureActivity : FixtureActivity
+{
+    [ActivityInput(DefaultValue = "{}")]
+    public System.Text.Json.JsonElement Element { get; set; }
+
+    [ActivityInput(DefaultValue = "{\"a\":1}")]
+    public System.Text.Json.JsonElement? NullableElement { get; set; }
+
+    [ActivityInput(DefaultValue = "[1,2]")]
+    public System.Text.Json.Nodes.JsonNode? Node { get; set; }
+
+    [ActivityInput(DefaultValue = "{}")]
+    public System.Text.Json.Nodes.JsonObject? Object { get; set; }
+
+    [ActivityInput(DefaultValue = "[]")]
+    public System.Text.Json.Nodes.JsonArray? Array { get; set; }
+
+    [ActivityInput(DefaultValue = "not json")]
+    public System.Text.Json.JsonElement NotJson { get; set; }
+
+    [ActivityInput(DefaultValue = "{}")]
+    public string Text { get; set; } = null!;
+}

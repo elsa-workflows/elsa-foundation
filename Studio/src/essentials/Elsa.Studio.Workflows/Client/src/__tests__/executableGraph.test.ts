@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, isGhostFact } from "../executableGraph";
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
-import { getChildSlots, planSlotNavigation, findNodeScopePath, resolveScope } from "../workflowAdapter";
+import { getActivitySourcePorts, getChildSlots, planSlotNavigation, findNodeScopePath, resolveScope } from "../workflowAdapter";
 import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
 import { bpmnActivity, ifActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
 import { buildBpmnCanvas } from "../bpmn/bpmnAdapter";
@@ -25,6 +25,26 @@ function executableNode(overrides: Partial<WorkflowExecutableNode> = {}): Workfl
     ...overrides
   };
 }
+
+it("keeps every pinned runtime outcome, including unconnected task actions, when the catalog changes or is missing", () => {
+  const outcomes = ["Approve", "Reject", "Request More Info", "Unmatched"];
+  const root = executableNode({ outcomes });
+  for (const available of [catalog, []]) {
+    const graph = buildExecutableActivityGraph(root, available);
+    expect(getActivitySourcePorts(graph.root, available[0]).map(port => port.name)).toEqual(outcomes);
+  }
+});
+
+it("honors an explicitly empty pinned outcome contract while retaining older-host fallback", () => {
+  for (const available of [catalog, []]) {
+    const empty = buildExecutableActivityGraph(executableNode({ outcomes: [] }), available);
+    expect(getActivitySourcePorts(empty.root, available[0])).toEqual([]);
+    for (const outcomes of [null, undefined]) {
+      const legacy = buildExecutableActivityGraph(executableNode({ outcomes }), available);
+      expect(getActivitySourcePorts(legacy.root, available[0]).map(port => port.name)).toEqual(["Done"]);
+    }
+  }
+});
 
 function sequenceRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNode {
   return executableNode({
@@ -368,7 +388,8 @@ describe("buildExecutableInspectorCanvas", () => {
       ariaLabel: "Connection from Write Line (write-line-1), True output, to Write Line (write-line-2). Not selected.",
       domAttributes: { "aria-pressed": false }
     });
-    expect(canvas.edges[0].data).toBeUndefined();
+    // Routing vertices stay ignored; "True" is not among the node's outcomes, so the connection is kept and flagged (spec 1208 FR-013).
+    expect(canvas.edges[0].data).toEqual({ missingPort: true });
   });
 
   it("treats a null connections projection as no flowchart edges", () => {

@@ -27,6 +27,11 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
         [new ActivityChildProjection(loop.BodySlotName, ReadAuthoredStructure(activity).Body is { } body ? [body] : [])];
 
+    // A loop has one child, its body, and promises no order for it. The loop schedules every pass itself, so an
+    // earlier pass is never among the runs that led to a later one.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var slot = childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, loop.BodySlotName));

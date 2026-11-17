@@ -69,6 +69,9 @@ internal static class StructuralParentEvaluationSupport
         ActivityInputSnapshot freshSnapshot;
         try
         {
+            // Re-materialization reads the node's inputs again, member reads (#4078) included, so it is guarded as
+            // activity start and bookmark resume are: a runtime that cannot select members refuses here.
+            SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
             freshSnapshot = await inputRematerializer.MaterializeAsync(
                 executable,
                 executableNode,
@@ -407,18 +410,19 @@ internal static class StructuralParentEvaluationSupport
 
     /// <summary>
     /// Marks a structural parent completed after evaluating a child, recording the evaluating command's reason and
-    /// work item and the normalized outcome names on its metadata. Shared by the completion and notification
-    /// handlers so both terminalize a parent identically.
+    /// work item and the outcome names its selection resolves to on its metadata (an explicitly empty selection stays
+    /// empty, ADR 0045 §6). Shared by the completion and notification handlers so both terminalize a parent identically.
     /// </summary>
     public static ActivityExecutionState CompleteParentActivity(
         RuntimeSchedulerWorkItem workItem,
         IActivityCommandPayload payload,
         ActivityExecutionState state,
-        IReadOnlyCollection<string> outcomeNames,
+        OutcomeSelection selection,
         DateTimeOffset completedAt,
         string? completedChildActivityExecutionId = null)
     {
-        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
+        ArgumentNullException.ThrowIfNull(selection);
+        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(selection.ResolveNames(), defaultToDone: false);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;

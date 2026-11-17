@@ -39,6 +39,10 @@ internal static class WorkflowsDesignJsonOptions
         // enums keep their own existing converters and response casing for current Studio clients.
         options.Converters.Add(new JsonStringEnumConverter<AuthoredWorkflowIntrinsicKind>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<AuthoredValueConversionMode>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedPresence>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActivityChildResultAvailability>(JsonNamingPolicy.CamelCase));
         return options;
     }
 }
@@ -118,6 +122,15 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(SubmittedWorkflowDefinitionView))]
 [JsonSerializable(typeof(WorkflowDefinitionSubmitSchemaView))]
 [JsonSerializable(typeof(WorkflowDraftView))]
+[JsonSerializable(typeof(WorkflowDefinitionStateView))]
+[JsonSerializable(typeof(ExpressionDefinition))]
+[JsonSerializable(typeof(VariableReference))]
+[JsonSerializable(typeof(ActivityDataContextRequest))]
+[JsonSerializable(typeof(ActivityDataContextResponse))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis))]
+[JsonSerializable(typeof(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionSourceFacts))]
 [JsonSerializable(typeof(PromotionPreflightAssessmentView))]
 [JsonSerializable(typeof(DraftValidationsView))]
 [JsonSerializable(typeof(ActivityStructuresResponse))]

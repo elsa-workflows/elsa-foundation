@@ -16,7 +16,9 @@ registers as `IAuthenticationSchemeProvider` and `IHttpRequestAuthenticator`.
 - Configurable `authorizationUrl`, `tokenUrl`, `scopesUrl`, and `scopes`
 - BYO client id (setting) and client secret (connection secret field or named credential)
 
-Grants require a writable secret store (`RequiresWritableStore`).
+Grants and PKCE secrets are created in the store named by `Elsa:Secrets:DefaultWritableStoreName`
+(default `encrypted`). That store must be registered and writable (`RequiresWritableStore`). A
+host-provided store is selected by that name, not by reusing `encrypted`.
 
 ## Callback (D2)
 

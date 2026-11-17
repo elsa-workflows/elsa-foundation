@@ -13,7 +13,7 @@ async function loadSecretsPage(page: import("@playwright/test").Page, scenario =
 async function openCreateSecret(page: import("@playwright/test").Page, scenario = "default") {
   const opener = await loadSecretsPage(page, scenario);
   await opener.click();
-  const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const dialog = page.getByRole("region", { name: "Create secret", exact: true });
   await expect(dialog).toBeVisible();
   return { dialog, opener };
 }
@@ -23,22 +23,27 @@ async function openEditSecret(page: import("@playwright/test").Page, scenario = 
   const opener = page.getByRole("button", { name: "Edit billing.integration-key", exact: true });
   await expect(opener).toBeEnabled();
   await opener.click();
-  const dialog = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const dialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(dialog).toBeVisible();
   return { dialog, opener };
 }
 
+async function selectSection(editor: import("@playwright/test").Locator, section: "Secret" | "Details" | "Storage & lifetime") {
+  // A section may carry a count and, after a failed option load, an attention marker.
+  const tab = editor.getByRole("tab", { name: new RegExp(`^${section}(?: \\(\\d+\\))?(?: — needs attention)?$`) });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+  return tab;
+}
+
 async function fillRequiredMetadata(dialog: import("@playwright/test").Locator, name: string) {
+  await selectSection(dialog, "Secret");
   await dialog.getByLabel("Technical name", { exact: true }).fill(name);
   await dialog.getByLabel("Value", { exact: true }).fill(fixtureValue);
 }
 
-async function revealOptionalFields(dialog: import("@playwright/test").Locator) {
-  const more = dialog.getByRole("button", { name: /^More options/ });
-  await expect(more).toHaveAttribute("aria-expanded", "false");
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  return more;
+async function revealOptionalFields(editor: import("@playwright/test").Locator) {
+  return selectSection(editor, "Storage & lifetime");
 }
 
 async function beginCustomScopeRefresh(dialog: import("@playwright/test").Locator) {
@@ -67,7 +72,7 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await search.fill("knownlaterintegrationbillingcredentialsforregionalpartnernetwork");
   await search.press("Enter");
   await expect(listRequests).toHaveText("2");
-  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
   await search.fill("draft should not relabel this search");
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
@@ -75,21 +80,23 @@ test("inventory coverage stays truthful through search, local scope filtering an
 
   const scope = page.getByRole("combobox", { name: "Scope", exact: true });
   await scope.selectOption("Integration:Later");
-  const rowTrigger = page.getByRole("button", { name: "Known later credentials", exact: true });
+  const rowTrigger = page.getByRole("link", { name: "Known later credentials", exact: true });
   await rowTrigger.click();
-  const detail = page.getByRole("dialog", { name: "Edit secret" });
+  const detail = page.getByRole("region", { name: "Edit secret" });
   await expect(detail).toBeVisible();
   await detail.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(rowTrigger).toBeFocused();
+  await expect(page.getByRole("button", { name: "Edit knownlaterintegrationbillingcredentialsforregionalpartnernetwork", exact: true })).toBeFocused();
   await expect(scope).toHaveValue("Integration:Later");
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
 
   await rowTrigger.click();
   await expect(detail).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(detail).toBeVisible();
+  await detail.getByRole("button", { name: "Back to secrets", exact: true }).click();
   await expect(detail).toHaveCount(0);
-  await expect(rowTrigger).toBeFocused();
-  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit knownlaterintegrationbillingcredentialsforregionalpartnernetwork", exact: true })).toBeFocused();
+  await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();
   await expect(scope).toHaveValue("Integration:Later");
 
   await page.emulateMedia({ colorScheme: "dark" });
@@ -234,42 +241,24 @@ test("keeps an active loaded scope visible when search returns a different scope
   await expect(scope.locator("option:checked")).toHaveText("Scope:1 (not in loaded results)");
 
   await scope.selectOption("");
-  await expect(page.getByRole("button", { name: "Known later credentials", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();
   await expect(count).toHaveText(`1 shown · 1 loaded · 1 result for “${laterName}”`);
   await expect(scope).toHaveValue("");
   await expect(page.locator("body")).not.toContainText("raw-secret-value");
 });
 
 for (const source of [
-  { scenario: "default", label: "Value", wrapper: ".secrets-value-field" },
-  { scenario: "configuration", label: "Configuration key", wrapper: "label" }
+  { scenario: "default", label: "Value" },
+  { scenario: "configuration", label: "Configuration key" }
 ]) {
   test(`required source is visible at 1280x800: ${source.label}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    const { dialog } = await openCreateSecret(page, source.scenario);
-    const control = dialog.getByLabel(source.label, { exact: true });
-    await expect(control).toHaveCount(1);
-    await expect(control).toBeVisible();
-    // Measure before any field interaction or scrollIntoView: labels and the complete
-    // input/toggle must fit inside the body's visible client area, not merely its DOM.
-    const geometry = await control.evaluate((element, wrapper) => {
-      const body = element.closest(".secrets-create-content")!;
-      const sourceField = element.closest(wrapper)!;
-      const bodyRect = body.getBoundingClientRect();
-      const fieldRect = sourceField.getBoundingClientRect();
-      return {
-        scrollTop: body.scrollTop,
-        bodyTop: bodyRect.top + body.clientTop,
-        bodyBottom: bodyRect.top + body.clientTop + body.clientHeight,
-        fieldTop: fieldRect.top,
-        fieldBottom: fieldRect.bottom
-      };
-    }, source.wrapper);
-    await testInfo.attach("initial-source-geometry", { body: JSON.stringify(geometry), contentType: "application/json" });
-    expect(geometry.scrollTop).toBe(0);
-    expect(geometry.fieldTop).toBeGreaterThanOrEqual(geometry.bodyTop);
-    expect(geometry.fieldBottom).toBeLessThanOrEqual(geometry.bodyBottom);
-    await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
+    const { dialog: editor } = await openCreateSecret(page, source.scenario);
+    const control = editor.getByLabel(source.label, { exact: true });
+    await expect(control).toBeInViewport();
+    await expect(editor.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await testInfo.attach("initial-source-geometry", { body: JSON.stringify(await control.boundingBox()), contentType: "application/json" });
   });
 }
 
@@ -278,49 +267,31 @@ for (const viewport of [
   { width: 1280, height: 800 },
   { width: 360, height: 640 }
 ]) {
-  test(`secret create keeps actions visible, body scrollable, and values on errors at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`secret page keeps sections, reachable actions, and values on errors at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    const { dialog, opener } = await openCreateSecret(page, "tall-error");
-    const content = dialog.locator(".secrets-create-content");
-    const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
-    const create = dialog.getByRole("button", { name: "Create", exact: true });
-    await expect.poll(() => content.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-    await expect(cancel).toBeInViewport();
-    await expect(create).toBeInViewport();
-
-    await dialog.getByLabel("Technical name", { exact: true }).fill("preserved.secret");
-    await dialog.getByLabel("Value", { exact: true }).fill(fixtureValue);
-    await revealOptionalFields(dialog);
-    await dialog.getByLabel("Tags", { exact: true }).scrollIntoViewIfNeeded();
-    await expect.poll(() => content.evaluate(element => element.scrollTop > 0)).toBe(true);
-    expect(await dialog.evaluate(element => element.scrollTop)).toBe(0);
-    await expect(cancel).toBeInViewport();
-    await expect(create).toBeInViewport();
-
+    const { dialog: editor, opener } = await openCreateSecret(page, "tall-error");
+    const cancel = editor.getByRole("button", { name: "Cancel", exact: true });
+    const create = editor.getByRole("button", { name: "Create", exact: true });
+    // Descriptor prose no longer forces authors through a scrolling modal.
+    await expect(editor).not.toContainText("This explanatory text is intentionally long");
+    await fillRequiredMetadata(editor, "preserved.secret");
+    await selectSection(editor, "Details");
+    await editor.getByLabel("Tags", { exact: true }).fill("retained");
     await page.setViewportSize({ ...viewport, height: viewport.height - 24 });
-    await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveValue("preserved.secret");
-    await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
-    await expect(create).toBeInViewport();
     await create.click();
-
-    const alert = dialog.getByRole("alert");
+    const alert = editor.getByRole("alert");
     await expect(alert).toContainText("Fixture secret creation failed.");
     await expect(alert).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(create).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(alert).toBeFocused();
-    await page.keyboard.press("Tab");
-    const technicalName = dialog.getByLabel("Technical name", { exact: true });
-    await expect(technicalName).toBeFocused();
-    await technicalName.scrollIntoViewIfNeeded();
-    await expect(technicalName).toBeInViewport();
+    await selectSection(editor, "Secret");
+    const technicalName = editor.getByLabel("Technical name", { exact: true });
     await expect(technicalName).toHaveValue("preserved.secret");
-    await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
-    await expect(cancel).toBeInViewport();
-    await expect(create).toBeInViewport();
+    await expect(editor.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+    await expect(editor.getByLabel("Value", { exact: true })).toHaveAttribute("type", "password");
+    await selectSection(editor, "Details");
+    await expect(editor.getByLabel("Tags", { exact: true })).toHaveValue("retained");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await cancel.click();
-    await expect(dialog).toHaveCount(0);
+    await expect(editor).toHaveCount(0);
     await expect(opener).toBeFocused();
   });
 }
@@ -375,7 +346,7 @@ test("custom scope is revealed by keyboard and keeps its exact case at 320px", a
   await fillRequiredMetadata(dialog, "custom.scope");
 
   const dimensions = await page.evaluate(() => {
-    const form = document.querySelector<HTMLElement>(".secrets-modal form")!;
+    const form = document.querySelector<HTMLElement>(".secrets-editor-page form")!;
     const bounds = form.getBoundingClientRect();
     return { viewport: window.innerWidth, document: document.documentElement.scrollWidth, left: bounds.left, right: bounds.right };
   });
@@ -391,27 +362,31 @@ test("custom scope is revealed by keyboard and keeps its exact case at 320px", a
 
 test("catalog retry preserves the form and a removed provider scope as authored", async ({ page }) => {
   const { dialog } = await openCreateSecret(page, "retry-removed");
-  await revealOptionalFields(dialog);
-  await dialog.getByLabel("Technical name", { exact: true }).fill("preserved.secret");
+  await fillRequiredMetadata(dialog, "preserved.secret");
+  await selectSection(dialog, "Details");
   await dialog.getByLabel("Display name", { exact: true }).fill("Preserved display name");
   await dialog.getByLabel("Description", { exact: true }).fill("Keep this description during retry.");
   await dialog.getByLabel("Tags", { exact: true }).fill("reviewed, preserved");
+  await selectSection(dialog, "Storage & lifetime");
   const scope = dialog.getByRole("combobox", { name: "Scope", exact: true });
   await scope.selectOption("Integration.Legacy-CRM");
-  await dialog.getByLabel("Value", { exact: true }).fill(fixtureValue);
 
   await dialog.getByRole("button", { name: "Refresh scope suggestions", exact: true }).click();
-  const catalogError = dialog.getByRole("alert");
+  const catalogError = dialog.getByRole("alert").filter({ hasText: "Scope suggestions could not be refreshed." });
   await expect(catalogError).toContainText("Scope suggestions could not be refreshed.");
+  await selectSection(dialog, "Secret");
   await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveValue("preserved.secret");
+  await selectSection(dialog, "Details");
   await expect(dialog.getByLabel("Display name", { exact: true })).toHaveValue("Preserved display name");
   await expect(dialog.getByLabel("Description", { exact: true })).toHaveValue("Keep this description during retry.");
   await expect(dialog.getByLabel("Tags", { exact: true })).toHaveValue("reviewed, preserved");
 
+  await selectSection(dialog, "Storage & lifetime");
   await catalogError.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
   const customScope = dialog.getByRole("textbox", { name: "Custom scope value", exact: true });
   await expect(customScope).toHaveValue("Integration.Legacy-CRM");
   await expect(catalogError).toHaveCount(0);
+  await selectSection(dialog, "Secret");
   await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveValue("preserved.secret");
 
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -435,106 +410,88 @@ test("catalog refresh shows its loading state without clearing the selected scop
   await expect(scope).toHaveValue("Integration:Billing");
 });
 
-test("More options preserves authored choices and keeps context outside the fold", async ({ page }) => {
-  const { dialog } = await openCreateSecret(page);
-  const optionalFields = [
-    { label: "Display name", role: "textbox" },
-    { label: "Description", role: "textbox" },
-    { label: "Tags", role: "textbox" },
-    { label: "Store", role: "combobox" },
-    { label: "Scope", role: "combobox" }
-  ] as const;
-  for (const { label, role } of optionalFields) {
-    const field = dialog.getByRole(role, { name: label, exact: true, includeHidden: true });
-    await expect(field).toHaveCount(1);
-    await expect(field).toBeHidden();
-  }
-  const hint = dialog.getByText("Optional qualifier. A reference that specifies a scope must match it (ignoring case). Scope does not grant access.", { exact: true });
-  await expect(hint).toHaveCount(1);
+test("named sections preserve authored choices and validate the first invalid field", async ({ page }) => {
+  const { dialog: editor } = await openCreateSecret(page);
+  await expect(editor.getByRole("tablist", { name: "Secret sections" })).toBeVisible();
+  await expect(editor.getByRole("button", { name: /^More options/ })).toHaveCount(0);
+  await selectSection(editor, "Details");
+  await editor.getByLabel("Display name", { exact: true }).fill("Authored display name");
+  await editor.getByLabel("Description", { exact: true }).fill("Authored description");
+  await editor.getByLabel("Tags", { exact: true }).fill("retained");
+  await expect(editor.getByRole("tab", { name: "Details (3)", exact: true })).toBeVisible();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor.getByRole("tab", { name: "Secret", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(editor.getByLabel("Technical name", { exact: true })).toBeFocused();
+  await editor.getByLabel("Technical name", { exact: true }).fill("tabbed.secret");
+  await selectSection(editor, "Storage & lifetime");
+  // One compatible store is implicit; scope guidance belongs beside Scope.
+  await expect(editor.getByLabel("Store", { exact: true })).toHaveCount(0);
+  const scope = editor.getByRole("combobox", { name: "Scope", exact: true });
+  const hint = editor.getByText("References must match this scope (ignoring case). Scope does not grant access.", { exact: true });
   await expect(hint).toBeVisible();
-  const storeContext = dialog.getByText("Store: Encrypted", { exact: true });
-  const expires = dialog.getByLabel("Expires", { exact: true });
-  await expect(storeContext).toBeVisible();
-  await expect(expires).toBeVisible();
-  await fillRequiredMetadata(dialog, "folded.secret");
-  await dialog.getByLabel("Expires", { exact: true }).fill("2027-01-15T10:30");
-  const more = await revealOptionalFields(dialog);
-  const regionId = await more.getAttribute("aria-controls");
-  expect(regionId).toBeTruthy();
-  const region = dialog.locator(`[id="${regionId}"]`);
-  for (const { label, role } of optionalFields) await expect(region.getByRole(role, { name: label, exact: true })).toBeVisible();
-  await expect(region.getByLabel("Expires", { exact: true })).toHaveCount(0);
-  await expect(region.getByText("Store: Encrypted", { exact: true })).toHaveCount(0);
-  await expect(storeContext).toBeVisible();
-  await expect(expires).toBeVisible();
-  await expect(more).not.toContainText("set");
-  const scope = dialog.getByRole("combobox", { name: "Scope", exact: true });
-  const descriptionIds = (await scope.getAttribute("aria-describedby"))?.split(/\s+/) ?? [];
-  expect(descriptionIds).toContain(await hint.getAttribute("id"));
-  await dialog.getByLabel("Display name", { exact: true }).fill("Authored display name");
-  await dialog.getByLabel("Description", { exact: true }).fill("Authored description");
-  await dialog.getByLabel("Tags", { exact: true }).fill("retained");
-  await expect(more).toContainText("3 set");
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "false");
-  await expect(hint).toBeVisible();
-  await expect(storeContext).toBeVisible();
-  await expect(expires).toBeVisible();
-  await expect(more).not.toContainText(fixtureValue);
-  await expect(more).not.toContainText("Authored display name");
-  await more.click();
-  await expect(dialog.getByLabel("Display name", { exact: true })).toHaveValue("Authored display name");
-  await expect(dialog.getByLabel("Description", { exact: true })).toHaveValue("Authored description");
-  await expect(dialog.getByLabel("Tags", { exact: true })).toHaveValue("retained");
-  await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+  expect((await scope.getAttribute("aria-describedby"))?.split(/\s+/)).toContain(await hint.getAttribute("id"));
+  await editor.getByLabel(/Expires/).fill("2027-01-15T10:30");
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor.getByLabel("Value", { exact: true })).toBeFocused();
+  await editor.getByLabel("Value", { exact: true }).fill(fixtureValue);
+  const secretTab = await selectSection(editor, "Secret");
+  await secretTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(editor.getByRole("tab", { name: "Details (3)", exact: true })).toBeFocused();
+  await expect(editor.getByLabel("Display name", { exact: true })).toHaveValue("Authored display name");
+  await expect(editor.getByLabel("Description", { exact: true })).toHaveValue("Authored description");
+  await expect(editor.getByLabel("Tags", { exact: true })).toHaveValue("retained");
+  await page.keyboard.press("End");
+  await expect(editor.getByRole("tab", { name: "Storage & lifetime (1)", exact: true })).toBeFocused();
+  await expect(editor.getByLabel(/Expires/)).toHaveValue("2027-01-15T10:30");
+  await page.keyboard.press("Home");
+  await expect(secretTab).toBeFocused();
+  await expect(editor.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+  await expect(editor.getByLabel("Value", { exact: true })).toHaveAttribute("type", "password");
+  await expect(editor.getByRole("tablist")).not.toContainText(fixtureValue);
 });
 
-test("Scope failure preserves focused custom input and stays disclosed after recovery", async ({ page }) => {
-  const { dialog } = await openCreateSecret(page, "focused-retry");
-  const more = await revealOptionalFields(dialog);
-  await fillRequiredMetadata(dialog, "focused.scope");
-  const custom = await beginCustomScopeRefresh(dialog);
+test("scope failure preserves focused custom input and supports recovery", async ({ page }) => {
+  const { dialog: editor } = await openCreateSecret(page, "focused-retry");
+  await fillRequiredMetadata(editor, "focused.scope");
+  await selectSection(editor, "Storage & lifetime");
+  const custom = await beginCustomScopeRefresh(editor);
   await custom.focus();
   await page.evaluate(() => window.dispatchEvent(new Event("fixture-scope-failure")));
-  const error = dialog.getByRole("alert");
-  await expect(error).toContainText("Scope suggestions could not be refreshed.");
+  const error = editor.getByRole("alert").filter({ hasText: "Scope suggestions could not be refreshed." });
+  await expect(error).toBeVisible();
   await expect(custom).toBeFocused();
   await expect(custom).toHaveValue(fixtureScope);
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   await error.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
   await expect(error).toHaveCount(0);
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "false");
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(custom).toHaveValue(fixtureScope);
+  await selectSection(editor, "Secret");
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   const metadata = page.getByTestId("created-secret-metadata");
   await expect(metadata).toContainText('"scope":" Org.Team-A/Case "');
   await expect(metadata).not.toContainText(fixtureValue);
   await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
 });
 
-test("Scope failure reopens collapsed options and keeps recovery visible until dismissed", async ({ page }) => {
-  const { dialog } = await openCreateSecret(page, "focused-retry");
-  const more = await revealOptionalFields(dialog);
-  await fillRequiredMetadata(dialog, "collapsed.scope");
-  const custom = await beginCustomScopeRefresh(dialog);
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "false");
+test("scope failure is recoverable across section changes without stealing focus", async ({ page }) => {
+  const { dialog: editor } = await openCreateSecret(page, "focused-retry");
+  await fillRequiredMetadata(editor, "background.scope");
+  await selectSection(editor, "Storage & lifetime");
+  await beginCustomScopeRefresh(editor);
+  const detailsTab = await selectSection(editor, "Details");
   await page.evaluate(() => window.dispatchEvent(new Event("fixture-scope-failure")));
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  await expect(custom).toHaveValue(fixtureScope);
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  await dialog.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(more).toHaveAttribute("aria-expanded", "true");
-  await more.click();
-  await expect(more).toHaveAttribute("aria-expanded", "false");
-  await more.click();
-  await expect(custom).toHaveValue(fixtureScope);
-  await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+  await expect(editor.getByRole("alert").filter({ hasText: "Secret options could not be loaded." })).toBeVisible();
+  await expect(detailsTab).toHaveAttribute("aria-selected", "true");
+  await expect(detailsTab).toBeFocused();
+  const attention = editor.getByRole("tab", { name: /^Storage & lifetime(?: \(\d+\))? — needs attention$/ });
+  await expect(attention).toBeVisible();
+  await selectSection(editor, "Storage & lifetime");
+  await expect(editor.getByRole("textbox", { name: "Custom scope value", exact: true })).toHaveValue(fixtureScope);
+  await editor.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(attention).toHaveCount(0);
+  await selectSection(editor, "Secret");
+  await expect(editor.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
   await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
 });
 
@@ -555,16 +512,18 @@ test("Configuration creation returns metadata without the authored source", asyn
 
 test("Edit secret keeps Scope read-only, explains matching, and saves metadata only", async ({ page }) => {
   const { dialog } = await openEditSecret(page);
+  await selectSection(dialog, "Storage & lifetime");
   const scope = dialog.getByRole("textbox", { name: "Scope", exact: true });
   await expect(scope).toHaveValue("Integration:CRM");
   await expect(scope).toHaveAttribute("readonly", "");
   const descriptionId = await scope.getAttribute("aria-describedby");
   expect(descriptionId).toBeTruthy();
   const scopeHelp = dialog.locator(`[id="${descriptionId}"]`);
-  await expect(scopeHelp).toContainText("A reference that specifies a scope must match it (ignoring case).");
+  await expect(scopeHelp).toContainText("References must match this scope (ignoring case).");
   await expect(scopeHelp).toContainText("Scope does not grant access.");
   await expect(scopeHelp).toContainText("Scope is read-only in this editor.");
 
+  await selectSection(dialog, "Details");
   await dialog.getByLabel("Display name", { exact: true }).fill("Updated billing integration");
   await dialog.getByLabel("Description", { exact: true }).fill("Updated metadata only.");
   await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -586,13 +545,13 @@ test("Edit secret keeps Scope read-only, explains matching, and saves metadata o
 
 test("restores row Edit focus when a metadata refresh temporarily removes the opener", async ({ page }) => {
   await page.goto("/secret-scopes.html?scenario=editor-focus-refresh");
-  const originalOpener = page.locator('button[data-secret-open="billing.integration-key"]');
+  const originalOpener = page.locator('a[data-secret-open="billing.integration-key"]');
   await expect(originalOpener).toBeVisible();
   const originalElement = await originalOpener.elementHandle();
   expect(originalElement).toBeTruthy();
   await originalOpener.click();
 
-  const dialog = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const dialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Display name", { exact: true }).fill("Focus restored after delayed refresh");
   await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -639,7 +598,7 @@ test("secret mutation attempts are visible while pending and remain counted afte
 
   const create = page.getByRole("button", { name: "Create secret", exact: true });
   await create.click();
-  const createDialog = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const createDialog = page.getByRole("region", { name: "Create secret", exact: true });
   await fillRequiredMetadata(createDialog, "fixture.attempted-create");
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(count).toHaveText("1");
@@ -653,7 +612,7 @@ test("secret mutation attempts are visible while pending and remain counted afte
 
   const edit = page.getByRole("button", { name: "Edit billing.integration-key", exact: true });
   await edit.click();
-  const editDialog = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const editDialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await editDialog.getByLabel("Display name", { exact: true }).fill("Attempted metadata update");
   await editDialog.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(count).toHaveText("2");

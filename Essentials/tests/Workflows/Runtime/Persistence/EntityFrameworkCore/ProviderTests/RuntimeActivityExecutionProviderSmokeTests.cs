@@ -53,7 +53,15 @@ internal static class RuntimeActivityExecutionProviderSmoke
             var inspection = new EfActivityExecutionInspectionStore(context, new FixedAccessor(scope), codec);
             var hierarchy = new EfActivityExecutionHierarchyStore(context, new FixedAccessor(scope), new Elsa.Workflows.Runtime.Services.ActivityExecutions.HmacActivityExecutionHierarchyCursorCodec(Options.Create(new Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivityExecutionHierarchyCursorOptions { SigningKey = SigningKey })));
 
+            // The row presence probe must never answer false for a run the store holds rows of, on any provider.
+            IRunRowPresenceProbe stateProbe = state;
+            IRunRowPresenceProbe inspectionProbe = inspection;
+            Assert.False(await stateProbe.HasAnyAsync(workflow));
+            Assert.False(await inspectionProbe.HasAnyAsync(workflow));
+
             await state.SaveAsync(State(workflow, "root", 1, null));
+            Assert.True(await stateProbe.HasAnyAsync(workflow));
+            Assert.False(await inspectionProbe.HasAnyAsync(workflow));
             await state.SaveAsync(State(workflow, "child", 2, "root"));
             Assert.Equal(2, await state.CountAsync(workflow));
             Assert.Equal("child", Assert.Single((await state.ListByParentPageAsync(new ActivityExecutionStateParentPageQuery(workflow, "root"))).Items).Execution.ActivityExecutionId);
@@ -69,6 +77,14 @@ internal static class RuntimeActivityExecutionProviderSmoke
 
             var projection = Projection(workflow, "root", 1, "root", null, true);
             await inspection.SaveAsync(projection);
+            Assert.True(await inspectionProbe.HasAnyAsync(workflow));
+            // Another run and another scope hold none of these rows.
+            Assert.False(await stateProbe.HasAnyAsync($"other-{workflow}"));
+            Assert.False(await inspectionProbe.HasAnyAsync($"other-{workflow}"));
+            IRunRowPresenceProbe otherScopeState = new EfActivityExecutionStateStore(context, new FixedAccessor($"{scope}-other"), codec);
+            IRunRowPresenceProbe otherScopeInspection = new EfActivityExecutionInspectionStore(context, new FixedAccessor($"{scope}-other"), codec);
+            Assert.False(await otherScopeState.HasAnyAsync(workflow));
+            Assert.False(await otherScopeInspection.HasAnyAsync(workflow));
             var childProjection = Projection(workflow, "child", 2, "root", "root", false);
             var siblingProjection = Projection(workflow, "child-b", 2, "root", "root", false);
             await inspection.SaveAsync(childProjection);

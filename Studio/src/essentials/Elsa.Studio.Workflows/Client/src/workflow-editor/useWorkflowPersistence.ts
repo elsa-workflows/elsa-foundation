@@ -1,5 +1,5 @@
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
@@ -17,7 +17,8 @@ interface WorkflowPersistenceParams {
   editDraft(recipe: WorkflowDraftRecipe): void;
   /** Reconcile an acknowledged live edit with history before adopting the server's normalized representation. */
   onSaveReconciled?(requested: WorkflowDraft, saved: WorkflowDraft): void;
-  setStatus(value: string): void;
+  /** The editor's status setter; an updater lets a dropped autosave release only the status it wrote itself. */
+  setStatus: Dispatch<SetStateAction<string>>;
   setError(value: WorkflowErrorInput): void;
   /**
    * The designer-history autosave hold for reviewed Operation Batches (spec 1193 FR-010): autosave is skipped while the
@@ -26,6 +27,8 @@ interface WorkflowPersistenceParams {
    */
   lineageHold?: WorkflowLineageHold;
 }
+
+const autosavingStatus = "Autosaving...";
 
 // Owns draft persistence: the serialised save queue (so concurrent saves apply in order), the
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
@@ -53,6 +56,14 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   // Keep the latest draft addressable so flushPendingSave can persist unsaved edits without a stale closure.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
   latestDraftRef.current = draft;
+  // Each scheduled autosave takes a token and shows "Autosaving..." until it ends. A save that ends reporting its own
+  // status replaces it; one that ends without (cancelled before the debounce, skipped under a hold, or a save whose
+  // result no longer covers the live draft or review) clears it, provided no newer autosave has been scheduled since and
+  // no other action has replaced the status.
+  const autosaveTokenRef = useRef(0);
+  const releaseAutosavingStatus = useCallback((token: number) => {
+    if (token === autosaveTokenRef.current) setStatus(current => current === autosavingStatus ? "" : current);
+  }, [setStatus]);
 
   useEffect(() => {
     const preventNavigation = (event: Event) => {
@@ -155,14 +166,20 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
-    setStatus("Autosaving...");
+    const token = ++autosaveTokenRef.current;
+    const release = () => releaseAutosavingStatus(token);
+    setStatus(autosavingStatus);
+    let fired = false;
     const timeoutId = window.setTimeout(() => {
-      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) return;
-      void saveDraft(draft, "Autosaved").catch(() => undefined);
+      fired = true;
+      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) { release(); return; }
+      void saveDraft(draft, "Autosaved").then(release, release);
     }, autosaveDelayMs);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus]);
+    // Before the timer fires, cancelling drops this autosave; after, its save settles and releases it. A new edit re-runs
+    // this effect, which takes a new token and shows "Autosaving..." again in the same commit.
+    return () => { window.clearTimeout(timeoutId); if (!fired) release(); };
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus, releaseAutosavingStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

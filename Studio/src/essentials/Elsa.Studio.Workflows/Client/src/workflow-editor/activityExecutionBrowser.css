@@ -45,3 +45,6 @@
 
 .wf-execution-transition { min-height: 2.5rem; padding: 0.4rem 1rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); box-sizing: border-box; }
 .wf-execution-transition button { margin-inline-start: 0.5rem; }
+
+.wf-execution-scope { gap: var(--studio-space-2); padding: var(--studio-space-3) var(--studio-space-4); }
+.wf-execution-scope > button { min-height: var(--studio-control-height); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); padding: .45rem .75rem; font: inherit; }

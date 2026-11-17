@@ -1,3 +1,4 @@
+using Elsa.Agent.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,5 +9,6 @@ public sealed class AgentSqliteDbContext(DbContextOptions<AgentSqliteDbContext> 
     public const string ExpectedProviderName = EfProviderNames.Sqlite;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AgentTurnRecord>().Property(x => x.Payload).HasColumnType("TEXT");
     }
 }

@@ -1,0 +1,31 @@
+.wf-executable-workbench .wf-instance-canvas-shell > header > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wf-executable-workbench .wf-instance-canvas-shell > header .wf-canvas-kicker {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: var(--wf-label-transform, uppercase);
+  letter-spacing: var(--wf-label-tracking, 0);
+}
+
+.wf-executable-workbench .wf-instance-canvas-shell > header .wf-executable-selection {
+  min-width: 0;
+  max-width: 42%;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.wf-executable-artifact-id {
+  margin-top: 6px;
+  max-width: 28rem;
+}

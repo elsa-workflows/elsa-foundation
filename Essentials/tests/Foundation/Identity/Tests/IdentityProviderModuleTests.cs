@@ -193,7 +193,7 @@ public sealed class IdentityProviderModuleTests
         var tokenService = provider.GetRequiredService<ITokenService>();
         var sessionService = provider.GetRequiredService<IAuthSessionService>();
 
-        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]));
+        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]) { Provider = "local" });
         var validated = await tokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
         Assert.True(validated.Succeeded, validated.Failure);
         var session = await sessionService.GetAsync(Assert.IsType<ClaimsPrincipal>(validated.Principal));

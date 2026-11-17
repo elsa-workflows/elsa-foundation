@@ -1,9 +1,9 @@
-import { specialistEditorContributions, register as registerAgents } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/module";
+import { agentEditorContributions, register as registerAgents } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/module";
 import { register as registerSecrets } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
 import { register as registerConnections } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
 import { createEndpointContext } from "@elsa-workflows/studio-sdk";
-import { initialSpecialistManifest } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/specialistManifest";
+import { initialAgentManifest } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/agentManifest";
 import { useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnonymousAuthProvider, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -37,11 +37,11 @@ function initialDraft(): ActivityDefinitionDraftView {
         subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 },
         location: { jsonPointer: `/contract/${section}/0/name`, referenceKey: section === "inputs" ? "subtotal" : section === "outputs" ? "amount" : "quoted" }, metadata: {}
       }))
-    } : agent && scenario.has("invalid") ? { draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp, diagnostics: [{ code: "specialist.manifest.invalid", severity: "Info", message: "Choose a model connection and add instructions.", subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 }, location: { providerKey: "elsa.specialist", jsonPointer: "/instructions" }, metadata: {} }] } : null,
+    } : agent && scenario.has("invalid") ? { draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp, diagnostics: [{ code: "agent.manifest.invalid", severity: "Info", message: "Choose a model connection and add instructions.", subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 }, location: { providerKey: "elsa.agent", jsonPointer: "/instructions" }, metadata: {} }] } : null,
     contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
       outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
       outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },
-    provider: agent ? { providerKey: "elsa.specialist", schemaVersion: "2", manifestFingerprint: "sha256:specialist-fixture", payload: { ...initialSpecialistManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
+    provider: agent ? { providerKey: "elsa.agent", schemaVersion: "2", manifestFingerprint: "sha256:agent-fixture", payload: { ...initialAgentManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
       payload: { rootActivity: { nodeId: "root", activityVersionId: "sequence-v1", inputs: [], outputs: [], structure: { kind: "Sequence", schemaVersion: "1", payload: { activities: [] } } }, variables: [], outputMappings: outcomeOnly ? [] : [{ outputReferenceKey: "amount", source: { syntax: "Input", value: { referenceKey: "subtotal" } } }], outcomeMappings: [{ sourceOutcomeReferenceKey: "done", boundaryOutcomeReferenceKey: outcomeOnly ? "done" : "quoted" }] } }, layout: []
   };
 }
@@ -55,7 +55,7 @@ export function ActivityAuthoringFixture() {
     baseUrl: "activity-authoring-2994",
     http: {
       getJson: async (url: string) => {
-        if (url === "/agent/specialists/model-providers") return { items: [{ providerKey: "azure-openai", displayName: "Azure OpenAI", connectionTypeName: "azure-openai" }] };
+        if (url === "/agent/model-providers") return { items: [{ providerKey: "azure-openai", displayName: "Azure OpenAI", connectionTypeName: "azure-openai" }] };
         if (url === "/capabilities") return { capabilities: [
           { id: "elsa.api.activity-design", contractVersion: "1", links: [
             ["activity-definition", "definitions/{definitionId}"], ["activity-definition-draft", "drafts/{draftId}"],
@@ -67,7 +67,7 @@ export function ActivityAuthoringFixture() {
             { rel: "activity-publication", href: "fixture/drafts/{draftId}/publication", templated: true },
             { rel: "activity-publication-receipt", href: "fixture/publications/{idempotencyKey}", templated: true }
           ] },
-          ...(agent ? [{ id: "elsa.api.agent-specialists", contractVersion: "1", links: [] }] : []),
+          ...(agent ? [{ id: "elsa.api.agent", contractVersion: "1", links: [] }] : []),
           { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "fixture/expressions" }] }
         ] };
         if (url === "/fixture/drafts/quote-draft") return structuredClone(draft.current);
@@ -77,7 +77,7 @@ export function ActivityAuthoringFixture() {
         };
         if (url === "/fixture/authoring-capabilities" && parameters.get("capabilities") === "unavailable") throw new Error("Authoring capabilities unavailable in this fixture scenario");
         if (url === "/fixture/authoring-capabilities") return {
-          contractSchemaVersions: ["1"], providers: agent ? [{ providerKey: "elsa.specialist", displayName: "Agent", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] }] : [{ providerKey: "elsa.activity-graph", displayName: "Designer", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [] }],
+          contractSchemaVersions: ["1"], providers: agent ? [{ providerKey: "elsa.agent", displayName: "Agent", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] }] : [{ providerKey: "elsa.activity-graph", displayName: "Designer", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true, migratableFromSchemaVersions: ["1"] }], requiredOutcomes: [] }],
           types: [
             { alias: "Decimal", displayName: "Number", category: "Numbers", defaultEditor: "number", supportsNull: true, supportsDurability: true, supportedCollectionKinds: ["Single", "List"], compatibleStorageDriverKeys: ["elsa.json"] },
             { alias: "String", displayName: "Text", category: "Text", defaultEditor: "text", supportsNull: true, supportsDurability: true, supportedCollectionKinds: ["Single", "List"], compatibleStorageDriverKeys: ["elsa.json"] },
@@ -97,25 +97,25 @@ export function ActivityAuthoringFixture() {
       postJson: async (url: string, body?: unknown) => {
         const current = draft.current;
         if (url === "/connections/picker") return { items: [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
-        if (url === "/agent/specialists/model-capabilities") return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
+        if (url === "/agent/model-capabilities") return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
         if (url.endsWith("/publication")) {
           const request = body as { idempotencyKey: string; expectedDraftRevision: number; reviewToken: string; version: string };
           return { idempotencyKey: request.idempotencyKey, status: "Rejected", draftId: current.draftId,
             expectedDraftRevision: request.expectedDraftRevision, expectedDefinitionHeadVersionId: null,
             reviewToken: request.reviewToken, requestedVersion: request.version, outcome: null, updatedAt: timestamp,
-            diagnostics: [{ code: "specialist.model.unavailable", severity: "Info", message: "The selected model connection cannot be used right now.",
+            diagnostics: [{ code: "agent.model.unavailable", severity: "Info", message: "The selected model connection cannot be used right now.",
               remediation: "Choose another authorized model connection, or check its endpoint, credentials and access policy in Connections, then check again.",
-              subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/model" }, metadata: { actionLabel: "Review model connection" } }] };
+              subject: { kind: "ActivityDefinition", id: "elsa.agent" }, location: { providerKey: "elsa.agent", jsonPointer: "/model" }, metadata: { actionLabel: "Review model connection" } }] };
         }
         if (url.endsWith("/publication-preflight")) {
           const payload = current.provider.payload as { instructions?: string; model?: { connectionName?: string } };
           const diagnostics = [];
-          if (!payload.instructions?.trim()) diagnostics.push({ code: "specialist.manifest.instructions", severity: "Error", message: "Agent instructions are required.", remediation: "Enter instructions of 1 to 32,768 characters in Designer.", subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/instructions" }, metadata: { actionLabel: "Edit instructions" } });
-          if (!payload.model?.connectionName) diagnostics.push({ code: "specialist.manifest.model", severity: "Error", message: "A complete model connection has not been selected.", remediation: "In Designer, choose a model connection with a configured model or deployment. Create or update it in Connections if none is available.", subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/model" }, metadata: { actionLabel: "Choose model connection" } });
+          if (!payload.instructions?.trim()) diagnostics.push({ code: "agent.manifest.instructions", severity: "Error", message: "Agent instructions are required.", remediation: "Enter instructions of 1 to 32,768 characters in Designer.", subject: { kind: "ActivityDefinition", id: "elsa.agent" }, location: { providerKey: "elsa.agent", jsonPointer: "/instructions" }, metadata: { actionLabel: "Edit instructions" } });
+          if (!payload.model?.connectionName) diagnostics.push({ code: "agent.manifest.model", severity: "Error", message: "A complete model connection has not been selected.", remediation: "In Designer, choose a model connection with a configured model or deployment. Create or update it in Connections if none is available.", subject: { kind: "ActivityDefinition", id: "elsa.agent" }, location: { providerKey: "elsa.agent", jsonPointer: "/model" }, metadata: { actionLabel: "Choose model connection" } });
           return { draftId: current.draftId, draftRevision: current.revision, definitionId: current.definitionId, definitionHeadVersionId: null,
             hasBaseline: false, reviewToken: `fixture-review-${current.revision}`, isPublishable: diagnostics.length === 0,
             minimumVersion: "1.0.0", validVersions: ["1.0.0"], impactFirstChanges: [], dependencies: [],
-            provider: { kind: "Provider", key: "elsa.specialist", schemaVersion: "2", status: diagnostics.length ? "Unavailable" : "Ready", supportedSchemaVersions: ["2"] }, storage: [], runtime: [], diagnostics: [...diagnostics, ...diagnostics] };
+            provider: { kind: "Provider", key: "elsa.agent", schemaVersion: "2", status: diagnostics.length ? "Unavailable" : "Ready", supportedSchemaVersions: ["2"] }, storage: [], runtime: [], diagnostics: [...diagnostics, ...diagnostics] };
         }
         if (url.endsWith("/proposals")) return { draftId: current.draftId, revision: current.revision, providerKey: current.provider.providerKey, providerSchemaVersion: current.provider.schemaVersion, manifestFingerprint: current.provider.manifestFingerprint, proposalFingerprint: "sha256:fixture-proposal", changes: [], diagnostics: [] };
         if (url.endsWith("/validate")) return { draftId: current.draftId, revision: current.revision, isValid: true, validatedAt: timestamp, diagnostics: [] };
@@ -130,7 +130,7 @@ export function ActivityAuthoringFixture() {
   }, []);
   const navigation = getStudioNavigation([{ id: "home", label: "Home", path: "/dashboard", placement: "main" }, { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" }, { id: "activities", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "main" }, ...registry.navigation.list()]);
   return <ThemeProvider><AnonymousAuthProvider><ShellFrame navigation={navigation} panels={[]} path="/workflows/activity-definitions" title="Activity definitions" backendBaseUrl="https://backend.example" enabledFeatures={["Elsa.Studio.Workflows"]} onNavigate={() => undefined}>
-    <QueryClientProvider client={client}><ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={agent ? specialistEditorContributions : [activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} /></QueryClientProvider>
+    <QueryClientProvider client={client}><ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={agent ? agentEditorContributions : [activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} /></QueryClientProvider>
   </ShellFrame></AnonymousAuthProvider></ThemeProvider>;
 }
 

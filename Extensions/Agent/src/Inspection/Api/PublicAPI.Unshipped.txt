@@ -1,0 +1,75 @@
+#nullable enable
+Elsa.Agent.Inspection.Api.AgentInspectionApi
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.<Clone>$() -> Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.Deconstruct(out string! TestRunId) -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.Equals(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest? other) -> bool
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.AgentTestRunEvidenceRequest(string! TestRunId) -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.TestRunId.get -> string!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.TestRunId.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.<Clone>$() -> Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.ArtifactId.get -> string?
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.ArtifactId.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.DraftId.get -> string!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.DraftId.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.DraftRevision.get -> long
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.DraftRevision.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Equals(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView? other) -> bool
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Invocation.get -> Elsa.Agent.Core.Models.AgentInvocationEvidence?
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Invocation.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Status.get -> string!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Status.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.TestRunId.get -> string!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.TestRunId.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.WorkflowExecutionId.get -> string!
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.WorkflowExecutionId.init -> void
+Elsa.Agent.Inspection.Api.AgentInspectionApiFeature
+Elsa.Agent.Inspection.Api.AgentInspectionApiFeature.AgentInspectionApiFeature() -> void
+MinimalEndpoints.Generated.ElsaAgentInspectionApiEndpoints
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.GetHashCode() -> int
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.ToString() -> string!
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Equals(object? obj) -> bool
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.GetHashCode() -> int
+override Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.ToString() -> string!
+static Elsa.Agent.Inspection.Api.AgentInspectionApi.MapAgentInspectionApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.operator !=(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest? left, Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest.operator ==(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest? left, Elsa.Agent.Inspection.Api.AgentTestRunEvidenceRequest? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.operator !=(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView? left, Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.operator ==(Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView? left, Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView? right) -> bool
+static MinimalEndpoints.Generated.ElsaAgentInspectionApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
+virtual Elsa.Agent.Inspection.Api.AgentInspectionApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.Inspection.Api.AgentInspectionApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.<Clone>$() -> Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest!
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.ActivityExecutionId.get -> string!
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.ActivityExecutionId.init -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.Deconstruct(out string! WorkflowExecutionId, out string! ActivityExecutionId) -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.Equals(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest? other) -> bool
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.AgentInvocationEvidenceRequest(string! WorkflowExecutionId, string! ActivityExecutionId) -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.WorkflowExecutionId.get -> string!
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.WorkflowExecutionId.init -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.<Clone>$() -> Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView!
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.Deconstruct(out Elsa.Agent.Core.Models.AgentInvocationEvidence! Invocation, out bool ValuesPermitted) -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.Equals(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView? other) -> bool
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.Invocation.get -> Elsa.Agent.Core.Models.AgentInvocationEvidence!
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.Invocation.init -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.AgentInvocationEvidenceView(Elsa.Agent.Core.Models.AgentInvocationEvidence! Invocation, bool ValuesPermitted) -> void
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.ValuesPermitted.get -> bool
+Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.ValuesPermitted.init -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.Deconstruct(out string! TestRunId, out string! DraftId, out long DraftRevision, out string? ArtifactId, out string! WorkflowExecutionId, out string! Status, out Elsa.Agent.Core.Models.AgentInvocationEvidence? Invocation, out bool ValuesPermitted) -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.AgentTestRunEvidenceView(string! TestRunId, string! DraftId, long DraftRevision, string? ArtifactId, string! WorkflowExecutionId, string! Status, Elsa.Agent.Core.Models.AgentInvocationEvidence? Invocation, bool ValuesPermitted) -> void
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.ValuesPermitted.get -> bool
+Elsa.Agent.Inspection.Api.AgentTestRunEvidenceView.ValuesPermitted.init -> void
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.GetHashCode() -> int
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.ToString() -> string!
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.Equals(object? obj) -> bool
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.GetHashCode() -> int
+override Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.ToString() -> string!
+static Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.operator !=(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest? left, Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest.operator ==(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest? left, Elsa.Agent.Inspection.Api.AgentInvocationEvidenceRequest? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.operator !=(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView? left, Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView? right) -> bool
+static Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView.operator ==(Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView? left, Elsa.Agent.Inspection.Api.AgentInvocationEvidenceView? right) -> bool

@@ -179,6 +179,13 @@ public static class IdentityClaimTypes
 
     public const string Provider = "elsa.identity.provider";
 
+    /// <summary>
+    /// On a first-party token issued to a subject that is no Elsa user: the provider that authenticated that subject,
+    /// which with the tenant scopes the <c>TokenSubject</c> the token is stored under. <see cref="Provider"/> on such a
+    /// token names the issuing module instead. Stripped from incoming external principals like every internal claim.
+    /// </summary>
+    public const string SubjectProvider = "elsa.identity.subject_provider";
+
     public const string Role = "elsa.identity.role";
 
     public const string Permission = "elsa.identity.permission";

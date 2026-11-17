@@ -66,7 +66,7 @@ public sealed class HostProvidedPackagesGuardTests
             {
                 ["Elsa.Activities.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Activities.Runtime.Core"] = WorkbenchSourceBuildVersion,
-                ["Elsa.Agent.Core"] = WorkbenchSourceBuildVersion,
+                ["Elsa.Weaver.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Api.Capabilities.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Attention.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Caching.Core"] = WorkbenchSourceBuildVersion,

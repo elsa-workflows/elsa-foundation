@@ -79,7 +79,7 @@ ORGANIZATION_KIND = "workflows.library-organization"
 TEMPLATE_KIND = "workflows.template-editor"
 LIBRARY_RESULT, LIST_RESULT, PREFILL_RESULT, BATCH_RESULT = "workflows.library-result", "workflows.list-state", "workflows.create-dialog-prefill", "workflows.batch-result"
 DISABLED_REASON = "Workflow organization is disabled by this backend's administrator."
-UNAVAILABLE_DIAGNOSTIC = "agent.workflow.library_unavailable"
+UNAVAILABLE_DIAGNOSTIC = "weaver.workflow.library_unavailable"
 
 # The dedicated library actor, appended after the four truth-seam principals so every earlier index keeps its meaning:
 # design read and tag assignment (so the library tools are offered and existing tags can be assigned), but neither tag
@@ -117,7 +117,7 @@ def library_principal(principals, new_identity):
     return [new_identity("witness-library-limited", principals[0]["tenant"], LIBRARY_LIMITED_GRANTS)]
 
 
-# ---- Attachments: the pages' own client contexts, as Studio builds them (workflowLibraryAgent.ts). ----
+# ---- Attachments: the pages' own client contexts, as Studio builds them (workflowLibraryWeaver.ts). ----
 
 def _client(prefix):
     return {"clientId": "qualification-" + prefix, "generationId": str(uuid.uuid4())}

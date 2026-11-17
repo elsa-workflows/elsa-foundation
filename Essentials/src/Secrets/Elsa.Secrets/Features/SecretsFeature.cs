@@ -36,6 +36,12 @@ public class SecretsFeature : IShellFeature
         Secret = true)]
     public IDictionary<string, string>? Keys { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Default writable store name",
+        Description = "Name of the registered writable ISecretStore used for connection-owned field secrets and OAuth grant and PKCE secrets. Defaults to encrypted. A host-provided store is selected by this name, not by reusing encrypted.",
+        Category = "Security")]
+    public string? DefaultWritableStoreName { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSecrets();
@@ -49,6 +55,9 @@ public class SecretsFeature : IShellFeature
 
             if (!string.IsNullOrWhiteSpace(ActiveKeyId))
                 options.ActiveKeyId = ActiveKeyId;
+
+            if (!string.IsNullOrWhiteSpace(DefaultWritableStoreName))
+                options.DefaultWritableStoreName = DefaultWritableStoreName;
 
             if (Keys is null) return;
 

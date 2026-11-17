@@ -7,9 +7,16 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { activationSlotReadsUnavailableReason, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight } from "../api/publishing";
 import type { WorkflowActivationSlot } from "../api/runtime";
 import type { PromotionPreflightAssessment } from "../api/workflowDesign";
-import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { publicationBaselineFor, publicationChangesFor, publicationIntentForChannel } from "../workflow-editor/publicationReview";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
+import { collectContributionDraftValidation, contributionDraftValidationCollectors } from "../contributionDraftValidation";
+import {
+  collectEvaluateDecisionValidation,
+  evaluateDecisionActivityType
+} from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionDraftValidation";
+import { asset, stubApi } from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/__tests__/helpers";
+import { editTable, parseTable } from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml";
 import { activationSlot, foreignSlotOwner, importedActivationSlot, publicationPreflight, publicationRecord } from "./fixtures/publicationSlots";
 
 type Operations = ReturnType<typeof useWorkflowOperations>;
@@ -890,6 +897,177 @@ describe("workflow publication operations", () => {
   });
 });
 
+describe("Evaluate Decision Review & publish gating", () => {
+  const publishedVersion = {
+    id: "v1",
+    assetId: asset.id,
+    number: 1,
+    name: asset.name,
+    xml: asset.xml,
+    sourceHash: "hash1",
+    publishedAt: asset.createdAt
+  };
+
+  it("blocks Review while @latest is unpublished, then allows it after the table is published", async () => {
+    const api = stubApi();
+    let publishedVersionId: string | null = null;
+    api.backend.http.getJson.mockImplementation(async (path: string) => {
+      if (path.endsWith("/versions/v1")) return publishedVersion;
+      return { ...asset, publishedVersionId, xml: asset.xml };
+    });
+    const fixture = renderOperations({
+      draft: evaluateDraft("approval@latest", { amount: { kind: "number", value: "950" } }),
+      collectLocalValidation: reviewCollector(api)
+    });
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "validationBlocked",
+      executableStatus: "blocked"
+    });
+    expect(fixture.current().publicationReview?.validationErrors.some(message => message.includes("no published version"))).toBe(true);
+
+    publishedVersionId = "v1";
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview?.phase).not.toBe("validationBlocked");
+    expect(fixture.current().publicationReview?.validationErrors ?? []).toEqual([]);
+  });
+
+  it("re-resolves @latest at Review after a new published table adds an input", async () => {
+    const api = stubApi();
+    const regionXml = editTable(asset.xml ?? "", { kind: "add-clause", output: false });
+    const added = parseTable(regionXml).inputs.find(clause => clause.name !== "amount")!;
+    let latest = publishedVersion;
+    api.backend.http.getJson.mockImplementation(async (path: string) => {
+      if (path.includes("/versions/")) return latest;
+      return { ...asset, publishedVersionId: latest.id, xml: latest.xml };
+    });
+    const fixture = renderOperations({
+      draft: evaluateDraft("approval@latest", { amount: { kind: "number", value: "950" } }),
+      collectLocalValidation: reviewCollector(api)
+    });
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview?.validationErrors ?? []).toEqual([]);
+
+    latest = { ...publishedVersion, id: "v2", number: 2, xml: regionXml, sourceHash: "hash-region" };
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "validationBlocked",
+      executableStatus: "blocked"
+    });
+    expect(fixture.current().publicationReview?.validationErrors.some(message => message.includes(added.name))).toBe(true);
+  });
+
+  it("retries Review after a transient table lookup failure", async () => {
+    const api = stubApi();
+    let fail = true;
+    api.backend.http.getJson.mockImplementation(async (path: string) => {
+      if (fail) throw new Error("temporary lookup failed");
+      if (path.endsWith("/versions/v1")) return publishedVersion;
+      return { ...asset, publishedVersionId: "v1", xml: asset.xml };
+    });
+    const fixture = renderOperations({
+      draft: evaluateDraft("approval@v1", { amount: { kind: "number", value: "950" } }),
+      collectLocalValidation: reviewCollector(api)
+    });
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview).toMatchObject({ phase: "validationBlocked" });
+    expect(fixture.current().publicationReview?.validationErrors.some(message => message.includes("temporary lookup failed"))).toBe(true);
+
+    fail = false;
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.current().publicationReview?.phase).not.toBe("validationBlocked");
+    expect(fixture.current().publicationReview?.validationErrors ?? []).toEqual([]);
+  });
+
+  it("does not look up a table for an unrelated activity whose Decision value contains @", async () => {
+    const api = stubApi();
+    const fixture = renderOperations({
+      draft: {
+        ...draft(),
+        state: {
+          rootActivity: {
+            nodeId: "notify-1",
+            activityVersionId: "notify-1-v",
+            inputs: [],
+            outputs: [],
+            Decision: { expression: { type: "Literal", value: "ops@example.com" } }
+          }
+        }
+      },
+      collectLocalValidation: reviewCollector(api, notifyCatalog())
+    });
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(api.backend.http.getJson).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview?.phase).not.toBe("validationBlocked");
+    expect(fixture.current().publicationReview?.validationErrors ?? []).toEqual([]);
+  });
+});
+
+function evaluateCatalog(): Map<string, ActivityCatalogItem> {
+  return new Map([["eval-1-v", {
+    activityVersionId: "eval-1-v",
+    activityTypeKey: evaluateDecisionActivityType,
+    version: "1.0.0",
+    category: "Decisions",
+    displayName: "Evaluate Decision",
+    executionType: "Action",
+    inputs: [
+      { name: "Decision", referenceKey: "Decision", typeName: "System.String", uiHint: "decision-version" },
+      { name: "Inputs", referenceKey: "Inputs", typeName: "Elsa.Decisions.Core.DecisionValue" }
+    ],
+    outputs: []
+  }]]);
+}
+
+function notifyCatalog(): Map<string, ActivityCatalogItem> {
+  return new Map([["notify-1-v", {
+    activityVersionId: "notify-1-v",
+    activityTypeKey: "Contoso.Notify",
+    version: "1.0.0",
+    category: "Custom",
+    displayName: "Notify",
+    executionType: "Action",
+    inputs: [{ name: "Decision", referenceKey: "Decision", typeName: "System.String" }],
+    outputs: []
+  }]]);
+}
+
+function reviewCollector(api: ReturnType<typeof stubApi>, catalog = evaluateCatalog()) {
+  const collectors = contributionDraftValidationCollectors(
+    [{
+      id: "decisions.version",
+      supports: descriptor => descriptor.uiHint === "decision-version",
+      component: () => null,
+      collectDraftValidation: (activity, context) => collectEvaluateDecisionValidation(api, activity, context)
+    }],
+    []
+  );
+  return (snapshot: WorkflowDraft) => collectContributionDraftValidation(snapshot.state.rootActivity, collectors, catalog);
+}
+
+function evaluateDraft(pin: string, inputs: Record<string, { kind: string; value: string }>): WorkflowDraft {
+  return {
+    ...draft(),
+    state: {
+      rootActivity: {
+        nodeId: "eval-1",
+        activityVersionId: "eval-1-v",
+        inputs: [],
+        outputs: [],
+        Decision: { expression: { type: "Literal", value: pin } },
+        Inputs: { expression: { type: "Object", value: inputs } }
+      }
+    }
+  };
+}
+
 async function prepare(fixture: ReturnType<typeof renderOperations>) {
   await fixture.current().preparePublication();
   await flushUpdates();
@@ -936,6 +1114,7 @@ function renderOperations(options: {
   publications?: Publication[];
   legacySlotContract?: boolean;
   snapshotPreflightOverrides?: Partial<PublicationPreflight>;
+  collectLocalValidation?(draft: WorkflowDraft): Promise<ValidationError[]>;
 } = {}) {
   let sourceDraft = options.draft ?? draft();
   const slots = options.slots ?? [publishedSlot()];
@@ -1085,6 +1264,7 @@ function renderOperations(options: {
       saveDraft,
       lineage: options.lineage,
       flushPendingSave,
+      collectLocalValidation: options.collectLocalValidation,
       ...callbacks
     }} />));
   renderHarness();

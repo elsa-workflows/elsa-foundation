@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa3.Models;
 using System.Buffers;
+using System.Globalization;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -50,7 +51,8 @@ public sealed record ReusableActivityImportItem(
     IReadOnlyList<ReusableActivityDependency> Dependencies,
     IReadOnlyList<ReusableActivityReferenceRewrite> Rewrites,
     IReadOnlyList<ReusableActivityDirectStart> DirectStarts,
-    IReadOnlyList<Elsa3MigrationDiagnostic> Diagnostics)
+    IReadOnlyList<Elsa3MigrationDiagnostic> Diagnostics,
+    int ConverterRevision = 0)
 {
     public bool CanApply => Diagnostics.All(x => !x.IsError);
 }
@@ -70,20 +72,44 @@ public sealed record ReusableActivityReferenceRewrite(
 
 public sealed record ReusableActivityDirectStart(string NodeId, string ActivityType);
 
+/// <param name="TenantId">
+/// Without an <paramref name="AccessScope"/>: the tenant stamped on the imported rows, as an access scope's tenant is.
+/// The import at engine start passes its persistence scope's tenant, so the publishers authorize the same tenant the
+/// commit writes (spec 235).
+/// </param>
+/// <param name="OperationKey">
+/// Without an <paramref name="AccessScope"/>: the publish phase's operation key instead of the plan id. A caller that
+/// applies the same input again passes a new key, so a publication refused earlier is attempted again (spec 235).
+/// </param>
 public sealed record ReusableActivityImportApplyRequest(
     string PlanId,
     ReusableActivityImportCollection Collection,
     IReadOnlyCollection<string> SelectedSourceVersionIds,
     ReusableActivityImportAccessScope? AccessScope = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string? TenantId = null,
+    string? OperationKey = null);
 
 /// <param name="Warnings">Conversion warnings of the applied items (runtime differences); the receipt stores them too.</param>
+/// <param name="Publications">The publish phase's states of the reusable versions, also when there is no receipt.</param>
+/// <param name="Workflows">One entry per workflow or wrapper version the mutation holds.</param>
 public sealed record ReusableActivityImportApplyResult(
     string PlanId,
     IReadOnlyList<string> AppliedSourceVersionIds,
     bool NoOp,
     ReusableActivityImportReceipt? Receipt = null,
-    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null,
+    IReadOnlyList<ReusableActivityPublicationState>? Publications = null,
+    IReadOnlyList<ReusableActivityImportedWorkflowVersion>? Workflows = null);
+
+/// <summary>A workflow or wrapper version an apply wrote or found already written.</summary>
+/// <param name="SourceVersionId">The Elsa 3 version id it was converted from.</param>
+/// <param name="Version">Its SemVer, <c>{n}.0.0</c> for Elsa 3 version n.</param>
+public sealed record ReusableActivityImportedWorkflowVersion(
+    string SourceVersionId,
+    string WorkflowDefinitionId,
+    string WorkflowVersionId,
+    string Version);
 
 /// <summary>
 /// Complete Design mutation handed to the atomic adapter. <see cref="Activities"/> are in publish order: dependencies
@@ -114,9 +140,10 @@ public sealed record ImportedReusableActivity(
 /// What the publish phase publishes for one imported reusable version: the plan's deterministic id, which wrappers and
 /// callers already reference, its SemVer and the draft content.
 /// </summary>
-/// <param name="Version">The SemVer, <c>{n}.0.0</c> for Elsa 3 version n.</param>
+/// <param name="Version">The SemVer, <c>{n}.{R}.0</c> for Elsa 3 version n at converter revision R (<see cref="ReusableActivityImportIdentity.ImportedVersion"/>).</param>
 /// <param name="GraphManifest">The schema-2 graph manifest the draft carries as its provider payload.</param>
 /// <param name="DependsOn">The ids of the imported versions this one uses; each is published before it.</param>
+/// <param name="ConverterRevision">The converter revision this version was converted at (#3921); 0 for an import before revisions existed.</param>
 public sealed record ImportedReusableActivityVersion(
     string Id,
     string DefinitionId,
@@ -125,13 +152,14 @@ public sealed record ImportedReusableActivityVersion(
     ActivityContract Contract,
     JsonElement GraphManifest,
     IReadOnlyList<string> DependsOn,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    int ConverterRevision = 0)
 {
     /// <summary>The import's tenant, stamped by the importer before the commit.</summary>
     public string? TenantId { get; set; }
 
     /// <summary>The draft the publish phase publishes this version from; deterministic, so a resumed apply finds it.</summary>
-    public string DraftId => ReusableActivityImportIdentity.Create("activity-draft", SourceVersionId);
+    public string DraftId => ReusableActivityImportIdentity.ActivityDraft(SourceVersionId, ConverterRevision);
 }
 
 public sealed record ImportedWorkflow(
@@ -349,4 +377,42 @@ public static class ReusableActivityImportIdentity
     /// <summary>The tenant-owned provenance binding identity of one imported Design definition.</summary>
     public static string DefinitionBinding(string targetDocumentKind, string targetDefinitionId) =>
         Create("definition-binding", targetDocumentKind, targetDefinitionId);
+
+    /// <summary>
+    /// The SemVer of Elsa 3 version <paramref name="sourceVersion"/> imported at <paramref name="converterRevision"/>:
+    /// <c>{n}.{R}.0</c> (spec 235 R-8, #3921). The major is the Elsa 3 number, the minor the converter revision, so a
+    /// converter upgrade re-imports the same Elsa 3 version as a newer Elsa 4 version beside the earlier one, never over it.
+    /// </summary>
+    public static string ImportedVersion(int sourceVersion, int converterRevision)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(converterRevision);
+        return string.Create(CultureInfo.InvariantCulture, $"{sourceVersion}.{converterRevision}.0");
+    }
+
+    /// <summary>
+    /// The Elsa 4 workflow version id of Elsa 3 source version <paramref name="sourceVersionId"/> imported at
+    /// <paramref name="converterRevision"/>. Revision 0 keeps the Elsa 3 id itself, as every import before revisions
+    /// existed did, so stored data stays valid; a later revision derives a new deterministic id, so the re-import is a new
+    /// version and never collides with what an earlier converter wrote.
+    /// </summary>
+    public static string WorkflowVersion(string sourceVersionId, int converterRevision) =>
+        Revised("workflow-version", sourceVersionId, converterRevision) ?? sourceVersionId;
+
+    /// <summary>The imported reusable activity version id of one Elsa 3 source version at one converter revision.</summary>
+    public static string ActivityVersion(string sourceVersionId, int converterRevision) =>
+        Revised("activity-version", sourceVersionId, converterRevision) ?? Create("activity-version", sourceVersionId);
+
+    /// <summary>The draft an imported reusable activity version is published from, at one converter revision.</summary>
+    public static string ActivityDraft(string sourceVersionId, int converterRevision) =>
+        Revised("activity-draft", sourceVersionId, converterRevision) ?? Create("activity-draft", sourceVersionId);
+
+    /// <summary>The layout of that draft.</summary>
+    public static string ActivityDraftLayout(string sourceVersionId, int converterRevision) =>
+        Revised("activity-draft-layout", sourceVersionId, converterRevision) ?? Create("activity-draft-layout", sourceVersionId);
+
+    private static string? Revised(string kind, string sourceVersionId, int converterRevision)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(converterRevision);
+        return converterRevision == 0 ? null : Create(kind, sourceVersionId, converterRevision.ToString(CultureInfo.InvariantCulture));
+    }
 }

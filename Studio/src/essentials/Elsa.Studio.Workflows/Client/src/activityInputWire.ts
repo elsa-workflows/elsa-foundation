@@ -1,5 +1,4 @@
 import { generateId, readArgumentType, readStringField, referenceKeyKeys } from "./workflowProperties";
-import { readPortableExpressionDefinition } from "./activityProperties";
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "./workflowTypes";
 import { normalizeFlowchartStartNode } from "./flowchartStartNode";
 
@@ -43,8 +42,8 @@ interface WrappedInputValue {
 
 interface WireArgumentState {
   referenceKey: string;
-  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; reference
-  // expressions keep their structured identity objects so stable reference keys survive the trip.
+  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; references and
+  // other structured definitions keep their objects so stable identities survive the trip.
   value: { value: unknown; expressionType: string };
   conversion?: unknown;
   [key: string]: unknown;
@@ -72,8 +71,8 @@ function mapState(
   // The normalizer is deliberately shape-loose (it repairs legacy/wire records), so its unknown[]
   // result is asserted back to the declared variables type rather than validated per-field.
   if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument) as VariableDefinition[];
-  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, normalizeInputDefinition);
-  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentRecord(record, false));
+  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, record => normalizeArgumentDefinition(record, true));
+  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentDefinition(record, false));
   return next;
 }
 
@@ -134,8 +133,8 @@ function normalizeStoredArgument(record: Record<string, unknown>): Record<string
   return normalizeArgumentRecord(record, true);
 }
 
-function normalizeInputDefinition(record: Record<string, unknown>): Record<string, unknown> {
-  const next = normalizeStoredArgument(record);
+function normalizeArgumentDefinition(record: Record<string, unknown>, keepStorage: boolean): Record<string, unknown> {
+  const next = normalizeArgumentRecord(record, keepStorage);
   const isNullable = record.isNullable ?? record.IsNullable;
   delete next.IsNullable;
   next.isNullable = typeof isNullable === "boolean" ? isNullable : false;
@@ -318,29 +317,30 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
   };
 }
 
-// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Most expressions keep
-// their authored syntax and serialize the value to a string. Two exceptions:
-//  - Variable and Input expressions keep their structured reference objects (the backend's
-//    VariableReference.TryParse reads `{ referenceKey, declaringScopeId }` from an ArgumentValue.Value
-//    object), as do Connection expressions (whose `{ connection, type }` payload is object-shaped) and
-//    portable expression definitions (whose `language`, `source`, and related fields form an object
-//    contract), so their structured payloads survive the trip.
-//  - A Literal whose value is structured (an array or object, e.g. a collection repeater's list) is sent
-//    as an "Object" expression. The backend's literal converter only handles scalars, so it can't turn
-//    the JSON-string form of a list into ICollection<T>; the Object handler JSON-deserializes it into the
-//    target type. isRecord covers both arrays and plain objects.
+// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Scalars serialize to a
+// string under their authored syntax. A structured value (an object or array) is an authored definition and
+// rides the wire as it is: a Variable, Input, Connection or ActivityResult reference, a portable expression
+// definition, and equally a definition this client does not know, such as a member read or a source kind
+// added later. Turning one into JSON text would change what the document means, so an unknown definition is
+// preserved rather than interpreted. Only the syntaxes in `textContractSyntaxes` carry structured values as
+// JSON text:
+//  - A Literal whose value is structured (e.g. a collection repeater's list) is sent as an "Object"
+//    expression. The backend's literal converter only handles scalars, so it can't turn the JSON-string
+//    form of a list into ICollection<T>; the Object handler JSON-deserializes it into the target type.
+//  - Object and Secret values keep the JSON-text form they have always been saved in.
+// isRecord covers both arrays and plain objects.
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
-  if ((expressionType === "Variable" || expressionType === "Input" || expressionType === "Connection") && isRecord(expression.value)) {
+  if (isRecord(expression.value) && !textContractSyntaxes.has(expressionType.toLowerCase())) {
     return { value: expression.value, expressionType };
   }
-  const portableDefinition = readPortableExpressionDefinition(expression.value, expressionType);
-  if (portableDefinition) return { value: portableDefinition, expressionType };
   if (expressionType === "Literal" && isRecord(expression.value)) {
     return { value: toWireValue(expression.value), expressionType: "Object" };
   }
   return { value: toWireValue(expression.value), expressionType };
 }
+
+const textContractSyntaxes = new Set(["literal", "object", "secret"]);
 
 // ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.
 function toWireValue(value: unknown): string | null {

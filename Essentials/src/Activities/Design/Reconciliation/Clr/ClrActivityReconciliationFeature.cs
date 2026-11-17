@@ -4,7 +4,9 @@ using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Clr.Options;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation;
+using Elsa.Activities.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr;
 
@@ -28,7 +30,8 @@ namespace Elsa.Activities.Design.Reconciliation.Clr;
 [ShellFeature(
     name: "ClrActivityReconciliation",
     DisplayName = "CLR Activity Reconciliation",
-    Description = "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind)."
+    Description = "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind).",
+    DependsOn = new object[] { "Expressions" }
 )]
 public class ClrActivityReconciliationFeature : IShellFeature
 {
@@ -41,5 +44,7 @@ public class ClrActivityReconciliationFeature : IShellFeature
         services.AddScoped<IActivityTypeCategoryResolver, ActivityTypeCategoryResolver>();
         services.AddScoped<IClrAssemblyScanner, ClrAssemblyScanner>();
         services.AddScoped<IActivityReconciliationSource, ClrActivityReconciliationSource>();
+        services.TryAddSingleton<IActivityContractCapabilityCatalog, ClrActivityContractCapabilityCatalog>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivitySerializedShapeSource, ClrActivitySerializedShapeSource>());
     }
 }

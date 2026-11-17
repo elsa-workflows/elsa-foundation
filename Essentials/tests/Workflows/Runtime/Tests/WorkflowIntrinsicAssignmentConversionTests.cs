@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class WorkflowIntrinsicAssignmentConversionTests
+public sealed partial class WorkflowIntrinsicAssignmentConversionTests
 {
     private const string WorkflowExecutionId = "wfexec-1";
     private const string IntrinsicExecutionId = "actexec-intrinsic";
@@ -186,7 +186,7 @@ public sealed class WorkflowIntrinsicAssignmentConversionTests
     private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external)
     {
         var scheduled = ActivityState(IntrinsicExecutionId, node.ExecutableNodeId, ActivityExecutionStatus.Scheduled) with { Attempts = [] };
-        var isProjection = node.InputBindings["value"].WorkflowRequest?.Path is not null;
+        var isProjection = node.InputBindings["value"].WorkflowRequest?.Path is not null || node.InputBindings["value"].Selection is not null;
         var json = JsonSerializer.SerializeToElement(isProjection ? new { count = payloadValue } : payloadValue);
         var source = ValueEnvelope.Inline(node.InputBindings["value"].ConversionPlan?.SourceType ?? new ValueTypeDescriptor("Elsa.Any"), json, ValueProtectionPolicy.InstanceInline);
         if (external)

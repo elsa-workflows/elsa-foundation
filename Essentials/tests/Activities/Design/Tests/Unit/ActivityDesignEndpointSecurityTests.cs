@@ -27,20 +27,24 @@ public sealed class ActivityDesignEndpointSecurityTests
     {
         var endpoints = MapEndpoints();
 
-        Assert.Equal(ActivitiesDesignCompatibilityCases.Manifest.Count, endpoints.Count);
-        foreach (var route in ActivitiesDesignCompatibilityCases.Manifest)
-        {
-            var endpoint = Find(endpoints, route);
-            var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
-            var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
-            var descriptor = Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor);
-            var permission = route.Action switch
+        Assert.Equal(ActivitiesDesignCompatibilityCases.Manifest.Count + 1, endpoints.Count);
+        var activityData = Assert.Single(endpoints, endpoint =>
+            endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
+            new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) ==
+            new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", HttpMethods.Post));
+        var routes = ActivitiesDesignCompatibilityCases.Manifest.Select(route =>
+            (Endpoint: Find(endpoints, route), Permission: route.Action switch
             {
                 "read" => ActivityDesignPermissions.Read,
                 "manage" => ActivityDesignPermissions.Manage,
                 _ => throw new InvalidOperationException($"Unexpected manifest action '{route.Action}'.")
-            };
-
+            }));
+        // Keep the migration oracle unchanged and apply its full security contract to the additive endpoint.
+        foreach (var (endpoint, permission) in routes.Append((activityData, ActivityDesignPermissions.Read)))
+        {
+            var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+            var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
+            var descriptor = Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor);
             Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
             Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
             Assert.Equal([PermissionKey.Normalize(permission)], descriptor.Permissions);

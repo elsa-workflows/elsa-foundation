@@ -5,7 +5,7 @@ import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowOrganizationButton } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowOrganizationButton";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
@@ -210,7 +210,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
     throw new Error(`Unexpected DELETE ${url}`);
   }
 } } as unknown as StudioEndpointContext;
-const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined } as unknown as StudioAgentRegistry;
+const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined } as unknown as StudioWeaverRegistry;
 
 function Library() {
   const session = useWorkflowDefinitionBrowseSession(context);

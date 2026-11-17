@@ -5,7 +5,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 /// <summary>
 /// <c>.github/workflows/packages.yml</c> stays a thin shell over the publisher, and keeps its workflow-level
 /// requirements: no global <c>/p:Version</c>, no <c>--skip-duplicate</c>, serialized runs from main that
-/// are never cancelled in progress, and pushes from main alone.
+/// are never cancelled in progress, pushes from main alone, and a push that publishes only what its CI run passed.
 /// </summary>
 public sealed class PackagesWorkflowTests
 {
@@ -78,6 +78,25 @@ public sealed class PackagesWorkflowTests
         Assert.Contains($"/{PlanFiles.PackFilter}", pack, StringComparison.Ordinal);
         Assert.Contains($"-p:CustomBeforeDirectoryBuildProps=\"$RUNNER_TEMP/versions/{PlanFiles.PackProperties}\"", pack, StringComparison.Ordinal);
         Assert.Contains($"-p:PackageOutputPath=\"$RUNNER_TEMP/versions/{PlanFiles.Packages}\"", pack, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A push to main publishes only what CI has passed (#4002): the pack job's first script waits for the commit's
+    /// CI push run before the publisher plans, and fails rather than skips when that run did not succeed. Manual runs
+    /// are the operator's choice and do not wait.
+    /// </summary>
+    [Fact]
+    public void A_push_from_main_waits_for_the_commits_CI_run_before_planning()
+    {
+        var steps = ((List<object>)Jobs["pack"]["steps"]).Cast<Dictionary<object, object>>().ToList();
+        var gate = steps.Single(step => step.TryGetValue("run", out var run) && ((string)run).Contains("tools/ci/await_ci_result.py", StringComparison.Ordinal));
+        var plan = steps.Single(step => step.TryGetValue("id", out var id) && (string)id == "plan");
+
+        Assert.Equal("${{ github.event_name == 'push' }}", (string)gate["if"]);
+        Assert.Contains("--sha \"$GITHUB_SHA\"", (string)gate["run"], StringComparison.Ordinal);
+        Assert.True(steps.IndexOf(gate) < steps.IndexOf(plan), "The CI gate must run before the publisher plans.");
+        Assert.True(int.Parse((string)Jobs["pack"]["timeout-minutes"]) >= 90, "The pack job must allow for a full CI run before packing.");
+        Assert.Equal("read", Map(Workflow, "permissions")["actions"]);
     }
 
     /// <summary>The bootstrap is the owner's manual act: a boolean dispatch input, off unless set.</summary>

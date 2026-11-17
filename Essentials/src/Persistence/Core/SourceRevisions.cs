@@ -50,6 +50,10 @@ public sealed class SourceSnapshotPin
 /// <summary>Only domain-authorized, bounded source queries reach the persistence reader.</summary>
 public sealed record SourcePage(int Total, IReadOnlyList<SourceWorkingCopy> Items);
 
+/// <summary>An immutable snapshot with its original copy reference, resolved within trusted source scope.</summary>
+public sealed record SourceSnapshotRead(string CopyId, SourceSnapshot Snapshot);
+public sealed record SourceSnapshotPage(int Total, IReadOnlyList<SourceSnapshotRead> Items);
+
 /// <summary>A source persistence refusal, with no protected payload in its diagnostic.</summary>
 public sealed class SourceRevisionException(string code, Exception? innerException = null)
     : Exception("The source revision operation was refused (" + code + ").", innerException)
@@ -61,6 +65,11 @@ public interface ISourceRevisionReader
 {
     Task<SourceWorkingCopy?> FindAsync(string sourceId, string copyId, CancellationToken cancellationToken = default);
     Task<SourceSnapshot?> FindSnapshotAsync(string sourceId, string copyId, string snapshotId, CancellationToken cancellationToken = default);
+    Task<SourceSnapshotRead?> FindSourceSnapshotAsync(string sourceId, string snapshotId, CancellationToken cancellationToken = default);
+    /// <summary>All retained copies of one source, in stable snapshot identity order; revisions remain copy-local CAS numbers.</summary>
+    Task<SourceSnapshotPage> HistorySourceAsync(string sourceId, int skip = 0, int take = 50, CancellationToken cancellationToken = default);
+    /// <summary>One representative copy per source, including discarded sources. Prefers an active copy, then stable copy identity.</summary>
+    Task<SourcePage> ListSourcesAsync(string? search, int skip, int take, CancellationToken cancellationToken = default);
     Task<SourcePage> ListAsync(string? search, int skip, int take, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SourceSnapshot>> HistoryAsync(string sourceId, string copyId, int skip = 0, int take = 100, CancellationToken cancellationToken = default);
 }

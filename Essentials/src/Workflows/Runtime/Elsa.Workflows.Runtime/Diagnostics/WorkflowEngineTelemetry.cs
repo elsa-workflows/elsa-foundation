@@ -66,6 +66,17 @@ public static class WorkflowEngineTelemetry
     /// <summary>The phase outcome (<c>completed</c> or <c>faulted</c>).</summary>
     public const string OutcomeTag = "elsa.outcome";
 
+    /// <summary>
+    /// Present on a dispatch span when, for a handler fault, the ownership check could not be made, the poison store
+    /// could not say whether it can check the lease, or the poison record could not be written under the fence for a
+    /// reason other than a lost lease. It is set when that failure happens, before the write that follows, so it does
+    /// not by itself say the record was written without the fence: after a failed ownership read the record is still
+    /// written under the fence where the store can check. The value is the type of the failure: its innermost
+    /// exception, so a store that wraps provider failures reports the provider's type. When more than one of these
+    /// happens in a dispatch, the last one is kept.
+    /// </summary>
+    public const string PoisonFenceFallbackTag = "elsa.poison.fence_fallback";
+
     /// <summary>The committed checkpoint's id.</summary>
     public const string CheckpointIdTag = "elsa.checkpoint.id";
 

@@ -50,6 +50,16 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : null;
     }
 
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.AssessChildResult(activity, producerChildNodeId, consumerChildNodeId)
+            : new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         ArgumentNullException.ThrowIfNull(activity);

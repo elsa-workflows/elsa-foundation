@@ -43,7 +43,7 @@ namespace Elsa.Workflows.Publishing;
     name: "WorkflowsPublishing",
     DisplayName = "Workflows Publishing",
     Description = "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events", "WorkflowDesignValidations" }
 )]
 public class WorkflowsPublishingFeature : IShellFeature
 {

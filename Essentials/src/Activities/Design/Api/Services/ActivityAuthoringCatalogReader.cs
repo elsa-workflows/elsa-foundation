@@ -8,6 +8,8 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -18,7 +20,8 @@ public sealed class ActivityAuthoringCatalogReader(
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
     IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders,
-    IActivityFeatureAttributionResolver featureAttributionResolver) : IActivityAuthoringCatalogReader
+    IActivityFeatureAttributionResolver featureAttributionResolver,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IActivityAuthoringCatalogReader
 {
     public async Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
     {
@@ -48,7 +51,8 @@ public sealed class ActivityAuthoringCatalogReader(
             var featureId = string.Equals(item.Version.ConsumerKey, ActivityProvenanceConstants.ClrActivityConsumerKey, StringComparison.Ordinal)
                 ? await featureAttributionResolver.ResolveProvidingFeatureAsync(item.Definition.ActivityTypeKey, cancellationToken)
                 : null;
-            persisted.Add(ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey), featureId));
+            persisted.Add(ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey), featureId,
+                ResolveDeclaredActivityType(item.Definition.ActivityTypeKey)));
         }
 
         // Built-in engine intrinsics (Set Variable, Set Output, …) are code-owned and always addable: they
@@ -61,11 +65,22 @@ public sealed class ActivityAuthoringCatalogReader(
         return new ActivityAuthoringCatalogView(persisted.Concat(builtIns).ToArray());
     }
 
+    // The runtime identity a compiled node carries for a CLR activity that declares `public const string ActivityType`
+    // (e.g. Elsa.HttpEndpoint). The catalog key stays the CLR full name for compatibility; clients use this to find the
+    // catalog row for a node whose stamped type is the declared one.
+    private string? ResolveDeclaredActivityType(string activityTypeKey)
+    {
+        if (wellKnownTypeRegistry is null || !wellKnownTypeRegistry.TryGetTypeOrDefault(activityTypeKey, out var clrType) || clrType == typeof(object))
+            return null;
+        return ActivityTypeMetadata.GetDeclaredActivityType(clrType);
+    }
+
     private static ActivityAuthoringDescriptorView ToView(
         Persistence.Core.Entities.ActivityDefinitionVersion version,
         Persistence.Core.Entities.ActivityDefinition definition,
         bool available,
-        string? featureId)
+        string? featureId,
+        string? runtimeActivityType)
     {
         if (!ActivityStructureDesignFacetReader.TryReadSingle(version.DesignFacets, out var structureFacet))
             throw new InvalidOperationException(
@@ -98,7 +113,8 @@ public sealed class ActivityAuthoringCatalogReader(
             IconName: ActivityIconName.ReadFromFacets(version.DesignFacets))
         {
             DesignFacets = version.DesignFacets.Select(facet => new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, facet.Payload.Clone())).ToArray(),
-            PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone()
+            PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone(),
+            RuntimeActivityType = runtimeActivityType
         };
     }
 

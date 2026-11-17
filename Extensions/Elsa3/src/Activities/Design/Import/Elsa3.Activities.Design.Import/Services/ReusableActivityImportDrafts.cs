@@ -7,7 +7,8 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// <summary>
 /// The Design-owned draft an imported reusable version is published from (spec 246 R-4): the graph manifest as the
 /// provider payload and the converted contract, at revision 1 with an empty layout. Ids derive from the Elsa 3 source
-/// version, so the commit and a resumed publish phase build the same draft.
+/// version and the converter revision, so the commit and a resumed publish phase build the same draft, and a later
+/// converter revision gets its own.
 /// </summary>
 public static class ReusableActivityImportDrafts
 {
@@ -24,7 +25,9 @@ public static class ReusableActivityImportDrafts
         DefinitionId = version.DefinitionId,
         Revision = 1,
         SourceVersionId = headVersionId,
-        PresentationLabel = $"Elsa 3 v{version.Version.Split('.')[0]}",
+        PresentationLabel = version.ConverterRevision == 0
+            ? $"Elsa 3 v{version.Version.Split('.')[0]}"
+            : $"Elsa 3 v{version.Version.Split('.')[0]} (converter revision {version.ConverterRevision})",
         Status = ActivityDefinitionDraftStatus.Active,
         State = new(
             version.Contract,
@@ -37,7 +40,7 @@ public static class ReusableActivityImportDrafts
     /// <summary>Elsa 3 exports carry no designer layout the graph activity can use, so the draft has none.</summary>
     public static ActivityDefinitionDraftLayout Layout(ImportedReusableActivityVersion version) => new()
     {
-        Id = ReusableActivityImportIdentity.Create("activity-draft-layout", version.SourceVersionId),
+        Id = ReusableActivityImportIdentity.ActivityDraftLayout(version.SourceVersionId, version.ConverterRevision),
         TenantId = version.TenantId,
         DraftId = version.DraftId,
         Revision = 1,

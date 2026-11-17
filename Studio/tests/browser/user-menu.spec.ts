@@ -121,13 +121,13 @@ async function readShellGeometry(page: Page) {
       actions: dimensions(actions),
       content: dimensions(content),
       controls: {
-        weaver: describe(".topbar-actions .agent-launcher"),
+        weaver: describe(".topbar-actions .weaver-launcher"),
         github: describe('.topbar-actions a[aria-label="GitHub"]'),
         documentation: describe('.topbar-actions a[aria-label="Documentation"]'),
         appearance: describe(".topbar-actions .theme-selector-button"),
         account: describe(".topbar-actions .user-menu-button")
       },
-      weaverBadges: describeAll(".topbar-actions .agent-session-indicator > span")
+      weaverBadges: describeAll(".topbar-actions .weaver-session-indicator > span")
     };
   });
 }
@@ -212,12 +212,12 @@ test.describe("shell user menu", () => {
       const before = await readShellGeometry(page);
       const beforeScreenshot = await page.screenshot();
       const accountBounds = await account(page, displayName).boundingBox();
-      const launcherBounds = await page.locator(".agent-launcher").boundingBox();
+      const launcherBounds = await page.locator(".weaver-launcher").boundingBox();
       expect(accountBounds).not.toBeNull();
       expect(launcherBounds).not.toBeNull();
-      const launcher = page.locator(".agent-launcher");
+      const launcher = page.locator(".weaver-launcher");
       await expect(launcher).toBeVisible();
-      await expect(page.locator(".agent-session-indicator")).toContainText("1 waiting");
+      await expect(page.locator(".weaver-session-indicator")).toContainText("1 waiting");
       await page.mouse.click(launcherBounds!.x + launcherBounds!.width / 2, launcherBounds!.y + launcherBounds!.height / 2);
       await expect(launcher).toHaveAttribute("aria-expanded", "true");
       await page.mouse.click(launcherBounds!.x + launcherBounds!.width / 2, launcherBounds!.y + launcherBounds!.height / 2);
@@ -438,7 +438,7 @@ test.describe("shell user menu", () => {
     await openShell(page, { displayName: "Administrator", weaver: "dense" });
     const geometry = await readShellGeometry(page);
     await attachShellGeometry("dense-weaver-320", geometry, await page.screenshot());
-    const indicator = page.locator(".agent-session-indicator");
+    const indicator = page.locator(".weaver-session-indicator");
     await expect(indicator).toHaveAttribute("aria-label", "1 active or background Weaver sessions, 2 waiting, 1 blocked, 1 failed, 3 pending proposals, 2 pending artifacts, 1 pending prompts, 1 child sessions");
     expect(geometry.controls.weaver).not.toBeNull();
     expectHeaderToFit(geometry, 320);
@@ -535,7 +535,7 @@ test.describe("host branding resource links", () => {
     await page.setViewportSize({ width: 320, height: 900 });
     await openShell(page, { weaver: true, branding: { helpUrl: "", privacyUrl: "" } });
     await expect(page.locator(".topbar-actions > a")).toHaveCount(0);
-    await page.locator(".agent-launcher").focus();
+    await page.locator(".weaver-launcher").focus();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Select theme", exact: true })).toBeFocused();
     expectHeaderToFit(await readShellGeometry(page), 320);

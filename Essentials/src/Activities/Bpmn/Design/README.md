@@ -1,7 +1,7 @@
 # BPMN authoring
 
 This package owns the authored structure, child/outcome projection, executable lowering and exact
-published-model reference contribution described by the approved [package boundary](../../../../../specs/1179-specialist-agents/plan.md#d7--bpmn-runtimeauthoring-separation).
+published-model reference contribution described by the approved [package boundary](../../../../../specs/1179-agents/plan.md#d7--bpmn-runtimeauthoring-separation).
 It depends on [neutral Core](../Core/README.md), Workflows Design Core and Publishing Core, with no
 reference to the concrete BPMN runtime or interpreter. [Extension points](EXTENSION_POINTS.md) record
 the owning contracts and registration lifetimes.
@@ -33,4 +33,4 @@ to Core and is visible only to the BPMN sibling implementations/tests; third-par
 public activity/model contracts.
 
 This package separation is part of M4. Editorial/native/BPMN execution and independent packaged
-consumer qualification remain separate acceptance tasks in [spec1179](../../../../../specs/1179-specialist-agents/tasks.md).
+consumer qualification remain separate acceptance tasks in [spec1179](../../../../../specs/1179-agents/tasks.md).

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from agent_transport import AgentTransport
+from weaver_transport import WeaverTransport
 from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_FRAMES, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
                                     qualify_workflow_authorization, require_denied_problem, require_turn_refusal,
                                     require_unavailable_problem, require_workflow_authorization, select_command, snapshot_attachment)
@@ -36,7 +36,7 @@ class DefinitionOutcomeTests(unittest.TestCase):
             "generic-500": lambda v: (500, v),
             "denied-403": lambda v: (403, v),
             "no-code": lambda v: (503, {key: value for key, value in v.items() if key != "errorCode"}),
-            "other-code": lambda v: (503, {**v, "errorCode": "agent.workflow.authority_unavailable"}),
+            "other-code": lambda v: (503, {**v, "errorCode": "weaver.workflow.authority_unavailable"}),
             "status-mismatch": lambda v: (503, {**v, "statusCode": 500}),
             "cause-message": lambda v: (503, {**v, "errors": {"generalErrors": [CAUSE]}}),
             "cause-extra": lambda v: (503, {**v, "detail": CAUSE}),
@@ -95,14 +95,14 @@ class TurnRefusalTests(unittest.TestCase):
                     self.assertEqual(TURN_REFUSALS[expected], self.check(provider, expected))
         self.assertEqual({"code": UNAVAILABLE_CODE, "statusCode": 503, "message": "The owning module could not establish current authority for this operation."},
                          TURN_REFUSALS["unavailable"])
-        self.assertEqual({"code": "agent.context.incomplete", "statusCode": 400, "message": "Current read permission for the workflow context is required."},
+        self.assertEqual({"code": "weaver.context.incomplete", "statusCode": 400, "message": "Current read permission for the workflow context is required."},
                          TURN_REFUSALS["denied"])
 
     def test_the_pre_change_incomplete_context_shape_no_longer_qualifies_as_unavailable(self):
         # Observed on 300d3c286 before the engine reported the owner's code: code and status were collapsed.
         for provider in ("copilot", "anthropic"):
             frames = self.frames("unavailable", provider)
-            frames[-1]["error"] = {"code": "agent.context.incomplete", "statusCode": 400, "message": "Workflow definition authorization could not be completed."}
+            frames[-1]["error"] = {"code": "weaver.context.incomplete", "statusCode": 400, "message": "Workflow definition authorization could not be completed."}
             with self.subTest(provider=provider):
                 with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=frames)
 
@@ -131,7 +131,7 @@ class TurnRefusalTests(unittest.TestCase):
             for item in first(frames, "contextAdmitted")["payload"]["attachments"]:
                 if item["contentType"] == "workflow.catalog": item["content"] = {"status": "unavailable", "entries": []}
         def other_tool(frames): first(frames, "toolCallStarted")["payload"]["toolName"] = "workflow_set_designer_position"
-        def wrong_code(frames): frames[-1]["error"]["code"] = "agent.tool.admission_unavailable"
+        def wrong_code(frames): frames[-1]["error"]["code"] = "weaver.tool.admission_unavailable"
         def wrong_status(frames): frames[-1]["error"]["statusCode"] = 500
         def owner_text(frames): frames[-1]["error"]["message"] = "Workflow definition authorization could not be completed."
         def leaked(frames): frames[-1]["error"]["message"] += " " + CAUSE
@@ -168,7 +168,7 @@ class SelectedCommandEvidenceTests(unittest.TestCase):
         self.command_file = self.root / "protocol" / "command.json"
 
     def transport(self, name):
-        return AgentTransport(SimpleNamespace(base="http://127.0.0.1:1", bearer=None), self.root / name, command_file=self.command_file)
+        return WeaverTransport(SimpleNamespace(base="http://127.0.0.1:1", bearer=None), self.root / name, command_file=self.command_file)
 
     def test_the_shared_command_file_reference_goes_stale_when_the_next_turn_selects_its_command(self):
         first = self.transport("tool-unavailable").set_command("command-unavailable", "workflow_read_graph", {})

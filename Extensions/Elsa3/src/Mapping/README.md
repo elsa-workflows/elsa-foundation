@@ -1,7 +1,9 @@
 # Elsa3.Mapping
 
 Converts Elsa 3 workflow definitions to Elsa 4 Design state. The single-definition import and the Elsa 3 collection
-import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235) builds on it. The
+import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235,
+[`Elsa3JsonReconciliation`](../Activities/Design/Import/Reconciliation/README.md)) runs the collection import on a
+folder of Elsa 3 exports at engine start, so it converts exactly as the collection import does. The
 decision record for every Elsa 3 member is
 [`specs/236-elsa3-activity-map/member-map.md`](../../../../specs/236-elsa3-activity-map/member-map.md); flowchart
 connections follow [`specs/239-elsa3-flowchart-connections`](../../../../specs/239-elsa3-flowchart-connections/spec.md).
@@ -85,7 +87,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
-  array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
+  array) into the captured variable, or into `http.{node}.headers` / `.query` for a bare memory slot. The
   endpoint must sit in a list of activities (a Sequence or a Flowchart) so that a node can follow it; in a Flowchart the
   node is connected between the endpoint and the endpoint's former successors.
 - **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
@@ -120,6 +122,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   bound to a JSON member must therefore be declared untyped in Elsa 3 (`Object`, or a list or dictionary of objects):
   Elsa 3 converted a typed declaration's result (`Int32` turns `"5"` into 5), and Elsa 4 would take the value as
   returned, so a typed declaration is `VF-IMP-008`.
+- **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
+  `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
+  as a comma-separated list, so the brackets and quotes would otherwise become part of the items.
 - **HTTP response body.** Elsa 4's `WriteHttpResponse.Body` is a JSON value: text is sent as is, anything else as JSON,
   and an unset content type is inferred as Elsa 3 did (`text/plain` for text, `application/json` otherwise). Elsa 3
   `Content` therefore converts when it is a literal or a `String` variable, or when the content type is unset, blank or JSON.
@@ -132,19 +137,33 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):
   - The body becomes a schema-2 graph.
-  - `SetOutput` of a declared output writes a synthesized variable (`elsa3.output.{hash}`) that `outputMappings`
+  - `SetOutput` of a declared output writes a synthesized variable (`output.{hash}`) that `outputMappings`
     expose.
   - `Complete` becomes the graph `Complete` activity, at any depth, with the outcome's reference key (`Done` →
     `done`, other names verbatim). `End` does the same with `done`, but only in the workflow's root flowchart: Elsa 3
     `End` ends only its enclosing flowchart, so elsewhere it is `ELS3-ACTIVITY-UNSUPPORTED-MODE`.
   - `Done` is always declared and mapped from the natural completion.
-  - Several outcomes or an expression outcome → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared
-    with a warning; a declared outcome nothing reaches is dropped with a warning.
+  - Several literal outcomes (a JSON list, literal or `Object`) become the graph `Complete`'s literal `outcomes` list of
+    reference keys, so the caller follows every one of them (spec 1208 FR-029); one outcome stays `outcome`. An
+    expression outcome, and several outcomes in a workflow that is not reusable (Elsa 4 `finish` names one), are
+    `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared with a warning; a declared outcome nothing
+    reaches is dropped with a warning.
 - **Flowcharts** (spec 239) become Elsa 4 Flowcharts with their connections:
   - A connection keeps its source, target and port. The port is mapped by the map's outcome rules (an Elsa 3 `If` or
     `Switch` completes with `Done`; Elsa 4's completes with `True`/`False` or a case match, so one connection becomes
     one per Elsa 4 outcome), or kept when the Elsa 4 activity emits it. Target ports and vertices have no behaviour and
     are dropped.
+  - A RunJavaScript `Done` connection stays on `Done`, with or without possible outcomes (spec 1208, #3295).
+  - A Switch or FlowSwitch in `MatchFirst` mode (the default) gets a synthesized `Value` that returns the first true
+    case's label. In `MatchAny` mode (`MatchAny`, `matchAny` or `1`) it becomes the Elsa 4 Switch's `MatchAny` mode,
+    each case keeping its own condition (read with JavaScript truthiness, as in `MatchFirst`), so every true case's
+    connection runs, or `Default` when none is true (spec 1208 FR-028). Elsa 4 cannot run case activities in `MatchAny`
+    mode, so a `MatchAny` Switch case that holds an activity is `ELS3-ACTIVITY-UNSUPPORTED-MODE` (use a FlowSwitch and
+    connect the cases); so is a mode set by an expression or an unknown mode. Every case carries a case identity.
+    A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
+    code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
+    connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx
+    response goes to `Failed`.
   - `startNodeId` is always set: a `Start` activity's target, else the first start-capable child, else the first child
     with no inbound connection, else the first child.
   - `FlowFork`, `FlowJoin` and `Start` leave no node: a fork becomes several connections on one port (fan-out), a join
@@ -203,6 +222,7 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | A statement-form expression | A function that returns its last expression |
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
 | An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
+| `setOutcome(…)`, `setOutcomes(…)` in a RunJavaScript body | The body returns `complete(<value>, <pending selection>)` (spec 1208). Each call replaces the pending selection, and a body that sets nothing completes with `Done`. Literal names join the possible outcomes. A computed name, when the activity lists possible outcomes, selects any name outside them as a converter-declared outcome "Unlisted outcome" with no connection, so that path ends as in Elsa 3 (info `ELS3-SCRIPT-OUTCOME-CATCHALL`) |
 
 ### What is refused, and what to change in Elsa 3
 
@@ -210,7 +230,9 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 |---|---|---|
 | `newGuid()`, `newGuidString()`, `newShortGuid()`, `Guid`, `Math.random()` | `VF-IMP-005` | Use `getWorkflowInstanceId()` when one unique value per run is enough; otherwise pass the value in as a workflow input |
 | `new Date()`, `Date.now()`, `DateTime`, any use of `Date` | `VF-IMP-005` | Replace a wait loop with a Delay activity. Pass the current time or date values in as workflow inputs |
-| `setOutcome(…)`, `setOutcomes(…)` | `VF-IMP-005` | Route with a Decision or Switch activity whose conditions carry the script's logic |
+| `setOutcome(…)`, `setOutcomes(…)` in an input expression | `VF-IMP-005` | Move the call into a RunJavaScript, or route with a Decision or Switch activity. Only a RunJavaScript script selects outcomes in Elsa 4 |
+| `setOutcome(…)`, `setOutcomes(…)` with a computed name in a RunJavaScript whose possible outcomes are empty | `VF-IMP-005` | List every outcome the script can set in the activity's possible outcomes |
+| A RunJavaScript body that calls `setOutcome` and declares its own `complete` | `VF-IMP-005` | Rename the script's `complete`. Elsa 4 reserves it for the returned completion form |
 | `toJson(x)` | `VF-IMP-005` | Use `JSON.stringify(x)`, or `JSON.parse(JSON.stringify(x))` to copy a value. Elsa 3's `toJson` escaped HTML characters and kept .NET casing |
 | `parseGuid(s)` | `VF-IMP-005` | Keep the GUID as a string |
 | Byte, stream and Base64 helpers | `VF-IMP-005` | Move the conversion into an activity |
@@ -255,6 +277,20 @@ For example, 4 Parallels (20) inside 8 Sequences (32) put a node at level 54, wh
 `ELS3-ACTIVITY-NESTING-TOO-DEEP`, and the message names the level reached. A binding value that is itself deeply
 nested JSON can still exceed the limit at a convertible depth; the import then fails before anything is committed.
 
+## Converter revision
+
+An imported Elsa 3 version n becomes Elsa 4 version `{n}.{R}.0`, where R is `Elsa3ConverterRevision.CurrentRevision`
+(spec 235 R-8, #3921). At revision 0 the Elsa 4 version id is the Elsa 3 version id and a reusable's activity version
+id derives from it alone, as every import did before revisions existed. From revision 1 on, both ids and the draft ids
+derive from the Elsa 3 version id and R, so the same export imported after a converter upgrade adds `{n}.{R}.0`
+beside `{n}.{R-1}.0` instead of colliding with it (`ELS3-REUSABLE-IDENTITY-COLLISION`); nothing the earlier revision
+wrote is changed or unpublished. Bump the revision in the change that makes the converter emit different content for
+the same input, never otherwise, and only once a released converter may have been used for durable imports. Before
+GA no host keeps durable imports, so the revision stays 0 and rebuilding the store is the upgrade path (spec 235
+R-10). An older Elsa 3 version of a reusable whose `{m}.{R}.0` would be below a newer version that is already
+published is refused by the activity version bump rule and skipped with its dependents; the versions imported at the
+earlier revision keep running.
+
 ## Registration
 
 `Elsa3MappingFeature` registers the following:
@@ -262,6 +298,7 @@ nested JSON can still exceed the limit at a convertible depth; the import then f
 - the resolver, the replaced-type index, the normalizer and the converter, all scoped;
 - one `IElsa3NodeRewrite` per rewrite strategy;
 - the mappers and value-flow services;
-- the importer and the reusable-activity materializer.
+- the importer and the reusable-activity materializer;
+- the converter revision (`IElsa3ConverterRevision`), with `TryAdd`.
 
 The replaceable contracts are listed in its [extension-point catalog](EXTENSION_POINTS.md).

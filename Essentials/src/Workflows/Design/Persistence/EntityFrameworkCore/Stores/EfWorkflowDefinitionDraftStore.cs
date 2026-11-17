@@ -15,10 +15,14 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
     public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         var idHash = EfDesignSupport.LookupHash(draftId);
-        var row = await EfDesignSupport.ReadAsync("reading workflow draft", () => Query().SingleOrDefaultAsync(x => x.IdLookupHash == idHash, cancellationToken));
-        if (row is null)
+        var result = await EfDesignSupport.ReadAsync("reading workflow draft", () => Query().AsNoTracking()
+            .Where(x => x.IdLookupHash == idHash)
+            .Select(row => new { Row = row, PhysicalScope = EF.Property<string>(row, EfDesignSupport.ScopeKeyProperty) })
+            .SingleOrDefaultAsync(cancellationToken));
+        if (result is null)
             return null;
-        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow draft lookup");
+        var row = result.Row;
+        EfDesignSupport.EnsurePhysicalScope(result.PhysicalScope, row, "workflow draft lookup");
         EfDesignSupport.EnsureExactIdentity(draftId, row.Id, "workflow draft lookup");
         return EfDesignSupport.MapDraft(serializer, row);
     }

@@ -214,6 +214,7 @@ internal static class RulesCompiledPublicationFixture
         clrFeature.Options.SourceId = "rules-compiled-publication-test";
         clrFeature.ConfigureServices(services);
         new WorkflowsPublishingFeature().ConfigureServices(services);
+        new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new RulesRuntimeFeature().ConfigureServices(services);
         new RulesWorkflowsDesignFeature().ConfigureServices(services);
 
@@ -222,7 +223,6 @@ internal static class RulesCompiledPublicationFixture
             new MediatorFeature().ConfigureServices(services);
             new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
             new WorkflowsRuntimeRecurringTriggersFeature().ConfigureServices(services);
-            new WorkflowDesignValidationsFeature().ConfigureServices(services);
             new RuntimeEntityFrameworkCoreFeature
             {
                 Provider = "Sqlite",

@@ -4,7 +4,7 @@ Elsa Foundation is the transitional Elsa 4 foundation workspace. Contributions a
 
 ## Choose a starting point
 
-- To run the backend from source, use the [backend source quickstart](docs/contributing/backend-source-quickstart.md). For a prebuilt Workbench and Studio stack, follow the [Docker quickstart](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- To run the backend from source, use the [backend source quickstart](docs/contributing/backend-source-quickstart.md). To pair that Workbench with Studio from this repository's `Studio/` tree, use the [Studio source quickstart](Studio/docs/contributing/studio-source-quickstart.md). For a prebuilt Workbench and Studio stack, follow the [Docker quickstart](docker/compose/README.md#quick-start--published-images-no-clone-or-build); those published images are not built from current `main`.
 - To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
 - For conduct expectations and reporting, see the [Code of Conduct](CODE_OF_CONDUCT.md).
 - For a contributor question, use [Foundation Discussions Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a).

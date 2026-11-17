@@ -39,10 +39,10 @@ database connection string, or `RuntimeConnectionToken`.
 - `IConnectionTypeProvider`: a kind of external system (`http`, `google-drive`, …). Must declare
   supported schemes, non-secret settings, an allowed-hosts policy, and `TestAsync`.
   Known implementations include the built-in HTTP contribution (intra-domain) and the stateless
-  [Anthropic](../../../../Extensions/Agent/src/Specialists/Anthropic/README.md) and
-  [Azure OpenAI](../../../../Extensions/Agent/src/Specialists/AzureOpenAI/README.md) specialist
+  [Anthropic](../../../../Extensions/Agent/src/Anthropic/README.md) and
+  [Azure OpenAI](../../../../Extensions/Agent/src/AzureOpenAI/README.md) agent
   connection types (cross-domain), registered by their optional features through
-  `SpecialistModelConnectionTypeProvider`. The Connections type registry is a singleton immutable
+  `AgentModelConnectionTypeProvider`. The Connections type registry is a singleton immutable
   lookup; contributors must not capture scoped runtime factories/resolvers.
 - `IAuthenticationSchemeProvider`: an open auth-scheme plugin (`api-key`, `basic`, `bearer`,
   `oauth2`, …). Core never hard-codes a scheme list.

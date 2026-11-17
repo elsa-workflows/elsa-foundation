@@ -224,6 +224,32 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Equal(lease.LeaseId, (await backend.Liveness.FindAsync(WorkflowId, ownershipStateId))!.ExecutionLease!.LeaseId);
     }
 
+    /// <summary>
+    /// #2667: an alteration commits its terminal job evidence under the run's ownership lease. Each store checks that
+    /// fence in the unit of work that stages the job, so a commit under a lease the run no longer has changes nothing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(StoreData))]
+    public async Task A_fenced_alteration_commit_is_refused_under_a_lease_the_run_no_longer_has_and_lands_under_the_current_one(string store)
+    {
+        await using var backend = await RuntimeCheckpointCommitContractBackend.CreateAsync(store);
+        var job = await backend.ClaimAlterationJobAsync(WorkflowId);
+        var lost = await backend.Ownership.AcquireAsync(WorkflowId);
+        var current = await backend.Ownership.AcquireAsync(WorkflowId);
+        var commit = StatefulCommit(Terminal(TerminalChange(job, StatefulCommitId)));
+
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() =>
+            backend.Store.CommitAsync(commit with { ExpectedFence = lost.ToFence() }, Immediate()).AsTask());
+        Assert.Equal(0, await backend.CountMarkersAsync());
+        Assert.Equal(WorkflowAlterationJobStatus.Running, (await backend.Alterations.FindJobAsync(job.JobId))!.Status);
+
+        await backend.Store.CommitAsync(commit with { ExpectedFence = current.ToFence() }, Immediate());
+
+        Assert.Equal(1, await backend.CountMarkersAsync());
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await backend.Alterations.FindJobAsync(job.JobId))!.Status);
+        Assert.Equal(current.LeaseId, (await backend.Liveness.FindAsync(WorkflowId, RuntimeExecutionOwnershipStateId.For(WorkflowId)))!.ExecutionLease!.LeaseId);
+    }
+
     private sealed record ConflictCase(
         Func<RuntimeCheckpointCommitContractBackend, Task<RuntimeCheckpointCommit>> Arrange,
         Type ExceptionType,

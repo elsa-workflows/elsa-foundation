@@ -15,7 +15,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     const search = page.getByRole("searchbox", { name: "Search tasks", exact: true });
     expect((await search.boundingBox())!.width).toBeGreaterThan(200);
     await page.screenshot({ path: info.outputPath("empty.png"), fullPage: true });
-    await page.goto(`/user-tasks-ux.html?two&theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?two&theme=${theme}&backend=legacy`);
     const link = page.getByRole("link", { name: /^Review purchase request/ });
     await expect(link).toBeVisible();
     await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
@@ -23,17 +23,14 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Clear search", exact: true }).last().press("Enter");
     await expect(link).toBeVisible();
     await link.press("Enter");
-    const detail = page.getByRole("complementary", { name: /^Review purchase request/ });
+    const detail = page.getByRole("region", { name: /^Review purchase request/ });
     await expect(detail.getByRole("heading")).toBeFocused();
+    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await detail.getByRole("textbox", { name: "Note" }).fill("Reviewed with keyboard");
     await expect(detail.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
-    await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
-    await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
-    await expect(detail.getByRole("textbox", { name: "Note" })).toHaveValue("Reviewed with keyboard");
-    await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
-    page.once("dialog", dialog => dialog.dismiss());
-    await page.getByRole("link", { name: "Approve travel request", exact: true }).click();
-    await expect(detail.getByRole("textbox", { name: "Note" })).toHaveValue("Reviewed with keyboard");
+    await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Task inbox", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Approve travel request", exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("task-detail.png"), fullPage: true });
     page.once("dialog", dialog => dialog.dismiss());
@@ -77,17 +74,16 @@ test("User Tasks distinguish denied and failed requests from an empty inbox", as
   }
 });
 
-test("an unconfirmed response survives filtering and refuses task switches until resolved", async ({ page }) => {
+test("a standalone task retains an unconfirmed response and prevents leaving until resolved", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?two&ambiguous");
   await page.getByRole("link", { name: /^Review purchase request/ }).click();
-  const detail = page.getByRole("complementary", { name: /^Review purchase request/ });
+  const detail = page.getByRole("region", { name: /^Review purchase request/ });
   await detail.getByRole("textbox", { name: /^Note/ }).fill("Keep this exact response");
   await detail.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(detail.getByRole("button", { name: "Retry Approve", exact: true })).toBeVisible();
   await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeDisabled();
-  await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("missing");
-  await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
-  await page.getByRole("link", { name: "Approve travel request", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Approve travel request", exact: true })).toHaveCount(0);
   await expect(detail.getByRole("textbox", { name: /^Note/ })).toHaveValue("Keep this exact response");
   await detail.getByRole("button", { name: "Retry Approve", exact: true }).click();
   const sent = await page.evaluate(() => (window as unknown as { taskRequests: unknown[] }).taskRequests);
@@ -105,4 +101,13 @@ test("an unconfirmed response survives filtering and refuses task switches until
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "More form versions", exact: true })).toBeVisible();
+});
+
+
+test("an expired task page restarts its collection with the search preserved", async ({ page }) => {
+  await page.goto("/user-tasks-ux.html?cursor-error&after=expired&search=Review");
+  await expect(page.getByRole("heading", { name: "Tasks unavailable", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "First page", exact: true }).click();
+  await expect(page.getByRole("link", { name: /^Review purchase request/ })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveValue("Review");
 });

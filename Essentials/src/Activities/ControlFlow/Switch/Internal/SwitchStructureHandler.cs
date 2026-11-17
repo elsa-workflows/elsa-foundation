@@ -77,6 +77,11 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
         return projections;
     }
 
+    // Switch promises no order between its branches, so availability stays unknown. It schedules the chosen branch
+    // itself, once per run, so no earlier run of a branch leads to a later one.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);
@@ -116,12 +121,22 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
         if (duplicateMatch is not null)
             throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares duplicate case match value '{duplicateMatch}'. Each Switch case must have a unique match value.");
 
+        if (authoredStructure.Mode is { } mode && mode != SwitchModes.MatchAny)
+            throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares unknown mode '{mode}'. Use '{SwitchModes.MatchFirst}' or '{SwitchModes.MatchAny}'.");
+        // In MatchAny mode several cases can be selected at once, and they route through their outcome connections; a
+        // case branch activity runs only as the one selected branch, so it cannot express that (spec 1208 FR-031).
+        if (authoredStructure.MatchesAny && authoredStructure.Cases.FirstOrDefault(@case => @case.Activity is not null) is { } branched)
+            throw new ArgumentException(
+                $"Switch activity node '{activity.NodeId}' is in '{SwitchModes.MatchAny}' mode, so its case '{branched.Match}' cannot hold an activity. " +
+                "Connect each case outcome to the activities it should run instead.");
+
         var executableStructure = new SwitchExecutableStructure(
             authoredStructure.Cases
                 .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId)
                 { ConditionInputKey = @case.Condition is null ? null : SwitchActivity.ConditionInputKey(@case.CaseId!) })
                 .ToArray(),
-            authoredStructure.Default?.NodeId);
+            authoredStructure.Default?.NodeId,
+            authoredStructure.Mode);
 
         return new ActivityNodeStructure(
             SwitchActivity.StructureKind,
@@ -140,7 +155,8 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
                 .Select(@case => new SwitchExecutableCase(@case.Match, Remap(@case.Activity, authoredToExecutableNodeIds))
                 { ConditionInputKey = @case.ConditionInputKey })
                 .ToArray(),
-            Remap(executable.Default, authoredToExecutableNodeIds));
+            Remap(executable.Default, authoredToExecutableNodeIds),
+            executable.Mode);
         return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
     }
 

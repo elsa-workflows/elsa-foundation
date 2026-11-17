@@ -28,7 +28,7 @@ public sealed class CreateUserTask(IUserTaskRuntime tasks) : StatefulActivity<Us
     [ActivityInput(UIHint = "user-task-actions", DefaultValue = "[\"Approve\",\"Reject\"]", DefaultSyntax = "Object"), Required] public ICollection<string> Actions { get; set; } = ["Approve", "Reject"];
     [ActivityInput(DefaultValue = "[]", DefaultSyntax = "Object")] public ICollection<string> OptionalFormActions { get; set; } = [];
     [ActivityInput(UIHint = "user-task-form")] public string? FormId { get; set; }
-    [ActivityInput] public string? FormVersion { get; set; }
+    [ActivityInput(UIHint = "user-task-form-version")] public string? FormVersion { get; set; }
     [ActivityInput(DefaultValue = "{}", DefaultSyntax = "Object")] public JsonElement Prefill { get; set; } = JsonSerializer.SerializeToElement(new { });
 
     protected override async ValueTask<ActivityTransition<UserTaskResponse, UserTaskWait>> ExecuteAsync(ActivityExecutionContext context)

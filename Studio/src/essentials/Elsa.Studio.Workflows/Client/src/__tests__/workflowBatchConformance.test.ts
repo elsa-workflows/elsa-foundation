@@ -4,7 +4,7 @@ import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workfl
 import { buildWorkflowSnapshotContent } from "../workflow-editor/useWorkflowContextBridge";
 import fixture from "./workflowBatchConformance.json";
 
-// Spec 1193 slice C: the same cases Elsa.Agent.Tests prepares on the server (WorkflowBatchConformanceTests). What the
+// Spec 1193 slice C: the same cases Elsa.Weaver.Tests prepares on the server (WorkflowBatchConformanceTests). What the
 // server freezes the applier must apply; what the server refuses the applier refuses too, so the two never drift.
 const catalog = fixture.catalog as unknown as ActivityCatalogItem[];
 const draft = () => structuredClone(fixture.draft) as unknown as WorkflowDraft;

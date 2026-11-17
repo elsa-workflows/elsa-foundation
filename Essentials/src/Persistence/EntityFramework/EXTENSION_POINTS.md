@@ -476,6 +476,6 @@ Pins and collection serialize on the source fence and relational foreign keys. A
 be released only after the future shared publication coordinator proves safe terminal cancellation
 or transfers retention to a confirmed release. No timeout or absent receipt authorizes release.
 This source capability does not compile, reserve a release, publish or make a snapshot executable.
-See [spec 1179's boundary](../../../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+See [spec 1179's boundary](../../../../specs/1179-agents/plan.md#3790-source-slice-placement-and-transition).
 
 The initial collection policy retains snapshots for the lifetime of an active copy, even after individual pins are released. Collection requires a discarded copy and no pins. The retained discarded copy cannot capture again, so collected snapshot/operation IDs cannot be rebound to new content. More aggressive active-copy collection would require durable operation tombstones; it is not silently approximated here.

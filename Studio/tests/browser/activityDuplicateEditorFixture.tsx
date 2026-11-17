@@ -282,7 +282,7 @@ function ActivityDuplicateEditorFixtureContent() {
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
-    promptActions: { list: () => [] },
+    promptActions: { list: () => new URLSearchParams(window.location.search).has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [] },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
@@ -447,7 +447,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           return {
             definition: {
               id: "definition-1",
-              name: "Order confirmation",
+              name: new URLSearchParams(window.location.search).has("toolbar-long-name") ? "Order processing and customer notification across all regional fulfillment centers" : "Order confirmation",
               description: "Notifies the buyer.",
               createdAt: "2026-10-14T00:00:00Z",
               lastModifiedAt: "2026-10-14T00:00:00Z",

@@ -224,7 +224,8 @@ describe("auth provider manager", () => {
   });
 
   it("can build provider adapters dynamically from backend bootstrap metadata", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn<typeof fetch>(async input => {
+      const url = String(input);
       if (url.endsWith("/_elsa/identity/bootstrap")) {
         return jsonResponse({
           ownershipMode: "foundation-owned",

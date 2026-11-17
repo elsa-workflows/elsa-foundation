@@ -69,6 +69,9 @@ public sealed class ClaimsNormalizationTests
             new(IdentityClaimTypes.Normalized, "v1"),
             new(IdentityClaimTypes.Normalized, "forged"),
             new(IdentityClaimTypes.UserId, "user-forged"),
+            new(IdentityClaimTypes.UserId.ToUpperInvariant(), "user-forged-upper"),
+            new(IdentityClaimTypes.SubjectProvider, "idp-forged"),
+            new(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "idp-forged-upper"),
             new(ClaimTypes.Role, "external-role"),
             new("groups", "admins")
         ]));
@@ -92,7 +95,9 @@ public sealed class ClaimsNormalizationTests
         Assert.Equal("v1", marker.Value);
         Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.TenantId && x.Value == "stale-tenant");
         Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.Provider && x.Value == "stale-provider");
-        Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.UserId);
+        // Stripped case-insensitively, as FindAll and FindFirstValue read claim types downstream.
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

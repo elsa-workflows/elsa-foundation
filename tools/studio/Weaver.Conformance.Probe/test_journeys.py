@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from agent_transport import Response, AgentTransportError
+from weaver_transport import Response, WeaverTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
 from contextlib import nullcontext
 from unittest.mock import DEFAULT
@@ -232,11 +232,11 @@ class JourneyBoundariesTests(unittest.TestCase):
 
     def test_identical_http_failure_status_cannot_mask_wrong_cause(self):
         def response(code, status=403):
-            return Response("POST", "/_elsa/agent/proposals/p/execute", status, {},
+            return Response("POST", "/_elsa/weaver/proposals/p/execute", status, {},
                             json.dumps({"error": {"code": code, "message": "observed native refusal"}}).encode(), {})
-        self.assertEqual("agent.proposal.forbidden", expect_error(response("agent.proposal.forbidden"), 403, "agent.proposal.forbidden")["error"]["code"])
-        with self.assertRaises(RuntimeError): expect_error(response("agent.proposal.expired"), 403, "agent.proposal.forbidden")
-        with self.assertRaises(AgentTransportError): expect_error(response("agent.proposal.forbidden", 409), 403, "agent.proposal.forbidden")
+        self.assertEqual("weaver.proposal.forbidden", expect_error(response("weaver.proposal.forbidden"), 403, "weaver.proposal.forbidden")["error"]["code"])
+        with self.assertRaises(RuntimeError): expect_error(response("weaver.proposal.expired"), 403, "weaver.proposal.forbidden")
+        with self.assertRaises(WeaverTransportError): expect_error(response("weaver.proposal.forbidden", 409), 403, "weaver.proposal.forbidden")
 
     def test_private_principal_recipe_is_concrete_and_isolates_tenant_axis(self):
         with tempfile.TemporaryDirectory() as temporary:

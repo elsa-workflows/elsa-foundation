@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Api.Tests;
 
@@ -23,14 +24,16 @@ internal static class CatalogReaderFixture
         IReadOnlyList<ActivityDefinitionVersion> versions,
         IActivityFeatureAttributionResolver? resolver = null,
         IActivityAvailabilityEvaluator? availabilityEvaluator = null,
-        IActivityAvailabilitySettingsStore? settingsStore = null) =>
+        IActivityAvailabilitySettingsStore? settingsStore = null,
+        IWellKnownTypeRegistry? typeRegistry = null) =>
         new ActivityAuthoringCatalogReader(
                 new InMemoryDefinitionStore(definitions),
                 new InMemoryVersionStore(versions),
                 availabilityEvaluator ?? new AllAddableEvaluator(),
                 settingsStore ?? new NullSettingsStore(),
                 [new IntrinsicAuthoringDescriptorProvider()],
-                resolver ?? new NoFeatureAttribution())
+                resolver ?? new NoFeatureAttribution(),
+                typeRegistry)
             .ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
 
     private sealed class InMemoryDefinitionStore(IReadOnlyList<ActivityDefinition> definitions) : IActivityDefinitionStore

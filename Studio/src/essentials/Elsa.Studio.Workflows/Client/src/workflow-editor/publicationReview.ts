@@ -149,6 +149,25 @@ export function withPublicationWarnings(review: PublicationReviewState, entries:
   return added.length ? { ...review, validationWarnings: [...review.validationWarnings, ...added] } : review;
 }
 
+/** Designer-side Decision (and other contribution) issues that must block Review & publish in Studio. */
+export function withLocalValidationErrors(
+  review: PublicationReviewState,
+  entries: ReadonlyArray<{ message?: string | null }> | null | undefined
+): PublicationReviewState {
+  const added = (entries ?? [])
+    .map(entry => entry.message?.trim())
+    .filter((message): message is string => !!message)
+    .filter((message, index, messages) => !review.validationErrors.includes(message) && messages.indexOf(message) === index);
+  if (!added.length) return review;
+  const validationErrors = [...review.validationErrors, ...added];
+  return {
+    ...review,
+    validationErrors,
+    phase: "validationBlocked",
+    executableStatus: "blocked"
+  };
+}
+
 /**
  * The label the review shows for a publication's version: the fetched design version's human-readable
  * label when Studio has it, falling back to the publication's version id otherwise. Kept as the single

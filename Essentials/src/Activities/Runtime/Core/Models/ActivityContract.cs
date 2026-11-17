@@ -128,6 +128,7 @@ public sealed class ActivityContract
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool SupportsBackgroundExecution { get; }
 
+
     private string ComputeFingerprint()
     {
         var payload = new

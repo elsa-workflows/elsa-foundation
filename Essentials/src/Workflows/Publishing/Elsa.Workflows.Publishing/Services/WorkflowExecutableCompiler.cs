@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Collections.Immutable;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
@@ -9,6 +12,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -44,6 +48,36 @@ public sealed class WorkflowExecutableCompiler(
     : IWorkflowExecutableCompiler
 {
     private readonly IWorkflowExecutableStore? _executableStore = executableStore;
+
+    private readonly IActivityDataSelectionAnalyzer? _dataSelectionAnalyzer;
+
+    /// <summary>Uses the required scoped source authority while preserving every existing constructor signature.</summary>
+    public WorkflowExecutableCompiler(
+        IActivityDataSelectionAnalyzer dataSelectionAnalyzer,
+        IWorkflowDefinitionVersionStore workflowVersions,
+        IActivityDefinitionVersionStore activityVersions,
+        IActivityDefinitionVersionPublicationStore activityPublications,
+        IExecutableActivityTemplateReader activityTemplates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        ActivityTemplatePlacer templatePlacer,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        WorkflowExecutableHasher hasher,
+        ActivityTreeProjector activityTreeProjector,
+        ExecutableNodeCompiler executableNodeCompiler,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null,
+        IWorkflowExecutableStore? executableStore = null,
+        ActivityResultConversionPlanLinker? activityResultConversionPlanLinker = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        : this(workflowVersions, activityVersions, activityPublications, activityTemplates, sourceReferences,
+            templatePlacer, inputBindingCompiler, outputCaptureCompiler, hasher, activityTreeProjector,
+            executableNodeCompiler, placementSidecars, metadataEnricher, executableStore,
+            activityResultConversionPlanLinker, incidentStrategyCatalog)
+    {
+        _dataSelectionAnalyzer = dataSelectionAnalyzer ?? throw new ArgumentNullException(nameof(dataSelectionAnalyzer));
+    }
+
 
     /// <summary>Preserves current main's pre-dependency-store primary-constructor signature.</summary>
     public WorkflowExecutableCompiler(
@@ -124,6 +158,9 @@ public sealed class WorkflowExecutableCompiler(
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
 
+            var sourceAuthority = _dataSelectionAnalyzer
+                ?? throw new InvalidOperationException("Workflow compilation requires the scoped activity data selection analyzer. Compose WorkflowDesignValidations and use the source-authority constructor.");
+
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
@@ -137,6 +174,7 @@ public sealed class WorkflowExecutableCompiler(
             var placedStorageDriverRequirements = new HashSet<RuntimeStorageDriverRequirement>();
             var placedLayoutSegments = new List<ExecutableLayoutBoundarySegment>();
             var placedPresentation = new List<WorkflowExecutableActivityPresentationRecord>();
+            var compiledBoundaryInputs = ImmutableDictionary.CreateBuilder<string, ImmutableArray<ArgumentState>>(StringComparer.Ordinal);
             foreach (var activity in projection.Nodes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -160,7 +198,8 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler);
+                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs);
+                compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
                     publication.Contract.Outputs,
@@ -198,6 +237,30 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
+            {
+                source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,
+                source.DefinitionVersionId, state
+            });
+            var sourceAnalysis = await sourceAuthority.AnalyzeAsync(new ActivityDataSelectionDocument(
+                "Workflow", source.DefinitionId,
+                sourceRevision,
+                rootActivity, state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
+                state.Outputs.ToImmutableArray()) { CompiledBoundaryInputs = compiledBoundaryInputs.ToImmutable() }, cancellationToken: cancellationToken);
+            if (!StringComparer.Ordinal.Equals(sourceAnalysis.ContractRevision, sourceRevision))
+                throw new InvalidOperationException("Activity data selection analysis does not match the actual workflow candidate.");
+            var sourceErrors = sourceAnalysis.Findings
+                .Where(finding => StringComparer.Ordinal.Equals(finding.Severity, ValidationSeverities.Error))
+                .ToImmutableArray();
+            if (!sourceErrors.IsEmpty)
+                throw new ActivityDataSelectionRejectedException(sourceErrors)
+                {
+                    ResourceKind = source.SourceKind,
+                    ResourceId = source.SourceId
+                };
+
+            compiledRoot = MemberReadSelectionPinner.Pin(compiledRoot, sourceAnalysis.MemberReads);
+
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {
@@ -207,6 +270,20 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             ValidatePinnedActivityContracts(compiledRoot);
+
+            try
+            {
+                ActivityTemplateDataSelectionGuard.Validate(compiledRoot, hasSourceAnalysis: true,
+                    activityTreeProjector.DescribeDataSelectionFacts(compiledRoot, state));
+            }
+            catch (ActivityDataSelectionRejectedException refusal)
+            {
+                throw new ActivityDataSelectionRejectedException(refusal.Findings)
+                {
+                    ResourceKind = source.SourceKind,
+                    ResourceId = source.SourceId
+                };
+            }
 
             // Direct result references can only be resolved once the complete executable tree (including
             // placed template boundaries and optional metadata enrichment) is available. Pin the producer
@@ -275,7 +352,7 @@ public sealed class WorkflowExecutableCompiler(
         }
         catch (Exception exception) when (
             exception is not WorkflowExecutableCompilationException &&
-            (exception is WorkflowExecutableDependencyGraphException or ArgumentException or InvalidOperationException))
+            (exception is WorkflowExecutableDependencyGraphException or ActivityDataSelectionRejectedException or ArgumentException or InvalidOperationException))
         {
             throw new WorkflowExecutableCompilationException(source?.DefinitionId, source?.DefinitionVersionId, exception.Message, exception);
         }
@@ -285,7 +362,8 @@ public sealed class WorkflowExecutableCompiler(
         Elsa.Workflows.Design.Core.Models.ActivityNode activity,
         Elsa.Activities.Design.Core.Models.ActivityContract contract,
         RuntimeActivityDescriptor boundaryDescriptor,
-        RuntimeInputBindingCompiler compiler)
+        RuntimeInputBindingCompiler compiler,
+        out ImmutableArray<ArgumentState> effectiveInputs)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var authored = activity.Inputs.ToArray();
@@ -326,6 +404,7 @@ public sealed class WorkflowExecutableCompiler(
             result[input.ReferenceKey] = inputState is null
                 ? compiler.CompileUnboundPublishedBoundaryInput(activity.NodeId, input)
                 : compiler.CompilePublishedBoundaryInput(activity.NodeId, input, inputState);
+        effectiveInputs = [.. inputStates.Where(item => item.State is not null).Select(item => item.State!)];
         return result;
     }
 

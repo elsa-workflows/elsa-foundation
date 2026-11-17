@@ -1,7 +1,9 @@
 using Acornima;
+using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
@@ -178,8 +180,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         try
         {
             // Share grammar selection with runtime without evaluating authored code.
-            JavaScriptBindingSyntax.IsExpression(source);
-            return [];
+            Node parsed = JavaScriptBindingSyntax.IsExpression(source)
+                ? new Parser().ParseExpression(source, strict: true)
+                : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            return ReservedNameDiagnostics(parsed, revision);
         }
         catch (ParseErrorException exception)
         {
@@ -198,4 +202,18 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             ];
         }
     }
+
+    /// <summary>
+    /// <c>complete</c> is a reserved built-in name in every JavaScript surface (spec 1208 FR-007a, ADR 0045 §5): a binding
+    /// that declares it, as a variable, function, class, parameter or catch binding, is refused at design time.
+    /// </summary>
+    private static IReadOnlyList<ExpressionDiagnostic> ReservedNameDiagnostics(Node root, string revision) =>
+        JavaScriptReservedNames.CollectCompleteDeclarations(root)
+            .Select(identifier => new ExpressionDiagnostic(
+                "JavaScript/ReservedName",
+                ExpressionDiagnosticSeverity.Error,
+                $"'{JavaScriptScriptBuiltIns.Complete}' is a reserved built-in name and cannot be declared in an expression. Rename it.",
+                revision,
+                JavaScriptReservedNames.RangeOf(identifier)))
+            .ToArray();
 }

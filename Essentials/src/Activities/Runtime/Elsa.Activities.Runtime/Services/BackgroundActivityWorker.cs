@@ -184,7 +184,7 @@ public sealed class BackgroundActivityWorker(
             result = transition switch
             {
                 IActivityCompletionTransition completion => new BackgroundActivityWorkTerminalResult(
-                    BackgroundActivityWorkResultKind.Complete, completion.Outcome,
+                    BackgroundActivityWorkResultKind.Complete, completion.Selection,
                     codec.Serialize(node.ActivityContract, completion, settings.MaximumResultBytes)),
                 IActivityFaultTransition fault => new BackgroundActivityWorkTerminalResult(
                     BackgroundActivityWorkResultKind.Fault, fault: masking.Mask(fault.Fault).ToNormalized()),

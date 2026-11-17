@@ -144,6 +144,13 @@
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
+    <!--
+      Transitive pin (see Microsoft.OpenApi above): no project references System.Security.Cryptography.Pkcs
+      directly; Microsoft.Data.SqlClient pulls in 9.0.13, which carries CVE-2026-84008 (GHSA-846f-f764-76mx,
+      a .NET denial of service). 9.0.21 is the first patched 9.0.x build (#3707). Deleting this pin lets the
+      graph resolve the vulnerable build again.
+    -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />

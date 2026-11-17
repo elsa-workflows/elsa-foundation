@@ -3,7 +3,10 @@ using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
 namespace Elsa.Activities.Switch.Internal;
 
-/// <summary>Consumes the ordered case inputs before the invocation's immutable snapshot is committed.</summary>
+/// <summary>
+/// Consumes the ordered case inputs before the invocation's immutable snapshot is committed: up to the first match, or
+/// every case in <see cref="Models.SwitchModes.MatchAny"/> mode, which reads each case's condition (spec 1208 FR-031).
+/// </summary>
 internal sealed class SwitchStructureInputPolicy : IRuntimeStructureInputMaterializationPolicy
 {
     public string Kind => SwitchActivity.StructureKind;
@@ -22,7 +25,7 @@ internal sealed class SwitchStructureInputPolicy : IRuntimeStructureInputMateria
                 var value = await context.MaterializeAsync(nameof(SwitchActivity.Value), cancellationToken);
                 matches = StringComparer.Ordinal.Equals(item.Match, SwitchConditionValues.String(value, nameof(SwitchActivity.Value)));
             }
-            if (matches) return;
+            if (matches && !navigator.MatchesAny) return;
         }
     }
 }
