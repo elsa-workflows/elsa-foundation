@@ -24,12 +24,15 @@ function Surface(props: StudioExpressionEditorProps) {
     onChange={(document, edit) => props.onChange(document.value, edit)} />;
 }
 const contribution: StudioExpressionEditorContribution = { id: "fixture.text", supports: context => context.syntax === "JavaScript",
-  sourceInsertion: { render: ({ alias }) => ({ supported: true, insert: `args.${alias}["customerId"]` }) }, surfaces: { inline: Surface, expanded: Surface } };
+  sourceInsertion: { render: ({ alias, memberPath }) => ({ supported: true, insert: `args.${alias}${memberPath.map(segment => `[${JSON.stringify(segment)}]`).join("")}` }) },
+  surfaces: { inline: Surface, expanded: Surface } };
 const descriptor: StudioActivityDescriptor = { typeName: "Writer", inputs: [{ name: "Text", referenceKey: "Text", displayName: "Message", typeName: "System.String", isWrapped: true }], outputs: [], ports: [] };
 const parameter = { kind: "ActivityResult" as const, producerNodeId: "fetch", projectionKey: "$result", isOptional: false };
 let root: Root, container: HTMLDivElement, doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>;
 let ownerContext = {}, readOnly = false, installed = true, changes = 0;
 let serverRefusal: ActivityDataContextResult | null = null;
+// The default-on composition; the default-off tests turn member reads off (owner decision, 17 Nov).
+let memberReads = true;
 const rangeRects = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
 const rangeBounds = Object.getOwnPropertyDescriptor(Range.prototype, "getBoundingClientRect");
 const shape = (scalar: boolean) => ({ state: "known" as const, kind: scalar ? "scalar" as const : "object" as const,
@@ -41,7 +44,7 @@ const request = vi.fn(async (_target: unknown, _signal: AbortSignal, _skip: numb
   const selected = shape(path.length > 0);
   const rootShape = path.length ? selected : { ...selected, members: [{ serializedName: "customerId", displayName: "Customer ID", shape: shape(true) }] };
   return { state: "supported", code: null, documentRevision: getDraftContentRevision(doc.state.draft!), baseRevision: "base", snapshotHash: "hash", contextRevision: "context",
-    hasMoreSources: false, memberReadsEnabled: false, expressionParametersEnabled: true, expressionType: "JavaScript",
+    hasMoreSources: false, memberReadsEnabled: memberReads, expressionParametersEnabled: true, expressionType: "JavaScript",
     target: { displayName: "Message", target: { nodeId: "consumer", inputKey: "Text" }, constraint: null, type: { alias: "String", collectionKind: "Single" } },
     sources: [{ id: "activity:fetch:$result", displayName: "Fetch", activityResultSource: parameter, binding: null, reasonCode: "EarlierProducerRun", availability: "definite",
       parameterSource: parameter, parameterPath: path, type: rootShape.type, shape: rootShape }] };
@@ -66,7 +69,7 @@ beforeEach(() => {
   // jsdom has no text geometry; only the missing DOM APIs are supplied, never editor/history behavior.
   if (!rangeRects) Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
   if (!rangeBounds) Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => new DOMRect() });
-  window.dispatchEvent(new Event("elsa:auth-session-started")); ownerContext = {}; readOnly = false; installed = true; changes = 0; serverRefusal = null; request.mockClear();
+  window.dispatchEvent(new Event("elsa:auth-session-started")); ownerContext = {}; readOnly = false; installed = true; changes = 0; serverRefusal = null; memberReads = true; request.mockClear();
   container = document.createElement("div"); document.body.append(container); root = createRoot(container); render();
   const draft: WorkflowDraft = { id: "draft", definitionId: "definition", sourceVersionId: null, validationErrors: [], layout: [], state: { variables: [], inputs: [], outputs: [],
     rootActivity: { nodeId: "consumer", activityVersionId: "writer", inputs: [], outputs: [], Text: { typeName: "System.String", expression: { type: "JavaScript", value: "0" } } } } };
@@ -197,4 +200,45 @@ it("explains incompatible portable source capability without proposing a native 
   key(panel, "Escape"); await vi.waitFor(() => expect(document.querySelector(".wf-data-chooser-panel")).toBeNull());
   await vi.waitFor(() => expect(document.activeElement).toBe(insertButton()));
   expect(stored()).toBe("0"); expect(changes).toBe(0); expect(history.canUndoNow).toBe(false);
+});
+
+const memberNavigation = () => document.querySelector("[role='dialog'] nav[aria-label='Member path'], [role='dialog'] [role='listbox'][aria-label='Members'], [role='dialog'] input[aria-label='Member name']");
+const sourceOption = () => [...document.querySelectorAll<HTMLElement>("[role='dialog'] [role='option']")].find(element => element.textContent?.includes("Get Customer"))!;
+it("with member reads on, opens the members of an object source before inserting", async () => {
+  await open(); expect(sourceOption().querySelector("svg")).not.toBeNull();
+  click(sourceOption());
+  await vi.waitFor(() => expect([...document.querySelectorAll("[role='option']")].some(element => element.textContent?.includes("customerId"))).toBe(true));
+  expect(memberNavigation()).not.toBeNull(); expect(stored()).toBe("0"); expect(changes).toBe(0);
+  expect(request.mock.calls.at(-1)![3]).toMatchObject({ parameterSource: parameter, memberPath: [], includeMemberShapes: true });
+});
+it("with member reads off, offers no member navigation and inserts the whole value in one edit", async () => {
+  memberReads = false;
+  click(container.querySelector<HTMLButtonElement>(".studio-code-editor-preview")!);
+  await vi.waitFor(() => expect(content()).not.toBeNull()); content().focus(); key(content(), "a", true);
+  await open();
+  // Like the native default-off chooser, a source row does not lead into its members.
+  expect.soft(sourceOption().querySelector("svg")).toBeNull(); expect(memberNavigation()).toBeNull();
+  click(sourceOption()); expect.soft(memberNavigation()).toBeNull();
+  await vi.waitFor(() => expect(typeof stored()).toBe("object"));
+  await vi.waitFor(() => expect(document.querySelector("[role='dialog']")).toBeNull());
+  expect(stored()).toMatchObject({ source: "args.data", parameters: { data: parameter } }); expect(changes).toBe(1);
+  const focused = request.mock.calls.map(call => call[3]).filter(query => query?.parameterSource);
+  expect(focused).toEqual([{ expressionType: "JavaScript", parameterSource: parameter, expectedSnapshotHash: "hash", memberPath: [] }]);
+  expect(request.mock.calls.every(call => (call[3]?.memberPath ?? []).length === 0)).toBe(true);
+  await vi.waitFor(() => expect(document.activeElement).toBe(content()));
+});
+it("with member reads off, keeps a stored request-path parameter and its member access unchanged", async () => {
+  memberReads = false;
+  const legacy = { kind: "WorkflowRequest", memberKey: "payload", path: "body.customer" };
+  const definition = { language: "JavaScript", source: 'args.legacy["customerId"]', resultType: { alias: "String", collectionKind: "Single" },
+    parameters: { legacy }, options: { keep: true }, capabilityProfile: "binding-pure-v1" };
+  flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, state: { ...draft!.state, rootActivity: { ...draft!.state.rootActivity!,
+    Text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } } } })));
+  await open(); expect(stored()).toBe(definition); expect(changes).toBe(0);
+  expect.soft(sourceOption().querySelector("svg")).toBeNull(); click(sourceOption());
+  await vi.waitFor(() => expect(changes).toBe(1));
+  const after = stored() as typeof definition;
+  expect(after.parameters).toEqual({ legacy, data: parameter }); expect(after.parameters.legacy).toStrictEqual(legacy);
+  expect(after.source).toContain('args.legacy["customerId"]'); expect(after.source.replace('args.legacy["customerId"]', "")).toBe("args.data");
+  expect(after.options).toEqual({ keep: true });
 });

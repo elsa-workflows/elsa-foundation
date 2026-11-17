@@ -35,6 +35,9 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   latest.current = { host, target, current, onSelect, onRefusal, onRefresh };
   const expressionRef = useRef(expression); expressionRef.current = expression;
   const expressionType = expression?.type;
+  // Owner decision (17 Nov): like the native chooser, expression insertion browses members only where the server
+  // enables member reads. Otherwise every source inserts its whole value; the author can still write member access.
+  const memberNavigation = !expressionType || result.memberReadsEnabled === true;
   const labels = { expressionType, describeActivity: host.describeActivity, describeScope: (scope: string) => host.describeActivity(scope)?.label ?? null };
   const families = groupActivityDataSources(result, labels);
 
@@ -49,7 +52,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
     setError(null);
     requestSources({ nodeId, inputKey }, controller.signal, 0, {
       ...(expressionType ? { expressionType, parameterSource: selection.parameterSource, expectedSnapshotHash: selection.snapshotHash } : { source: selection.source }),
-      memberPath: selection.path, includeMemberShapes: true
+      memberPath: selection.path, ...(memberNavigation ? { includeMemberShapes: true } : {})
     }).then(answer => {
       if (controller.signal.aborted) return;
       const now = latest.current;
@@ -61,7 +64,8 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         setError(answer.findings?.map(describeActivityDataMemberFinding).join(" ") || "This source cannot be used here.");
         return;
       }
-      if (expressionType ? answer.expressionParametersEnabled !== true || answer.expressionType !== expressionType : answer.memberReadsEnabled !== true) { setPacket(null); now.onRefresh(); return; }
+      if (expressionType ? answer.expressionParametersEnabled !== true || answer.expressionType !== expressionType || selection.path.length > 0 && answer.memberReadsEnabled !== true
+        : answer.memberReadsEnabled !== true) { setPacket(null); now.onRefresh(); return; }
       const offered = answer.sources.length === 1 ? answer.sources[0] : undefined;
       if (!offered || answer.documentRevision !== revision || answer.baseRevision !== base ||
         selection.sourceId && offered.id !== selection.sourceId || (expressionType
@@ -80,7 +84,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
       if (!controller.signal.aborted) { setPending(false); setPacket(null); setError("Studio couldn't load the members. Try again."); }
     });
     return () => controller.abort();
-  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result, expressionType, ownerContext]);
+  }, [selection, documentRevision, baseRevision, requestSources, nodeId, inputKey, result, expressionType, ownerContext, memberNavigation]);
 
   const focusedPath = useRef("");
   useLayoutEffect(() => {
@@ -116,6 +120,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const canonicalParameter = packet?.source.parameterSource ?? selection?.parameterSource;
   const selectedId = packet?.source.id ?? selection?.sourceId;
   const changePath = (path: string[], choose = false) => {
+    if (path.length > 0 && !memberNavigation) return;
     if ((canonicalRoot || expressionType && canonicalParameter) && shown && current)
       open(canonicalRoot, selectedId, shown.label, path, choose, canonicalParameter ?? undefined, packet?.result.snapshotHash ?? selection?.snapshotHash);
   };
@@ -127,11 +132,11 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         <button type="button" onClick={() => (selection?.path ?? shown.path).length ? changePath((selection?.path ?? shown.path).slice(0, -1)) : setSelection(null)}>Back</button>
         <strong>{shown.label}</strong>
       </div>
-      <nav aria-label="Member path" className="wf-data-member-path">
+      {memberNavigation ? <nav aria-label="Member path" className="wf-data-member-path">
         {activityDataBreadcrumbs(shown.path).map(crumb => <button key={crumb.key} type="button"
           aria-current={crumb.memberPath.length === shown.path.length ? "location" : undefined}
           disabled={!current || pending} onClick={() => changePath(crumb.memberPath)}>{crumb.label}</button>)}
-      </nav>
+      </nav> : null}
       <button type="button" className="wf-data-member-use" disabled={!ready || !!model?.reason || !(expressionType ? packet?.source.parameterSource : packet?.source.binding)}
         onClick={() => changePath(shown.path, true)}>{shown.path.length ? "Use this value" : "Use whole value"}</button>
       {model?.typeLabel ? <p className="wf-data-chooser-note">{model.typeLabel}{model.typeKnowledge === "deferred" ? " · Checked when the workflow runs" : ""}</p> : null}
@@ -170,11 +175,11 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
             onClick={() => {
               if (!current || option.unavailableReason || !(expressionType ? option.source.parameterSource : option.source.binding)) return;
               open(option.source.binding ?? undefined, option.source.id, option.label, [],
-                option.source.shape?.kind === "scalar" || option.source.shape?.kind === "collection", option.source.parameterSource ?? undefined, result.snapshotHash ?? undefined);
+                !memberNavigation || option.source.shape?.kind === "scalar" || option.source.shape?.kind === "collection", option.source.parameterSource ?? undefined, result.snapshotHash ?? undefined);
             }}>
             <span className="wf-data-chooser-option-label">{option.label}{option.disambiguation ? ` · ${option.disambiguation}` : ""}{option.shadowed ? " (outer scope)" : ""}</span>
             <span className="wf-data-chooser-option-type" title={option.typeLabel ?? undefined}>{option.typeLabel}</span>
-            {option.unavailableReason ? <small>{option.unavailableReason}</small> : <ChevronRight size={12} aria-hidden="true" />}
+            {option.unavailableReason ? <small>{option.unavailableReason}</small> : memberNavigation ? <ChevronRight size={12} aria-hidden="true" /> : null}
           </button>)}
         </div>
       </div>)}

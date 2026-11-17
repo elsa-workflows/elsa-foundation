@@ -132,23 +132,26 @@ export function activityDataMemberBrowser(result: ActivityDataContextResult, sou
   const identity = source ? sourceFactIdentity(source, labels) : null;
   const value = record(source?.binding?.value);
   const returnedPath = labels.expressionType ? source?.parameterPath ?? [] : source?.binding ? readActivityDataMemberReference(source.binding)?.memberPath ?? [] : [];
+  // Expression insertion offers whole values only where the server does not enable member reads (owner decision, 17 Nov).
+  const navigable = !labels.expressionType || result.memberReadsEnabled === true;
   const unsupported = !labels.expressionType && (identity?.role === "ActivityResult" && value?.producerScopeId != null ||
     identity?.role === "WorkflowRequest" && value?.path != null);
   const reason = !current(result, labels) ? "This input cannot select data here."
     : (labels.expressionType ? result.expressionParametersEnabled !== true : result.memberReadsEnabled !== true) ? (labels.expressionType ? "This server does not support expression data insertion." : "Member selection is not enabled on this server.")
+    : !navigable && path.length > 0 ? "Member selection is not enabled on this server."
     : !isActivityDataMemberPath(path, true) ? "The member path exceeds the supported bounds."
     : !source ? "This source is no longer available unambiguously."
     : JSON.stringify(returnedPath) !== JSON.stringify(path) ? "Load the current member path before browsing it."
     : protectedShape(shape) ? "This source is protected."
     : sourceReason(result, source, labels) ?? (unsupported ? "This source does not support member selection." : null);
   const container = shape?.kind !== "scalar" && shape?.kind !== "collection";
-  const allowLiteral = !reason && container && (shape?.kind === "map" || shape?.state !== "known");
-  const members = reason || !container ? [] : (shape?.members ?? []).flatMap(member => {
+  const allowLiteral = !reason && navigable && container && (shape?.kind === "map" || shape?.state !== "known");
+  const members = reason || !container || !navigable ? [] : (shape?.members ?? []).flatMap(member => {
     const memberPath = appendActivityDataMember(path, member.serializedName);
     return memberPath && !protectedShape(member.shape) ? [{ ...member, memberPath, key: JSON.stringify(memberPath) }] : [];
   });
   return { members, allowLiteral, reason, state: reason ? "unavailable" : shape?.state ?? "unknown",
-    information: reason ?? (shape?.kind === "collection" ? "Collections are selected as a whole; indexing and fan-out are not supported."
+    information: reason ?? (!navigable ? null : shape?.kind === "collection" ? "Collections are selected as a whole; indexing and fan-out are not supported."
       : shape?.kind === "scalar" ? "This value has no object members."
       : allowLiteral ? "Enter one exact member name. Dots and empty names are kept literally; names are case-sensitive."
       : shape?.state === "known" ? null : "The member shape is not known."),
