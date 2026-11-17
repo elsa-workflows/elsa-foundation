@@ -2,8 +2,8 @@
 
 **Branch**: `claude/3052-s6-define-b4bd05` | **Date**: 2026-11-16 | **Spec**: [spec.md](spec.md)
 
-**Status**: draft with the spec. Written to the recommended answers of Q1–Q9. Implemented on the initiative branch
-once the spec is approved (D-18), after spec 1221's implementation of the write history has merged there.
+**Status**: approved with the spec (2026-11-17). Written to the answers of Q1–Q9 (as recommended). Implemented on the initiative branch
+(D-18) after spec 1221's implementation of the write history has merged there.
 
 ## Summary
 

@@ -14,7 +14,7 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain — open decisions are Q1–Q9, each with a recommended answer
+- [x] No [NEEDS CLARIFICATION] markers remain — decisions Q1–Q9 are answered
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic

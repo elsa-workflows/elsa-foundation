@@ -4,8 +4,8 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft — waits for the coordinator's answers to Q1–Q9; the ADR it applies (ADR 0092) is agreed, and no
-ADR change is needed.
+**Status**: Approved — agreed 2026-11-17 with Q1–Q9 answered as recommended; it applies ADR 0092 as merged
+(`f52a661df`), and no ADR change is needed.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-6**,
 decisions **D-8** and **D-9**.
@@ -58,29 +58,28 @@ not part of ADR 0092.
   (captured, caller may not see it), `expired` (retention removed it). None of them is `null`; a captured `null` is a
   value.
 
-## Decisions (questions with recommended answers)
+## Decisions
 
-Each question has a recommended answer. The spec, plan and tasks are written to the recommended answers; a different
-answer is applied to the text before approval.
+Each question below was answered as recommended. The spec, plan and tasks follow these answers.
 
 - **Q1 — What orders writes across variables?** The record from spec 1221's implementation stores the frame revision
   after the write as its commit order. That orders the writes of one frame, not writes in different frames (a root
   variable and a container variable), and not activity lifecycle steps.
-  **Recommended:** a per-instance *commit sequence*, assigned at each logical checkpoint in the drain (one drain per
+  **Answer:** a per-instance *commit sequence*, assigned at each logical checkpoint in the drain (one drain per
   instance, so the order is total), stamped on every write record and on every activity lifecycle transition. Folded
   (coalesced) commits keep each logical checkpoint's own number, so intermediate writes keep their order. The frame
   revision stays as it is. If spec 1221's implementation adds this number, this spec only reads it; otherwise this
   spec adds it as an optional member, read back as absent on older records.
 - **Q2 — Where does the journal and the history come from?** Options: a new journal store; ADR 0084's commit journal;
   or derived from what is already committed.
-  **Recommended:** derived. Write records ride the writer's activity execution state (spec 1221's measured choice);
+  **Answer:** derived. Write records ride the writer's activity execution state (spec 1221's measured choice);
   lifecycle transitions carry their commit sequence (Q1). The read model queries one instance's activity executions,
   paged, and merges them by commit sequence. No new store and no extra rows. A projection is added later only if
   measurement shows the query is too slow for large instances (SC-004). ADR 0084's journal is about commit cost and is
   not used.
 - **Q3 — What is "another open branch" (#3292)?** Static structure cannot see script `setVariable`, C# writes,
   sub-workflows or run-time Flowchart paths.
-  **Recommended:** a write W2 by invocation I2 is a *concurrent overwrite* when the value it replaced was written by
+  **Answer:** a write W2 by invocation I2 is a *concurrent overwrite* when the value it replaced was written by
   another logical invocation I1 and the commit of that write does not *happen before* I2: I2 was not scheduled,
   directly or through the activities, join arrivals and parent callbacks in between, by that commit or a later commit
   of I1. The relation comes from scheduling provenance, which exists for every write source, so it covers scripts, C#
@@ -91,34 +90,34 @@ answer is applied to the text before approval.
   write committed after I2 started", was rejected: an intrinsic `Set`, and every inline leaf once there is no gap
   (ADR 0092 decision 10), starts and writes in one dispatch, so that rule would never flag them.
 - **Q4 — Is the trace always on, or does it follow the inspection granularity?**
-  **Recommended:** always available. It is derived when read (Q2, Q3), so it costs nothing at run time and nothing when
+  **Answer:** always available. It is derived when read (Q2, Q3), so it costs nothing at run time and nothing when
   no overwrite happens. The write-history metadata is mandatory under ADR 0092 decision 13 and does not depend on the
   inspection granularity; only values follow the capture settings (Q5).
 - **Q5 — Values: who captures them, and what does inspection show?** Spec 1221 FR-025 (value capture with retention)
   is not built yet.
-  **Recommended:** capture and retention stay with spec 1221. This spec shows each historical value through its value
+  **Answer:** capture and retention stay with spec 1221. This spec shows each historical value through its value
   state and reads payloads only through the existing separately authorized value-payload read. Until FR-025 lands,
   every non-operational historical value shows as `omitted`. The value a lost-update warning overwrote and a refused
   `Fault` write are operational data: shown under the same protection rules, never removed by inspection retention.
   The current value of a variable is shown with the same rules.
 - **Q6 — Which instances can be compared?**
-  **Recommended:** two instances of the same executable version only; any other pair is refused with a reason.
+  **Answer:** two instances of the same executable version only; any other pair is refused with a reason.
   Activity executions are matched by executable node and invocation origin path (loop iteration, sub-workflow), not by
   id. The comparison shows the first point where the commit order differs, and per variable whether the final value
   and the write sequence differ. Values are compared by digest, so comparison works when values were not captured and
   never discloses a value the caller may not see.
 - **Q7 — How does the lost-update warning reach the user as an "instance diagnostic"?**
-  **Recommended:** as data, not as an incident. The instance details carry a count of lost-update warnings and of
+  **Answer:** as data, not as an incident. The instance details carry a count of lost-update warnings and of
   concurrent overwrites, and the history can be filtered to them. An incident is not used: spec 1221's implementation
   found that an incident in a commit ends the coalescing session and would reopen the inline gap. Studio shows the
   count and links to the history (elsa-studio).
 - **Q8 — Who may read it?**
-  **Recommended:** the existing permission for activity execution inspection reads the history, journal, trace and
+  **Answer:** the existing permission for activity execution inspection reads the history, journal, trace and
   comparison metadata. Values follow the existing sensitive-value rules and payload read; nothing new is disclosed by
   the new endpoints.
 - **Q9 — Are `ModifyVariable` changes in the history?** Spec 1221's implementation stamps the operator as the writer of
   the new version but leaves no write record, and an alteration is not an activity execution.
-  **Recommended:** yes. The alteration's outcome records a write record (source `Alteration`) with its commit sequence;
+  **Answer:** yes. The alteration's outcome records a write record (source `Alteration`) with its commit sequence;
   the read model merges it into the variable's history. Without it, an operator's correction shows as a version gap.
 
 ## User Scenarios & Testing *(mandatory)*
