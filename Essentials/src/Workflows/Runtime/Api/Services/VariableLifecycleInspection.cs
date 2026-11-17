@@ -169,6 +169,9 @@ internal sealed class VariableLifecycleInspection
         var pending = new Stack<(string RowId, long Bound)>();
         if (ScheduledCommitOf(writerRow) is not { } start)
             return false;
+        // An alteration happens before an invocation an operator scheduled at or after it (a re-execution).
+        if (replaced.Row is null && IsAlterationScheduled(writerRow) && start >= commit)
+            return true;
         PushSchedulingEdges(writerRow, start, pending);
         while (pending.Count > 0)
         {
