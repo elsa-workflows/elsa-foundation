@@ -337,18 +337,17 @@ value and confirm it is not provided.
   Its reads — literal and computed — MUST go through the body's variable session (ADR 0089 R2, ADR 0090 decision 2,
   ADR 0092), which returns the committed value plus the step's own pending writes. The body's reads, literal and
   computed, go into the body's **session reads** (ADR 0092 decision 3), recorded per attempt, not into the input snapshot (ADR 0090 decision 2: a body read is never the pinned input snapshot). Only
-  input-binding reads, pinned and fallback, join the input snapshot. Neither the session nor the read set exists in
-  code yet: S-10 (spec 1221) builds the read set and session reads, and S-7 the session writes. This spec builds the
-  body's read path itself (resolve the body read plan's targets, read the committed value, plus pending writes once
-  S-7 lands) and records each read through S-10's session reads; the body's fallback candidates are loaded before the
-  body runs, as for input expressions (Q5). This spec's body
-  surface (T045–T047) therefore waits on S-10; until S-7 lands the session has no pending writes and equals the
-  committed state.
+  input-binding reads, pinned and fallback, join the input snapshot. No variable session exists in code yet. S-10
+  (spec 1221) provides the read-set types (`InputReadSet`, `SessionReads`); S-7 (ADR 0090) builds the variable session,
+  its read path and the recording of its session reads (spec 1221 T015 and T016 moved to S-7 on 2026-11-17). This spec
+  serves the body's `variables` root and `getVariable` over S-7's session: it resolves the body read plan's targets,
+  loads the body's fallback candidates before the body runs, as for input expressions (Q5), and reads each value
+  through the session. This spec's body surface (T045, T047, T050) therefore waits on S-10 and S-7.
 - **FR-034**: Within one evaluation, every read path to the same variable (`variables.x`, `variables['x']`,
   `getVariable('x')`, and a computed name that resolves to `x`) MUST return the same JavaScript value, so spec 1228
   can see a change made through any of them (spec 1228 FR-003).
-- **FR-035**: Every body read MUST be recorded in the session reads of S-10's read set (ADR 0092 decision 3) with the
-  variable's protection policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
+- **FR-035**: Every body read MUST be recorded in the session reads (ADR 0092 decision 3; recorded by S-7's session in
+  S-10's `SessionReads`) with the variable's protection policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
 - **FR-035a**: A script reads a workflow variable through `variables` (`variables.X`, `variables['X']`,
   `getVariable(...)`), in input expressions and in the `RunJavaScript` body alike: the converter, editor completions
   and documentation MUST use this form. Variable reads are no longer lowered to `args`; `args` carries inputs, activity
