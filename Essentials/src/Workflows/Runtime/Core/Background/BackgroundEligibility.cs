@@ -35,8 +35,9 @@ public enum BackgroundEligibilityCriterion
 }
 
 /// <summary>
-/// What the eligibility criteria read about one node. Each caller builds it from what it knows; a criterion whose fact
-/// is absent does not run (C6 runs only when <see cref="StagedCoordinatorEffects"/> is set, on the worker).
+/// What the eligibility criteria read about one node. Each caller builds it from what it knows. C6 runs only when
+/// <see cref="StagedCoordinatorEffects"/> is set, on the worker. A missing CLR type is refused under C1 and a missing
+/// contract under C3, unless <see cref="TypeCheckedAtRunTime"/> defers the CLR-type checks at publication.
 /// </summary>
 public sealed record BackgroundEligibilitySubject(string NodeId)
 {

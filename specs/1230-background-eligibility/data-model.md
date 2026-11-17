@@ -19,8 +19,9 @@ BackgroundExecutionSafe", because the declaration is how the author promises C7 
 
 ## BackgroundEligibilitySubject
 
-What a criterion reads. Built by each caller from what it has; a field a caller cannot know is absent, and the
-criteria that need it run only where it is present (C6 only at the worker).
+What a criterion reads. Built by each caller from what it has. C6 runs only where staged effects are known (the
+worker). A missing CLR type is refused under C1 and a missing contract under C3, except that a publication subject
+marked `TypeCheckedAtRunTime` skips the CLR-type checks (C1 interfaces, C2, C9 and the CLR parts of C3 and C4).
 
 | Field | Publication | Admission | Worker |
 |---|---|---|---|

@@ -132,7 +132,7 @@ the initiative branch first; no logic overlaps.
   worker has no access to variables, so the activity does not meet C9. C9 checks the activity type and a script's
   variable access differs per node; rather than a per-node rule, the activity is not marked. Marking it needs an
   isolated worker to get variable access (the variable session that lifts C9). The 13 remaining marks stand.
-- **Declaration order (data-model deviation).** The declaration check runs **after** the engine-checked criteria, not
+- **Declaration order (data-model updated to match).** The declaration check runs **after** the engine-checked criteria, not
   before C1, so an unmarked activity that also fails C1–C10 is refused naming that criterion (US5 acceptance 2:
   `Sequence` → C1, `Inline` → C3). An unmarked activity that passes them all is refused as "does not declare
   BackgroundExecutionSafe" (`WriteHttpResponse`, `SendHttpRequest`, `ReadLine`, `PublishEvent`, `Timer`).
@@ -142,7 +142,7 @@ the initiative branch first; no logic overlaps.
   a graph activity). An authored node that references a reusable definition is still refused C1 by the workflow
   compiler. A publishing shell need not host the runtime type a template provider pins (AgentDesign runs without
   AgentRuntime): placement then checks every criterion the pinned contract and node shape show (C1 shape, C3–C5, C10,
-  the declaration) and leaves the CLR-type criteria (C1 interfaces, C2, C9) to admission and the worker, which always
+  the declaration) and leaves the CLR-type criteria (C1 interfaces, C2, C9 and the CLR parts of C3 and C4) to admission and the worker, which always
   re-check them (`BackgroundEligibilitySubject.TypeCheckedAtRunTime`). An authored node still needs its CLR type at
   publication. This is the one place FR-012's "same publication check" is narrower; review round 1.
 - **Versions (T020).** Marking changes only the runtime contract fingerprint; the design catalog hash does not read the
