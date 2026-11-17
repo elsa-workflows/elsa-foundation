@@ -61,7 +61,7 @@ type check; the Elsa 3 lowerer and its type shapes.
 | Extension-point catalog | ACTION | The bridge and the precision policy are new replacement contracts: `EXTENSION_POINTS.md` and the generated map change. |
 | §2.22 docs | ACTION | The adapter contracts (FR-027) and the JavaScript value docs. |
 | §2.23 tests | PASS | One test per acceptance scenario, the precision suite, the registration test for the policy feature. |
-| ADR 0046 amendment (#3422) | WAIT | Applied at `ba99ca02d`; agreed, not yet merged into the branch. Implementation starts once it is merged (D-18). |
+| ADR 0046 amendment (#3422) | PASS | Applied at `ba99ca02d`, merged into the initiative branch unchanged as `da4dddbb98`. |
 | ADR 0090 (accepted) | PASS | C1–C4 applied; the step write path is S-7's. |
 
 ## Project Structure
@@ -135,5 +135,4 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 
 ## Complexity Tracking
 
-> No constitution violations. The ACTION gates are covered by tasks. The WAIT gate is the merge of the agreed ADR 0046
-> amendment into the initiative branch.
+> No constitution violations. The ACTION gates are covered by tasks.

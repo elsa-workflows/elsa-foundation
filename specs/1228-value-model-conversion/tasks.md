@@ -7,7 +7,6 @@
 This work changes existing code, not greenfield: tests go with each change; no test-first cadence is declared.
 
 **Gates**:
-- All tasks wait on the ADR 0046 amendment (#3422) being merged into the initiative branch (D-18).
 - User Story 3's end-to-end test (T028) waits on S-7's step write path (ADR 0090).
 - User Story 6 waits on #3167 (S-0).
 - User Story 3, User Story 7 and T010's variable cases need S-4's script body read surface (spec 1222).

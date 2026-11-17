@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Approved — by the coordinator on 2026-11-16. Implementation starts once the ADR 0046 amendment is merged into the initiative branch.
+**Status**: Approved — by the coordinator on 2026-11-16. The ADR 0046 amendment it applies is merged into the initiative branch.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-8**,
 analysis **A-1**, decisions **D-12**, **D-15**, **D-16** and **D-17**.
@@ -63,8 +63,8 @@ to tidy with #4103.
 **Approval plan**: the coordinator approves this spec alone. An ADR change found here goes to its own small ADR PR
 with the initiative's approvers as reviewers.
 
-**Implementation**: on the initiative branch, once this spec is approved and the ADR 0046 amendment is merged there
-(D-18).
+**Implementation**: on the initiative branch (D-18). The ADR 0046 amendment is merged there (`da4dddbb9`); S-4's read
+surface gates User Stories 3 and 7.
 
 ## Rule and boundary
 
@@ -462,7 +462,7 @@ on 2026-11-16; the requirements follow them.
 
 ## Assumptions
 
-- The ADR 0046 amendment at `ba99ca02d` is the text applied. If it changes, this spec is rechecked.
+- The ADR 0046 amendment at `ba99ca02d` is the text applied; it was merged unchanged as `da4dddbb9`.
 - The ForEach and snapshot parts of #3421 are fixed already. Only the script part remains.
 - S-9 delivers date interpretation, user type conversion contracts and the shared serializer baseline. S-8 uses them.
 - S-1 delivers the host function mechanism and the refusal of Elsa 3 scripts that use .NET members.
