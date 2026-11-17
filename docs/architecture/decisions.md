@@ -18,7 +18,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 12 Nov | Optimise for correctness, then database calls per workflow, then latency, then flexibility. | [Sketch, decisions](../reports/clean-slate-kernel/design-sketch-draft-5.md#decisions-taken-so-far-12-november) |
 | 15 Nov | Replace whole layers and edges, never pieces of the commit. Timers, messages, events and subscriptions stay inside the fenced atomic commit; brokers and schedulers are ingress adapters. | [Sketch, extensibility boundary](../reports/clean-slate-kernel/design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november) |
 | 15 Nov | A send is recorded atomically with the sender's state and may be delivered later, deduplicated by derived message id. | [Sketch, the commit](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit); [Log paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md) |
-| 16 Nov | Layer 3 stays host-neutral: execution models, activities, Studio and operator APIs depend only on the turn contract, the four logical seams (commit, ownership, delivery, read models) and read models; never on partitions, positions or SQL. | Owner card |
+| 16 Nov | Layer 3 stays host-neutral: execution models, activities, Studio and operator APIs depend only on the turn contract, the four logical seams (commit, ownership, delivery, read models) and read models; never on partitions, positions or SQL. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state ("Adopted 16 November") |
 | 16 Nov | After release 1, layers 1 and 2 become a separable built-in default that users may replace with their own actor stack; release 1 protects this with a contracts package that layer 3 builds against. | Owner card |
 
 ## Layers, runtime and profiles
@@ -30,6 +30,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 12 Nov | One public runtime seam with a runtime conformance suite; an Orleans reference adapter kept in tests; adapters shipped on demand. | Sketch, the seam |
 | 12 Nov | No "runtimes" plug-in. Persistence mode, actor runtime and provider vary independently; deployment profiles (Embedded, Cluster, Orleans, Log later) are presets. No capability flags. | [Sketch, profiles](../reports/clean-slate-kernel/design-sketch-draft-5.md#deployment-profiles-not-runtimes) |
 | 12 Nov | Inline execution is a per-workflow or per-route choice; inline plus Ephemeral costs no database call. | Sketch, profiles |
+| 12 Nov | A resume does not move its instance to the receiving node; the one hop to the owner stays unless measurements show it matters. | Owner card (deployment profiles, 12 November) |
 | 12 Nov | Wake-ups between nodes are a pluggable hint over the runtime's transport; polling is the guarantee. | Sketch, decisions (walkthrough 3) |
 | 12 Nov | Names: an instance's turn, a background job, a runtime pass. | [Sketch, header](../reports/clean-slate-kernel/design-sketch-draft-5.md) |
 | 15 Nov | The instance table is an actor table, with an explicit `type` column beside `model` and only actor-generic columns; each actor type has its own read models. | Owner card |
@@ -38,7 +39,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 
 | Date | Rule | Source |
 |---|---|---|
-| 12 Nov | Activity side effects are at least once in Balanced; idempotency keys are documented. | [Sketch, decisions](../reports/clean-slate-kernel/design-sketch-draft-5.md#decisions-taken-so-far-12-november) |
+| 12 Nov | Activity side effects are at least once in Balanced; idempotency keys are documented; Durable where a repeat is unacceptable. | [Sketch, decisions](../reports/clean-slate-kernel/design-sketch-draft-5.md#decisions-taken-so-far-12-november) |
 | 12 Nov | History is Full by default; State and Minimal per workflow. | Sketch, decisions |
 | 12 Nov | The lease is 10 seconds. | Sketch, decisions |
 | 12 Nov | An HTTP response is released after the commit of the turn that wrote it; opt-out per route. | Sketch, decisions |
@@ -51,11 +52,12 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | Date | Rule | Source |
 |---|---|---|
 | 12 Nov | The fence goes in the batch by default; the fence as its own statement stays an option. | [Sketch, the commit](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) |
-| 13 Nov | SQL Server's EF path uses the checked fence (E9). | [Sketch, decided 13 November](../reports/clean-slate-kernel/design-sketch-draft-5.md#decided-13-november) |
+| 13 Nov | SQL Server's default fence is the checked fence, as its own statement (E9); other engines keep the fence in the batch. Narrowed on 16 November to the EF reference path (next rows). | [Sketch, decided 13 November](../reports/clean-slate-kernel/design-sketch-draft-5.md#decided-13-november) |
 | 16 Nov | The kernel writes its own commit SQL on PostgreSQL, SQL Server, SQLite and MySQL; EF keeps the schema, migrations and cold paths. The checked fence is one multi-row statement. | [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#defaults) |
 | 16 Nov | SQL Server's owned commit uses the fence in the batch; the EF reference path keeps the checked fence. | [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#defaults) (#4698) |
 | 12 Nov | Snapshot plus journal stays the default; a lazy snapshot is the fallback spike if measurements demand it. | [Write volume](write-volume.md) |
 | 12 Nov | Large values are stored by reference (decision 10), with a size benchmark in the cost runs. | Sketch, decisions (walkthrough 10) |
+| 15 Nov | The message table stays the inbox queue; a partitioned inbox is revisited once virtual partitions change the keys, and stays out of release 1 (round 5 D). | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219); [write volume](write-volume.md) |
 
 ## Messages, jobs, events and recovery
 
@@ -140,4 +142,5 @@ recommendations, and that card also accepted the migration addressing fallback. 
 |---|---|---|
 | 13 Nov | Architecture references live in `docs/architecture/` with a Proposed banner until approval; a shorter published section goes into `website/docs/` at the switch. | [Sketch, architecture documentation](../reports/clean-slate-kernel/design-sketch-draft-5.md#architecture-documentation-owner-decision-12-november) |
 | 12 Nov | The owner sees the list before any ADR or old-core page is retired. | Sketch, architecture documentation |
+| 15 Nov | The simulation runs permanently in CI: path filters, a fast simulation and mutation PR gate, and the heavy suites nightly (round 5 F, delivered in #4670). | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219) |
 | 16 Nov | Kernel behaviour (commit, fence, ownership, delivery, timers, recovery) needs two independent reviews; tests, docs, CI and tooling need a self-review plus one. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
