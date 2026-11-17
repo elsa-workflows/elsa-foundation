@@ -129,7 +129,9 @@ them. The store never refuses an insert for depth:
 **Kept rows of a parked instance.** Arrivals that a parked instance consumes become done rows kept for its recovery
 ([observability](observability.md#what-park-keeps)). While parked they are outside due depth and add no poll delay;
 their growth is storage, which ends when the Park is resolved. Recovery restores them page by page, and a page waits
-while its virtual partition's backlog is above the high water mark, so they rejoin due depth under this threshold.
+until the previous page's restored rows have been delivered, so they rejoin due depth at most one page at a time. The gate
+does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and would hold it
+above the high water mark for good.
 
 **The estimate (proposed).** The owner of a virtual partition knows its due depth exactly while its last poll came back
 short: every due row is then in its memory. While polls come back full, it samples a capped count once per sample
