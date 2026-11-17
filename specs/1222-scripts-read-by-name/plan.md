@@ -63,7 +63,7 @@ Relevant gates (from `.specify/memory/constitution.md`, `constitution-framework.
 
 - **§E2.2 Runtime ⊄ Design** — the publish-time read-set resolver reuses Studio's `ScopedVariableResolver` on the
   Design side, with loop iteration declarations from a new default-empty structure-handler member implemented in the
-  loop module (which references only Design.Core); the runtime path must not
+  loop module (`Elsa.Activities.ControlFlow`, which already references both Design and Runtime core packages); the runtime path must not
   add a Design reference (`ArchitectureGuardTests.Runtime_projects_do_not_add_design_references`). Plan keeps
   resolution split: Studio/publish (Design) resolves literal names and computes the conservative report; runtime reads
   pinned values and runs the fallback lookup over its own visible-variable frames (no Design types).

@@ -36,7 +36,8 @@ literal names that could be pinned.
 **Decision.**
 
 - Add a **per-parameter surface flag** to the compiled `Variable` parameter: `surface = variables | args` (default
-  `args`). One parameter list, no second map. The evaluator builds the `variables` root from parameters whose surface is
+  `args`). One parameter map, no second map; a `surface = variables` entry is keyed `variables.<name>`, which no
+  JavaScript identifier can equal, so it never collides with an explicit `args` parameter of the same name. The evaluator builds the `variables` root from parameters whose surface is
   `variables`, and the `args` root from the rest. Roots are separate objects, so names cannot collide.
 - Add an **expression-level fallback marker** to the compiled binding: present when publish found a computed or opaque
   read, carrying the conservative read report (the candidate variable references visible at that point).
@@ -59,8 +60,10 @@ body, with the loop node as declaring scope; the loop variables are `currentItem
 `index` (For), and the Elsa 3 converter already lowers `CurrentValue` to them (`Elsa3LoopVariableReferencesRewrite`).
 At run time `RuntimeLoopIterationFrameFactory.Create` (ADR 0028 still names it `RuntimeLoopIterationScopeFactory`)
 builds one frame per pass, and the ambient projection already includes iteration frames, innermost first. Pinned
-`Variable` parameters are materialized by `RuntimePortableExpressionEvaluator.MaterializeParametersAsync`, which must
-learn to read a parameter whose declaring scope is a loop node from the current pass's frame. On the Design side,
+`Variable` parameters are materialized by `RuntimePortableExpressionEvaluator.MaterializeParametersAsync`, which
+already reads a parameter whose declaring scope is a loop node from the current pass's frame
+(`RuntimeVisibleVariableFrames` keys iteration values by scope + key, #296); a missing one faults with "references
+unavailable variable". This needs tests, not new code. On the Design side,
 declarations reach `ScopedVariableResolver` only through `IActivityStructureHandler.ProjectScopedVariables`, which
 compile into container variables; the loop module's `LoopStructureHandler` (shared with While and Do) has no
 iteration projection. ForEach puts `currentIndex` in the pass's frame only when `ExposeIndex` is true. `ExposeIndex`
@@ -93,8 +96,9 @@ projecting all visible variables when it detects computed access.
    "possible protected read" diagnostic (FR-018), not a refusal.
 2. **Before evaluation** the runtime makes the candidate set readable. This starts from the visible-variable
    projection (`RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes`), which today returns only
-   name → envelope, skips unresolvable frames and silently omits transient candidates; it must be extended to carry
-   each candidate's declaring scope and a transient marker, so a read can be recorded with its scope (FR-010) and a
+   name → envelope (each envelope carries `Policy.Lifecycle`) and skips unresolvable frames; the silent omission of
+   transient candidates happens later, in `RuntimePortableExpressionEvaluator.MaterializeAmbientVariableValuesAsync`.
+   The projection must be extended to carry each candidate's declaring scope, and the omission replaced, so a read can be recorded with its scope (FR-010) and a
    transient match can fault (FR-017). This is the accepted cost of a computed read; it is confined to marked
    expressions.
 3. **During evaluation** each computed or host-function read resolves the name nearest-scope-first over the candidates,

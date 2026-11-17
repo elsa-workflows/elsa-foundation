@@ -15,7 +15,7 @@ A spec 095 declared parameter produced by publish for one resolved literal read.
 |---|---|
 | `declaringScopeNodeId` | The scope whose declaration the name resolved to (iteration / container / workflow). |
 | `variableKey` | The variable's key, as declared. |
-| `surface` | `variables` or `args` (default `args`). `variables` exposes it under the `variables` root (R-2; settled by ADR 0089). |
+| `surface` | `variables` or `args` (default `args`). `variables` exposes it under the `variables` root (R-2; settled by ADR 0089). In the `Parameters` map a `variables` entry is keyed `variables.<name>`, so it never collides with an explicit `args` parameter. |
 
 Validation: the name MUST resolve to exactly one visible declaration at publish (else refused); the variable MUST be
 durable (a transient literal read keeps its publish diagnostic).
@@ -39,10 +39,11 @@ One actual read served by the fallback lookup.
 |---|---|
 | `name` | The name the script asked for. |
 | `declaringScopeNodeId` / `variableKey` | Where it resolved, nearest scope first; empty when absent. |
+| `version` | The variable version read (ADR 0092 decision 3); empty when absent. |
 | `present` | `false` when the name matched no visible variable (the script read `undefined` / nil, a warning was recorded). |
 
 Recorded reads are protection-checked as they happen. An input-binding expression's reads are stored in the step's
-input snapshot with the pinned values; a `RunJavaScript` body's reads go into its session reads (ADR 0092 decision 3);
+input snapshot with the pinned values and enter its input read set (S-10's `InputReadSet`); a `RunJavaScript` body's reads go into its session reads (ADR 0092 decision 3);
 secret values are redacted wherever a recorded read is logged.
 
 ### `variables` root (run time)

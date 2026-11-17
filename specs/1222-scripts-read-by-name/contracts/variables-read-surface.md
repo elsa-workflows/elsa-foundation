@@ -17,11 +17,15 @@ A script reads a workflow variable by name:
 
 ## Publish (name resolution and validation)
 
-1. Parse the source with the language parser (no regex). Collect literal variable names; detect computed access.
+1. Parse the source with the language parser (no regex). Collect literal variable names; detect computed access,
+   including `variables` or `getVariable` used as a value (aliased, passed, enumerated or spread), and calls to host
+   functions registered as reading variables.
 2. Resolve each literal name to its nearest declaring scope: iteration scope → enclosing container → outer containers →
    workflow; innermost declaration shadows an outer one.
-3. For each resolved literal name, add a pinned `Variable` parameter with `surface = variables`, recording
-   `declaringScopeNodeId` + `variableKey`. The authored source is not rewritten.
+3. For each resolved literal name, add a pinned `Variable` parameter with `surface = variables`, keyed
+   `variables.<name>` in the parameter map, recording `declaringScopeNodeId` + `variableKey`. The authored source is
+   not rewritten. For a `RunJavaScript` `script` input the same targets and marker form the step's **body read plan**,
+   kept apart from the input snapshot.
 4. For an expression with computed or opaque reads, add the fallback marker with the conservative read report (the
    variables visible at that point). Publish succeeds.
 5. Refuse (publish diagnostic) when:
