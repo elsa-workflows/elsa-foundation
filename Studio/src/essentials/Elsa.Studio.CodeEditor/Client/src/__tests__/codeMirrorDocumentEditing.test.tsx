@@ -46,6 +46,29 @@ function editor() {
     type(text: string) { const v = view(); flushSync(() => v.dispatch({ changes: { from: v.state.selection.main.head, insert: text }, selection: { anchor: v.state.selection.main.head + text.length }, annotations: Transaction.userEvent.of("input.type") })); }
   };
 }
+it("consumes the fallback selection belonging to each mounted editor surface", () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  close = () => { flushSync(() => root.unmount()); host.remove(); };
+  const props: StudioCodeEditorEngineProps = {
+    document: { uri: "elsa://shared-selection", language: "text", value: "abcd" },
+    session: createStudioCodeEditorSession(), profile: "compact", readOnly: false, theme: "studio",
+    minHeight: "20px", ariaLabel: "Expression", diagnostics: [], onChange() {}
+  };
+  const compact = { current: { source: "abcd", selection: { anchor: 0, head: 2 } } };
+  const expanded = { current: { source: "abcd", selection: { anchor: 1, head: 4 } } };
+  flushSync(() => root.render(<>
+    <CodeMirrorStudioCodeEditor {...props} fallbackSelection={compact} />
+    <CodeMirrorStudioCodeEditor {...props} profile="expanded" fallbackSelection={expanded} />
+  </>));
+  const [compactView, expandedView] = Array.from(host.querySelectorAll(".cm-editor"), node => EditorView.findFromDOM(node)!);
+  expect(compactView.state.selection.main).toMatchObject({ anchor: 0, head: 2 });
+  expect(expandedView.state.selection.main).toMatchObject({ anchor: 1, head: 4 });
+  expect(compact.current).toBeNull();
+  expect(expanded.current).toBeNull();
+});
+
 const bound = { parameters: { customer: { kind: "ActivityResult", producerNodeId: "fetch", projectionKey: "$result", isOptional: false } } };
 it("histories real typing and an isolated source/payload/selection insertion together", () => {
   const e = editor(); e.view().dispatch({ selection: { anchor: 1 } }); e.type("b");

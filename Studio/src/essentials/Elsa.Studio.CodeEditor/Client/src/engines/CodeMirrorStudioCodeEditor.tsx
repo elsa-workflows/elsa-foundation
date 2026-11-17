@@ -92,7 +92,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
 
     const view = claimCompactView(entry, props.profile, container)
       ?? new EditorView({ state: entry.state, parent: container });
-    const handoff = entry.runtime.props.fallbackSelection;
+    const handoff = props.fallbackSelection;
     const fallback = handoff?.current;
     if (handoff) handoff.current = null;
     if (fallback && fallback.source === view.state.doc.toString()) {
@@ -128,7 +128,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       viewRef.current = undefined;
     };
   // A session survives profile remounts. A changed URI/session intentionally mounts a new view.
-  }, [entry, props.autoFocus, props.document.language, props.document.uri, props.profile, props.session]);
+  }, [entry, props.autoFocus, props.document.language, props.document.uri, props.fallbackSelection, props.profile, props.session]);
 
   const registerController = props.documentEditing?.onController;
   useEffect(() => {
