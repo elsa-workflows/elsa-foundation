@@ -90,7 +90,9 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
   const applyFix = useCallback((fix: SourceFix, source: string, editor: StudioExpressionEditorController) => {
     const now = current.current;
     const captured = editor.capture();
-    if (!now.capable || !now.state.supported || (now.diagnostic?.fix !== fix && !now.fixes.some(offered => offered === fix)) || !captured || captured.source !== source || now.sourceText !== source ||
+    const stillOffered = [now.diagnostic?.fix, ...now.fixes].some(offered =>
+      offered?.from === fix.from && offered.to === fix.to && offered.replacement === fix.replacement);
+    if (!now.capable || !now.state.supported || !stillOffered || !captured || captured.source !== source || now.sourceText !== source ||
         !editor.apply({ expected: captured, range: fix, insert: fix.replacement, historyValue: now.state.historyValue }))
       setNotice("The expression changed. Review the available fix again.");
   }, []);
