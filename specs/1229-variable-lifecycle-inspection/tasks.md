@@ -56,7 +56,8 @@ merged into the initiative branch. Tests use xUnit only; risk-based (ADR 0080).
 - [ ] T015 [US2] Tests: two branches `count + 1` → one lost update naming both writers and branches and the overwritten
   value's state; blind `Set` on a third branch → concurrent overwrite, not lost update; sequential and joined-then-write
   → none; self-overwrite across suspension → none; retry attempts of one logical invocation → none; re-execution can
-  overwrite its predecessor; `Fault` → refused write listed, current value unchanged.
+  overwrite its predecessor; `Fault` → refused write listed, current value unchanged; accepting that recorded completion → applied entry with
+  outcome accepted override, linked to the refused write, both kept.
 
 ## Phase 5: User Story 3 — commit-ordered journal (P2)
 

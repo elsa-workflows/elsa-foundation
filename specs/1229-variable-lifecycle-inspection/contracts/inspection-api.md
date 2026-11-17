@@ -12,8 +12,9 @@ payload read. Paging uses `after` (a commit sequence) and `take` (default 100, m
 | GET | `runtime/workflows/instances/{workflowExecutionId}/compare/{otherWorkflowExecutionId}` | `InstanceComparisonView` |
 | GET | `runtime/workflows/instances/{workflowExecutionId}` (existing) | + `lostUpdateWarningCount`, `concurrentOverwriteCount` |
 
-Filters: `outcome` ∈ `applied`, `lostUpdateWarning`, `lostUpdateFault`; `overwrites=true` keeps only concurrent
-overwrites; `source` ∈ `capture`, `intrinsic`, `sessionChange`, `alteration`, `backgroundResult`.
+Filters: `outcome` ∈ `applied`, `lostUpdateWarning`, `lostUpdateFault`, `acceptedOverride`; `overwrites=true` keeps only concurrent
+overwrites; `source` ∈ `capture`, `intrinsic`, `sessionChange`, `alteration`, `backgroundResult`,
+`acceptedCompletion`.
 
 Problems (existing problem shapes):
 - `404` instance not found (either side of a comparison).

@@ -21,9 +21,10 @@ refreshed background snapshot to the one it superseded (ADR 0092 decision 9).
 `Value` (ValueStateView), `HistoryRecorded: bool`.
 
 **VariableWriteEntryView**: `ScopeId`, `VariableKey`, `Writer` (WriterView), `Source`, `Outcome` (`applied`,
-`lostUpdateWarning`, `lostUpdateFault`), `BaseVersion?`, `CurrentVersion`, `NewVersion`, `CommitSequence?`,
+`lostUpdateWarning`, `lostUpdateFault`, `acceptedOverride`), `BaseVersion?`, `CurrentVersion`, `NewVersion`, `CommitSequence?`,
 `OrderApproximate: bool`, `IsCurrentValue: bool`, `ConcurrentOverwrite?` (OverwriteView), `Value` (ValueStateView),
-`OverwrittenValue?` / `RefusedValue?` (ValueStateView), `OccurredAt`.
+`OverwrittenValue?` / `RefusedValue?` (ValueStateView), `ResolvesEntry?` (for an accepted override: the refused
+write it resolves), `OccurredAt`.
 
 **WriterView**: `Source`, `ExecutableNodeId?`, `ActivityExecutionId?`, `LogicalInvocationId?`, `AttemptId?`,
 `BranchId?`, `ExecutionPathId?`, `AlterationId?`.
@@ -45,6 +46,8 @@ node id, kind, branch/path), `Writes` (list of VariableWriteEntryView).
 ## Rules
 
 - Order: commit sequence; ties within one commit by frame revision, then record order.
+- Outcome mapping from spec 1221's commit outcomes: blind, current and returned-value writes are `applied`; an
+  accepted override is its own outcome and counts as applied.
 - Current value: the last applied entry of each variable in that order.
 - Concurrent overwrite: research R-3.
 - Values: research R-4; never inline.

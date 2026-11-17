@@ -175,6 +175,9 @@ analysis cannot see.
    does not list the second write as an overwrite of itself.
 5. **Given** a `Fault` lost update, **When** the history is read, **Then** the refused write is listed with outcome
    fault and its refused value's state, and the current value is unchanged.
+6. **Given** an operator accepted the recorded completion of that faulted step (ADR 0092 decision 8), **When** the
+   history is read, **Then** the accepted write is listed as an applied write with source accepted completion and
+   outcome accepted override, linked to the refused write it resolves, and both entries stay in the history.
 
 ---
 
@@ -266,10 +269,14 @@ state.
 - **FR-002**: The API MUST list an instance's variables with scope, key, current version, last writer, last commit
   sequence and value state.
 - **FR-003**: The API MUST list the write history of an instance, filterable by variable, by source and by outcome
-  (applied, lost-update warning, lost-update fault, concurrent overwrite), ordered by commit sequence and paged.
+  (applied, lost-update warning, lost-update fault, accepted override, concurrent overwrite), ordered by commit
+  sequence and paged.
 - **FR-004**: Each entry MUST show the variable (scope and key), the writer (node, logical invocation, attempt), the
-  source (capture, intrinsic, session change, alteration, background result), base, current and new versions, the
-  commit sequence, the outcome, and the value state; the entry that produced the current value MUST be marked.
+  source (capture, intrinsic, session change, alteration, background result, accepted completion), base, current and
+  new versions, the commit sequence, the outcome, and the value state; the entry that produced the current value MUST
+  be marked.
+- **FR-004a**: An accepted override (an operator accepted a recorded completion the commit rule refused) MUST be shown
+  as an applied write and MUST link to the refused write it resolves; the refused write stays in the history.
 - **FR-005**: `ModifyVariable` changes MUST appear in the history with source `Alteration` (Q9).
 - **FR-006**: Values MUST be shown only through value states and the existing authorized payload read; omitted,
   redacted and expired MUST be distinct from a captured `null` (ADR 0092 decision 13).
