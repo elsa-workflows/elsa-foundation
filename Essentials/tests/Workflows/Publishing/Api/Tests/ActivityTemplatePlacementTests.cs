@@ -142,6 +142,7 @@ public sealed class ActivityTemplatePlacementTests
 
         var write = Assert.Single(Assert.Single(sequence.ChildSlots, x => x.Name == "Activities").Activities);
         Assert.Equal(ActivityExecutionPlacement.Background, write.ExecutionPlacement);
+        Assert.True(write.ActivityContract!.SupportsBackgroundExecution);
         var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
         var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
         Assert.Equal([write.ExecutableNodeId], orderedChildIds);
@@ -153,8 +154,8 @@ public sealed class ActivityTemplatePlacementTests
         // FR-012 (spec 1230): a template provider's own background nodes pass the publication check when placed.
         foreach (var (leaf, criterion) in new[]
                  {
-                     (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'reader'"),
-                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C1): Background execution is not eligible for activity node 'bare'")
+                     (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'node-"),
+                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-")
                  })
         {
             var template = Template("template-root", "hash-root", Node("root", leaf));
@@ -170,6 +171,60 @@ public sealed class ActivityTemplatePlacementTests
 
             Assert.StartsWith(criterion, exception.Message, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task Placement_defers_the_type_criteria_when_the_publishing_host_does_not_know_the_runtime_type()
+    {
+        // A design-only shell (for example an agent designed without the agent runtime) cannot resolve the type; the
+        // contract-visible criteria still pass, and admission and the worker check the type.
+        var template = Template("template-root", "hash-root", Node("root", BackgroundLeaf("unknown", "test.not-registered-here")));
+        var publication = Publication("definition-root", "version-root", "type.root", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+
+        var placement = await placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+
+        var leaf = Assert.Single(Assert.Single(placement.Root.ChildSlots).Activities);
+        Assert.Equal(ActivityExecutionPlacement.Background, leaf.ExecutionPlacement);
+    }
+
+    [Fact]
+    public async Task Placement_checks_the_background_node_as_pinned_with_the_occurrence_bindings()
+    {
+        // The template's own node has no bindings and passes; the occurrence binds a sensitive literal to its input,
+        // which would travel unprotected to a worker (C10).
+        var leaf = BackgroundLeaf("leaf");
+        var contract = leaf.ActivityContract!;
+        var withInput = new ExecutableNode(
+            leaf.ExecutableNodeId, leaf.AuthoredActivityId, leaf.ActivityType, leaf.ActivityTypeVersion, leaf.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+            activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind, contract.DescriptorPayload,
+                [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("token", "Token", new("String"), false, true, false, null, ActivityValuePolicy.Default)],
+                contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile, supportsBackgroundExecution: true));
+        var template = Template("template-leaf", "hash-leaf", withInput);
+        var publication = Publication("definition-leaf", "version-leaf", "type.leaf", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+        var sensitive = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+        var binding = new RuntimeInputBinding("token", new("String"), sensitive, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new("String"), Json("\"p@ss\""), sensitive));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding> { ["token"] = binding },
+            new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+        Assert.StartsWith("VF-BG-001 (C10):", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("input 'token' is sensitive", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

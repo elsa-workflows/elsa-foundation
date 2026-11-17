@@ -46,6 +46,14 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// <summary>The CLR activity type, or null when the node's type is not a registered CLR activity.</summary>
     public Type? ActivityType { get; init; }
 
+    /// <summary>
+    /// The CLR type is not known to this host but is checked again where the node runs. Template placement sets it
+    /// when the publishing host does not register a template node's runtime type (a design-only shell): the criteria
+    /// that read the contract and node shape still apply, and the ones that need the CLR type (the interface part of
+    /// C1, C2 and C9) are left to admission and the worker, which always re-check them.
+    /// </summary>
+    public bool TypeCheckedAtRunTime { get; init; }
+
     /// <summary>The node is an engine intrinsic.</summary>
     public bool IsIntrinsic { get; init; }
 
@@ -197,9 +205,11 @@ public static class BackgroundEligibility
             return "engine intrinsics cannot run as background activities";
         if (subject.IsReusableBoundary)
             return "reusable activity boundaries are not supported";
+        if (subject.HasStructure || subject.HasChildren)
+            return "structural activities and nodes with children are not supported";
         if (subject.ActivityType is not { } type)
-            return "the activity type is not a registered CLR activity";
-        if (subject.HasStructure || subject.HasChildren ||
+            return subject.TypeCheckedAtRunTime ? null : "the activity type is not a registered CLR activity";
+        if (
             typeof(IRuntimeStructuralActivity).IsAssignableFrom(type) ||
             typeof(IRuntimeActivityChildCompletionHandler).IsAssignableFrom(type) ||
             typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(type) ||
@@ -211,7 +221,8 @@ public static class BackgroundEligibility
 
     private static string? CompletesInOneGo(BackgroundEligibilitySubject subject)
     {
-        var type = subject.ActivityType!;
+        if (subject.ActivityType is not { } type)
+            return null;
         if (typeof(IStatefulActivity).IsAssignableFrom(type))
             return "stateful activities are not supported";
         if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(type))
@@ -223,7 +234,7 @@ public static class BackgroundEligibility
     {
         if (subject.Contract is not { } contract)
             return "the activity has no pinned typed result contract";
-        if (FindResultType(subject.ActivityType!) == typeof(object) ||
+        if ((subject.ActivityType is { } type && FindResultType(type) == typeof(object)) ||
             contract.Result.Type.Alias is "Object" or "System.Object" or "Any" or "Elsa.Any")
             return "untyped object results are not supported";
         return null;
@@ -232,7 +243,7 @@ public static class BackgroundEligibility
     private static string? HasDurableResult(BackgroundEligibilitySubject subject)
     {
         var result = subject.Contract!.Result;
-        var resultType = FindResultType(subject.ActivityType!);
+        var resultType = subject.ActivityType is { } type ? FindResultType(type) : null;
         if ((resultType is not null && typeof(Stream).IsAssignableFrom(resultType)) ||
             result.Projections.Values.Select(projection => projection.EffectiveSourceRepresentation)
                 .Prepend(result.EffectiveSourceRepresentation)
@@ -248,7 +259,7 @@ public static class BackgroundEligibility
             : null;
 
     private static string? UsesVariablesOnlyThroughInputsAndResults(BackgroundEligibilitySubject subject) =>
-        AccessesVariablesByName(subject.ActivityType!)
+        subject.ActivityType is { } type && AccessesVariablesByName(type)
             ? "the activity reads variables by name; variables reach a background step only through its inputs and output captures"
             : null;
 
@@ -282,7 +293,9 @@ public static class BackgroundEligibility
 
     private static bool DeclaresBackgroundExecutionSafe(BackgroundEligibilitySubject subject) =>
         subject.Contract?.SupportsBackgroundExecution == true &&
-        subject.ActivityType?.GetCustomAttribute<BackgroundExecutionSafeAttribute>() is not null;
+        (subject.ActivityType is null
+            ? subject.TypeCheckedAtRunTime
+            : subject.ActivityType.GetCustomAttribute<BackgroundExecutionSafeAttribute>() is not null);
 
     private static IEnumerable<ActivityValuePolicy> ResultPolicies(ActivityResultContract result) =>
         result.Projections.Values.Select(projection => projection.Policy).Prepend(result.Policy);

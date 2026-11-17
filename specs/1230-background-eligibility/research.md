@@ -135,8 +135,11 @@ the initiative branch first; no logic overlaps.
   activation capability, as the worker does, and runs `CheckPublication`. A frame root is **not** treated as a
   reusable boundary: a source-owned occurrence's template root is the authored node itself (a background leaf inside
   a graph activity). An authored node that references a reusable definition is still refused C1 by the workflow
-  compiler. A host whose type registry does not know the type refuses the node (C1), as authored nodes are; the
-  Workbench registers the agent runtime types in the publishing shell.
+  compiler. A publishing shell need not host the runtime type a template provider pins (AgentDesign runs without
+  AgentRuntime): placement then checks every criterion the pinned contract and node shape show (C1 shape, C3–C5, C10,
+  the declaration) and leaves the CLR-type criteria (C1 interfaces, C2, C9) to admission and the worker, which always
+  re-check them (`BackgroundEligibilitySubject.TypeCheckedAtRunTime`). An authored node still needs its CLR type at
+  publication. This is the one place FR-012's "same publication check" is narrower; review round 1.
 - **Versions (T020).** Marking changes only the runtime contract fingerprint; the design catalog hash does not read the
   attribute. The eight connector reads carry `[Version]` and move 1.0.0 → 1.1.0. Primitives, Scripting and BPMN use the
   assembly version, which the per-package versioning tool moves. The activity contract surface baseline does not
@@ -145,3 +148,12 @@ the initiative branch first; no logic overlaps.
   on the initiative branch and S-10's branch), so C9 enforces `IRuntimeScopedVariableReader` only. It is one public
   predicate, `BackgroundEligibility.AccessesVariablesByName(Type)`, where both signals join when ADR 0090 decision 4 is
   implemented.
+- **Codec checks are not eligibility.** `BackgroundActivityCompletionCodec` still refuses a non-persistable or hidden
+  result policy with `BG-ACT-004` when it serializes a receipt. Eligibility refuses those nodes first (C4, C5), so the
+  codec check is unreachable for them; it stays as the serializer's own invariant (it never writes a value it cannot
+  store or protect). Lifting C4 or C5 (ADR 0093 *Limits*) therefore also means giving the codec a protected transport,
+  which is the point of the lift.
+- **Boundary contract stamping (fixed, review round 1).** `ActivityTemplatePlacer.StampBoundaryContract` rebuilt the
+  contract without `SupportsBackgroundExecution`, so a background leaf placed as an occurrence root (a background
+  step inside a graph activity) was pinned as not background-safe and refused at admission. It now keeps the flag,
+  and the placer checks the node as pinned (occurrence bindings, stamped contract), not the template's node.

@@ -49,13 +49,13 @@
 
 - [x] T008 [US3] **(test-first, drive)** Place a background node with a stream input and with a transient-resource
   input; record what happens today (publish, admission or worker) in research R-1 before changing anything.
-- [x] T012 [US3] **(test-first)** Publication refuses each C10 case naming C10: no durable representation, not
+- [ ] T012 [US3] **(test-first)** Publication refuses each C10 case naming C10: no durable representation, not
   materializable on the worker, protection would be lost.
 - [x] T013 [US3] Add C10 to the component, reusing `EnsureSecretBindingsAdmissible` and the snapshot checks (P-4);
   add the input-representation check that is missing.
 - [ ] T014 [P] [US3] A secret reference input on a background node: admitted, resolved at worker activation; assert
   no raw secret in the persisted input snapshot or the work record (SC-005).
-- [x] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3.
+- [ ] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3.
 
 ## Phase 6: User Story 4 — the promise on the attribute (P2)
 
@@ -71,7 +71,7 @@
   test per assessed-but-unmarked category, naming its criterion.
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
   changes); regenerate the contract surface baselines.
-- [x] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
+- [ ] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
   read resolves its connection's tenant partition on a worker; a secret-bound `RunJavaScript.Arguments` resolves on the
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
   activity that fails gets an issue instead of the mark (Q10).
@@ -109,10 +109,16 @@
 
 ## Implementation status (2026-11-17, first implementation PR)
 
-- **Done:** T001–T013, T015–T018, T020–T023, T028–T030. Findings in research *Implementation findings*.
+- **Done:** T001–T011, T013, T016–T018, T020, T021, T023, T028–T030. Findings in research *Implementation findings*.
 - **Partial, open:** T014 — a secret reference input is admitted at publication in the background (C10); the
   worker-side assertion that no raw secret reaches the input snapshot or the work record is not written yet.
   T019 — publish-in-background tests for the six Essentials built-ins, end-to-end worker runs for `WriteLine`
   (completion) and `Fault` (fault) on both persistence modes, marked-set guards for the connector reads; no
   end-to-end run per connector read (their test projects do not host a worker).
+- **Partial, open (review round 1):** T012 — publication refuses the stream and the protection cases (C10); the
+  non-persistable case is covered only by the component test, because no `[ActivityInput]` declares a non-persistable
+  policy. T015 — an `Any`/JSON input publishes in the background and an `Any` result is refused (C3); no worker run
+  of the `Any` input yet. T022 — the partition and secret unknowns were settled by reading the code and a
+  publication test, not by background runs against a live connector; the `DownloadFile` limit by reading the codec.
+  The 15 marks rest on that reading (Q10).
 - **Held:** US6 (T024–T026) until S-10's PR #4316 is merged into the initiative branch (Q7). T031 waits on US6.

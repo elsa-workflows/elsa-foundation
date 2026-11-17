@@ -10440,3 +10440,5 @@ static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ForPi
 static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.ForPinnedNode(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node, System.Type? activityType) -> Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject!
 static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.operator !=(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? right) -> bool
 static Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.operator ==(Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? left, Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject? right) -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.TypeCheckedAtRunTime.get -> bool
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.TypeCheckedAtRunTime.init -> void

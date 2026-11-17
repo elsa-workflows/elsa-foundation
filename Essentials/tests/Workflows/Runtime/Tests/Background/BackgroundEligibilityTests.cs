@@ -71,6 +71,18 @@ public sealed class BackgroundEligibilityTests
     }
 
     [Fact]
+    public void A_type_checked_at_run_time_defers_only_the_criteria_that_need_the_CLR_type()
+    {
+        var unknown = Subject<SafeLeaf>() with { ActivityType = null, TypeCheckedAtRunTime = true };
+
+        Assert.Null(BackgroundEligibility.CheckPublication(unknown));
+        AssertRefused("publication", BackgroundEligibilityCriterion.C1, unknown with { HasChildren = true }, "children");
+        AssertRefused("publication", BackgroundEligibilityCriterion.C3, unknown with { Contract = Contract<SafeLeaf>(result: Result("Any")) }, "untyped");
+        AssertRefused("publication", BackgroundEligibilityCriterion.C10, unknown with { Contract = Contract<SafeLeaf>(inputs: [Input("content", "Stream")]) }, "materialized");
+        Assert.Contains("does not declare", BackgroundEligibility.CheckPublication(unknown with { Contract = Contract<SafeLeaf>(supportsBackgroundExecution: false) })!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void C6_is_a_run_time_check_after_the_body()
     {
         var subject = Subject<SafeLeaf>() with { StagedCoordinatorEffects = true };

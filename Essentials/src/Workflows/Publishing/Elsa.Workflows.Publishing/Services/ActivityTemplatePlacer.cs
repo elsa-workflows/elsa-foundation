@@ -364,13 +364,7 @@ public sealed class ActivityTemplatePlacer(
                     frame.Publication.Version,
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
-            // FR-012 (spec 1230): a background node a template provider compiled itself passes the same publication
-            // check as an authored one before it reaches a pinned executable. A source-owned occurrence's template
-            // root is the authored node itself, so being a frame's root does not make a node a reusable boundary;
-            // an authored node that references a reusable definition is refused by the workflow compiler.
-            if (current.Node.ExecutionPlacement == ActivityExecutionPlacement.Background)
-                EnsureTemplateNodeBackgroundEligible(current.Node);
-            placedNodes[current.Node.ExecutableNodeId] = new(
+            var placed = new ExecutableNode(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
                 isBoundary ? frame.ActivityTypeKey : current.Node.ActivityType,
@@ -387,6 +381,14 @@ public sealed class ActivityTemplatePlacer(
                 activityContract,
                 current.Node.IntrinsicKind,
                 current.Node.IntrinsicVariable);
+            // FR-012 (spec 1230): a background node a template provider compiled itself passes the same publication
+            // check as an authored one before it reaches a pinned executable. The check reads the node as it is pinned:
+            // the occurrence's bindings, stamped contract and overlay structure. A source-owned occurrence's template
+            // root is the authored node itself, so being a frame's root does not make a node a reusable boundary;
+            // an authored node that references a reusable definition is refused by the workflow compiler.
+            if (placed.ExecutionPlacement == ActivityExecutionPlacement.Background)
+                EnsureTemplateNodeBackgroundEligible(placed);
+            placedNodes[current.Node.ExecutableNodeId] = placed;
         }
 
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
@@ -533,7 +535,9 @@ public sealed class ActivityTemplatePlacer(
         var subject = typeRegistry is null
             ? BackgroundEligibilitySubject.ForPinnedNode(node, activityType: null)
             : BackgroundEligibilitySubject.ForPinnedNode(node, typeRegistry);
-        if (BackgroundEligibility.CheckPublication(subject) is { } refusal)
+        // A publishing shell need not host the runtime types a template provider pins (an agent designed without the
+        // agent runtime): what the contract shows is checked here, the CLR-type criteria at admission and on the worker.
+        if (BackgroundEligibility.CheckPublication(subject with { TypeCheckedAtRunTime = subject.ActivityType is null }) is { } refusal)
             throw new InvalidOperationException(refusal.Message);
     }
 
@@ -635,7 +639,10 @@ public sealed class ActivityTemplatePlacer(
             contract.Result,
             inputContracts is null ? contract.Outcomes : contract.Outcomes.Union(ExecutableNodeCompiler.StructureOutcomes(structure), StringComparer.Ordinal).ToArray(),
             contract.Activation,
-            contract.SideEffectProfile);
+            contract.SideEffectProfile,
+            // Spec 1230: keep the type's background declaration, or a background leaf placed as an occurrence root
+            // would be pinned as not background-safe and refused at admission.
+            contract.SupportsBackgroundExecution);
     }
 
     private static ExecutableNode CloneWithChildSlots(
