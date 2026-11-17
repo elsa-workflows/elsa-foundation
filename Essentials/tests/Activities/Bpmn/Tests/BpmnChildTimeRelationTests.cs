@@ -406,6 +406,59 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "after", "after"));
     }
 
+    // An inclusive merge that the other branch reaches only on one exclusive choice does not hold this branch: on the
+    // other choice that branch retries and reaches the final join with a new key, so the final join fires per arrival.
+    [Fact]
+    public void An_inclusive_merge_reached_on_one_choice_does_not_hold_the_other_branch()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("p", BpmnElementTypes.ParallelGateway), Task("a", "left"),
+                Element("m", BpmnElementTypes.InclusiveGateway), Task("c", "right"), Element("x", BpmnElementTypes.ExclusiveGateway),
+                Task("z", "retry"), Element("g", BpmnElementTypes.ExclusiveGateway), Element("j", BpmnElementTypes.InclusiveGateway),
+                Task("w", "after"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "p"), Flow("p", "a"), Flow("a", "m"), Flow("p", "c"), Flow("c", "x"), Flow("x", "m"), Flow("x", "z"),
+                Flow("z", "g"), Flow("g", "z"), Flow("g", "j"), Flow("m", "j"), Flow("j", "w"), Flow("w", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "retry", "after"));
+    }
+
+    // A loop that only a boundary event leads into is walked by the runtime from its lowest element id, so its back flows
+    // depend on ids: the process declares nothing.
+    [Fact]
+    public void A_loop_reached_only_from_a_boundary_event_declares_nothing()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("host", "host"),
+                new BpmnElement("b", BpmnElementTypes.BoundaryEvent, attachedToRef: "host", cancelActivity: true),
+                Element("h", BpmnElementTypes.ExclusiveGateway), Task("w", "work"), Element("g", BpmnElementTypes.ExclusiveGateway),
+                Element("end", BpmnElementTypes.EndEvent), Element("end2", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "host"), Flow("host", "end"), Flow("b", "h"), Flow("h", "w"), Flow("w", "g"), Flow("g", "h"), Flow("g", "end2")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "work", "work"));
+    }
+
+    // A boundary path that returns into the started flow's loop is walked with that loop: the process still declares.
+    [Fact]
+    public void A_boundary_path_back_into_a_started_loop_still_declares()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("m", BpmnElementTypes.ExclusiveGateway), Task("host", "host"),
+                new BpmnElement("b", BpmnElementTypes.BoundaryEvent, attachedToRef: "host", cancelActivity: true),
+                Task("fix", "fix"), Element("x", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "m"), Flow("m", "host"), Flow("host", "x"), Flow("x", "m"), Flow("x", "end"), Flow("b", "fix"), Flow("fix", "m")]);
+
+        Assert.NotEqual(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "host", "host"));
+    }
+
     // A parallel split and its waiting join inside a loop body stay one sequential pass.
     [Theory]
     [InlineData(BpmnElementTypes.InclusiveGateway)]

@@ -489,7 +489,7 @@ internal sealed class BpmnTimeRelationAnalysis
 
         // A cycle with more than one way in has no loop head: the runtime then picks its back flows by visiting order, so
         // which runs pair up at a join depends on flow ids. Declare nothing rather than guess.
-        if (!analysis.IsReducible())
+        if (!analysis.IsReducible() || analysis.HasCycleOutsideTheStartedFlow())
             return null;
 
         // A token gets a new iteration key whenever it crosses a back flow, and an inclusive join pairs only arrivals with
@@ -517,6 +517,48 @@ internal sealed class BpmnTimeRelationAnalysis
     }
 
     private bool IsBackFlow(string source, string target) => Dominates(target, source);
+
+    // The runtime finds back flows by a depth-first walk from the start events, then from each element it did not reach,
+    // in element-id order. A cycle that only a boundary event (or another element without incoming flows) leads into is
+    // walked from whichever of its elements has the lowest id, so its back flows depend on ids: declare nothing.
+    private bool HasCycleOutsideTheStartedFlow()
+    {
+        var started = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>(SuccessorsOf(Root).Where(node => _elements.TryGetValue(node, out var element) &&
+                                                                     element.ElementType == BpmnElementTypes.StartEvent));
+        foreach (var node in queue)
+            started.Add(node);
+        while (queue.TryDequeue(out var node))
+            foreach (var next in SuccessorsOf(node))
+            {
+                if (node.StartsWith(HostEntryPrefix, StringComparison.Ordinal) && _elements.TryGetValue(next, out var element) &&
+                    element.ElementType == BpmnElementTypes.BoundaryEvent)
+                    continue;
+                if (started.Add(next))
+                    queue.Enqueue(next);
+            }
+
+        var outside = _inbound.Keys.Concat(_outgoing.Keys)
+            .Where(node => !StringComparer.Ordinal.Equals(node, Root) && !started.Contains(node))
+            .ToHashSet(StringComparer.Ordinal);
+        return outside.Any(node => CyclesWithin(node, outside));
+    }
+
+    private bool CyclesWithin(string node, HashSet<string> region)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>([node]);
+        while (queue.TryDequeue(out var current))
+            foreach (var next in SuccessorsOf(current).Where(region.Contains))
+            {
+                if (StringComparer.Ordinal.Equals(next, node))
+                    return true;
+                if (visited.Add(next))
+                    queue.Enqueue(next);
+            }
+
+        return false;
+    }
 
     // Reducible: dropping the flows back into a loop head (a node that dominates the flow's source) leaves no cycle.
     private bool IsReducible()
@@ -550,11 +592,43 @@ internal sealed class BpmnTimeRelationAnalysis
                 var plain = fork.Groups.Select(group => NodesReachedAvoiding(group, join)).ToList();
                 var reaches = fork.Groups.Select((group, index) =>
                 {
-                    var others = plain.Where((_, other) => other != index).SelectMany(nodes => nodes).ToHashSet(StringComparer.Ordinal);
-                    return KeyedArrival(fork.Fork, group, join, others);
+                    var others = Enumerable.Range(0, fork.Groups.Count).Where(other => other != index).ToList();
+                    return KeyedArrival(fork.Fork, group, join, merge =>
+                        others.Any(other => plain[other].Contains(merge) &&
+                                            (!IsInclusive(merge) || MustReach(fork.Groups[other], merge, join))));
                 }).ToList();
                 return reaches.Count(reach => reach.Plain || reach.Crossed) >= 2 && reaches.Any(reach => reach.Crossed);
             });
+
+    private bool IsInclusive(string node) =>
+        _elements.TryGetValue(node, out var element) && element.ElementType == BpmnElementTypes.InclusiveGateway;
+
+    // Whether every way from the branch leads into the merge before the join or an end: an inclusive join fires without an
+    // arrival that may not come, so it merges two branches only when the other one always arrives.
+    private bool MustReach(IEnumerable<string> branch, string merge, string join)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>();
+        foreach (var target in branch)
+        {
+            if (StringComparer.Ordinal.Equals(target, merge))
+                continue;
+            if (visited.Add(target))
+                queue.Enqueue(target);
+        }
+
+        while (queue.TryDequeue(out var node))
+        {
+            var successors = SuccessorsOf(node).ToList();
+            if (StringComparer.Ordinal.Equals(node, join) || successors.Count == 0)
+                return false;
+            foreach (var next in successors)
+                if (!StringComparer.Ordinal.Equals(next, merge) && visited.Add(next))
+                    queue.Enqueue(next);
+        }
+
+        return true;
+    }
 
     private HashSet<string> NodesReachedAvoiding(IEnumerable<string> starts, string avoid)
     {
@@ -568,7 +642,7 @@ internal sealed class BpmnTimeRelationAnalysis
     }
 
     // Whether the branch reaches the join without crossing a back flow (Plain) and along one that does (Crossed).
-    private (bool Plain, bool Crossed) KeyedArrival(string fork, IEnumerable<string> branch, string join, HashSet<string> otherBranches)
+    private (bool Plain, bool Crossed) KeyedArrival(string fork, IEnumerable<string> branch, string join, Func<string, bool> mergesThere)
     {
         var plain = false;
         var crossed = false;
@@ -578,7 +652,7 @@ internal sealed class BpmnTimeRelationAnalysis
             Visit(fork, target, false);
         while (queue.TryDequeue(out var state))
         {
-            if (IsWaitingJoin(state.Node) && !_nonWaitingJoins.Contains(state.Node) && otherBranches.Contains(state.Node))
+            if (IsWaitingJoin(state.Node) && mergesThere(state.Node))
                 continue;
             foreach (var next in SuccessorsOf(state.Node))
                 Visit(state.Node, next, state.Crossed);

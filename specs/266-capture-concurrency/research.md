@@ -109,7 +109,9 @@ together. Then every write in its subtree is an unordered write, even a single n
   join pairs only arrivals with one key. An inclusive join counts as non-waiting when two branches of a fork reach it
   and one of them crosses a back flow first (a retry loop on one branch); a parallel join in that shape never fires.
   A process whose cycles have more than one way in (irreducible) declares nothing, because the runtime then picks back
-  flows by flow-id order. A process with link events declares nothing too: the graph has no edge from a link throw to
+  flows by flow-id order, and so does one with a cycle that only a boundary event (or another element without
+  incoming flows) leads into, which the runtime walks from its lowest element id. A branch stops at an inclusive join
+  only where another branch of the fork always arrives. A process with link events declares nothing too: the graph has no edge from a link throw to
   its catch.
 - A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
   successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
