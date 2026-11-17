@@ -60,8 +60,10 @@ async function resolveParameterType(assessment: {
       result.target.isSensitive || result.target.isCredential || result.sources.length !== 1) return;
   const source = result.sources[0];
   const shape = source.shape;
-  if (!matchesParameterOffer(parameterSource, memberPath, source) || shape?.state !== "known" ||
+  if (!matchesParameterOffer(parameterSource, memberPath, source) || !shape ||
       shape.isNullable !== false || shape.presence === "optional" || shape.isSensitive || shape.isCredential) return;
+  // A whole output can have a declared type without a provider that describes its serialized members.
+  if (shape.state !== "known" && !(memberPath.length === 0 && shape.state === "unknown" && shape.reasonCode === "NoMetadataOwner")) return;
   if (!shape.type || typeof shape.type.collectionKind !== "string") return;
   return { alias: shape.type.alias, collectionKind: shape.type.collectionKind };
 }
