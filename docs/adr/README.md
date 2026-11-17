@@ -80,7 +80,7 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
 | 0087 | [ETL owns its execution domain](0087-etl-owns-its-execution-domain.md) | Accepted |
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
-| 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
+| 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Accepted |
 | 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Accepted |
 | 0092 | [Variable Reads And Writes Share One Versioned Lifecycle](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) | Accepted |
 | 0093 | [Background Execution Eligibility Is One Set Of Criteria](0093-background-execution-eligibility-is-one-set-of-criteria.md) | Accepted |
