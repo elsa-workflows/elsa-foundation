@@ -149,7 +149,8 @@ keeps the operator's value. A re-execution sees the corrected value. Activity co
 
 Accept is for a `Fault` step whose body succeeded but whose commit was refused as a lost update. The faulted row keeps
 that refused completion (`RecordedCompletion`: result, outcome selection and every variable write). Accepting it
-checks that the pinned contract and the target variables are unchanged, then commits the successor as completed with
+checks that the pinned contract is unchanged and that each target variable is still declared with the same type and
+protection. It does not refuse a variable that changed since: the override keeps the value it overwrote. It then commits the successor as completed with
 the recorded result, and applies each recorded write as an override (`AcceptedOverride`) that keeps the value it
 overwrote. The parent hears of the completion once; a second request finds the source superseded and is refused. The
 faulted row keeps the refused write, so the conflict stays in the history. A completion that also produced durable
@@ -169,6 +170,7 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   no value snapshot yet.
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
   second does not see the first.
+- A record of a closed-scope row write has no frame revision; its `CommitOrder` is the version the write produced.
 - A commit resubmitted byte for byte under a later lease is numbered again, so it no longer matches the stored copy.
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to

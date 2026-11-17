@@ -32,7 +32,7 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   refused (`WorkflowTerminal`).
 - **T021 (accept recorded completion):** `AcceptRecordedCompletion/1`. A `Fault` refusal on an invoke keeps the
   whole refused completion on the faulted row (`RecordedCompletion`: result, outcome selection, attempt and every
-  variable write resolved to its value). Accepting it revalidates the pinned contract and the target variables, then
+  variable write resolved to its value). Accepting it revalidates the pinned contract and each target variable's declaration (type and protection), then
   supersedes the row with a completed successor of the same logical invocation; each recorded write applies as an
   override (`AcceptedOverride`, writer `AcceptedCompletion`) that keeps the value it overwrote, and the parent hears of
   the completion once. A repeated request finds the source superseded and is refused. Not recorded, so refused

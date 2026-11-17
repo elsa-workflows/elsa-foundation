@@ -78,7 +78,8 @@ public sealed class RuntimeOutputCaptureProjector
                 var row = await ProjectGraphVariableAsync(
                     workflowExecutionId, activityExecutionId, capture, projectionContract, projected, transition, targetScopeId,
                     closedScopeBoundary, capturedAt, cancellationToken);
-                var versioned = await VersionRowAsync(workflowExecutionId, node, row, closedScopeBoundary!, invocation, source, durableValueStateStore, capturedAt, cancellationToken);
+                var versioned = await VersionRowAsync(workflowExecutionId, node, row, closedScopeBoundary!, invocation, source, durableValueStateStore,
+                    projected.Policy.HidesValue(), capturedAt, cancellationToken);
                 if (versioned.Record is { } record)
                     rowWrites.Add(record);
                 if (versioned.Record?.Outcome == VariableCommitOutcome.LostUpdateFault)
@@ -175,6 +176,7 @@ public sealed class RuntimeOutputCaptureProjector
         ActivityExecutionState? invocation,
         VariableWriteSource source,
         IDurableValueStateStore? durableValueStateStore,
+        bool hidesValue,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken)
     {
@@ -193,11 +195,20 @@ public sealed class RuntimeOutputCaptureProjector
                 frame.Revision, frame.Status, frame.Versions);
         var writer = new VariableWriter(source, node.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
         var write = frame.Commit(key, value, frame.Revision, invocation.InputSnapshot?.InputReadSet?.BaseFor(frame.ScopeId, key), LostUpdateModes.Of(node), writer);
+        // A row has no frame revision: its commit order is the version the write produced. Whether the value is hidden
+        // comes from the captured value's policy; the row's own metadata does not carry it.
         var record = VariableWriteRecord.From(frame, write, key, writer, capturedAt);
+        record = new VariableWriteRecord(record.ScopeId, record.VariableKey, record.Writer, record.Outcome, record.BaseVersion,
+            record.CurrentVersion, record.NewVersion, record.NewVersion, record.OccurredAt, record.OverwrittenWriter, record.OverwrittenValue)
+        {
+            CommitSequence = record.CommitSequence,
+            FrameId = record.FrameId,
+            Digest = hidesValue ? null : record.Digest
+        };
         if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
             return (row, record with { RejectedValue = value });
 
-        var versioned = ClosedScopeVariableRows.WithVersion(written, write.Frame.VersionOf(key), value.Policy.HidesValue());
+        var versioned = ClosedScopeVariableRows.WithVersion(written, write.Frame.VersionOf(key), hidesValue);
         return (row with { State = versioned, Metadata = versioned.Metadata }, VariableWriteRecord.IsRecorded(write.Decision) ? record : null);
     }
 

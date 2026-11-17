@@ -98,6 +98,22 @@ public sealed class CommitSequenceStampingTests
         Assert.Equal(ActivityLifecycleTransitionKind.Faulted, Assert.Single(transitions).Kind);
     }
 
+    // A commit that failed and comes back after other commits were numbered gets a new, higher number.
+    [Fact]
+    public async Task A_failed_commit_retried_after_others_is_numbered_after_them()
+    {
+        var (committer, store, accessor) = NewCommitter();
+        using var _ = accessor.Push(Lease(fencingToken: 1));
+        store.FailNext = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await committer.CommitAsync(Commit("commit-x", Activity(ActivityExecutionStatus.Running))));
+        await committer.CommitAsync(Commit("commit-y", Activity(ActivityExecutionStatus.Running)));
+        await committer.CommitAsync(Commit("commit-x", Activity(ActivityExecutionStatus.Completed)));
+
+        Assert.True(Transitions(store.Commits[1])[^1].CommitSequence > Transitions(store.Commits[0])[^1].CommitSequence);
+    }
+
     // A record that was committed without a number (older, or outside a lease) is not numbered by a later commit.
     [Fact]
     public async Task A_record_without_a_number_stays_without_one()

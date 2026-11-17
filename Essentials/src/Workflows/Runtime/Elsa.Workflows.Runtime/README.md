@@ -85,7 +85,7 @@ run, and they are the only outcomes the incident rule lets replace a committed `
 - `AcceptRecordedCompletion/1` (spec 1221 FR-017) applies the completion a `Fault` lost update refused, without running
   the body again: the successor is the same logical invocation, completed with the recorded result and outcome
   selection, and each recorded variable write applies as an override that keeps the value it overwrote. It revalidates
-  the pinned contract and the target variables first, and refuses a step without a recorded completion
+  the pinned contract and each target variable's declaration (type and protection) first, and refuses a step without a recorded completion
   (`NoRecordedCompletion`): a faulted body, or a completion that also produced durable outputs, a workflow dispatch or
   a published stimulus.
 - `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a

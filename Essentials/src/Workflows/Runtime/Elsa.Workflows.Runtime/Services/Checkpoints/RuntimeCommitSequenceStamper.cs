@@ -101,8 +101,11 @@ internal static class RuntimeCommitSequenceStamper
         if (lease is null || !Leases.TryGetValue(lease, out var state))
             return;
         lock (state)
+        {
+            state.AcknowledgeCommit(commit.CommitId);
             foreach (var activity in commit.StateChanges.ActivityExecutions.Select(change => change.State).OfType<ActivityExecutionState>())
                 state.Acknowledge(activity);
+        }
     }
 
     /// <summary>The transition an activity's status stands for, given the transition before it.</summary>
@@ -131,17 +134,23 @@ internal static class RuntimeCommitSequenceStamper
     private sealed class LeaseSequence
     {
         private long _ordinal;
-        private readonly Dictionary<string, long> _commits = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (long Sequence, bool Persisted)> _commits = new(StringComparer.Ordinal);
+        private long _lastSequence = -1;
         private readonly Queue<string> _commitOrder = new();
         private readonly Dictionary<string, Persisted> _activities = new(StringComparer.Ordinal);
 
         public long SequenceFor(string commitId, long fencingToken)
         {
-            if (_commits.TryGetValue(commitId, out var known))
-                return known;
+            // The same commit keeps its number when it was persisted (a replay) or when nothing was numbered since (the
+            // alteration writer numbers a commit, then commits it). A commit that failed and comes back after others
+            // were numbered gets a new, higher number, so numbers keep growing with commit order.
+            if (_commits.TryGetValue(commitId, out var known) && (known.Persisted || known.Sequence == _lastSequence))
+                return known.Sequence;
             var sequence = RuntimeCommitSequence.Compose(fencingToken, ++_ordinal);
-            _commits[commitId] = sequence;
-            _commitOrder.Enqueue(commitId);
+            if (!_commits.ContainsKey(commitId))
+                _commitOrder.Enqueue(commitId);
+            _commits[commitId] = (sequence, false);
+            _lastSequence = sequence;
             if (_commitOrder.Count > RememberedCommits)
                 _commits.Remove(_commitOrder.Dequeue());
             return sequence;
@@ -184,6 +193,12 @@ internal static class RuntimeCommitSequenceStamper
                 FirstCommitSequence = numbers.Length == 0 ? activity.FirstCommitSequence : numbers.Min(),
                 LastCommitSequence = numbers.Length == 0 ? activity.LastCommitSequence : numbers.Max()
             };
+        }
+
+        public void AcknowledgeCommit(string commitId)
+        {
+            if (_commits.TryGetValue(commitId, out var known))
+                _commits[commitId] = (known.Sequence, true);
         }
 
         public void Acknowledge(ActivityExecutionState activity)
