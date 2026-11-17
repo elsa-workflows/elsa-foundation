@@ -215,7 +215,22 @@ internal sealed class Elsa3DefinitionConverter(
             plan.Request.IsReusable,
             (node, name) => plan.Find(node)?.Resolved?.Inputs
                 .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type));
+                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type,
+            node => AncestorContainerVariableNames(plan, node)));
+    }
+
+    /// <summary>The names of the variables the containers enclosing <paramref name="node"/> declare, nearest first (spec 1222 FR-031).</summary>
+    private static IReadOnlyList<string> AncestorContainerVariableNames(Elsa3ConversionPlan plan, Elsa3Activity node)
+    {
+        var names = new List<string>();
+        var parent = plan.Find(node)?.Parent;
+        while (parent is not null && plan.Find(parent) is { } parentPlan)
+        {
+            names.AddRange(parentPlan.Variables.Select(variable => variable.Name));
+            parent = parentPlan.Parent;
+        }
+
+        return names;
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>
