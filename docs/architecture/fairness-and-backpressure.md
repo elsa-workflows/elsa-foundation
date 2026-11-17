@@ -97,9 +97,9 @@ An inline Ephemeral start that writes no row passes the tenant rate check only.
 Background jobs are limited in a different way: the job scheduler gives each tenant a number of slots per node, and a
 job beyond them waits for a slot. That limit refuses nothing.
 
-**Control commands and operator actions (proposed).** `Suspend`, `Terminate`, `Delete` and an operator's discard of
+**Control commands and operator actions (decision 4).** `Suspend`, `Terminate`, `Delete` and an operator's discard of
 parked work shed load, so they are exempt from `InboxFull` and from the tenant rate; a separate operator rate limits
-them. `Resume` and an operator's retry of parked work add load, so they obey `InboxFull`. See "Decisions for the owner".
+them. `Resume` and an operator's retry of parked work add load, so they obey `InboxFull`.
 
 **Cost.** An admitted request pays nothing extra: every check is in memory. A refused request writes no row, so a client
 or adapter retry is harmless; a retry with the same caller key finds the same instance, as today.
@@ -108,7 +108,7 @@ or adapter retry is harmless; a retry with the same caller key finds the same in
 turn path, and lists and counts come from read models. A quota read from a projected count per tenant is soft: it can
 overshoot by the tenant's admission rate times the projector's lag. A hard quota would need a quota actor per tenant
 that every start passes through: one more hop and one more commit per start, and one virtual partition serialising
-the tenant's starts. See "Decisions for the owner".
+the tenant's starts. Release 1 has no running-instance quotas (decision 1).
 
 ## A bound on inbox growth
 
@@ -149,7 +149,7 @@ also means a `done = true` update is no longer HOT, so it writes an entry in eve
 delete writes no index entry and leaves dead tuples for vacuum. All of this is unmeasured: the release 1 cost runs
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
-**The pressure list (proposed).** The owner writes its estimate into a new `backlog` column of the virtual partition's
+**The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
 assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
@@ -286,27 +286,18 @@ an outside publish for its matches, priorities, load-aware rebalancing and shuff
 - A two-tenant stress test on PostgreSQL: one tenant bursts 100,000 starts and the other trickles. It records the
   quiet tenant's start-to-first-turn latency at the 99th percentile and its refusals, with admission on and off.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-1. **Running-instance quotas in release 1.**
-   - (a) None: rates and the ingress threshold only. *Recommended:* it costs nothing on the hot path, and the two
-     others need a projection or a hop that release 1 does not otherwise need.
-   - (b) Soft quotas from a projected count per tenant.
-   - (c) Hard quotas through a quota actor per tenant, at one hop and one commit per start.
-2. **Where the backlog estimate is published.**
-   - (a) A `backlog` column on the virtual partition's fence row. *Recommended:* it is runtime-neutral, and the
-     commit and beat already write that row.
-   - (b) The node heartbeat row: built-in runtime only.
-3. **A turn above the send cap.**
-   - (a) The turn fails and the instance is parked, as for any turn that throws. *Recommended:* the failure is
-     deterministic and visible.
-   - (b) No kernel cap; rely on models' credits and the ForEach cap.
-4. **Control commands and operator actions under `InboxFull`.**
-   - (a) Exempt the commands that shed load (`Suspend`, `Terminate`, `Delete`, discard of parked work) from
-     `InboxFull` and the tenant rate, under a separate operator rate; `Resume` and retry of parked work obey
-     `InboxFull`. *Recommended:* an operator can always shed load, and nothing that adds load skips the threshold.
-   - (b) Exempt every control command and operator action, `Resume` and retry included.
-   - (c) No exemption: every outside message obeys `InboxFull`.
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with
+the rest of the kernel's. Rejected options are kept for the record.
+
+1. **Running-instance quotas in release 1: none (a).** Rates and the ingress threshold only. Rejected: (b) soft quotas
+   from a projected count per tenant; (c) hard quotas through a quota actor per tenant.
+2. **The backlog estimate goes on the virtual partition's fence row (a).** Rejected: (b) the node heartbeat row.
+3. **A turn above the send cap fails and the instance parks (a).** Rejected: (b) no kernel cap.
+4. **`InboxFull` exempts only the commands that shed load (a):** `Suspend`, `Terminate`, `Delete` and discard of parked
+   work, under an operator rate; `Resume` and retry obey `InboxFull`. Rejected: (b) exempt every control command and
+   operator action; (c) no exemption.
 
 ## Contract and evidence
 

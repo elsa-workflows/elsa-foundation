@@ -119,7 +119,7 @@ one flush. The spike spreads every level; the mixed placement is **unmeasured**.
 
 **Where it lives.** In layer 3, as a reusable combiner library on the turn contract. It uses only `Start`, the child
 notice, `SetStatus` and the kernel's terminate. Layer 2 needs no change for the tree itself: no new message kind, no
-new table and no partition knowledge in the model. Decision 5 below may change the child registry of
+new table and no partition knowledge in the model. Decision 5 below changes the child registry of
 `WorkflowInstance`, layer 3's workflow actor type, which is a layer 3 change. ETL uses it for its partitions of work.
 Native gets it as a distributed form of ForEach, below.
 
@@ -164,20 +164,22 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
 
 The spike implements neither policy: a child fault throws in the coordinator, and the kernel parks it.
 
-**Parked leaves.** A leaf whose turn throws is parked: it ends Faulted and sends a Faulted notice to its combiner
-(built: `WorkflowInstance.Park` sends it), and the combiner's registry drops it. Release 1 lets an operator retry parked
-work. If the leaf is retried and finishes, its later notice reaches a parent that no longer expects it: a
+**Parked leaves.** A leaf whose turn throws is parked. As built, it ends Faulted and sends a Faulted notice to its
+combiner (`WorkflowInstance.Park` sends it), and the combiner's registry drops it. Release 1 lets an operator retry
+parked work, and with the built rule a retried leaf's later notice reaches a parent that no longer expects it: a
 generation-tracked parent refuses it as `UnknownChildCreation`; an untracked parent's model sees it, and Native drops it
 (no matching wait) while the spike's model throws and parks. Either way its effects happened and its result is lost.
-This holds for every waiting parent today, a Native `DispatchWorkflow` that waits for its child included (a
-fire-and-forget dispatch gets no notice), so it is a decision for the owner below, beyond the tree.
+This holds for every waiting parent, a Native `DispatchWorkflow` that waits for its child included (a fire-and-forget
+dispatch gets no notice). Decision 5 changes the rule for every waiting parent: a parked child's notice says it was
+parked, and the parent keeps the child in its registry, and a combiner keeps it in `Outstanding` with its credit, until
+a later notice or a discard. A tree with parked leaves visibly waits, and a retried leaf's result is merged. The change
+is in `WorkflowInstance`'s registry and notice (layer 3) and is not built.
 
 **Retries.** A leaf's activity retries inside the leaf: each retry is a new generation in its iteration path, so a new
 effect key (the owner's rule of 16 November). A combiner may retry a failed child by starting a new child for the same
 range. That child is a new instance with a new origin, so its effects carry new keys. For a leaf this is one item's new
 attempt, as intended. For an inner sub-range it reruns every item of the range, including items whose effects already
-happened, under keys no receiver can match. How far a retry reaches is a decision for the owner below; the
-recommendation is leaves only. A body whose effect must happen once per item across retries uses the item's business key
+happened, under keys no receiver can match. A combiner retries leaves only (decision 4). A body whose effect must happen once per item across retries uses the item's business key
 for its receiver as well.
 
 ## Effect keys inside the tree
@@ -200,10 +202,10 @@ tree path: the leaf's origin is unique, and the item a leaf handles is in its st
 Release 1 ships no tree. It adds a parallel ForEach that runs its bodies as frames inside one instance, with two
 inputs and two limits:
 
-| Input | Meaning | Limit (proposed) |
+| Input | Meaning | Limit |
 |---|---|---|
-| `Items` | The collection | At most `MaxParallelItems`. The activity faults with `ParallelForEachCapExceeded` when the evaluated collection is larger. Designer validation flags a literal collection above the cap. |
-| `MaxDegreeOfParallelism` | Bodies running at once: the ForEach's credit | Default 16; at most 64 |
+| `Items` | The collection | At most `MaxParallelItems`, 1,000 (decision 1). The activity faults with `ParallelForEachCapExceeded` when the evaluated collection is larger. Designer validation flags a literal collection above the cap. |
+| `MaxDegreeOfParallelism` | Bodies running at once: the ForEach's credit | Default 16; at most 64 (decision 1) |
 
 Why a cap is needed in this form: the items and every running body live in one instance's state, rewritten at each of
 its commits. Every body that waits (a job, a timer, an event) resumes through that one instance's inbox. With the
@@ -211,10 +213,10 @@ degree as its credit, the inbox holds at most the degree's worth of its results,
 that bodies start stays at most the degree. Items by reference (decision 10) would remove the O(N) copy; the turns
 remain at least one commit per waiting body.
 
-**The cap's value is the owner's decision** (below). The arithmetic for 1,000 items of about 50 bytes, unverified,
+**The cap is 1,000 items, degree 16 by default and 64 at most** (decision 1). The arithmetic for 1,000 items of about 50 bytes, unverified,
 assuming each body waits once, so one commit per item: a state of about 50 kB, rewritten at about 1,000 commits, about
 50 MB of row writes per ForEach; at 10,000 items about 5 GB. A body that waits w times multiplies both by w; there is no
-ceiling. The release 1 state-size benchmark (decision 10) measures it before the cap is published. A body that starts a
+ceiling. The release 1 state-size benchmark (decision 10) confirms or lowers the cap before it is published. A body that starts a
 child workflow per item stays inside the same cap.
 
 Larger work in release 1 is split by the author: a sequential ForEach over batches that each dispatch a bounded
@@ -223,7 +225,7 @@ parallel ForEach, or child workflows for batches. The documentation states the c
 **After release 1, with ETL:** the combiner library; ETL's partitions of work on it; and, for Native, an explicit
 distributed form of ForEach (for example `Distribution = Tree`) that runs each item's body as a leaf workflow instance.
 The distributed form changes semantics: a leaf runs in its own instance, sees no variables of the parent's scope other
-than its inputs, and returns its output through the reducer. That is why it stays a choice the author makes.
+than its inputs, and returns its output through the reducer. That is why it stays a choice the author makes (decision 2).
 
 **Verification planned** (none of it exists):
 
@@ -235,32 +237,22 @@ than its inputs, and returns its output through the reducer. That is why it stay
 - The mixed placement.
 - A PostgreSQL run that records round trips and bytes per level against the direct baseline.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-1. **The release 1 cap on a parallel ForEach.**
-   - (a) 1,000 items, degree default 16 and maximum 64, confirmed or lowered by the state-size benchmark before
-     release. *Recommended:* the arithmetic stays in tens of MB per ForEach for bodies that wait once.
-   - (b) 10,000 items, accepting GB-scale writes per ForEach until values by reference land.
-2. **How the distributed form is chosen after release 1.**
-   - (a) An explicit option on ForEach. *Recommended:* the body's scope and output semantics change, so the author
-     decides.
-   - (b) Automatic above the cap, which would change semantics without the author knowing.
-3. **Fault policy default for the combiner library.**
-   - (a) FailFast. *Recommended:* it matches a structured parallel block and needs no threshold.
-   - (b) Collect with a threshold, which ETL batch jobs may prefer per job.
-4. **How far a combiner's retry reaches.**
-   - (a) Leaves only: a failed leaf is restarted as a new leaf for its item; a failed inner sub-range is not retried,
-     and its fault goes up. *Recommended:* no finished item runs again.
-   - (b) Unfinished items of a sub-range: the combiner records which items merged and restarts only the rest. Its
-     state grows with the items it must remember.
-   - (c) Whole sub-ranges, accepting that finished items run again under new keys.
-5. **A parked child that an operator later retries.**
-   - (a) A parked child's notice says it was parked. The parent keeps the child in its registry, and the combiner keeps
-     it in `Outstanding`, with its credit, until a later notice or a discard. *Recommended:* no result is lost, and a
-     tree with parked leaves visibly waits. It changes `WorkflowInstance`'s registry and the notice, in layer 3, for
-     every waiting parent.
-   - (b) A parked child's fault is final for its parent. The operator tools refuse to retry a child whose parent
-     consumed its fault, and the operator retries at the parent instead.
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with
+the rest of the kernel's. Rejected options are kept for the record.
+
+1. **Release 1 caps a parallel ForEach at 1,000 items, degree 16 by default and 64 at most (a),** confirmed or lowered
+   by the state-size benchmark before release. Rejected: (b) 10,000 items.
+2. **The distributed form is an explicit option on ForEach (a).** Rejected: (b) automatic above the cap.
+3. **The combiner library defaults to FailFast (a).** Rejected as the default: (b) Collect with a threshold, which
+   stays available per job.
+4. **A combiner's retry reaches leaves only (a).** Rejected: (b) unfinished items of a sub-range; (c) whole
+   sub-ranges.
+5. **A parked child later retried: the parent keeps waiting (a).** The notice says "parked"; the parent's registry and a
+   combiner's `Outstanding` keep the child until a later notice or a discard. This changes `WorkflowInstance`'s
+   registry and notice (layer 3) for every waiting parent. Rejected: (b) a parked child's fault is final for its
+   parent.
 
 ## Contract and evidence
 

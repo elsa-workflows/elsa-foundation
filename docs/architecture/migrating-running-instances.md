@@ -157,7 +157,7 @@ The migration's turn ends in one fenced commit, batched with its partition's oth
 
 All of it lands or none of it does (invariant 2). A commit refused by the fence resets the owner as usual. The next owner finds `Migrate` in the inbox and maps the same committed state again, so the result is the same. A refusal is also a commit: the message is consumed and the outcome carries the findings, with the instance unchanged.
 
-**The journal record.** At Full history the migration's journal entry records source, target and plan, and the viewer renders earlier entries against the source definition and later ones against the target. At State history the journal row is `[]`, and at Minimal no row is written (`Journal` in WorkflowInstance.cs). Those levels have no activity entries to render, so the viewer needs no boundary there. They also keep no record that the migration happened, beyond the row's definition and the plan's outcome. The [data lifecycle](data-lifecycle.md) page proposes lifecycle entries (created, ended, migrated, deleted) at every history level; that is an owner decision there.
+**The journal record.** At Full history the migration's journal entry records source, target and plan, and the viewer renders earlier entries against the source definition and later ones against the target. At State history the journal row is `[]`, and at Minimal no row is written (`Journal` in WorkflowInstance.cs). Those levels have no activity entries to render, so the viewer needs no boundary there. As built they keep no record that the migration happened, beyond the row's definition and the plan's outcome. The [data lifecycle](data-lifecycle.md) page's lifecycle entries (created, ended, migrated, deleted) at every history level are adopted (its decision 1), so a migration writes an envelope-only "migrated" entry at State and Minimal too; that is not built.
 
 ### Plans and bulk migration
 
@@ -209,22 +209,22 @@ Later: explicit node, path and state maps; frame cancellation by map; re-registe
   - a simulated migration under takeovers: it lands once, a refusal changes nothing, effect keys of replayed activations are unchanged, invariant 8 holds, and an older owner never writes a newer state back;
   - mutations that forget a frame's parent chain, accept a reordered Sequence prefix, map a ForEach to a target with a different child, ignore a join's inbound set, drop a `Results` node, or consume a `Migrate` on an older owner.
 
-## Decisions for the owner
+## Decisions (owner, 16–17 November 2026)
 
-1. **Rolling back a release that bumps a state version.**
-   - **A (as built):** a release writes the new version as soon as it runs. If it is rolled back, instances already written at the new version are withheld on the older nodes until the release is rolled forward again.
-   - **B (reader first):** a release first ships the reader of the new shape while still writing the old one; the next release writes the new one. A rollback by one release is always safe, but each bump takes two releases and every upgrade needs a writer of the old shape.
-   - **Recommendation: A for release 1,** with a metric for withheld instances and release notes that name every state version bump. Revisit B if operators need rollback across bumps.
-2. **An instance a bulk plan refuses.**
-   - **A:** it stays running on the source version and the plan reports it.
-   - **B:** it is suspended for an operator.
-   - **Recommendation: A.** A refusal changes nothing, which keeps a plan safe to run on a live system.
-3. **The simple-case boundary** is the one defined above. **Recommendation:** confirm it as release 1's scope; release 1 refuses everything outside it.
-4. **ADR 0049's rule that only a suspended, fully quiescent execution may migrate.**
-   - **A: keep it.** Release 1 migrates suspended instances only.
-   - **B: widen it.** Release 1 migrates running and suspended instances. A turn boundary is the kernel's quiescent point: no activity runs during the migration's turn, and jobs in flight are pinned to their source node and inputs.
-   - **Recommendation: B.** ADR 0049 then goes on the list of ADRs the new core supersedes. A plan can still require suspension as an option.
-5. **How long a source definition version is kept.**
-   - **A:** while any running instance, job ticket or retained history refers to it. Pre-migration history at Full is rendered against the source, so this means until every instance once bound to it is deleted.
-   - **B:** while a running instance or job ticket refers to it. Older history then renders with a "definition removed" fallback.
-   - **Recommendation: A.** Retention ([data lifecycle](data-lifecycle.md)) bounds how long that is, and the instance-list read model counts the references.
+The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with
+the rest of the kernel's. Rejected options are kept for the record.
+
+1. **Rollback of a state version bump stays as built (A):** instances written at the new version are withheld on older
+   nodes until the roll-forward, with a metric for withheld instances and release notes that name every bump. Rejected:
+   (B) reader first, two releases per bump.
+2. **An instance a bulk plan refuses stays running on the source version (A),** and the plan reports it. Rejected: (B)
+   suspend it for an operator.
+3. **The simple-case boundary above is release 1's scope;** release 1 refuses everything outside it.
+4. **ADR 0049's quiescent-only rule is widened to running instances (B).** Release 1 migrates running and suspended
+   instances at a turn boundary; a plan can still require suspension. ADR 0049 goes on the list of ADRs the new core
+   supersedes. Rejected: (A) suspended instances only.
+5. **A source definition version is kept while any running instance, job ticket or retained history refers to it
+   (A).** Rejected: (B) running instances and tickets only, with a "definition removed" fallback for older history.
+
+**Accepted with the recommendations:** until creation headers are persisted, a plan addresses instances by id only,
+and release 1 documents the reused-caller-key risk ("Release 1's fallback" above).
