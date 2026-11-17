@@ -18,7 +18,7 @@ import {
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
 import { formatActivityDefinitionDate, formatActivityVersion, resolveActivityDefinitionTitle } from "./workflowFormatting";
-import { activityDesignKeys, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
+import { activityDesignKeys, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityAuthoringCapabilities, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { WorkflowListIdentifiers } from "./workflow-editor/WorkflowListIdentifiers";
@@ -225,12 +225,14 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
 
 function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
   const queryClient = useQueryClient();
+  const capabilitiesQuery = useActivityAuthoringCapabilities(context);
+  const providers = capabilitiesQuery.data?.providers ?? [];
   const [restoredContext] = useState(() => readActivityHistoryMetadata()?.collection ?? null);
   const restoredScopeMatches = !authorizationInvalidating && restoredContext?.runtimeScopeId === activityRuntimeScopeId && restoredContext?.baseUrl === baseUrl && restoredContext?.authorityRevision === authorityRevision;
   const [searchInput, setSearchInput] = useState(restoredContext?.searchInput ?? "");
-  const [providerInput, setProviderInput] = useState(restoredContext?.providerInput ?? "");
+  const [selectedProviderKey, setSelectedProviderKey] = useState(restoredContext?.providerKey ?? "");
   const search = useDebouncedValue(searchInput, 250, restoredContext?.search);
-  const providerKey = useDebouncedValue(providerInput, 250, restoredContext?.providerKey);
+  const providerKey = selectedProviderKey || "";
   const [authority, setAuthority] = useState<ActivityDefinitionCollectionRequest["authority"]>(restoredContext?.authority ?? "Design");
   const [pageSize, setPageSize] = useState<PageSize>(restoredContext?.pageSize ?? 25);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>(restoredScopeMatches ? restoredContext?.cursorStack ?? [null] : [null]);
@@ -257,13 +259,13 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     authorityRevision,
     searchInput,
     search,
-    providerInput,
+    providerInput: selectedProviderKey,
     providerKey,
     authority,
     pageSize,
     cursorStack: effectiveCursorStack,
     cursorIndex: effectiveCursorIndex
-  }), [authority, authorityRevision, baseUrl, effectiveCursorIndex, effectiveCursorStack, pageSize, providerInput, providerKey, search, searchInput]);
+  }), [authority, authorityRevision, baseUrl, effectiveCursorIndex, effectiveCursorStack, pageSize, selectedProviderKey, providerKey, search, searchInput]);
   const authorityScope = `${baseUrl}\u0000${authorityRevision}`;
   const query = useActivityDefinitions(context, request, authorityScope);
   const directFailure = query.error ? classifyActivityDefinitionReadFailure(query.error) : null;
@@ -272,8 +274,8 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const mustDiscardData = failure === "forbidden" || failure === "unavailable";
   const rejectedContinuation = failure === "expired" || invalidCursor;
   const data = authorizationInvalidating || scopeChanged || mustDiscardData || rejectedContinuation || freshPageRequired ? undefined : query.data;
-  const defaultDesignedView = authority === "Design" && !searchInput.trim() && !providerInput.trim();
-  const filtersActive = Boolean(searchInput.trim() || providerInput.trim() || authority !== "Design");
+  const defaultDesignedView = authority === "Design" && !searchInput.trim() && !selectedProviderKey;
+  const filtersActive = Boolean(searchInput.trim() || selectedProviderKey || authority !== "Design");
 
   useEffect(() => {
     if (!scopeChanged) return;
@@ -374,7 +376,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
-            <label><span>Provider key</span><input value={providerInput} onChange={event => setProviderInput(event.target.value)} placeholder="Exact provider key" /></label>
+            <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
             <StudioField label={<><span>Rows per page</span></>}><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></StudioField>
           </div>
         </details>
@@ -390,7 +392,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
         icon={<Database size={24} aria-hidden />}
         title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
         description={defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
-        actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
+        actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setSelectedProviderKey(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
       /></div> : null}
       {data && data.items.length > 0 ? <>
         <div className="studio-table-container studio-collection-table ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
@@ -428,7 +430,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           </div>;
           })}
         </div>
-        <footer className="studio-collection-footer" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} authorized definitions</span><div><StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</StudioButton><StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></StudioButton></div></footer>
+        <footer className="studio-collection-footer" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} definitions</span><div><StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</StudioButton><StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></StudioButton></div></footer>
       </> : null}
       {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>

@@ -18,13 +18,22 @@ export function BackendSwitcher({connections,onNavigate}:{connections:BackendCon
       <Server size={17} aria-hidden="true" /><span><strong>{active?.profile.name ?? "Choose backend"}</strong><small>{active?.profile.environment === "Production" ? "Production · " : ""}{active ? new URL(active.profile.baseUrl).host : "Not connected"}</small></span><ChevronDown size={14} aria-hidden="true" />
     </StudioButton>
     <AnchoredPopover open={open} anchorRef={button} className="backend-switcher-popover" minWidth={260} maxHeight={420} onDismiss={() => setOpen(false)}>
-      <div aria-label="Backend connections">
-      <strong>Connect to backend</strong>
-      {snapshot.profiles.map(profile => <StudioButton type="button" key={profile.id} disabled={snapshot.busy || profile.id === active?.profile.id && !active?.disposed && !active?.discoveryError} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
-        <span><strong>{profile.name}</strong><small>{profile.environment} · {new URL(profile.baseUrl).host}</small></span><span>{profile.id === active?.profile.id ? "Active" : "Connect"}</span>
-      </StudioButton>)}
-      <StudioButton type="button" onClick={() => {setOpen(false);onNavigate("/settings/backends");}}>Manage backends</StudioButton>
-    </div></AnchoredPopover>
+      <div aria-label="Backend connections" className="backend-switcher-popover-content">
+        <div className="backend-switcher-popover-header">Connect to backend</div>
+        <div className="backend-switcher-popover-profiles">
+          {snapshot.profiles.map(profile => <StudioButton type="button" key={profile.id} className="backend-switcher-popover-profile" disabled={snapshot.busy || profile.id === active?.profile.id && !active?.disposed && !active?.discoveryError} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
+            <div className="backend-switcher-popover-profile-info">
+              <strong>{profile.name}</strong>
+              <small>{profile.environment} · {new URL(profile.baseUrl).host}</small>
+            </div>
+            <span className="backend-switcher-popover-profile-status">{profile.id === active?.profile.id ? "Active" : "Connect"}</span>
+          </StudioButton>)}
+        </div>
+        <div className="backend-switcher-popover-footer">
+          <StudioButton type="button" className="backend-switcher-popover-manage" onClick={() => {setOpen(false);onNavigate("/settings/backends");}}>Manage backends</StudioButton>
+        </div>
+      </div>
+    </AnchoredPopover>
   </div>;
 }
 
@@ -51,7 +60,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   const edit = !!profile && segment[1] === "edit";
   const detailPath = profile ? `/settings/backends/${encodeURIComponent(profile.id)}` : "/settings/backends";
   if (create || edit) return <BackendForm key={create ? "new" : profile!.id} connections={connections} profile={edit ? profile : undefined} navigate={navigate} />;
-  if (segment.length && !profile) return <div className="backends-page"><StudioButton type="button" onClick={() => navigate("/settings/backends")}>Back to backends</StudioButton><StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert></div>;
+  if (segment.length && !profile) return <div className="backends-page"><div style={{display:"flex",flexDirection:"column",gap:"16px"}}><StudioButton type="button" onClick={() => navigate("/settings/backends")}>Back to backends</StudioButton><StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert></div></div>;
   if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} />;
   return <section className="backends-page" aria-label="Backends">
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>

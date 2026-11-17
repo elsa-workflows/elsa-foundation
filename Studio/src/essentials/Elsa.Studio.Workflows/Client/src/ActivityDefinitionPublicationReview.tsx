@@ -286,21 +286,36 @@ export function ActivityDefinitionPublicationReview({
   const reviewDetails = preflight ? <>
       {blockerPanel}
       <PublicationSummary preflight={preflight} blocked={publicationBlocked} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
-      {mode === "toolbar" && !preflight.hasBaseline ? <>
-        <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
-        <details className="ad-publication-technical-details"><summary>Review initial activity contents</summary>
+      {mode === "toolbar" ? <>
+        {!preflight.hasBaseline ? <>
+          <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
+          <details className="ad-publication-technical-details"><summary>Review initial activity contents</summary>
+            <ImpactReview changes={preflight.impactFirstChanges} compact />
+          </details>
+        </> : <details className="ad-publication-technical-details"><summary>Changes</summary>
           <ImpactReview changes={preflight.impactFirstChanges} compact />
-        </details>
-      </> : <ImpactReview changes={preflight.impactFirstChanges} compact={mode === "toolbar"} />}
-      {mode === "toolbar" && (preflight.isPublishable || hasBlockingDiagnostics) ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
-        <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />
-      </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={mode === "toolbar"} />}
-      {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
-      {!publicationBlocked ? <div className="ad-publication-version">
-        <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
-        <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>{mode === "toolbar" ? "Suggested version based on these changes. You can choose a higher version." : "The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version."}</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
-        {versionError ? <p role="alert">{versionError}</p> : null}
-      </div> : null}
+        </details>}
+        {(preflight.isPublishable || hasBlockingDiagnostics) ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
+          <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />
+        </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />}
+        {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
+        {!publicationBlocked ? <details className="ad-publication-technical-details"><summary>Version</summary>
+          <div className="ad-publication-version">
+            <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
+            <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>Suggested version based on these changes. You can choose a higher version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
+            {versionError ? <p role="alert">{versionError}</p> : null}
+          </div>
+        </details> : null}
+      </> : <>
+        <ImpactReview changes={preflight.impactFirstChanges} compact={false} />
+        <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={false} />
+        {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
+        {!publicationBlocked ? <div className="ad-publication-version">
+          <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
+          <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
+          {versionError ? <p role="alert">{versionError}</p> : null}
+        </div> : null}
+      </>}
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> {mode === "toolbar" ? "Existing workflows keep the activity version they already use." : "Publication is atomic and idempotent for this reviewed revision and head."}</span>
         <button type="button" className="ad-primary-action" aria-describedby={publicationBlocked ? blockedReasonId : undefined} onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
