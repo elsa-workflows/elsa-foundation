@@ -21,7 +21,8 @@ Code facts are read on the initiative branch at `dc32983a2`, S-10's PR #4316 (he
 - **S-11 (#4725)** builds `BackgroundEligibility` in `Essentials/src/Workflows/Runtime/Core/Background/`, with C9 as
   one predicate `AccessesVariablesByName(Type)` (today: `IRuntimeScopedVariableReader`) and a subject
   (`BackgroundEligibilitySubject`) built from the pinned node. It marks `RunJavaScript` `[BackgroundExecutionSafe]`
-  ("a closed sandbox with no variable access").
+  in its first head; the coordinator then decided it is not (`eb9b1b1a4a`): its scripts read and write variables by
+  name.
 - **Converter.** `Elsa3ExpressionRewriter` refuses `setVariable`/`setOutput`/`setInput`/`setResult` (`SetterCalls`),
   generated setters (`TryGetAccessorName(…, "set", …)`), and assignments to ambient roots, all with
   `ForbiddenCapability` and `MutationGuidance` ("Move the assignment into a Set Variable activity…"). The same visitor
@@ -79,16 +80,18 @@ type still sees it.
 **Rationale.** The contract is what publication, the descriptor and C9 read; carrying both signals in the contract
 lets C9 refuse them at placement even when the CLR type is not loaded (spec 1230 `TypeCheckedAtRunTime`).
 
-## R-6 — C9: which signals, and the read-only reference (Q2, Q3)
+## R-6 — C9: which signals, and the read-only reference (Q2)
 
 **Decision (recommended).** C9 refuses, in `BackgroundEligibility`:
 1. `IRuntimeScopedVariableReader` (unchanged);
 2. an activity type marked `[AccessesUndeclaredVariables]`;
-3. any input of kind variable reference, writable **or read-only**;
-4. a `RunJavaScript` node whose pinned body touch set is not empty (reads, writes, or the fallback).
+3. any input of kind variable reference, writable **or read-only**.
+
+`RunJavaScript` needs no rule: the coordinator decided on #4725 (`eb9b1b1a4a`) that it is not
+`[BackgroundExecutionSafe]`, and S-11 refuses a background `RunJavaScript`.
 
 `AccessesVariablesByName(Type)` covers 1–3 from the CLR type; a new node-level fact on the subject
-(`TouchesVariables`, from the pinned contract and node metadata) covers 2–4 without the CLR type. The refusal reason
+(`TouchesVariables`, from the pinned contract and node metadata) covers 2–3 without the CLR type. The refusal reason
 names the signal.
 
 **Why the read-only reference is refused (Q2).** C9's criterion text in ADR 0093 is "The body does not read or write
@@ -100,12 +103,7 @@ only with a background session through ADR 0092. Refusing it applies the criteri
 If the coordinator prefers to make the enforcement sentence list every signal explicitly, that is a one-line ADR 0093
 amendment in its own PR (offered, not required).
 
-**Why per node for `RunJavaScript` (Q3).** S-11 marked `RunJavaScript` because its body had no variable access. After
-this spec it may; a body that touches no variable is still a closed sandbox and stays eligible. The touch set is
-pinned at publish, so the check is exact for literal reads and writes and conservative for the fallback.
-
-**Alternatives.** Unmark `RunJavaScript` (loses eligibility for pure scripts); allow read-only references on the
-worker (needs a background session, ADR 0093 amendment).
+**Alternative.** Allow read-only references on the worker (needs a background session, ADR 0093 amendment).
 
 ## R-7 — Opaque writes (Q5)
 

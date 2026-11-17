@@ -42,7 +42,7 @@ JavaScript expressions/Jint, Scripting activities, Elsa 3 mapping)
 | §E2.2 Runtime takes no Design reference | PASS | The session lives in Runtime/Runtime Core; publish analysis lives in Publishing and Design Validations, which already reference Runtime Core. |
 | §2.17 duplication beats dependency | PASS | Reuses S-10's commit rule and S-4's resolver instead of copies. |
 | ADR 0045 §6 | PASS | `context.Variables` exposes variables only; outputs and outcomes keep their typed result. |
-| §E2.6.1 executable-always-runs | ACTION | A pinned background `RunJavaScript` whose body now touches variables is refused at the worker with an incident; before this spec no such body existed, so no published executable changes behaviour. Release notes say so. |
+| §E2.6.1 executable-always-runs | PASS | No published executable changes behaviour: the new C9 signals are new types, and `RunJavaScript` is already refused in the background by S-11. |
 | §E5 / §4.2 versioning | ACTION | New public API (`VariableReference<T>`, `ReadOnlyVariableReference<T>`, `AccessesUndeclaredVariablesAttribute`, `IStepVariables`) in `PublicAPI.Unshipped.txt`; `RunJavaScript` contract gains write metadata → version per its module's rule. |
 | §2.22 docs | ACTION | Activity authoring docs (step writes, references, marker), script docs (write forms, copy explicitly with `{...variables.o}`), `EXTENSION_POINTS.md` for the marker, Elsa 3 conversion guide. |
 | §2.23 tests | PASS | One test per ADR 0090 *Required evidence* item in scope; one C9 test per signal at publication and run time. |
@@ -57,7 +57,7 @@ JavaScript expressions/Jint, Scripting activities, Elsa 3 mapping)
 | P-3 | Bases | R-3: session read → input read set → blind; own applied writes advance a persisted per-invocation base, restored on resume. |
 | P-4 | Script writes pinned at publish | R-4: extend S-4's body analyzer with write forms; pin targets, may-write set, body touch set. |
 | P-5 | References in the contract | R-5: contract input kind `VariableReference` + direction; marker pinned in the contract. |
-| P-6 | C9 | R-6: `AccessesVariablesByName(Type)` covers the type signals; a new subject fact `TouchesVariables` (from contract and node) covers the contract-visible signals and `RunJavaScript`'s body touch set. |
+| P-6 | C9 | R-6: `AccessesVariablesByName(Type)` covers the type signals; a new subject fact `TouchesVariables` (from contract and node) covers the contract-visible signals (marker, reference inputs). |
 | P-7 | Converter | R-8: script mode rewrites setters to `variables` writes; new stable refusal codes; expression mode unchanged except guidance. |
 | P-8 | Minimal script write path before S-8 | Whole assignments only; member changes come from S-8's bridge. |
 

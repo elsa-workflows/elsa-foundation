@@ -3,7 +3,7 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts/step-variables.md](contracts/step-variables.md)
 
-**Gates**: implementation starts after the coordinator approves the spec (Q1–Q7). S-10 (#4316) must be on the branch
+**Gates**: implementation starts after the coordinator approves the spec (Q1, Q2, Q4–Q7). S-10 (#4316) must be on the branch
 before Phase 2; S-11 (#4725) before Phase 6. If either has not merged, the implementing PR depends on it. Phase 4
 (the reference types and the marker) and Phase 6 (C9) land in **the same PR** (ADR 0093 *Consequences*).
 
@@ -17,8 +17,8 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 ## Phase 2: Foundational — the session and the commit path (blocks every story)
 
 - [ ] T003 Add `IStepVariables` and `IActivityExecutionContext.Variables` in `Essentials/src/Activities/Runtime/Core/Contracts/` (FR-002, FR-023).
-- [ ] T004 Implement `StepVariableSession` and `WriteIntent` (data-model.md) in `Essentials/src/Workflows/Runtime/Core/Models/`: committed read at the moment of the read over the visible frame chain shared with `RuntimeContainerScopeService`, read-your-writes view, loop items read-only, `VF-ACT-010` for withheld values (FR-003, FR-004, FR-006).
-- [ ] T005 Record session reads per attempt as `VariableReadSetEntry` (digest only under `Fault`); never carried to a new attempt or across suspension (FR-007; **spec 1221 T015**).
+- [ ] T004 Implement `StepVariableSession` and `WriteIntent` (data-model.md) in `Essentials/src/Workflows/Runtime/Core/Models/`: committed read at the moment of the read over the visible frame chain shared with `RuntimeContainerScopeService`, read-your-writes view, loop items read-only, `VF-ACT-010` for withheld values (FR-003, FR-004, FR-006); the read by scope and key that S-4's T050 calls (FR-006a); transient and withheld matches fault on the host side, uncatchable by the script (FR-006b).
+- [ ] T005 Record session reads per attempt as `VariableReadSetEntry` with the protection policy (digest only under `Fault`); never carried to a new attempt or across suspension (FR-007; **spec 1221 T015**).
 - [ ] T006 Base selection per research R-3: session read → input read set → blind; oldest in-use on ambiguity (FR-008, FR-009; **spec 1221 T015**, FR-006 session half).
 - [ ] T007 Create the session per step in `WorkflowInvokeActivitySchedulerWorkHandler` and `WorkflowResumeBookmarkSchedulerWorkHandler`; a fresh session on resume and on every new attempt.
 - [ ] T008 Apply intents in the step's checkpoint commit before captures, through S-10's `VariableCommitRule` with the node's lost-update mode and then the C4 no-op check; write records with `SessionChange` (FR-011–FR-013, FR-016); integrate with `RuntimeOutputCaptureProjection` so the capture wins.
@@ -58,10 +58,10 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 ## Phase 6: User Story 5 — background eligibility C9 (P2, same PR as Phase 4)
 
 - [ ] T030 [US5] Extend `BackgroundEligibility.AccessesVariablesByName(Type)` in `Essentials/src/Workflows/Runtime/Core/Background/BackgroundEligibility.cs`: `[AccessesUndeclaredVariables]`, any `VariableReference<T>` or `ReadOnlyVariableReference<T>` input (Q2); keep `IRuntimeScopedVariableReader` (FR-030 a–c).
-- [ ] T031 [US5] Add a subject fact `TouchesVariables` built from the pinned contract (marker, reference inputs) and node metadata (`RunJavaScript` body touch set), checked by C9 even when `TypeCheckedAtRunTime` (FR-030 d, FR-031); update `ForPinnedNode` and the template placer's subject.
-- [ ] T032 [P] [US5] **(test-first)** For each signal — (a) marker, (b) writable reference, (c) read-only reference, (d) `RunJavaScript` body reading `variables.x`, writing it, and using the fallback — publication is refused with exactly `VF-BG-001 (C9)` and the run-time re-check (admission and worker) refuses with the same text; a `RunJavaScript` with no variable access stays eligible.
+- [ ] T031 [US5] Add a subject fact `TouchesVariables` built from the pinned contract (marker, reference inputs), checked by C9 even when `TypeCheckedAtRunTime` (FR-031); update `ForPinnedNode` and the template placer's subject.
+- [ ] T032 [P] [US5] **(test-first)** For each signal — (a) marker, (b) writable reference, (c) read-only reference — publication is refused with exactly `VF-BG-001 (C9)` and the run-time re-check (admission and worker) refuses with the same text.
 - [ ] T033 [P] [US5] **(test-first)** Template placement in a design-only shell refuses the contract-visible signals at placement and the type-only ones at admission.
-- [ ] T034 [US5] Update the `RunJavaScript` `[BackgroundExecutionSafe]` comment (S-11) to say a body that touches variables is refused per node under C9; update ADR 0093's C9 *Today* note only through an amendment PR if the coordinator chooses Q2's alternative.
+- [ ] T034 [US5] Update ADR 0093's C9 *Today* note only through an amendment PR if the coordinator chooses Q2's alternative; otherwise nothing (`RunJavaScript` is already refused in the background by S-11).
 
 ## Phase 7: Publish-time write analysis (all stories)
 

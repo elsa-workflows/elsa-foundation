@@ -37,7 +37,7 @@ lost update with warning, or fault).
 | Fact | Source | Read by |
 |---|---|---|
 | `MayWriteSet` | script analysis (FR-019) or writable bound references (FR-024) | concurrent-write rule, overlap warning, inspection |
-| `BodyTouchSet` (`RunJavaScript`) | pinned reads, writes, and the fallback flag | C9 (FR-030 d) |
+| `BodyTouchSet` (`RunJavaScript`) | pinned reads, writes, and the fallback flag | inspection, concurrent-write rule |
 | `AccessesUndeclaredVariables` | activity-type attribute, pinned in the contract | free-name gate, concurrent-write rule ("every visible variable"), C9 |
 | Variable-reference inputs | contract input kind `VariableReference` with `Direction` (`Read`, `ReadWrite`) and value type | binding validation, C9 |
 | Lost-update mode | S-10 (`[ActivityLostUpdateMode]`, node setting) | the commit rule |

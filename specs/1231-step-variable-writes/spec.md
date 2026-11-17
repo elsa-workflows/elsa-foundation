@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-17
 
-**Status**: Draft — waits for the coordinator's answers to Q1–Q7 (*Open questions*). Not provisional: every ADR it
+**Status**: Draft — waits for the coordinator's answers to Q1, Q2 and Q4–Q7 (*Open questions*; Q3 was decided on #4725). Not provisional: every ADR it
 applies is accepted and merged.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-7**,
@@ -32,7 +32,7 @@ variables this way is refused a background placement until a background session 
 | **ADR 0046** (value model) | V6 declared loss, V9 copy, compare, patch for scripts (built by S-8), `Any` is plain JSON | `da4dddbb9` | accepted 2026-11-16 |
 
 **Approval plan**: @j03y-nxxbz alone (coordinator decision of 2026-11-16: the ADRs were resolved together, so a spec
-needs only the coordinator's approval). Approval needs answers to Q1–Q7. If an answer changes an ADR (Q2's
+needs only the coordinator's approval). Approval needs answers to Q1, Q2 and Q4–Q7 (Q3 is decided). If an answer changes an ADR (Q2's
 alternative, Q5's alternative), that change goes in its own small amendment PR reviewed by @sfmskywalker and
 @FransVanEk. With the recommended answers this spec needs **no ADR amendment**.
 
@@ -55,8 +55,9 @@ alternative, Q5's alternative), that change goes in its own small amendment PR r
 6. **Publish checks**: undeclared, computed, read-only and transient targets; unbound references; the may-write set
    fed to the concurrent-write rule; the warning when a may-write set overlaps the step's own capture.
 7. **Background eligibility C9 extended** in `BackgroundEligibility` (S-11): an activity type marked
-   `[AccessesUndeclaredVariables]`, an activity with a variable-reference input, and a `RunJavaScript` node whose body
-   touches variables are refused a background placement, at publication and at the worker.
+   `[AccessesUndeclaredVariables]` and an activity with a variable-reference input are refused a background
+   placement, at publication and at the worker. `RunJavaScript` is not `[BackgroundExecutionSafe]` (coordinator
+   decision on #4725, `eb9b1b1a4a`), so script writes never reach a worker and need no rule here.
 8. **The Elsa 3 converter**: `setVariable`, `set<Name>()` and nested mutation inside `RunJavaScript` convert; in
    input expressions they stay refused.
 
@@ -217,7 +218,7 @@ doing the same; run a marked activity naming an undeclared variable.
 ### User Story 5 — A step that touches variables is not placed in the background (Priority: P2)
 
 A workflow author places a node in the background. If the activity type is marked `[AccessesUndeclaredVariables]`,
-has a variable-reference input, or is a `RunJavaScript` whose body reads or writes variables, publication refuses it
+or has a variable-reference input, publication refuses it
 with `VF-BG-001 (C9)`, and so does the worker if a placement got past publication.
 
 **Why this priority**: ADR 0093's *Consequences* make it a hard requirement of the change that introduces these
@@ -234,11 +235,10 @@ re-check with each.
 2. **Given** a `[BackgroundExecutionSafe]` activity with a writable `VariableReference<T>` input, **Then** the same.
 3. **Given** a `[BackgroundExecutionSafe]` activity with a `ReadOnlyVariableReference<T>` input, **Then** the same
    (Q2).
-4. **Given** a background `RunJavaScript` whose body reads or writes `variables`, calls `getVariable` or
-   `setVariable`, or uses the computed or opaque fallback, **Then** the same (Q3). A background `RunJavaScript` whose
-   body touches no variable stays eligible.
+4. **Given** a background `RunJavaScript`, **Then** it stays refused as S-11 built it (it is not
+   `[BackgroundExecutionSafe]`); this spec adds nothing for it (Q3, decided).
 5. **Given** a template placement in a shell without the runtime type (S-11's deferred type check), **Then** the
-   contract-visible signals (variable-reference inputs, the descriptor marker, the pinned body touch set) are refused at
+   contract-visible signals (variable-reference inputs, the descriptor marker) are refused at
    placement and the type-only parts at admission and on the worker.
 
 ---
@@ -311,11 +311,17 @@ and run the converted scripts.
   changing a copy without `Set` MUST NOT be a write.
 - **FR-006**: Loop items and indexes MUST be read-only: frozen in a script (mutation throws), an untracked copy in C#
   (`Set` throws). A withheld value MUST be refused on read with `VF-ACT-010`.
+- **FR-006a**: The session MUST offer the read S-4's body surface builds on (spec 1222 FR-033–FR-035, T050): by
+  declaring scope and key (the pinned target), returning the committed value plus the step's own pending writes.
+- **FR-006b**: A session read of a transient variable (spec 1222 FR-017) or a withheld value MUST be recorded on the
+  host side when the read happens and MUST fault the step even when the script catches the JavaScript exception
+  (spec 1222 FR-017a).
 
 **Session reads and bases (ADR 0092 decisions 3, 4, 11; moved from spec 1221)**
 
-- **FR-007**: Every session read MUST be recorded in the attempt's session reads with the version read, plus the
-  stored digest when the node's lost-update mode is `Fault` (spec 1221 FR-003). Session reads MUST NOT be carried to a
+- **FR-007**: Every session read MUST be recorded in the attempt's session reads with the version read, the
+  variable's protection policy (spec 1222 FR-035; spec 1228 US7 relies on it), plus the stored digest when the node's
+  lost-update mode is `Fault` (spec 1221 FR-003). Session reads MUST NOT be carried to a
   new attempt or across a suspension. A visible variable that was not read MUST NOT appear.
 - **FR-008**: A session write MUST take as its base the read it was built on: the session read of that variable, or,
   when the step did not read it in its session, the input read set's entry (spec 1221 FR-005). A write to a variable
@@ -394,12 +400,12 @@ and run the converted scripts.
 - **FR-030**: `BackgroundEligibility`'s C9 check MUST refuse a background placement, at publication and in the
   run-time re-check at admission and on the worker, with `VF-BG-001 (C9)` and a reason naming the signal, for:
   (a) an activity type marked `[AccessesUndeclaredVariables]`; (b) an activity with a writable `VariableReference<T>`
-  input; (c) an activity with a `ReadOnlyVariableReference<T>` input (Q2); (d) a `RunJavaScript` node whose pinned
-  body reads or writes a variable, including through the computed or opaque fallback (Q3). The existing
+  input; (c) an activity with a `ReadOnlyVariableReference<T>` input (Q2). `RunJavaScript` needs no rule: it is not
+  `[BackgroundExecutionSafe]` (Q3, decided on #4725). The existing
   `IRuntimeScopedVariableReader` refusal stays. These checks MUST land in the same change that introduces the marker
   and the reference types.
 - **FR-031**: Where placement cannot see the CLR type (S-11's `TypeCheckedAtRunTime`), the signals visible in the
-  pinned contract and node (reference inputs, the marker, the body touch set) MUST still be checked at placement; the
+  pinned contract (reference inputs, the marker) MUST still be checked at placement; the
   rest at admission and on the worker.
 
 **Elsa 3 conversion (ADR 0090 *Consequences*, converter)**
@@ -428,8 +434,8 @@ and run the converted scripts.
 - **Variable access marker**: `[AccessesUndeclaredVariables]` on an activity type, shown in the descriptor.
 - **Variable reference input**: an input of type `VariableReference<T>` or `ReadOnlyVariableReference<T>`, bound to
   a declared variable like a capture target.
-- **Body touch set**: for a `RunJavaScript` node, the pinned reads and writes plus whether it uses the fallback; read
-  by C9.
+- **Body touch set**: for a `RunJavaScript` node, the pinned reads and writes plus whether it uses the fallback;
+  read by inspection and the concurrent-write rule.
 
 ## Success Criteria *(mandatory)*
 
@@ -443,7 +449,7 @@ and run the converted scripts.
   faulted, re-driven burst).
 - **SC-004**: Two parallel inline script branches that each increment a counter give 2; a stale-base session write
   is never silent: it either warns (default) or faults (`Fault`).
-- **SC-005**: Each of the four C9 signals is refused with `VF-BG-001 (C9)` both at publication and at the worker.
+- **SC-005**: Each of the three C9 signals is refused with `VF-BG-001 (C9)` both at publication and at the worker.
 - **SC-006**: The Elsa 3 JTest corpus is re-measured: every definition refused only because of `setVariable`,
   generated setters or nested mutation inside `RunJavaScript` converts, publishes and runs; the count is posted on
   #3052.
@@ -468,7 +474,7 @@ Each has a recommended answer; the coordinator approves or changes it.
 |---|---|---|---|
 | Q1 | **Which engine-owned state.** ADR 0090's A-3 section says a step may change variables, workflow outputs, correlation id, instance name and outcome selection, but its decisions specify a surface for variables only. Does S-7 build all of them? | **Variables only.** Outcome selection is S-3. Workflow outputs, correlation id and instance name from step bodies get their own spec row (proposed S-13), which designs their surface and the correlation rule (never rebind bookmarks). The converter keeps refusing their Elsa 3 setters. | Build all four here; needs a surface design the ADR does not give. |
 | Q2 | **`ReadOnlyVariableReference<T>` under C9.** ADR 0093's enforcement sentence names only writable references. | **Refuse it too.** C9's criterion text says the body does not *read or write* workflow variables, and the existing C9 signal (`IRuntimeScopedVariableReader`) is itself read-only. On a worker the read would see durable state that may lag (ADR 0090 open question 7). No ADR change: the criterion already covers it; recorded in research R-6. | Allow it (stale reads on the worker); needs an ADR 0093 amendment. |
-| Q3 | **`RunJavaScript` is `[BackgroundExecutionSafe]` (S-11).** Once its body touches variables, it meets C9. | **Refuse per node** when the pinned body touches a variable (FR-030 d). A script without variable access stays eligible, so S-11's marking stands. | Remove the marker from `RunJavaScript`; every script loses background placement. |
+| Q3 | **`RunJavaScript` in the background.** | **Decided 2026-11-17 by the coordinator (#4725, `eb9b1b1a4a`):** `RunJavaScript` is not `[BackgroundExecutionSafe]`; a background `RunJavaScript` is refused. No rule needed here. | — |
 | Q4 | **Structural activities** (ADR 0090 open question 6). | **No session for structural activities in this spec.** They keep `IRuntimeScopedVariableReader` reads; a write from a structural evaluation is a later spec if a case appears. | Each structural evaluation is its own step with a session (the ADR's recommendation, but no current consumer). |
 | Q5 | **Writes when `variables` escapes.** S-4 lets a body read through an escaped `variables` root (opaque fallback). A write through it cannot be resolved at publish. | **Refuse at publish** a body that writes when the `variables` root or `setVariable` escapes (ADR 0090 decision 3). Read-only bodies keep S-4's opaque reads. | Allow and treat the may-write set as every visible variable, resolved at run time; needs an ADR 0090 amendment of decision 3. |
 | Q6 | **The converted form of `setVariable('x', v)`.** | **Rewrite to `variables.x = v`**, matching S-4's `variables.X` for reads: one form in converted scripts. | Keep `setVariable('x', v)`, which the runtime supports. |

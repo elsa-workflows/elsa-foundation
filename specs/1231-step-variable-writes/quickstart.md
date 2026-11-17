@@ -12,9 +12,8 @@ Build and test only the touched projects (AGENTS.md, *Builds on a shared machine
 4. **Lost update** — a step reads `count`, suspends, another branch writes `count`, the step resumes and writes:
    default → applies with a lost-update warning; `[ActivityLostUpdateMode(Fault)]` → faults.
 5. **C9** — place each of: a `[BackgroundExecutionSafe, AccessesUndeclaredVariables]` activity, one with a
-   `VariableReference<T>` input, one with a `ReadOnlyVariableReference<T>` input, a `RunJavaScript` reading
-   `variables.x`, in the background: publication returns `VF-BG-001 (C9)`; the worker re-check returns the same. A
-   `RunJavaScript` with no variable access stays eligible.
+   `VariableReference<T>` input, one with a `ReadOnlyVariableReference<T>` input, in the background: publication
+   returns `VF-BG-001 (C9)`; the worker re-check returns the same.
 6. **Converter** — convert an Elsa 3 `RunJavaScript` with `setVariable('Total', 1); setTotal(2);
    getVariable('Order').Status = 'Paid';`: the output uses `variables.Total = …` and `variables.Order.Status = …`, and
    it publishes and runs. The same in an input expression is refused.
