@@ -62,7 +62,10 @@ Everything below is **proposed and unverified**.
   `BoundScope` is defined in the kernel's contracts package (K2) with an internal constructor, visible only to the
   kernel's Elsa hosting adapter package. That adapter reads the scope ADR 0097's binder bound with
   `PersistenceAccessContext.Scoped(scope)` in the request's DI scope, checks the tenant-id grammar below, and issues the
-  `BoundScope`. The contracts package references no Elsa persistence package; only the adapter references both. A
+  `BoundScope`. The contracts package references no Elsa persistence package; only the adapter references both. The
+  internal constructor is also visible (`InternalsVisibleTo`) to the store conformance and simulation assemblies. A
+  standalone kernel host without Elsa uses the kernel's own fixed-tenant issuer, which binds one configured,
+  grammar-checked tenant id for the process, the kernel's equivalent of ADR 0097 (g)'s fixed-tenant scope source. A
   tenant named in a payload, a header or a domain object is verified against the bound scope and never selects it; a
   mismatch is refused (403) without naming the other tenant (ADR 0097 (a), (c)). No bound scope means refusal; the
   kernel never defaults a tenant.
@@ -94,14 +97,36 @@ Q(t, n) = t "_" n          e.g. Q("acme", "op-1") = "acme_op-1"
 `_` is outside the grammar, so the first `_` of a stored name ends its tenant, and `Q` is injective: two tenants never
 produce one stored name.
 
-**Under SQL Server and MySQL collations.** Those engines compare a stored name with the column's collation, which may
-ignore case, accents, width and trailing spaces. Two qualified names of different tenants differ inside the tenant part,
-or at the position where the shorter tenant has `_` and the longer one a grammar character. Case and accent folding map
-only upper case to lower case and accented letters to their base letters; the grammar has neither, so its letters and
-digits stay distinct from each other and from `_`. Trailing-space padding and expansions such as `ß` = `ss` can only
-equate characters inside `n`, which is within one tenant, as today. The punctuation `-` and `_` is where collations
-differ most (SQL Server's Windows collations give the hyphen a special sort weight), so case T15 checks equality of
-names built to collide if either were ignored, on both engines.
+**Under database collations: the grammar plus a pinned collation (decided, 17 November).** SQL Server and MySQL
+compare a stored name with its column's collation, and the EF model pins none, so the kernel's tables would inherit
+whatever the database administrator chose. The grammar alone does not make `Q` injective there: locale collations
+contract and expand letter sequences. The reviewer's runs on SQL Server 2022 and MySQL 8.4 (scripts in the review's
+evidence folder) found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` and `ssz_x` = `szsz_x` under SQL
+Server's `Hungarian_CI_AS` and `Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`. The same runs found `-` and
+`_` never ignored and never equal to each other in every collation tested.
+
+So every column that holds a tenant id, an actor id or a tenant-qualified name gets one fixed collation with no locale
+rules, case-insensitive so that matching within a tenant stays as it is:
+
+| Engine | Pinned collation |
+|---|---|
+| SQL Server | `Latin1_General_100_CI_AS_SC_UTF8` on the existing `nvarchar` columns; widths are unchanged |
+| MySQL | `utf8mb4_0900_ai_ci` |
+| PostgreSQL | The default deterministic collation. ICU nondeterministic collations (`deterministic = false`) are not used on these columns and must not be |
+| SQLite | `BINARY`, the default |
+| MongoDB | Binary comparison: no collection or index collation on these fields |
+
+The pinned columns: `Instances.Id` and `Instances.Parent`; `Messages.Id`, `Messages.Target` and `Messages.Sender`;
+`Subscriptions.Key` and `Subscriptions.Instance`; `Events.Key` and `Events.Id`; `Journal.Instance`; the instance column
+of `Views`, of value rows and of every read model, and the read models' `key` column; and every `tenant` column. Under
+these collations the grammar's letters, digits and `-` and the separator `_` each compare equal only to themselves,
+and neither collation has a contraction or expansion among those characters, so two tenants' qualified names never
+compare equal. That is reasoned from the collations' rules; T15 verifies it on both engines. Folding
+inside the caller's name (case on both engines, accents on MySQL) stays within one tenant, as it is today. The K3
+store change and the K4 migrations create the pin; case T16 checks that they do.
+
+**`_` is a `LIKE` wildcard.** Selecting a tenant's rows uses the `tenant` column, or a prefix match with `_` escaped;
+an unescaped `LIKE 'acme_%'` would also match `acmex...`, so no query uses one.
 
 **`_` keeps the effect key fit for its receivers.** An effect key carries its instance origin, so a caller-key
 instance's key contains `Q`. `_` is RFC 5322 atext, so the key still fits the local part of the e-mail activity's
@@ -202,6 +227,8 @@ administrator who must inspect a tenant's work enters that tenant through the su
 - **Changes for K3:** the tenant column on every tenant-keyed record, `Q` at every ingress and in the keyed-request
   hash, qualified correlation keys, the tenant check on load and consumption, read-model indexes led by tenant, and
   the conformance cases below. Fairness's tenant column on the instance row is part of this.
+- **Kernel-behaviour store change for K3 (two reviews):** the collation pin (decision 6) on every pinned column, created
+  by the schema and the migrations of every relational provider, with T16.
 
 ## Acceptance cases
 
@@ -224,7 +251,8 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 | T12 | Host administration forces a handover and drains a node while A and B have work | Only `partition` and `node` rows change; both tenants' work continues under the new owner | K5, K11 |
 | T13 | Simulation: two tenants with colliding operation ids, caller keys and correlation keys in the mix; mutations `TenantlessOutsideId`, `TenantlessCorrelationKey` and `SkipTenantCheckOnLoad` | The invariant "no delivery, match, read or effect crosses tenants" holds; each mutation is caught | K3 |
 | T14 | T2 to T11 in Embedded with the fixed tenant, and in Cluster with two nodes and two tenants | All pass on both profiles | K12 |
-| T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id; then T2 and T3 run on SQL Server (default case- and accent-insensitive collation) and MySQL (`utf8mb4_0900_ai_ci`) with tenant pairs `ab`/`a-b` and `a`/`a-b`, and names built to meet if `-` or `_` were ignored (`Q(a, b_x)` = `a_b_x` against `Q(a-b, x)` = `a-b_x`) | The four ids are refused at the binder; every pair stays two rows, two matches and two answers | K4 |
+| T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id. Then T2 and T3 run against the pinned schema on SQL Server 2022 in databases whose default collation is `SQL_Latin1_General_CP1_CI_AS` (SQL Server's default, accent-sensitive) and `Hungarian_100_CI_AS`, and on MySQL 8.4 with database defaults `utf8mb4_0900_ai_ci` and `utf8mb4_hu_0900_ai_ci`. Tenant pairs: `ab`/`a-b`, `a`/`a-b` (`a_b_x` against `a-b_x`), `ccs`/`cscs` and `ssz`/`szsz` | The four ids are refused at the binder; every pair stays two rows, two matches and two answers, including `ccs_x` and `cscs_x` in the Hungarian-default databases | K4 |
+| T16 | Inspect the schema the K3 store change and the K4 migrations create, on SQL Server and MySQL, in a database with a locale default collation | Every pinned column has the pinned collation; a column created without it fails the check | K3, K4 |
 
 The two-tenant fairness run of K12 measures latency and refusals; it does not replace these cases.
 
@@ -242,6 +270,9 @@ The two-tenant fairness run of K12 measures latency and refusals; it does not re
    positions and value rows stay unique store-wide with a checked tenant column.
 5. **A canonical tenant-id grammar:** lowercase ASCII letters, digits and `-`, enforced where the bound scope is
    created.
+6. **A pinned collation on every column that holds a tenant-qualified name:** one fixed, non-locale, case-insensitive
+   collation, `Latin1_General_100_CI_AS_SC_UTF8` on SQL Server and `utf8mb4_0900_ai_ci` on MySQL, so `Q` stays
+   injective whatever the database default is, and matching within a tenant stays case-insensitive.
 
 ADR 0097's own questions (Q3 tenancy model, Q4 no agnostic tenant, Q7 support context) are pending owner there. This
 page follows their recommended defaults; decisions 4 and 5 touch 0097's section (a) and its tenant catalog, and 0097's
