@@ -36,6 +36,8 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await outputs.click();
   const fixOutput = source.getByRole("button", { name: "Use args.numbers", exact: true });
   await expect(fixOutput).toBeVisible();
+  await fixOutput.scrollIntoViewIfNeeded();
+  await expect.poll(() => source.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   await capture(page, info, "sum-fix");
   await fixOutput.press("Enter");
   await expect(expression).toBeFocused();
@@ -88,6 +90,7 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await s.open(caller);
   const fixText = page.getByRole("button", { name: "Use variables.Variable1" });
   await expect(fixText).toBeVisible();
+  await fixText.scrollIntoViewIfNeeded();
   await capture(page, info, "write-line-fix");
   await fixText.press("Enter");
   await expect.poll(() => s.stored(caller)).toEqual({ expressionType: "JavaScript", value: rightText });
