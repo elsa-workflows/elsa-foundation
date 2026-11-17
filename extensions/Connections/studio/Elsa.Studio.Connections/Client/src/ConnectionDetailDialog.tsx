@@ -1,10 +1,10 @@
 import React, { useId, useRef } from "react";
-import { Ban, Cable, ShieldCheck, Trash2, X } from "lucide-react";
+import { Ban, Cable, Pencil, ShieldCheck, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { connectionDate, connectionSchemeLabel, ConnectionStatusBadge, connectionTypeLabel } from "./connectionPresentation";
 
-export type ConnectionAction = "Test" | "Revoke" | "Delete";
+export type ConnectionAction = "Test" | "Revoke" | "Delete" | "Edit";
 
 export function ConnectionDetailDialog({ connection, descriptors, busy, notification, onClose, onAction, restoreFocus }: {
   connection: ConnectionMetadata;
@@ -59,6 +59,7 @@ export function ConnectionDetailDialog({ connection, descriptors, busy, notifica
       <footer className="connections-dialog-footer">
         <div className="connections-danger-actions"><button type="button" className="connections-danger" disabled={!!busy || connection.status === "Revoked"} onClick={() => onAction("Revoke")}><Ban size={14} aria-hidden="true" />{busy === "Revoke" ? "Revoking…" : "Revoke"}</button>
           <button type="button" className="connections-danger" disabled={!!busy} onClick={() => onAction("Delete")}><Trash2 size={14} aria-hidden="true" />{busy === "Delete" ? "Deleting…" : "Delete"}</button></div>
+        <button type="button" className="connections-edit" disabled={!!busy} onClick={() => onAction("Edit")}><Pencil size={14} aria-hidden="true" />{busy === "Edit" ? "Opening…" : "Edit"}</button>
         <button type="button" disabled={!!busy} onClick={() => onAction("Test")}><ShieldCheck size={14} aria-hidden="true" />{busy === "Test" ? "Testing…" : "Test"}</button>
       </footer>
     </section>
