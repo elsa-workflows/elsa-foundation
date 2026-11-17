@@ -66,7 +66,11 @@ public static class VariableWriteValueSnapshots
         };
         if (executableNodeId is not null)
             metadata[RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId;
-        var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
+        // A value stored outside the document, or withheld, is not read here: the snapshot says it was not captured.
+        var inline = value.Presence == ValuePresence.ExplicitNull || value.Presence == ValuePresence.Present && value.InlineValue is not null;
+        var decision = !inline
+            ? new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "The value is stored externally or withheld; the write history keeps no payload.")
+            : payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
             RuntimePayloadCaptureSubject.VariableWrite,
             workflowExecutionId,
             capturedAt,
@@ -78,8 +82,7 @@ public static class VariableWriteValueSnapshots
         JsonElement? payload = value.Presence switch
         {
             ValuePresence.ExplicitNull => Serialize(decision, null, record.VariableKey, type),
-            ValuePresence.Present when value.InlineValue is { } inline => Serialize(decision, inline, record.VariableKey, type),
-            // An external or withheld value is not read here: the snapshot records the decision, not the payload.
+            ValuePresence.Present when value.InlineValue is { } inlineValue => Serialize(decision, inlineValue, record.VariableKey, type),
             _ => null
         };
         return ActivityExecutionInspectionValueSnapshot.FromDecision(

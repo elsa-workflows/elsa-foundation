@@ -133,8 +133,8 @@ internal sealed class BackgroundActivityCoordinator(
              StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))
             return state;
 
-        // Reading the scopes is a store read: a provider failure escapes to the scheduler's retry policy, as any other
-        // admission read does.
+        // Reading the scopes and the inputs fails as Start's materialization does: a provider failure goes to the
+        // scheduler's retry policy, and an input expression failure keeps its typed evidence.
         var scopes = new RuntimeContainerScopeService(activityStateStore, workflowStateStore);
         var visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
         // Inside a closed scope (a graph body) the variables are rows, carried by the durable values: those are loaded
@@ -161,19 +161,9 @@ internal sealed class BackgroundActivityCoordinator(
             return state;
 
         var refreshedAt = timeProvider.GetUtcNow();
-        ActivityInputSnapshot fresh;
-        try
-        {
-            // Resolved only when a refresh is due, from the invocation's own services, as the Start handler materializes.
-            fresh = await serviceProvider.GetRequiredService<RuntimeActivityInputSnapshotMaterializer>().MaterializeAsync(executable, node, state, serviceProvider, refreshedAt, cancellationToken)
-                with { Evaluation = snapshot.EvaluationNumber + 1 };
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException and not BackgroundActivityValidationException)
-        {
-            // Reading the inputs again failed: the step faults with a visible incident, as the invoke handler treats a
-            // failed input materialization (InputMaterializationFailed), rather than going to the retry policy.
-            throw new BackgroundActivityValidationException($"BG-ACT-004: The background step's inputs could not be read again at admission: {exception.Message}");
-        }
+        // Resolved only when a refresh is due, from the invocation's own services, as the Start handler materializes.
+        var fresh = await serviceProvider.GetRequiredService<RuntimeActivityInputSnapshotMaterializer>().MaterializeAsync(executable, node, state, serviceProvider, refreshedAt, cancellationToken)
+            with { Evaluation = snapshot.EvaluationNumber + 1 };
         return state with
         {
             InputSnapshot = fresh,
