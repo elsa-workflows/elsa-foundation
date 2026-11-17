@@ -4,8 +4,9 @@
 
 **Created**: 2026-11-17
 
-**Status**: Draft — waits for the coordinator's answers to Q1, Q2 and Q4–Q7 (*Open questions*; Q3 was decided on #4725). Not provisional: every ADR it
-applies is accepted and merged.
+**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with Q1, Q2 and Q4–Q7 answered as
+recommended (Q3 decided earlier on #4725). Applies ADR 0090 (`87e55ebc7`), ADR 0092 (`f52a661df`) and ADR 0093
+(`875aa14c7`, amended `dc32983a2`) as merged; no ADR amendment.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-7**,
 decisions **D-2** and **D-3**, analysis **A-3** (closed).
@@ -32,9 +33,9 @@ variables this way is refused a background placement until a background session 
 | **ADR 0046** (value model) | V6 declared loss, V9 copy, compare, patch for scripts (built by S-8), `Any` is plain JSON | `da4dddbb9` | accepted 2026-11-16 |
 
 **Approval plan**: @j03y-nxxbz alone (coordinator decision of 2026-11-16: the ADRs were resolved together, so a spec
-needs only the coordinator's approval). Approval needs answers to Q1, Q2 and Q4–Q7 (Q3 is decided). If an answer changes an ADR (Q2's
-alternative, Q5's alternative), that change goes in its own small amendment PR reviewed by @sfmskywalker and
-@FransVanEk. With the recommended answers this spec needs **no ADR amendment**.
+needs only the coordinator's approval). **Approved 2026-11-17** with every open question answered as recommended, so
+this spec needs **no ADR amendment**. Workflow outputs, correlation id and instance name from step bodies go to a new
+board row, S-13 (Q1).
 
 ## Rule and boundary
 
@@ -466,9 +467,9 @@ and run the converted scripts.
   the lost-update rule only across suspension or operator alterations.
 - `[ActivityLostUpdateMode]` (S-10) is ADR 0090's `[VariableConflictPolicy]`; no rename.
 
-## Open questions
+## Decisions (formerly open questions)
 
-Each has a recommended answer; the coordinator approves or changes it.
+All answered by the coordinator on 2026-11-17 as recommended (Q3 earlier, on #4725). The *Recommended answer* column is the decision.
 
 | # | Question | Recommended answer | Alternative |
 |---|---|---|---|

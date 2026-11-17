@@ -34,5 +34,5 @@
 - This is an architecture-level spec for an initiative: it names the authoring surfaces (`variables.x`,
   `VariableReference<T>`, `[AccessesUndeclaredVariables]`, `VF-BG-001 (C9)`) because the ADRs it applies define them as
   the contract users write against. That is the accepted exception for initiative specs, not implementation leakage.
-- Open decisions are listed as Q1–Q7 (Q3 decided) with recommended answers instead of [NEEDS CLARIFICATION] markers, per the
-  initiative's spec practice; approval (coordinator) settles them.
+- Decisions Q1–Q7 were listed with recommended answers instead of [NEEDS CLARIFICATION] markers, per the
+  initiative's spec practice; the coordinator approved them as recommended on 2026-11-17.

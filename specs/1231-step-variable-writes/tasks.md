@@ -3,7 +3,7 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts/step-variables.md](contracts/step-variables.md)
 
-**Gates**: implementation starts after the coordinator approves the spec (Q1, Q2, Q4–Q7). S-10 (#4316) must be on the branch
+**Gates**: the spec is approved (2026-11-17). S-10 (#4316) must be on the branch
 before Phase 2; S-11 (#4725) before Phase 6. If either has not merged, the implementing PR depends on it. Phase 4
 (the reference types and the marker) and Phase 6 (C9) land in **the same PR** (ADR 0093 *Consequences*).
 
