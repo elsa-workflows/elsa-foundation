@@ -97,6 +97,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<MigrateWorkflowAlterationHandler>();
         services.TryAddScoped<RescheduleActivityAlterationHandler>();
         services.TryAddScoped<RetryFaultedActivityAlterationHandler>();
+        services.TryAddScoped<ReExecuteFaultedActivityAlterationHandler>();
+        services.TryAddScoped<AcceptRecordedCompletionAlterationHandler>();
         services.TryAddScoped<DecideInterventionAlterationHandler>();
         services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
         AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
@@ -108,6 +110,14 @@ public static class RuntimeCoreServiceCollectionExtensions
             services,
             new(RetryFaultedActivityAlterationHandler.Kind, RetryFaultedActivityAlterationHandler.SchemaVersion, "Retry faulted activity"),
             typeof(RetryFaultedActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(ReExecuteFaultedActivityAlterationHandler.Kind, ReExecuteFaultedActivityAlterationHandler.SchemaVersion, "Re-execute faulted activity"),
+            typeof(ReExecuteFaultedActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(AcceptRecordedCompletionAlterationHandler.Kind, AcceptRecordedCompletionAlterationHandler.SchemaVersion, "Accept recorded completion"),
+            typeof(AcceptRecordedCompletionAlterationHandler));
         AddRuntimeOwnedAlterationContribution(
             services,
             new(DecideInterventionAlterationHandler.Kind, DecideInterventionAlterationHandler.SchemaVersion, "Decide intervention"),

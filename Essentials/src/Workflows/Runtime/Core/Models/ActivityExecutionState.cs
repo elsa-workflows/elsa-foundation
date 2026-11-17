@@ -63,6 +63,15 @@ public sealed record ActivityExecutionState(
 
     public string InvocationId => Execution.ActivityExecutionId;
 
+    /// <summary>
+    /// The logical invocation identity (ADR 0092 decision 8, amended 2026-11-16): the first attempt's row id for a row
+    /// that continues an earlier attempt (an operator retry), otherwise this row's own id. <see cref="InvocationId"/>
+    /// stays the row key that lineage, inspection and scheduling use; activity code that needs one identity across
+    /// retries reads this, or <see cref="OperationKey"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string LogicalInvocationId => NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
     /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
     [JsonIgnore]
     public string OperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.OperationKey)
@@ -112,6 +121,57 @@ public sealed record ActivityExecutionState(
     /// <summary>Exact-call ordered acceptance; absent on ordinary and legacy invocations.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeChildControlInbox? ChildControlInbox { get; init; }
+
+    /// <summary>
+    /// The write history of this invocation's variable writes (spec 1221 FR-024): one record per applied write and per
+    /// lost update, committed with the write. Absent when the invocation wrote no variable and on legacy invocations.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
+
+    /// <summary>
+    /// The completion a <c>Fault</c> lost update refused (spec 1221 FR-017): the body succeeded, but its commit did not
+    /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
+    /// every other invocation.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecordedActivityCompletion? RecordedCompletion { get; init; }
+
+    /// <summary>
+    /// The input snapshots a background admission refresh superseded (spec 1221 FR-020), oldest first, each linked to
+    /// the evaluation that replaced it and the variables that changed. Absent when the inputs were never refreshed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityInputRefresh>? InputRefreshes { get; init; }
+
+    /// <summary>
+    /// One stamp per lifecycle transition of this invocation (started, suspended, resumed, completed, faulted,
+    /// cancelled, superseded), each with the instance commit sequence that committed it (spec 1221 FR-024), so writes
+    /// and transitions share one order. Stamped by the checkpoint committer; absent on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityLifecycleStamp>? Transitions { get; init; }
+
+    /// <summary>
+    /// The lowest and highest commit sequence over this row's transitions and write records (spec 1221 FR-024), kept by
+    /// the committer so a reader can page the instance's history by commit order. Absent when nothing on the row is
+    /// numbered.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? FirstCommitSequence { get; init; }
+
+    /// <inheritdoc cref="FirstCommitSequence"/>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? LastCommitSequence { get; init; }
+
+    /// <summary>Appends write-history records to this invocation.</summary>
+    public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        return records.Count == 0
+            ? this
+            : this with { VariableWrites = [.. VariableWrites ?? [], .. records] };
+    }
 
     public void EnsureValueFlowCompatible()
     {

@@ -206,7 +206,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             return FusedStartResult.CompletedAtStart;
         }
 
-        if (executableNode.ActivityContract?.SideEffectProfile != SideEffectProfile.ReplaySafe)
+        if (!ReplaySafeFusionDriver.IsFusableNode(executableNode))
             return FusedStartResult.Fallback;
 
         var runningState = await ProduceRunningStateAsync(workItem, resolution.StartPayload, resolution.Executable, executableNode, state, serviceProvider, cancellationToken);

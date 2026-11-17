@@ -3,7 +3,8 @@
 Status: accepted (2026-11-16), as amended below (*Amendment*). Sipke Schoorstra, the decision holder, chose this
 design in a brainstorming session on 2026-10-24, started from the review of spec 266. It overturns parts of an accepted ADR (0045 §4,
 §5 and §6) and changes what spec 266 analyses, so it needed agreement with Joey Barten and Frans van Ek. The three
-architects agreed the amended text; Joey Barten recorded the agreement as coordinator.
+architects agreed the amended text; Joey Barten recorded the agreement as coordinator. Decision 3 was amended on
+2026-11-17 (computed and opaque writes in scripts, from spec 1231 Q5), approved by Joey Barten as coordinator.
 
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
 ([program-goal registry](../program-goals/README.md#registry)). It amends
@@ -99,17 +100,33 @@ At publish, the same parser and nearest-scope rule as ADR 0089 resolves every to
 pins that target (scope and key). The value itself comes from the session at run time (decision 2), not from a
 pinned parameter snapshot. Publish refuses:
 
-- a computed name in any form (`variables[k]`, `getVariable(k)`, `setVariable(k, v)`, or passing `variables`,
-  `getVariable` or `setVariable` around as a value), as ADR 0089 decision 5 does;
-- an undeclared name (decision 5);
+- an undeclared literal name (decision 5);
 - a transient variable, except in host-interop mode (decision 8);
 - an assignment to, or a direct nested assignment into, a read-only target (a loop item or index).
 
 The may-write set is every variable the script assigns, mutates, or lets escape into a local, a function argument or
 a closure, because each of those can mutate it. Read-only targets are frozen, so their escapes are not writes.
 
-*Why.* Resolving at publish keeps one resolver for reads and writes, keeps "which nodes touch this variable?" exact,
-and gives spec 266 a sound write set. Counting escapes as possible writes is conservative: it can add concurrent-write
+**Computed and opaque writes (amended 2026-11-17).** A write whose target publish cannot name is allowed, not
+refused: a computed name (`variables[k] = v`, `setVariable(k, v)`) and a write through `variables` or `setVariable`
+used as a value (aliased, passed to a function, spread). It is treated as decision 4 treats a free-name C# activity:
+- Publish marks the node as possibly writing **every visible variable**: its may-write set is all variables visible at
+  that point, so the concurrent-write rule and inspection count it, and publication and Studio show the mark.
+- At run time the name resolves to the nearest visible scope, as ADR 0089's fallback does for computed reads. The
+  write is found by the same change-finding mechanism as every other script write (amendment C2) and commits with
+  the step (decision 6) under ADR 0092.
+- An undeclared name faults the step before its commit (decision 5); a transient variable faults the step, as a
+  computed read of one does (ADR 0089); a read-only target is frozen, so the write throws.
+
+A node with only literal writes keeps its exact may-write set; the conservative set applies only to a node that has a
+computed or opaque write.
+
+*Why.* Resolving at publish keeps one resolver for reads and writes, keeps "which nodes touch this variable?" exact
+where the names are literal, and gives spec 266 a sound write set. Computed and opaque writes are not refused because
+the may-write set only feeds diagnostics, and a conservative set keeps them sound: refusing would block a script that
+runs correctly, which goes against the platform principle (guardrails and diagnostics, not restrictions), and would
+refuse even the plain writes of a script that aliases `variables` only to read it. C# free names already get this
+answer (decision 4). Counting escapes as possible writes is conservative: it can add concurrent-write
 diagnostics for a script that only passes a variable to a helper (a refusal under ADR 0045 §4 today, a warning if
 spec 266 lands), but it never misses a write.
 
@@ -142,8 +159,9 @@ to every C# access); bound references only (unlike Elsa 3, and too strict for ge
 
 ### 5. Undeclared variables are refused
 
-A script that names an undeclared variable fails publication. A free-name C# access to an undeclared name faults the
-step before its commit. Nothing is created implicitly.
+A script that names an undeclared variable literally fails publication. A computed or opaque script write to an
+undeclared name (decision 3) and a free-name C# access to an undeclared name fault the step before its commit. Nothing
+is created implicitly.
 
 *Why.* An Elsa 4 variable has a declared type, storage driver and policy. Elsa 3's `setVariable` created variables
 on first write; an auto-created Elsa 4 variable would have none of these.
@@ -400,12 +418,15 @@ This answers A-3's question: writing from scripts is a general capability, not c
 - **Spec 095.** Its expression-and-import contract says stateful scripts "use a separate graph-visible `Set` intrinsic
   when a variable must change". That stays true for input bindings and becomes optional for activities.
 - **Concurrent-write rule and spec 266 (#3286).** `ValueFlow/ConcurrentWrite` (a refusal today, spec 266's warning if
-  it lands) must add step writers through the may-write set and treat a marked free-name activity as touching every
-  visible variable. Its rationale becomes precise: static analysis sees every write except
-  those of marked free-name activities. Decision 7 uses per-variable versions (C5), not the frame revision, so spec
+  it lands) must add step writers through the may-write set and treat a marked free-name activity, and a script with a
+  computed or opaque write (decision 3), as touching every visible variable. Its rationale becomes precise: static
+  analysis sees every write except those of marked free-name activities and of such scripts, which it counts
+  conservatively. Decision 7 uses per-variable versions (C5), not the frame revision, so spec
   266's ADR 0048 §4 amendment does not conflict with it.
 - **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
-  mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused.
+  mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused. A
+  computed `setVariable` name stays refused by the converter: Elsa 3 created a missing variable on write, where
+  Elsa 4 faults (decision 5), so the conversion would not be faithful.
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
   history and the winning write) needs.
 - **Cost.** One serialization per tracked variable per commit, and one more comparison per conflict-checked variable.
@@ -420,6 +441,10 @@ Rejected as the only path; it stays the right choice for most activities.
 a clear error on mutation. Rejected because C# authors expect to mutate what they read, and a rule they must learn
 is a source of confusion.
 
+**Refuse computed and opaque writes in scripts (decision 3 as first written).** Keeps every may-write set exact.
+Rejected on 2026-11-17: the set only feeds diagnostics, a conservative set keeps them sound, and the refusal blocked
+scripts that run correctly, including the plain writes of a script that aliases `variables` only to read it.
+
 **Live store, as in Elsa 3.** Variables are shared live objects, written immediately. Impossible with durable,
 distributed execution: the next step may run on another node from the serialized value.
 
@@ -433,8 +458,10 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - A step reads committed values at invoke, not its pinned input snapshot.
 - Read-your-writes in scripts and C#, including nested mutation through an alias.
 - An unchanged value writes nothing; a changed nested field writes the whole value; a read-only read never writes.
-- Publish refuses computed and undeclared targets, writes to read-only targets, and unbound references, and the
-  may-write set feeds the concurrent-write rule.
+- Publish refuses undeclared literal targets, literal writes to read-only targets, and unbound references, and the
+  may-write set feeds the concurrent-write rule. A computed or opaque script write publishes with the node marked as
+  possibly writing every visible variable, resolves at run time, and faults the step on an undeclared or transient
+  name.
 - A background read-then-write conflict faults by default; a write to an unrelated variable in the same frame is not
   a conflict; the type default and the node override work; blind writes follow the concurrent-write rule.
 - A background step's intents and read bases are persisted with its worker result and applied, with the check, by

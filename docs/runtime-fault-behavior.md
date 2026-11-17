@@ -193,6 +193,20 @@ is recorded differently at the source: the activity is left `Waiting` rather tha
 incident is written with a `WaitForIntervention` outcome and system source `ActivityActivationFailure`
 already attached. That non-null outcome is what makes both downstream observers skip it.
 
+### Special case: a lost update on a `Fault` node
+
+A step that writes a variable on a stale base (another writer changed it after the step read it) has made a lost
+update ([variable lifecycle](runtime-variable-lifecycle.md), spec 1221). By default that is **not** a fault: the write
+applies, the last write wins, and a lost-update warning is recorded in the write history. Only a node that opted in to
+strict read-modify-write (`[ActivityLostUpdateMode(LostUpdateMode.Fault)]` on the activity type, or the node's own
+`LostUpdateMode` setting) faults, and only when the value really changed (a value that came back applies).
+
+That fault takes Path A unchanged: the invoke (or resume) handler records a blocking incident with sub-status
+`VariableLostUpdate` and the activity becomes `Faulted`. None of its captures apply; the refused write is kept on the
+activity's write history as the rejected completion. The incident message names the variable, the version the step
+read, the current version and both writers. The workflow's incident strategy decides what follows, as for any other
+activity fault.
+
 ## Path B: a handler throws
 
 ### Where it is caught

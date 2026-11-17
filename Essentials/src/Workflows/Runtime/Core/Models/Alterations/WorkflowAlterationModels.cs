@@ -373,7 +373,8 @@ public sealed record WorkflowAlterationCapturedConcurrency(
     long? RootVariableFrameRevision,
     WorkflowExecutableIdentity? PinnedExecutable,
     IReadOnlyDictionary<string, string>? ActivityStateRevisions = null,
-    WorkflowExecutionAuthoritySnapshot? Authority = null);
+    WorkflowExecutionAuthoritySnapshot? Authority = null,
+    IReadOnlyDictionary<string, long>? RootVariableVersions = null);
 
 /// <summary>Lease carried by an at-least-once alteration job worker.</summary>
 public sealed record WorkflowAlterationJobClaim
@@ -425,6 +426,14 @@ public sealed record WorkflowAlterationOutcome
     public string? Message { get; }
     public DateTimeOffset RecordedAt { get; }
     public IReadOnlyDictionary<string, string> StructuralMetadata { get; }
+
+    /// <summary>
+    /// The variable writes this alteration applied (spec 1221 FR-024): a <c>ModifyVariable</c> leaves one record with
+    /// an <c>Alteration</c> writer, its versions and its commit sequence. Records hold no values, so the outcome stays
+    /// structural. Absent for every other alteration.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
 }
 
 /// <summary>One durable target/job state; terminal forms later join the runtime checkpoint.</summary>

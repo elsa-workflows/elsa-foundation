@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -89,13 +90,39 @@ public sealed class ReplaySafeFusionDriver
         if (!_options.Enabled || node.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return false;
 
-        var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
-            ? WorkflowIntrinsicFusion.IsFusable(intrinsicKind)
-            : node.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe;
-
-        return nodeIsFusable
+        return IsFusableNode(node)
             && _coalescingSessionAccessor?.Current is { } session
             && session.AppliesTo(workflowExecutionId);
+    }
+
+    /// <summary>
+    /// Whether a node may run its Schedule → Start → Invoke stages as one fused span, whatever the session: a fusable
+    /// intrinsic kind, a ReplaySafe typed node, or an <c>External</c> typed <b>leaf</b> (spec 1221, ADR 0092 decision
+    /// 10). An External leaf fuses so that no other branch's work item runs between its input materialization and its
+    /// transition commit. Its <c>ActivityAttemptClaimed</c> claim still flushes immediately, as an intermediate commit
+    /// inside the span: the coalescing policy keeps an External claim <c>Immediate</c>, and the session continues past
+    /// that boundary after persisting the span's Schedule anchor. Claim, fencing and durability are therefore unchanged,
+    /// and no transaction is held around the body. External composites keep the discrete chain.
+    /// </summary>
+    internal static bool IsFusableNode(ExecutableNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node.IntrinsicKind is { } intrinsicKind)
+            return WorkflowIntrinsicFusion.IsFusable(intrinsicKind);
+
+        return node.ActivityContract?.SideEffectProfile switch
+        {
+            SideEffectProfile.ReplaySafe => true,
+            // Only an inline leaf: a background External leaf is admitted to a worker and must never be re-driven
+            // through Start by a redelivered Schedule (WorkflowScheduleActivitySchedulerWorkHandler's Running branch).
+            // A start-trigger node is its run's entry: no other branch can run before it, so it keeps the discrete chain
+            // and the stimulus-consumption crash shape its recovery is built on.
+            SideEffectProfile.External => node.ExecutionPlacement == Elsa.Primitives.Models.ActivityExecutionPlacement.Inline &&
+                                          node.Structure is null && node.ChildSlots.Count == 0 &&
+                                          !(node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) &&
+                                            StringComparer.Ordinal.Equals(executionType, TriggerNodeMetadata.TriggerExecutionType)),
+            _ => false
+        };
     }
 
     /// <summary>
@@ -161,7 +188,7 @@ public sealed class ReplaySafeFusionDriver
             // commit (completion + parent-completion intent, or suspension / fault / child-scheduling) flows via the
             // overlay outbox exactly as the discrete path.
             var invokeHandler = ResolveHandler(invokeWorkItem);
-            await invokeHandler.HandleAsync(invokeWorkItem, cancellationToken);
+            await DispatchInDrainScopeAsync(invokeHandler, invokeWorkItem, cancellationToken);
         }
 
         await PumpCompletionCascadeAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
@@ -404,6 +431,42 @@ public sealed class ReplaySafeFusionDriver
         // the handlers read, so classification adds no durable round-trips.
         var executable = await PinnedExecutableRead.FindAsync(_serviceProvider, artifactId, cancellationToken);
         return executable is not null && executable.NodesById.TryGetValue(executableNodeId, out var node) ? node : null;
+    }
+
+    /// <summary>
+    /// Runs the inline invoke stage bound to the drain's persistence scope, as the discrete dispatcher does. A handler's
+    /// direct entry point opens a scope on the host's default partition. A ReplaySafe body commits nothing until the
+    /// session flushes in the drain's own scope, so that never mattered. An External leaf commits its attempt claim
+    /// immediately and its body may read the run's partition, so both must see the run's partition, not the host's.
+    /// Anything a pipeline-aware handler stages is committed here, as the discrete Checkpoint slot would commit it.
+    /// </summary>
+    private async ValueTask DispatchInDrainScopeAsync(
+        IWorkflowSchedulerWorkHandler handler,
+        RuntimeSchedulerWorkItem workItem,
+        CancellationToken cancellationToken)
+    {
+        if (handler is not IRuntimePipelineWorkHandler pipelineAware)
+        {
+            await handler.HandleAsync(workItem, cancellationToken);
+            return;
+        }
+
+        var context = new FusedInvokePipelineContext(workItem);
+        context.Workspace.CancellationToken = cancellationToken;
+        context.Workspace.PersistenceScope = _serviceProvider.GetService<IPersistenceAccessContextAccessor>()?.Current.Scope;
+        await pipelineAware.HandleAsync(workItem, context, cancellationToken);
+        if (context.Workspace.PendingCheckpointCommits.Count == 0)
+            return;
+
+        var committer = _serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        foreach (var commit in context.Workspace.PendingCheckpointCommits)
+            await committer.CommitAsync(commit, cancellationToken);
+    }
+
+    private sealed class FusedInvokePipelineContext(RuntimeSchedulerWorkItem workItem) : IRuntimePipelineContext
+    {
+        public RuntimeSchedulerWorkItem WorkItem { get; } = workItem;
+        public RuntimePipelineWorkspace Workspace { get; } = new();
     }
 
     private IWorkflowSchedulerWorkHandler ResolveHandler(RuntimeSchedulerWorkItem workItem)

@@ -64,7 +64,10 @@ public enum RuntimePayloadCaptureSubject
     DurableValue,
     Incident,
     Diagnostic,
-    ContainerVariable
+    ContainerVariable,
+
+    /// <summary>The value one variable write wrote, kept in the write history (spec 1221 FR-025).</summary>
+    VariableWrite
 }
 
 public enum RuntimePayloadCaptureMode

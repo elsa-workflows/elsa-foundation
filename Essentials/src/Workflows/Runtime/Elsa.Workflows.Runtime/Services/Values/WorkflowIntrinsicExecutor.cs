@@ -23,8 +23,10 @@ public sealed class WorkflowIntrinsicExecutor(
     IExternalPayloadStore? externalPayloadStore = null,
     IPortableExpressionEvaluator? portableExpressionEvaluator = null,
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
-    IWorkflowExecutableInputValidator? inputValidator = null)
+    IWorkflowExecutableInputValidator? inputValidator = null,
+    IRuntimePayloadCapturePolicy? payloadCapturePolicy = null)
 {
+    private readonly IRuntimePayloadCapturePolicy _payloadCapturePolicy = payloadCapturePolicy ?? new Elsa.Workflows.Runtime.Services.ActivityExecutions.DefaultRuntimePayloadCapturePolicy();
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
@@ -124,7 +126,14 @@ public sealed class WorkflowIntrinsicExecutor(
             validateAssignmentPayload: true);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
-        var changedFrame = frameOwner.Frame.Set(target.VariableKey, value, frameOwner.Frame.Revision);
+        // Spec 1221: the intrinsic reads its value and commits the write in this one dispatch, so nothing can move the
+        // variable in between. Its write is committed as a blind write (D-8) and recorded in the write history.
+        var writer = new VariableWriter(VariableWriteSource.Intrinsic, node.ExecutableNodeId, intrinsicState.InvocationId);
+        var write = frameOwner.Frame.Commit(target.VariableKey, value, frameOwner.Frame.Revision, writeBase: null, Elsa.Primitives.Models.LostUpdateMode.Default, writer);
+        var changedFrame = write.Frame;
+        if (VariableWriteRecord.IsRecorded(write.Decision))
+            intrinsicState = intrinsicState.WithVariableWrites(
+                [VariableWriteRecord.From(frameOwner.Frame, write, target.VariableKey, writer, timeProvider.GetUtcNow())]);
         WorkflowExecutionState? changedWorkflow = null;
         ActivityExecutionState? changedActivityOwner = null;
         if (frameOwner.WorkflowOwned)
@@ -411,11 +420,21 @@ public sealed class WorkflowIntrinsicExecutor(
         var metadata = RuntimeModelMetadata.Snapshot(metadataValues);
         var checkpointName = terminatesWorkflow ? RuntimeCheckpointNames.WorkflowCompleted : RuntimeCheckpointNames.IntrinsicCompleted;
         var checkpointId = $"checkpoint:{startWorkItem.WorkItemId}:{(terminatesWorkflow ? "workflow-completed" : "intrinsic")}:{intrinsicState.InvocationId}";
+        // FR-025: the value a Set/Merge/Reduce wrote joins the write history as an inspection value, under the capture policy.
+        var writtenFrames = new[] { changedWorkflow?.RootVariableFrame, changedActivityOwner?.VariableFrame }.OfType<VariableFrameState>().ToArray();
+        var writeSnapshots = (completedState.VariableWrites ?? [])
+            .Select(record => (Record: record, Frame: writtenFrames.FirstOrDefault(frame => StringComparer.Ordinal.Equals(frame.ScopeId, record.ScopeId))))
+            .Where(item => item.Frame is not null && item.Frame.Values.ContainsKey(item.Record.VariableKey))
+            .Select(item => Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+                _payloadCapturePolicy, startWorkItem.WorkflowExecutionId, intrinsicState.InvocationId, node.ExecutableNodeId,
+                item.Record, item.Frame!.Values[item.Record.VariableKey], occurredAt))
+            .ToArray();
         var inspection = await inspectionAccumulator.BuildProjectionAsync(
             completedState,
             checkpointId,
             occurredAt,
             outcomeNames,
+            valueSnapshots: writeSnapshots.Length == 0 ? null : writeSnapshots,
             metadata: metadata,
             cancellationToken: cancellationToken);
         var completionWorkItem = terminatesWorkflow

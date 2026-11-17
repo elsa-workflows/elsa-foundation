@@ -79,5 +79,8 @@ public enum ActivityExecutionInspectionValueSubject
 {
     ActivityInput,
     ActivityOutput,
-    ContainerVariable
+    ContainerVariable,
+
+    /// <summary>The value one variable write wrote (spec 1221 FR-025).</summary>
+    VariableWrite
 }

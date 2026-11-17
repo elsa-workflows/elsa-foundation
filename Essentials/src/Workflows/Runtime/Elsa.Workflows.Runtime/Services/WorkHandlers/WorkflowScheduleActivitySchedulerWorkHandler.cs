@@ -137,7 +137,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
             else if (existing.Status == ActivityExecutionStatus.Running &&
                      executableNode.IntrinsicKind is null &&
-                     executableNode.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe)
+                     ReplaySafeFusionDriver.IsFusableNode(executableNode))
             {
                 if (existing.InputSnapshot is null)
                     throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{existing.InvocationId}' has no committed input snapshot.");

@@ -21,7 +21,9 @@ public sealed class RuntimeDiagnosticsSettings
         {
             [RuntimeDiagnosticsSubjects.DurableValues] = RuntimeDiagnosticsEvidenceLevel.Metadata,
             [RuntimeDiagnosticsSubjects.Incidents] = RuntimeDiagnosticsEvidenceLevel.Metadata,
-            [RuntimeDiagnosticsSubjects.Diagnostics] = RuntimeDiagnosticsEvidenceLevel.Metadata
+            [RuntimeDiagnosticsSubjects.Diagnostics] = RuntimeDiagnosticsEvidenceLevel.Metadata,
+            // Spec 1221 FR-025: the values in the write history are kept only when a host turns them on.
+            [RuntimeDiagnosticsSubjects.VariableWrites] = RuntimeDiagnosticsEvidenceLevel.Off
         };
 
     public static RuntimeDiagnosticsSettings Default { get; } = new();
@@ -99,6 +101,9 @@ public static class RuntimeDiagnosticsSubjects
     public const string ContainerVariables = "containerVariables";
     public const string DurableValues = "durableValues";
 
+    /// <summary>The values variable writes wrote, in the write history (spec 1221 FR-025). Off unless configured.</summary>
+    public const string VariableWrites = "variableWrites";
+
     public static readonly IReadOnlyCollection<string> All =
     [
         WorkflowInputs,
@@ -108,7 +113,8 @@ public static class RuntimeDiagnosticsSubjects
         Incidents,
         Diagnostics,
         ContainerVariables,
-        DurableValues
+        DurableValues,
+        VariableWrites
     ];
 
     public static string FromCaptureSubject(RuntimePayloadCaptureSubject subject) =>
@@ -122,6 +128,7 @@ public static class RuntimeDiagnosticsSubjects
             RuntimePayloadCaptureSubject.Diagnostic => Diagnostics,
             RuntimePayloadCaptureSubject.ContainerVariable => ContainerVariables,
             RuntimePayloadCaptureSubject.DurableValue => DurableValues,
+            RuntimePayloadCaptureSubject.VariableWrite => VariableWrites,
             _ => throw new ArgumentOutOfRangeException(nameof(subject), subject, "Unknown runtime payload capture subject.")
         };
 }
@@ -153,6 +160,9 @@ public static class RuntimeDiagnosticsSettingsResolver
         {
             if (effectiveOverrides.ContainsKey(subject))
                 continue;
+            // Spec 1221 FR-025: a host cap limits write-history values; it never turns them on without their own setting.
+            if (StringComparer.Ordinal.Equals(subject, RuntimeDiagnosticsSubjects.VariableWrites))
+                continue;
 
             var subjectMaximum = Min(configuredMaximum, hostPolicy.MaximumLevel);
             var effectiveSubjectLevel = Cap(requested.DefaultLevel, subjectMaximum, permissions, limitationReasons, RuntimeDiagnosticsSubjectDisplayName(subject));
@@ -177,9 +187,11 @@ public static class RuntimeDiagnosticsSettingsResolver
     public static RuntimeDiagnosticsEvidenceLevel GetEffectiveLevel(RuntimeDiagnosticsSettingsView view, RuntimePayloadCaptureSubject subject)
     {
         var subjectId = RuntimeDiagnosticsSubjects.FromCaptureSubject(subject);
-        return view.Effective.SubjectOverrides.TryGetValue(subjectId, out var level)
-            ? level
-            : view.Effective.DefaultLevel;
+        if (view.Effective.SubjectOverrides.TryGetValue(subjectId, out var level))
+            return level;
+        // Spec 1221 FR-025: write-history values are opt-in. Without their own setting they stay off, even when saved
+        // settings change the default level for everything else.
+        return subject == RuntimePayloadCaptureSubject.VariableWrite ? RuntimeDiagnosticsEvidenceLevel.Off : view.Effective.DefaultLevel;
     }
 
     public static RuntimePayloadCaptureMode ToCaptureMode(RuntimeDiagnosticsEvidenceLevel level) =>
@@ -271,6 +283,7 @@ public static class RuntimeDiagnosticsSettingsResolver
             RuntimeDiagnosticsSubjects.Diagnostics => "Diagnostics",
             RuntimeDiagnosticsSubjects.ContainerVariables => "Container variables",
             RuntimeDiagnosticsSubjects.DurableValues => "Durable values",
+            RuntimeDiagnosticsSubjects.VariableWrites => "Variable writes",
             _ => subject
         };
 }
