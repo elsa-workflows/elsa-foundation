@@ -1753,7 +1753,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
-            backendSession={backendSession} runRelatedLinks={runRelatedLinks}
+            backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
@@ -2378,6 +2378,7 @@ function WorkflowInstanceInspector({
   expressionEditors = [],
   backendSession,
   runRelatedLinks = [],
+  incidentRootCauseProviders = [],
   collapsed = false,
   expanded = true,
   maximized = false,
@@ -2420,6 +2421,7 @@ function WorkflowInstanceInspector({
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   collapsed?: boolean;
   expanded?: boolean;
   maximized?: boolean;
