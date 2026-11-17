@@ -181,7 +181,7 @@ internal static class StructuralParentEvaluationSupport
             ? targeted.Concat(allStates
                 .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parentActivityExecutionId) &&
                                 !targetedIds.Contains(state.Execution.ActivityExecutionId) &&
-                                state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered))
+                                state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded))
                 .Select(state => new RuntimeChildSubtreeCancellationRequest(state.Execution.ActivityExecutionId, every.Reason, every.Metadata)))
             : targeted;
         foreach (var request in expanded)

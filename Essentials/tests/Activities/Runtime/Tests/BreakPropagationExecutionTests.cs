@@ -194,6 +194,37 @@ public sealed class BreakPropagationExecutionTests
             .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId));
     }
 
+    // A sibling path's next node may already be queued (scheduled but not started) when the Break completes; it must not
+    // start after the Flowchart has completed, also when the workflow goes on after the loop the Break ended.
+    [Fact]
+    public async Task Break_in_a_flowchart_stops_a_queued_sibling_node_from_starting()
+    {
+        await using var harness = NewHarness(Enumerable.Range(1, 16).Select(index => $"actexec-{index}").ToArray());
+
+        var flowchart = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-fork"),
+                WorkflowExecutionHarness.NewProbeNode("node-y"),
+                WorkflowExecutionHarness.NewProbeNode("node-z"),
+                WorkflowExecutionHarness.NewProbeNode("node-break", [ActivityOutcomes.Break])
+            ],
+            connections: [NewConnection("node-fork", "node-y"), NewConnection("node-y", "node-z"), NewConnection("node-fork", "node-break")],
+            startNodeId: "node-fork");
+        var root = NewSequenceNode("node-root",
+        [
+            NewForNode("node-for", start: 0, end: 3, body: flowchart),
+            WorkflowExecutionHarness.NewProbeNode("node-after")
+        ]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-after");
+        Assert.True(run.States("node-z").All(state => state.Status != ActivityExecutionStatus.Completed),
+            "node-z started after the Flowchart had ended on Break.");
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         BaseHarness().Build(activityExecutionIds);
 

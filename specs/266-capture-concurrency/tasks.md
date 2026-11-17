@@ -36,7 +36,7 @@ implementation within each phase.
 - [X] T008 [US1] Declare Sequence (index order, completes after children) in
   `Essentials/src/Activities/Sequence/Internal/SequenceStructureHandler.cs`
 - [X] T009 [US1] Declare Flowchart (reachability with waiting joins, `merge` rule, trigger-entry exclusivity,
-  port-blind forks, merge self-overlap; completes after children unless a `firstWins` node exists) in
+  forks whatever the ports (D-2a as amended), merge self-overlap; completes after children unless a `firstWins` node exists) in
   `Essentials/src/Activities/Flowchart/Internal/FlowchartChildResultAnalysis.cs` and `FlowchartStructureHandler.cs`
 - [X] T010 [US1] Replace `ValueFlowValidator`'s concurrency code with the analysis (captures + Set/Merge/Reduce,
   warning severity, duplicate capture warning) in

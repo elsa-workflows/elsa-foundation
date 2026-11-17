@@ -63,7 +63,11 @@ internal sealed class BpmnTimeRelationAnalysis
         if (!forward && !backward)
             return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
 
-        var firstEarlier = forward && (!backward || !Dominates(second, first));
+        // Two nodes that reach each other only around a cycle are ordered when one dominates the other (it runs first on
+        // every pass); otherwise they sit on branches of one pass that run side by side.
+        if (forward && backward && !Dominates(first, second) && !Dominates(second, first))
+            return ActivityChildTimeRelation.Unordered;
+        var firstEarlier = forward && (!backward || Dominates(first, second));
         var (earlier, later) = firstEarlier ? (first, second) : (second, first);
         if (!OrderedThroughJoins(earlier, later) || (ForkCycleRuns().TryGetValue(later, out var forks) && forks.Any(fork => IsReachable(earlier, fork) && IsReachable(fork, earlier))))
             return ActivityChildTimeRelation.Unordered;

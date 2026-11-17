@@ -62,7 +62,9 @@ join sentence require across levels, for example a threshold Parallel inside a S
   instead (decided by the coordinator, 2026-11-17): a Flowchart that ends on `Break` stages
   `RequestLiveChildrenSubtreeCancellation`, a new runtime request that cancels every still-live child in the same
   commit, resolved by the cancellation planner over the states it already loads, so it costs nothing unless a
-  `Break` fires. The first-wins race and the threshold Parallel are join behaviour and stay with the join initiative
+  `Break` fires. A child whose schedule was still queued has no state yet, so the schedule handler also acknowledges a
+  schedule whose parent has completed or been cancelled without starting the child (found in the local review). The
+  first-wins race and the threshold Parallel are join behaviour and stay with the join initiative
   (#4193, comment 6943318941); when that initiative changes them, the two declarations above change with them.
 - BPMN and CompensationScope cancel their live children; they declare `true`. Sequence, If, Switch and the loops run
   one child at a time and declare `true`.
@@ -78,7 +80,8 @@ join sentence require across levels, for example a threshold Parallel inside a S
   therefore keeps its continuation ordered. A join downstream of a `firstWins` race does not order the race's
   branches either: the losing path is cancelled only in the Flowchart's state, its activity keeps running, and the
   join is released without it.
-  A merge node reached by unordered arrivals can itself run twice at once (R-5).
+  A merge node reached by unordered arrivals from distinct sources can itself run twice at once (R-5); two connections
+  from one source are one arrival, because a completion schedules each target once (spec 1208 FR-022).
 - BPMN joins: parallel and inclusive gateways wait. An exclusive gateway, an event-based gateway and any other element
   with several incoming flows pass each token on (BPMN uncontrolled flow); they are treated like `merge`.
 
@@ -89,11 +92,13 @@ so the declaration also answers for a child paired with itself: `Unordered` mean
 together. Then every write in its subtree is an unordered write, even a single node's. Sources:
 
 - BPMN non-sequential multi-instance (`LoopCharacteristics.IsSequential == false`).
-- A Flowchart or BPMN node reached from a non-waiting join whose inbound paths are not mutually exclusive.
-- A node on a branch that a definite fork on a cycle sends off the cycle (Flowchart: several connections from one
-  port, or the `parallelFork`/`inclusiveFork` policy; BPMN: any split that is not exclusive). Each pass starts another
-  run of the branch, which also overlaps the next pass of the cycle. A Flowchart loop that repeats through one port
-  and leaves through another is not counted: treating it as a fork would follow from finding F-1 and is left to #4193.
+- A Flowchart or BPMN node reached from a non-waiting join whose arrivals can overlap: in a Flowchart, arrivals from
+  two distinct sources that are neither ordered nor exclusive (one source counts once, spec 1208 FR-022); in BPMN,
+  every incoming flow is its own token.
+- A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
+  successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
+  run of the branch, which also overlaps the next pass of the cycle. This includes a Flowchart loop that repeats
+  through one port and leaves through another; whether that may be narrowed is for the join initiative (#4193).
 
 For the self-pair, `Unspecified` is treated as "never overlaps": treating every child of an undeclared structure as
 self-overlapping would warn about every single write in it. D-2b's unordered default applies to pairs of different

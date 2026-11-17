@@ -80,8 +80,11 @@ internal sealed class FlowchartChildResultAnalysis(
         if (!forward && !backward)
             return AreExclusive(first, second) ? ActivityChildTimeRelation.MutuallyExclusive : ActivityChildTimeRelation.Unordered;
 
-        // In a cycle each child runs after the other's earlier pass; take the direction a dominator gives.
-        var firstEarlier = forward && (!backward || !Dominates(second, first));
+        // Two nodes that reach each other only around a cycle are ordered when one dominates the other (it runs first on
+        // every pass); otherwise they sit on branches of one pass that run side by side.
+        if (forward && backward && !Dominates(first, second) && !Dominates(second, first))
+            return ActivityChildTimeRelation.Unordered;
+        var firstEarlier = forward && (!backward || Dominates(first, second));
         var (earlier, later) = firstEarlier ? (first, second) : (second, first);
         if (!OrderedThroughJoins(earlier, later) || OverlapsALaterPass(earlier, later))
             return ActivityChildTimeRelation.Unordered;
@@ -93,8 +96,8 @@ internal sealed class FlowchartChildResultAnalysis(
         ForkCycleRuns().TryGetValue(later, out var forks) &&
         forks.Any(fork => IsReachable(earlier, fork) && IsReachable(fork, earlier));
 
-    // For each node on a branch that a definite fork on a cycle sends off the cycle, the forks that start a run of it
-    // on every pass. Only the fanned-out targets of a port count; a policy fork counts all its targets.
+    // For each node on a branch that a fork on a cycle sends off the cycle, the forks that start a run of it on every
+    // pass. Every node with several distinct successors is a fork, whatever their ports (D-2a as amended).
     private Dictionary<string, HashSet<string>> ForkCycleRuns()
     {
         if (_forkCycleRuns is not null)
@@ -248,14 +251,12 @@ internal sealed class FlowchartChildResultAnalysis(
             return null;
 
         var edges = new List<(string Source, string Target)>();
-        var ports = new List<(string Source, string Port, string Target)>();
         foreach (var connection in structure.Connections)
         {
             if (connection?.Source is null || connection.Target is null ||
                 !childNodeIds.Contains(connection.Source.NodeId) || !childNodeIds.Contains(connection.Target.NodeId))
                 return null;
             edges.Add((connection.Source.NodeId, connection.Target.NodeId));
-            ports.Add((connection.Source.NodeId, connection.Source.Port ?? string.Empty, connection.Target.NodeId));
         }
 
         var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
@@ -314,21 +315,11 @@ internal sealed class FlowchartChildResultAnalysis(
                 inboundSources[id].Where(owner.ContainsKey).Select(source => owner[source]).Distinct(StringComparer.Ordinal).Count() > 1));
         }
 
-        // Definite forks: several connections leave one port (those targets), or the node's policy schedules all of them.
-        var forkBranches = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
-        foreach (var id in nodeIds)
-        {
-            var targets = PolicyOf(id) is FlowchartPolicyKinds.ParallelFork or FlowchartPolicyKinds.InclusiveFork
-                ? successors[id].ToArray()
-                : ports.Where(port => StringComparer.Ordinal.Equals(port.Source, id))
-                    .GroupBy(port => port.Port, StringComparer.Ordinal)
-                    .Where(group => group.Count() > 1)
-                    .SelectMany(group => group.Select(port => port.Target))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-            if (targets.Length > 1)
-                forkBranches[id] = targets;
-        }
+        // Forks: every node with several distinct successors, through one port or several, since any activity may select
+        // several outcomes in one completion (D-2a as amended; narrowing is for the join initiative, #4193).
+        var forkBranches = nodeIds
+            .Where(id => successors[id].Count > 1)
+            .ToDictionary(id => id, id => successors[id], StringComparer.Ordinal);
 
         return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors, inboundSources, nonWaitingJoins, forkBranches, raceJoins);
     }

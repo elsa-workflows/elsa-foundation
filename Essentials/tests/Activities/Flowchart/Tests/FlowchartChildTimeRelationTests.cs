@@ -114,15 +114,17 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
     }
 
-    // A loop whose decision leaves through a different port than it repeats through is not a definite fork.
+    // D-2a as amended: the decision may select Continue and Exit together, so the exit path can run on every pass while
+    // the next pass runs. The join initiative (#4193) decides whether this may be narrowed.
     [Fact]
-    public void A_loop_with_an_exit_port_keeps_its_passes_and_exit_sequential()
+    public void A_loop_with_an_exit_port_is_a_fork_on_the_cycle()
     {
         var flow = Flowchart(["start", "check", "body", "after"],
             [("start", "check", null), ("check", "body", "Continue"), ("body", "check", null), ("check", "after", "Exit")]);
 
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "body", "body"));
-        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "body", "after"));
     }
 
     // A first-wins race cancels the losing path only in the Flowchart's state; the join downstream does not wait for it.
@@ -160,26 +162,28 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "j"));
     }
 
-    // A writer on an earlier, unrelated retry loop is not on the forking cycle, so it stays ordered before the branch.
+    // A writer on an earlier loop is not on the later forking cycle, so it stays ordered before that cycle's branch;
+    // its own exit (Done) is a fork on its own cycle and runs on every pass of that loop.
     [Fact]
-    public void A_writer_on_an_unrelated_earlier_loop_stays_ordered_before_a_fork_cycle_branch()
+    public void A_writer_on_an_unrelated_earlier_loop_stays_ordered_before_a_later_fork_cycle_branch()
     {
         var flow = Flowchart(["p", "a", "loop", "b"],
             [("p", "p", "Retry"), ("p", "a", "Done"), ("a", "loop", null), ("loop", "a", null), ("a", "b", null)], "p");
 
-        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "p", "b"));
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "p", "a"));
     }
 
-    // Fanning out the repeat port of a loop does not make the exit-port branch run on every pass.
+    // The exit port of a loop is a fork on the cycle like any other (D-2a as amended).
     [Fact]
-    public void A_fan_out_on_a_loops_repeat_port_keeps_its_exit_sequential()
+    public void A_fan_out_on_a_loops_repeat_port_and_its_exit_run_unordered()
     {
         var flow = Flowchart(["start", "check", "body1", "body2", "after"],
             [("start", "check", null), ("check", "body1", "Continue"), ("check", "body2", "Continue"),
              ("body1", "check", null), ("body2", "check", null), ("check", "after", "Exit")]);
 
-        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "body1", "body2"));
     }
 
     // Since spec 1208 (FR-022) a completion schedules each target once, so two connections from one node into a merge

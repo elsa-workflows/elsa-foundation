@@ -383,6 +383,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
                 RuntimeDelayedSchedules.Validate(serviceProvider, TimeProvider, payload.ExecutableNodeId, scheduledChildren);
 
+                // Cancelling every live child would also plan the subtree a fault absorption reclaims; the two do not combine.
+                if (context.GetChildFaultAbsorptionRequests().Count > 0 &&
+                    context.GetChildSubtreeCancellationRequests().Any(request => request.TargetsEveryLiveChild))
+                    throw new InvalidOperationException("A structural decision cannot both absorb a child fault and cancel every live child subtree.");
+
                 subtreeCancellationPlans = await StructuralParentEvaluationSupport.PlanChildSubtreeCancellationsAsync(
                     serviceProvider,
                     activityExecutionStateStore,

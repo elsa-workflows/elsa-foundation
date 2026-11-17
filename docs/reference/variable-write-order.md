@@ -57,8 +57,8 @@ Each structure declares how its children relate in time; the warning has no list
   branches still run, and so does a Flowchart that uses the `firstWins` policy: writes of those branches stay
   unordered with what follows.
 - **Loops that fork**: when a pass of a Flowchart or BPMN cycle forks off the cycle, the branch can still run while
-  the next pass runs, so it is unordered with itself and with the cycle. A loop whose decision repeats through one
-  port and leaves through another is not treated as a fork.
+  the next pass runs, so it is unordered with itself and with the cycle. In a Flowchart this includes a loop whose
+  decision repeats through one port and leaves through another, because the decision may select both.
 - **A structure that declares nothing** is treated as unordered, and the warning says that it does not declare how
   its children are ordered.
 

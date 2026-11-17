@@ -156,6 +156,22 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "a", "b"));
     }
 
+    // Parallel branches inside a loop reach each other only around the cycle; within one pass they run side by side.
+    [Fact]
+    public void Parallel_branches_inside_a_loop_are_unordered()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("merge", BpmnElementTypes.ExclusiveGateway),
+                Element("split", BpmnElementTypes.ParallelGateway), Task("a", "left"), Task("b", "right"),
+                Element("join", BpmnElementTypes.ParallelGateway)
+            ],
+            [Flow("start", "merge"), Flow("merge", "split"), Flow("split", "a"), Flow("split", "b"),
+             Flow("a", "join"), Flow("b", "join"), Flow("join", "merge")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "left", "right"));
+    }
+
     [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {
