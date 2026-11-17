@@ -98,6 +98,12 @@ public sealed record ActivityExecutionContext
     internal string? TriggerNodeId { get; }
 
     /// <summary>
+    /// This step's variable session (ADR 0090, spec 1231): reads of committed values and explicit writes committed with
+    /// the step. Outside a step body (a background worker, a test that builds the context by hand) every call throws.
+    /// </summary>
+    public IStepVariables Variables { get; init; } = StepVariables.Unavailable;
+
+    /// <summary>
     /// Returns a copy that carries <paramref name="operationKey"/> and <paramref name="targetOperationKey"/>. A blank
     /// operation key falls back to <see cref="InvocationId"/>.
     /// </summary>
@@ -112,7 +118,10 @@ public sealed record ActivityExecutionContext
             TriggerNodeId,
             operationKey,
             targetOperationKey,
-            logicalInvocationId ?? LogicalInvocationId);
+            logicalInvocationId ?? LogicalInvocationId)
+        {
+            Variables = Variables
+        };
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

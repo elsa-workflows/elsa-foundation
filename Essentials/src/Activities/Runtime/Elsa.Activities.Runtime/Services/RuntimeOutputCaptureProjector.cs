@@ -197,7 +197,7 @@ public sealed class RuntimeOutputCaptureProjector
             new Dictionary<string, ValueEnvelope>(frame.Values, StringComparer.Ordinal) { [key] = previous },
             frame.Revision, frame.Status, frame.Versions);
         var writer = new VariableWriter(source, node.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
-        var write = frame.Commit(key, value, frame.Revision, invocation.InputSnapshot?.InputReadSet?.BaseFor(frame.ScopeId, key), LostUpdateModes.Of(node), writer);
+        var write = frame.Commit(key, value, frame.Revision, InvocationVariableBases.For(invocation, frame.ScopeId, key), LostUpdateModes.Of(node), writer);
         // A row has no frame revision: its commit order is the version the write produced. Whether the value is hidden
         // comes from the captured value's policy; the row's own metadata does not carry it.
         var record = VariableWriteRecord.From(frame, write, key, writer, capturedAt);

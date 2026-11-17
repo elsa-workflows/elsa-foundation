@@ -134,6 +134,32 @@ public sealed record ActivityExecutionState(
     /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
     /// every other invocation.
     /// </summary>
+    /// <summary>
+    /// The bases this invocation's own applied writes advanced (spec 1231 FR-010, ADR 0092 decision 4): one entry per
+    /// variable, at the version its latest own write produced. Persisted with the invocation, so a session write on
+    /// suspension and a capture on completion do not conflict, and restored on resume. Absent until the invocation
+    /// writes a variable.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableReadSetEntry>? OwnVariableBases { get; init; }
+
+    /// <summary>
+    /// The reads this invocation's steps made through their variable session (spec 1231 FR-007), per attempt, with the
+    /// variable's protection policy. Inspection data only: a session read gives a base to its own attempt's writes and
+    /// is never carried to a new attempt or across a suspension.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableSessionRead>? SessionReads { get; init; }
+
+    /// <summary>Appends session reads to this invocation's inspection record of them.</summary>
+    public ActivityExecutionState WithSessionReads(IReadOnlyCollection<VariableSessionRead> reads)
+    {
+        ArgumentNullException.ThrowIfNull(reads);
+        return reads.Count == 0
+            ? this
+            : this with { SessionReads = [.. SessionReads ?? [], .. reads] };
+    }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RecordedActivityCompletion? RecordedCompletion { get; init; }
 

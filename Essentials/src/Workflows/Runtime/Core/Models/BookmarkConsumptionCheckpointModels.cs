@@ -18,7 +18,9 @@ public sealed class BookmarkConsumptionCheckpointRequest
         string? commitDiscriminator,
         RuntimeStateChange<WorkflowExecutionState>? workflowExecutionChange = null)
     {
-        if (workflowExecutionChange is not null && transitionKind != BookmarkResumeCheckpointTransitionKind.ActivityCompletion)
+        // A completion carries its captures and its step's session writes; a suspension carries its step's session writes
+        // (spec 1231 FR-015).
+        if (workflowExecutionChange is not null && transitionKind is not (BookmarkResumeCheckpointTransitionKind.ActivityCompletion or BookmarkResumeCheckpointTransitionKind.ActivitySuspension))
             throw new ArgumentException($"Bookmark resume transition '{transitionKind}' cannot carry a workflow execution state change.", nameof(workflowExecutionChange));
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
@@ -136,6 +138,36 @@ public sealed class BookmarkConsumptionCheckpointRequest
     /// </summary>
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecutionChange { get; }
 
+    /// <summary>
+    /// The activities whose container variable frames the resumed step's session wrote (spec 1231 FR-011), committed in
+    /// the same checkpoint. Only a completion or a suspension carries them.
+    /// </summary>
+    public IReadOnlyCollection<ActivityExecutionState> VariableOwnerChanges { get; private init; } = [];
+
+    /// <summary>This request with the container frames a step's session wrote.</summary>
+    public BookmarkConsumptionCheckpointRequest WithVariableOwnerChanges(IReadOnlyCollection<ActivityExecutionState> owners)
+    {
+        ArgumentNullException.ThrowIfNull(owners);
+        if (owners.Count > 0 && TransitionKind is not (BookmarkResumeCheckpointTransitionKind.ActivityCompletion or BookmarkResumeCheckpointTransitionKind.ActivitySuspension))
+            throw new ArgumentException($"Bookmark resume transition '{TransitionKind}' cannot carry variable owner changes.", nameof(owners));
+        return new BookmarkConsumptionCheckpointRequest(this) { VariableOwnerChanges = owners.ToArray() };
+    }
+
+    private BookmarkConsumptionCheckpointRequest(BookmarkConsumptionCheckpointRequest source)
+    {
+        TransitionKind = source.TransitionKind;
+        ResumeWorkItem = source.ResumeWorkItem;
+        ResumePayload = source.ResumePayload;
+        BookmarksToConsume = source.BookmarksToConsume;
+        CommitDiscriminator = source.CommitDiscriminator;
+        ActivityExecutionState = source.ActivityExecutionState;
+        ContinuationWorkItems = source.ContinuationWorkItems;
+        ValueSnapshots = source.ValueSnapshots;
+        DurableValueChanges = source.DurableValueChanges;
+        WorkflowExecutionChange = source.WorkflowExecutionChange;
+        VariableOwnerChanges = source.VariableOwnerChanges;
+    }
+
     public static BookmarkConsumptionCheckpointRequest ForInitialTriggerClaim(
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
@@ -196,7 +228,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
         ActivityExecutionState suspendedState,
         IReadOnlyCollection<RuntimeSchedulerWorkItem> bookmarkCreationWorkItems,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null) =>
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null,
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecutionChange = null) =>
         new(
             BookmarkResumeCheckpointTransitionKind.ActivitySuspension,
             resumeWorkItem,
@@ -207,7 +240,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
             bookmarkCreationWorkItems,
             valueSnapshots ?? [],
             durableValueChanges ?? [],
-            null);
+            null,
+            workflowExecutionChange);
 
     public static BookmarkConsumptionCheckpointRequest ForCompletion(
         RuntimeSchedulerWorkItem resumeWorkItem,
