@@ -325,7 +325,10 @@ public sealed class RetryFaultedActivityAlterationHandler(
     }
 
     private static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
-        StringComparer.Ordinal.Equals(left.Alias, right.Alias) && left.CollectionKind == right.CollectionKind;
+        StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
+        left.CollectionKind == right.CollectionKind &&
+        left.SchemaVersion == right.SchemaVersion &&
+        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
 
     private sealed record AcceptedRecordedWritesStagedChange(
         int Ordinal,

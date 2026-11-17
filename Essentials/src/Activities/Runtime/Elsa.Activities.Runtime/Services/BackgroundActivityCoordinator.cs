@@ -133,11 +133,26 @@ internal sealed class BackgroundActivityCoordinator(
              StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))
             return state;
 
-        // The durable values carry a closed scope's variable rows, so a read of a graph-body variable is checked too.
-        var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
-            .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-        var visible = await new RuntimeContainerScopeService(activityStateStore, workflowStateStore)
-            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
+        RuntimeVisibleVariableFrames visible;
+        try
+        {
+            var scopes = new RuntimeContainerScopeService(activityStateStore, workflowStateStore);
+            visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
+            // Inside a closed scope (a graph body) the variables are rows, carried by the durable values: those are
+            // loaded only then, so a read of a graph-body variable is checked too.
+            if (visible.ClosedScopeBoundary is not null)
+            {
+                var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
+                    .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+                visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not BackgroundActivityValidationException)
+        {
+            // The step's variable scopes could not be read: it faults with a visible incident, as below.
+            throw new BackgroundActivityValidationException($"BG-ACT-004: The background step's variable scopes could not be read at admission: {exception.Message}");
+        }
+
         var changes = new List<VariableInputChange>();
         foreach (var entry in readSet.Entries)
         {

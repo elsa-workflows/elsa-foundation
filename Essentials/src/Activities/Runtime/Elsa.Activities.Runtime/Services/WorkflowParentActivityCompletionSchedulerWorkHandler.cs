@@ -1026,7 +1026,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                                            cancellationToken)
                                        ?? fallbackState;
         // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
-        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Contains(refusal.Record) != true)
+        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record => record with { CommitSequence = null } == refusal.Record with { CommitSequence = null }) != true)
             latestFaultedParentState = latestFaultedParentState.WithVariableWrites([refusal.Record]);
         // Every arm that records a thrown exception records through here, so this is where a value resolved for the
         // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from

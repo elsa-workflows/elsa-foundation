@@ -166,11 +166,14 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
 - An intrinsic cannot write a closed scope's variables yet; only captures write rows.
 - A value snapshot is kept for captures of a leaf (on completion and on resume, including background results) and
   for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
-  composite completes, accepted overrides and intrinsic writes to loop iteration frames have their write record, but
-  no value snapshot yet.
+  composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration
+  frames are read-only to intrinsics.)
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
   second does not see the first.
 - A record of a closed-scope row write has no frame revision; its `CommitOrder` is the version the write produced.
+- The committer remembers, per lease, the stamps of activities still in flight; an entry goes when the activity's
+  terminal commit is persisted or the lease ends.
+- An alteration replay is matched on the job's terminal evidence, which does not compare the outcome's write records.
 - A commit resubmitted byte for byte under a later lease is numbered again, so it no longer matches the stored copy.
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
