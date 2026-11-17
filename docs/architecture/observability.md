@@ -375,8 +375,12 @@ store conformance suite need it:
 - the consume rule that keeps no arrival after a resolution opens, and the interruption rules that resume keeping;
 - the ticket generation that `Worker.TicketId` gains for jobs restarted by a recover.
 
-**Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
-gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
+**Every operator message** is an outside add in the operator's bound scope. Its id is the tenant-qualified operation
+id `Q(t, operation)`, with a `keep_until`, so a retried command gets a duplicate-key answer and no second effect, and
+the same operation id in another tenant is a different message. An operator acts only within its bound scope: another
+tenant's instance answers not found, as a missing one does. Partition release, drain and handover are host
+administration and touch no tenant rows; cross-tenant support uses ADR 0097's support context
+([tenancy](tenancy.md#every-operation)). Inspecting metadata,
 reading payloads, recovering, discarding and handing over are separate permissions, and each action is audited with
 its principal, reason and outcome.
 

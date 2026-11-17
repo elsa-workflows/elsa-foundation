@@ -75,7 +75,8 @@ worker --HTTP/gRPC--> gateway --renew, complete, fail--> job actor --commit--> r
 
 The durable path needs no new layer 2 concept. In the candidate, a job actor is placed in its queue shard's partition,
 so the queue's grant reaches it in memory after the commit and both commit in the same partition's batches. The gateway
-addresses a queue by its actor id (`queue/{tenant}/{name}/{shard}`) and a job by the
+addresses a queue by its actor id (`queue/Q(tenant, name)/{shard}`, with the tenant-qualified name of
+[tenancy](tenancy.md#names-one-namespace-per-tenant)) and a job by the
 job id in its grant; layer 2 maps both to a partition, and the gateway treats both as opaque strings. A busy queue is
 split into a fixed number of shards; the gateway spreads a worker's activates over them.
 

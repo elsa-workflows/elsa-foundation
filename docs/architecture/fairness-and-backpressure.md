@@ -74,13 +74,15 @@ public interface IAdmission                                // layer 2, the ingre
     AdmissionDecision Admit(AdmissionRequest request);     // synchronous, in memory: no database call
 }
 
-public sealed record AdmissionRequest(string Tenant, AdmissionKind Kind, InstanceRef? Target, string? Definition);
+public sealed record AdmissionRequest(BoundScope Scope, AdmissionKind Kind, InstanceRef? Target, string? Definition);
 public enum AdmissionKind { Start, Command, Publish }
 public sealed record AdmissionDecision(bool Admitted, RefusalReason? Reason = null, TimeSpan? RetryAfter = null);
 public enum RefusalReason { RateLimited, NodeBusy, InboxFull }   // HTTP 429, 503, 503
 ```
 
-`Target` is the instance a keyed start or command addresses. Its virtual partition is read from the id inside layer 2;
+`Scope` is the bound persistence scope from ADR 0097's binder, the only source of the tenant
+([tenancy](tenancy.md#where-the-tenant-comes-from)). `Target` is the instance a keyed start or command addresses, by
+its tenant-qualified id. Its virtual partition is read from the id inside layer 2;
 the contract itself names no partition, so layer 3 and the public API stay host-neutral. A start without a caller key
 has no target yet. Inline execution places it in a virtual partition the receiving node owns; placement picks one below
 the high-water mark, and admission refuses the start only when every one of the node's virtual partitions is above it.
@@ -264,7 +266,8 @@ The kernel does not implement credits; ETL ships them as part of its model.
 The sketch's release 1 scope names "admission control with bounded inboxes". Proposed contents:
 
 - `IAdmission` on every ingress path, with per-tenant token buckets per node and an in-flight limit per node.
-- A tenant column on the instance row, which the sketch's data model already lists.
+- The tenant from the bound scope and a tenant column on every tenant-keyed record, as [tenancy](tenancy.md) defines;
+  the instance row's column, which the sketch's data model already lists, is the one turn selection reads.
 - Per-tenant job slots in the job scheduler.
 - The ingress threshold on due depth per virtual partition: the `backlog` field, the capped count with its index, and
   the pressure list, with 503 refusals and the exemptions for control commands and operator actions.
