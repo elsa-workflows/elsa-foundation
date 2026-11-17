@@ -209,7 +209,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
     </AnchoredPopover> : null}
     {fixes.map(fix => <div className="wf-expression-reference-fix" key={fix.from}>
       {reusableOutput
-        ? <span>Prefer the stable input key for <code>{fix.current}</code>.</span>
+        ? <span><code>{fix.current}</code> is unavailable in a stable-key expression.</span>
         : <span><code>{fix.current}</code> is unavailable here.</span>}
       <StudioButton variant="ghost" size="sm" onClick={() => startFix(fix)}>Use <code>{fix.replacement}</code></StudioButton>
     </div>)}
