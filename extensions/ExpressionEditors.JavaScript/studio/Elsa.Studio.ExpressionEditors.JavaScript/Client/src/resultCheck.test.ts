@@ -29,7 +29,7 @@ it("compares primitive types independently of the field and only offers a suppor
 });
 
 it.each(["String(args.data)", '`Sum: ${args.data}`', "args[alias]", "args?.data", "args.data + 1",
-  "const String = fn; args.data", "args.data; doWork()", "args.data(", "3n"])("leaves %s alone with a text destination", async source => {
+  "const String = fn; args.data", "args.data; doWork()", "args.data(", "3n", "01", "1__2", "return /*\n*/ args.data", "return /*\u2028*/ args.data"])("leaves %s alone with a text destination", async source => {
   const resolveParameterType = vi.fn(async () => type("Double"));
   expect(await javaScriptResultCheck.check({ source, expectedType, resolveParameterType })).toBeUndefined();
   expect(resolveParameterType).not.toHaveBeenCalled();

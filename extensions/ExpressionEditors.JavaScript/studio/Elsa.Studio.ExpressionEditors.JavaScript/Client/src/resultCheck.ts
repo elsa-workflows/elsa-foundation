@@ -18,6 +18,9 @@ export const javaScriptResultCheck: StudioExpressionResultCheck = {
     if (statements.length !== 1 || !["ExpressionStatement", "ReturnStatement"].includes(statements[0].name)) return;
     const expression = children(statements[0]).find(node => !comment(node) && node.name !== "return" && node.name !== ";");
     if (!expression) return;
+    // A line terminator in a comment after return makes it a bare return at runtime.
+    const returnKeyword = statements[0].getChild("return");
+    if (returnKeyword && /[\r\n\u2028\u2029]/.test(source.slice(returnKeyword.to, expression.from))) return;
 
     const value = unwrap(expression);
     let actual = literalType(value, source);
@@ -73,7 +76,12 @@ function unwrap(node: Node): Node {
 
 function literalType(node: Node, source: string): Scalar | undefined {
   switch (node.name) {
-    case "Number": return source.slice(node.from, node.to).endsWith("n") ? undefined : "number";
+    case "Number": {
+      const text = source.slice(node.from, node.to);
+      // Restrict fixes to numeric spellings that are also valid in strict JavaScript.
+      if (!/^0[0-9]/.test(text) && Number.isFinite(Number(text))) return "number";
+      break;
+    }
     case "BooleanLiteral": return "boolean";
     case "String":
     case "TemplateString": return "string";
