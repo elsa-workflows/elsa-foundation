@@ -142,9 +142,15 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
    commit in which the faulted instance consumes an arrival set it in the same update that marks the row done, so it
    costs no statement, only the column (8 bytes where set, a null-bitmap bit elsewhere). Ordinary done markers,
    outside commands the instance handled before the Park and still within their window, have no `KeptBy` and are
-   never restored, so none is applied twice (invariant 4). A list of kept keys in the `ParkRecord` on the instance
+   never restored, so none is applied twice (invariant 4). A list of every kept key in the `ParkRecord` on the instance
    row would do the same, but the parked instance's row would then grow with every arrival and be rewritten whole
-   each time. Their `keep_until` follows the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's
+   each time.
+
+   **The two groups of kept rows.** `KeptBy` marks both the deliveries the Park consumed and the arrivals while
+   parked, and `resume` must restore only the second group. So the Park's commit also writes the ids of the deliveries
+   it consumed into `ParkRecord.Consumed`, in the instance-row update it already makes; a re-park adds the ids it
+   consumes. The list grows with the consumed count only, never with arrivals. A kept row whose id is in
+   `ParkRecord.Consumed` is a Park-consumed delivery; any other kept row is an arrival while parked. Their `keep_until` follows the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's
    time plus that window, or no expiry when it is null (the default: kept until recovered or discarded).
 
    **Invariant: `KeptBy` is non-null only while its Park is unresolved.** Every step that resolves a Park clears
@@ -194,8 +200,9 @@ one commit, and calls one new model hook.
   ticket nor its kept done row. The model never sees the generation: the job context and the `job-finished` result
   carry the model's own key, and the kernel maps the generation back. A result from the old generation matches no live
   ticket and is dropped.
-- **Deliveries are restored, never copied** (decision 2). Both modes restore every kept arrival from while
-  parked; `retry` also restores the selected deliveries the Park consumed. Recover's commit, under the partition
+- **Deliveries are restored, never copied** (decision 2). The owner's read of the instance's rows with `KeptBy` not
+  null splits them by `ParkRecord.Consumed`. Both modes restore every kept row whose id is not in
+  `ParkRecord.Consumed` (the arrivals while parked); `retry` also restores the selected rows whose id is in it. Recover's commit, under the partition
   fence, updates each row to be restored by its key with the predicate `Done AND KeptBy IS NOT NULL` (the row is still
   there, still done, and kept by the current Park): it clears `Done` and `KeptBy`, resets `Attempts` to 0 and `Trial`
   to none, sets `Seen` to the current epoch and `KeepUntil` to the ordinary outside-command window from now. In the
@@ -205,7 +212,8 @@ one commit, and calls one new model hook.
   whose attempts reached the threshold (the `MaxAttempts` check in
   [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs)), so a retried poison message or job ticket
   would otherwise park the instance again at once. Each row's update has its count checked; a row that matched nothing
-  (the sweep removed it first) goes on the "could not deliver" list and does not fail the commit. Only rows whose
+  (the sweep removed it between the read and the commit) goes on the "could not deliver" list and does not fail the
+  commit. Only rows whose
   update landed are handed to the instance in memory after the commit, in their original `seq` order, so nothing is in
   memory that is not on disk (invariant 9). A restored row keeps its id, sender, kind, payload and creations. That
   matters because the kernel authenticates some kinds: a child completion to a creation-qualified parent must carry a
@@ -223,8 +231,11 @@ one commit, and calls one new model hook.
   and is restored under the ordinary window set above. The sweep's delete and the restore update meet on the row: the
   one that runs second finds nothing, and the restore's count says which happened. A row the sweep removed goes on the
   list. So when a non-null `Parked` window has passed, recover delivers what remains and its answer lists the ids it
-  could not deliver. `retry` of a Park whose consumed deliveries are all
-  gone is refused; `resume` stays possible.
+  could not deliver. That list is complete for the Park-consumed deliveries: their ids are in `ParkRecord.Consumed`, so
+  one the sweep removed before recover's read is listed as missing. It is not complete for arrivals while parked:
+  their ids are kept nowhere but their rows, so an arrival the sweep removed before recover's read is not seen and not
+  listed. That is the limit of a finite `Parked` window, and recover's answer states it whenever the window has
+  passed. `retry` of a Park whose consumed deliveries are all gone is refused; `resume` stays possible.
 - **Side effects** of the retried turn may repeat, with the same effect keys.
 
 **Discard** `{operation, expected revision}` checks, as recover does, that the instance is parked and that its Park's
@@ -313,6 +324,7 @@ with the rest of the kernel's. Rejected options are kept for the record.
    child ([large fan-out](large-fan-out.md), decision 5), the recovered child's later completion reaches a parent that
    still registers it. Rejected: (b) a linked successor; (c) refusing recovery of a terminal run.
 2. **Park is extended (a):** it keeps consumed deliveries and arrivals while parked as done rows under the `Parked`
-   window, marked by `KeptBy` under the invariant "non-null only while its Park is unresolved", journals at every
+   window, marked by `KeptBy` under the invariant "non-null only while its Park is unresolved" (with
+   `ParkRecord.Consumed` telling the Park-consumed rows from later arrivals), journals at every
    history level, and the restore clears `Done`. This extends the 13 November Park decision. Rejected: (b) Park as
    decided on 13 November, where only `resume` is possible.
