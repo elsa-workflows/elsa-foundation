@@ -84,6 +84,13 @@ export interface CreateConnectionRequest {
   tags?: string[];
 }
 
+export interface UpdateConnectionRequest {
+  displayName?: string;
+  settings?: Record<string, string>;
+  secretFields?: Record<string, CreateConnectionSecretField>;
+  tags?: string[];
+}
+
 export interface ConnectionTestResponse {
   succeeded: boolean;
   message?: string | null;
