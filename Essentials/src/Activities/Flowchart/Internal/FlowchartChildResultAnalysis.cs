@@ -25,6 +25,7 @@ internal sealed class FlowchartChildResultAnalysis(
     private Dictionary<string, HashSet<string>>? _dominators;
     private Dictionary<string, HashSet<string>>? _forkCycleRuns;
     private readonly Dictionary<string, bool> _arrivalsCanOverlap = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _reachedWithoutJoin = new(StringComparer.Ordinal);
 
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _inboundSources =
         inboundSources ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -207,16 +208,16 @@ internal sealed class FlowchartChildResultAnalysis(
             return reached;
         }
 
-        // A waiting join passes the branch's token on only when every one of its arrivals can come from the fork without
-        // the join: one that waits for the join's own run sends nothing until that run has ended.
-        var fromFork = NodesReachedWithout(fork, join);
+        // A waiting join passes the branch's token on only when every one of its arrivals can come without the join: an
+        // arrival that every path from the start reaches through the join waits for the join's own run to end.
+        var withoutJoin = NodesReachedWithoutJoin(join);
         var visited = new HashSet<string>(StringComparer.Ordinal) { branch };
         var queue = new Queue<string>([branch]);
         while (queue.TryDequeue(out var node))
         {
             if (sources.Contains(node))
                 reached.Add(node);
-            if (IsWaitingJoin(node) && !InboundOf(node).All(source => StringComparer.Ordinal.Equals(source, fork) || fromFork.Contains(source)))
+            if (IsWaitingJoin(node) && !InboundOf(node).All(source => StringComparer.Ordinal.Equals(source, fork) || withoutJoin.Contains(source)))
                 continue;
             foreach (var next in SuccessorsOf(node))
                 if (!StringComparer.Ordinal.Equals(next, join) && visited.Add(next))
@@ -226,15 +227,18 @@ internal sealed class FlowchartChildResultAnalysis(
         return reached;
     }
 
-    private HashSet<string> NodesReachedWithout(string from, string excluded)
+    // The nodes a run can reach from its start without passing the join.
+    private HashSet<string> NodesReachedWithoutJoin(string join)
     {
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var queue = new Queue<string>([from]);
+        if (_reachedWithoutJoin.TryGetValue(join, out var cached))
+            return cached;
+        var visited = new HashSet<string>(entryNodeIds.Where(start => !StringComparer.Ordinal.Equals(start, join)), StringComparer.Ordinal);
+        var queue = new Queue<string>(visited);
         while (queue.TryDequeue(out var node))
             foreach (var next in SuccessorsOf(node))
-                if (!StringComparer.Ordinal.Equals(next, excluded) && visited.Add(next))
+                if (!StringComparer.Ordinal.Equals(next, join) && visited.Add(next))
                     queue.Enqueue(next);
-        return visited;
+        return _reachedWithoutJoin[join] = visited;
     }
 
     private static bool ReachDifferentArrivals(IReadOnlyList<HashSet<string>> arrivals)
