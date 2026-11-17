@@ -141,21 +141,43 @@ internal sealed class BpmnTimeRelationAnalysis
 
     private bool ArrivalsCanOverlap(string join)
     {
-        var sources = _inbound[join];
-        if (sources.Count != sources.Distinct(StringComparer.Ordinal).Count())
-            return true;
-        for (var left = 0; left < sources.Count; left++)
-        for (var right = left + 1; right < sources.Count; right++)
+        // Every incoming flow is its own token, judged with the choice it leaves its source on.
+        var arrivals = Arrivals(join);
+        for (var left = 0; left < arrivals.Count; left++)
+        for (var right = left + 1; right < arrivals.Count; right++)
         {
-            // The first arrival runs the join while the path to the second is still in flight, unless the second source
-            // is only reached through the join itself (a loop back into it) or excludes the first.
-            if (!IsReachable(join, sources[left]) && !IsReachable(join, sources[right]) &&
-                !AreExclusive(sources[left], sources[right]))
-                return true;
+            // Two arrivals each run the join. They are in flight together unless they exclude each other, or exactly one of
+            // them is reached from the join within one pass: that one is the way back of a loop and only comes after the
+            // join's run for the other.
+            if (ReachesWithinPass(join, arrivals[left].Source) != ReachesWithinPass(join, arrivals[right].Source) ||
+                ArrivalsExclude(arrivals[left], arrivals[right]))
+                continue;
+            return true;
         }
 
         return false;
     }
+
+    private List<(string Source, string? Choice)> Arrivals(string join) =>
+        _outgoing.SelectMany(entry => entry.Value
+                .Where(edge => StringComparer.Ordinal.Equals(edge.Target, join))
+                .Select(edge => (Source: entry.Key, edge.Choice)))
+            .ToList();
+
+    private bool ArrivalsExclude((string Source, string? Choice) left, (string Source, string? Choice) right)
+    {
+        if (StringComparer.Ordinal.Equals(left.Source, right.Source))
+            return left.Choice is not null && right.Choice is not null && !StringComparer.Ordinal.Equals(left.Choice, right.Choice);
+        return AreExclusive(left.Source, right.Source) || ArrivalExcludes(left, right.Source) || ArrivalExcludes(right, left.Source);
+    }
+
+    // A flow leaving an exclusive split on one choice excludes a node the split reaches only on other choices (the "skip"
+    // flow of an optional step excludes the step).
+    private bool ArrivalExcludes((string Source, string? Choice) arrival, string node) =>
+        arrival.Choice is not null &&
+        Dominates(arrival.Source, node) &&
+        Choices(arrival.Source, _outgoing[arrival.Source], node) is { Count: > 0 } choices &&
+        !choices.Contains(arrival.Choice);
 
     private bool OrderedThroughJoins(string earlier, string later) =>
         _nonWaitingJoins
@@ -166,10 +188,11 @@ internal sealed class BpmnTimeRelationAnalysis
     // Another arrival at the join can run it while the earlier child is in flight when it comes from a source that
     // neither follows the earlier child nor excludes it.
     private bool OtherArrivalCanOverlap(string join, string earlier) =>
-        _inbound[join].Any(source =>
-            !StringComparer.Ordinal.Equals(source, earlier) &&
-            !ReachesWithinPass(earlier, source) &&
-            !AreExclusive(source, earlier));
+        Arrivals(join).Any(arrival =>
+            !StringComparer.Ordinal.Equals(arrival.Source, earlier) &&
+            !ReachesWithinPass(earlier, arrival.Source) &&
+            !AreExclusive(arrival.Source, earlier) &&
+            !ArrivalExcludes(arrival, earlier));
 
     private bool AreExclusive(string left, string right)
     {

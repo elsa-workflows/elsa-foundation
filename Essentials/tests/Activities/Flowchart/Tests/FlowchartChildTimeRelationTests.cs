@@ -242,6 +242,29 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "b", "a"));
     }
 
+    // A merge loop head whose fork sends both branches back runs once per returning branch, so the loop overlaps itself.
+    [Fact]
+    public void A_merge_loop_head_fed_by_two_returning_branches_overlaps_itself()
+    {
+        var flow = Flowchart(["start", "m", "f", "a", "b"],
+            [("start", "m", null), ("m", "f", null), ("f", "a", null), ("a", "m", null), ("f", "b", null), ("b", "m", null)], "start",
+            new Dictionary<string, FlowchartNodeMetadata> { ["m"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "a"));
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "m", "m"));
+    }
+
+    // A merge inside a loop body runs on the fork's arrival and again on the branch's arrival: two overlapping runs.
+    [Fact]
+    public void A_merge_inside_a_loop_body_overlaps_itself()
+    {
+        var flow = Flowchart(["start", "h", "a", "b"],
+            [("start", "h", null), ("h", "a", null), ("h", "b", null), ("a", "b", null), ("b", "h", null)], "start",
+            new Dictionary<string, FlowchartNodeMetadata> { ["b"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "b"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

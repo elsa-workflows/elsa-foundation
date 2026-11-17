@@ -162,11 +162,13 @@ internal sealed class FlowchartChildResultAnalysis(
         for (var left = 0; left < sources.Length; left++)
         for (var right = left + 1; right < sources.Length; right++)
         {
-            // The first arrival runs the join while the path to the second is still in flight, unless the second source
-            // is only reached through the join itself (a loop back into it) or excludes the first.
-            if (!IsReachable(join, sources[left]) && !IsReachable(join, sources[right]) &&
-                !AreExclusive(sources[left], sources[right]))
-                return true;
+            // Two arrivals each run the join. They are in flight together unless they exclude each other, or exactly one of
+            // them is reached from the join within one pass: that one is the way back of a loop and only comes after the
+            // join's run for the other.
+            if (ReachesWithinPass(join, sources[left]) != ReachesWithinPass(join, sources[right]) ||
+                AreExclusive(sources[left], sources[right]))
+                continue;
+            return true;
         }
 
         return false;

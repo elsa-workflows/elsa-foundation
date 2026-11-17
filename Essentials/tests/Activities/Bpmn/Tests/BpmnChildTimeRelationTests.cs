@@ -187,6 +187,21 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Empty(Analyze(process).UnorderedWrites);
     }
 
+    // An optional step: one choice runs the step, the other skips straight to the merge. Only one token passes.
+    [Fact]
+    public void An_optional_step_skipped_by_an_exclusive_split_stays_ordered()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("x", BpmnElementTypes.ExclusiveGateway),
+                Task("t2", "step"), Element("j", BpmnElementTypes.ExclusiveGateway), Task("t3", "after")
+            ],
+            [Flow("start", "x"), Flow("x", "t2"), Flow("x", "j"), Flow("t2", "j"), Flow("j", "t3")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "step", "after"));
+    }
+
     [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {

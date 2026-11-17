@@ -92,9 +92,11 @@ so the declaration also answers for a child paired with itself: `Unordered` mean
 together. Then every write in its subtree is an unordered write, even a single node's. Sources:
 
 - BPMN non-sequential multi-instance (`LoopCharacteristics.IsSequential == false`).
-- A Flowchart or BPMN node reached from a non-waiting join whose arrivals can overlap: in a Flowchart, arrivals from
-  two distinct sources that are neither ordered nor exclusive (one source counts once, spec 1208 FR-022); in BPMN,
-  every incoming flow is its own token.
+- A Flowchart or BPMN node reached from a non-waiting join whose arrivals can overlap. Each arrival runs the join, so
+  two arrivals are in flight together unless they exclude each other or exactly one of them is reached from the join
+  within one pass (the way back of a loop, which comes only after the join's run). In a Flowchart one source counts
+  once (spec 1208 FR-022); in BPMN every incoming flow is its own token, judged with the choice it leaves an exclusive
+  split on (a split's "skip" flow excludes the step it skips).
 - A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
   successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
   run of the branch, which also overlaps the next pass of the cycle. This includes a Flowchart loop that repeats
