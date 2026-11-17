@@ -74,13 +74,14 @@
 
 - [x] T017 [US5] Fill the spec's *Built-in assessment* table from research R-4 and get the approver's confirmation of
   C7 and C8 per marked activity (Q4).
-- [x] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity that passed T022.
+- [x] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity that passed T022. *Done for* the five
+  Essentials built-ins; the eight connector activities stay unmarked until their background runs in #4737 pass (Q10).
 - [x] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
   test per assessed-but-unmarked category, naming its criterion. *Done as:* the five Essentials built-ins publish in
   the background and run end to end on a worker (`WriteLine` and `Fault` on both persistence modes; `Break`,
   `WriteLines`, `BpmnDecision` on EF Core; `BpmnDecision` with an outcome from its pinned set), every unmarked category is refused
-  naming why (`BuiltInBackgroundAssessmentTests`), and guards pin the marked connector set. End-to-end runs of the
-  eight connector activities need a connector host with a worker: #4737.
+  naming why (`BuiltInBackgroundAssessmentTests`). The eight connector activities are not marked, so they have no run
+  here: #4737 runs them on a worker and marks the ones that pass (Q10).
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
   changes); regenerate the contract surface baselines.
 - [x] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
@@ -88,7 +89,8 @@
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
   activity that fails gets an issue instead of the mark (Q10). *Done as:* the secret-bound input by a worker run
   (T014), the receipt limit by a worker run (`BackgroundActivityWorkerTests.Faults_a_result_above_the_receipt_size_limit`),
-  the connector tenant partition by reading the code; background runs against connector endpoints: #4737.
+  the connector tenant partition by reading the code only. Without a background run the connector activities are not
+  marked; #4737 runs them and marks the ones that pass (Q10).
 - [x] T023 [US1] **(test-first)** Call `CheckPublication` in `ActivityTemplatePlacer` for every background node a
   template provider returns (FR-012, Q9). Tests: a template node that fails a criterion is refused naming it; the
   agent's model-turn node (`AgentActivityProvider.CompileAsync`) passes.
@@ -132,5 +134,5 @@
   - SC-002: every criterion is refused at both entry points in the component tests (`BackgroundEligibilityTests`).
     Through the real call sites: C1–C5, C9 and C10 at publication and at template placement, C1–C4 and C6 on the
     worker, and C9 at admission. The other combinations share those call sites and are shown through the component.
-  - T019 and T022 for the eight connector activities: their background runs need a connector host with a worker, so
-    their marks rest on reading the code (Q10). Follow-up: #4737.
+  - The eight connector activities that qualify by reading stay unmarked: their background runs need a connector host
+    with a worker (T019, T022). #4737 runs them and marks the ones that pass (Q10, amended 2026-11-18).
