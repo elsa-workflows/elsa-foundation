@@ -89,8 +89,13 @@ internal sealed class FlowchartChildResultAnalysis(
             var secondToFirst = ReachesWithinPass(second, first);
             if (!firstToSecond && !secondToFirst)
                 return ActivityChildTimeRelation.Unordered;
-            forward = firstToSecond || Dominates(first, second);
-            backward = !forward;
+            // Around a cycle each run of one is followed by a run of the other: declare both orders, so a reader checks
+            // that both sides are done (see ActivityChildTimeRelation).
+            var (earlierNode, laterNode) = firstToSecond ? (first, second) : (second, first);
+            return OrderedThroughJoins(earlierNode, laterNode) && OrderedThroughJoins(laterNode, earlierNode) &&
+                   !OverlapsALaterPass(earlierNode, laterNode) && !OverlapsALaterPass(laterNode, earlierNode)
+                ? ActivityChildTimeRelation.FirstBeforeSecond
+                : ActivityChildTimeRelation.Unordered;
         }
         var firstEarlier = forward && (!backward || Dominates(first, second));
         var (earlier, later) = firstEarlier ? (first, second) : (second, first);
@@ -132,7 +137,7 @@ internal sealed class FlowchartChildResultAnalysis(
     private bool OrderedThroughJoins(string earlier, string later) =>
         _nonWaitingJoins.Concat(_raceJoins)
             .Where(join => !StringComparer.Ordinal.Equals(join, earlier))
-            .Where(join => IsReachable(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || IsReachable(join, later)))
+            .Where(join => ReachesWithinPass(earlier, join) && (StringComparer.Ordinal.Equals(join, later) || ReachesWithinPass(join, later)))
             .All(join => Dominates(earlier, join) || !OtherArrivalCanOverlap(join, earlier));
 
     // Another arrival at the join can run it while the earlier child is in flight when it comes from a source that
@@ -140,7 +145,7 @@ internal sealed class FlowchartChildResultAnalysis(
     private bool OtherArrivalCanOverlap(string join, string earlier) =>
         _inboundSources.GetValueOrDefault(join, []).Any(source =>
             !StringComparer.Ordinal.Equals(source, earlier) &&
-            !IsReachable(earlier, source) &&
+            !ReachesWithinPass(earlier, source) &&
             !AreExclusive(source, earlier));
 
     // A non-waiting join runs once per arrival. Two arrivals can be in flight together when they come from two nodes
@@ -197,7 +202,6 @@ internal sealed class FlowchartChildResultAnalysis(
         return !requireEdge && StringComparer.Ordinal.Equals(source, target);
     }
 
-    /// <summary>Whether every path from every entry to the node passes the candidate.</summary>
     // Whether target is reachable from source without entering a node that dominates source (other than source itself).
     private bool ReachesWithinPass(string source, string target)
     {
@@ -218,6 +222,7 @@ internal sealed class FlowchartChildResultAnalysis(
         return false;
     }
 
+    /// <summary>Whether every path from every entry to the node passes the candidate.</summary>
     private bool Dominates(string candidate, string node)
     {
         _dominators ??= ComputeDominators();

@@ -172,6 +172,21 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "left", "right"));
     }
 
+    // An exclusive merge closing a loop is reached only around the cycle, so the loop body stays sequential.
+    [Fact]
+    public void Tasks_in_a_loop_body_closed_by_an_exclusive_merge_stay_ordered()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("xm", BpmnElementTypes.ExclusiveGateway),
+                Task("ta", "a"), Task("tb", "b"), Element("xs", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "xm"), Flow("xm", "ta"), Flow("ta", "tb"), Flow("tb", "xs"), Flow("xs", "xm"), Flow("xs", "end")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "a", "b"));
+        Assert.Empty(Analyze(process).UnorderedWrites);
+    }
+
     [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {

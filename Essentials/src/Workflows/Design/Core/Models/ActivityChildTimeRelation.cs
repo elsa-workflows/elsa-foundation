@@ -4,6 +4,9 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// What a structure states about how two of its direct children relate in time within one run of the structure
 /// (spec 266, D-2). Asked about one child paired with itself, it states whether two runs of that child can be in
 /// flight together: <see cref="Unordered"/> means they can; any other declared value means they never overlap.
+/// Two children that alternate (around a cycle, each run of one is followed by a run of the other) are declared with the
+/// same order for both argument orders, for example <see cref="FirstBeforeSecond"/> for (a, b) and for (b, a); a reader
+/// then requires both to have ended before the other runs.
 /// </summary>
 public enum ActivityChildTimeRelation
 {

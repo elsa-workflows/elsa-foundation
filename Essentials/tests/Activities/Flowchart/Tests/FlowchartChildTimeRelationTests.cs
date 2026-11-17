@@ -218,6 +218,30 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "m", "m"));
     }
 
+    // A merge inside a loop body runs on the fork's other arrival while the branch before it is still in flight.
+    [Fact]
+    public void A_merge_inside_a_loop_body_does_not_order_the_branch_before_it()
+    {
+        var flow = Flowchart(["start", "h", "a", "b"],
+            [("start", "h", null), ("h", "a", null), ("h", "b", null), ("a", "b", null), ("b", "h", null)], "start",
+            new Dictionary<string, FlowchartNodeMetadata> { ["b"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "a", "b"));
+    }
+
+    // A merge at the loop head is only reached around the cycle: the loop body stays sequential, and two body steps
+    // alternate (each runs before the other in turn), which is declared for both argument orders.
+    [Fact]
+    public void A_merge_loop_head_keeps_its_body_sequential_and_alternating()
+    {
+        var flow = Flowchart(["start", "m", "a", "b"],
+            [("start", "m", null), ("m", "a", null), ("a", "b", null), ("b", "m", null)], "start",
+            new Dictionary<string, FlowchartNodeMetadata> { ["m"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "a", "b"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _structures.RelateChildren(flow, "b", "a"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

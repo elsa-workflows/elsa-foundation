@@ -52,6 +52,8 @@ of C on their paths:
    for `SecondBeforeFirst`.
 3. A single write is unordered with itself when an ancestor declares the child on its path self-`Unordered`.
 4. Two different children with the same node id are never claimed ordered.
+5. Two children that alternate around a cycle are declared with the same order for both argument orders; then both
+   sides must be done (rule 2 applied to each side), since each runs before the other in turn.
 
 A missing `CompletesAfterItsChildren` and a missing `RelateChildren` are named separately in the message.
 

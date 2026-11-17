@@ -91,6 +91,19 @@ public sealed class UnorderedVariableWriteAnalysisTests
         Assert.Equal(VariableReference.WorkflowScopeId, finding.ScopeId);
     }
 
+    // Children that alternate around a cycle need both sides done: an early-releasing later child still overlaps the
+    // earlier child's next run.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Alternating_children_need_both_sides_done(bool laterCompletesAfterChildren, bool warns)
+    {
+        var root = Container("loop", Capture("a", "total"), Container("b", Capture("b-inner", "total")));
+        var structures = new DeclaredStructures { Alternating = { "loop" }, Completes = { ["b"] = laterCompletesAfterChildren } };
+
+        Assert.Equal(warns, Analyze(root, structures).UnorderedWrites.Count == 1);
+    }
+
     [Fact]
     public void Two_children_with_one_node_id_are_never_claimed_ordered()
     {
@@ -128,6 +141,7 @@ public sealed class UnorderedVariableWriteAnalysisTests
     private sealed class DeclaredStructures : IActivityStructureService
     {
         public HashSet<string> Ordered { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Alternating { get; } = new(StringComparer.Ordinal);
         public HashSet<string> SelfOverlapping { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, bool?> Completes { get; } = new(StringComparer.Ordinal);
 
@@ -138,6 +152,8 @@ public sealed class UnorderedVariableWriteAnalysisTests
         {
             if (first == second)
                 return SelfOverlapping.Contains(first) ? ActivityChildTimeRelation.Unordered : ActivityChildTimeRelation.FirstBeforeSecond;
+            if (Alternating.Contains(activity.NodeId))
+                return ActivityChildTimeRelation.FirstBeforeSecond;
             if (!Ordered.Contains(activity.NodeId))
                 return ActivityChildTimeRelation.Unordered;
             var ids = Children(activity).Select(child => child.NodeId).ToList();

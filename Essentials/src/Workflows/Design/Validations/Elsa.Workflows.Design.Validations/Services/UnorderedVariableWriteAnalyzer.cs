@@ -230,6 +230,9 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                     return false;
                 case ActivityChildTimeRelation.Unordered:
                     return true;
+                case ActivityChildTimeRelation.FirstBeforeSecond or ActivityChildTimeRelation.SecondBeforeFirst when Alternate(common, firstChild, secondChild):
+                    // Around a cycle each runs before the other in turn, so both sides must be done before the other runs.
+                    return !EarlierSideIsDone(common, first, firstChild, undeclared) || !EarlierSideIsDone(common, second, secondChild, undeclared);
                 case ActivityChildTimeRelation.FirstBeforeSecond:
                     return !EarlierSideIsDone(common, first, firstChild, undeclared);
                 case ActivityChildTimeRelation.SecondBeforeFirst:
@@ -266,6 +269,15 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
             }
 
             return false;
+        }
+
+        // A structure declares two children that alternate (around a cycle) by stating, for both argument orders, that the
+        // first runs before the second (or, for both, that the second runs before the first).
+        private bool Alternate(Node parent, Node first, Node second)
+        {
+            var forward = Relate(parent, first, second);
+            var reverse = Relate(parent, second, first);
+            return forward is ActivityChildTimeRelation.FirstBeforeSecond or ActivityChildTimeRelation.SecondBeforeFirst && forward == reverse;
         }
 
         private ActivityChildTimeRelation Relate(Node parent, Node first, Node second)
