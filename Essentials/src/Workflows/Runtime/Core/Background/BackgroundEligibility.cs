@@ -276,9 +276,11 @@ public static class BackgroundEligibility
             if (input.IsStructureInput)
                 continue;
             var binding = subject.InputBindings.GetValueOrDefault(input.Key);
-            // A secret reference travels as a withheld reference and resolves at worker activation; nothing travels for
-            // an input that is neither bound nor defaulted.
-            if (binding?.Source == RuntimeInputBindingSource.SecretRead || (binding is null && !input.HasDefault))
+            // A secret reference travels as a withheld reference and resolves at worker activation. Nothing travels for
+            // an input that is neither bound nor defaulted: the compiler pins it as an absent literal.
+            if (binding?.Source == RuntimeInputBindingSource.SecretRead ||
+                (binding is null && !input.HasDefault) ||
+                binding is { Source: RuntimeInputBindingSource.Literal, Literal.Presence: ValuePresence.Absent })
                 continue;
             if (!input.Policy.IsPersistable)
                 return $"input '{input.Key}' has no durable representation to carry it to a worker";

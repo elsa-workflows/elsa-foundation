@@ -76,7 +76,7 @@ unchanged.*
 | P-1 | One static component in Runtime Core | R-2. Two entry points, one criterion list. |
 | P-2 | First failing criterion wins | Criteria run in order C1 … C10; the report is stable whichever point checks. |
 | P-3 | Placement precondition stays outside C1–C10 | Undefined `ExecutionPlacement` is refused before the criteria, as today. |
-| P-4 | C10 reuses the snapshot checks | `EnsureSecretBindingsAdmissible` and the snapshot materializer stay; the component adds the input representation check and calls them where they apply. |
+| P-4 | C10 reuses the snapshot checks | `EnsureSecretBindingsAdmissible` and the snapshot materializer stay where they run (compiler, placer, activation); the component adds the input representation check and lets a `SecretRead` binding through, so a secret binding an activity refuses is still reported as `VF-ACT-012`. |
 | P-5 | No queue change | R-6; evidence only. |
 
 ## Project Structure
@@ -125,4 +125,4 @@ Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/       
 
 | Deviation | Why it is needed | Simpler alternative rejected because |
 |---|---|---|
-| A domain-deciding rule set (`BackgroundEligibility`) lives in `Elsa.Workflows.Runtime.Core`, above the §2.1/§2.17 thin bar for a `.Core`. | ADR 0093 decision 3 (accepted) requires one component for publication, template placement, admission and the worker, in Runtime Core, because Publishing and `Elsa.Activities.Runtime` both reference it and it checks contracts that live there. It is static and dependency-free: no service, no persistence, no infrastructure. | An implementation project both callers reference does not exist; creating one, or adding a Publishing → `Elsa.Workflows.Runtime` reference, adds a dependency direction ADR 0093 avoided. Two copies in the callers are what the ADR removes. |
+| A domain-deciding rule set (`BackgroundEligibility`) lives in `Elsa.Workflows.Runtime.Core`, above the §2.1/§2.17 thin bar for a `.Core`. | ADR 0093 decision 3 (accepted) requires one component for publication, template placement, admission and the worker, in Runtime Core, because Publishing and `Elsa.Activities.Runtime` both reference it and it checks contracts that live there. It is static and holds no service, persistence or infrastructure; its only input beyond the subject is the well-known type registry the caller passes in, an existing `.Core` contract. | An implementation project both callers reference does not exist; creating one, or adding a Publishing → `Elsa.Workflows.Runtime` reference, adds a dependency direction ADR 0093 avoided. Two copies in the callers are what the ADR removes. |

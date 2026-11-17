@@ -9,7 +9,7 @@
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-11**,
 analysis **A-2**.
 
-**Issues**: none filed yet. The S-11 intake on the #3052 board lists the five checks this spec settles.
+**Issues**: #4721–#4724 (built-ins with an implementation gap, FR-009). The S-11 intake on the #3052 board lists the five checks this spec settles.
 
 **Input**: Background eligibility is one set of criteria (ADR 0093, C1–C10). One component in
 `Elsa.Workflows.Runtime.Core` holds every criterion the engine enforces, and both publication and the background

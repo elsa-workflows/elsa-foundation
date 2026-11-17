@@ -68,6 +68,17 @@ public sealed class BackgroundEligibilityPublicationTests
     }
 
     [Fact]
+    public async Task C10_admits_an_optional_input_the_author_left_unbound()
+    {
+        // The compiler pins an unbound optional input as an absent literal; nothing travels to the worker.
+        var executable = await SecretBindingCompilerFixture.CompileAsync(
+            Background(typeof(BackgroundSafeStreamInputActivity)), [typeof(BackgroundSafeStreamInputActivity)]);
+
+        Assert.Equal(ActivityExecutionPlacement.Background, executable.RootActivity.ExecutionPlacement);
+        Assert.Equal(ValuePresence.Absent, executable.RootActivity.InputBindings["content"].Literal!.Presence);
+    }
+
+    [Fact]
     public async Task C10_admits_a_secret_reference_and_an_Any_input()
     {
         var secret = await SecretBindingCompilerFixture.CompileAsync(

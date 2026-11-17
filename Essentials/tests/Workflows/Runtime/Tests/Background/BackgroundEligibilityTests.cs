@@ -145,6 +145,14 @@ public sealed class BackgroundEligibilityTests
         }));
 
         Assert.Null(Check(entryPoint, Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("content", "Stream", hasDefault: false)]))));
+        // The shape the compiler pins for an unbound optional input: an absent literal, so nothing travels.
+        var sensitive = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: false);
+        var absent = new RuntimeInputBinding("password", new ValueTypeDescriptor("String"), sensitive, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Absent(new ValueTypeDescriptor("String"), sensitive));
+        Assert.Null(Check(entryPoint, Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("password", "String", ActivityValuePolicy.Default with { IsSensitive = true }, hasDefault: false)])) with
+        {
+            InputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal) { ["password"] = absent }
+        }));
         Assert.Null(Check(entryPoint, Subject<SafeLeaf>(Contract<SafeLeaf>(inputs: [Input("document", "Any")]))));
     }
 
