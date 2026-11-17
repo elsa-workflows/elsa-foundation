@@ -63,8 +63,9 @@ builds one frame per pass, and the ambient projection already includes iteration
 learn to read a parameter whose declaring scope is a loop node from the current pass's frame. On the Design side,
 declarations reach `ScopedVariableResolver` only through `IActivityStructureHandler.ProjectScopedVariables`, which
 compile into container variables; the loop module's `LoopStructureHandler` (shared with While and Do) has no
-iteration projection. ForEach declares `currentIndex` only when `ExposeIndex` is true, and that input may be bound to
-an expression. Iteration values follow the normal checkpoint boundary (ADR 0028), so
+iteration projection. ForEach puts `currentIndex` in the pass's frame only when `ExposeIndex` is true. `ExposeIndex`
+is an ordinary activity input: it may be bound to an expression, which the runtime resolves and hydrates from the
+step's input snapshot, so nothing is missing in the code; publish just cannot know the value. Iteration values follow the normal checkpoint boundary (ADR 0028), so
 they are durable. ADR 0090 decision 2 makes a loop item frozen and untracked in a script. Spec 265 projects graph
 variables through synthetic frames.
 
@@ -72,8 +73,10 @@ variables through synthetic frames.
 scope of every node in the loop body, resolves an iteration-scope variable as the nearest scope (innermost first) and
 pins it as a `Variable` parameter recording the loop node id + key. The iteration declarations come from a new,
 default-empty iteration-projection member on the structure handler, implemented for ForEach and For only and kept
-apart from container variables (an extension-point catalog change). `currentIndex` is declared only for a literal
-`ExposeIndex = true`; otherwise a literal read of it is a publish diagnostic. BPMN multi-instance is out of scope. At
+apart from container variables (an extension-point catalog change). `currentIndex` is declared unless
+`ExposeIndex` is a literal `false` (then a literal read of it is a publish diagnostic). When an `ExposeIndex`
+expression resolves to `false` for a run, a pinned read of `currentIndex` faults the step, naming the node and the
+variable, instead of reading `null`. BPMN multi-instance is out of scope. At
 run time the pinned value is materialized from the current pass's iteration frame. The fallback lookup walks the same
 frame chain, innermost first, so a computed name sees the iteration value the same way.
 
@@ -140,6 +143,10 @@ reliable computed-access detection, and moves the decision to publish so the run
 **Decision (spec Q4, accepted).** Variables are read as `variables.X` in input expressions and in the `RunJavaScript`
 body; variable reads are no longer lowered to `args`, so the body gets a `variables` root next to `args`. The former
 "declare the same variable two ways is ambiguous" refusal is removed, because the roots are separate objects.
+
+**Explicit `args` parameters (spec Q6, accepted).** `variables` is the container for variables. An author may still
+declare an explicit `args` parameter bound to a variable (ADR 0089 decision 7); that is the author's choice, and the
+author tells their users to read it through `args`.
 
 ## R-8: Secrets / protection
 
