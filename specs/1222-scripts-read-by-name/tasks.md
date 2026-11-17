@@ -1,0 +1,210 @@
+---
+description: "Task list for Scripts Read Variables By Name (spec 1222)"
+---
+
+# Tasks: Scripts Read Variables By Name
+
+**Input**: Design documents from `specs/1222-scripts-read-by-name/`
+
+**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
+
+**Status**: follows the spec, approved 2026-11-17 (initiative #3052). ADR 0089 is accepted and merged (`0a381a812a`); these tasks are implemented on
+the initiative branch (D-18). External prerequisites: #3171 (side track on `main`) for the
+parser parity; spec 1216 / S-2 FR-025–FR-027 for the missing-name behaviour. The former #3287 tasks (T026, T030) are
+dropped: #4315 fixed the `arguments` type. Spec 1228 (S-8) User Stories 3 and 7 wait on Phase 8 (T039, T045–T050).
+
+**Tests**: xUnit only (no FluentAssertions). Include framework §2.23 tests for logic-bearing implementations and for
+feature wiring that carries logic. Cadence: the Elsa derived constitution does not declare TDD; tests are listed per
+story and may be written alongside implementation (no failing-run gate assumed). Architecture guard tests
+(`Essentials/tests/Architecture/Tests/`) must stay green.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no incomplete dependencies)
+- **[Story]**: US1–US5 maps to the spec's user stories
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Confirm external prerequisites and record them in the PR: #3171 (side track) status for publish/runtime parser parity, and spec 1216 FR-025–FR-027 wording.
+- [ ] T002 [P] Capture a baseline of current read-path tests in `Essentials/tests/` and `Extensions/Elsa3/tests/Mapping/Tests/` that this work changes (ambient-variable tests, declared-parameter tests, `Elsa3JavaScriptConversionTests`), so regressions are visible.
+
+---
+
+## Phase 2: Foundational (blocking prerequisites)
+
+**⚠️ Blocks all user stories.**
+
+- [ ] T003 Add a per-parameter `surface` flag (`variables` | `args`, default `args`) to the compiled spec 095 `Variable` parameter, keyed `variables.<name>` in the `Parameters` map for `surface = variables` so it cannot collide with an explicit `args` parameter (FR-003, Q6), and an optional expression-level fallback marker carrying the conservative read report, in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and the binding model, per contracts/variables-read-surface.md (R-2).
+- [ ] T004 Update `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` §1 (surface flag, fallback marker, `variables` root, recorded reads in the evaluation result), §2 (serialized shape), §3 (drop the list that forbids `variables`/`getVariable` until ADR 0089 is accepted) and §6 (importer keeps `variables.X` and computed `getVariable(expr)`), recorded as a contract change flowing to #3420 / spec 095.
+- [ ] T005 Build the publish-time read-set resolver (Design side): parse JS/Liquid source with the language parser, resolve each literal name nearest-scope-first by reusing `ScopedVariableResolver` and adding, through a new default-empty iteration-projection member on `IActivityStructureHandler` implemented for ForEach and For only (not While/Do; extension-point catalog update), the loop's iteration declarations (`currentItem`, `currentIndex`, `index`; declaring scope = loop node) as the innermost scope of the body (ADR 0028, FR-004a, Q1), and detect computed/opaque access (including `variables` or `getVariable` used as a value: aliased, passed, enumerated or spread, FR-008) to set the fallback marker, in `Essentials/src/Workflows/Design/...`. No regex (R-6).
+
+**Checkpoint**: the surface flag, marker, contract and resolver exist; user stories can proceed.
+
+---
+
+## Phase 3: User Story 1 — Literal reads (Priority: P1) 🎯 MVP
+
+**Goal**: scripts read workflow variables by literal name in JS and Liquid, resolved nearest-scope and pinned.
+
+**Independent Test**: publish and run a workflow reading `variables.order` (and nested/loop/alias/Liquid variants); the
+script sees the nearest-scope value; an unset variable reads `null`; only named variables are loaded.
+
+### Tests for User Story 1
+
+- [ ] T006 [P] [US1] Cover nearest-scope resolution + shadowing (workflow/container/iteration) of the publish resolver in `Essentials/tests/.../VariableReadResolutionTests.cs`, and a ForEach body reading `variables.currentItem` that reads each pass's own item at run time (FR-004a).
+- [ ] T007 [P] [US1] Cover run-time exposure of the `variables` root from pinned params, unset → `null`, and selective load (a large/external unnamed variable is not loaded on a literal-only expression) in `Essentials/tests/.../VariablesRootEvaluationTests.cs`.
+- [ ] T008 [P] [US1] Cover Liquid `{{ variables.X }}` parity in `Essentials/tests/.../LiquidVariableReadTests.cs`.
+
+### Implementation for User Story 1
+
+- [ ] T009 [US1] Pin each resolved literal read as a `Variable` parameter with `surface = variables` (name not rewritten) in the publish/compile path (`RuntimeInputBindingCompiler` / the resolver output). Depends on T003, T005.
+- [ ] T010 [US1] Build the run-time `variables` root from `surface = variables` pinned params, with unset → JSON `null`, in `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (replace `SetReadOnlyVariables`' ambient build) and `JintPortableJavaScriptEvaluator.cs`.
+- [ ] T011 [US1] Remove the run-time regex read-detection (`IsAmbientVariableReferenced`, `HasComputedAmbientAccess`) from `RuntimePortableExpressionEvaluator.cs`; literal-only expressions get no frame-chain projection.
+- [ ] T012 [US1] Materialize only the named variables into pinned params (`RuntimePortableExpressionEvaluator.MaterializeParametersAsync`; the projection is wired in `RuntimeActivityInputSnapshotMaterializer.cs` and `WorkflowIntrinsicExecutor.cs`), with no load-all for literal-only expressions. A parameter whose declaring scope is a loop node already reads the current pass's iteration frame (`RuntimeVisibleVariableFrames` keys values by scope + key; `ReadVariableParameterAsync` reads them): verify and add tests rather than build it (FR-004a). Refuse a literal `currentIndex` read at publish only when `ExposeIndex` is a literal `false`; when an `ExposeIndex` expression resolved to `false` and the pass has no `currentIndex`, fault the step naming the node and the variable; today's "references unavailable variable" fault does this, so verify its wording (FR-004a).
+- [ ] T013 [US1] Remove the generated `get<Name>()` functions and getter completions (decision 6) from `IsolatedJintEngine.cs` and `JavaScriptExpressionToolingProvider`; keep `getVariable` as a runtime function (literal argument → pinned value).
+- [ ] T014 [US1] Apply the same `variables` root + nearest-scope reads to Liquid (`variables.X`), reusing the resolver, in `Essentials/src/Expressions/Liquid/Services/PortableLiquidExpressionHandler.cs`.
+
+**Checkpoint**: literal reads work end-to-end; MVP.
+
+---
+
+## Phase 4: User Story 2 — Computed and opaque reads via the run-time fallback (Priority: P1)
+
+**Goal**: computed names and host-function reads publish, are reported conservatively, and are looked up, recorded,
+protection-checked and snapshotted at run time; a missing name reads `undefined` (nil) with a warning.
+
+**Independent Test**: publishing `getVariable(name)` / `variables[key]` succeeds with a conservative report; running it
+reads the right value, records the read in the input snapshot, and reads `undefined` + warning for a missing name.
+
+### Tests for User Story 2
+
+- [ ] T015 [P] [US2] Cover publish of each computed form (non-literal index, non-literal `getVariable` arg, `variables`/`getVariable` aliased, passed, enumerated or spread) and a host-function read: publish succeeds, the fallback marker is set, and the conservative report lists the visible variables, in `Essentials/tests/.../ComputedReadPublishTests.cs`.
+- [ ] T016 [P] [US2] Cover run-time fallback: nearest-scope lookup (including iteration scope), recorded reads in the input snapshot, unread candidates not recorded, mixed literal + computed reads of the same variable, in `Essentials/tests/.../ComputedReadFallbackTests.cs`.
+- [ ] T017 [P] [US2] Cover a missing computed name: JavaScript reads `undefined` (not `null`), Liquid reads nil, a warning is recorded, the read is marked absent (spec 1216 FR-025/FR-026); a missing literal name stays a publish diagnostic (FR-027).
+- [ ] T018 [P] [US2] Cover a computed read resolving to a transient variable faulting the step with a fault that names the node and the variable (ADR 0089 R3, FR-017), and the transient-candidate publish warning.
+
+### Implementation for User Story 2
+
+- [ ] T019 [US2] In the publish resolver (T005), set the fallback marker with the conservative read report for expressions with computed or opaque reads; emit the "computed read reported", "possible protected read" and "transient candidate" diagnostics (R-4, R-5).
+- [ ] T020 [US2] In `RuntimePortableExpressionEvaluator.cs`, make the candidate set readable before evaluation only for marked expressions. Extend `RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes` to carry each candidate's declaring scope (its envelopes already carry `Policy.Lifecycle`), and stop `MaterializeAmbientVariableValuesAsync` from skipping transient candidates silently, so a transient match can fault (R-4 step 2).
+- [ ] T021 [US2] In `IsolatedJintEngine.cs`, back the `variables` root and `getVariable` with the fallback lookup for unpinned names: resolve nearest-scope-first, check protection for the variable actually read, record each read, return `undefined` + warning + absent for a missing name, and fault on a transient match.
+- [ ] T022 [US2] Return recorded reads (with the version read) from `JintPortableJavaScriptEvaluator.cs` and the Liquid evaluator, add an input-binding expression's reads to the step's input snapshot in `RuntimeActivityInputSnapshotMaterializer.cs`, and hand them to S-10's `InputReadSet` (spec 1221 T004/T012; ADR 0092 decision 3, FR-010). The `InputReadSet` part depends on S-10. Record a transient or withheld match on the host side so it faults the step even if the script catches it (FR-017a).
+- [ ] T023 [US2] No host function reads variables today. Add the registration hook by which a host function declares that it reads variables; publish sets the fallback marker for expressions that call one, and such reads go through the same fallback lookup so they are recorded, checked and snapshotted the same way (FR-008).
+
+**Checkpoint**: computed and opaque reads work through the fallback; literal-only expressions pay no fallback cost.
+
+---
+
+## Phase 5: User Story 3 — Converter reads faithfully (Priority: P2)
+
+**Goal**: Elsa 3 literal variable reads convert to `variables.X`, computed reads convert to their Elsa 4 computed form,
+both publish, and are faithful-or-refused; #3204 and #3296 fixed.
+
+**Independent Test**: convert `getVariable("order")` → `variables.order` and `getVariable(name)` → `getVariable(name)`,
+both publish; a script declaring its own `args` is refused with guidance.
+
+### Tests for User Story 3
+
+- [ ] T024 [P] [US3] Cover emission of `variables.X` for `Variables.X` / `getVariable("X")` / `get<Name>()`, and of `getVariable(expr)` / `variables[expr]` for computed reads (not refused), in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`.
+- [ ] T025 [P] [US3] Cover the #3296 `args`-collision refusal (declared `args` + lowered reads) in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`.
+- [ ] T027 [P] [US3] Cover the literal faithfulness refusal (Elsa 4 resolution ≠ Elsa 3 resolution), the shadowed-candidate import warning for computed reads, and the transient-in-Elsa-4 import flag.
+
+### Implementation for User Story 3
+
+- [ ] T028 [US3] Emit `variables.X` for Elsa 3 literal variable reads in input-binding expressions (stop lowering them to `args`); for a converted `RunJavaScript` body keep lowering to `args` until T047 lands, then switch it too (FR-026a) and keep computed reads as `getVariable(expr)` / `variables[expr]` (remove the computed-read refusal); keep `args.X` for inputs/activity-results/metadata, in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` and `Elsa3ValueFlowLowerer.cs`.
+- [ ] T029 [US3] Refuse (faithful-or-refuse) with guidance when a script's own declared `args` collides with lowered `args` reads in scope (#3296), extending the guard in `Elsa3ExpressionRewriter.cs`.
+- [ ] T031 [US3] Confirm statement bodies emit without the IIFE wrap on the `RunJavaScript` body path (#3010) and add a regression test.
+- [ ] T032 [US3] Add the literal faithfulness check (refuse when Elsa 4 nearest-scope resolution differs from Elsa 3), the shadowed-candidate import warning for computed reads, and the transient-in-Elsa-4 import-time flag.
+
+**Checkpoint**: converter faithful; #3204/#3296 covered; computed Elsa 3 reads convert.
+
+---
+
+## Phase 6: User Story 4 — Rename safety (Priority: P3)
+
+**Goal**: rename never silently breaks a read; publish refuses unresolvable literal names; shadow change warns;
+computed reads that could reach the renamed variable are flagged; published versions immutable.
+
+**Independent Test**: rename updates a resolvable reference in a draft and flags a computed one; removing a declaration a
+script names literally refuses at publish; a published version is unchanged by a draft rename.
+
+### Tests for User Story 4
+
+- [ ] T033 [P] [US4] Cover publish refusal for an unresolvable literal name and the shadow-change warning (resolves to a different declaration than the previously published version) in `Essentials/tests/.../RenameSafetyPublishTests.cs`.
+- [ ] T034 [P] [US4] Cover Studio rename updating a resolvable reference and flagging both an unresolvable one and a computed read whose conservative report contains the variable, in the Design/Studio tests.
+
+### Implementation for User Story 4
+
+- [ ] T035 [US4] In the publish resolver, refuse a literal name that no longer resolves, and warn when a literal name resolves to a different declaration than the previously published version (R-9).
+- [ ] T036 [US4] Studio rename: update references the resolver can resolve; surface the rest (including computed reads with the variable among their candidates) for manual repair; keep readable names in source; never alter a published version.
+
+**Checkpoint**: rename-safe.
+
+---
+
+## Phase 7: User Story 5 — Secrets never leak (Priority: P3)
+
+**Goal**: literal reads of protected variables are checked at publish; computed reads are checked at run time for the
+variable actually read; secret values are redacted from logs and recorded reads; withheld values are not provided.
+
+**Independent Test**: reading a secret by literal and computed name and logging shows redaction; a no-permission value is
+not provided.
+
+### Tests for User Story 5
+
+- [ ] T037 [P] [US5] Cover publish-time protection check for a literal read of a protected variable, the "possible protected read" publish diagnostic for a computed read, the run-time check of the actual read, redaction in logs/diagnostics/recorded reads, and non-provision of a withheld value in `Essentials/tests/.../SecretVariableReadTests.cs`.
+
+### Implementation for User Story 5
+
+- [ ] T038 [US5] Check protection at publish for a literal read of a protected variable; check the actual computed read at run time (a withheld variable the script never reads does not block it); ensure secret values are redacted wherever reads could be logged, including recorded reads (R-8).
+
+**Checkpoint**: secrets handled.
+
+---
+
+## Phase 8: Input snapshot vs body session; the body read surface for S-8 (cross-cutting)
+
+- [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the body's variable session (ADR 0090 decision 2, ADR 0092) and land in the session reads, not the input snapshot; record the write assumptions for verification against S-7 (R-10).
+- [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the session reads with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
+- [ ] T046 [P] Cover that every read path to one variable returns the same JavaScript value within one evaluation (FR-034), and that values stay frozen until spec 1228's bridge lands (FR-037).
+- [ ] T049 At publish, parse the `RunJavaScript` `script` input with the resolver (T005) and store its pinned targets and fallback marker as the step's body read plan, kept apart from the input snapshot (body targets are never materialized as `Variable` parameters into the snapshot) (FR-004, FR-033). Depends on T005, T019.
+- [ ] T050 Serve the body's reads over S-7's variable session: resolve the body read plan's targets and, for a marked body, load its candidate set before it runs (Q5); read each value through the session (committed value plus the step's pending writes), so the session records the read with its version and protection policy in S-10's `SessionReads` (FR-033, FR-035). Depends on T049, S-10's read-set types (spec 1221 T004, PR #4316) and S-7's session and session-read recording (spec 1221 T015/T016, moved to S-7).
+- [ ] T047 Add a `variables` root and `getVariable` to the `RunJavaScript` body, next to its `args` (spec Q4, FR-035a), served by T050's read path, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, `Essentials/src/Expressions/JavaScript/Core/Contracts/IJavaScriptScriptEvaluator.cs` (the script evaluation request), `JintJavaScriptScriptEvaluator.cs` and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010, T021, T050.
+- [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7, and its T007 that replaces the frozen values) when T047 is merged.
+
+---
+
+## Phase 9: Polish & Cross-Cutting
+
+- [ ] T040 [P] Update docs/glossary or CONTEXT for the `variables` read surface and the run-time fallback if warranted (domain terms only).
+- [ ] T041 [P] Confirm architecture guard tests pass: `Runtime_projects_do_not_add_design_references`, `Elsa3MigrationBoundaryTests`, `FeatureCompositionTests`; place new tests in the correct CI tier (§E7).
+- [ ] T042 Run `specs/1222-scripts-read-by-name/quickstart.md` validation end-to-end.
+- [ ] T043 Confirm the spec 095 contract change (T004) lands with the first implementation PR.
+- [ ] T044 Set this spec's `**Status**:` line to `Implemented` in the delivery PR, before it merges (spec-lifecycle rule; never a separate status PR).
+
+---
+
+## Dependencies & Execution Order
+
+- **Setup (P1)** → no deps.
+- **Foundational (P2: T003–T005)** → blocks all stories.
+- **US1 (P1)** after Foundational — MVP.
+- **US2 (P1)** after T005 (marker) and T010 (`variables` root).
+- **US3 (P2)** after US1's pinning/`variables` root (T009–T010) and US2's fallback (T021) for computed conversions. T028's body path switches to `variables.X` only after T047 (FR-026a).
+- **US4 (P3)** after T005/T009/T019 (resolver, pinning, conservative report).
+- **US5 (P3)** after T009 and T021 (pinned reads, fallback check).
+- **Phase 8** after US1 and US2; T045, T047 and T050 also after S-10 (spec 1221, the read-set types) and S-7 (the variable session and its session reads) land (T049 waits on neither). T022's `InputReadSet` hand-off also waits on S-10. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
+- **Polish** after the desired stories.
+
+### Parallel opportunities
+
+- T006–T008 (US1 tests), T015–T018 (US2 tests), T024–T027 (US3 tests) parallel; test tasks across stories parallel once their phase deps are met.
+- US4 and US5 are independent of each other once US1 and US2 land.
+
+## Implementation Strategy
+
+- **MVP** = Phase 1–3 (literal reads). Validate independently, then add US2 (run-time fallback), US3 (converter), US4
+  (rename), US5 (secrets).
+- Each story is an independent, testable increment.

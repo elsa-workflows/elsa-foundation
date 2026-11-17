@@ -53,7 +53,7 @@ Confirmed by the owner on 2026-10-23, after Frans van Ek's review.
 |---|----------|-----|
 | D-1 | **A warning, not a refusal, for every declared variable write, with all writers reported at once.** Captures and intrinsic writes (Set, Merge, Reduce) are checked together by the existing `ValueFlow/ConcurrentWrite` rule, which becomes a warning, including for the intrinsic writes it refuses today. There is one finding per variable, keeping today's path and type id. It names every node that writes that variable without a defined order, says that the last commit wins, and says how to make the result deterministic: order the branches, capture into separate variables, or combine them with one write after the join. | Elsa gives guardrails and diagnostics and does not restrict what the engineer builds. Static analysis sees only declared writes (not script `setVariable`, C# activities, or writes decided at run time), so a refusal would promise more than the engine can keep. Reporting every writer avoids a fix-one, republish, find-the-next loop. The type id stays because Studio and tests match on it. |
 | D-2 | **Each structure declares how its children relate in time.** For any two of its children, a structure states whether one always runs before the other, whether their order is not defined (they can be in flight together), whether they are mutually exclusive, or that it does not say. Every built-in structure declares this fully, BPMN included. In this spec only the warning uses the declaration; the ordering rules move to it later (#3282). | Structures are pluggable, and BPMN is missed today because the validator does not know it. The structure's author is the only one who knows its semantics. Describing the whole time relation now costs little and avoids a second declaration for ordering later. |
-| D-2a | **Flowchart order follows its ports.** Paths that leave one node through the same outcome port are unordered (an implicit fork). All outbound paths of a node with the `parallelFork` or `inclusiveFork` policy are unordered. Paths that leave different ports of any other node are mutually exclusive, unless the node's activity contract allows several outcomes per completion (decision D-4 on epic #3052, PR #3389); then they are unordered, as under `inclusiveFork`. Nodes on one path are ordered, and branches that start at different trigger entries stay exclusive as today. | It matches what the engine does: it schedules the outbound connections whose port matches the completed outcome, or all of them under `parallelFork`. No built-in activity declares multi-outcome completion yet, so this changes no warning today. D-4 makes multi-outcome completion an explicit part of the activity contract, which is what lets the analysis tell the two cases apart. |
+| D-2a | **Flowchart paths that leave one node are unordered.** Paths that leave one node, through the same outcome port or through different ports, are unordered: every activity may select several of its outcomes in one completion (ADR 0045 §6 as amended on 2026-11-16, spec 1208), so they act as an inclusive fork. All outbound paths of a node with the `parallelFork` or `inclusiveFork` policy are unordered too. Nodes on one path are ordered, and branches that start at different trigger entries stay exclusive as today. *Amended 2026-11-17 (implementation finding F-1).* | It matches what the engine does: it schedules the outbound connections of every selected outcome, or all of them under `parallelFork`. No activity declares that it selects at most one outcome, so the analysis cannot treat different ports as exclusive. Whether joins and this analysis may narrow that is decided by the join initiative ([#4193](https://github.com/elsa-workflows/elsa-foundation/issues/4193)). |
 | D-2b | **A structure that declares nothing is treated as unordered.** The warning then says that the structure does not declare how its children are ordered, so a module author knows the fix is to declare it. | With a warning, erring towards reporting costs little. A silent "sequential" default would hide real races in third-party structures. |
 | D-3 | **Reported where the author is; publication never blocks on it.** The warning appears in workflow draft validation, in graph activity draft validation and in graph activity compilation diagnostics. Workflow executable compilation adds no check, because it has no warning channel and nothing to block. | A warning belongs where the author can act on it. The publication gates stay unchanged. |
 | D-4 | **Merge and Reduce are warned about like Set.** They are not exempt. | They overwrite today. Exempting them by name would hide a lost contribution. When real merge strategies exist, a strategy that declares itself order-independent can be exempted by that work. |
@@ -66,7 +66,8 @@ All are sub-issues of epic #3052 and out of scope here.
 - [#3282](https://github.com/elsa-workflows/elsa-foundation/issues/3282): the value-flow ordering rules and the expression picker take ordering from the structures' declarations (D-2) instead of hard-coded structure kinds.
 - [#3283](https://github.com/elsa-workflows/elsa-foundation/issues/3283): reconciled workflow versions pass the full draft validation gate.
 - [#3284](https://github.com/elsa-workflows/elsa-foundation/issues/3284): workflow executable compilation reports every error in one refusal.
-- [#3285](https://github.com/elsa-workflows/elsa-foundation/issues/3285): activities select their outcomes explicitly, several per completion (D-4). This spec no longer depends on it; D-2a already treats a multi-outcome node as unordered.
+- [#3285](https://github.com/elsa-workflows/elsa-foundation/issues/3285): activities select their outcomes explicitly, several per completion (D-4). Delivered by spec 1208; D-2a treats every node as possibly selecting several outcomes.
+- [#4193](https://github.com/elsa-workflows/elsa-foundation/issues/4193): join behaviour, including whether paths that leave different ports of one node may be treated as exclusive.
 - [#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290): inspection shows each variable's write history and the winning write.
 - [#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291): inspection shows a commit-ordered journal and compares two instances.
 - [#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292): the runtime traces a write that overwrites another open branch's write.
@@ -136,7 +137,7 @@ no warning appears.
 warning. This shares P1 with Story 1.
 
 **Independent Test**: Validate workflows with captures into one variable from If arms, Switch cases, Sequence steps,
-a sequential Flowchart path, Flowchart decision outcomes and a loop body; none reports the warning.
+a sequential Flowchart path and a loop body; none reports the warning.
 
 **Acceptance Scenarios**:
 
@@ -147,10 +148,9 @@ a sequential Flowchart path, Flowchart decision outcomes and a loop body; none r
 3. **Given** a loop whose body captures into `result`, **When** it is validated, **Then** no warning is reported.
 4. **Given** a Flowchart path `A → B` where A and B both capture into `result`, **When** it is validated, **Then**
    no warning is reported.
-5. **Given** a Flowchart node whose activity selects one outcome per completion, and whose two outcome ports lead to
-   two nodes that each capture into `result`, **When** it is validated, **Then** no warning is reported. (If the
-   activity's contract allows several outcomes per completion, the two paths are unordered and the warning is
-   reported, per D-2a.)
+5. **Given** a Flowchart node whose two outcome ports lead to two nodes that each capture into `result`, **When** it
+   is validated, **Then** the warning is reported: any activity may select both outcomes (D-2a as amended). An
+   author who needs exactly one path uses an If or a Switch, whose branches are exclusive.
 6. **Given** a join that waits for every branch that can still write, or guarantees those branches can no longer
    commit writes before releasing its continuation, **When** a branch and the continuation both write `result`,
    **Then** that branch write is ordered before the continuation write and this pair causes no warning. Unordered
@@ -246,9 +246,9 @@ variable from them report the warning without any change to the validator.
   separate stale read-modify-write policy in view (FR-014). Every affected variable MUST be reported in the same
   validation or compilation pass.
 - **FR-003**: Writes whose order is defined, or of which only one can run, MUST NOT be reported: consecutive steps, a
-  Flowchart path, If arms, Switch cases, loop iterations, Flowchart paths that leave different outcome ports of a
-  node without a fork policy, and BPMN exclusive gateway branches. A node or structure that may select several
-  outcomes in one completion (D-4) is not exclusive: its selected paths are unordered.
+  Flowchart path, If arms, Switch cases, loop iterations, and BPMN exclusive gateway branches. Flowchart paths that
+  leave one node are not exclusive, whatever their ports: every activity may select several outcomes in one
+  completion (D-2a as amended).
   Across a join, ordering MUST follow the structure's waiting and cancellation guarantees. A branch that can still
   commit writes after the continuation is released MUST NOT be classified as ordered before that continuation.
 - **FR-004**: The warning MUST appear in workflow draft validation, in graph activity draft validation and in graph
@@ -260,7 +260,7 @@ variable from them report the warning without any change to the validator.
   the other, whether their order is not defined, whether they are mutually exclusive, or that it does not say.
 - **FR-007**: A structure that declares nothing MUST be treated as unordered for this rule, and the finding MUST say
   that the structure does not declare how its children are ordered.
-- **FR-008**: Every built-in structure MUST declare that relation fully: Sequence, Flowchart (outcome ports and fork
+- **FR-008**: Every built-in structure MUST declare that relation fully: Sequence, Flowchart (paths, joins and fork
   policies, as in D-2a), If, Switch, Parallel, the loops (For, ForEach, While, Do), BPMN (parallel, inclusive,
   exclusive and event-based gateways, implicit splits and multi-instance) and CompensationScope.
 - **FR-009**: The rule MUST take its ordering knowledge only from the structures' declarations, not from a list of
