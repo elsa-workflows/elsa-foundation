@@ -68,11 +68,13 @@ behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy
 
 - **Q1 — What orders writes across variables?** The frame revision orders the writes of one frame only, not writes in
   different frames and not activity lifecycle steps.
-  **Decision:** a per-instance *commit sequence*, assigned to each logical checkpoint under the instance fence (one
-  writer per instance, so the order is total), stamped on every write record and every activity lifecycle stamp,
-  including the commit that scheduled an invocation. Folded (coalesced) commits keep each logical checkpoint's own
-  number, so intermediate writes keep their order. Spec 1221 records it as part of FR-024 ("the instance commit
-  order"); this spec reads it. Older records without it read back as absent.
+  **Decision:** a per-instance *commit sequence*: the execution lease's fencing token (issued one higher on every
+  acquisition) followed by the commit's number within that lease. It grows with commit order across owners, needs no
+  stored counter and costs no extra read or write; the numbers are ordered, not dense. It is assigned to each logical
+  checkpoint before a coalescing fold, so intermediate writes keep their order, and stamped on every write record and
+  every activity lifecycle stamp, including the commit that scheduled an invocation. Spec 1221 records it as part of
+  FR-024 ("the instance commit order"); this spec reads it and relies only on its order. Older records, and commits
+  made outside an execution lease, carry none and read back as absent.
 - **Q2 — Where do the journal and the history come from?**
   **Decision:** derived from what is already committed: write records on the writer's activity execution state,
   lifecycle stamps, and alteration records. Each activity execution carries the first and last commit sequence of its
@@ -310,8 +312,8 @@ state.
 **Journal and comparison (#3291)**
 
 - **FR-010**: The API MUST return an instance's journal in commit sequence order, paged, with each commit's activity
-  transitions (scheduled, started, suspended, resumed, completed, faulted), branch or path, input refreshes, and
-  applied writes.
+  transitions (scheduled, started, suspended, resumed, completed, faulted, cancelled, superseded), branch or path,
+  input refreshes, and applied writes.
 - **FR-011**: The API MUST compare two instances of the same executable version: activity executions matched by
   run-time path (Q6); the first diverging commit; per variable whether the final digest and the sequence of written
   digests differ. Any other pair MUST be refused with a reason.

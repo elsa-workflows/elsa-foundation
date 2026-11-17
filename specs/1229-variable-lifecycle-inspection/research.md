@@ -5,18 +5,21 @@ Each item records the decision, why, and the alternatives weighed. Alternatives 
 
 ## R-1 — Instance commit sequence (Q1)
 
-- **Decision**: spec 1221 records it (FR-024, "the instance commit order"). A per-instance `long` counter, held with
-  the instance under its fence and persisted on the workflow execution state. `RuntimeCheckpointCommitter` assigns the
-  next number to each logical checkpoint and stamps the records and lifecycle stamps the handlers built before
-  `CommitAsync`. In coalescing mode the coalescing store sits below the committer, so each logical checkpoint is
-  numbered before the fold. Background results and alterations commit through the same committer.
+- **Decision**: spec 1221 records it (FR-024, "the instance commit order"). The number is the execution lease's fencing
+  token in the high 32 bits and the commit's ordinal within that lease in the low 32 bits. The fencing token is issued
+  one higher on every acquisition, so numbers grow across owners; within a lease the ordinal grows per commit. Numbers
+  are ordered, not dense. `RuntimeCheckpointCommitter` numbers each logical checkpoint and stamps the records and
+  lifecycle stamps the handlers built before `CommitAsync`. In coalescing mode the coalescing store sits below the
+  committer, so each logical checkpoint is numbered before the fold. A commit replayed with the same commit id keeps
+  its number. Background results and alterations commit through the same committer.
 - **Rationale**: the frame revision orders one frame only; timestamps are not a total order; the scheduler's
   `ExecutionSequence` is scheduling order, not commit order.
-- **Cost**: the workflow execution change is optional in a commit today; a numbered commit now always writes that row.
-  Spec 1221 measures this with its benchmark.
-- **Alternatives**: frame revision plus timestamp (not total); a global database sequence (cross-instance cost,
-  provider-specific).
-- **To verify**: recovery and deletion paths (task T002).
+- **Cost**: none at commit beyond stamping: no stored counter, no extra read or write.
+- **Alternatives**: a counter stored on the workflow execution state (the workflow execution change is optional in a
+  commit today, so every numbered commit would write that row); frame revision plus timestamp (not total); a global
+  database sequence (cross-instance cost, provider-specific).
+- **Limit**: a commit made outside an execution lease is not numbered. Task T002 lists such commit paths (recovery and
+  deletion among them) and how the read model orders what they commit (as legacy, approximate).
 
 ## R-2 — Derived read model, no new store (Q2)
 

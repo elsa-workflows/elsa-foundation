@@ -12,8 +12,8 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 - [ ] T001 Recheck the data recorded by spec 1221 against the data model's first table (names, placement, optional
   members, writes that changed nothing not recorded). A missing member is raised on spec 1221 before building on it.
-- [ ] T002 Verify that recovery and deletion paths commit through `RuntimeCheckpointCommitter` (the other paths are
-  known to), so every record and stamp carries a commit sequence (research R-1). List any path that does not.
+- [ ] T002 List the commit paths made outside an execution lease (recovery and deletion among them), which carry no
+  commit sequence, and check the read model orders what they commit as legacy (research R-1).
 
 ## Phase 2: Foundation (blocks US2, US3, US4)
 
@@ -57,7 +57,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 - [ ] T013 [US3] Journal in the read model: group stamps, input refreshes and writes by commit sequence; cursor paging.
 - [ ] T014 [US3] Endpoint `…/journal`.
-- [ ] T015 [US3] Tests: every commit once and in order with scheduled to faulted stamps; coalesced segment keeps
+- [ ] T015 [US3] Tests: every commit once and in order with every stamp kind; coalesced segment keeps
   logical order; paging continues exactly; a background input refresh appears with both evaluations linked.
 
 ## Phase 6: User Story 4 — compare two instances (P2)

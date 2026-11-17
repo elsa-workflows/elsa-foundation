@@ -6,18 +6,17 @@ Additive optional members; older records read back with them absent.
 
 | Where | Member | Meaning |
 |---|---|---|
-| Workflow execution state | `LastCommitSequence: long` | The instance's counter, advanced under the fence when a logical checkpoint commits (Q1). |
 | Workflow execution state | `LostUpdateWarningCount: long?` | Applied lost-update warnings, counted in the commit that raises them (Q7). |
-| `VariableWriteRecord` | `CommitSequence: long?` | Commit sequence of the logical checkpoint that committed the write. |
+| `VariableWriteRecord` | `CommitSequence: long?` | Commit sequence of the logical checkpoint that committed the write: lease fencing token, then ordinal within the lease (ordered, not dense). |
 | `VariableWriteRecord` | `FrameId: string?` | The frame written; with the key it identifies the variable instance. |
 | `VariableWriteRecord` | `Digest: string?` | Digest of the value the write produced (the resulting version's digest). |
-| `ActivityExecutionState` | `Transitions: IReadOnlyList<ActivityLifecycleStamp>?` | One stamp per scheduled, started, suspended, resumed, completed, faulted. |
+| `ActivityExecutionState` | `Transitions: IReadOnlyList<ActivityLifecycleStamp>?` | One stamp per scheduled, started, suspended, resumed, completed, faulted, cancelled, superseded (replaced by a successor row). |
 | `ActivityExecutionState` | `FirstCommitSequence: long?`, `LastCommitSequence: long?` | Range of the row's stamps and records, stored so the store can filter by it. |
 | Alteration job outcome | `VariableWrites: IReadOnlyList<VariableWriteRecord>?` | The `ModifyVariable` write, source `Alteration` (Q9). |
 
-`ActivityLifecycleStamp(Kind, CommitSequence, BranchId?, ExecutionPathId?)`. Input refreshes keep spec 1221's own
-records (`ActivityInputRefresh`, `ActivityInputSnapshot.Evaluation`); the journal shows them in the commit that made
-them. Writes that changed nothing are not recorded; a refused `Fault` write is.
+`ActivityLifecycleStamp(Kind, CommitSequence, BranchId?, ExecutionPathId?, Evaluation?)`; `Evaluation` is the input
+evaluation a refreshed background step ran on. Input refreshes keep spec 1221's own records (`ActivityInputRefresh`,
+`ActivityInputSnapshot.Evaluation`); the journal shows them in the commit that made them. Writes that changed nothing are not recorded; a refused `Fault` write is.
 
 ## Data added by this spec
 
