@@ -39,7 +39,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 
 | Date | Rule | Source |
 |---|---|---|
-| 12 Nov | Activity side effects are at least once in Balanced; idempotency keys are documented; Durable where a repeat is unacceptable. | [Sketch, decisions](../reports/clean-slate-kernel/design-sketch-draft-5.md#decisions-taken-so-far-12-november) |
+| 12 Nov | Activity side effects are at least once in every mode; idempotency keys are documented. Durable narrows the window: before an External activity runs, a turn of its own commits its attempt (journal entry `a:frame:1`, the attempt segment of the effect key), so a later owner knows an attempt began. It does not prevent a repeat: a receiver can apply a call and the owner be lost before the outcome commits, and the next owner calls again under the same effect key. Where a repeat is unacceptable, the receiver must deduplicate by the effect key, or the workflow must reconcile. Amended 17 November after the gate 2 review (m3), in line with the sketch's own wording. | [Sketch, decisions](../reports/clean-slate-kernel/design-sketch-draft-5.md#decisions-taken-so-far-12-november); [LEASE.md](../../prototypes/kernel-model/LEASE.md); [NATIVE.md](../../prototypes/kernel-model/NATIVE.md) |
 | 12 Nov | History is Full by default; State and Minimal per workflow. | Sketch, decisions |
 | 12 Nov | The lease is 10 seconds. | Sketch, decisions |
 | 12 Nov | An HTTP response is released after the commit of the turn that wrote it; opt-out per route. | Sketch, decisions |

@@ -74,7 +74,14 @@ The fence need not be the first SQL statement for this safety argument: writes m
 
 In a traced PostgreSQL batch, EF inserted the instance, journal and message rows, updated the partition fence, then inserted a subscription. EF checks the affected-row count before sending COMMIT. This path took two wire round trips. The separate checked fence runs first and took three.
 
-SQL Server defaults to the separate checked fence because of the lock order observed in E9. A stale batch can hold a message lock while it waits for the partition row. A concurrent take can hold that partition row while it waits for the same message. Checking the fence first gives both transactions the same lock order and avoids those takeover deadlocks.
+Two commit paths exist, and SQL Server's default differs between them ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#defaults); `SqlServerEngine.FenceInBatchByDefault` in `Engines.cs`, `EfStore.FenceInBatch`):
+
+| Path | SQL Server default | Lock order |
+|---|---|---|
+| Owned commit SQL (the default writer on every engine) | Fence in the batch | The fence is the first statement of the one command, so the partition row is the commit's first lock, as it is the take's. A stale commit waits on the partition row before it holds any message row |
+| EF reference path (`commit=ef`) | Separate checked fence | EF orders the batch's statements by table and writes message rows (seen and trial marks, sent messages) before the partition row. Checking the fence first, as its own round trip, restores the take's order |
+
+E9 is the evidence for the distinction. A take locks the partition row, then message rows; EF's in-batch commit locked message rows, then the partition row, so the two could wait for each other. In the same 40-second SQL Server stress, EF with the fence in the batch had 74 deadlocks, every victim a take; the owned commit with the fence in the batch had none, and so did the checked fence ([COMMIT-SQL.md, E9](../../prototypes/kernel-model/COMMIT-SQL.md#e9-on-sql-server-the-owned-in-batch-fence)). Measured, on one machine. The k-row fence of the Worker refactor keeps the order by locking its rows in ascending id; that part is reasoned, since the kernel fences one row today.
 
 ## What the fence transaction also does
 
@@ -88,12 +95,12 @@ The message marks are writes protected by the fence, rather than fields in the p
 
 The provider must learn that its conditional write succeeded before it authorizes a commit. Sending an unconditional `COMMIT` blindly after an update that matched zero rows would still commit the other writes.
 
-The EF implementation has two forms:
+Both commit paths offer two forms:
 
 | Form | How success is checked | Cost shape |
 |---|---|---|
-| Fence in the batch | Epoch and position are concurrency tokens. EF checks the affected-row result before sending `COMMIT`. | The fence shares the data-writing batch. A simple PostgreSQL checkpoint takes two round trips: batch and commit. |
-| Separate checked fence | Send the conditional update, read its result, then send the data-writing batch and commit. | The check is its own round trip. The same PostgreSQL checkpoint takes three. SQL Server uses this form by default. |
+| Fence in the batch | Owned SQL: the fence is the batch's first statement, and its affected-row count is read before `COMMIT`. EF: epoch and position are concurrency tokens, checked before `COMMIT`. | The fence shares the data-writing batch. A simple PostgreSQL checkpoint takes two round trips: batch and commit. The default for the owned commit on every engine, SQL Server included. |
+| Separate checked fence | Send the conditional update, read its result, then send the data-writing batch and commit. | The check is its own round trip. The same PostgreSQL checkpoint takes three. The default for SQL Server's EF reference path; selectable everywhere. |
 
 These are measured checkpoint shapes, not universal counts for every provider or operation. Transaction setup, polling, loading, sent messages, parameter limits and exceptional paths can add work. SQLite counts calls into its engine rather than network round trips. The provider must preserve the atomic fence contract even when its wire protocol groups commands differently.
 
@@ -160,4 +167,4 @@ The protocol depends on atomic rollback, reliable affected-row checks and read i
 
 ## Contract and evidence
 
-The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-is-sql-servers-default) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this proposed architecture.
+The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-closed-by-round-5-b-the-owned-in-batch-fence-is-the-default-again) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this proposed architecture.

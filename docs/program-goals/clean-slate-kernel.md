@@ -39,17 +39,17 @@ gate 5.
 | # | Milestone | Acceptance |
 |---|---|---|
 | K0 | **Design approval** (gate 2) | ADR 0099, the register, the seven answers and the supersede list reviewed by the independent architecture review; every material finding resolved; the owner's delegated approval recorded on #4229 |
-| K1 | **Worker refactor to range ownership** (two reviews) | The prototype's Worker owns ranges of the 1,024 virtual partitions, with a fence row and a journal per virtual partition and `VirtualPartitions` at 1,024; rebalance moves the fewest partitions, so a node's partitions may be scattered; the simulation at both sizes, the mutations and store conformance pass, with take, beat, takeover and rebalance costs measured against [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md). It comes right after design approval and before product wiring (owner, 17 November) |
-| K2 | **Contracts package and storage contract** | Layer 3's contracts package (turn contract, the four seams, read models) and the store contract with the in-memory store; an architecture guard fails any layer 3 reference to layers 1 and 2; the store conformance suite passes on the in-memory store |
-| K3 | **Store changes the answer pages flag** (each its own PR, two reviews) | See "Store and kernel changes" below; each with conformance cases on every engine and a simulation invariant or mutation that fails without it |
-| K4 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine; MongoDB conformance in CI on a replica set. **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned |
+| K1 | **Worker refactor to range ownership** (two reviews) | The prototype's Worker owns ranges of the 1,024 virtual partitions, with a fence row and a journal per virtual partition and `VirtualPartitions` at 1,024; rebalance moves the fewest partitions, so a node's partitions may be scattered; the simulation at both sizes, the mutations and store conformance pass, with take, beat, takeover and rebalance costs measured in the integrated Worker for both scattered and contiguous ownership, against [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md)'s experiment figures; a witness moves a subset of virtual partitions to another owner while a commit spanning several of them is outstanding, and shows that one stale fence rolls the whole flush back, with no journal hole and no stranded seen or trial mark in the virtual partitions the old owner keeps. It comes right after design approval and before product wiring (owner, 17 November) |
+| K2 | **Contracts package and storage contract** | Layer 3's contracts package (turn contract, the four seams, read models) and the store contract with the in-memory store; an architecture guard fails any layer 3 reference to layers 1 and 2; the store conformance suite passes on the in-memory store. A project-reference guard cannot catch a partition property moved into the contracts package, so representative activities, the native model, a second model and the runtime API compile against the public contracts alone, and a test feeds them opaque addresses that carry no parseable partition. Today the prototype exposes `InstanceRef.Partition` through `ITurn` and the native HTTP adapter builds an address from a partition (`Contracts.cs` lines 8 and 75–77, `Addresses.cs` lines 9–25, `Live.cs` line 100); K2 removes both from layer 3's surface |
+| K3 | **Store changes the answer pages flag** (each its own PR, two reviews) | See "Store and kernel changes" below. Each lands as an executable contract on the prototype or the in-memory store: its conformance cases, and a simulation invariant or mutation that fails without it. Physical-provider acceptance of the same cases closes with K4 |
+| K4 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine; MongoDB conformance in CI on a single-node replica set; production MongoDB (1.1) first needs a three-member replica set's primary-loss and uncertain-commit qualification. The K3 cases pass on every engine. Every process that reads or writes the kernel's schema and protocol families checks their versions and refuses before processing a version it cannot read (see "Kernel schema and protocol compatibility"). **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned |
 | K5 | **Durable layer, built-in runtime, profiles** | Embedded and Cluster; 1,024 virtual partitions; the wake signal; the runtime conformance suite; graceful stop ends owned work before persistence is disposed (#3939's row) |
-| K6 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported |
+| K6 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported. The in-process job contract picks one durable outcome for the right ticket generation in each race: a `StartJob` timeout against the job's completion, in both orders and across a takeover; and Park then recover against a late result from the old ticket generation |
 | K7 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4; both in Embedded and Cluster |
-| K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits |
+| K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits, under the HTTP error and timeout contract below. Its tests are separate from the durable send obligations, because an HTTP response is never recorded |
 | K9 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
 | K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
-| K11 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans; parked-work inspect, retry and discard; values by reference |
+| K11 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans, dispatched by creation wherever creation headers exist, with id-only fallback outcomes marked in the plan-outcomes read model and shown to the operator; parked-work inspect, retry and discard; values by reference |
 | K12 | **Qualification** | See "Release 1 qualification" below |
 | K13 | **Default switch** (gate 4) | **Release acceptance:** K1 to K12 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
 | K14 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
@@ -101,9 +101,88 @@ Gate 3 takes on #2531's M5 rows ([hand-off](https://github.com/elsa-workflows/el
 7. **Uncertain commits** (#3698): a landed commit is never reported as refused, including after a late lease loss or an
    ambiguous COMMIT.
 
+8. **Schema compatibility rehearsal** (gate 2 review, m4): see "Kernel schema and protocol compatibility" below.
+
 Also before release, from the answer pages: the `pad=` PostgreSQL run that accepts values by reference; the
 state-size benchmark that confirms or lowers the ForEach cap; a write-volume run on the final schema; the two-tenant
 stress test with admission on and off. No Azure or multi-machine spend without the owner's approval.
+
+## The HTTP error and timeout contract (K8, proposed)
+
+A response is live output on the `Emit` channel. It is held in memory until the commit of the turn that wrote it
+lands, then released; a route may opt out and release before the commit. It is never a durable obligation: no row
+records it, and nothing retries it. Built and run in the prototype except where marked
+([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), section 4):
+
+| Case | The caller receives |
+|---|---|
+| The turn's commit lands, the response is released | The response, once |
+| The owner resets on the receiving node while the request waits | 503 at once (run) |
+| The owning process dies after `COMMIT` and before the release, and it is also the receiving node | A dropped connection, with the process (reasoned) |
+| The owner is on another node and is lost, before or after its commit | 504 at the reply deadline, the route's timeout (reasoned: no signal from the owner reaches the receiving node) |
+| The turn that wrote the response parks | An error at once; the held response is dropped (proposed: 500) |
+| The client disconnects or times out | Nothing; the workflow is not cancelled unless the route maps the disconnect to a cancel |
+
+In every case the workflow's committed state is unaffected and continues under its owner; its later output reaches no
+caller. A caller never receives two responses, and never a response for a turn whose commit did not land, unless the
+route opted out.
+
+## Kernel schema and protocol compatibility (proposed)
+
+[ADR 0077](../adr/0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) requires
+coordination for a schema-family change. F14 withholding protects model state versions only; it gives a sweeper or a
+projector no way to read a new durable marker. The kernel's families:
+
+| Family | What it covers | Writers | Readers |
+|---|---|---|---|
+| Store schema | Fence and partition rows, node rows, actor rows, message rows (with `KeptBy`, `trace` and codec columns), subscriptions, events, journal, projection cursor, value rows | EF migrations; owned commit SQL; take and beat; sweeper (deletes); projector (views and cursor) | Take, poll, load, owned commit SQL, sweeper, projector, viewer tail read, read-model APIs |
+| Message protocol | Kernel message kinds (control kinds, tickets, recover, discard, migrate), derived message-id grammar, the `Done`, `keep_until` and `KeptBy` meanings, ticket generations | Turns through owned SQL; API and ingress adds | Worker delivery and poison handling; sweeper; recover |
+| Journal and payload codec | The journal envelope and the codec header on every payload | Owned commit SQL | Projector, viewer, retention worker through read models |
+
+**The rule.** The store records one version per family. Before a take, a sweep or a projector round, a process
+compares them with the versions it can read, and refuses, processing nothing and reporting the versions, when one is
+higher. In release 1, a change that a running version cannot read is a coordinated stop: stop every node, migrate,
+start the new version.
+
+**The rollback floor** is the oldest kernel version that reads all of the store's current family versions. Release
+notes state it for every release. A version below the floor refuses; going below it needs a database restored from
+before the upgrade. Before release no user data exists, so developers regenerate their databases instead (K13).
+
+**The rehearsal (K12).** Upgrade one node to a build that raises a family version (a new codec header or a new
+`KeptBy` meaning) and let it write. Then start a pre-upgrade owner, sweeper and projector against the same store: each
+must refuse before it processes any row, and the upgraded node keeps running. Record the floor this produces.
+
+## Gate 2 review: counterexamples and answers
+
+The [independent architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)
+raised four Minors and plan recommendations that this plan and ADR 0099 answer. B1, B2 and M1 to M3 are answered on
+their own pages.
+
+| Finding | Counterexample | Answer |
+|---|---|---|
+| m1 | The default owned SQL Server provider is budgeted with a checked fence from the stale reference | [Ownership and fencing](../architecture/ownership-and-fencing.md#a-take-racing-a-stale-commit) gives both paths: owned in the batch, EF checked, each with its lock order, and E9 as the evidence |
+| m2 | The process dies after `COMMIT` and before the HTTP release; the workflow advances while the caller times out, yet ADR 0099 called the response a recorded obligation | ADR 0099's 0020 row now says the response is held in memory and never recorded; the contract above gives the caller's answer in each case, tested at K8 apart from durable sends |
+| m3 | A receiver applies a call, the owner is lost before the outcome commits, and the next owner calls again, even in Durable | The [register](../architecture/decisions.md#kernel-defaults) now requires receiver deduplication by the effect key or reconciliation, and says what Durable's attempt checkpoint records |
+| m4 | A host writes a new codec or `KeptBy` meaning, then a pre-upgrade owner or projector takes over | The families, the refusal rule and the rollback floor above; the refusal checks at K4 and the rehearsal at K12 |
+| Plan | Experiment costs, a contracts package that still exposes partitions, a K3 that depends on K4's providers, unproven job races, single-node Mongo evidence, silent migration fallback | K1's scattered and contiguous costs and the stale multi-VP flush witness; K2's opaque-address compile test; K3 staged on the prototype and closed at K4; K6's job races; K4's three-member Mongo condition for 1.1; K11's marked fallback outcomes |
+
+### Acceptance cases
+
+| Case | Milestone |
+|---|---|
+| Take, beat, takeover and rebalance costs, measured for scattered and for contiguous ownership | K1 |
+| Move a subset of virtual partitions during an outstanding multi-VP commit: the stale fence rolls back the whole flush; no journal hole, no stranded seen or trial mark in the retained partitions | K1 |
+| Representative activities, the native model, a second model and the runtime API compile against the contracts package alone and run on opaque addresses with no parseable partition | K2 |
+| Each K3 change passes its conformance cases and its simulation invariant or mutation on the prototype or in-memory store | K3 |
+| The same K3 cases pass on PostgreSQL, SQL Server, SQLite, MySQL and MongoDB | K4 |
+| On SQL Server, the owned in-batch fence and the EF checked fence each hold under the 40-second stress with no take deadlock | K4 |
+| A process refuses before processing a store whose family version it cannot read: owner take, sweeper and projector, each on its own | K4 |
+| A `StartJob` timeout against the job's completion, in both orders and across a takeover, selects one durable outcome for the current ticket generation | K6 |
+| Park, then recover, against a late result from the old ticket generation: the late result is dropped and the new generation's outcome applies once | K6 |
+| Each row of the HTTP error and timeout contract, including a process killed between `COMMIT` and the release, with the caller's answer and the workflow's committed state checked | K8 |
+| A plan run on a mix of creation-qualified and creation-0 rows: the fallback outcomes are marked id-only and listed apart in the operator API | K11 |
+| The mixed-version rehearsal: an upgraded node raises a family version; a pre-upgrade owner, sweeper and projector each refuse before processing; the floor is recorded | K12 |
+| MongoDB on a three-member replica set: primary loss and an uncertain commit, before production support | After release 1 (1.1) |
 
 ## The switch
 
