@@ -1,5 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
+
+async function showRunData(page: Page, host: string) {
+  if (host !== "instance") return;
+  const data = page.getByRole("complementary", { name: "Run details panel", exact: true }).getByRole("tab", { name: "Data", exact: true });
+  if (await data.getAttribute("aria-selected") !== "true") await data.press("Enter");
+}
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`keeps live inspection keyboard accessible in the ${host} (${theme}, ${width}px)`, async ({ page }) => {
@@ -13,10 +19,13 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const canvas = host === "instance"
       ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
+    if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas).toBeVisible();
     const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     const narrowInstance = host === "instance" && width === 390;
     await expect(source).toHaveAccessibleName(/Run state: Completed/);
     await source.press("Enter");
+    await showRunData(page, host);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     if (narrowInstance) {
       await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).press("Enter");
@@ -37,6 +46,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);
     await expect(source).toHaveAccessibleName(/Selected/);
     await source.press(" ");
+    await showRunData(page, host);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     if (!narrowInstance) await expect(source).toBeFocused();

@@ -10,6 +10,30 @@ export default defineConfig({
   // Sharing their cache invalidates dependency URLs in already-open browser sessions.
   cacheDir: resolve(__dirname, "../../node_modules/.vite/browser"),
   plugins: [react(), {
+    name: "outlined-fixture-readiness",
+    configureServer(server) {
+      let ready: Promise<void> | undefined;
+      server.middlewares.use(async (request, response, next) => {
+        if (request.url !== "/__outlined-ready") return next();
+        ready ??= (async () => {
+          const entry = await server.transformRequest("/outlinedFieldsFixture.tsx");
+          if (!entry) throw new Error("The Outlined fixture entry could not be transformed.");
+          // Vite schedules static-import warmups after transforming the entry. Its public idle
+          // boundary includes those transforms; listener/entry readiness alone does not.
+          await server.waitForRequestsIdle();
+        })();
+        try {
+          await ready;
+          response.writeHead(200, { "Content-Type": "text/plain" });
+          response.end("Outlined fixture dependency graph ready");
+        } catch (error) {
+          server.config.logger.error(String(error));
+          response.writeHead(503, { "Content-Type": "text/plain" });
+          response.end("Outlined fixture dependency graph unavailable");
+        }
+      });
+    }
+  }, {
     name: "minimal-log-browser-witness",
     configureServer(server) {
       server.middlewares.use(backendStreamProbe);

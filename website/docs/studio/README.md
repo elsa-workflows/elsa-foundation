@@ -26,7 +26,19 @@ Both views show brief visual cues for newly recorded activity changes. Sequence 
 
 BPMN connections and external execution boundaries do not gain inferred traversal animation. A dispatched child workflow is a separate execution; inspect its own run for the evidence it exposes. Custom activities and external providers retain their existing pinned structure and available evidence, without expanding their internal execution onto the parent canvas.
 
-Captured values depend on the server's capture policy and your access. Missing, unavailable or redacted values stay explicitly identified. Following a run does not enable additional data capture or provide engine pause, rewind or recorded playback.
+Captured values depend on the server's capture policy and your access. Missing, unavailable or redacted values stay explicitly identified. Following a run does not enable additional data capture or provide engine pause or rewind.
+
+## Step through recorded activities
+
+Open an existing run from **Runs**. When its server provides activity recording, **Activity playback** lets you inspect recorded activity occurrences while keeping your chosen **Timeline** or **Diagram** view. Selecting a timeline entry keeps Timeline open. Choose **Inspect owning execution →** when you want the selected occurrence's Activity details.
+
+Use **Previous** and **Next** to move one occurrence at a time, or drag **Activity position** to seek. Focus the position control and use the arrow keys to step with the keyboard. Repeated activities and retries have separate execution identities; the selected occurrence determines the details you inspect.
+
+Choose **Play** to advance automatically and **Pause** to stop. **Presentation pace** offers 0.5×, 1×, 2× and 4×; 1× shows one activity step per second. The original timestamps and recorded waits remain unchanged. Manual navigation, explicit Activity inspection and switching away from the run pause playback. At the end of an available segment, **Replay** starts again only when you choose it.
+
+Playback keeps its recorded range while a live run continues. Pause and choose **Include new history** to include subsequent observations. **Refresh playback** checks the available range again. Playback does not execute activities or change the running workflow.
+
+The controls describe missing, partial or unavailable recording and stop at known gaps. Direct scrubbing needs a known, supported position range. Missing diagram material does not remove readable timeline facts. Recorded order alone does not establish a causal route or reconstruct earlier workflow state; captured values still depend on recording policy and your current access.
 
 ## What Studio looks like
 
