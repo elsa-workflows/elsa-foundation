@@ -148,7 +148,8 @@ keep consumed deliveries in a dead-letter queue. Retry of a parked message needs
 
    **The two groups of kept rows.** `KeptBy` marks both the deliveries the Park consumed and the arrivals while
    parked, and `resume` must restore only the second group. So the Park's commit also writes the ids of the deliveries
-   it consumed into `ParkRecord.Consumed`, in the instance-row update it already makes; a re-park adds the ids it
+   it consumed into `ParkRecord.Consumed`, in the instance-row update it already makes; a new Park after a recovery
+   starts a fresh `Consumed` list, and a re-park adds the ids it
    consumes. The list grows with the consumed count only, never with arrivals. A kept row whose id is in
    `ParkRecord.Consumed` is a Park-consumed delivery; any other kept row is an arrival while parked. Their `keep_until` follows the [data lifecycle](data-lifecycle.md) page's `Parked` window: the Park's
    time plus that window, or no expiry when it is null (the default: kept until recovered or discarded).
@@ -176,7 +177,7 @@ deliveries, so a retry finds their payloads.
 one commit, and calls one new model hook.
 
 - **The contract gains a hook,** beside `UpgradeState`:
-  `RestorePlan RestoreWaits(object state, ParkRecord park, IReadOnlySet<string> pendingTimers)`. It returns the
+  `RestorePlan RestoreWaits(object state, ParkRecord park, IReadOnlySet<string> pendingTimers, IReadOnlySet<string> keptTimers)`. It returns the
   subscriptions, timers and jobs the model's committed state still waits on. Native, Flowchart and StateMachine each
   implement it.
 - **Checks.** The instance is parked, its Park's first revision (from the `ParkRecord`, the revision the parked-work
@@ -186,13 +187,13 @@ one commit, and calls one new model hook.
   events published while it was parked, within their keep window; a wait that did not misses them, as the owner
   decided.
 - **Timers.** The owner reads the instance's inbox rows (one read by target, of pending rows and of rows with
-  `KeptBy` not null) and passes the ids of timers still pending.
+  `KeptBy` not null) and passes the hook two sets: the ids of timers still pending, and the ids of kept timer rows.
   A pending timer stays as it is. A timer that came due while parked and was kept (decision 2a) is restored as its own
-  row, below, which arms it with its original id and due time, so it fires at once. A timer that came due while parked
-  whose kept row the sweep removed (a non-null `Parked` window passed) is armed again by the plan with its original due
-  time. A timer the Park itself consumed is restored
-  only in `retry`, as one of the consumed deliveries; `resume` neither restores nor re-arms it, so it cannot fire the
-  poison again. No timer is armed twice.
+  row, below, which arms it with its original id and due time, so it fires at once. The plan re-arms, with its original
+  due time, only a timer it waits on whose id is neither pending, nor kept, nor in `ParkRecord.Consumed`: that is a
+  timer that came due while parked and whose kept row the sweep removed (a non-null `Parked` window passed). A timer
+  the Park itself consumed is restored only in `retry`, as one of the consumed deliveries; `resume` neither restores
+  nor re-arms it, so it cannot fire the poison again. No timer is armed twice, so no restored row meets a re-armed one.
 - **Jobs.** A job still in the row's jobs with a live ticket keeps it. A kept ticket row is restored like any kept
   delivery, below, with its original id. A job whose ticket is gone (a kept ticket the sweep removed after a non-null `Parked`
   window, or a ticket the Park consumed under `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation
