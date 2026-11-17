@@ -14,10 +14,9 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 **Implementation status (first implementation PR, #4316):** the ticked tasks are done there. Open, with the reason:
 
-- **T015, T016 (session reads, self-write on suspend):** no variable session API exists on the initiative branch (ADR
-  0090's session is not implemented), so there is no session read or session write to instrument. The read-set model
-  keeps one entry per variable (oldest read wins, the spec's oldest-in-use rule); session reads and own-write base
-  advancement land with the session API.
+- **T015, T016 (session reads, own-write bases): moved to S-7** (coordinator, 2026-11-17; see the spec's *Scope
+  moved*). No variable session exists before S-7 (ADR 0090) builds it. The read-set model keeps one entry per variable
+  (oldest read wins, the spec's oldest-in-use rule), which S-7's session reads join.
 - **US2 operator actions (T017–T020 in #4316):** following the ADR 0092 decision 8 amendment of 2026-11-16,
   `ActivityExecutionState.LogicalInvocationId` is the logical invocation identity (the first attempt's row id through
   the attempt lineage; `OperationKey` already falls back to it). A retry successor joins the source's lineage and keeps
@@ -42,11 +41,12 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - **T028, T042:** coordinator steps on #3411; the PoC result is in #4316's description.
 - **T003 (partly):** versions and digests are on frames; closed-scope variables (graph rows) are not versioned yet, so
   their writes stay blind.
-- **T021a (partly):** the warning is recorded in the write history with both writers and the overwritten value; showing
-  it as an instance diagnostic in Studio is S-6's surface. A warning incident was not used: an incident in a commit ends
-  the coalescing session and would re-open the inline gap for later leaves.
-- **T033 (partly):** resume keeps the snapshot and read set and starts with no refresh; advancing own-write bases waits
-  for T016.
+- **T021a:** the warning is its write-history entry, with both writers, both versions and the overwritten value; the
+  API that exposes it is S-6 and Studio presentation is its own elsa-foundation-studio work (spec *Scope moved*). A
+  warning incident was not used: an incident in a commit ends the coalescing session and would re-open the inline gap
+  for later leaves.
+- **T033:** resume keeps the snapshot and read set and starts with no refresh. Advancing own-write bases on resume
+  moved to S-7 with T016.
 - **T036, T037 (partly):** every applied write and lost update leaves a record on the writer's activity state, with
   the operational data (overwritten value, refused write), and a `ModifyVariable` stamps its version's writer instead
   of a record. Inspection-value capture with retention, and telling omitted/redacted/expired apart from `null`, are not
@@ -95,8 +95,8 @@ default of FR-011 depends on it (FR-013a).
 - [x] T012 [US1] Capture the input read set during materialization in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`; commit it with the input snapshot.
 - [x] T013 [US1] Apply the commit rule and base at the capture site in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjection.cs`.
 - [x] T014 [P] [US1] Apply the commit rule at the intrinsic site (Set/Merge/Reduce) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`.
-- [ ] T015 [US1] Record session reads per attempt in the variable session read path; implement base selection (immutable input bases; oldest-in-use tie-break) per data-model.md and R-4.
-- [ ] T016 [US1] Self-write handling: an invocation's applied write advances its own base for X (session change on suspend + capture on complete, ADR 0090 §6 order); test no self-conflict.
+- [x] T015 [US1] **Moved to S-7, not built here.** Record session reads per attempt in the variable session read path; implement base selection (immutable input bases; oldest-in-use tie-break) per data-model.md and R-4.
+- [x] T016 [US1] **Moved to S-7, not built here.** Self-write handling: an invocation's applied write advances its own base for X (session change on suspend + capture on complete, ADR 0090 §6 order); test no self-conflict.
 
 **Checkpoint**: US1 reproduction passes; lost updates are never silent across `External`; blind writes unaffected.
 
@@ -118,7 +118,7 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 5: User Story 3 — Opt-in strict read-modify-write (Priority: P2)
 
-- [ ] T021a [US1] Default lost-update warning: on a stale base the write applies and an instance diagnostic (Studio) plus a write-history entry is raised, naming the variable, base and current versions and both writers, keeping the overwritten value; versions only, no digest in the read set.
+- [x] T021a [US1] Default lost-update warning: on a stale base the write applies and an instance diagnostic (Studio) plus a write-history entry is raised, naming the variable, base and current versions and both writers, keeping the overwritten value; versions only, no digest in the read set.
 - [x] T022 [US3] Add the `Fault` opt-in: `LostUpdateMode` per activity type (attribute) and per node (setting) in the runtime policy resolution, pinned in the executable; `Fault` nodes record stored digests in their read sets and use the exact check.
 - [x] T023 [US3] Route a `Fault` lost update through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
 - [x] T024 [P] [US3] Behaviour tests: default warns and applies (incl. `0 → 1 → 0`); `Fault` (type and node) applies `0 → 1 → 0` with a recorded mismatch and faults a real lost update through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
@@ -146,7 +146,7 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 8: User Story 6 — Suspension keeps base (D-11) (Priority: P3)
 
-- [ ] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; an explicit stale-base write meets the commit rule and the node's mode.
+- [x] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; an explicit stale-base write meets the commit rule and the node's mode.
 - [x] T034 [P] [US6] `ModifyVariableAlterationHandler`: record the variable's version and apply only if unchanged (replace the root-frame revision check); a later stale-base write keeps the operator's value in the warning; a read alone never produces a lost update. In `.../Alterations/Handlers/ModifyVariableAlterationHandler.cs`.
 - [x] T035 [P] [US6] Tests: resume keeps base; read-only change produces no lost update; a stale-base write warns by default and faults under `Fault`. In `.../Tests/VariableLifecycle/SuspensionTests.cs`.
 

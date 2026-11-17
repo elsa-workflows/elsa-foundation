@@ -103,6 +103,18 @@ durable write-history data model that S-6 reads, including the overwritten value
 `Merge`/`Reduce` semantics (they still overwrite like `Set`); general transactional script/C# writes (A-3, #3425); and
 the publish-time warning itself (spec 266, S-5), apart from its pointer to the `Fault` opt-in.
 
+**Scope moved (2026-11-17, coordinator decision).** So that this spec is not blocked by work it does not own:
+
+- **Session reads and session writes go to S-7** (ADR 0090, activities change engine-owned state). No variable session
+  exists before S-7 builds it, so there is nothing for this spec to instrument. S-7 applies this spec's rules to its
+  session: FR-003 (record session reads, not carried to a new attempt), the session half of FR-005 and FR-006, the
+  own-write base advancement (an invocation's applied write moves its own base, ADR 0090 §6 order), and the session
+  write as a write site under FR-010. This spec delivers the input read set, the commit rule every write site uses, and
+  the base held by a suspended step; S-7 reuses them.
+- **Studio presentation goes to its own work in elsa-foundation-studio**, specified there against the API: the
+  distinct operator action names (FR-014) and showing the lost-update warning (FR-011). In this spec the warning *is*
+  its write-history entry (FR-024); exposing that history through an API is S-6 (spec 1229).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — A parallel read-modify-write is never silent (Priority: P1)
