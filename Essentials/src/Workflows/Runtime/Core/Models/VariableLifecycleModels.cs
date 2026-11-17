@@ -42,7 +42,10 @@ public enum VariableWriteSource
     Intrinsic,
     SessionChange,
     Alteration,
-    BackgroundResult
+    BackgroundResult,
+
+    /// <summary>An operator accepted a completion the commit rule refused; its recorded writes apply as an override.</summary>
+    AcceptedCompletion
 }
 
 /// <summary>The writer of a variable write: the node, invocation and attempt, and the kind of write (spec 1221 FR-024).</summary>

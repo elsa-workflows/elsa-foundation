@@ -85,20 +85,30 @@ still at that version. A write to another variable in the same frame does not co
 is versioned with an `Alteration` writer, so a later write on a stale base names the operator's change in its
 warning and keeps the operator's value.
 
-## Retry and re-execute
+## Retry, re-execute, accept
 
-An operator recovers a faulted step that waits for intervention in one of two ways (ADR 0092 decision 8 as amended
-2026-11-16). Both replace the faulted row with a successor row.
+An operator recovers a faulted step that waits for intervention in one of three ways (ADR 0092 decision 8 as amended
+2026-11-16). Each replaces the faulted row with a successor row.
 
-| Action | Alteration | Identity | Inputs |
-|---|---|---|---|
-| Retry | `RetryFaultedActivity/1` | the same logical invocation (`LogicalInvocationId`, operation keys) | the committed snapshot and its read set |
-| Re-execute | `ReExecuteFaultedActivity/1`, and `RescheduleActivity/1` | a new logical invocation | materialized again from current committed state |
+| Action | Alteration | Identity | Inputs | Body |
+|---|---|---|---|---|
+| Retry | `RetryFaultedActivity/1` | the same logical invocation (`LogicalInvocationId`, operation keys) | the committed snapshot and its read set | runs again |
+| Re-execute | `ReExecuteFaultedActivity/1`, and `RescheduleActivity/1` | a new logical invocation | materialized again from current committed state | runs again |
+| Accept | `AcceptRecordedCompletion/1` | the same logical invocation | not used | does not run |
 
 A retry suits a transient failure, where an external service deduplicates on the same key. Its write is judged against
 the base it read before, so a variable an operator changed meanwhile is overwritten with a lost-update warning that
 keeps the operator's value. A re-execution sees the corrected value. Activity code reads the logical identity as
 `context.LogicalInvocationId` (stable across retries, new for a re-execution), or the operation key.
+
+Accept is for a `Fault` step whose body succeeded but whose commit was refused as a lost update. The faulted row keeps
+that refused completion (`RecordedCompletion`: result, outcome selection and every variable write). Accepting it
+checks that the pinned contract and the target variables are unchanged, then commits the successor as completed with
+the recorded result, and applies each recorded write as an override (`AcceptedOverride`) that keeps the value it
+overwrote. The parent hears of the completion once; a second request finds the source superseded and is refused. The
+faulted row keeps the refused write, so the conflict stays in the history. A completion that also produced durable
+outputs, a workflow dispatch or a published stimulus is not recorded, because an alteration cannot replay those
+effects, and accepting it is refused (`NoRecordedCompletion`).
 
 ## What is not covered yet
 
@@ -109,6 +119,6 @@ keeps the operator's value. A re-execution sees the corrected value. Activity co
 - A `ModifyVariable` leaves no write-history record of its own; its version carries an `Alteration` writer, and the
   alteration job keeps its own outcome.
 - Variables of a closed scope (graph rows) are read and written outside the root frame; their writes are blind.
-- Accepting a recorded completion and the background admission refresh are delivered separately (see the spec's
-  tasks).
+- A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
+  accept.
 - The write history is data only; the inspection surfaces that present it are spec S-6.

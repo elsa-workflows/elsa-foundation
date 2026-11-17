@@ -69,10 +69,10 @@ mandatory Runtime checkpoint, or stores one failed outcome and skips all non-app
 at-least-once; deterministic checkpoint IDs reconcile a lost acknowledgement without replaying an applied change.
 
 The built-in descriptors are `CancelWorkflow/1`, `ModifyVariable/1`, `ScheduleActivity/1`,
-`RescheduleActivity/1`, `RetryFaultedActivity/1`, `ReExecuteFaultedActivity/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
+`RescheduleActivity/1`, `RetryFaultedActivity/1`, `ReExecuteFaultedActivity/1`, `AcceptRecordedCompletion/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
 the sole envelope. Scheduling requires an activity-owned compiled scheduling capability; migration is limited to a
 quiescent suspended execution and an exact compatible executable artifact. Alterations never recover a workflow or
-resolve an incident implicitly. Three explicit operator actions resolve an incident that waits for intervention in a running
+resolve an incident implicitly. Four explicit operator actions resolve an incident that waits for intervention in a running
 run, and they are the only outcomes the incident rule lets replace a committed `WaitForIntervention`:
 
 - `RetryFaultedActivity/1` retries the faulted activity, resolving the incident with an `OperatorRetry` outcome and
@@ -82,6 +82,12 @@ run, and they are the only outcomes the incident rule lets replace a committed `
 - `ReExecuteFaultedActivity/1` (spec 1221) resolves the incident the same way, but re-executes: the successor is a new
   logical invocation whose inputs are materialized again from current committed state, so a variable corrected with
   `ModifyVariable` reaches it. `RescheduleActivity/1` is a re-execution too.
+- `AcceptRecordedCompletion/1` (spec 1221 FR-017) applies the completion a `Fault` lost update refused, without running
+  the body again: the successor is the same logical invocation, completed with the recorded result and outcome
+  selection, and each recorded variable write applies as an override that keeps the value it overwrote. It revalidates
+  the pinned contract and the target variables first, and refuses a step without a recorded completion
+  (`NoRecordedCompletion`): a faulted body, or a completion that also produced durable outputs, a workflow dispatch or
+  a published stimulus.
 - `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a
   required reason: it resolves the incident with an `OperatorDecision` outcome from `OperatorDecisionAlteration` and
   enqueues the decision for the parent, which applies it in its own evaluation

@@ -206,6 +206,17 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             VariableWrites = [WriteRecord() with { RejectedValue = value }]
         })),
+        ["recorded completion result"] = new("ActivityExecutionState.RecordedCompletion.Completion.Result", $"Activity execution '{ActivityExecutionId}' recorded completion result", value => ActivityChanges(ActivityState() with
+        {
+            RecordedCompletion = new RecordedActivityCompletion(new ActivityCompletion(ActivityExecutionId, "attempt-1", value, OutcomeSelection.Unspecified, OccurredAt, "fingerprint"), null, [])
+        })),
+        ["recorded variable write"] = new("ActivityExecutionState.RecordedCompletion.VariableWrites[].Value", $"Activity execution '{ActivityExecutionId}' recorded variable write 'token'", value => ActivityChanges(ActivityState() with
+        {
+            RecordedCompletion = new RecordedActivityCompletion(
+                new ActivityCompletion(ActivityExecutionId, "attempt-1", ValueEnvelope.Null(new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline), OutcomeSelection.Unspecified, OccurredAt, "fingerprint"),
+                null,
+                [new RecordedVariableWrite("token", value)])
+        })),
         ["root variable"] = new("WorkflowExecutionState.RootVariableFrame.Values[]", $"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
             new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, WorkflowState(Frame(VariableFrameKind.Root, value)), new Dictionary<string, string>()),
             null, [], [], [], [], []))

@@ -129,6 +129,14 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
 
+    /// <summary>
+    /// The completion a <c>Fault</c> lost update refused (spec 1221 FR-017): the body succeeded, but its commit did not
+    /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
+    /// every other invocation.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecordedActivityCompletion? RecordedCompletion { get; init; }
+
     /// <summary>Appends write-history records to this invocation.</summary>
     public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
     {

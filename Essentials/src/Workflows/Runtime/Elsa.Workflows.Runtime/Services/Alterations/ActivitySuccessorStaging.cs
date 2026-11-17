@@ -50,7 +50,7 @@ internal static class ActivitySuccessorStaging
         SuccessorKind kind = SuccessorKind.Retry)
     {
         var successor = NewRetrySuccessor(source, sourceNode, successorId, scopeId, provenance, metadata, now);
-        if (kind == SuccessorKind.Retry)
+        if (kind is SuccessorKind.Retry or SuccessorKind.Accept)
         {
             var lineage = source.Attempt ?? source.Provenance.Attempt;
             return successor with
@@ -134,7 +134,13 @@ internal static class ActivitySuccessorStaging
         Retry,
 
         /// <summary>A new logical invocation: fresh inputs, a new read set, new identity.</summary>
-        ReExecute
+        ReExecute,
+
+        /// <summary>
+        /// The same logical invocation, completed with the completion it recorded when a <c>Fault</c> lost update refused
+        /// its commit; the body does not run again (spec 1221 FR-017). The handler completes the successor.
+        /// </summary>
+        Accept
     }
 
     /// <summary>Marks <paramref name="source"/> superseded by <paramref name="successorId"/>, validating the lineage.</summary>
@@ -225,12 +231,26 @@ internal static class ActivitySuccessorStaging
         commandMetadata["runtime.alteration.jobId"] = context.Job.JobId;
         commandMetadata["runtime.alteration.planId"] = context.Job.PlanId;
         commandMetadata["runtime.alteration.kind"] = context.Envelope.Kind;
-        var commandKind = successor.Status == ActivityExecutionStatus.Running
-            ? WorkflowExecutionCommandKind.StartActivity
-            : WorkflowExecutionCommandKind.ScheduleActivity;
-        object payload = successor.Status == ActivityExecutionStatus.Running
-            ? new RuntimeStartActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason)
-            : new RuntimeScheduleActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason, successor.SchedulingActivityExecutionId, successor.ParentActivityExecutionId, successor.Provenance);
+        // A completed successor (an accepted recorded completion) reports its completion upward, as an invoke does.
+        var commandKind = successor.Status switch
+        {
+            ActivityExecutionStatus.Completed => WorkflowExecutionCommandKind.CompleteActivity,
+            ActivityExecutionStatus.Running => WorkflowExecutionCommandKind.StartActivity,
+            _ => WorkflowExecutionCommandKind.ScheduleActivity
+        };
+        object payload = successor.Status switch
+        {
+            ActivityExecutionStatus.Completed => new RuntimeCompleteActivityCommandPayload(
+                workflow.PinnedExecutable,
+                successor.Execution.ExecutableNodeId,
+                successor.Execution.ActivityExecutionId,
+                successor.ParentActivityExecutionId,
+                successor.BranchId,
+                Elsa.Workflows.Runtime.Services.WorkHandlers.SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(successor, skippedSubStatus: null),
+                RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason),
+            ActivityExecutionStatus.Running => new RuntimeStartActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason),
+            _ => new RuntimeScheduleActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason, successor.SchedulingActivityExecutionId, successor.ParentActivityExecutionId, successor.Provenance)
+        };
         var workItem = new RuntimeSchedulerWorkItem(
             RuntimeChainId.Derive(context.Job.JobId, $"alteration-{slug}-work:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
             workflow.WorkflowExecutionId,

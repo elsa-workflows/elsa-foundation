@@ -31,9 +31,14 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   intervention, retrying or re-executing iteration 2 runs only that iteration again (on its own item) and then
   iteration 3, which never ran; under the `Fault` strategy the run ends, iteration 3 never runs and both actions are
   refused (`WorkflowTerminal`).
-- **T021 (accept recorded completion):** held until S-3 (spec 1208, #4314) lands. It must record and re-apply a whole
-  rejected completion (outcome, outputs and every capture), and S-3 is reshaping the completion record
-  (`ActivityCompletion.OutcomeKey` → `Selection`). Today a `Fault` refusal keeps only the refused variable write.
+- **T021 (accept recorded completion):** `AcceptRecordedCompletion/1`. A `Fault` refusal on an invoke keeps the
+  whole refused completion on the faulted row (`RecordedCompletion`: result, outcome selection, attempt and every
+  variable write resolved to its value). Accepting it revalidates the pinned contract and the target variables, then
+  supersedes the row with a completed successor of the same logical invocation; each recorded write applies as an
+  override (`AcceptedOverride`, writer `AcceptedCompletion`) that keeps the value it overwrote, and the parent hears of
+  the completion once. A repeated request finds the source superseded and is refused. Not recorded, so refused
+  (`NoRecordedCompletion`): a faulted body, a completion that also produced durable outputs, a workflow dispatch or a
+  published stimulus (an alteration cannot replay those), and a refusal on resume or on a composite's completion.
 - **T010a, T029–T032 (background branches, admission refresh):** with US5 in a later implementation PR. The stale-base
   drives of T010/T011 cover the commit rule a background result meets.
 - **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`
@@ -110,7 +115,7 @@ default of FR-011 depends on it (FR-013a).
 - [x] T018 [US2] Split the three actions in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/ActivitySuccessorStaging.cs`: retry (same id + snapshot), re-execute/reschedule (new id + fresh inputs + new input read set), accept recorded completion.
 - [x] T019 [US2] Fix the current bug where an operator retry gets a new id with a copied snapshot; amend ADR 0045 §3 behavior (re-execute materializes fresh inputs).
 - [x] T020 [P] [US2] Add the owned-frame re-activation guard on the successor `Start` re-entry path in `WorkflowStartActivitySchedulerWorkHandler.cs`.
-- [ ] T021 [US2] Implement accept-recorded-completion: revalidate state/scope/contracts/policies, apply the recorded transition atomically + duplicate-safely, refuse a faulted body, keep the conflict in history, no silent input refresh; test repeated acceptance does not double-schedule downstream.
+- [x] T021 [US2] Implement accept-recorded-completion: revalidate state/scope/contracts/policies, apply the recorded transition atomically + duplicate-safely, refuse a faulted body, keep the conflict in history, no silent input refresh; test repeated acceptance does not double-schedule downstream.
 
 **Checkpoint**: the three operator actions are distinct and tested; corrections reach re-executed steps.
 

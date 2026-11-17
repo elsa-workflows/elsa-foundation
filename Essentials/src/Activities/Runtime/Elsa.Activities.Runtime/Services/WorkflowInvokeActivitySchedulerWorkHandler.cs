@@ -714,9 +714,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         if (captureCommit.LostUpdateFault is { } lostUpdate)
         {
             // A Fault-mode lost update refuses the whole completion: no capture applies, the step faults through the
-            // ordinary incident path, and the faulted invocation keeps the refused write as its rejected completion.
+            // ordinary incident path, and the faulted invocation keeps the refused write in its history and the whole
+            // refused completion for an operator to accept (spec 1221 FR-017).
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, state.WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
+                invokePayload,
+                state.WithVariableWrites(captureCommit.Records) with
+                {
+                    RecordedCompletion = RecordCompletion(completedState, captureCommit, durableValueChanges, stagedWorkflowDispatch, stagedPublishIntents)
+                },
+                new VariableLostUpdateException(lostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -741,6 +747,19 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             occurredAt,
             cancellationToken);
     }
+
+    // The completion an operator may accept later is the whole transition: result, outcome selection and every
+    // variable write. A completion that also produced durable outputs, a workflow dispatch or a published stimulus is
+    // not recorded: an alteration cannot replay those effects, so accepting it is refused rather than half applied.
+    private static RecordedActivityCompletion? RecordCompletion(
+        ActivityExecutionState completedState,
+        RuntimeWorkflowVariableCaptureCommit captureCommit,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        WorkflowDispatchCheckpointRequest? workflowDispatch,
+        IReadOnlyList<RuntimePostCommitIntent> publishIntents) =>
+        completedState.Completion is { } completion && durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0
+            ? new RecordedActivityCompletion(completion, completedState.Attempts?.LastOrDefault(), captureCommit.RecordedWrites)
+            : null;
 
     // This is where an activity fault stops: it is recorded here, not re-thrown, so it never reaches the scheduler
     // drainer's fault arm and never produces a poison record. Whether the resulting blocking incident terminates the

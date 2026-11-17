@@ -136,6 +136,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             ?? throw new InvalidOperationException(
                 $"Output capture on executable node '{executableNodeId}' targets a workflow variable, but workflow execution '{workflowState.WorkflowExecutionId}' has no canonical root variable frame.");
 
+        var resolved = new List<RecordedVariableWrite>(writes.Count);
         foreach (var (variableKey, encoding) in writes.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             if (!frame.Values.TryGetValue(variableKey, out var declared))
@@ -166,6 +167,11 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
                     ValueEnvelope.Inline(declared.Type, inline, declared.Policy),
                 _ => ValueEnvelope.Null(declared.Type, declared.Policy)
             };
+            resolved.Add(new RecordedVariableWrite(variableKey, envelope));
+        }
+
+        foreach (var (variableKey, envelope) in resolved.Select(item => (item.VariableKey, item.Value)))
+        {
             var write = frame.Commit(variableKey, envelope, frame.Revision, readSet?.BaseFor(frame.ScopeId, variableKey), mode, writer);
             if (writer is not null)
             {
@@ -174,7 +180,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
                 {
                     // Nothing in the batch applies, so only the refused write is recorded, not the captures before it.
                     var refused = record with { RejectedValue = envelope };
-                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [refused], refused);
+                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [refused], refused) { RecordedWrites = resolved };
                 }
                 records.Add(record);
             }
@@ -198,4 +204,10 @@ public sealed record RuntimeWorkflowVariableCaptureCommit(
     VariableWriteRecord? LostUpdateFault)
 {
     public static RuntimeWorkflowVariableCaptureCommit None { get; } = new(null, null, [], null);
+
+    /// <summary>
+    /// On a <c>Fault</c> lost update: every write of the refused batch, resolved to the value it would have written, for
+    /// the faulted invocation's recorded completion (spec 1221 FR-017).
+    /// </summary>
+    public IReadOnlyList<RecordedVariableWrite> RecordedWrites { get; init; } = [];
 }

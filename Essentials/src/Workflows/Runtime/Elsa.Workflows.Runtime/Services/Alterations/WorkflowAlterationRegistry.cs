@@ -14,6 +14,7 @@ public sealed class WorkflowAlterationRegistry : IWorkflowAlterationRegistry
         "RescheduleActivity",
         "RetryFaultedActivity",
         "ReExecuteFaultedActivity",
+        "AcceptRecordedCompletion",
         "DecideIntervention",
         "Migrate"
     };

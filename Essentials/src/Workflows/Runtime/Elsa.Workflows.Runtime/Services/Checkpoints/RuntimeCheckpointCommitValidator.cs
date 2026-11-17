@@ -187,7 +187,8 @@ public static class RuntimeCheckpointCommitValidator
         var single = new (string Location, ValueEnvelope? Value)[]
         {
             ($"{subject} private state", state.PrivateState?.Value),
-            ($"{subject} completion result", state.Completion?.Result)
+            ($"{subject} completion result", state.Completion?.Result),
+            ($"{subject} recorded completion result", state.RecordedCompletion?.Completion.Result)
         };
 
         return (state.InputSnapshot?.Values ?? new Dictionary<string, ValueEnvelope>())
@@ -199,7 +200,10 @@ public static class RuntimeCheckpointCommitValidator
             .Concat((state.IterationFrameRequest?.Values ?? new Dictionary<string, ValueEnvelope>())
                 .Select(value => ($"{subject} iteration variable request '{value.Key}'", value.Value)))
             // Spec 1221 write history: the value a lost-update warning overwrote and the write a Fault refused.
-            .Concat((state.VariableWrites ?? []).SelectMany(record => WriteRecordEnvelopes(subject, record)));
+            .Concat((state.VariableWrites ?? []).SelectMany(record => WriteRecordEnvelopes(subject, record)))
+            // Spec 1221 FR-017: the completion a Fault lost update refused, kept for an operator to accept.
+            .Concat((state.RecordedCompletion?.VariableWrites ?? [])
+                .Select(write => ($"{subject} recorded variable write '{write.VariableKey}'", write.Value)));
     }
 
     private static IEnumerable<(string Location, ValueEnvelope Value)> WriteRecordEnvelopes(string subject, VariableWriteRecord record)

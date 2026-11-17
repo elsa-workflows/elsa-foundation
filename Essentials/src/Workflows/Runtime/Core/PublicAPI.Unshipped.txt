@@ -10537,3 +10537,30 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey = 2 -> int
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.RecordedCompletion.get -> Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.RecordedCompletion.init -> void
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion!
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.Attempt.get -> Elsa.Workflows.Runtime.Core.Models.ActivityAttempt?
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.Completion.get -> Elsa.Workflows.Runtime.Core.Models.ActivityCompletion!
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.Equals(Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.RecordedActivityCompletion(Elsa.Workflows.Runtime.Core.Models.ActivityCompletion! completion, Elsa.Workflows.Runtime.Core.Models.ActivityAttempt? attempt, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite!>! variableWrites) -> void
+Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.VariableWrites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite!>!
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite!
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.Equals(Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.RecordedVariableWrite(string! variableKey, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! value) -> void
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.Value.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
+Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.VariableKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome.AcceptedOverride = 5 -> Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.VariableWriteSource.AcceptedCompletion = 5 -> Elsa.Workflows.Runtime.Core.Models.VariableWriteSource
+override Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.operator !=(Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? left, Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.operator ==(Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? left, Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.operator !=(Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? left, Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.operator ==(Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? left, Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? right) -> bool

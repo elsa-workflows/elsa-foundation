@@ -195,6 +195,7 @@ public sealed class WorkflowAlterationTargetCaptureTask
                 "RescheduleActivity" => "sourceActivityExecutionId",
                 "RetryFaultedActivity" => "sourceActivityExecutionId",
                 "ReExecuteFaultedActivity" => "sourceActivityExecutionId",
+                "AcceptRecordedCompletion" => "sourceActivityExecutionId",
                 _ => null
             };
             if (propertyName is not null &&

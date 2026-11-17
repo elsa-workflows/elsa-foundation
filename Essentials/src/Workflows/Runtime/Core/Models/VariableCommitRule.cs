@@ -17,7 +17,13 @@ public enum VariableCommitOutcome
     ReturnedValue,
 
     /// <summary><c>Fault</c> mode, stale base whose value changed: the write does not apply and the step faults.</summary>
-    LostUpdateFault
+    LostUpdateFault,
+
+    /// <summary>
+    /// An operator accepted a completion refused as a lost update: its recorded write applies as an override, whatever
+    /// the current version, and keeps the value it overwrote (spec 1221 FR-017).
+    /// </summary>
+    AcceptedOverride
 }
 
 /// <summary>The decision for one write and the version the variable has once it is applied.</summary>

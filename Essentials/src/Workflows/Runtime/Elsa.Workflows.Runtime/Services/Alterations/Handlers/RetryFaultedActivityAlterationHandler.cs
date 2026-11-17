@@ -5,6 +5,8 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Services.WorkHandlers;
 
 namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 
@@ -42,10 +44,13 @@ public sealed class RetryFaultedActivityAlterationHandler(
     private const string RetryReason = "OperatorRetryFaultedActivity";
     private const string ReExecuteSlug = "reexecute";
     private const string ReExecuteReason = "OperatorReExecuteFaultedActivity";
+    private const string AcceptSlug = "accept";
+    private const string AcceptReason = "OperatorAcceptRecordedCompletion";
 
     /// <summary>The outcome-metadata value that names which operator action resolved the incident.</summary>
     internal const string OperatorActionRetry = "Retry";
     internal const string OperatorActionReExecute = "ReExecute";
+    internal const string OperatorActionAccept = "AcceptRecordedCompletion";
 
     private readonly IWorkflowExecutableStore _executableStore = executableStore ?? throw new ArgumentNullException(nameof(executableStore));
     private readonly IIncidentStateStore _incidentStateStore = incidentStateStore ?? throw new ArgumentNullException(nameof(incidentStateStore));
@@ -71,12 +76,14 @@ public sealed class RetryFaultedActivityAlterationHandler(
     {
         ArgumentNullException.ThrowIfNull(context);
         var reExecute = kind == ActivitySuccessorStaging.SuccessorKind.ReExecute;
-        var slug = reExecute ? ReExecuteSlug : RetrySlug;
-        var reason = reExecute ? ReExecuteReason : RetryReason;
+        var accept = kind == ActivitySuccessorStaging.SuccessorKind.Accept;
+        var slug = accept ? AcceptSlug : reExecute ? ReExecuteSlug : RetrySlug;
+        var reason = accept ? AcceptReason : reExecute ? ReExecuteReason : RetryReason;
+        var operatorAction = accept ? OperatorActionAccept : reExecute ? OperatorActionReExecute : OperatorActionRetry;
         if (!TryReadPayload(context.Envelope.Payload, out var sourceId, out var operatorReason))
             return WorkflowAlterationPreflightResult.Rejected(
                 "InvalidRetryFaultedActivityPayload",
-                $"{(reExecute ? ReExecuteFaultedActivityAlterationHandler.Kind : Kind)} requires sourceActivityExecutionId and accepts only an optional reason of at most {MaxReasonLength} characters.");
+                $"{(accept ? AcceptRecordedCompletionAlterationHandler.Kind : reExecute ? ReExecuteFaultedActivityAlterationHandler.Kind : Kind)} requires sourceActivityExecutionId and accepts only an optional reason of at most {MaxReasonLength} characters.");
 
         var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();
         if (workflow.Status.IsTerminal())
@@ -124,6 +131,8 @@ public sealed class RetryFaultedActivityAlterationHandler(
         var executable = await _executableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !Equals(executable.Identity, workflow.PinnedExecutable) || !executable.NodesById.TryGetValue(source.Execution.ExecutableNodeId, out var sourceNode))
             return WorkflowAlterationPreflightResult.Rejected("PinnedExecutableUnavailable", "The source activity node is unavailable in the pinned executable.");
+        if (accept && RevalidateRecordedCompletion(source, sourceNode, workflow) is { } acceptRefusal)
+            return acceptRefusal;
 
         var plan = await _alterationStore.FindPlanAsync(context.Job.PlanId, cancellationToken);
         var now = _timeProvider.GetUtcNow();
@@ -135,17 +144,26 @@ public sealed class RetryFaultedActivityAlterationHandler(
             successorId,
             scopeId,
             NewProvenance(workflow, source, scopeId, reason, keepOperationKeys: !reExecute),
-            NewMetadata(source, reExecute),
+            NewMetadata(source, reExecute, accept),
             now,
             kind);
+        WorkflowExecutionState? acceptedWorkflow = null;
+        if (accept)
+            (successor, acceptedWorkflow) = ApplyRecordedCompletion(source, sourceNode, successor, workflow, now);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
         var resolvedIncidents = sourceIncidents
-            .Select(incident => ResolveRetriedIncident(incident, context, plan?.SubmittedBy.Subject, operatorReason, now,
-                reExecute ? OperatorActionReExecute : OperatorActionRetry))
+            .Select(incident => ResolveRetriedIncident(incident, context, plan?.SubmittedBy.Subject, operatorReason, now, operatorAction))
             .ToArray();
 
         var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, slug, reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
+        if (acceptedWorkflow is not null)
+        {
+            // The accepted writes commit in the same checkpoint as the successor that records them.
+            context.ProjectedState.Set(acceptedWorkflow);
+            context.Staging.Stage(new AcceptedRecordedWritesStagedChange(context.Ordinal, superseded.Execution.ActivityExecutionId, acceptedWorkflow));
+        }
+
         context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
             $"runtime.alteration.{slug}:{superseded.Execution.ActivityExecutionId}",
             superseded,
@@ -191,15 +209,124 @@ public sealed class RetryFaultedActivityAlterationHandler(
             metadata);
     }
 
-    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source, bool reExecute)
+    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source, bool reExecute, bool accept)
     {
-        // The shared successor metadata already drops the source's per-invocation markers. Both successors carry
+        // The shared successor metadata already drops the source's per-invocation markers. Every successor carries
         // RetryOfActivityExecutionId: a structural parent recognises its replaced faulted child by it.
         var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
         metadata[RuntimeMetadataKeys.RetryOfActivityExecutionId] = source.Execution.ActivityExecutionId;
         if (reExecute)
             metadata[AlterationOutcomeMetadataKeys.OperatorAction] = OperatorActionReExecute;
+        if (accept)
+            metadata[AlterationOutcomeMetadataKeys.OperatorAction] = OperatorActionAccept;
         return metadata;
+    }
+
+    // Spec 1221 FR-017: a recorded completion is accepted only against the state it was produced for. The body is not
+    // run again and its inputs are not refreshed, so the pinned contract and every target variable must still be what
+    // the completion was produced under; anything else is refused rather than applied to a changed scope.
+    private static WorkflowAlterationPreflightResult? RevalidateRecordedCompletion(
+        ActivityExecutionState source,
+        ExecutableNode sourceNode,
+        WorkflowExecutionState workflow)
+    {
+        if (source.RecordedCompletion is not { } recorded)
+            return WorkflowAlterationPreflightResult.Rejected(
+                "NoRecordedCompletion",
+                "The source activity has no recorded completion: only a step whose body succeeded and whose commit a Fault lost update refused can be accepted.");
+        if (sourceNode.ActivityContract is not { } contract ||
+            !StringComparer.Ordinal.Equals(contract.SchemaFingerprint, recorded.Completion.ContractFingerprint))
+            return WorkflowAlterationPreflightResult.Rejected(
+                "RecordedCompletionContractChanged",
+                "The pinned activity contract is not the one the recorded completion was produced under.");
+        if (recorded.VariableWrites.Count == 0)
+            return null;
+        if (workflow.RootVariableFrame is not { Kind: VariableFrameKind.Root, Status: VariableFrameStatus.Active } frame)
+            return WorkflowAlterationPreflightResult.Rejected("RootVariableFrameUnavailable", "The target workflow has no writable root variable frame.");
+        foreach (var write in recorded.VariableWrites)
+        {
+            if (!frame.Values.TryGetValue(write.VariableKey, out var declared) || !SameType(declared.Type, write.Value.Type))
+                return WorkflowAlterationPreflightResult.Rejected(
+                    "RecordedCompletionScopeChanged",
+                    $"Workflow variable '{write.VariableKey}' is no longer declared as the recorded completion wrote it.");
+        }
+
+        return null;
+    }
+
+    // The successor completes with the recorded transition: the same result and outcome selection, the attempt that
+    // produced them, and every recorded write applied as an override. Each write keeps the value it overwrote, so the
+    // acceptance is repairable, and the source keeps its refused write and recorded completion as the conflict.
+    private static (ActivityExecutionState Successor, WorkflowExecutionState Workflow) ApplyRecordedCompletion(
+        ActivityExecutionState source,
+        ExecutableNode sourceNode,
+        ActivityExecutionState successor,
+        WorkflowExecutionState workflow,
+        DateTimeOffset now)
+    {
+        var recorded = source.RecordedCompletion!;
+        var successorId = successor.Execution.ActivityExecutionId;
+        var attempt = recorded.Attempt is { } recordedAttempt
+            ? new ActivityAttempt(recordedAttempt.AttemptId, successorId, recordedAttempt.Ordinal, recordedAttempt.Reason,
+                recordedAttempt.StartedAt, recordedAttempt.EndedAt ?? now, recordedAttempt.TriggerDeliveryId, ActivityTransitionKind.Complete)
+            : null;
+        var writer = new VariableWriter(VariableWriteSource.AcceptedCompletion, sourceNode.ExecutableNodeId, successorId, attempt?.AttemptId);
+        var records = new List<VariableWriteRecord>(recorded.VariableWrites.Count);
+        var frame = workflow.RootVariableFrame;
+        foreach (var write in recorded.VariableWrites)
+        {
+            var before = frame!;
+            var previousValue = before.Values[write.VariableKey];
+            var committed = before.Commit(write.VariableKey, write.Value, before.Revision, writeBase: null, Elsa.Primitives.Models.LostUpdateMode.Default, writer);
+            var decision = committed.Decision;
+            records.Add(new VariableWriteRecord(
+                before.ScopeId,
+                write.VariableKey,
+                writer,
+                VariableCommitOutcome.AcceptedOverride,
+                baseVersion: null,
+                decision.Current.Version,
+                decision.Resulting.Version,
+                committed.Frame.Revision,
+                now,
+                decision.ChangesValue ? decision.Current.Writer : null,
+                decision.ChangesValue ? previousValue : null));
+            frame = committed.Frame;
+        }
+
+        var completion = recorded.Completion;
+        var metadata = successor.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(completion.OutcomeNames);
+        var completed = RuntimeContainerScopeService.CloseOwnedFrames(successor with
+        {
+            Status = ActivityExecutionStatus.Completed,
+            SubStatus = null,
+            StartedAt = successor.StartedAt ?? now,
+            CompletedAt = now,
+            Metadata = metadata,
+            Completion = new ActivityCompletion(successorId, attempt?.AttemptId ?? completion.AttemptId, completion.Result,
+                completion.Selection, now, completion.ContractFingerprint),
+            Attempts = attempt is null ? [] : [attempt],
+            VariableWrites = records.Count == 0 ? null : records
+        });
+        return (completed, frame is null ? workflow : workflow with { RootVariableFrame = frame });
+    }
+
+    private static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
+        StringComparer.Ordinal.Equals(left.Alias, right.Alias) && left.CollectionKind == right.CollectionKind;
+
+    private sealed record AcceptedRecordedWritesStagedChange(
+        int Ordinal,
+        string SourceActivityExecutionId,
+        WorkflowExecutionState Workflow) : IWorkflowAlterationRuntimeCheckpointStagedChange
+    {
+        public string ChangeKey => $"runtime.alteration.accept-recorded-writes:{Ordinal}:{SourceActivityExecutionId}";
+
+        public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            builder.SetWorkflowExecution(Workflow);
+        }
     }
 
     private static IncidentState ResolveRetriedIncident(

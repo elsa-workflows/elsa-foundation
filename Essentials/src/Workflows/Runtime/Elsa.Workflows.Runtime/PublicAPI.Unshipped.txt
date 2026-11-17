@@ -1903,3 +1903,8 @@ Elsa.Workflows.Runtime.Services.Alterations.Handlers.ReExecuteFaultedActivityAlt
 Elsa.Workflows.Runtime.Services.Alterations.Handlers.ReExecuteFaultedActivityAlterationHandler.ReExecuteFaultedActivityAlterationHandler(Elsa.Workflows.Runtime.Services.Alterations.Handlers.RetryFaultedActivityAlterationHandler! retry) -> void
 const Elsa.Workflows.Runtime.Services.Alterations.Handlers.ReExecuteFaultedActivityAlterationHandler.Kind = "ReExecuteFaultedActivity" -> string!
 const Elsa.Workflows.Runtime.Services.Alterations.Handlers.ReExecuteFaultedActivityAlterationHandler.SchemaVersion = 1 -> int
+Elsa.Workflows.Runtime.Services.Alterations.Handlers.AcceptRecordedCompletionAlterationHandler
+Elsa.Workflows.Runtime.Services.Alterations.Handlers.AcceptRecordedCompletionAlterationHandler.AcceptRecordedCompletionAlterationHandler(Elsa.Workflows.Runtime.Services.Alterations.Handlers.RetryFaultedActivityAlterationHandler! retry) -> void
+Elsa.Workflows.Runtime.Services.Alterations.Handlers.AcceptRecordedCompletionAlterationHandler.PreflightAsync(Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationPreflightContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationPreflightResult!>
+const Elsa.Workflows.Runtime.Services.Alterations.Handlers.AcceptRecordedCompletionAlterationHandler.Kind = "AcceptRecordedCompletion" -> string!
+const Elsa.Workflows.Runtime.Services.Alterations.Handlers.AcceptRecordedCompletionAlterationHandler.SchemaVersion = 1 -> int

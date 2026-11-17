@@ -185,6 +185,89 @@ public sealed class OperatorActionsTests
         Assert.Equal(2, (await fixture.ReadRunAsync()).States(LoopBodyNodeId).Count);
     }
 
+    // T021 / FR-017: a Fault counter loses an update. Both leaves read count = 0; the left one commits 1, and the right
+    // one's +10 is refused. Its body succeeded, so its completion is recorded; the operator accepts it: the body does
+    // not run again, the recorded write applies as an override that keeps the value it overwrote, and the parent hears
+    // of the completion once. The source keeps the conflict.
+    [Fact]
+    public async Task Accepting_a_recorded_completion_applies_it_once_without_running_the_body()
+    {
+        await using var fixture = await Fixture.StartAsync(AcceptExecutable(), fusion: false, "actexec-parent", "actexec-left", "actexec-right");
+        var source = fixture.Run.State("node-right");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        Assert.Equal(1, VariableLifecycleTestGraph.ReadCount(fixture.Run));
+        var recorded = source.RecordedCompletion!;
+        Assert.Equal(10, Assert.Single(recorded.VariableWrites).Value.InlineValue!.Value.GetInt32());
+        Assert.Single(fixture.Reads.Observed);
+
+        var job = await fixture.ApplyAsync(AcceptRecordedCompletionAlterationHandler.Kind, source.Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        var run = await fixture.ReadRunAsync();
+        run.AssertWorkflowCompleted();
+        // The body did not run again; the recorded +10 applied over the left leaf's 1.
+        Assert.Single(fixture.Reads.Observed);
+        Assert.Equal(10, VariableLifecycleTestGraph.ReadCount(run));
+        var successor = Assert.Single(run.States("node-right"), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.Equal(source.LogicalInvocationId, successor.LogicalInvocationId);
+        Assert.Equal(recorded.Completion.Selection, successor.Completion!.Selection);
+        var accepted = Assert.Single(successor.VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.AcceptedOverride, accepted.Outcome);
+        Assert.Equal(VariableWriteSource.AcceptedCompletion, accepted.Writer.Source);
+        Assert.Equal("node-left", accepted.OverwrittenWriter!.ExecutableNodeId);
+        Assert.Equal(1, accepted.OverwrittenValue!.InlineValue!.Value.GetInt32());
+        // The conflict stays on the superseded source: its refused write and its recorded completion.
+        var superseded = Assert.Single(run.States("node-right"), state => state.Status == ActivityExecutionStatus.Superseded);
+        Assert.Equal(VariableCommitOutcome.LostUpdateFault, Assert.Single(superseded.VariableWrites!).Outcome);
+        Assert.NotNull(superseded.RecordedCompletion);
+        var incident = Assert.Single(await fixture.ListIncidentsAsync());
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.Equal("AcceptRecordedCompletion", incident.ResolutionOutcome!.Metadata["runtime.alteration.operatorAction"]);
+        // The parent completed once, on its two completed children.
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(run.States("node-parent")).Status);
+    }
+
+    // The parent waits for one more child that never comes, so the run is still running when the second request arrives.
+    [Fact]
+    public async Task A_repeated_acceptance_is_refused_and_schedules_nothing()
+    {
+        await using var fixture = await Fixture.StartAsync(AcceptExecutable(), fusion: false,
+            services => services.AddSingleton(new JoinDirective(ExtraChildren: 1)), "actexec-parent", "actexec-left", "actexec-right");
+        var sourceId = fixture.Run.State("node-right").Execution.ActivityExecutionId;
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await fixture.ApplyAsync(AcceptRecordedCompletionAlterationHandler.Kind, sourceId)).Status);
+
+        var again = await fixture.ApplyAsync(AcceptRecordedCompletionAlterationHandler.Kind, sourceId, idempotencyKey: "accept-again");
+
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, again.Status);
+        Assert.Equal("SourceActivityNotFaulted", Assert.Single(again.Outcomes).Code);
+        var run = await fixture.ReadRunAsync();
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
+        Assert.Single(run.States("node-right"), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.Equal(ActivityExecutionStatus.Running, Assert.Single(run.States("node-parent")).Status);
+        Assert.Single(fixture.Reads.Observed);
+        Assert.Equal(10, VariableLifecycleTestGraph.ReadCount(run));
+    }
+
+    // A step whose body faulted has no completion to accept.
+    [Fact]
+    public async Task Accepting_a_step_whose_body_faulted_is_refused()
+    {
+        await using var fixture = await Fixture.StartAsync();
+
+        var job = await fixture.ApplyAsync(AcceptRecordedCompletionAlterationHandler.Kind, fixture.Run.State("node-f").Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
+        Assert.Equal("NoRecordedCompletion", Assert.Single(job.Outcomes).Code);
+        Assert.Equal(ActivityExecutionStatus.Faulted, (await fixture.ReadRunAsync()).State("node-f").Status);
+    }
+
+    private static WorkflowExecutable AcceptExecutable() =>
+        WorkflowExecutionHarness.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(JoiningInterventionParentActivity),
+                VariableLifecycleTestGraph.Increment("node-left", typeof(IncrementActivity), Elsa.Primitives.Models.LostUpdateMode.Fault),
+                VariableLifecycleTestGraph.Increment("node-right", typeof(AddTenActivity), Elsa.Primitives.Models.LostUpdateMode.Fault)),
+            VariableLifecycleTestGraph.CountDeclaration());
+
     private const string LoopBodyNodeId = "node-body";
     private const string ForEachCurrentItem = Elsa.Activities.ForEach.Activities.ForEach.CurrentItemVariableName;
     private static readonly string LoopResumeTargetId = $"resume:{LoopBodyNodeId}:{LoopItemWaitingActivity.ResumeTargetKey}";
@@ -284,13 +367,22 @@ public sealed class OperatorActionsTests
             return fixture;
         }
 
-        public static async Task<Fixture> StartAsync(WorkflowExecutable executable, params string[] activityExecutionIds)
+        public static Task<Fixture> StartAsync(WorkflowExecutable executable, params string[] activityExecutionIds) =>
+            StartAsync(executable, fusion: true, configure: null, activityExecutionIds);
+
+        public static Task<Fixture> StartAsync(WorkflowExecutable executable, bool fusion, params string[] activityExecutionIds) =>
+            StartAsync(executable, fusion, configure: null, activityExecutionIds);
+
+        // Fusion off runs inline leaves step by step, so two parallel leaves both read before either commits.
+        public static async Task<Fixture> StartAsync(WorkflowExecutable executable, bool fusion, Action<IServiceCollection>? configure, params string[] activityExecutionIds)
         {
             var reads = new CountReadLog();
             var harness = WorkflowExecutionHarness.Create()
                 .WithFeature(services => new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services))
                 .ConfigureServices(services =>
                 {
+                    if (!fusion)
+                        services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false });
                     // The parent assigns no operation keys, so each invocation derives its own (a parent-assigned key stays the parent's).
                     services.AddSingleton(new InterventionDirective { AssignKeys = false });
                     services.AddSingleton(new ChildEvaluationLog());
@@ -300,6 +392,8 @@ public sealed class OperatorActionsTests
                     services.AddSingleton(new DescendantFaultExecutionTests.DescendantFaultLog());
                     services.AddSingleton(new DescendantFaultExecutionTests.ReceiverDirective(Intervene: true));
                     services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+                    configure?.Invoke(services);
+                    services.TryAddSingleton(new JoinDirective());
                 })
                 .Build(activityExecutionIds);
             var reference = await harness.PublishAsync(executable, "operator-actions");
@@ -310,8 +404,8 @@ public sealed class OperatorActionsTests
         public Task<WorkflowAlterationJobState> ModifyCountAsync(int value) =>
             SubmitAndOrchestrateAsync("ModifyVariable", JsonSerializer.SerializeToElement(new { variableKey = VariableLifecycleTestGraph.CountKey, value }), $"modify-{value}");
 
-        public Task<WorkflowAlterationJobState> ApplyAsync(string kind, string sourceActivityExecutionId) =>
-            SubmitAndOrchestrateAsync(kind, JsonSerializer.SerializeToElement(new { sourceActivityExecutionId }), $"{kind}-{sourceActivityExecutionId}");
+        public Task<WorkflowAlterationJobState> ApplyAsync(string kind, string sourceActivityExecutionId, string? idempotencyKey = null) =>
+            SubmitAndOrchestrateAsync(kind, JsonSerializer.SerializeToElement(new { sourceActivityExecutionId }), idempotencyKey ?? $"{kind}-{sourceActivityExecutionId}");
 
         private async Task<WorkflowAlterationJobState> SubmitAndOrchestrateAsync(string kind, JsonElement payload, string idempotencyKey)
         {
@@ -385,6 +479,58 @@ public sealed class LoopItemWaitingActivity(CountReadLog reads) : StatefulActivi
 
     protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
         ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+}
+
+/// <summary>A leaf that reads <c>Count</c>, records the run, and returns <c>Count + 10</c>.</summary>
+public sealed class AddTenActivity(CountReadLog reads) : Activity<Incremented>
+{
+    [ActivityInput]
+    public int Count { get; set; }
+
+    protected override ValueTask<ActivityTransition<Incremented>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        reads.Add(Count, context.OperationKey, context.LogicalInvocationId);
+        return ValueTask.FromResult(ActivityTransition.Complete(new Incremented(Count + 10), ActivityOutcomes.Done));
+    }
+}
+
+/// <summary>
+/// Runs its slot children side by side, keeps a child's fault waiting for intervention, and completes once every
+/// child has a completed execution (a superseded one does not count; its successor does).
+/// </summary>
+/// <summary>How many children beyond its own a <see cref="JoiningInterventionParentActivity"/> waits for.</summary>
+public sealed record JoinDirective(int ExtraChildren = 0);
+
+public sealed class JoiningInterventionParentActivity(IActivityExecutionStateStore states, JoinDirective directive) : StructuralActivity,
+    IRuntimeStructuralActivity,
+    IRuntimeActivityChildCompletionHandler,
+    IRuntimeActivityChildFaultHandler
+{
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+    {
+        foreach (var child in Assert.Single(context.ExecutableNode.ChildSlots).Activities)
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId, new Dictionary<string, string>());
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+    {
+        ((IRuntimeActivityExecutionContext)context.ParentContext).RequestChildFaultIntervention(context.IncidentId!, "operator");
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public async ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+    {
+        var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
+        var children = await states.ListAllByParentAsync(runtimeContext.WorkflowExecutionId, runtimeContext.ActivityExecutionState.InvocationId);
+        var expected = Assert.Single(runtimeContext.ExecutableNode.ChildSlots).Activities.Count + directive.ExtraChildren;
+        var completed = children
+            .Where(child => child.Status == ActivityExecutionStatus.Completed)
+            .Select(child => child.Execution.ExecutableNodeId)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        return completed >= expected ? RuntimeStructuralContinuation.Complete() : RuntimeStructuralContinuation.Defer;
+    }
 }
 
 /// <summary>A loop body that reads the loop item, records it, and faults on <c>"second"</c> while its budget lasts.</summary>
