@@ -4,7 +4,9 @@
 
 **Created**: 2026-11-09
 
-**Status**: Approved — agreed 2026-11-12, together with ADR 0092 (#3411, merged as `f52a661df`).
+**Status**: Implemented — in #4316 (2026-11-17). Approved 2026-11-12, together with ADR 0092 (#3411, merged as
+`f52a661df`). Session reads and own-write bases moved to S-7; the Studio presentation is follow-up work in this
+repository's `Studio/` (#4734, #4735; *Scope moved*).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-10**,
 analysis **A-2**, decisions **D-8** and **D-9**.
@@ -102,6 +104,20 @@ durable write-history data model that S-6 reads, including the overwritten value
 *eligibility* criteria (ADR 0093 → S-11); a merge policy (ADR 0092 decision 14: not part of this decision); real
 `Merge`/`Reduce` semantics (they still overwrite like `Set`); general transactional script/C# writes (A-3, #3425); and
 the publish-time warning itself (spec 266, S-5), apart from its pointer to the `Fault` opt-in.
+
+**Scope moved (2026-11-17, coordinator decision).** So that this spec is not blocked by work it does not own:
+
+- **Session reads and session writes go to S-7** (ADR 0090, activities change engine-owned state). No variable session
+  exists before S-7 builds it, so there is nothing for this spec to instrument. S-7 applies this spec's rules to its
+  session: FR-003 (record session reads, not carried to a new attempt), the session half of FR-005 and FR-006, the
+  own-write base advancement (an invocation's applied write moves its own base, ADR 0090 §6 order), and the session
+  write as a write site under FR-010. This spec delivers the input read set, the commit rule every write site uses, and
+  the base held by a suspended step; S-7 reuses them.
+- **Studio presentation is follow-up work in this repository**, not part of this PR. Studio lives here under `Studio/`
+  (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
+  showing the lost-update warning, accepted completions, background input refreshes, the node settings and the
+  `variableWrites` diagnostics setting (FR-011, #4735). In this spec the warning *is* its write-history entry (FR-024);
+  the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -382,7 +398,10 @@ expired values from `null`.
 - **FR-014**: The engine MUST provide three distinct operator actions — **retry** (same `InvocationId`, kept input
   snapshot, new attempt), **re-execute/reschedule** (new `InvocationId`, inputs materialized from current committed
   state, new input read set), and **accept recorded completion** (apply the recorded transition atomically without
-  re-running the body) — named distinctly in the API and Studio.
+  re-running the body) — named distinctly in the API and Studio. `InvocationId` is the logical invocation identity
+  (ADR 0092 decision 8, amendment 2026-11-16): a retry is a successor row that inherits it, together with the operation
+  keys, the input snapshot and its read set; a re-execution is a successor row with a new one. The row id stays the key
+  of the row and its supersession lineage.
 - **FR-015**: Successor staging MUST be fixed so an operator retry no longer silently copies the old snapshot onto a new
   invocation id; a re-execution MUST materialize fresh inputs. This amends ADR 0045 §3 as ADR 0092 decision 8 states.
 - **FR-016**: A successor that re-enters input materialization MUST NOT activate its owned frames a second time.

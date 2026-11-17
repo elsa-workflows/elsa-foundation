@@ -59,7 +59,9 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
-    public async Task PreflightAsync_SupersedesSource_CleansSubtree_AndPreservesPinnedInputs()
+    // A reschedule is a re-execution (spec 1221 FR-014/FR-015): the successor is a new invocation that re-enters through
+    // ScheduleActivity with no pinned inputs, so StartActivity materializes fresh ones from current committed state.
+    public async Task PreflightAsync_SupersedesSource_CleansSubtree_AndReExecutesOnFreshInputs()
     {
         var input = new ActivityInputSnapshot("source", "contract", "binding", new Dictionary<string, ValueEnvelope>(), DateTimeOffset.UnixEpoch);
         var source = Source(ActivityExecutionStatus.Faulted) with { InputSnapshot = input };
@@ -81,25 +83,23 @@ public sealed class RescheduleActivityAlterationHandlerTests
         change.Apply(builder);
 
         var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == source.Execution.ActivityExecutionId).State;
-        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId && change.State.Status == ActivityExecutionStatus.Running).State;
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId && change.StateId != descendant.Execution.ActivityExecutionId).State;
         var cancelledDescendant = Assert.Single(builder.ActivityExecutions, change => change.StateId == descendant.Execution.ActivityExecutionId).State;
         Assert.Equal(ActivityExecutionStatus.Superseded, superseded.Status);
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
         Assert.NotNull(superseded.SupersededAt);
         Assert.Equal(source.Execution.ActivityExecutionId, successor.Metadata["runtime.supersedesActivityExecutionId"]);
-        Assert.NotSame(input, successor.InputSnapshot);
-        Assert.Equal(successor.InvocationId, successor.InputSnapshot!.InvocationId);
-        Assert.Equal("source", input.InvocationId);
-        Assert.Equal(input.ContractFingerprint, successor.InputSnapshot.ContractFingerprint);
-        Assert.Equal(input.BindingFingerprint, successor.InputSnapshot.BindingFingerprint);
-        Assert.Equal(input.MaterializedAt, successor.InputSnapshot.MaterializedAt);
-        Assert.Equal(input.Values, successor.InputSnapshot.Values);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, successor.Status);
+        Assert.Null(successor.InputSnapshot);
+        Assert.Null(successor.StartedAt);
+        Assert.Equal(successor.InvocationId, successor.LogicalInvocationId);
         Assert.Equal(ActivityExecutionStatus.Cancelled, cancelledDescendant.Status);
         Assert.Equal("SupersededAncestor", cancelledDescendant.SubStatus);
         var cleanup = Assert.Single(builder.ActivityScopeCleanups);
         Assert.Equal(source.Execution.ActivityExecutionId, cleanup.ExecutionScopeId);
         Assert.Contains("derived-descendant-scope", cleanup.ActivityExecutionIds);
-        Assert.Equal(WorkflowExecutionCommandKind.StartActivity, Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!.CommandKind);
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!.CommandKind);
+        Assert.Equal("source", input.InvocationId);
     }
 
     [Fact]

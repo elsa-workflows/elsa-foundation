@@ -60,6 +60,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
             : projections.WorkflowInputEnvelopes;
+        var readRecorder = new RuntimeVariableReadRecorder();
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
@@ -71,13 +72,20 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             // Issue #984: expose the lexically visible variables to JavaScript value expressions
             // (variables.X / getVariable('X') / get<Name>()) through the isolated engine's ambient read surface.
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames, visibleFrames.RootVariableNames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId,
+            variableReadRecorder: readRecorder);
 
-        return await inputMaterializer.MaterializeSnapshotAsync(
+        var snapshot = await inputMaterializer.MaterializeSnapshotAsync(
             executableNode,
             state.InvocationId,
             resolutionContext,
             materializedAt,
             cancellationToken);
+
+        // Spec 1221 FR-002: commit the variables this materialization actually read, with the versions seen, as the
+        // invocation's input read set. Its capture writes are judged against these bases.
+        if (readRecorder.Reads.Count == 0)
+            return snapshot;
+        return snapshot with { InputReadSet = readRecorder.ToInputReadSet(visibleFrames.Frames, LostUpdateModes.Of(executableNode)) };
     }
 }

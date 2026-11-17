@@ -44,7 +44,10 @@ public sealed class RuntimeOutputCaptureProjector
         ActivityCompletionProjection completion,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default,
-        ActivityExecutionState? closedScopeBoundary = null)
+        ActivityExecutionState? closedScopeBoundary = null,
+        ActivityExecutionState? invocation = null,
+        VariableWriteSource source = VariableWriteSource.Capture,
+        IDurableValueStateStore? durableValueStateStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -58,6 +61,8 @@ public sealed class RuntimeOutputCaptureProjector
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has output captures but no pinned activity contract.");
         var changes = new List<RuntimeStateChange<DurableValueState>>();
         var workflowVariableWrites = new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal);
+        var rowWrites = new List<VariableWriteRecord>();
+        VariableWriteRecord? rowFault = null;
         foreach (var capture in node.OutputCaptures.Values
                      .Where(item => item.CaptureOnSuccessfulCompletion)
                      .OrderBy(item => item.OutputName, StringComparer.Ordinal))
@@ -70,9 +75,20 @@ public sealed class RuntimeOutputCaptureProjector
                 continue;
             if (capture.Metadata.TryGetValue(RuntimeMetadataKeys.CaptureTargetScopeId, out var targetScopeId))
             {
-                changes.Add(await ProjectGraphVariableAsync(
+                var row = await ProjectGraphVariableAsync(
                     workflowExecutionId, activityExecutionId, capture, projectionContract, projected, transition, targetScopeId,
-                    closedScopeBoundary, capturedAt, cancellationToken));
+                    closedScopeBoundary, capturedAt, cancellationToken);
+                var versioned = await VersionRowAsync(workflowExecutionId, node, row, closedScopeBoundary!, invocation, source, durableValueStateStore,
+                    projected.Policy, capturedAt, cancellationToken);
+                if (versioned.Record is { } record)
+                    rowWrites.Add(record);
+                if (versioned.Record?.Outcome == VariableCommitOutcome.LostUpdateFault)
+                {
+                    // A refused row write refuses the whole completion, as a refused frame write does.
+                    rowFault = versioned.Record;
+                    break;
+                }
+                changes.Add(versioned.Row);
                 continue;
             }
             var targetsVariable = capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal);
@@ -141,8 +157,71 @@ public sealed class RuntimeOutputCaptureProjector
                 state.Metadata));
         }
 
-        return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites);
+        return rowFault is not null
+            ? new RuntimeOutputCaptureProjection([], new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal)) { VariableWrites = [rowFault], LostUpdateFault = rowFault }
+            : new RuntimeOutputCaptureProjection(changes, workflowVariableWrites) { VariableWrites = rowWrites };
     }
+
+    /// <summary>
+    /// Spec 1221 T003 (ADR 0048 D-9: frames and rows follow one set of rules): a capture into a closed scope's variable
+    /// row is judged by the commit rule against the version the row carries, through the same read frame a body node
+    /// reads it from, and the row stores the resulting version, digest and writer. Without an invocation or a durable
+    /// value store the row is written blind and unversioned, as before.
+    /// </summary>
+    private async ValueTask<(RuntimeStateChange<DurableValueState> Row, VariableWriteRecord? Record)> VersionRowAsync(
+        string workflowExecutionId,
+        ExecutableNode node,
+        RuntimeStateChange<DurableValueState> row,
+        ActivityExecutionState boundary,
+        ActivityExecutionState? invocation,
+        VariableWriteSource source,
+        IDurableValueStateStore? durableValueStateStore,
+        ValueProtectionPolicy capturedPolicy,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken)
+    {
+        // The store is the caller's scoped one, so the row is read in the drain's persistence scope.
+        if (invocation is null || durableValueStateStore is null || row.State is not { } written)
+            return (row, null);
+
+        // Row metadata does not carry the value's protection, so the committed value and the one it overwrites are given
+        // the captured value's policy: a record keeps them as protected as the capture was.
+        var hidesValue = capturedPolicy.HidesValue();
+        var key = written.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey];
+        var current = await durableValueStateStore.FindAsync(workflowExecutionId, written.DurableValueId, cancellationToken);
+        var value = WithPolicy(RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes([written], boundary.InvocationId, ActivityExecutionScopeValues.VariableRole)[key], capturedPolicy);
+        var frame = ClosedScopeVariableRows.ReadFrame(boundary, current is null ? [] : [current]);
+        // A variable the scope never stored reads as null at version 0, as an undeclared frame value would.
+        var previous = frame.Values.TryGetValue(key, out var stored) ? WithPolicy(stored, capturedPolicy) : ValueEnvelope.Null(value.Type, capturedPolicy);
+        frame = new VariableFrameState(frame.FrameId, frame.ScopeId, frame.ActivationId, frame.ParentFrameId, frame.Kind,
+            new Dictionary<string, ValueEnvelope>(frame.Values, StringComparer.Ordinal) { [key] = previous },
+            frame.Revision, frame.Status, frame.Versions);
+        var writer = new VariableWriter(source, node.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
+        var write = frame.Commit(key, value, frame.Revision, invocation.InputSnapshot?.InputReadSet?.BaseFor(frame.ScopeId, key), LostUpdateModes.Of(node), writer);
+        // A row has no frame revision: its commit order is the version the write produced. Whether the value is hidden
+        // comes from the captured value's policy; the row's own metadata does not carry it.
+        var record = VariableWriteRecord.From(frame, write, key, writer, capturedAt);
+        record = new VariableWriteRecord(record.ScopeId, record.VariableKey, record.Writer, record.Outcome, record.BaseVersion,
+            record.CurrentVersion, record.NewVersion, record.NewVersion, record.OccurredAt, record.OverwrittenWriter, record.OverwrittenValue)
+        {
+            CommitSequence = record.CommitSequence,
+            FrameId = record.FrameId,
+            Digest = hidesValue ? null : record.Digest
+        };
+        if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
+            return (row, record with { RejectedValue = value });
+
+        var versioned = ClosedScopeVariableRows.WithVersion(written, write.Frame.VersionOf(key), hidesValue);
+        return (row with { State = versioned, Metadata = versioned.Metadata }, VariableWriteRecord.IsRecorded(write.Decision) ? record : null);
+    }
+
+    private static ValueEnvelope WithPolicy(ValueEnvelope envelope, ValueProtectionPolicy policy) => envelope.Presence switch
+    {
+        ValuePresence.ExplicitNull => ValueEnvelope.Null(envelope.Type, policy),
+        ValuePresence.Present when envelope.InlineValue is { } inline => ValueEnvelope.Inline(envelope.Type, inline, policy),
+        ValuePresence.Present when envelope.ExternalReference is { } external => ValueEnvelope.External(envelope.Type, external, policy),
+        _ => envelope
+    };
 
     /// <summary>
     /// A capture into a graph variable writes the variable row of the producer's nearest closed activity

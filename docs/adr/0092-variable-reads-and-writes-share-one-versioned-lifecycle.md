@@ -1,6 +1,7 @@
 # Variable Reads And Writes Share One Versioned Lifecycle
 
-Status: accepted (2026-11-12). It follows from analysis A-2. It completes the stale read-modify-write proposal of ADR 0090 §7,
+Status: accepted (2026-11-12); decision 8 amended 2026-11-16 (`InvocationId` is the logical invocation identity).
+It follows from analysis A-2. It completes the stale read-modify-write proposal of ADR 0090 §7,
 rather than replacing it.
 
 Its implementation is planned through the initiative's own specs (S-10), not through a program goal. If accepted, it
@@ -304,6 +305,32 @@ implementing spec splits it.
 must be recoverable without reading the same outdated value again: that is re-execution. A transient failure should
 be retried without changing inputs or idempotency keys: that is retry. And when the body's work is already done, for
 example a payment made, the operator can keep it instead of repeating it: that is accepting the recorded completion.
+
+#### Amendment (2026-11-16): `InvocationId` is the logical invocation identity
+
+*Accepted by the initiative coordinator (@j03y-nxxbz) on 2026-11-16 in the spec 1221 implementation PR (#4316), without
+a separate architect review: it settles a consequence of this decision that implementation surfaced, and it changes no
+behaviour the decision promised.*
+
+Implementing this decision showed that in the runtime `InvocationId` is the activity execution row's own id, and that
+`RetryFaultedActivity/1` replaces a faulted row with a successor row (ADR 0045 §3 lineage, ADR 0049 jobs). Read
+literally, "a retry keeps the `InvocationId`" would require re-running the faulted row in place and giving up that
+supersession lineage. That is not what this decision is for. In this decision, and in the ADRs it amends:
+
+- **`InvocationId` means the logical invocation identity**, not the row id. Every activity execution carries it. It is
+  the first row's id when the invocation is first scheduled, and a successor row created by a retry inherits it.
+- **Retry** creates a successor row (the supersession lineage is unchanged) that belongs to the same logical invocation.
+  It keeps the `InvocationId`, the operation keys, the committed input snapshot and its input read set, and it starts a
+  new attempt. An activity that deduplicates on the `InvocationId` or an operation key sees the same identity.
+- **Re-execute and reschedule** create a successor row that is a new logical invocation. It gets a new `InvocationId`
+  and new operation keys (a key its structural parent assigned stays the parent's), its inputs are materialized from
+  current committed state, and it gets a new input read set.
+- **Recovery** (redelivery, resume) stays on the same row, as before.
+- The row id stays the key of the row: lineage (`SupersededBy…`), inspection, cleanup and scheduling keep using it.
+  Activity code that needs a stable idempotency key reads the logical `InvocationId` (the activity context's
+  `LogicalInvocationId`) or an operation key, never the row id (the context's `InvocationId`).
+
+The *Why* above is unchanged. The implementing spec (1221) carries this split.
 
 ### 9. A stale base is refreshed before background admission, under an explicit contract
 

@@ -4,6 +4,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Values;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Runtime.Services;
@@ -13,6 +15,7 @@ internal sealed class BackgroundActivityCoordinator(
     BackgroundActivityCompletionCodec codec,
     RuntimeCheckpointCommitter committer,
     IWorkflowExecutionStateStore workflowStateStore,
+    IActivityExecutionStateStore activityStateStore,
     TimeProvider timeProvider,
     IOptions<BackgroundActivityWorkerOptions> options,
     IBackgroundActivityWorkStore? store = null)
@@ -20,8 +23,10 @@ internal sealed class BackgroundActivityCoordinator(
     public async ValueTask<BackgroundActivityWorkItem?> GetResultOrAdmitAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload payload,
+        WorkflowExecutable executable,
         ExecutableNode node,
         ActivityExecutionState state,
+        IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {
         if (!options.Value.Enabled)
@@ -46,9 +51,14 @@ internal sealed class BackgroundActivityCoordinator(
             throw new BackgroundActivityValidationException("BG-ACT-003: A background result cannot create a new invocation.");
         if (state.InputSnapshot is null)
             throw new BackgroundActivityValidationException("BG-ACT-003: Background admission requires committed immutable inputs.");
+        state = await RefreshInputsAsync(executable, node, state, serviceProvider, cancellationToken);
         var prepared = ActivityAttemptActivationClaimer.PrepareBackgroundInvokeClaim(timeProvider, workItem, payload, state);
         var occurredAt = prepared.Commit.Checkpoint.OccurredAt;
-        workId = RuntimeChainId.Derive($"background:{workItem.WorkflowExecutionId}", prepared.Claim.Attempt.AttemptId);
+        // A refreshed evaluation is its own piece of work: its id, and the keys derived from it, name the evaluation.
+        var evaluation = state.InputSnapshot!.EvaluationNumber;
+        workId = RuntimeChainId.Derive(
+            $"background:{workItem.WorkflowExecutionId}",
+            evaluation == 1 ? prepared.Claim.Attempt.AttemptId : $"{prepared.Claim.Attempt.AttemptId}:evaluation:{evaluation}");
         var resultWorkItem = new RuntimeSchedulerWorkItem(
             RuntimeChainId.Derive(workItem.WorkItemId, "background-result"),
             workItem.WorkflowExecutionId,
@@ -96,6 +106,70 @@ internal sealed class BackgroundActivityCoordinator(
             .WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request]));
         await committer.CommitAsync(prepared.Commit with { StateChanges = changes }, cancellationToken);
         return null;
+    }
+
+    /// <summary>
+    /// Spec 1221 FR-018 to FR-020: the admission refresh. A background step's inputs were read at Start; if a variable
+    /// they read has a newer version now, its inputs are read again as a new evaluation of the same invocation, so the
+    /// worker sees the current value instead of meeting a stale base at commit. The superseded snapshot stays in the
+    /// history with the variables that changed, and the snapshot pinned here is immutable from then on. A node that
+    /// turned the refresh off keeps the inputs Start read; its stale base meets the commit rule. Only the Start-to-
+    /// admission gap is covered: the worker's own run is not refreshed.
+    /// </summary>
+    private async ValueTask<ActivityExecutionState> RefreshInputsAsync(
+        WorkflowExecutable executable,
+        ExecutableNode node,
+        ActivityExecutionState state,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = state.InputSnapshot!;
+        // A retry keeps its committed inputs (FR-014, ADR 0092 decision 8): a retry successor that carries its source's
+        // snapshot on purpose is not refreshed. Every row that read its inputs at its own Start (a first attempt, a retry
+        // boundary's next attempt, a re-execution) is refreshed as usual.
+        if (state.Metadata.ContainsKey(RuntimeMetadataKeys.InputSnapshotCarriedFrom))
+            return state;
+        if (snapshot.InputReadSet is not { Entries.Count: > 0 } readSet ||
+            (node.Metadata.TryGetValue(RuntimeMetadataKeys.BackgroundInputRefresh, out var refresh) &&
+             StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))
+            return state;
+
+        // Reading the scopes and the inputs fails as Start's materialization does: a provider failure goes to the
+        // scheduler's retry policy, and an input expression failure keeps its typed evidence.
+        var scopes = new RuntimeContainerScopeService(activityStateStore, workflowStateStore);
+        var visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
+        // Inside a closed scope (a graph body) the variables are rows, carried by the durable values: those are loaded
+        // only then, so a read of a graph-body variable is checked too.
+        if (visible.ClosedScopeBoundary is not null)
+        {
+            var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
+                .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+            visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
+        }
+
+        var changes = new List<VariableInputChange>();
+        foreach (var entry in readSet.Entries)
+        {
+            var frame = visible.Frames.LastOrDefault(item => StringComparer.Ordinal.Equals(item.ScopeId, entry.ScopeId));
+            if (frame is null || !frame.Values.ContainsKey(entry.VariableKey))
+                continue;
+            var current = frame.VersionOf(entry.VariableKey).Version;
+            if (current != entry.Version)
+                changes.Add(new VariableInputChange(entry.ScopeId, entry.VariableKey, entry.Version, current));
+        }
+
+        if (changes.Count == 0)
+            return state;
+
+        var refreshedAt = timeProvider.GetUtcNow();
+        // Resolved only when a refresh is due, from the invocation's own services, as the Start handler materializes.
+        var fresh = await serviceProvider.GetRequiredService<RuntimeActivityInputSnapshotMaterializer>().MaterializeAsync(executable, node, state, serviceProvider, refreshedAt, cancellationToken)
+            with { Evaluation = snapshot.EvaluationNumber + 1 };
+        return state with
+        {
+            InputSnapshot = fresh,
+            InputRefreshes = [.. state.InputRefreshes ?? [], new ActivityInputRefresh(snapshot, fresh.EvaluationNumber, changes, refreshedAt)]
+        };
     }
 
     private static void ValidateReceiptTarget(

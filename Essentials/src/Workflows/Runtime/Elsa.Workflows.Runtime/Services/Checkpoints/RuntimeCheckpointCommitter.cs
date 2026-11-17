@@ -111,6 +111,10 @@ public sealed class RuntimeCheckpointCommitter
         // decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        // Spec 1221 FR-024: number this logical checkpoint under the lease, before any coalescing fold, and stamp the
+        // number on the writes and lifecycle transitions it commits.
+        commit = RuntimeCommitSequenceStamper.Stamp(commit, _ownershipContextAccessor.Current);
+
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
             throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
         if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)
@@ -245,6 +249,9 @@ public sealed class RuntimeCheckpointCommitter
         // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
         PublishInProcessHopWorkItems(commit);
 
+        // Spec 1221 FR-024: only now are this commit's stamps persisted, so only now may a later commit merge them back.
+        RuntimeCommitSequenceStamper.Acknowledge(commit, _ownershipContextAccessor.Current);
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 
@@ -330,6 +337,13 @@ public sealed class RuntimeCheckpointCommitter
 
         return [pending];
     }
+
+    /// <summary>
+    /// Numbers <paramref name="commit"/> as <see cref="CommitAsync"/> will (spec 1221 FR-024), for a caller that returns
+    /// what it committed. Committing the numbered commit numbers it again to the same values.
+    /// </summary>
+    internal RuntimeCheckpointCommit NumberCommit(RuntimeCheckpointCommit commit) =>
+        RuntimeCommitSequenceStamper.Stamp(commit, _ownershipContextAccessor.Current);
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {

@@ -198,6 +198,36 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             IterationFrameRequest = new LoopIterationScopeRequest("loop", "iteration-1", new Dictionary<string, ValueEnvelope> { ["token"] = value })
         })),
+        ["overwritten variable"] = new("ActivityExecutionState.VariableWrites[].OverwrittenValue", $"Activity execution '{ActivityExecutionId}' overwritten variable 'token'", value => ActivityChanges(ActivityState() with
+        {
+            VariableWrites = [WriteRecord(overwritten: value)]
+        })),
+        ["rejected variable write"] = new("ActivityExecutionState.VariableWrites[].RejectedValue", $"Activity execution '{ActivityExecutionId}' rejected variable write 'token'", value => ActivityChanges(ActivityState() with
+        {
+            VariableWrites = [WriteRecord() with { RejectedValue = value }]
+        })),
+        ["superseded input"] = new("ActivityExecutionState.InputRefreshes[].Superseded.Values[]", $"Activity execution '{ActivityExecutionId}' superseded input 'token'", value => ActivityChanges(ActivityState() with
+        {
+            InputRefreshes =
+            [
+                new ActivityInputRefresh(
+                    new ActivityInputSnapshot(ActivityExecutionId, "contract", "binding", new Dictionary<string, ValueEnvelope> { ["token"] = value }, OccurredAt),
+                    2,
+                    [new VariableInputChange("scope-1", "count", 0, 1)],
+                    OccurredAt)
+            ]
+        })),
+        ["recorded completion result"] = new("ActivityExecutionState.RecordedCompletion.Completion.Result", $"Activity execution '{ActivityExecutionId}' recorded completion result", value => ActivityChanges(ActivityState() with
+        {
+            RecordedCompletion = new RecordedActivityCompletion(new ActivityCompletion(ActivityExecutionId, "attempt-1", value, OutcomeSelection.Unspecified, OccurredAt, "fingerprint"), null, [])
+        })),
+        ["recorded variable write"] = new("ActivityExecutionState.RecordedCompletion.VariableWrites[].Value", $"Activity execution '{ActivityExecutionId}' recorded variable write 'token'", value => ActivityChanges(ActivityState() with
+        {
+            RecordedCompletion = new RecordedActivityCompletion(
+                new ActivityCompletion(ActivityExecutionId, "attempt-1", ValueEnvelope.Null(new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline), OutcomeSelection.Unspecified, OccurredAt, "fingerprint"),
+                null,
+                [new RecordedVariableWrite("token", value)])
+        })),
         ["root variable"] = new("WorkflowExecutionState.RootVariableFrame.Values[]", $"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
             new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, WorkflowState(Frame(VariableFrameKind.Root, value)), new Dictionary<string, string>()),
             null, [], [], [], [], []))
@@ -253,6 +283,11 @@ public sealed class RuntimeCheckpointCommitValidatorTests
 
     private static DurableValueExternalReference ExternalReference() =>
         new("payloads", "locator-1", new Dictionary<string, string>());
+
+    private static VariableWriteRecord WriteRecord(ValueEnvelope? overwritten = null) =>
+        new("scope-1", "token", new VariableWriter(VariableWriteSource.Capture, "node-1", ActivityExecutionId),
+            VariableCommitOutcome.LostUpdateWarning, baseVersion: 0, currentVersion: 1, newVersion: 2, commitOrder: 2, OccurredAt,
+            overwrittenValue: overwritten);
 
     private static VariableFrameState Frame(VariableFrameKind kind, ValueEnvelope value) =>
         new("frame-1", "scope-1", "activation-1", kind == VariableFrameKind.Root ? null : "frame-root", kind, new Dictionary<string, ValueEnvelope> { ["token"] = value });

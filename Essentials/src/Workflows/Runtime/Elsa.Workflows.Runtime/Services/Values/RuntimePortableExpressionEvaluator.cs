@@ -73,6 +73,9 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 : EmptyAmbientVariables;
             foreach (var (name, envelope) in referencedAmbient)
             {
+                // Handed to the engine: an instrumented read for the invocation's input read set (spec 1221).
+                resolutionContext.VariableReadRecorder?.Record(envelope);
+
                 // The engine needs the variable's value, and a withheld value is not here to hand it.
                 // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
                 if (envelope.Presence == ValuePresence.Withheld)
@@ -405,6 +408,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var address = new RuntimeVariableValueAddress(binding.DeclaringScopeNodeId, binding.VariableKey);
         if (!context.VariableEnvelopes.TryGetValue(address, out var envelope))
             throw NewParameterException(parameterName, nodeId, inputName, $"references unavailable variable '{binding.VariableKey}' in scope '{binding.DeclaringScopeNodeId}'");
+        context.VariableReadRecorder?.Record(envelope);
         return new PortableExpressionParameter(
             await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);

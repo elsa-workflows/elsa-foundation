@@ -371,6 +371,8 @@ internal static class StructuralCallbackEvaluation
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
+        IReadOnlyList<VariableWriteRecord>? writesBeforeCapture = null;
+        var captureRecordsAdded = false;
         try
         {
             var completedAt = timeProvider.GetUtcNow();
@@ -386,7 +388,11 @@ internal static class StructuralCallbackEvaluation
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken),
+                invocation: currentParentState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+            // Spec 1221 T003: a refused closed-scope row write refuses the completion, as a refused frame write does.
+            if (captureProjection.LostUpdateFault is { } rowLostUpdate)
+                throw new VariableLostUpdateException(rowLostUpdate);
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)
@@ -394,17 +400,27 @@ internal static class StructuralCallbackEvaluation
                 .ToArray();
             // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
             // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-            completionWorkflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            // Judged under the spec 1221 commit rule against the composite's input read set; the history rides along.
+            var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 workItem.WorkflowExecutionId,
-                parentExecutableNode.ExecutableNodeId,
+                parentExecutableNode,
+                currentParentState,
                 captureProjection.WorkflowVariableWrites,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                     [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
                 },
+                VariableWriteSource.Capture,
+                completedAt,
                 cancellationToken);
+            if (captureCommit.LostUpdateFault is { } lostUpdate)
+                throw new VariableLostUpdateException(lostUpdate);
+            completionWorkflowVariableWriteBack = captureCommit.Change;
+            writesBeforeCapture = currentParentState.VariableWrites;
+            captureRecordsAdded = true;
+            currentParentState = currentParentState.WithVariableWrites([.. captureProjection.VariableWrites, .. captureCommit.Records]);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
                 openAttempt.StartedAt, completedAt, openAttempt.TriggerDeliveryId,
@@ -442,9 +458,16 @@ internal static class StructuralCallbackEvaluation
         }
         catch (Exception exception)
         {
+            // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
+            var lostUpdate = exception as VariableLostUpdateException;
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, currentParentState, exception, definition.FaultSubStatus, valueSnapshots, cancellationToken);
+                workItem, payload, definition,
+                lostUpdate is not null
+                    ? currentParentState.WithVariableWrites([lostUpdate.Record])
+                    // A later failure drops the capture write-back, so the records of captures that never applied go too.
+                    : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
+                exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -473,6 +496,12 @@ internal static class StructuralCallbackEvaluation
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
+        // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
+        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record =>
+                record.Outcome == refusal.Record.Outcome && record.ScopeId == refusal.Record.ScopeId &&
+                record.VariableKey == refusal.Record.VariableKey && record.NewVersion == refusal.Record.NewVersion &&
+                record.OccurredAt == refusal.Record.OccurredAt && record.Writer.InvocationId == refusal.Record.Writer.InvocationId) != true)
+            latestFaultedParentState = latestFaultedParentState.WithVariableWrites([refusal.Record]);
         // Every arm that records a thrown exception records through here, so this is where a value resolved for the
         // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
         // that masked fault directly, without coming through here.

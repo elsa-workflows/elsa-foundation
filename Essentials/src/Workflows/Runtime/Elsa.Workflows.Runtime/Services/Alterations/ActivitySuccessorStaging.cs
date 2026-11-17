@@ -25,12 +25,71 @@ internal static class ActivitySuccessorStaging
     public static string SuccessorScopeId(string successorId) => RuntimeChainId.Derive(successorId, "scope");
 
     /// <summary>
-    /// Builds the successor of <paramref name="source"/>. It keeps the source's inputs, parent, scheduling identity,
-    /// branch, iteration and pinned node, and starts directly when its inputs are pinned and it is a CLR activity;
-    /// <c>StartActivity</c> executes intrinsics only from <c>Scheduled</c>, so intrinsic successors re-enter through
-    /// <c>ScheduleActivity</c>.
+    /// Builds the successor of <paramref name="source"/> for one of the two operator actions that replace a row (spec
+    /// 1221 FR-014, ADR 0092 decision 8 as amended 2026-11-16). Both keep the source's parent, scheduling identity,
+    /// branch, iteration and pinned node.
+    /// <list type="bullet">
+    /// <item><see cref="SuccessorKind.Retry"/>: the same logical invocation. The successor joins the source's attempt
+    /// lineage (<see cref="ActivityExecutionState.LogicalInvocationId"/> stays), keeps the committed input snapshot and
+    /// its read set, and starts directly when its inputs are pinned and it is a CLR activity.</item>
+    /// <item><see cref="SuccessorKind.ReExecute"/>: a new logical invocation. The successor has no lineage, no snapshot
+    /// and no activated frames: it re-enters through <c>ScheduleActivity</c>, so <c>StartActivity</c> activates its
+    /// frames once and materializes fresh inputs, with a new read set, from current committed state.</item>
+    /// </list>
+    /// <c>StartActivity</c> executes intrinsics only from <c>Scheduled</c>, so intrinsic successors always re-enter
+    /// through <c>ScheduleActivity</c>.
     /// </summary>
     public static ActivityExecutionState NewSuccessor(
+        ActivityExecutionState source,
+        ExecutableNode sourceNode,
+        string successorId,
+        string scopeId,
+        ActivitySchedulingProvenance provenance,
+        IReadOnlyDictionary<string, string> metadata,
+        DateTimeOffset now,
+        SuccessorKind kind = SuccessorKind.Retry)
+    {
+        var successor = NewRetrySuccessor(source, sourceNode, successorId, scopeId, provenance, metadata, now);
+        if (kind is SuccessorKind.Retry or SuccessorKind.Accept)
+        {
+            var lineage = source.Attempt ?? source.Provenance.Attempt;
+            // A retry that runs on the source's committed snapshot says so, so admission keeps those inputs (FR-014). A
+            // retry without one is scheduled and reads its inputs at its own Start, like any other step.
+            if (kind == SuccessorKind.Retry && successor.Status == ActivityExecutionStatus.Running && successor.InputSnapshot is not null)
+            {
+                var carried = successor.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+                carried[RuntimeMetadataKeys.InputSnapshotCarriedFrom] = source.Execution.ActivityExecutionId;
+                successor = successor with { Metadata = carried };
+            }
+
+            return successor with
+            {
+                Attempt = new ActivityExecutionAttemptLineage(
+                    (lineage?.AttemptNumber ?? 1) + 1,
+                    source.LogicalInvocationId,
+                    source.Execution.ActivityExecutionId)
+            };
+        }
+
+        // A re-execution starts over: the source's activated frames belong to the source's activation, and the
+        // iteration it ran in is requested again so the successor's own Start activates it once (FR-016).
+        var iterationRequest = source.IterationFrameRequest ??
+                               (source.IterationVariableFrame is { } iteration && source.IterationId is { } iterationId
+                                   ? new LoopIterationScopeRequest(iteration.ScopeId, iterationId, iteration.Values)
+                                   : null);
+        return successor with
+        {
+            Status = ActivityExecutionStatus.Scheduled,
+            StartedAt = null,
+            InputSnapshot = null,
+            VariableFrame = null,
+            IterationVariableFrame = null,
+            IterationFrameRequest = iterationRequest,
+            Attempt = null
+        };
+    }
+
+    private static ActivityExecutionState NewRetrySuccessor(
         ActivityExecutionState source,
         ExecutableNode sourceNode,
         string successorId,
@@ -44,6 +103,7 @@ internal static class ActivitySuccessorStaging
             : ActivityExecutionStatus.Scheduled;
         return source with
         {
+            VariableWrites = null,
             Execution = source.Execution with { ActivityExecutionId = successorId },
             Status = successorStatus,
             SubStatus = null,
@@ -62,8 +122,17 @@ internal static class ActivitySuccessorStaging
             PrivateState = null,
             // Values and binding policy stay pinned, but the typed snapshot belongs to this new
             // native invocation. Carrying the old owner fails VF-ACT-001 at typed completion.
+            // The kept values keep the read set they were materialized against (spec 1221), so the successor's captures
+            // are still judged against the versions those values were read at.
             InputSnapshot = source.InputSnapshot is { } input ? new ActivityInputSnapshot(successorId,
-                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) : null,
+                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet, Evaluation = input.Evaluation } : null,
+            // Per-invocation history belongs to the source row: the successor starts its own lifecycle and history, and
+            // a refused completion stays with the row that refused it.
+            RecordedCompletion = null,
+            Transitions = null,
+            InputRefreshes = null,
+            FirstCommitSequence = null,
+            LastCommitSequence = null,
             Completion = null,
             Fault = null,
             TriggerRegistrations = [],
@@ -72,6 +141,22 @@ internal static class ActivitySuccessorStaging
             SupersededByActivityExecutionId = null,
             SupersededAt = null
         };
+    }
+
+    /// <summary>Which operator action a successor row stands for (spec 1221 FR-014).</summary>
+    public enum SuccessorKind
+    {
+        /// <summary>The same logical invocation: kept identity, operation keys, snapshot and read set; a new attempt.</summary>
+        Retry,
+
+        /// <summary>A new logical invocation: fresh inputs, a new read set, new identity.</summary>
+        ReExecute,
+
+        /// <summary>
+        /// The same logical invocation, completed with the completion it recorded when a <c>Fault</c> lost update refused
+        /// its commit; the body does not run again (spec 1221 FR-017). The handler completes the successor.
+        /// </summary>
+        Accept
     }
 
     /// <summary>Marks <paramref name="source"/> superseded by <paramref name="successorId"/>, validating the lineage.</summary>
@@ -126,7 +211,8 @@ internal static class ActivitySuccessorStaging
         RuntimeMetadataKeys.CausalActivityExecutionId,
         RuntimeMetadataKeys.CausalExecutableNodeId,
         RuntimeMetadataKeys.CausationKind,
-        RuntimeMetadataKeys.BackgroundActivityWorkId
+        RuntimeMetadataKeys.BackgroundActivityWorkId,
+        RuntimeMetadataKeys.InputSnapshotCarriedFrom
     ];
 
     /// <summary>The successor's scheduling command metadata, rebuilt from its durable scheduling provenance.</summary>
@@ -162,12 +248,26 @@ internal static class ActivitySuccessorStaging
         commandMetadata["runtime.alteration.jobId"] = context.Job.JobId;
         commandMetadata["runtime.alteration.planId"] = context.Job.PlanId;
         commandMetadata["runtime.alteration.kind"] = context.Envelope.Kind;
-        var commandKind = successor.Status == ActivityExecutionStatus.Running
-            ? WorkflowExecutionCommandKind.StartActivity
-            : WorkflowExecutionCommandKind.ScheduleActivity;
-        object payload = successor.Status == ActivityExecutionStatus.Running
-            ? new RuntimeStartActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason)
-            : new RuntimeScheduleActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason, successor.SchedulingActivityExecutionId, successor.ParentActivityExecutionId, successor.Provenance);
+        // A completed successor (an accepted recorded completion) reports its completion upward, as an invoke does.
+        var commandKind = successor.Status switch
+        {
+            ActivityExecutionStatus.Completed => WorkflowExecutionCommandKind.CompleteActivity,
+            ActivityExecutionStatus.Running => WorkflowExecutionCommandKind.StartActivity,
+            _ => WorkflowExecutionCommandKind.ScheduleActivity
+        };
+        object payload = successor.Status switch
+        {
+            ActivityExecutionStatus.Completed => new RuntimeCompleteActivityCommandPayload(
+                workflow.PinnedExecutable,
+                successor.Execution.ExecutableNodeId,
+                successor.Execution.ActivityExecutionId,
+                successor.ParentActivityExecutionId,
+                successor.BranchId,
+                Elsa.Workflows.Runtime.Services.WorkHandlers.SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(successor, skippedSubStatus: null),
+                RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason),
+            ActivityExecutionStatus.Running => new RuntimeStartActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason),
+            _ => new RuntimeScheduleActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, reason, successor.SchedulingActivityExecutionId, successor.ParentActivityExecutionId, successor.Provenance)
+        };
         var workItem = new RuntimeSchedulerWorkItem(
             RuntimeChainId.Derive(context.Job.JobId, $"alteration-{slug}-work:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
             workflow.WorkflowExecutionId,
