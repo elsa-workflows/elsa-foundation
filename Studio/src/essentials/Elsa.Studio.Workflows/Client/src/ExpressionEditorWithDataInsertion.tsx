@@ -190,7 +190,9 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
       </div>
     </AnchoredPopover> : null}
     {fixes.map(fix => <div className="wf-expression-reference-fix" key={fix.from}>
-      <span><code>{fix.current}</code> is unavailable here.</span>
+      {reusableOutput
+        ? <span>Prefer the stable input key for <code>{fix.current}</code>.</span>
+        : <span><code>{fix.current}</code> is unavailable here.</span>}
       <StudioButton variant="ghost" size="sm" onClick={() => {
         setNotice(null);
         if (controller.current) applyFix(fix, sourceText, controller.current);
