@@ -37,13 +37,12 @@ internal static class RuntimeCommitSequenceStamper
     public static RuntimeCheckpointCommit Stamp(RuntimeCheckpointCommit commit, RuntimeExecutionLease? lease)
     {
         ArgumentNullException.ThrowIfNull(commit);
-        if (lease is null || !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
-            return commit;
-
         var activities = commit.StateChanges.ActivityExecutions;
         var job = commit.StateChanges.AlterationJobTerminalChange;
         if (activities.Count == 0 && job?.Outcomes.All(outcome => outcome.VariableWrites is null) != false)
             return commit;
+        if (lease is null || !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
+            return WithoutPendingNumbers(commit, activities, job);
 
         var state = Leases.GetValue(lease, _ => new LeaseSequence());
         lock (state)
@@ -58,12 +57,38 @@ internal static class RuntimeCommitSequenceStamper
                     job.Status,
                     job.Outcomes.Select(outcome => outcome.VariableWrites is null
                         ? outcome
-                        : outcome with { VariableWrites = outcome.VariableWrites.Select(record => record.CommitSequence is null ? record with { CommitSequence = sequence } : record).ToArray() }).ToArray(),
+                        : outcome with { VariableWrites = outcome.VariableWrites.Select(record => record.CommitSequence == VariableWriteRecord.PendingCommitSequence ? record with { CommitSequence = sequence } : record).ToArray() }).ToArray(),
                     job.CheckpointCommitId,
                     job.CompletedAt,
                     job.SafeFailure));
             return commit with { StateChanges = changes };
         }
+    }
+
+    // Outside a lease nothing is numbered: a record built for this commit leaves without a number, as order unknown.
+    private static RuntimeCheckpointCommit WithoutPendingNumbers(
+        RuntimeCheckpointCommit commit,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activities,
+        WorkflowAlterationJobTerminalChange? job)
+    {
+        static VariableWriteRecord Clear(VariableWriteRecord record) =>
+            record.CommitSequence == VariableWriteRecord.PendingCommitSequence ? record with { CommitSequence = null } : record;
+
+        var changes = commit.StateChanges.WithActivityExecutions(activities
+            .Select(change => change.State?.VariableWrites is { } writes && writes.Any(record => record.CommitSequence == VariableWriteRecord.PendingCommitSequence)
+                ? change with { State = change.State with { VariableWrites = writes.Select(Clear).ToArray() } }
+                : change)
+            .ToArray());
+        if (job is not null && job.Outcomes.Any(outcome => outcome.VariableWrites is not null))
+            changes = changes.WithAlterationJobTerminalChange(new WorkflowAlterationJobTerminalChange(
+                job.JobId,
+                job.ClaimToken,
+                job.Status,
+                job.Outcomes.Select(outcome => outcome.VariableWrites is null ? outcome : outcome with { VariableWrites = outcome.VariableWrites.Select(Clear).ToArray() }).ToArray(),
+                job.CheckpointCommitId,
+                job.CompletedAt,
+                job.SafeFailure));
+        return commit with { StateChanges = changes };
     }
 
     /// <summary>
@@ -125,7 +150,9 @@ internal static class RuntimeCommitSequenceStamper
         public ActivityExecutionState StampActivity(ActivityExecutionState activity, long sequence)
         {
             _activities.TryGetValue(activity.Execution.ActivityExecutionId, out var persisted);
-            var records = activity.VariableWrites?.Select(record => record.CommitSequence is not null
+            // Only a record built for a commit in progress is numbered: one already numbered keeps its number, and one
+            // without a number (older, or committed outside a lease) stays without, as order unknown.
+            var records = activity.VariableWrites?.Select(record => record.CommitSequence != VariableWriteRecord.PendingCommitSequence
                     ? record
                     : record with
                     {
@@ -148,7 +175,7 @@ internal static class RuntimeCommitSequenceStamper
             }
 
             var numbers = stamps.Select(stamp => stamp.CommitSequence)
-                .Concat((records ?? []).Where(record => record.CommitSequence is not null).Select(record => record.CommitSequence!.Value))
+                .Concat((records ?? []).Where(record => record.CommitSequence is >= 0).Select(record => record.CommitSequence!.Value))
                 .ToArray();
             return activity with
             {
@@ -175,7 +202,7 @@ internal static class RuntimeCommitSequenceStamper
                 if (!persisted.Stamps.Contains(stamp))
                     persisted.Stamps.Add(stamp);
             foreach (var record in activity.VariableWrites ?? [])
-                if (record.CommitSequence is { } number)
+                if (record.CommitSequence is >= 0 and var number)
                     persisted.Records.TryAdd(RecordKey(activity, record), number);
         }
     }

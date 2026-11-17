@@ -98,6 +98,18 @@ public sealed class CommitSequenceStampingTests
         Assert.Equal(ActivityLifecycleTransitionKind.Faulted, Assert.Single(transitions).Kind);
     }
 
+    // A record that was committed without a number (older, or outside a lease) is not numbered by a later commit.
+    [Fact]
+    public async Task A_record_without_a_number_stays_without_one()
+    {
+        var (committer, store, accessor) = NewCommitter();
+        using var _ = accessor.Push(Lease(fencingToken: 1));
+
+        await committer.CommitAsync(Commit("commit-1", Activity(ActivityExecutionStatus.Completed, Record() with { CommitSequence = null })));
+
+        Assert.Null(Assert.Single(Activity(store.Commits[0]).VariableWrites!).CommitSequence);
+    }
+
     [Fact]
     public async Task A_commit_outside_a_lease_is_not_numbered()
     {
@@ -149,7 +161,11 @@ public sealed class CommitSequenceStampingTests
 
     private static VariableWriteRecord Record() =>
         new("scope-1", "count", new VariableWriter(VariableWriteSource.Capture, "node-1", ActivityExecutionId),
-            VariableCommitOutcome.Current, baseVersion: 0, currentVersion: 0, newVersion: 1, commitOrder: 1, Now);
+            VariableCommitOutcome.Current, baseVersion: 0, currentVersion: 0, newVersion: 1, commitOrder: 1, Now)
+        {
+            // A record built for the commit in progress, as VariableWriteRecord.From builds it.
+            CommitSequence = VariableWriteRecord.PendingCommitSequence
+        };
 
     private static ActivityExecutionState Activity(RuntimeCheckpointCommit commit) =>
         Assert.Single(commit.StateChanges.ActivityExecutions).State!;

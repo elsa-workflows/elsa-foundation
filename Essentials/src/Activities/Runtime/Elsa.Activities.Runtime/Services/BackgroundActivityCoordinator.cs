@@ -133,8 +133,11 @@ internal sealed class BackgroundActivityCoordinator(
              StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))
             return state;
 
+        // The durable values carry a closed scope's variable rows, so a read of a graph-body variable is checked too.
+        var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
+            .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var visible = await new RuntimeContainerScopeService(activityStateStore, workflowStateStore)
-            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
+            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
         var changes = new List<VariableInputChange>();
         foreach (var entry in readSet.Entries)
         {

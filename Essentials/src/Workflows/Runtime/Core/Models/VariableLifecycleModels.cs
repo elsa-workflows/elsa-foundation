@@ -162,6 +162,13 @@ public sealed record VariableWriteRecord
     public long? CommitSequence { get; init; }
 
     /// <summary>
+    /// The <see cref="CommitSequence"/> of a record built for the commit in progress: the committer replaces it with the
+    /// commit's number, or with none outside a lease. A record without a number (older, or committed outside a lease)
+    /// is never numbered later, so it reads as order unknown.
+    /// </summary>
+    public const long PendingCommitSequence = -1;
+
+    /// <summary>
     /// The frame the write went to. Versions count per frame, and loop iterations and containers reuse a scope id, so
     /// a variable's history is keyed by frame and key. Absent on older records.
     /// </summary>
@@ -205,6 +212,7 @@ public sealed record VariableWriteRecord
             lostUpdate ? decision.Current.Writer : null,
             lostUpdate && decision.ChangesValue ? write.OverwrittenValue : null)
         {
+            CommitSequence = PendingCommitSequence,
             FrameId = before.FrameId,
             // A value whose policy hides it keeps no digest in the history, which is meant to be structural.
             Digest = decision.Applies && write.Frame.Values.TryGetValue(variableKey, out var written) && !written.Policy.HidesValue()

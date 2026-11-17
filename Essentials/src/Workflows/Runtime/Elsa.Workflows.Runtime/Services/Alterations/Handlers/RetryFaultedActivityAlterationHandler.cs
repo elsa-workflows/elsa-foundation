@@ -296,8 +296,10 @@ public sealed class RetryFaultedActivityAlterationHandler(
                 decision.Current.Writer,
                 previousValue)
             {
+                CommitSequence = VariableWriteRecord.PendingCommitSequence,
                 FrameId = before.FrameId,
-                Digest = decision.Resulting.Digest
+                // As for any record: a value whose policy hides it keeps no digest in the history.
+                Digest = write.Value.Policy.HidesValue() ? null : decision.Resulting.Digest
             });
         }
 

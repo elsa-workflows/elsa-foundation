@@ -115,7 +115,8 @@ keeps its record on the alteration job's outcome.
   `LastCommitSequence`). A write of an equal value leaves no record unless it was a lost update. A coalescing drain numbers each
   logical checkpoint before folding them, so writes inside one folded segment keep their own order. Code:
   `RuntimeCommitSequenceStamper`.
-- **Values.** The value each write wrote is an inspection value of the writing step (subject `VariableWrite`; name =
+- **Values.** The value a leaf's capture or an intrinsic wrote is an inspection value of the writing step (the other
+  write sites are listed under *What is not covered yet*) (subject `VariableWrite`; name =
   variable key, phase = scope id, sequence = the version it produced), decided by the payload capture policy under the
   `variableWrites` diagnostics setting, which is off unless configured. A value not captured has no payload and its
   capture mode says why; a sensitive one is withheld; retention applies as for any inspection value. None of these
@@ -162,6 +163,10 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
   warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
 - An intrinsic cannot write a closed scope's variables yet; only captures write rows.
+- A value snapshot is kept for captures of a leaf (on completion and on resume, including background results) and
+  for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
+  composite completes, accepted overrides and intrinsic writes to loop iteration frames have their write record, but
+  no value snapshot yet.
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
   second does not see the first.
 - A commit resubmitted byte for byte under a later lease is numbered again, so it no longer matches the stored copy.

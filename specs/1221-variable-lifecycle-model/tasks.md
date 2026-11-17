@@ -64,7 +64,7 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   `ModifyVariable` leaves one on its job outcome (versions and writer, no value). FR-024's instance commit order:
   `RuntimeCommitSequenceStamper` numbers each logical checkpoint under the execution lease (fencing token, then the
   ordinal within the lease) before any coalescing fold, and stamps new records and activity lifecycle transitions
-  (`ActivityExecutionState.Transitions`); no read or write per commit. FR-025: each written value is an inspection
+  (`ActivityExecutionState.Transitions`); no read or write per commit. FR-025: each value a leaf capture or an intrinsic wrote is an inspection
   value of the writer (subject `VariableWrite`, setting `variableWrites`, off unless configured), so capture,
   sensitivity and retention follow the existing rules and a value not captured never reads as `null`. FR-026: the
   overwritten value, the refused write and the refused completion stay on the state whatever that setting says.
