@@ -40,7 +40,7 @@ internal static partial class OptedCalledSnapshotReader
         foreach (var id in new[] { "node-host-a", "node-host-b" })
         {
             var state = Exact(states, view, id);
-            Require(state.Status == ActivityExecutionStatus.Completed && state.Completion?.OutcomeKey == "Done" && state.Fault is null &&
+            Require(state.Status == ActivityExecutionStatus.Completed && state.Completion?.OutcomeNames is ["Done"] && state.Fault is null &&
                 state.ParentActivityExecutionId == root.InvocationId && state.Provenance.ParentActivityExecutionId == root.InvocationId && state.IterationId is null,
                 "An ordinary bound task lost its exact successful completion.");
         }
@@ -62,7 +62,7 @@ internal static partial class OptedCalledSnapshotReader
                 var state = Exact(states, view, id);
                 Require(matching.Length == 1 && state.Status == expected && state.Fault is null && state.ParentActivityExecutionId == root.InvocationId &&
                     state.Provenance.ParentActivityExecutionId == root.InvocationId && state.IterationId is null &&
-                    (expected != ActivityExecutionStatus.Completed || state.Completion?.OutcomeKey == "Done"), "Actual compensation handler ancestry/result/order changed.");
+                    (expected != ActivityExecutionStatus.Completed || state.Completion?.OutcomeNames is ["Done"]), "Actual compensation handler ancestry/result/order changed.");
                 if (id != "node-hold") Require(state.Provenance.SchedulingCause == "compensation" &&
                     state.Provenance.Metadata.GetValueOrDefault("bpmn.targetNodeId") == id &&
                     state.Provenance.Metadata.GetValueOrDefault("bpmn.elementId") == (id == "node-handler-b" ? "handler-b" : "handler-a"),

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -37,12 +38,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
             throw new UserTaskException("validation", "This task journal cannot store withheld or encryption-required input values.");
         var id = UserTaskRules.Id(access.Current.RequireScope().Value, execution.TenantId, request.WorkflowExecutionId, request.InvocationId);
         if (await store.FindAsync(execution.TenantId, id, ct) is { } prior) return prior;
-        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 500 || request.Description?.Length > 10000 ||
-            (string.IsNullOrWhiteSpace(request.AssigneeId) == string.IsNullOrWhiteSpace(request.GroupId)) || request.Actions.Count is < 1 or > 20 ||
-            request.Actions.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 100 || x != x.Trim() || x == "Unmatched") ||
-            request.Actions.Distinct(StringComparer.Ordinal).Count() != request.Actions.Count ||
-            request.OptionalFormActions.Any(x => !request.Actions.Contains(x, StringComparer.Ordinal)) || request.Prefill.ValueKind != JsonValueKind.Object)
-            throw new UserTaskException("validation", "A task requires a title, one assignment, unique actions and an object of prefilled values.");
+        UserTaskRules.ValidateCreation(request);
         var form = request.Form;
         if (request.FormId is not null)
             form = (await store.FindFormAsync(execution.TenantId, request.FormId, request.FormVersion ?? "", ct))?.Form
@@ -100,7 +96,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
         var activity = await rawActivities.FindAsync(task.WorkflowExecutionId, task.InvocationId, ct);
         if (execution is not null && execution.TenantId != task.TenantId) throw Refuse("The task's owning execution differs.");
         if (task.Decision is { } decision && activity?.Status == ActivityExecutionStatus.Completed && activity.Completion is { } completion &&
-            completion.InvocationId == task.InvocationId && completion.OutcomeKey == decision.Response.Action)
+            completion.InvocationId == task.InvocationId && completion.Selection.Equals(OutcomeSelection.Named(decision.Response.Action)))
         {
             var result = completion.Result.InlineValue ?? (completion.Result.ExternalReference is { } reference ? await (payloads ?? throw Refuse("The external task result reader is unavailable.")).ReadAsync(reference, ct) : (JsonElement?)null);
             if (result is null || !JsonElement.DeepEquals(result.Value, JsonSerializer.SerializeToElement(decision.Response)))

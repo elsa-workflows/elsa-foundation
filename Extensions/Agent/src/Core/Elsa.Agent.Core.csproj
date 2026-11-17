@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<ProjectReference Include="..\..\..\..\Essentials\src\Events\Core\Elsa.Events.Core.csproj" />
-		<ProjectReference Include="..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-	</ItemGroup>
-
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <InternalsVisibleTo Include="Elsa.Agent.Design" />
+    <InternalsVisibleTo Include="Elsa.Agent" />
+    <InternalsVisibleTo Include="Elsa.Agent.Tests" />
+    <InternalsVisibleTo Include="Elsa.Agent.Persistence.EntityFrameworkCore" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-"""Qualify committed specialist product packages with independent bounded consumers.
+"""Qualify committed agent product packages with independent bounded consumers.
 
 Nothing is pushed or published remotely. Model inference is deterministic and process-local.
 The output directory must be new, absolute and outside the source checkout.
@@ -16,7 +16,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
 PRODUCT_ROOTS = [
-    "Elsa.Agent.Specialists.Design", "Elsa.Agent.Specialists", "Elsa.Activities.Runtime",
+    "Elsa.Agent.Design", "Elsa.Agent", "Elsa.Activities.Runtime",
     "Elsa.Serialization.SystemText", "Elsa.Secrets", "Elsa.Workflows.Publishing.Api",
     "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
     "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore", "Elsa.Locking.FileSystem", "Elsa.Events", "Elsa.Tasks", "Elsa.Workflows.Runtime.Resumption",
@@ -102,7 +102,7 @@ def main():
                 visit(project.parent / include)
             selected.append(project)
 
-        roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
+        roots = PRODUCT_ROOTS + (["Elsa.Agent.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
         if args.profile == "bpmn-boundary":
             roots += ["Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Design", "Elsa.Activities.Primitives"]
         for name in roots:
@@ -110,7 +110,7 @@ def main():
         solution = ET.Element("Solution")
         for project in selected:
             ET.SubElement(solution, "Project", Path=project.relative_to(producer).as_posix())
-        candidate_solution = producer / "Specialist.Candidates.slnx"
+        candidate_solution = producer / "Agent.Candidates.slnx"
         ET.ElementTree(solution).write(candidate_solution, encoding="unicode")
         properties = ["-p:Version=" + args.version, "-p:SourceRevisionId=" + source]
         run("producer-build", ["dotnet", "build", str(candidate_solution), "-c", "Release", *properties], producer)
@@ -132,12 +132,12 @@ def main():
 
         def configure(directory):
             config = ET.parse(producer / "NuGet.config")
-            ET.SubElement(config.getroot().find("packageSources"), "add", key="specialist-candidate", value=str(feed))
+            ET.SubElement(config.getroot().find("packageSources"), "add", key="agent-candidate", value=str(feed))
             mapping = config.getroot().find("packageSourceMapping")
-            group = ET.SubElement(mapping, "packageSource", key="specialist-candidate")
+            group = ET.SubElement(mapping, "packageSource", key="agent-candidate")
             for identity in sorted(packages):
                 ET.SubElement(group, "package", pattern=identity)
-            ET.SubElement(group, "package", pattern="Acme.Specialist.*")
+            ET.SubElement(group, "package", pattern="Acme.Agent.*")
             config.write(directory / "NuGet.Config", encoding="unicode")
             shutil.copy2(producer / "global.json", directory / "global.json")
 
@@ -153,7 +153,7 @@ def main():
             resolved = {}
             for identity, library in assets["libraries"].items():
                 package_id, version = identity.rsplit("/", 1)
-                if package_id not in packages and not package_id.startswith("Acme.Specialist."):
+                if package_id not in packages and not package_id.startswith("Acme.Agent."):
                     continue
                 if version != args.version:
                     raise RuntimeError("wrong candidate package version: " + identity)
@@ -191,7 +191,7 @@ def main():
             if name in ["BpmnConsumer", "BpmnCombined"]:
                 shutil.copy2(fixtures / "Consumer/Program.cs.template", directory / "Program.cs")
             if name == "Author":
-                test_source = producer / "Extensions/Agent/tests/Specialists/Tests/Publication/SpecialistPublicationTests.cs"
+                test_source = producer / "Extensions/Agent/tests/Tests/Publication/AgentPublicationTests.cs"
                 shutil.copy2(test_source, directory / test_source.name)
                 report["authorPublicApiFixtureSha256"] = sha(test_source)
             configure(directory)

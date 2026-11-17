@@ -51,6 +51,19 @@ public interface IActivityStructureHandler
     /// </summary>
     IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
 
+    /// <summary>
+    /// Assesses one direct child's result at another direct child using this structure's execution semantics.
+    /// The default adapts <see cref="ChildrenCompletedBefore"/>: a declared prior result is definite, while
+    /// omission or an undeclared order remains unknown. Nullable facts mean the structure has not supplied them.
+    /// </summary>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
+
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>

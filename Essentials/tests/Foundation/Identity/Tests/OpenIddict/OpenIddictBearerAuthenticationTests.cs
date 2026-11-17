@@ -160,7 +160,7 @@ public sealed class OpenIddictBearerAuthenticationTests
         // Resolve the (scoped) token service from a scope — the Development environment enables scope validation.
         await using var scope = host.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest("user-1", "tenant-a", permissions.Length == 0 ? ["identity/users:read"] : permissions));
+            .IssueAsync(new TokenIssueRequest("user-1", "tenant-a", permissions.Length == 0 ? ["identity/users:read"] : permissions) { CanonicalUserId = "user-1" });
     }
 
     private static async Task<HttpResponseMessage> CallProtectedAsync(IHost host, string? accessToken)

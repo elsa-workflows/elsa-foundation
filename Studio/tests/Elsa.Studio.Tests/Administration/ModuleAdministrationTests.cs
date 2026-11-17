@@ -189,6 +189,62 @@ public sealed class ModuleAdministrationTests
     }
 
     [Fact]
+    public async Task The_registry_never_returns_a_configured_feed_credential()
+    {
+        const string credential = "private-feed-credential-sentinel-3735";
+        await using var host = await AdministrationHost.StartAsync(afterStudio: builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Nuplane:Setup:Feeds:0:Name"] = "private", ["Nuplane:Setup:Feeds:0:DirectoryPath"] = "private-feed",
+                ["Nuplane:Setup:Feeds:0:Credentials"] = credential
+            }));
+        using var response = await host.Client.GetAsync(Prefix + "/registry");
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(credential, body, StringComparison.Ordinal);
+        var feed = Assert.Single(JsonNode.Parse(body)!["feeds"]!.AsArray(), feed => (string?)feed!["name"] == "private")!.AsObject();
+        Assert.Equal("private-feed", (string?)feed["directoryPath"]);
+        Assert.DoesNotContain(feed, property => property.Key.Contains("credential", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task A_feed_edit_without_a_credential_keeps_the_stored_one_and_still_never_returns_it()
+    {
+        const string credential = "stored-feed-credential-sentinel-3735";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"local","DirectoryPath":"current","Credentials":"CREDENTIAL","IncludeAll":true,"Directory":{"Watch":false}}]}}}""".Replace("CREDENTIAL", credential)));
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/local", Feed("local", "edited"));
+        edit.EnsureSuccessStatusCode();
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!;
+        var feed = stored["Nuplane"]!["Setup"]!["Feeds"]![0]!;
+        Assert.Equal("edited", (string?)feed["DirectoryPath"]);
+        Assert.Equal(credential, (string?)feed["Credentials"]);
+        using var registry = await host.Client.GetAsync(Prefix + "/registry");
+        registry.EnsureSuccessStatusCode();
+        Assert.DoesNotContain(credential, await registry.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_feed_edit_that_changes_the_service_index_drops_the_stored_credential()
+    {
+        const string credential = "secrets://vault/issued-for-private-host-3735";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"remote","ServiceIndex":"https://private.example/v3/index.json","Credentials":"CREDENTIAL","IncludeAll":true}]}}}""".Replace("CREDENTIAL", credential)));
+        var edited = new JsonObject
+        {
+            ["name"] = "remote", ["serviceIndex"] = "https://public.example/v3/index.json", ["includeAll"] = true,
+            ["includePatterns"] = new JsonArray("*"), ["directory"] = new JsonObject { ["watch"] = false, ["debounceWindow"] = "00:00:01" }
+        };
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/remote", edited);
+        edit.EnsureSuccessStatusCode();
+        var feed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!["Nuplane"]!["Setup"]!["Feeds"]![0]!.AsObject();
+        Assert.Equal("https://public.example/v3/index.json", (string?)feed["ServiceIndex"]);
+        Assert.False(feed.ContainsKey("Credentials"));
+    }
+
+    [Fact]
     public async Task A_named_cache_directory_accepts_uploads_without_claiming_desired_state_discovery()
     {
         await using var host = await AdministrationHost.StartAsync(

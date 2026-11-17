@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Agent.OpenAI.OpenAIAgentsFeature
+Elsa.Agent.OpenAI.OpenAIAgentsFeature.OpenAIAgentsFeature() -> void
+virtual Elsa.Agent.OpenAI.OpenAIAgentsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

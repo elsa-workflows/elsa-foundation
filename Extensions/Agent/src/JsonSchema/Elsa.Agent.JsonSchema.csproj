@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+    <InternalsVisibleTo Include="Elsa.Agent.Design" />
+    <InternalsVisibleTo Include="Elsa.Agent" />
+    <InternalsVisibleTo Include="Elsa.Agent.Tests" />
+    <ProjectReference Include="../Core/Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
+  </ItemGroup>
+</Project>

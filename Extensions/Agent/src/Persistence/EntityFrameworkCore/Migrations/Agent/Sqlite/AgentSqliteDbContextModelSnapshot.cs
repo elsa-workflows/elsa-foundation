@@ -16,142 +16,13 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditOwnerRow", b =>
+            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentConversationRecord", b =>
                 {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ActorId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SchemaVersion")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("SessionId");
-
-                    b.HasIndex("SchemaVersion");
-
-                    b.ToTable("elsa_agent_audit_owners", (string)null);
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditRow", b =>
-                {
-                    b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ActorId")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("EventId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SchemaVersion")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Sequence");
-
-                    b.HasIndex("CreatedAtUtcTicks");
-
-                    b.HasIndex("SchemaVersion");
-
-                    b.HasIndex("SessionId", "CreatedAtUtcTicks");
-
-                    b.ToTable("elsa_agent_audit", (string)null);
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditSequenceRow", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("Last")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SchemaVersion")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SchemaVersion");
-
-                    b.ToTable("elsa_agent_audit_sequence", (string)null);
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>
-                {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Kind")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("KeyHash")
+                    b.Property<string>("ScopeKey")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SchemaVersion")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("SessionId", "Kind", "KeyHash");
-
-                    b.HasIndex("SchemaVersion");
-
-                    b.ToTable("elsa_agent_call_keys", (string)null);
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentContextRow", b =>
-                {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("AttachmentKey")
+                    b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
@@ -164,95 +35,68 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("Sequence")
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("SessionId", "AttachmentKey");
+                    b.HasKey("ScopeKey", "Id");
 
                     b.HasIndex("SchemaVersion");
 
-                    b.ToTable("elsa_agent_context", (string)null);
+                    b.ToTable("elsa_agent_conversations", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentDisclosureSnapshotRow", b =>
+            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentOperationRecord", b =>
                 {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Digest")
+                    b.Property<string>("ScopeKey")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Canonical")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SchemaVersion")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("Size")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("SessionId", "Digest");
-
-                    b.HasIndex("SchemaVersion");
-
-                    b.ToTable("elsa_agent_disclosure_snapshots", (string)null);
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentMessageRow", b =>
-                {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("MessageId")
-                        .HasMaxLength(128)
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("Sequence")
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("StatusReason")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("SessionId", "MessageId");
+                    b.HasKey("ScopeKey", "OperationKey");
 
                     b.HasIndex("SchemaVersion");
 
-                    b.ToTable("elsa_agent_messages", (string)null);
+                    b.ToTable("elsa_agent_operations", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentProposalRow", b =>
+            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentTurnRecord", b =>
                 {
-                    b.Property<string>("ProposalId")
-                        .HasMaxLength(128)
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("ExpiresAtUtcTicks")
+                    b.Property<string>("Handle")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DeadlineUtcTicks")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Fence")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -261,14 +105,6 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SessionId")
-                        .IsRequired()
-                        .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
@@ -278,98 +114,200 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("ProposalId");
+                    b.HasKey("ScopeKey", "Handle");
 
                     b.HasIndex("SchemaVersion");
 
-                    b.HasIndex("SessionId", "Sequence");
+                    b.HasIndex("ScopeKey", "OperationKey")
+                        .IsUnique();
 
-                    b.ToTable("elsa_agent_proposals", (string)null);
+                    b.ToTable("elsa_agent_turns", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", b =>
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
                 {
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(128)
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ActorId")
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ContinuedFrom")
+                    b.Property<string>("Profile")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("ExpiresAtUtcTicks")
+                    b.Property<long>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("WorkingCopyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("WorkingCopyKey", "Revision", "Key");
+
+                    b.ToTable("elsa_agent_sources_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("SnapshotKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SnapshotKey");
+
+                    b.ToTable("elsa_agent_sources_pins", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CopyId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Discarded")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("Fence")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<long?>("LeaseExpiresAtUtcTicks")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("LimitReached")
-                        .HasMaxLength(32)
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("NextSequence")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
 
-                    b.Property<string>("OwnerToken")
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Partition")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Profile")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("PausedTurnPayload")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PendingAuditsPayload")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("PolicyRevision")
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("TenantId")
+                    b.Property<string>("SourceId")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Title")
+                    b.Property<string>("SourceIdentity")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("UpdatedAtUtcTicks")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Workspace")
+                    b.Property<string>("TenantId")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.HasKey("SessionId");
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
 
                     b.HasIndex("SchemaVersion");
 
-                    b.HasIndex("TenantId", "ActorId", "UpdatedAtUtcTicks", "SessionId");
+                    b.HasIndex("SourceIdentity")
+                        .IsUnique();
 
-                    b.ToTable("elsa_agent_sessions", (string)null);
+                    b.HasIndex("ScopeKey", "Discarded", "Key");
+
+                    b.ToTable("elsa_agent_sources_copies", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
@@ -444,49 +382,35 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     b.ToTable("__ElsaSchemaFinalization_ElsaAgent", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
                 {
-                    b.HasOne("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
                         .WithMany()
-                        .HasForeignKey("SessionId")
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", null)
+                        .WithMany()
+                        .HasForeignKey("WorkingCopyKey")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentContextRow", b =>
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
                 {
-                    b.HasOne("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
                         .WithMany()
-                        .HasForeignKey("SessionId")
+                        .HasForeignKey("SnapshotKey")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentDisclosureSnapshotRow", b =>
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
                 {
-                    b.HasOne("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
                         .WithMany()
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentMessageRow", b =>
-                {
-                    b.HasOne("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
-                        .WithMany()
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentProposalRow", b =>
-                {
-                    b.HasOne("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
-                        .WithMany()
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

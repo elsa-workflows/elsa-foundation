@@ -31,6 +31,22 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         return [new ActivityChildProjection(FlowchartActivity.ActivitiesSlotName, structure.Activities)];
     }
 
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        var structure = ReadAuthoredStructure(activity);
+        var children = structure.Activities
+            .Select(child => child.NodeId)
+            .Where(nodeId => !string.IsNullOrWhiteSpace(nodeId))
+            .ToArray();
+        if (!children.Contains(producerChildNodeId, StringComparer.Ordinal) ||
+            !children.Contains(consumerChildNodeId, StringComparer.Ordinal))
+            return new(ActivityChildResultAvailability.Unavailable);
+
+        return FlowchartChildResultAnalysis.TryCreate(structure)
+                   ?.Assess(producerChildNodeId, consumerChildNodeId)
+               ?? new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
+    }
+
     public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Connections
             .GroupBy(connection => connection.Source.NodeId, StringComparer.Ordinal)

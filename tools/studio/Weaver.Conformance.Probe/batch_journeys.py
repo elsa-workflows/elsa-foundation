@@ -145,7 +145,7 @@ def batch_snapshot(seed, revision, *, working_state="draft", credential_node=Fal
 # (lifecycle denied-result-continuation, both adapters), a tool refused at preparation (malformed-arguments, Copilot), and
 # a turn whose commanded tool the adapter was not offered (truth-seam read-only layout request, both adapters). Copilot's
 # SDK runs the supplied function and reports the refusal through its own events. Anthropic leaves the call to the engine
-# (AgentTurnServices): a refused dispatch carries no result, so no context is re-admitted before toolCallCompleted (a
+# (WeaverTurnServices): a refused dispatch carries no result, so no context is re-admitted before toolCallCompleted (a
 # successful read re-admits there, as observed), and the continuation step admits its context once, as observed.
 PROPOSAL_FRAMES = {
     "copilot": ["started", "contextAdmitted", "toolCallStarted", "proposalCreated", "toolApprovalRequested"],
@@ -166,7 +166,7 @@ UNOFFERED_FRAMES = {
     "copilot": ["started", "contextAdmitted", "error"],
     "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "error"],
 }
-UNOFFERED_ERROR = {"copilot": "agent.provider.github_copilot.turn_failed", "anthropic": "agent.provider.anthropic.turn_failed"}
+UNOFFERED_ERROR = {"copilot": "weaver.provider.github_copilot.turn_failed", "anthropic": "weaver.provider.anthropic.turn_failed"}
 UNOFFERED_MESSAGE = "The commanded tool is not uniquely advertised by the actual adapter."
 # How each adapter hands a refused tool outcome back: Copilot's function returns, Anthropic continues with the results.
 OUTCOME_ROWS = {"copilot": ".return", "anthropic": ".continuation"}

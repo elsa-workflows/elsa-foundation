@@ -503,3 +503,6 @@ docs/maps/manifest.json
 docs/maps/dependency-map.json
 docs/reports/maps-v1-findings.md
 docs/reports/maps-v2-findings.md
+
+# Initiative meeting agendas: the coordinator's local copy with names (tools/initiatives/agenda_names.py)
+*.named.md

@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class CanonicalRuntimeInputBindingResolverTests
+public sealed partial class CanonicalRuntimeInputBindingResolverTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");
     private readonly RuntimeInputBindingResolver _resolver = new();
@@ -829,7 +829,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
                     new ValueTypeDescriptor("test/result"),
                     JsonSerializer.SerializeToElement(new { customerId = "customer-7" }),
                     ValueProtectionPolicy.InstanceInline),
-                "Done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
                 completedAt,
                 "contract"),
             CompletedAt = completedAt

@@ -274,6 +274,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        // Recorded before the write, so a commit whose outcome is uncertain still counts as possibly durable.
+        if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
+            session.RecordPossibleDurableWrites(commit.StateChanges);
+
         RuntimeCheckpointCommitStoreResult result;
         if (session?.DurableValuePageMemo is not { } memo)
         {

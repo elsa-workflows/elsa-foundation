@@ -1,4 +1,4 @@
-/* Specialist run inspection inherits the public minimal roles without restyling its behavior. */
+/* Agent run inspection inherits the public minimal roles without restyling its behavior. */
 html[data-workspace-style="minimal"] :is(.wf-instance-canvas-shell, .wf-instance-inspector) { border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 html[data-workspace-style="minimal"] :is(.wf-instance-canvas-shell > header, .wf-instance-inspector > header) { padding: 16px 20px; }
 html[data-workspace-style="minimal"] .wf-instance-inspector h3 { font-size: 20px; font-weight: 600; }

@@ -15,8 +15,8 @@ public sealed class RuntimeStructuralContinuationTests
         var continuation = RuntimeStructuralContinuation.Complete("Approved");
 
         Assert.Equal(RuntimeStructuralContinuationKind.Complete, continuation.Kind);
-        Assert.Equal("Approved", continuation.OutcomeName);
-        Assert.False(typeof(RuntimeStructuralContinuation).GetProperty(nameof(RuntimeStructuralContinuation.OutcomeName))!.CanWrite);
+        Assert.Equal(new[] { "Approved" }, continuation.OutcomeNames);
+        Assert.False(typeof(RuntimeStructuralContinuation).GetProperty(nameof(RuntimeStructuralContinuation.Selection))!.CanWrite);
     }
 
     [Theory]
@@ -31,7 +31,7 @@ public sealed class RuntimeStructuralContinuationTests
         var continuation = RuntimeStructuralContinuation.Defer;
 
         Assert.Equal(RuntimeStructuralContinuationKind.Defer, continuation.Kind);
-        Assert.Null(continuation.OutcomeName);
+        Assert.Null(continuation.Selection);
         Assert.Null(continuation.Fault);
         Assert.Null(continuation.CancellationReason);
     }
@@ -43,7 +43,7 @@ public sealed class RuntimeStructuralContinuationTests
 
         Assert.Same(fault, RuntimeStructuralContinuation.Faulted(fault).Fault);
         Assert.Equal("Cancelled by test.", RuntimeStructuralContinuation.Cancel("Cancelled by test.").CancellationReason);
-        Assert.Equal(ActivityOutcomes.Done, RuntimeStructuralContinuation.Complete().OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, RuntimeStructuralContinuation.Complete().OutcomeNames);
     }
 
     [Fact]

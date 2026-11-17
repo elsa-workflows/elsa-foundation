@@ -29,7 +29,7 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
 
     public string Serialize(ActivityContract contract, IActivityCompletionTransition completion, int maximumBytes)
     {
-        ValidateOutcome(contract, completion.Outcome);
+        ValidateOutcome(contract, completion.Selection);
         var type = ResolveResultType(contract);
         if (completion.Result is null && contract.Result.IsRequired)
             throw new BackgroundActivityValidationException("BG-ACT-005: The background activity did not return its required result.");
@@ -40,21 +40,29 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
         return json;
     }
 
-    public ActivityTransition Deserialize(ActivityContract contract, string json, string outcome, int maximumBytes)
+    public ActivityTransition Deserialize(ActivityContract contract, string json, OutcomeSelection selection, int maximumBytes)
     {
-        ValidateOutcome(contract, outcome);
+        ValidateOutcome(contract, selection);
         ValidateSize(json, maximumBytes);
         var type = ResolveResultType(contract);
         var result = JsonSerializer.Deserialize(json, type, JsonOptions);
         if (result is null && contract.Result.IsRequired)
             throw new BackgroundActivityValidationException("BG-ACT-005: The background receipt is missing its required result.");
-        return new RehydratedCompletion(result, type, outcome);
+        return new RehydratedCompletion(result, type, selection);
     }
 
-    private static void ValidateOutcome(ActivityContract contract, string outcome)
+    private static void ValidateOutcome(ActivityContract contract, OutcomeSelection selection)
     {
-        if (!contract.Outcomes.Contains(outcome, StringComparer.Ordinal))
-            throw new BackgroundActivityValidationException($"BG-ACT-005: Outcome '{outcome}' is not declared by the pinned background activity contract.");
+        // The same rules as every other completion (ADR 0045 §6): the receipt's selection is checked against the node's
+        // pinned outcome set and multi-outcome flag before it is accepted.
+        try
+        {
+            ActivityOutcomeSelectionRules.Validate(contract, selection);
+        }
+        catch (ActivityOutcomeSelectionException exception)
+        {
+            throw new BackgroundActivityValidationException($"BG-ACT-005: {ActivityOutcomeSelectionRules.FaultCode}: {exception.Message}");
+        }
     }
 
     private static void ValidateSize(string json, int maximumBytes)
@@ -64,7 +72,7 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
             throw new BackgroundActivityValidationException("BG-ACT-006: The background result exceeds the configured receipt size limit.");
     }
 
-    private sealed record RehydratedCompletion(object? Result, Type ResultType, string Outcome)
+    private sealed record RehydratedCompletion(object? Result, Type ResultType, OutcomeSelection Selection)
         : ActivityTransition, IActivityCompletionTransition
     {
         public override Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind Kind =>

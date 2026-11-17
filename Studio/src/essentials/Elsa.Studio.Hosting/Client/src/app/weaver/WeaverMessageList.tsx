@@ -2,7 +2,7 @@ import React from "react";
 import { Bot, Play, ThumbsDown, ThumbsUp, Undo2, User } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AgentMessageViewModel } from "../agent/agentTypes";
+import type { WeaverMessageViewModel } from "./weaverTypes";
 import { WEAVER_AUTO_APPLY_LABELS } from "./useWeaverSession";
 
 const PLACEHOLDER = "Awaiting assistant response…";
@@ -46,7 +46,7 @@ export function WeaverMessageList({
   onStart,
   onWithdraw
 }: {
-  messages: AgentMessageViewModel[];
+  messages: WeaverMessageViewModel[];
   streaming: boolean;
   onFeedback?(messageId: string, rating: "positive" | "negative"): void;
   /** Preview (#3441): whether a recorded prompt may be started now; nothing ever starts on its own. */
@@ -112,7 +112,7 @@ export function WeaverMessageList({
 
 /** Preview (#3441): the recorded outcome of a message that did not simply complete, with its explicit actions. */
 function WeaverMessageOutcome({ message, streaming, canStart, pending, onStart, onWithdraw }: {
-  message: AgentMessageViewModel;
+  message: WeaverMessageViewModel;
   streaming: boolean;
   canStart: boolean;
   pending: boolean;
@@ -136,7 +136,7 @@ function WeaverMessageOutcome({ message, streaming, canStart, pending, onStart, 
   );
 }
 
-function describeOutcome(message: AgentMessageViewModel, streaming: boolean): string | null {
+function describeOutcome(message: WeaverMessageViewModel, streaming: boolean): string | null {
   if (message.status === "cancelled") {
     if (message.statusReason === "interrupted") return "Interrupted. The turn stopped when its connection or the server ended. Nothing was sent again.";
     if (message.statusReason === "user-stop") return "Stopped by you.";
@@ -149,7 +149,7 @@ function describeOutcome(message: AgentMessageViewModel, streaming: boolean): st
   return null;
 }
 
-function WeaverMessageContent({ message, streaming }: { message: AgentMessageViewModel; streaming: boolean }) {
+function WeaverMessageContent({ message, streaming }: { message: WeaverMessageViewModel; streaming: boolean }) {
   const isAwaiting = message.content === PLACEHOLDER || message.content.length === 0;
   const showCaret = streaming && message.role === "assistant" && message.status === "streaming";
 

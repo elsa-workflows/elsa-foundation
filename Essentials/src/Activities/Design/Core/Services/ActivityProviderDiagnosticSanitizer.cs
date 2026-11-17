@@ -13,6 +13,13 @@ public static partial class ActivityProviderDiagnosticSanitizer
 {
     private const string FallbackCode = ActivityErrorCodes.ProviderDiagnostic;
 
+    // Keep the two-parameter CLR entry point: callers compiled against the preview packages that carried only this
+    // shape (4.0.23-preview) bind to it directly, while optional parameters alone are not binary-compatible.
+    public static IReadOnlyList<ActivityDiagnostic> Sanitize(
+        IEnumerable<ActivityDiagnostic>? diagnostics,
+        string providerKey) =>
+        Sanitize(diagnostics, providerKey, null);
+
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
         string providerKey,

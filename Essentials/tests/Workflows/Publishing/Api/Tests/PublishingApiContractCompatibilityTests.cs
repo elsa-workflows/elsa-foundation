@@ -75,7 +75,8 @@ public sealed class PublishingApiContractCompatibilityTests
             legacyHash == "f150e2f01767f0fc6f3eb30de9fcd169517a6268dbe83648bea18bb899df3e6b",
             $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
         Assert.True(
-            actualHash == "e1db8206c0661634dad9390f5ca5291c9b8b372b10110ac058b60d871a99c2c7",
+            // #3922 adds only null-omitted AuthoredPath to the modern located diagnostic; legacy surface above is unchanged.
+            actualHash == "637bc06baf5a03d0955b94a5746abc80267bf6cf4c1a3ca0784cbc353e91f117",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

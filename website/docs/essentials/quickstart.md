@@ -11,6 +11,8 @@ Run the reference Workbench server and Studio visual client with Docker, then cr
 > | Compose file | Foundation commit `48bfcea5` |
 >
 > This is a historical verification, not a claim that newer images or every platform pass. For the exact runs and limits, see the [published-image verification record](https://github.com/elsa-workflows/elsa-foundation/blob/69f067104c1a977d897911db7ecf16037cfbe542/docs/contributing/published-image-pair.md#recorded-image-provenance-and-hosted-result).
+>
+> **Published images, not current `main`.** The Workbench and Studio images below are pinned by digest. They are not built from the `main` commit you are reading. To run the Workbench and Studio source in this repository, use the [backend source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md) and the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/docs/contributing/studio-source-quickstart.md).
 
 > **Demo only.** It contains public demo credentials and keys. Workflow data lives in the Workbench container's SQLite files and is lost when that container is removed; the named volume keeps only the Data Protection key ring. Keep valuable workflows in a separately configured persistent deployment.
 
@@ -62,7 +64,7 @@ docker compose -p elsa-first-workflow -f docker-compose.images.yml ps
 docker compose -p elsa-first-workflow -f docker-compose.images.yml logs --no-color elsa-workbench elsa-studio
 ```
 
-The [Docker Compose guide](https://github.com/elsa-workflows/elsa-foundation/blob/69f067104c1a977d897911db7ecf16037cfbe542/docker/compose/README.md) explains the reference composition, connection settings and troubleshooting. To build the backend yourself, use the [backend source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md); its instructions and verification records have their own revision scope.
+The [Docker Compose guide](https://github.com/elsa-workflows/elsa-foundation/blob/69f067104c1a977d897911db7ecf16037cfbe542/docker/compose/README.md) explains the reference composition, connection settings and troubleshooting. To run current `main` from source instead of these images, use the [backend source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md) and the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/docs/contributing/studio-source-quickstart.md); those instructions and verification records have their own revision scope.
 
 ## Stop the demo
 

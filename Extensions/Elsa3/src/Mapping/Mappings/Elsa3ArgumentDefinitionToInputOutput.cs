@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Mappings;
@@ -49,7 +50,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
 
     private string? MapAlias(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(value) || Elsa3VariableMapper.IsDefaultStorageDriver(value))
             return null;
 
         var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);

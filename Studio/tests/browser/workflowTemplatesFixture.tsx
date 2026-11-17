@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createNotificationController, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createNotificationController, type StudioWeaverRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowTemplatesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTemplatesPage";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
@@ -66,7 +66,7 @@ export function WorkflowTemplatesFixture() {
     const controller = createNotificationController(); controller.setScope("template-fixture");
     setNotifications(controller.api); return controller;
   });
-  const ai = useMemo(() => ({ promptActions: { list: () => [] }, providerAvailability: { get: () => false, subscribe: () => () => undefined }, dispatchPrompt: () => undefined } as unknown as StudioAgentRegistry), []);
+  const ai = useMemo(() => ({ promptActions: { list: () => [] }, providerAvailability: { get: () => false, subscribe: () => () => undefined }, dispatchPrompt: () => undefined } as unknown as StudioWeaverRegistry), []);
   setDialogs({ confirm: async () => true, alert: async () => undefined, prompt: async () => null });
   const props = { context: backend, ai, propertyEditors: builtInPropertyEditors, expressionEditors: [], runInputEditors: [], testStimulusEditors: [], workflowDesignerPanels: [] };
   const navigate = (path: string) => {

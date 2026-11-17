@@ -9,8 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Elsa.Agent.Specialists.Design" Version="__VERSION__" />
-    <PackageReference Include="Elsa.Agent.Specialists" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Agent.Design" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Agent" Version="__VERSION__" />
     <PackageReference Include="Elsa.Activities.Runtime" Version="__VERSION__" />
     <PackageReference Include="Elsa.Serialization.SystemText" Version="__VERSION__" />
     <PackageReference Include="Elsa.Secrets" Version="__VERSION__" />

@@ -12,11 +12,11 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
 
-    const runtime = page.getByRole("region", { name: "Test run summary" });
+    const runtime = page.getByRole("region", { name: "Test run summary", exact: true });
     const toolbar = runtime.getByRole("group", { name: "Execution controls", exact: true });
     const refresh = toolbar.getByRole("button", { name: "Refresh execution", exact: true });
     const elements = [
-      toolbar.getByRole("button", { name: "Pause following", exact: true }), refresh,
+      toolbar.locator(".wf-run-live-tool"), refresh,
       toolbar.getByRole("button", { name: "Return to editing", exact: true }),
       runtime.getByRole("button", { name: "Open run", exact: true }),
       toolbar.getByText("Activity state is recorded at commit boundaries.", { exact: true }),
@@ -42,14 +42,16 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
 
     const statusSlot = runtime.locator(".wf-runtime-heading");
     const confirmedSlot = await statusSlot.boundingBox();
-    await toolbar.getByRole("button", { name: "Pause following", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Pause live updates", exact: true }).click();
     await expect(runtime.locator(".wf-runtime-outcome")).toContainText("observation paused");
     await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
+    await expect(toolbar.getByText(/^Live updates paused/)).toBeVisible();
     expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
-    await toolbar.getByRole("button", { name: "Follow execution", exact: true }).press("Enter");
+    expect(await geometry(elements)).toEqual(settled);
+    await toolbar.getByRole("button", { name: "Resume live updates", exact: true }).press("Enter");
     await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
-    await expect(refresh).toBeEnabled();
     expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
+    await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();

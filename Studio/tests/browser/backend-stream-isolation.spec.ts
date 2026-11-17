@@ -4,7 +4,7 @@ test("anonymous backend HTTP, SSE and SignalR omit an existing same-origin cooki
   await context.addCookies([{name:"backend-transport-probe",value:"ambient",url:baseURL!}]);
   await page.goto("/backendStreams.html");
   await expect(page.getByRole("group",{name:"Console host"}).getByRole("button",{name:"Server",exact:true})).toHaveAttribute("aria-pressed","true");
-  await expect(page.getByText("Cookie-free Agent",{exact:true})).toBeVisible();
+  await expect(page.getByText("Cookie-free Weaver",{exact:true})).toBeVisible();
   await expect(page.getByText("Cookie-free Logs",{exact:true})).toBeVisible();
   await expect(page.getByText("Cookie-free Console",{exact:true})).toBeVisible();
   await expect(page.getByText("Cookie-free Replay",{exact:true})).toBeVisible();

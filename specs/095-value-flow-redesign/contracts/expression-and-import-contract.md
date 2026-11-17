@@ -55,7 +55,7 @@ pinned as part of the consumer invocation's complete input snapshot.
   "language": "JavaScript",
   "source": "args.subtotal + args.tax",
   "resultType": { "alias": "Decimal", "collection": "None" },
-  "capabilityProfile": "binding-pure-v1",
+  "capabilityProfile": "binding-readonly-v1",
   "parameters": [
     {
       "name": "subtotal",
@@ -106,23 +106,62 @@ Both engines MUST materialize dynamic `Any` parameters consistently from fresh `
 `JsonElement` forms. Mutation of the engine-local object MUST NOT write workflow state and SHOULD be
 prevented/frozen where supported.
 
-The `binding-pure-v1` capability profile permits deterministic value transforms only. It forbids:
+The `binding-readonly-v1` capability profile (ADR 0083 amendment, epic #3052 decisions D-1, D-5, D-6
+and D-11; it replaces `binding-pure-v1`) permits value transforms that read workflow values and never
+change engine-owned workflow state. They need not be deterministic.
+
+It permits:
+
+- the native JavaScript intrinsics `Date`, `Intl`, `Temporal` and `Math` (including `Math.random`), so the
+  current time, random values and GUID generation; the profile is not limited to host functions. Evaluators
+  run in UTC with the invariant culture. Native `Date` and the current time come from the host's injectable
+  clock (`TimeProvider`), so tests can fix the time. The random source behind `Math.random` is the script
+  engine's own (Jint creates it with `new Random()`) and cannot be injected, so tests MUST NOT assume a fixed
+  random sequence;
+- functions implemented in .NET that are registered for this profile and exchange only JSON values with
+  the expression. A call is never refused or skipped because of what it does, and the workflow designer
+  owns the idempotency of external effects (D-6). No function profile is required. A function is effect-free
+  unless its host declares it effectful at registration; only a declared call gets the commit boundary
+  (ADR 0045 §5, D-6).
+
+It forbids:
 
 - ambient `variables`, `input`, `output`, or `ExpressionExecutionContext` objects;
 - `getVariable`, `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and
   `getOutputFrom` host functions;
 - workflow/activity/instance identity not declared as a parameter;
-- configuration, environment, filesystem, network, process, reflection, and service access;
-- current time, GUID generation, random generation, or other nondeterminism unless supplied as a
-  pinned parameter or separately ratified deterministic capability;
-- workflow variable mutation or activity output publication;
-- registration of mutable host functions through evaluation events, filters, preprocessors, or
-  postprocessors; and
+- live .NET objects crossing into the expression while .NET interop is off, which is the default. A host
+  may enable .NET interop for JavaScript through one replaceable engine strategy, provided by a feature
+  (analysis A-1 and the ADR 0046 amendment, V10); it then applies to script activities and input-binding
+  expressions alike, so a JavaScript input expression takes the same input as a script in a JavaScript
+  script activity. Under the ADR 0046 amendment's guardrails (V10), such an expression returns a storable
+  value or is refused, no live object enters the input snapshot, and it never writes Elsa-owned workflow
+  state. Any workflow node that uses general .NET access, whether a binding or a script activity, gets a
+  publish-time warning with a stable diagnostic code and a marker on the node in Studio, so it is never
+  switched on unnoticed (ADR 0046 amendment, V12, gives the detail). Whether such an expression is treated
+  as possibly effectful is decided by the opt-in's implementing spec;
+- any change to engine-owned workflow state: variable mutation, workflow output publication,
+  correlation or instance-name changes, and outcome selection;
+- functions not registered for this profile, added through evaluation events, filters,
+  preprocessors, or postprocessors; and
 - nonpersistable results in durable execution.
+
+The first two forbidden items stay until
+[ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
+(proposed, decision D-7) is accepted. It lets `variables.X`, `variables['X']` and `getVariable('X')`
+read through publish-resolved declarations, pinned at publish. A computed name (`variables[x]`,
+`getVariable(expr)`) or a read inside an opaque host function falls back to a run-time lookup: it is
+reported conservatively at publish, and its actual reads are recorded, protection-checked and part of
+the step's input snapshot. A computed name that resolves to nothing reads `undefined` with a warning,
+and the read is marked absent (ADR 0089 amendment, R3).
+
+A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2
+amendment, D-11). Under that policy, an `undefined` result and every `undefined`-valued object property
+materialize as `null`.
 
 JavaScript/Liquid extension registration MUST declare the capability profiles in which it is allowed.
 The evaluator builds its processor/filter set from that allowlist. A global extension registration
-cannot silently join the pure profile.
+cannot silently join a capability profile.
 
 Stateful scripts, configuration-dependent scripts, or scripts with workflow-visible side effects are
 activities. They receive plain inputs, return a typed result, and use a separate graph-visible `Set`
@@ -136,7 +175,10 @@ For each expression input the runtime MUST:
 2. resolve every parameter binding from one structural/causal runtime view;
 3. type-check, policy-check, and snapshot parameter values;
 4. evaluate exactly once for the new logical invocation;
-5. coerce and validate the declared result type;
+5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
+   amendment, D-11) — `undefined` array elements and sparse holes become `null` placeholders that preserve positions,
+   and the no-return check applies only to function-body scripts whose result is consumed — then coerce and validate
+   the declared result type;
 6. validate result persistability/protection policy; and
 7. include the final input value in the complete invocation snapshot before activity activation.
 
@@ -245,10 +287,11 @@ represent the operation:
 3. parameter binding, options, result type, source, or capability change does change the hash;
 4. restart/retry uses the pinned value without reevaluation;
 5. fresh and durable `Any` values produce equivalent reads;
-6. undeclared ambient reads, all mutation forms, service/configuration access, and nondeterministic
-   helpers are rejected;
+6. undeclared ambient reads, all mutation forms and service/configuration access are rejected;
+   nondeterministic helpers (clock, randomness, GUIDs) are allowed (D-1);
 7. expression results cannot downgrade source sensitivity/protection; and
-8. no processor, filter, or event can add a forbidden host capability to the pure profile.
+8. no processor, filter, or event can add a forbidden host capability to the `binding-readonly-v1`
+   profile.
 
 Importer fixtures MUST include literals, variables, workflow inputs, unique prior outputs,
 output-only references, combined expression/reference values, JavaScript, Liquid, loops, and nested

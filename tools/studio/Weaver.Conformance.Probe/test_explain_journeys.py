@@ -9,7 +9,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 
-from agent_transport import AgentTransport
+from weaver_transport import WeaverTransport
 from artifacts import TOOL, sha
 from batch_journeys import CREDENTIAL
 from explain_journeys import (BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CONTROL, CONTROL_ERROR, EXPECTED_CASES, INTERPRETATION, JAVASCRIPT,
@@ -46,7 +46,7 @@ def attachment_for(turn="explain", canary=CANARY):
 
 
 def server_admission(attachment):
-    """The server's admitted projection of the parts the driver compares, as WorkflowAgentSnapshot.TryRead writes them."""
+    """The server's admitted projection of the parts the driver compares, as WorkflowWeaverSnapshot.TryRead writes them."""
     content = copy.deepcopy(attachment["content"])
     for key in ("selectedActivityType", "inspectedNodeId"):
         content.pop(key, None)
@@ -210,7 +210,7 @@ class DisclosureControlTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): require_disclosure_refused(Response(status, value), self.MARKER)
 
 
-# As the native capture retains them (witness 04cd44f7c): non-SSE responses beside the agent's event streams.
+# As the native capture retains them (witness 04cd44f7c): non-SSE responses beside Weaver's event streams.
 STREAMS = [{"captureMethod": "not-sse", "captureError": None, "captureValidationError": None, "rawBody": ""},
            {"captureMethod": "streamResourceContent", "captureError": None, "captureValidationError": None, "rawBody": "data: {\"kind\":\"started\"}\n\n"}]
 
@@ -223,7 +223,7 @@ class ExplainBrowserTests(unittest.TestCase):
     def tearDown(self):
         self.directory.cleanup()
 
-    def capture(self, rows, name="agent-streams.json"):
+    def capture(self, rows, name="weaver-streams.json"):
         path = Path(self.directory.name) / str(len(list(Path(self.directory.name).iterdir()))) / name
         path.parent.mkdir()
         path.write_text(json.dumps(rows))
@@ -295,7 +295,7 @@ class RedactorLeakTests(unittest.TestCase):
         key = PASSWORD_ACTIVITY["input"].lower()
         browser = (TOOL / "browser.mjs").read_text()
         trace = (TOOL / "fixtures" / "ProviderProtocolFixtures" / "ProtocolFiles.cs").read_text()
-        source = (TOOL / "agent_transport.py").read_text()
+        source = (TOOL / "weaver_transport.py").read_text()
         names = set(re.findall(r'name\.Equals\("([^"]+)"', trace))
         for pattern in re.findall(r"\(\?:([a-z|_\[\]?-]+)\)", browser + trace + source, flags=re.IGNORECASE):
             names |= {item.lower() for item in pattern.split("|")}
@@ -311,14 +311,14 @@ class RedactorLeakTests(unittest.TestCase):
         output = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, check=True).stdout
         self.assertEqual(3, output.count(CANARY))
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "agent-requests.json"
+            path = Path(directory) / "weaver-requests.json"
             path.write_text(output)
             with self.assertRaises(RuntimeError):
                 require_no_canary_in_evidence([{"path": str(path), "sha256": sha(path)}], CANARY, directory)
 
     def test_a_leak_in_the_node_wire_shape_survives_the_transport_redactor_and_the_trace_search(self):
         with tempfile.TemporaryDirectory() as directory:
-            transport = AgentTransport(SimpleNamespace(bearer=None, base="http://127.0.0.1"), Path(directory) / "transport")
+            transport = WeaverTransport(SimpleNamespace(bearer=None, base="http://127.0.0.1"), Path(directory) / "transport")
             redacted = transport._redact(self.leak())
             self.assertEqual(3, json.dumps(redacted).count(CANARY))
             with self.assertRaises(RuntimeError):

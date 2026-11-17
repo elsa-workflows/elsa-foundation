@@ -1,0 +1,44 @@
+{
+  "name": "3994 unrelated Decision mailbox",
+  "definitionId": "replace-with-current-definition-id",
+  "state": {
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "rootActivity": {
+      "nodeId": "flowchart",
+      "activityVersionId": "__FLOWCHART_ACTIVITY_VERSION_ID__",
+      "inputs": [],
+      "outputs": [],
+      "structure": {
+        "kind": "elsa.flowchart.structure",
+        "schemaVersion": "1.0.0",
+        "payload": {
+          "startNodeId": "notify-mailbox",
+          "connections": [],
+          "activities": [
+            {
+              "nodeId": "notify-mailbox",
+              "activityVersionId": "__NOTIFY_MAILBOX_ACTIVITY_VERSION_ID__",
+              "inputs": [],
+              "outputs": [],
+              "structure": null,
+              "Decision": {
+                "typeName": "System.String",
+                "expression": {
+                  "type": "Literal",
+                  "value": "ops@example.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "layout": [
+    { "nodeId": "flowchart", "x": 0, "y": 0 },
+    { "nodeId": "notify-mailbox", "x": 120, "y": 80 }
+  ],
+  "activityPresentation": []
+}

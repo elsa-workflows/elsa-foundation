@@ -34,7 +34,9 @@ public sealed class ActivityDefinitionLookup(
         // without catching EntityNotFoundException themselves.
         try
         {
-            return await versionStore.GetAsync(versionId, cancellationToken);
+            // Analysis and catalog consumers read IActivityDefinitionVersion.Definition. GetAsync
+            // does not include the navigation; GetWithDefinitionAsync does.
+            return await versionStore.GetWithDefinitionAsync(versionId, cancellationToken);
         }
         catch (EntityNotFoundException)
         {

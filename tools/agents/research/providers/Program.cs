@@ -79,7 +79,7 @@ IChatClient Client(string provider, FixtureTransport transport, int? retries)
 ChatClientAgentRunOptions Options() => new(new ChatOptions
 {
     ModelId = "fixture-model", Temperature = 0.2f, MaxOutputTokens = 64,
-    ResponseFormat = args.Contains("--drop-schema") ? null : ChatResponseFormat.ForJsonSchema(schema, "SpecialistResult")
+    ResponseFormat = args.Contains("--drop-schema") ? null : ChatResponseFormat.ForJsonSchema(schema, "AgentResult")
 });
 
 async Task Success(string provider)
@@ -185,7 +185,7 @@ async Task ResultBoundary(string provider, string mode)
     observations.Add(new { name = provider + "-" + mode, transportRequests = transport.Count,
         finishReason = observer.Last!.FinishReason?.Value, responseContentTypes = observer.ContentTypes,
         sdkReturnedNormally = true, visibleTextLength = response.Text.Length,
-        disposition = "SDK transport success is not acceptance of the specialist business result." });
+        disposition = "SDK transport success is not acceptance of the agent business result." });
     if (mode == "refusal") Check(provider == "anthropic" ? observer.Last.FinishReason == ChatFinishReason.ContentFilter : observer.Last.Messages.SelectMany(message => message.Contents).OfType<ErrorContent>().Any(content => content.ErrorCode == "Refusal"), provider + ": refusal signal preserved");
     if (mode == "invalid") Check(response.Text == "fixture invalid business result", provider + ": malformed business output is returned unvalidated");
     if (mode == "truncated") Check(observer.Last.FinishReason == ChatFinishReason.Length, provider + ": truncation signal preserved even with syntactically valid JSON");

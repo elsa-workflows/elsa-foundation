@@ -2,6 +2,8 @@
 Elsa.Rules.Runtime.RulesRuntimeFeature
 Elsa.Rules.Runtime.RulesRuntimeFeature.AcceptNewInvocations.get -> bool
 Elsa.Rules.Runtime.RulesRuntimeFeature.AcceptNewInvocations.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.AllowSourceBuildIdentity.get -> bool
+Elsa.Rules.Runtime.RulesRuntimeFeature.AllowSourceBuildIdentity.set -> void
 Elsa.Rules.Runtime.RulesRuntimeFeature.DeploymentReceiptPath.get -> string!
 Elsa.Rules.Runtime.RulesRuntimeFeature.DeploymentReceiptPath.set -> void
 Elsa.Rules.Runtime.RulesRuntimeFeature.HostDepsPath.get -> string!

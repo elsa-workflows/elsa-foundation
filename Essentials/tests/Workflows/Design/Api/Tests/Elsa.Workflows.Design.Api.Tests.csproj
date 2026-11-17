@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
@@ -35,6 +36,11 @@
     <!-- The credential-literal fixture the Design test project owns, shared rather than duplicated (spec 188). -->
     <Compile Include="..\..\Tests\Infrastructure\CredentialLiteralTestSupport.cs" Link="Support\CredentialLiteralTestSupport.cs" />
     <Compile Include="..\..\Tests\Unit\BaselineValidatorTests\StubActivityCatalog.cs" Link="Support\StubActivityCatalog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Canonical inline event pipeline used by the real source-analysis fixture. -->
+    <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
   </ItemGroup>
 
 </Project>

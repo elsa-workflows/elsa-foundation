@@ -1,9 +1,13 @@
 #nullable enable
-Elsa.Agent.Extensions.AgentServiceCollectionExtensions
-Elsa.Agent.FoundationAgentAbstractionsFeature
-Elsa.Agent.FoundationAgentAbstractionsFeature.FoundationAgentAbstractionsFeature() -> void
-static Elsa.Agent.Extensions.AgentServiceCollectionExtensions.AddFoundationAgentAbstractions(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-virtual Elsa.Agent.FoundationAgentAbstractionsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
-Elsa.Agent.Extensions.AgentPersistenceSelection
-static Elsa.Agent.Extensions.AgentPersistenceSelection.SelectAgentAuditStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, TStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static Elsa.Agent.Extensions.AgentPersistenceSelection.SelectAgentSessionRecordStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Agent.Core.Contracts.IAgentSessionRecordStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Agent.AgentInMemoryJournalFeature
+Elsa.Agent.AgentInMemoryJournalFeature.AgentInMemoryJournalFeature() -> void
+Elsa.Agent.AgentRuntimeFeature
+Elsa.Agent.AgentRuntimeFeature.AgentRuntimeFeature() -> void
+virtual Elsa.Agent.AgentInMemoryJournalFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.AgentRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.AgentRuntimeFeature.AllowNewOperations.get -> bool
+Elsa.Agent.AgentRuntimeFeature.AllowNewOperations.set -> void
+Elsa.Agent.AgentRuntimeFeature.ContentRetention.get -> System.TimeSpan
+Elsa.Agent.AgentRuntimeFeature.ContentRetention.set -> void
+Elsa.Agent.AgentRuntimeFeature.StreamResponses.get -> bool
+Elsa.Agent.AgentRuntimeFeature.StreamResponses.set -> void

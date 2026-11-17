@@ -1,6 +1,6 @@
 import React from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { applyCreateDialogPrefill } from "../workflow-editor/workflowLibraryAgent";
+import { applyCreateDialogPrefill } from "../workflow-editor/workflowLibraryWeaver";
 import type { CreateWorkflowDraft } from "../workflow-editor/editorTypes";
 import * as templateApi from "../workflowTemplates";
 import type { WorkflowTemplate } from "../workflowTemplates";
@@ -38,7 +38,7 @@ function renderDialog(creating = false) {
     draft={{ name: "QA workflow", description: "", rootActivityVersionId: null }}
     catalog={[flowchartActivity()]}
     creating={creating}
-    ai={testApi().agent}
+    ai={testApi().weaver}
     onChange={vi.fn()}
     onClose={onClose}
     onSubmit={vi.fn()}
@@ -94,7 +94,7 @@ const templates: WorkflowTemplate[] = [
 
 async function editableDialog(initial: CreateWorkflowDraft = { name: "", description: "", rootActivityVersionId: null }) {
   vi.spyOn(templateApi, "listWorkflowTemplates").mockResolvedValue(templates);
-  const ai = testApi().agent;
+  const ai = testApi().weaver;
   const onSubmit = vi.fn();
   let current = initial;
   let replace = (_draft: CreateWorkflowDraft) => {};

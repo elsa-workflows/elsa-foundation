@@ -65,7 +65,7 @@ public sealed class Elsa3ReusableGuidanceTests
         Assert.Contains("'n' (Elsa.HttpEndpoint)", error.Message, StringComparison.Ordinal);
         Assert.Equal("n", error.Metadata["ActivityNodeId"]);
         Assert.Contains($"Remove the capture of '{output}' from the HTTP Endpoint", error.Guidance, StringComparison.Ordinal);
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("elsa3-http", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("n.http-", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -1,0 +1,321 @@
+.weaver-launcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.topbar-actions > .weaver-launcher {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 0.75rem 0 0.65rem;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.weaver-launcher svg {
+  flex: 0 0 auto;
+}
+
+.weaver-session-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  margin-left: 0.15rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.weaver-session-indicator > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.1rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0 0.35rem;
+  white-space: nowrap;
+}
+
+.weaver-session-indicator > span:first-child {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.weaver-session-indicator > span[data-state="blocked"],
+.weaver-session-indicator > span[data-state="failed"] {
+  border-color: var(--studio-danger);
+  color: var(--studio-danger);
+}
+
+.weaver-session-indicator > span[data-state="waiting"] {
+  border-color: var(--studio-warning);
+  color: var(--studio-warning);
+}
+
+.weaver-launcher:hover:not(:disabled),
+.weaver-launcher:focus-visible {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.weaver-proposal footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  min-height: 1.9rem;
+  padding: 0 0.55rem;
+  cursor: pointer;
+}
+
+.weaver-proposal footer button:hover:not(:disabled) {
+  border-color: var(--studio-accent);
+}
+
+.weaver-context-chips,
+.weaver-prompt-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem 0;
+}
+
+.weaver-context-chip,
+.weaver-prompt-starters button,
+.weaver-proposal-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+/*
+ * Weaver risk chip — tone by severity.
+ *
+ * `data-risk` is set on the parent `.weaver-proposal` article; the actual values are the
+ * StudioWeaverRisk levels (`review-required` | `destructive` | `admin`). We also accept the
+ * generic low/medium/high/critical aliases in case a provider emits those. Text uses the
+ * WCAG-AA `--studio-*-fg` foreground tokens (same fix as the status chip: the saturated
+ * tone colour fails AA as small text on its own tint).
+ */
+.weaver-proposal[data-risk="review-required"] .weaver-proposal-risk,
+.weaver-proposal[data-risk="medium"] .weaver-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+}
+
+.weaver-proposal[data-risk="destructive"] .weaver-proposal-risk,
+.weaver-proposal[data-risk="high"] .weaver-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+/* Admin/critical: strongest emphasis — solid danger fill with its AA foreground. */
+.weaver-proposal[data-risk="admin"] .weaver-proposal-risk,
+.weaver-proposal[data-risk="critical"] .weaver-proposal-risk {
+  border-color: var(--studio-danger);
+  background: color-mix(in srgb, var(--studio-danger) 18%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+  font-weight: 700;
+}
+
+/* Low risk stays neutral-informational using the success tone. */
+.weaver-proposal[data-risk="low"] .weaver-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  color: var(--studio-success-fg);
+}
+
+.weaver-context-chip em {
+  color: var(--studio-warning);
+  font-style: normal;
+}
+
+.weaver-prompt-starters button {
+  cursor: pointer;
+}
+
+.weaver-proposals {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0 1rem 1rem;
+}
+
+.weaver-proposal {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 0.75rem;
+}
+
+.weaver-proposal header {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.weaver-proposal-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.weaver-proposal p {
+  color: var(--studio-text-muted);
+  font-size: 0.8125rem;
+}
+
+.weaver-proposal-details {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.weaver-proposal-details div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.weaver-proposal-details dt {
+  color: var(--studio-text-muted);
+}
+
+.weaver-proposal-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.weaver-proposal-error,
+.weaver-proposal-disabled,
+.weaver-proposal-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.weaver-proposal-error {
+  color: var(--studio-danger-fg);
+}
+
+.weaver-proposal-disabled {
+  color: var(--studio-text-muted);
+}
+
+.weaver-proposal-result {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem;
+  font-size: 0.78rem;
+}
+
+.weaver-proposal-result > span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.weaver-proposal-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--studio-text);
+  font: inherit;
+}
+
+.weaver-proposal footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+html[data-theme-material] .weaver-launcher {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-strong);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .weaver-launcher:hover:not(:disabled),
+html[data-theme-material] .weaver-launcher:focus-visible {
+  border-color: var(--studio-material-edge-strong);
+  color: var(--studio-accent);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .weaver-context-chip,
+html[data-theme-material] .weaver-prompt-starters button,
+html[data-theme-material] .weaver-proposal-result,
+html[data-theme-material] .weaver-proposal footer button {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .weaver-proposal {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}
+
+/* Recovery (#3441): the owner's statement about an uncertain client operation. */
+.weaver-proposal-resolution { color: var(--studio-text-muted); }
+
+.weaver-proposal-resolve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.weaver-proposal-resolve small { flex-basis: 100%; }
+
+.weaver-proposal-resolve button {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.weaver-proposal-resolve button:disabled { cursor: not-allowed; opacity: 0.55; }

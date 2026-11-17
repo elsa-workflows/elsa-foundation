@@ -1,14 +1,14 @@
 using CShells.Features;
-using Elsa.Agent.Anthropic;
-using Elsa.Agent.Anthropic.Services;
-using Elsa.Agent.GitHubCopilot;
-using Elsa.Agent.GitHubCopilot.Services;
+using Elsa.Weaver.Anthropic;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.GitHubCopilot;
+using Elsa.Weaver.GitHubCopilot.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Acme.Weaver.ProtocolFixtures;
 
-[ShellFeature(name: "AcmeCopilotProtocolFixture", DependsOn = new object[] { typeof(GitHubCopilotAgentFeature) })]
+[ShellFeature(name: "AcmeCopilotProtocolFixture", DependsOn = new object[] { typeof(WeaverGitHubCopilotFeature) })]
 public class CopilotProtocolFixtureFeature : IShellFeature
 {
     public string CommandFile { get; set; } = string.Empty;
@@ -22,7 +22,7 @@ public class CopilotProtocolFixtureFeature : IShellFeature
     }
 }
 
-[ShellFeature(name: "AcmeAnthropicProtocolFixture", DependsOn = new object[] { typeof(AnthropicAgentFeature) })]
+[ShellFeature(name: "AcmeAnthropicProtocolFixture", DependsOn = new object[] { typeof(WeaverAnthropicFeature) })]
 public class AnthropicProtocolFixtureFeature : IShellFeature
 {
     public string CommandFile { get; set; } = string.Empty;

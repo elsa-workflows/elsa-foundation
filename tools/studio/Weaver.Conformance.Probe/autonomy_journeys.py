@@ -18,7 +18,7 @@ import re
 import shutil
 from urllib.parse import quote, urlparse
 
-from agent_transport import _json as strict_json
+from weaver_transport import _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained, correlate_browser_protocol, _normalized_result
 from disclosure_journeys import require_stored_result
@@ -173,12 +173,12 @@ def _owner(root, reference):
 
 
 def _frames(output, session, backend_origin):
-    path = Path(output) / "agent-streams.json"
+    path = Path(output) / "weaver-streams.json"
     streams = strict_json(path.read_text())
     check(isinstance(streams, list) and streams, "Native SSE is mandatory")
     frames = []
     request_ids = set()
-    expected_url = backend_origin + "/_elsa/agent/sessions/" + quote(session, safe="") + "/stream"
+    expected_url = backend_origin + "/_elsa/weaver/sessions/" + quote(session, safe="") + "/stream"
     for stream in streams:
         check(isinstance(stream, dict), "A native stream observation must be a structured CDP record")
         request, response = stream.get("requestObservation"), stream.get("responseObservation")
@@ -308,13 +308,13 @@ def require_size_owner_journey(output, observation, witness):
 
 
 def _messages(output, a, witness, before):
-    requests = strict_json((Path(output) / "agent-requests.json").read_text())
+    requests = strict_json((Path(output) / "weaver-requests.json").read_text())
     check(isinstance(requests, list), "Native requests were not retained")
-    creates = [row for row in requests if urlparse(row["url"]).path == "/_elsa/agent/sessions"]
+    creates = [row for row in requests if urlparse(row["url"]).path == "/_elsa/weaver/sessions"]
     messages = [row for row in requests if urlparse(row["url"]).path.endswith("/messages")]
     check(len(creates) == 1 and creates[0].get("method") == "POST"
           and creates[0]["body"].get("autonomyMode") == a["initialMode"] and len(messages) == 2
-          and all(row.get("method") == "POST" and urlparse(row["url"]).path == "/_elsa/agent/sessions/" + a["sameSessionId"] + "/messages"
+          and all(row.get("method") == "POST" and urlparse(row["url"]).path == "/_elsa/weaver/sessions/" + a["sameSessionId"] + "/messages"
                   for row in messages), "The mode journey created or submitted to another native conversation")
     bootstrap = strict_json((Path(output) / "autonomy-native-bootstrap.json").read_text())
     capabilities = bootstrap.get("value", {}).get("data", {}).get("capabilities")
@@ -432,10 +432,10 @@ def _reviewed_effect(output, requests, frames, a, witness, before, inline_result
     preview = {"typeId": witness["sizeResultType"], "schemaVersion": "1", "data": {"widgetId": witness["widgetId"],
         "revision": before["revision"], "size": a["targetSize"], "beforeSize": before["size"], "hostId": witness["hostId"]}}
     check(same(prepared.get("preview"), preview), "The original reviewed preview does not identify the requested size change")
-    create = next(row for row in requests if urlparse(row["url"]).path == "/_elsa/agent/sessions")
+    create = next(row for row in requests if urlparse(row["url"]).path == "/_elsa/weaver/sessions")
     backend = urlparse(create["url"])
-    check(create["url"] == backend_origin + "/_elsa/agent/sessions", "The reviewed session must use the actual authenticated backend origin")
-    expected_url = backend.scheme + "://" + backend.netloc + "/_elsa/agent/proposals/" + quote(proposal["id"], safe="") + "/execute"
+    check(create["url"] == backend_origin + "/_elsa/weaver/sessions", "The reviewed session must use the actual authenticated backend origin")
+    expected_url = backend.scheme + "://" + backend.netloc + "/_elsa/weaver/proposals/" + quote(proposal["id"], safe="") + "/execute"
     effects = [row for row in requests if urlparse(row["url"]).path.endswith(("/execute", "/acknowledgements"))]
     check(len(effects) == 1 and effects[0].get("method") == "POST" and effects[0].get("url") == expected_url,
           "Exactly one original same-backend server execute request is required")
@@ -511,15 +511,15 @@ def _policy(value, message):
 def _request_kind(row, session, backend_origin):
     url = urlparse(row.get("url", ""))
     check(backend_origin == url.scheme + "://" + url.netloc and not url.query and not url.fragment,
-          "A native Agent request left the owned backend")
-    base = "/_elsa/agent/sessions"
+          "A native Weaver request left the owned backend")
+    base = "/_elsa/weaver/sessions"
     exact = {(base, "POST"): "create", (base + "/" + quote(session, safe="") + "/messages", "POST"): "message",
              (base + "/" + quote(session, safe="") + "/autonomy", "PUT"): "autonomy"}
     kind = exact.get((url.path, row.get("method")))
     if kind is None and row.get("method") == "POST":
-        match = re.fullmatch(r"/_elsa/agent/proposals/[^/]+/(approve|execute)", url.path)
+        match = re.fullmatch(r"/_elsa/weaver/proposals/[^/]+/(approve|execute)", url.path)
         kind = match[1] if match else None
-    check(kind is not None, "An unrecognized native Agent request is not part of this mode journey")
+    check(kind is not None, "An unrecognized native Weaver request is not part of this mode journey")
     return kind
 
 
@@ -554,7 +554,7 @@ def require_policy_acknowledgement(output, a, requests, backend_origin, owned_ro
     review = a["outcomeAtDecision"] == "review"
     check(kinds == ["create", "message"] + (["autonomy"] if transition else []) + ["message"] + (["approve", "execute"] if review else []),
           "Mode changes must be exactly one acknowledged PUT between the original prompts; controls send none")
-    update_url = backend_origin + "/_elsa/agent/sessions/" + quote(session, safe="") + "/autonomy"
+    update_url = backend_origin + "/_elsa/weaver/sessions/" + quote(session, safe="") + "/autonomy"
     structured, raw = output / "autonomy-mode-update.json", output / "autonomy-mode-update-http.json"
     if transition:
         check(_owned_ref(owned_root, a.get("policyUpdate")).resolve() == structured.resolve() and raw.is_file(),
@@ -652,7 +652,7 @@ def verify_mode_observation(output, observation, witness, provider, transport, *
     requests, session = _messages(output, a, witness, before)
     policy, policy_refs = require_policy_acknowledgement(output, a, requests, transport.http.base, owned_root)
     check(same(a.get("selectionRequests"), [row for row in requests if urlparse(row["url"]).path.endswith("/autonomy")]),
-          "The browser selection requests differ from the actual retained Agent requests")
+          "The browser selection requests differ from the actual retained Weaver requests")
     commands = _commands(output, a, witness)
     frames, sse = _frames(output, a["sameSessionId"], transport.http.base)
     trace = transport.protocol_trace(offset)

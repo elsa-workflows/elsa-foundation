@@ -119,6 +119,7 @@ public sealed class WorkflowExecutable
             .Concat(nodeSnapshot.Select(node => new RuntimeRequirement(
                 node.Descriptor.ConsumerKey,
                 node.Descriptor.SchemaVersion)))
+            .Concat(RuntimeReadSelectionRequirement.For(nodeSnapshot, WorkflowVariables.Select(variable => variable.InitialBinding)))
             .Distinct()
             .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
             .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)

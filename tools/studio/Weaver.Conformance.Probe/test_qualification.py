@@ -291,7 +291,7 @@ class CompleteWitnessTests(unittest.TestCase):
             "replaced-by-other-adapter": lambda r: r[MATRIX_QUALIFICATION]["cases"].__setitem__(
                 r[MATRIX_QUALIFICATION]["cases"].index(autonomy(r)), copy.deepcopy(autonomy(r, provider="copilot"))),
             "wrong-adapter": lambda r: autonomy(r).update(adapter="copilot"),
-            "wrong-cause": lambda r: autonomy(r)["outcome"].update(execute="agent.proposal.forbidden"),
+            "wrong-cause": lambda r: autonomy(r)["outcome"].update(execute="weaver.proposal.forbidden"),
             "wrong-mode-cause": lambda r: autonomy(r, "automatic-to-manual").update(outcomeAtDecision="automatic"),
             "failed-case": lambda r: autonomy(r).update(status="failed", cause="lifecycle.refusal_cause"),
             "no-evidence": lambda r: autonomy(r).update(evidence=[]),
@@ -391,7 +391,7 @@ class CompleteWitnessTests(unittest.TestCase):
             "inspection-shape-control-missing": lambda r: r[INSPECTION_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[INSPECTION_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[INSPECTION_SECTION]["records"][0]["id"].split("-", 1)[0],
                  "native": {key: value for key, value in synthetic_inspection_native(r[INSPECTION_SECTION]["records"][0]["id"]).items()
-                            if not key.endswith("-agent-absent")},
+                            if not key.endswith("-weaver-absent")},
                  "browser": synthetic_inspection_browser(r[INSPECTION_SECTION]["records"][0]["id"])})),
             "inspection-edit-changed": lambda r: r[INSPECTION_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[INSPECTION_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[INSPECTION_SECTION]["records"][0]["id"].split("-", 1)[0],

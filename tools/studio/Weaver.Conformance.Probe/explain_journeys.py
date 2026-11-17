@@ -67,10 +67,10 @@ MAX_DIAGNOSTICS, MAX_MESSAGE, MAX_CONTENT, CONTENT_BUDGET = 64, 1024, 2048, 1638
 # Each turn and the node the editor has selected for it.
 TURNS = {"explain": LITERAL_NODE, "validation": "b", "expression": "inner", "secret-reference": SECRET_NODE}
 CONTROL = "credential-disclosed"
-CONTROL_ERROR = {"code": "agent.context.incomplete", "statusCode": 400,
+CONTROL_ERROR = {"code": "weaver.context.incomplete", "statusCode": 400,
                  "message": "The selected activity's property context does not match the activity's declared inputs, so the snapshot was not admitted."}
 
-# Each actual adapter's own frame order for a read tool that completes. The engine's own loop (AgentTurnServices) emits it:
+# Each actual adapter's own frame order for a read tool that completes. The engine's own loop (WeaverTurnServices) emits it:
 # Copilot's SDK runs the function, and the engine admits context again before the contributed result; Anthropic leaves the
 # call to the engine, which admits context again before toolCallCompleted (a dispatch with a result, as the batch case
 # observed natively for its successful reads) and once more for the continuation step. The refused-preparation order of the
@@ -317,18 +317,18 @@ BROWSER_OBSERVATIONS = {"explainCompleted": True, "selectedExpressionType": "Var
 
 
 def require_stream_capture(evidence):
-    """The canary searches over the browser's agent streams count only when the streams were captured: every captured row
-    without a capture or validation error, and at least one actual agent event stream (not a non-SSE response)."""
-    refs = [ref for ref in evidence if isinstance(ref, dict) and Path(str(ref.get("path", ""))).name == "agent-streams.json"]
-    check(len(refs) == 1, "The explanation Studio journey retained no single agent stream capture")
+    """The canary searches over the browser's Weaver streams count only when the streams were captured: every captured row
+    without a capture or validation error, and at least one actual Weaver event stream (not a non-SSE response)."""
+    refs = [ref for ref in evidence if isinstance(ref, dict) and Path(str(ref.get("path", ""))).name == "weaver-streams.json"]
+    check(len(refs) == 1, "The explanation Studio journey retained no single Weaver stream capture")
     path = Path(refs[0]["path"])
-    check(path.is_file() and sha(path) == refs[0].get("sha256"), "The agent stream capture is missing or changed")
+    check(path.is_file() and sha(path) == refs[0].get("sha256"), "The Weaver stream capture is missing or changed")
     rows = json.loads(path.read_text())
-    check(isinstance(rows, list) and all(isinstance(row, dict) for row in rows), "Malformed agent stream capture")
+    check(isinstance(rows, list) and all(isinstance(row, dict) for row in rows), "Malformed Weaver stream capture")
     check(all(row.get("captureError") is None and row.get("captureValidationError") is None for row in rows),
-          "An agent stream was not captured completely, so its absence of the canary proves nothing")
+          "A Weaver stream was not captured completely, so its absence of the canary proves nothing")
     check(any(row.get("captureMethod") not in (None, "not-sse") and isinstance(row.get("rawBody"), str) and row["rawBody"].startswith("data: ")
-              for row in rows), "No actual agent event stream was captured to search")
+              for row in rows), "No actual Weaver event stream was captured to search")
     return len(rows)
 
 
@@ -503,7 +503,7 @@ def _browser(runtime, name, seed, canary):
     value = require_explain_browser(observed, commands, trace["records"], provider=runtime.provider)
     evidence = [*observed["evidence"], observed["ownerBefore"], observed["ownerAfter"], {"path": str(observation), "sha256": sha(observation)},
                 runtime.save(root, "browser-inputs", browser_inputs(config)), trace["receipt"]]
-    # The typed canary in no captured browser request, agent stream, owner read, adapter trace or other browser evidence.
+    # The typed canary in no captured browser request, Weaver stream, owner read, adapter trace or other browser evidence.
     value["canarySearch"] = {"files": require_no_canary_in_evidence(evidence, canary, runtime.run.root), "found": 0}
     _no_canary(canary, trace["records"])
     return value, evidence

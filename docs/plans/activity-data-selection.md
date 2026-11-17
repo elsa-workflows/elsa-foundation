@@ -71,7 +71,7 @@ These are source findings, not execution acceptance. The live issue/PR observati
 | Area | Existing basis | Work or uncertainty |
 |---|---|---|
 | Value semantics | Accepted [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) distinguishes immutable results from variables and resolves causal occurrences. | Preserve its rules; a reference never means the newest execution of a node. |
-| Direct result input | [RuntimeInputBindingCompiler](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection, scope and optionality. | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
+| Direct result input | [RuntimeInputBindingCompiler](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection and optionality; a declared producer scope is optional and legacy, and the server's own bindings carry none ([binding contract](../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire)). | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
 | Expression bindings | [ExpressionDefinition](../../Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs) supports activity-result parameters. [#3501](https://github.com/elsa-workflows/elsa-foundation/issues/3501) and merged [PR #3502](https://github.com/elsa-workflows/elsa-foundation/pull/3502) delivered a workflow-input argument picker. | Reuse portable parameter handling. Define nested selection separately from the installed language adapter used for transformations. |
 | Source discovery | [PersistedExpressionAuthoringContextSource](../../Essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs) supplies typed available outputs; [expressionToolingClient](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/expression-tooling/expressionToolingClient.ts) projects them to Studio. | Prove current-draft, non-code input usage. CLR member discovery is bounded; it is not general dynamic JSON-schema discovery. |
 | Main canvas | #3094 identifies Sequence/structure-owned availability and omitted Flowchart producers. | Prove a simple linear Flowchart in the first milestone; specify general graph availability before production expansion. |
@@ -260,7 +260,7 @@ and the org-wide [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob
 claims and delivery. This proposal does not create initiative membership for #3094. A future change that
 belongs to an existing initiative follows that initiative's agreement rules for that specific change.
 
-Planning considered framework constitution v6.1.0 and Elsa constitution v6.3.0: preserve module boundaries,
+Planning considered framework constitution v6.1.0 and Elsa constitution v6.4.0: preserve module boundaries,
 artifact-only execution, explicit value roles and meaningful risk-based tests. No exception is proposed.
 Draft/provisional framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 remain unratified; this proposal
 does not ratify them. Recheck affected gates during the formal spec/plan review.

@@ -14,4 +14,8 @@ public sealed record WorkflowOutputProjection(
     bool IsRedacted,
     string? RedactionReason,
     RuntimeValueTypeDescriptor Type,
-    DateTimeOffset CapturedAt);
+    DateTimeOffset CapturedAt)
+{
+    /// <summary>The policy-selected representation of an exposed value; absent for redacted values.</summary>
+    public RuntimePayloadCaptureMode? CaptureMode { get; init; }
+}

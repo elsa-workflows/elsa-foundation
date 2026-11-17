@@ -1,0 +1,261 @@
+/* Choose data (spec 1215): the row action, the shared source browser and the readable reference. The browser is
+   portaled to the document body, so it uses host --studio-* tokens; the trigger and reference live in the property
+   row and use the module's --wf-* tokens like their neighbours. */
+
+.wf-choose-data-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: none;
+  color: var(--wf-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.wf-choose-data-trigger:hover,
+.wf-choose-data-trigger:focus-visible,
+.wf-choose-data-trigger.open {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
+}
+
+.wf-choose-data-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.wf-data-chooser {
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 35%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-raised);
+  box-shadow: var(--studio-shadow-sm);
+  color: var(--studio-text);
+  animation: wf-pop-in 0.13s ease;
+}
+
+.wf-data-chooser-panel {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  outline: none;
+}
+
+.wf-data-chooser-heading {
+  display: grid;
+  gap: 2px;
+  padding: 0 2px 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wf-data-chooser-heading small,
+.wf-data-chooser-note {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.wf-data-chooser-list {
+  display: grid;
+  gap: 6px;
+}
+
+.wf-data-chooser-group {
+  display: grid;
+  gap: 1px;
+}
+
+.wf-data-chooser-group-label {
+  padding: 2px 4px;
+  overflow-wrap: anywhere;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wf-data-chooser-group-reason {
+  margin: 0;
+  padding: 0 4px 2px;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.wf-data-reference-id {
+  color: var(--wf-muted-text);
+  font-family: var(--studio-font-mono, ui-monospace, monospace);
+}
+
+.wf-data-chooser-group-id {
+  font-family: var(--studio-font-mono, ui-monospace, monospace);
+  font-weight: 400;
+}
+
+.wf-data-chooser-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.wf-data-chooser-option:not([aria-disabled="true"]):hover,
+.wf-data-chooser-option:not([aria-disabled="true"]):focus-visible {
+  background: var(--studio-accent-soft);
+}
+
+/* Every option shows keyboard focus; only those that can be chosen get the choosable fill. */
+.wf-data-chooser-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--studio-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.wf-data-chooser-option-tag {
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  color: var(--studio-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 0 6px;
+}
+
+.wf-data-chooser-option.selected {
+  background: color-mix(in srgb, var(--studio-accent) 22%, transparent);
+  font-weight: 600;
+}
+
+.wf-data-chooser-option[aria-disabled="true"] {
+  cursor: default;
+}
+
+.wf-data-chooser-option[aria-disabled="true"] .wf-data-chooser-option-label,
+.wf-data-chooser-option[aria-disabled="true"] .wf-data-chooser-option-type {
+  color: var(--studio-text-muted);
+}
+
+.wf-data-chooser-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-data-chooser-option-type {
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.wf-data-chooser-option small {
+  grid-column: 1 / -1;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.wf-data-chooser-notice {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 4px 2px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wf-data-chooser-notice[data-tone="danger"] {
+  color: var(--studio-danger-fg);
+}
+
+.wf-data-chooser-notice button,
+.wf-data-reference-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.wf-data-chooser-notice button:hover,
+.wf-data-chooser-notice button:focus-visible,
+.wf-data-reference-actions button:hover,
+.wf-data-reference-actions button:focus-visible {
+  border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+  background: var(--studio-accent-soft);
+  outline: none;
+}
+
+.wf-data-reference {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel);
+  padding: 7px 9px;
+}
+
+.wf-data-reference[data-problem="true"] {
+  border-color: color-mix(in srgb, var(--wf-warning) 55%, var(--wf-border));
+}
+
+.wf-data-reference-source,
+.wf-data-reference-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wf-data-reference-source > svg,
+.wf-data-reference-problem > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.wf-data-reference-source > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-data-reference-source > svg {
+  color: var(--wf-accent);
+}
+
+.wf-data-reference-problem {
+  color: var(--wf-warning-text);
+}
+
+.wf-data-reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

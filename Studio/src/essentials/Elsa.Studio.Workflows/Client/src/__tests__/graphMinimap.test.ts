@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   graphMinimapHideThreshold,
+  graphMinimapMinimumPaneWidth,
   graphNodeBounds,
   graphOverflowsViewport,
+  paneFitsGraphMinimap,
   shouldShowGraphMinimap,
   type GraphMinimapNode
 } from "../graph-authoring/graphMinimap";
@@ -94,5 +96,24 @@ describe("shouldShowGraphMinimap", () => {
     ];
     expect(shouldShowGraphMinimap(clearlyFitting, laptopPane, true)).toBe(false);
     expect(shouldShowGraphMinimap(clearlyFitting, laptopPane)).toBe(false);
+  });
+
+  it("stays hidden on a phone-width pane even when the graph overflows", () => {
+    const overflowing = [node("a", 0, 0), node("b", 0, 900)];
+    const phonePane = { width: 390, height: 420 };
+    expect(shouldShowGraphMinimap(overflowing, phonePane)).toBe(false);
+    expect(shouldShowGraphMinimap(overflowing, phonePane, true)).toBe(false);
+  });
+
+  it("still shows on a short but wide docked pane once the graph overflows", () => {
+    expect(shouldShowGraphMinimap([node("a", 0, 0), node("b", 0, 400)], { width: 840, height: 237 })).toBe(true);
+  });
+});
+
+describe("paneFitsGraphMinimap", () => {
+  it("needs the minimum pane width", () => {
+    expect(paneFitsGraphMinimap({ width: graphMinimapMinimumPaneWidth, height: 200 })).toBe(true);
+    expect(paneFitsGraphMinimap({ width: 530, height: 500 })).toBe(true);
+    expect(paneFitsGraphMinimap({ width: graphMinimapMinimumPaneWidth - 1, height: 800 })).toBe(false);
   });
 });

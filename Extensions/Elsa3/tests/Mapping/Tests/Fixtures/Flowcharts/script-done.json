@@ -1,0 +1,65 @@
+{
+  "id": "fixture-v1",
+  "definitionId": "fixture",
+  "name": "fixture",
+  "description": "Test-owned flowchart shape (spec 1208 US2): RunJavaScript connected on Done, without possible outcomes, with possible outcomes the script selects none of, and with a script that selects one.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "root", "nodeId": "root", "name": "root", "type": "Elsa.Flowchart", "version": 1,
+    "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "plain", "nodeId": "plain", "name": "plain", "type": "Elsa.RunJavaScript", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "return 1;" } }
+      },
+      {
+        "id": "listed", "nodeId": "listed", "name": "listed", "type": "Elsa.RunJavaScript", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "return 2;" } },
+        "possibleOutcomes": { "typeName": "List<String>", "expression": { "type": "Literal", "value": "[\"Approved\",\"Rejected\"]" } }
+      },
+      {
+        "id": "routed", "nodeId": "routed", "name": "routed", "type": "Elsa.RunJavaScript", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "setOutcome('Approved');" } },
+        "possibleOutcomes": { "typeName": "List<String>", "expression": { "type": "Literal", "value": "[\"Approved\",\"Rejected\"]" } }
+      },
+      {
+        "id": "on-approved", "nodeId": "on-approved", "name": "on-approved", "type": "Elsa.WriteLine", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "text": { "typeName": "String", "expression": { "type": "Literal", "value": "approved" } }
+      },
+      {
+        "id": "last", "nodeId": "last", "name": "last", "type": "Elsa.WriteLine", "version": 1,
+        "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "text": { "typeName": "String", "expression": { "type": "Literal", "value": "last" } }
+      }
+    ],
+    "connections": [
+      { "source": { "activity": "plain", "port": "Done" }, "target": { "activity": "listed", "port": "In" }, "vertices": [] },
+      { "source": { "activity": "listed", "port": "Done" }, "target": { "activity": "routed", "port": "In" }, "vertices": [] },
+      { "source": { "activity": "routed", "port": "Approved" }, "target": { "activity": "on-approved", "port": "In" }, "vertices": [] },
+      { "source": { "activity": "routed", "port": "Done" }, "target": { "activity": "last", "port": "In" }, "vertices": [] }
+    ],
+    "variables": []
+  }
+}

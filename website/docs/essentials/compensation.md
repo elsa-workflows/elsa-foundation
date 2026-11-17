@@ -87,8 +87,10 @@ Elsa does not provide exactly-once delivery or a reconciliation framework; these
 A compensation usually needs something the step produced: the reservation id to release. Bind the compensation's input to the step's result, a reference to one of the step's outputs. The compensation then reads the result of the exact run of the step it undoes: in a loop each iteration's compensation gets its own iteration's result, and an outer scope that undoes a nested scope's step after a hand-over still gets that step's result. For example, bind a **Release** compensation's `reservation` input to the result of the **Reserve** step it undoes:
 
 ```json
-{ "referenceKey": "reservation", "value": { "expressionType": "ActivityResult", "value": { "producerNodeId": "reserve-inventory", "projectionKey": "reservation", "producerScopeId": "order" } } }
+{ "referenceKey": "reservation", "value": { "expressionType": "ActivityResult", "value": { "producerNodeId": "reserve-inventory", "projectionKey": "reservation" } } }
 ```
+
+The binding names only the step and its output. Older documents may also carry a `producerScopeId`; it still works but is no longer needed.
 
 A workflow variable also works for a step that runs once: capture the step's output into the variable and bind the compensation's input to it. In a loop, a later iteration overwrites the variable before an earlier iteration's compensation reads it, so use the step's result there.
 

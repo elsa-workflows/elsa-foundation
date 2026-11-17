@@ -17,6 +17,10 @@ The semantic pin covers `Elsa.Rules.Core`, `Elsa.Rules.Runtime`, `Elsa.Rules.Per
 
 The host's trusted identity source validates deployed asset bytes against the receipt and normal loaded assembly file identity before advertising compatibility. It snapshots the validated pin. Callers cannot select an arbitrary receipt/path or override a published native node's pin. No runtime download, manually constructed assembly loader, publisher-trust claim or JIT-memory identity proof is introduced. Semantic dependencies must appear in the explicit pin rather than silently relying on the framework profile for their identity.
 
+### Source-build identity (opt-in)
+
+A host with `RulesRuntimeFeature.AllowSourceBuildIdentity` advertises the three required Rules assemblies it loaded from disk instead of a receipt ([ADR 0088 amendment](../../../docs/adr/0088-rules-owns-its-execution-domain.md#amendment--2026-11-09-accepted)). The pin keeps this shape with three markers: package ids are `source-build:Elsa.Rules.Core`, `source-build:Elsa.Rules.Runtime` and `source-build:Elsa.Rules.Persistence.Core`; the version is the loaded assembly version; the content-hash slot is the canonical Base64 SHA-512 of the assembly file, not a NuGet archive hash; and the single selected asset per package is `source-build/<file name>` with the assembly full name and the file's SHA-256. The prefix keeps a source-build pin from ever equalling a packaged pin, so it is execution-environment provenance, never package-archive provenance, and it does not satisfy this contract's acceptance gates. Recovery under it requires byte-identical assemblies.
+
 ## Invocation and recovery
 
 Direct facade calls freeze the trusted pin, artifact, canonical initial facts and resolved round limit once. Retries use the original envelope. Native publication freezes the same pin in immutable executable metadata. A runtime consumes only the executable and Rules artifact; the package host never opens mutable design storage to recover a run.

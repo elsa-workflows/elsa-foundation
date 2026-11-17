@@ -34,6 +34,11 @@ internal sealed class ParallelStructureHandler : IActivityStructureHandler
             .ToList();
     }
 
+    // Branches run side by side, so availability stays unknown. Parallel schedules every branch itself, once per run,
+    // so a branch's run never leads to another branch's run, let alone an earlier run of the same branch.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);

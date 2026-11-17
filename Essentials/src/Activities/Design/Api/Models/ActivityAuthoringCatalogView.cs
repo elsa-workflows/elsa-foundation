@@ -34,6 +34,13 @@ public sealed record ActivityAuthoringDescriptorView(
 
     /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
     public JsonElement? PaletteHints { get; init; }
+
+    /// <summary>
+    /// The runtime type a compiled node carries for this CLR activity when it declares <c>public const string ActivityType</c>
+    /// (for example <c>Elsa.HttpEndpoint</c>, whose <see cref="ActivityTypeKey"/> is the CLR full name). Null when the activity
+    /// declares none, so the node's stamped type equals <see cref="ActivityTypeKey"/>.
+    /// </summary>
+    public string? RuntimeActivityType { get; init; }
 }
 
 /// <summary>

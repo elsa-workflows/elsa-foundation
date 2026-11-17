@@ -74,7 +74,7 @@ authorizes requests whether the grant reaches any registered permission.
 | Connections | `connections:manage`, `connections:bind-secret`, `connections:test` | `Elsa.Connections.Api` |
 | Studio preferences | `studio/preferences:read`, `studio/preferences:write`, `studio/preferences/defaults:manage` | `Elsa.Studio.Preferences.Api` |
 | Platform | `attention:read`, `api-capabilities:read`, `module-management:read`, `module-management:manage` | `Elsa.Attention.Api`, `Elsa.Api.Capabilities`, `Elsa.Modularity.Api` |
-| Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `agent:use`, `agent/proposals:manage`, `agent/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Agent.Api` |
+| Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `weaver:use`, `weaver/proposals:manage`, `weaver/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Weaver.Api` |
 
 The execution evidence delete endpoint accepts `workflows/execution-evidence:delete` or
 `workflows/execution-evidence:manage`.
@@ -210,7 +210,7 @@ Sources: `src/modules/Elsa.UserTasks/Permissions/UserTasksResourcePermissions.cs
 | `alterations:execute` | `workflows/runtime:manage` | |
 | `tenants:view`, `:write`, `:delete`, `:refresh` | None | |
 | `system/shells:reload` | `module-management:manage` | Closest: applying a feature change. |
-| `ai/chat:execute`, `ai/tools:view`, `ai/capabilities:view` | `agent:use` | The Agent extension. |
+| `ai/chat:execute`, `ai/tools:view`, `ai/capabilities:view` | `weaver:use` | The Weaver extension (the Studio assistant). |
 | `*` | `*` | Superuser in both. |
 
 ### Wildcard grants
@@ -256,14 +256,14 @@ specs. Each old name is reported by the startup warning if a stored role still h
 | `api-capabilities.read` | `api-capabilities:read` |
 | `module-management.read`, `module-management.manage` | `module-management:read`, `module-management:manage` |
 | `extension-builder.read`, `extension-builder.manage` | `extension-builder:read`, `extension-builder:manage` |
-| `agent.use` | `agent:use` |
-| `agent.proposals` | `agent/proposals:manage` |
-| `agent.audit` | `agent/audit:read` |
+| `agent.use` | `agent:use`, renamed again to `weaver:use` by #4027 |
+| `agent.proposals` | `agent/proposals:manage`, renamed again to `weaver/proposals:manage` by #4027 |
+| `agent.audit` | `agent/audit:read`, renamed again to `weaver/audit:read` by #4027 |
 
 The `secrets:*` names already had this shape and are unchanged. The catalog's other implications are gone:
 `secrets:write` no longer satisfies `secrets:read`, `studio/preferences:write` no longer satisfies
 `studio/preferences:read`, `identity/roles:manage` no longer satisfies `identity/permissions:read`, and
-`agent/proposals:manage` no longer satisfies `agent:use`. Grant each permission a role needs.
+`weaver/proposals:manage` no longer satisfies `weaver:use`. Grant each permission a role needs.
 
 ## Sources
 

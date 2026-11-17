@@ -24,7 +24,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, bool>? isScriptBody = null,
         IReadOnlySet<string>? containerVariableIds = null,
         IReadOnlyDictionary<string, string>? memoryAliases = null,
-        bool isReusable = false)
+        bool isReusable = false,
+        Func<Elsa3Activity, string, TypeReference?>? inputTypeOf = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -99,7 +100,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (property.Expression is not null)
             {
                 if (isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
-                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
+                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, inputTypeOf, diagnostics);
                 else
                     LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 continue;
@@ -283,7 +284,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
             expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase))
         {
-            property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(property.Value);
+            // The current value, not the one collected before lowering began: a script's setOutcome conversion may
+            // already have declared its outcomes on this node's possible outcomes (DeclareScriptOutcomes).
+            property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(property.Activity.AdditionalProperties[property.PropertyName]);
             return;
         }
 
@@ -403,6 +406,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// A RunJavaScript body (plan D-16). Elsa 3 stores it as a literal and runs it with its host functions; Elsa 4 runs
     /// it as a function body that sees only <c>args</c>. The body is rewritten in script mode: its reads become
     /// <c>args.&lt;name&gt;</c>, bound by an <c>arguments</c> object expression, and its completion value is returned.
+    /// The <c>arguments</c> expression declares the type of the activity's own <c>arguments</c> input, because
+    /// publication requires the two to match exactly (#3287: Elsa 4's <c>RunJavaScript.Arguments</c> is a
+    /// <c>JsonElement</c>). Without a known contract it declares <c>Object</c>.
     /// </summary>
     private void LowerScript(
         Elsa3WorkflowDefinition definition,
@@ -411,6 +417,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
         AccessorScope accessors,
+        Func<Elsa3Activity, string, TypeReference?>? inputTypeOf,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
@@ -420,12 +427,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
+        var possibleOutcomes = PossibleOutcomesKey(property.Activity);
         var rewrite = expressionRewriter.Rewrite(
             "JavaScript",
             expression.Value,
             new TypeReference("Object"),
             ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
-            Elsa3JavaScriptMode.Script);
+            Elsa3JavaScriptMode.Script,
+            new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])));
         if (!rewrite.Succeeded)
         {
             foreach (var issue in rewrite.Issues)
@@ -449,28 +458,115 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var definitionResult = rewrite.Definition!;
         property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(
             Elsa3Literal(property.Value, definitionResult.Source));
+        if (rewrite.ScriptOutcomes is { } scriptOutcomes)
+            DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
         if (definitionResult.Parameters.Count == 0)
             return;
 
         var members = definitionResult.Parameters.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
+        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference("Object");
         var arguments = new ExpressionDefinition(
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
-            new TypeReference("Object"),
+            argumentsType,
             definitionResult.Parameters,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
         {
-            ["typeName"] = "Object",
+            ["typeName"] = argumentsType.Alias,
             ["expression"] = new JsonObject
             {
                 ["type"] = "JavaScript",
                 ["value"] = JsonNode.Parse(JsonSerializer.Serialize(arguments)),
             },
         });
+    }
+
+    private const string PossibleOutcomesName = "PossibleOutcomes";
+
+    private static string? PossibleOutcomesKey(Elsa3Activity activity) =>
+        activity.AdditionalProperties.Keys.FirstOrDefault(key => StringComparer.OrdinalIgnoreCase.Equals(key, PossibleOutcomesName));
+
+    /// <summary>The literal items of an Elsa 3 PossibleOutcomes value; null when an expression decides them.</summary>
+    private static IReadOnlyList<string>? PossibleOutcomeItems(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Undefined || !Elsa3TypedValues.IsBound(value))
+            return [];
+
+        string? text = null;
+        if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
+            text = literal;
+        else if (Elsa3TypedValues.TryGetExpression(value, out var type, out var expression) &&
+                 string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
+            text = expression.ValueKind == JsonValueKind.String ? expression.GetString() : expression.GetRawText();
+        if (text is null)
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind != JsonValueKind.Array
+                ? null
+                : document.RootElement.EnumerateArray()
+                    .Select(item => item.ValueKind switch
+                    {
+                        JsonValueKind.String => item.GetString(),
+                        JsonValueKind.Number => item.GetRawText(),
+                        _ => null
+                    })
+                    .OfType<string>()
+                    .ToArray();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A converted setter selects outcomes the node must declare: its literal names and, for computed names, the
+    /// converter-declared catch-all with no connection (spec 1208 FR-027, Q7). They join the node's possible outcomes,
+    /// so publication pins them and the graph conversion can connect them.
+    /// </summary>
+    private static void DeclareScriptOutcomes(
+        DiagnosticScope input,
+        ActivityProperty property,
+        string? possibleOutcomesKey,
+        Elsa3ScriptOutcomeConversion conversion,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        var key = possibleOutcomesKey ?? "possibleOutcomes";
+        var existing = possibleOutcomesKey is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomesKey]) ?? [];
+        var declared = existing
+            .Concat(conversion.LiteralOutcomes)
+            .Concat(conversion.CatchAll is null ? [] : [conversion.CatchAll])
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (declared.Length == existing.Count)
+            return;
+
+        var original = possibleOutcomesKey is null
+            ? JsonSerializer.SerializeToElement(new { typeName = "System.Collections.Generic.ICollection`1[[System.String]]" })
+            : property.Activity.AdditionalProperties[possibleOutcomesKey];
+        property.Activity.AdditionalProperties[key] = Elsa3Literal(original, JsonSerializer.Serialize(declared));
+
+        if (conversion.CatchAll is { } catchAll)
+        {
+            diagnostics.Add(CreateDiagnostic(
+                input,
+                property.ActivityNodeId,
+                property.ActivityPath,
+                property.StablePropertyKey,
+                Elsa3ImportDiagnosticCodes.ScriptOutcomeCatchAll,
+                $"The script sets an outcome computed at run time. A name outside its possible outcomes now selects the declared outcome '{catchAll}', which has no connection, so that path ends as it did in Elsa 3.",
+                "Connect the catch-all outcome to handle unexpected names, or list every outcome the script can set.",
+                $"{property.JsonPath}.expression.value",
+                memoryReferenceId: null,
+                Elsa3MigrationDiagnosticSeverity.Info));
+        }
     }
 
     private static JsonElement Elsa3Literal(JsonElement original, string value)
@@ -1024,7 +1120,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string message,
         string guidance,
         string path,
-        string? memoryReferenceId)
+        string? memoryReferenceId,
+        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error)
     {
         var metadata = input.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata["DefinitionId"] = input.DefinitionId;
@@ -1035,7 +1132,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             metadata["MemoryReferenceId"] = memoryReferenceId;
 
         return new Elsa3MigrationDiagnostic(
-            Elsa3MigrationDiagnosticSeverity.Error,
+            severity,
             code,
             message,
             path,

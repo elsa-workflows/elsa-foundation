@@ -1,5 +1,30 @@
 import { expect, test } from "@playwright/test";
 
+for (const theme of ["light", "dark"]) {
+  test(`starting point retains its dropdown arrow across workspace styles (${theme})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/?mode=workflow-creation-readiness&theme=${theme}`);
+    await page.getByRole("button", { name: "Open create workflow" }).click();
+    const picker = page.getByRole("combobox", { name: "Starting point" });
+    for (const workspace of [null, "minimal", "linen"]) {
+      await page.evaluate(value => {
+        if (value) document.documentElement.dataset.workspaceStyle = value;
+        else delete document.documentElement.dataset.workspaceStyle;
+      }, workspace);
+      // appearance:none hides the browser arrow: the host's replacement must survive module styles.
+      await expect(picker).toHaveCSS("appearance", "none");
+      await expect(picker).not.toHaveCSS("background-image", "none");
+      await expect(picker.locator('option[value="http"]')).toHaveText("HTTP request and response");
+      await picker.focus();
+      await expect(picker).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath(`starting-point-${workspace ?? "default"}.png`) });
+    }
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(picker).toHaveCSS("appearance", "auto");
+    await expect(picker).toHaveCSS("background-image", "none");
+  });
+}
+
 for (const theme of ["light", "dark"] as const) {
  for (const width of [1280, 360]) {
   test(`explains an unavailable HTTP starter without changing the blank selection (${theme}, ${width}px)`, async ({ page }) => {

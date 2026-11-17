@@ -21,7 +21,7 @@ differently.
 |---|---|---|
 | No start trigger in the body | `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`, `ELS3-REUSABLE-UNSUPPORTED-TRIGGER` | Elsa 4 behaviour |
 | No SetVariable, SetOutput, Correlate, SetName or Finish, and no captured HTTP Endpoint headers or query string | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | Gap, [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) |
-| Outcomes: each Complete names one literal outcome, not `done` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
+| Outcomes: each Complete names one or several literal outcomes, not `done` (several become the Elsa 4 Complete's `outcomes` list, spec 1208) | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
 What this means today: a reusable workflow imports as a reusable activity when its body sets no values and signals its
@@ -77,13 +77,16 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    - Known Elsa 4 limits that apply to every converted workflow, reusable or not: a RunJavaScript result bound straight
      to a typed input (for example a Flow Decision condition) has no automatic conversion and is refused at publish, and
      a converted RunJavaScript without arguments faults when it runs (both tracked as spec 265 follow-ups).
-4. **Outcomes.** Each Complete names exactly one literal outcome; not a list, not an expression, and not `done`, which
+4. **Outcomes.** Each Complete names one or several literal outcomes (several become the Elsa 4 Complete's `outcomes`
+   list, spec 1208); not an expression, and not `done`, which
    collides with Elsa 4's natural outcome (rename it, and change the callers that route on it). Declare the outcomes on the workflow: an undeclared one is declared anyway with
    `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`, and a declared one no Complete reaches is dropped with
    `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. End is allowed only in the workflow's root flowchart.
 5. **Version numbers.** If the workflow changed, it has a new version number in Elsa 3. An Elsa 4 version that is
    already imported cannot be replaced; a changed workflow under the same number is refused at publish with
-   `ELS3-REUSABLE-IDENTITY-COLLISION`.
+   `ELS3-REUSABLE-IDENTITY-COLLISION`. Elsa 3 version n imports as Elsa 4 version `{n}.{R}.0`, R the converter
+   revision: when the converter itself changes, the same export imports again as `{n}.{R+1}.0` beside the earlier
+   version, without a store rebuild (#3921).
 
 ## When a reusable workflow cannot meet the checklist yet
 
@@ -140,3 +143,17 @@ current state without publishing.
 
 Review the `warnings` (`ELS3-BEHAVIOUR-*`): they describe where Elsa 4 behaves differently at run time, and they stay on
 the receipt.
+
+## Import from a folder at engine start
+
+Instead of uploading, a host can import a folder of Elsa 3 exports every time it starts, with
+[`Elsa3JsonReconciliation`](../../Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/README.md) (spec 235). It
+runs the same import, so every check on this page applies, and it also publishes the imported workflows. What differs:
+
+- A workflow the import refuses is skipped with its code, together with every workflow that uses it, and the rest is
+  imported. The host log has one warning per skipped workflow and a summary line; set `FailOnUnconvertible` to make
+  a skip fail the start instead.
+- Two refusals fail the start because the import cannot name the workflow they came from: a credential literal, and
+  a changed workflow under an Elsa 3 version that is already imported. Give a changed workflow a new version in Elsa 3.
+- Publishing needs no permissions: the startup task publishes in its persistence scope's tenant.
+- The folder holds every reusable version the other workflows use (the collection checklist above).

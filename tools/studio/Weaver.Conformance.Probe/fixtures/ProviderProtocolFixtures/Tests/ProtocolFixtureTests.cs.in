@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Diagnostics;
-using Elsa.Agent.Anthropic.Services;
-using Elsa.Agent.GitHubCopilot.Services;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.GitHubCopilot.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

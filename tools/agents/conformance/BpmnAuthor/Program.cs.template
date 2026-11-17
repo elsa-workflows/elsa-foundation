@@ -37,7 +37,7 @@ var node = new ActivityNode("editorial", "bpmn-process-v1", [], [],
     new(BpmnActivityIdentities.StructureKind, BpmnActivityIdentities.StructureSchemaVersion, JsonSerializer.SerializeToElement(authored, options)));
 var children = handler.ProjectChildren(node);
 Check(children.Single().Name == BpmnActivityIdentities.ActivitiesSlotName && children.Single().Activities.Single().ActivityVersionId == "copywriter-v1",
-    "normal authoring feature projects the exact published specialist child");
+    "normal authoring feature projects the exact published agent child");
 var roundtrip = handler.ReplaceChildren(node, children);
 var compiled = handler.RemapExecutableStructure(handler.CompileExecutableStructure(roundtrip), new Dictionary<string, string> { ["copywriter"] = placedId });
 Check(compiled.Kind == "elsa.bpmn.structure" && compiled.SchemaVersion == "1.0.0", "lowering preserves frozen structure identity");

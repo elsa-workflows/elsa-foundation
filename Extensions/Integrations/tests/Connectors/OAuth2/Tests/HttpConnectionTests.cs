@@ -13,7 +13,7 @@ public sealed class HttpConnectionTests
 
         var completion = await OAuth2TestSupport.SendAsync(harness, server.ResourceEndpoint);
 
-        Assert.Equal("Done", completion.Outcome);
+        Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
         Assert.Equal(200, completion.Result.StatusCode);
         Assert.Contains("\"ok\":true", completion.Result.ResponseBody, StringComparison.Ordinal);
         Assert.Contains(server.IssuedAccessTokens, token => token.StartsWith(MockOAuthServer.CanaryAccessToken, StringComparison.Ordinal));

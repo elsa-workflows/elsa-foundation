@@ -1,4 +1,4 @@
-# Specialist publication and lifecycle research
+# Agent publication and lifecycle research
 
 Historical M0 witness: its expected BPMN dependency-gap assertion is source-bound. For current M4
 package-boundary qualification use the [new conformance profile](../conformance/README.md#bpmn-package-boundary-profile).
@@ -14,8 +14,8 @@ directory outside the checkout and a unique local package version:
 
 ```sh
 python3 tools/agents/publication/qualify.py \
-  --output /absolute/new-specialist-proof \
-  --version 4.0.0-specialist3533.local1
+  --output /absolute/new-agent-proof \
+  --version 4.0.0-agent3533.local1
 ```
 
 The driver snapshots committed product source, builds and packs its 38-project dependency
@@ -32,7 +32,7 @@ changed candidate without rewriting the earlier artifact. Only the exported temp
 the runtime inbox.
 
 The native Consumer has no Design or Publishing package dependency. It invokes Elsa's actual actor,
-scheduler, activity hydration and checkpoint path with the separately packed specialist runtime
+scheduler, activity hydration and checkpoint path with the separately packed agent runtime
 strategy and Microsoft Agent Framework 1.27.0. Native and BPMN executable fixtures use the same
 published child. Each verifies exact input, model, instructions, schema, committed JSON result
 and duplicate-start behavior. The invalid-output control must fault without an accepted result.

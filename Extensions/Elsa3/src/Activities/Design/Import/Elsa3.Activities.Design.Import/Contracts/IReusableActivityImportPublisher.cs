@@ -19,7 +19,7 @@ public interface IReusableActivityImportPublisher
         CancellationToken cancellationToken = default);
 }
 
-/// <param name="Version">The SemVer to publish, <c>{n}.0.0</c> for Elsa 3 version n.</param>
+/// <param name="Version">The SemVer to publish, <c>{n}.{R}.0</c> for Elsa 3 version n at converter revision R.</param>
 /// <param name="RequestedVersionId">The plan's deterministic version id, which wrappers and callers already reference.</param>
 /// <param name="IdempotencyKey">Deterministic per receipt and version, so a resumed apply never publishes twice.</param>
 /// <param name="TenantId">The import's tenant; the publisher must resolve the same one.</param>

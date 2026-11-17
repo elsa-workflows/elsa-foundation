@@ -45,7 +45,7 @@ Check live run/tracker state rather than treating this dated receipt as current 
 
 | Area | Existing technology and planned boundary |
 |---|---|
-| Server | C#/.NET 10; repository SDK 10.0.300 with latestFeature roll-forward. Existing CShells features, NativeEndpoints, System.Text.Json and role-owned executable contracts. |
+| Server | C#/.NET 10; repository SDK 10.0.300 with latestFeature roll-forward. Existing CShells features, MinimalEndpoints, System.Text.Json and role-owned executable contracts. |
 | Studio | TypeScript, React 19, Vite, pnpm 11.9.0; existing Studio module/UI, property contributions, canonical document/history and expression-editor sessions. |
 | Storage | Existing drafts/versions, executable/template artifacts, protected result envelopes and committed invocation/input snapshots. No migration, new store or persisted chooser state. |
 | Serialization | Exact current activity-value Web/camelCase/strict-number profile; literal serialized-name segments. General payload serialization and S-9/#3805 remain separate. |
@@ -56,7 +56,7 @@ Check live run/tracker state rather than treating this dated receipt as current 
 
 ## Constitution Check
 
-Loaded framework v6.1.0 and Elsa v6.3.0, both Gate indexes, and the
+Loaded framework v6.1.0 and Elsa v6.4.0, both Gate indexes, and the
 [review checklist](../../docs/contributing/review-checklist.md). This is a design assessment, not a claim
 that implementation architecture tests ran. Recheck these gates on each production PR and after integration.
 No constitutional exception or amendment is proposed.
