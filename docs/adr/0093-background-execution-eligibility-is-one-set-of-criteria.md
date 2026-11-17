@@ -108,6 +108,13 @@ object may be two methods of that one component, but not two separate lists. The
 live, and which both Publishing and `Elsa.Activities.Runtime` already reference, so no new dependency direction is
 needed.
 
+**When a placement cannot see the CLR type.** Some checks need the activity's CLR type: the handler interfaces of
+C1, C2, C9, and the CLR parts of C3 and C4. A shell can place a node without that type, for example a template
+placement in a shell that composes an activity's design features but not its runtime. It then checks everything the
+pinned contract shows, takes the `[BackgroundExecutionSafe]` declaration from the contract, and leaves the type-only
+checks to background admission and the worker. Those always re-check every enforced criterion against the resolved
+type, so no node runs in the background without passing all of them; the refusal moves from placement to admission.
+
 The declared criteria (C7, C8) are documented on `[BackgroundExecutionSafe]` itself, so an activity author reads the
 promise where they make it.
 
@@ -142,6 +149,10 @@ can be seen.
 - **ADR 0092** covers what happens when a background step's inputs were read before another branch changed them: the
   same lost-update rule as for inline steps, with a refresh before admission when the base is already stale.
 - **Studio** needs a way to set placement on eligible nodes. Not part of this ADR.
+- **ADR 0090's variable signals** (`[AccessesUndeclaredVariables]` and a writable `VariableReference<T>` input) do not
+  exist in code yet, so C9 enforces only `IRuntimeScopedVariableReader` today. The spec that introduces them extends
+  C9's check in the eligibility component in the same change, with a test that refuses a background placement for
+  each signal.
 
 ## Required evidence for the implementing spec
 
@@ -172,6 +183,11 @@ cancellation. They stay declarations, with documentation as the guardrail.
 
 **A universal maximum duration or a list of services a body may use.** Rejected. Neither is an eligibility question:
 operational timeouts and the capabilities a worker must offer can be specified separately.
+
+**Refuse a placement that cannot see the CLR type.** Placement would always be complete, but a shell that composes
+an activity's design features without its runtime could never place a background step, although the step would run
+correctly. Loading the runtime type into such a shell only to check it would undo that composition. Deferring the
+type-only checks keeps the guarantee, since admission and the worker re-check everything.
 
 **Allow variable access from the worker now.** Waits for A-3 and ADR 0090. A worker reading variables would read
 state that can be older than the coordinator's; ADR 0092's lost-update rule would cover the write side, but the
