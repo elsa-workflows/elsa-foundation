@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
 import type { StudioCodeEditorEngineProps } from "../types";
 
 /** A safe generic editor when a language module or rich editor chunk is unavailable. */
 export function FallbackCodeEditor({
   document,
+  fallbackSelection,
   profile,
   readOnly,
   minHeight,
@@ -17,6 +18,17 @@ export function FallbackCodeEditor({
 }: StudioCodeEditorEngineProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tabEscapeArmed = useRef(false);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input || !fallbackSelection) return;
+    fallbackSelection.current = null;
+    return () => {
+      const { value: source, selectionStart: start, selectionEnd: end, selectionDirection } = input;
+      const selection = selectionDirection === "backward" ? { anchor: end, head: start } : { anchor: start, head: end };
+      fallbackSelection.current = { source, selection };
+    };
+  }, [fallbackSelection]);
 
   useEffect(() => {
     const root = inputRef.current?.closest("[data-studio-code-editor]");

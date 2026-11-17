@@ -92,6 +92,12 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
 
     const view = claimCompactView(entry, props.profile, container)
       ?? new EditorView({ state: entry.state, parent: container });
+    const handoff = entry.runtime.props.fallbackSelection;
+    const fallback = handoff?.current;
+    if (handoff) handoff.current = null;
+    if (fallback && fallback.source === view.state.doc.toString()) {
+      view.dispatch({ selection: fallback.selection });
+    }
     activeCodeMirrorViews.add(view);
     viewRef.current = view;
     container.dataset.studioCodeEditorSurface = "codemirror";
