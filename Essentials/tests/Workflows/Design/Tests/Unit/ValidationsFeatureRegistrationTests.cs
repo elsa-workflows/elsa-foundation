@@ -163,6 +163,43 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.IsType<SecondAnalyzer>(Assert.Single(scope.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>()));
     }
 
+    // Spec 266: the write-order analyzer is a single-implementation replacement contract.
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("missing")]
+    [InlineData("scoped")]
+    public async Task The_write_order_analyzer_must_be_one_singleton(string invalid)
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            if (invalid == "duplicate")
+                services.AddSingleton<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+            else
+                services.RemoveAll<IUnorderedVariableWriteAnalyzer>();
+            if (invalid == "scoped")
+                services.AddScoped<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+        });
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IUnorderedVariableWriteAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_feature_composes_one_singleton_write_order_analyzer()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+        Assert.Same(provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>(), provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>());
+    }
+
+    private sealed class SecondWriteOrderAnalyzer : IUnorderedVariableWriteAnalyzer
+    {
+        public Elsa.Workflows.Design.Validations.Core.Models.UnorderedVariableWriteAnalysis Analyze(
+            Elsa.Workflows.Design.Core.Models.ActivityNode root, Elsa.Workflows.Design.Core.Contracts.IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default) =>
+            new([], []);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

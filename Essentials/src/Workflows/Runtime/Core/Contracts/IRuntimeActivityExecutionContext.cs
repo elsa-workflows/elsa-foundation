@@ -101,6 +101,15 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         string reason,
         IReadOnlyDictionary<string, string>? metadata = null);
 
+    /// <summary>
+    /// Stages cancellation of the subtree of every child that is still live, resolved by the runtime when it plans the
+    /// cancellations, so the parent needs no child activity-execution ids. Valid where
+    /// <see cref="RequestChildSubtreeCancellation"/> is, at most once per evaluation; a child also targeted by id is
+    /// cancelled once; a child whose schedule is still queued starts nothing once its parent completed. It does not
+    /// combine with a child fault absorption in the same evaluation. Used by a Flowchart that ends on <c>Break</c>.
+    /// </summary>
+    void RequestLiveChildrenSubtreeCancellation(string reason, IReadOnlyDictionary<string, string>? metadata = null);
+
     IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests();
 
     /// <summary>

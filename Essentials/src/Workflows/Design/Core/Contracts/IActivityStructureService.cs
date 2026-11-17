@@ -37,6 +37,19 @@ public interface IActivityStructureService
         return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
     }
 
+    /// <summary>
+    /// The owning handler's <see cref="IActivityStructureHandler.RelateChildren"/>; <see cref="ActivityChildTimeRelation.Unspecified"/>
+    /// when the node has no handler. The default adapts <see cref="ChildrenCompletedBefore"/> for custom services.
+    /// </summary>
+    ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        ActivityChildTimeRelationDefaults.FromCompletedBefore(this.ChildrenCompletedBefore, activity, firstChildNodeId, secondChildNodeId);
+
+    /// <summary>
+    /// The owning handler's <see cref="IActivityStructureHandler.CompletesAfterItsChildren"/>; <see langword="null"/> when
+    /// the node has no handler.
+    /// </summary>
+    bool? CompletesAfterItsChildren(ActivityNode activity) => null;
+
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>

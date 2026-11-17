@@ -16,6 +16,7 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   variables (`SupportsScopedVariables` defaults to `false`). Its `AssessChildResult` keeps availability
   `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: `Switch` schedules the one chosen branch
   itself, once per run.
+- `SwitchStructureHandler.RelateChildren` states the branches `MutuallyExclusive` and it completes after its children (spec 266).
 - `SwitchDuplicateCaseValidator` implements `IDraftValidator`
   (`Elsa.Workflows.Design.Validations.Core`). It walks the Draft activity tree and emits a
   `Switch/DuplicateCase` `ValidationError` for any `Switch` node that declares the same case match value

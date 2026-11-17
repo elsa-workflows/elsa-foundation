@@ -82,6 +82,14 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
 
+    // Switch runs the first matching case, or Default: exactly one branch, once per run.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId)
+            ? ActivityChildTimeRelation.FirstBeforeSecond
+            : ActivityChildTimeRelation.MutuallyExclusive;
+
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);

@@ -31,14 +31,27 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
+    IServiceScopeFactory? scopeFactory,
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
+    /// <summary>
+    /// Preserves the earlier constructor shape. Without a write-order analyzer the provider reports no unordered-write
+    /// warning; the graph design feature composes the provider with the one the workflow design validations supply.
+    /// </summary>
+    public GraphActivityProvider(
+        IActivityStructureService activityStructureService,
+        ActivityContractAuthoringValidator contractCapabilities,
+        IServiceScopeFactory? scopeFactory = null)
+        : this(activityStructureService, contractCapabilities, scopeFactory, null) { }
+
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
     private const string CompleteOutcomesInputKey = "outcomes";
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
+    private const string UnorderedWriteCode = "activity.graph.unordered-variable-write";
+    private const string DuplicateCaptureTargetCode = "activity.graph.duplicate-capture-target";
     private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -160,6 +173,7 @@ public sealed class GraphActivityProvider(
             ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
             // A draft has no resolved dependencies yet, so producer results and capture types are checked at compile.
             ValidateBodyReferences(graph, contract, nodes, dependencyContracts: null, subject, diagnostics);
+            ValidateWriteOrder(nodes, subject, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -196,6 +210,7 @@ public sealed class GraphActivityProvider(
                     .ToDictionary(x => x.Key, x => x.First().Contract, StringComparer.Ordinal),
                 subject,
                 diagnostics);
+            ValidateWriteOrder(nodes, subject, diagnostics);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
@@ -1547,6 +1562,57 @@ public sealed class GraphActivityProvider(
         foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
             diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));
     }
+
+    // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings,
+    // alongside any errors; compilation still succeeds when there are no errors.
+    private void ValidateWriteOrder(IReadOnlyList<GraphNode> nodes, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
+    {
+        if (writeOrderAnalyzer is null ||
+            nodes.FirstOrDefault(x => x.ParentOccurrenceId is null)?.Activity is not { } root)
+            return;
+
+        var pointers = nodes.GroupBy(x => x.NodeId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
+        var result = writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: false);
+        foreach (var finding in result.UnorderedWrites)
+        {
+            diagnostics.Add(Warning(
+                UnorderedWriteCode,
+                finding.Message,
+                subject,
+                pointers.GetValueOrDefault(finding.WriterNodeIds[0]),
+                "ValueFlow/ConcurrentWrite",
+                finding.ScopeId == "workflow" ? $"$workflow/variables/{finding.ReferenceKey}" : $"{finding.ScopeId}/variables/{finding.ReferenceKey}"));
+        }
+
+        foreach (var duplicate in result.DuplicateCaptureTargets)
+        {
+            diagnostics.Add(Warning(
+                DuplicateCaptureTargetCode,
+                duplicate.Message,
+                subject,
+                pointers.GetValueOrDefault(duplicate.NodeId),
+                "ValueFlow/DuplicateCaptureTarget",
+                $"{duplicate.NodeId}/outputs/{duplicate.OutputKeys[^1]}"));
+        }
+    }
+
+    private static ActivityDiagnostic Warning(
+        string code,
+        string message,
+        ActivityDiagnosticSubject subject,
+        string? jsonPointer,
+        string validationType,
+        string validationPath) => new(
+        code,
+        ActivityDiagnosticSeverity.Warning,
+        message,
+        subject,
+        new ActivityDiagnosticLocation(Key, jsonPointer),
+        Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["validationType"] = validationType,
+            ["validationPath"] = validationPath
+        });
 
     private static ActivityDiagnostic Diagnostic(
         string code,
