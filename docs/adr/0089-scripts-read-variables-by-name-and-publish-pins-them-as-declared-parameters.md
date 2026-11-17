@@ -174,7 +174,8 @@ beyond variable reads. This ADR covers **variable** reads. `input.X` and `workfl
 - **ADR 0045 §2.** A computed name that matches nothing reads `undefined` with the read marked absent, as R3 states.
 - **ADR 0092 decision 3.** Pinned reads and the actual reads of the fallback are recorded in the read set.
 - **ADR 0090 §3.** Its refusal of computed names follows this amendment for reads: a computed read in the body session
-  falls back as in R3. A computed write stays refused.
+  falls back as in R3. A computed or opaque write is allowed and counted conservatively (ADR 0090 decision 3, as
+  amended on 2026-11-17).
 
 ## Consequences
 

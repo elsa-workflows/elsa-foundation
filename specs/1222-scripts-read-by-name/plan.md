@@ -32,8 +32,9 @@ by the loop node (spec Q1). This is decision D-7, as ADR 0089 records it.
 **Primary Dependencies**: Jint (isolated JS engine); the spec 095 value-flow model (declared parameters, `Variable`
 binding); ADR 0090 / ADR 0092 variable session; Studio `ScopedVariableResolver`; the Elsa 3 converter (spec 247).
 
-**Dependencies on other specs**: S-10 (spec 1221, PR #4316) builds the read set and the body's session reads that
-FR-033–FR-035 need; S-7 builds session writes; spec 1216 (S-2) FR-025–FR-027 is not yet on the initiative branch.
+**Dependencies on other specs**: S-10 (spec 1221, PR #4316) provides the read-set types (`InputReadSet`,
+`SessionReads`); S-7 (ADR 0090) builds the variable session, its read path, its session reads and its writes, which
+FR-033–FR-035 need (spec 1221 T015 and T016 moved to S-7 on 2026-11-17); spec 1216 (S-2) FR-025–FR-027 is not yet on the initiative branch.
 
 **Storage**: N/A for reads (values come from the pinned input snapshot / external payload store as today).
 

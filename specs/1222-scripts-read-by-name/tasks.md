@@ -170,7 +170,7 @@ not provided.
 - [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the session reads with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
 - [ ] T046 [P] Cover that every read path to one variable returns the same JavaScript value within one evaluation (FR-034), and that values stay frozen until spec 1228's bridge lands (FR-037).
 - [ ] T049 At publish, parse the `RunJavaScript` `script` input with the resolver (T005) and store its pinned targets and fallback marker as the step's body read plan, kept apart from the input snapshot (body targets are never materialized as `Variable` parameters into the snapshot) (FR-004, FR-033). Depends on T005, T019.
-- [ ] T050 Build the body's read path: resolve the body read plan's targets and, for a marked body, load its candidate set before it runs (Q5); read the committed value (plus pending writes once S-7 lands); record each read with its version and protection policy in S-10's session reads (FR-033, FR-035). Depends on T049 and S-10's `SessionReads` (spec 1221 T004/T015, PR #4316).
+- [ ] T050 Serve the body's reads over S-7's variable session: resolve the body read plan's targets and, for a marked body, load its candidate set before it runs (Q5); read each value through the session (committed value plus the step's pending writes), so the session records the read with its version and protection policy in S-10's `SessionReads` (FR-033, FR-035). Depends on T049, S-10's read-set types (spec 1221 T004, PR #4316) and S-7's session and session-read recording (spec 1221 T015/T016, moved to S-7).
 - [ ] T047 Add a `variables` root and `getVariable` to the `RunJavaScript` body, next to its `args` (spec Q4, FR-035a), served by T050's read path, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, `Essentials/src/Expressions/JavaScript/Core/Contracts/IJavaScriptScriptEvaluator.cs` (the script evaluation request), `JintJavaScriptScriptEvaluator.cs` and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010, T021, T050.
 - [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7, and its T007 that replaces the frozen values) when T047 is merged.
 
@@ -195,7 +195,7 @@ not provided.
 - **US3 (P2)** after US1's pinning/`variables` root (T009–T010) and US2's fallback (T021) for computed conversions. T028's body path switches to `variables.X` only after T047 (FR-026a).
 - **US4 (P3)** after T005/T009/T019 (resolver, pinning, conservative report).
 - **US5 (P3)** after T009 and T021 (pinned reads, fallback check).
-- **Phase 8** after US1 and US2; T045, T047 and T050 also after S-10 (spec 1221) lands the read set and session reads (T049 does not wait on S-10). T022's `InputReadSet` hand-off also waits on S-10. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
+- **Phase 8** after US1 and US2; T045, T047 and T050 also after S-10 (spec 1221, the read-set types) and S-7 (the variable session and its session reads) land (T049 waits on neither). T022's `InputReadSet` hand-off also waits on S-10. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
 - **Polish** after the desired stories.
 
 ### Parallel opportunities
