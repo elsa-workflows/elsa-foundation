@@ -45,7 +45,9 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 12 Nov | An HTTP response is released after the commit of the turn that wrote it; opt-out per route. | Sketch, decisions |
 | 12 Nov | No reads across instances; questions go as messages or through projections. | Sketch, decisions |
 | 12 Nov | Events are not kept by default; keeping is per subscription. | Sketch, decisions |
-| 16 Nov | 1,024 virtual partitions, with a fence per virtual partition (replaces the 12 November default of 64). Range ownership is the later Worker refactor. | [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026) |
+| 16 Nov | 1,024 virtual partitions, with a fence per virtual partition (replaces the 12 November default of 64). | [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026) |
+| 17 Nov | Rebalance moves the fewest partitions; a node's partitions may be scattered, which costs nothing with a fence per partition (PARTITIONS.md decision 4). | Owner card |
+| 17 Nov | The Worker refactor to range ownership of the 1,024 virtual partitions, with a journal per virtual partition, is release 1's first milestone, right after design approval and before product wiring; kernel behaviour, two reviews (PARTITIONS.md decision 5). | Owner card |
 
 ## Commit, fence and storage
 
@@ -143,4 +145,5 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | 13 Nov | Architecture references live in `docs/architecture/` with a Proposed banner until approval; a shorter published section goes into `website/docs/` at the switch. | [Sketch, architecture documentation](../reports/clean-slate-kernel/design-sketch-draft-5.md#architecture-documentation-owner-decision-12-november) |
 | 12 Nov | The owner sees the list before any ADR or old-core page is retired. | Sketch, architecture documentation |
 | 15 Nov | The simulation runs permanently in CI: path filters, a fast simulation and mutation PR gate, and the heavy suites nightly (round 5 F, delivered in #4670). | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6887994219) |
+| 14 Nov | Unified Execution (#2892) is closed, superseded by the kernel; no decision was needed. | [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) (closed 14 November) |
 | 16 Nov | Kernel behaviour (commit, fence, ownership, delivery, timers, recovery) needs two independent reviews; tests, docs, CI and tooling need a self-review plus one. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
