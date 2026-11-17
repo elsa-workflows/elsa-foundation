@@ -8,8 +8,8 @@ Give step bodies a variable session (ADR 0090 as amended): reads of committed va
 explicit writes collected as intents and applied in the step's checkpoint commit under S-10's commit rule, intents
 before captures. `RunJavaScript` writes by name resolved and pinned at publish (S-4's resolver, S-8's change finder).
 C# activities read and write through bound `VariableReference<T>` / `ReadOnlyVariableReference<T>` inputs, or free
-names on a type marked `[AccessesUndeclaredVariables]`. Publish refuses undeclared, computed, opaque, transient and
-read-only targets, feeds the may-write set to the concurrent-write rule, and warns on overlap with a capture. In the
+names on a type marked `[AccessesUndeclaredVariables]`. Publish refuses undeclared, transient and read-only literal
+targets, counts computed and opaque writes as possibly writing every visible variable, feeds the may-write set to the concurrent-write rule, and warns on overlap with a capture. In the
 same change, C9 in `BackgroundEligibility` refuses each new signal. The Elsa 3 converter turns `setVariable`,
 `set<Name>()` and nested mutation inside `RunJavaScript` into `variables` writes.
 

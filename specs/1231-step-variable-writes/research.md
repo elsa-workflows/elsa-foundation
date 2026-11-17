@@ -105,16 +105,25 @@ amendment in its own PR (offered, not required).
 
 **Alternative.** Allow read-only references on the worker (needs a background session, ADR 0093 amendment).
 
-## R-7 — Opaque writes (Q5)
+## R-7 — Computed and opaque writes (Q5)
 
-**Decision (recommended).** A body in which the `variables` root or `setVariable` escapes (aliased, passed, spread,
-enumerated) may read through S-4's fallback but may not write: publish refuses a write anywhere in such a body, and a
-write through the escaped root at run time throws (the root is read-only in that body). Computed write names are
-refused.
+**Decision (coordinator, 2026-11-17).** A computed write (`variables[k] = v`, `setVariable(k, v)`) and a write through
+`variables` or `setVariable` used as a value publish. The node is marked as possibly writing every visible variable
+(its may-write set is all variables visible there), so the concurrent-write rule and inspection count it. At run time
+the name resolves to the nearest visible scope (ADR 0089's fallback rule), S-8's change finder reports the write like
+any other, and it commits with the step under ADR 0092. An undeclared name faults before the commit; a transient
+variable faults the step; a read-only target is frozen. Recorded in ADR 0090 decision 3 as amended (#4729,
+`53e301034a`), with ADR 0089's matching consequence.
 
-**Rationale.** ADR 0090 decision 3 refuses computed names in any form for writes, and the may-write set must stay
-exact for the concurrent-write rule. ADR 0092's *Consequences* let decision 3 follow the ADR 0089 amendment, which
-covers reads only.
+**Rationale.** The may-write set only feeds diagnostics; a conservative set keeps them sound. The refusal blocked
+scripts that run correctly, and refused even the plain writes of a script that aliases `variables` only to read it.
+C# free names already get this answer (decision 4).
+
+**Rejected.** Refusing at publish (the first recommendation); refusing only writes through the alias (an alias is
+the same object in JavaScript, so publish cannot tell the writes apart without rewriting the script).
+
+**Converter.** A computed Elsa 3 `setVariable` name stays refused: Elsa 3 created a missing variable on write, where
+Elsa 4 faults, so the conversion would not be faithful.
 
 ## R-8 — Converter
 

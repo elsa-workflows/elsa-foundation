@@ -48,12 +48,13 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 5: User Story 1 — script writes (P1)
 
-- [ ] T024 [US1] Extend S-4's body analyzer with write forms (contract table): pin targets, compute may-write set and body touch set; refuse computed, opaque (Q5), undeclared, transient and read-only writes with diagnostics naming position and target (FR-018–FR-020).
+- [ ] T024 [US1] Extend S-4's body analyzer with write forms (contract table): pin targets, compute may-write set and body touch set; refuse undeclared, transient and read-only literal writes with diagnostics naming position and target (FR-018–FR-020); mark a node with a computed or opaque write as possibly writing every visible variable (FR-020a).
 - [ ] T025 [US1] Jint write surface in the body: `variables` assignable, `setVariable('x', v)`, no `set<Name>()`; whole assignments go to the session (P-8) (FR-005, FR-021).
 - [ ] T026 [US1] Hand S-8's reported member changes to the session as `MemberChange` intents (C3), once S-8's bridge (spec 1228 T026) is on the branch; until then member changes stay unsupported and the test is skipped with a reason.
 - [ ] T027 [P] [US1] **(test-first)** Acceptance 1–5 of User Story 1 (whole assignments, fault, read-your-writes, read-only, no-op).
 - [ ] T028 [P] [US1] **(test-first)** Acceptance 6 (member change, C2 warning) — lands with S-8 US3's end-to-end test (spec 1228 T028), whichever of the two arrives second.
 - [ ] T029 [P] [US1] **(test-first)** A script mutating a loop item throws; publish refuses assigning a loop item or index.
+- [ ] T029a [P] [US1] **(test-first)** Computed and opaque writes (FR-020a): `variables[k] = v`, `setVariable(k, v)` and `const v = variables; v.X = 1` publish with the every-visible-variable mark, commit with the step, and fault on an undeclared or transient name; a plain write in an aliasing script works; the concurrent-write rule counts the node against every visible variable.
 
 ## Phase 6: User Story 5 — background eligibility C9 (P2, same PR as Phase 4)
 

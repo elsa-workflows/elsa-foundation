@@ -9,9 +9,9 @@
 | `variables.x += v`, `variables.x++` | read and whole assignment | pinned |
 | `variables.o.m = v`, `getVariable('o').m = v`, mutation through an alias of a read value | member change (C2) | `o` in may-write set |
 | a read value passed to a function, stored in a local or captured by a closure | possible write | in may-write set |
-| `variables[k] = v`, `setVariable(k, v)`, `setVariable` as a value | computed write | refused |
-| any write in a body where `variables` or `setVariable` escapes | opaque write | refused (Q5) |
-| write to an undeclared, transient, or read-only (loop item/index) target | — | refused |
+| `variables[k] = v`, `setVariable(k, v)` | computed write | publishes; node may write every visible variable; name resolved at run time; undeclared or transient → step faults |
+| a write through `variables` or `setVariable` used as a value (`const v = variables; v.X = 1`) | opaque write | same as a computed write (Q5) |
+| literal write to an undeclared, transient, or read-only (loop item/index) target | — | refused |
 | `set<Name>(v)` | not provided by the runtime | unknown function |
 
 ## C#
@@ -47,5 +47,5 @@ public class MyActivity : Activity<MyResult>
 |---|---|
 | `VF-BG-001 (C9)` | background placement of an activity with a variable signal (FR-030), at publication, admission and the worker |
 | `VF-ACT-010` | session read of a withheld value |
-| publish diagnostics (codes chosen in implementation, `ValueFlow/*` family) | unbound / undeclared / read-only-target reference; computed, opaque, undeclared, transient or read-only script write; may-write set overlaps own capture (warning) |
+| publish diagnostics (codes chosen in implementation, `ValueFlow/*` family) | unbound / undeclared / read-only-target reference; undeclared, transient or read-only literal script write; may-write set overlaps own capture (warning) |
 | `ELS3-*` (stable, chosen in implementation under `Elsa3ImportDiagnosticCodes`) | computed setter name; setter of an undeclared variable; setter of a transient variable |

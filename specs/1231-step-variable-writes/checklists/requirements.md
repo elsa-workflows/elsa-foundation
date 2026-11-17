@@ -35,4 +35,4 @@
   `VariableReference<T>`, `[AccessesUndeclaredVariables]`, `VF-BG-001 (C9)`) because the ADRs it applies define them as
   the contract users write against. That is the accepted exception for initiative specs, not implementation leakage.
 - Decisions Q1–Q7 were listed with recommended answers instead of [NEEDS CLARIFICATION] markers, per the
-  initiative's spec practice; the coordinator approved them as recommended on 2026-11-17.
+  initiative's spec practice; the coordinator approved them on 2026-11-17 (Q5 with its alternative).

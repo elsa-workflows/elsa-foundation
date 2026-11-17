@@ -4,9 +4,9 @@
 
 **Created**: 2026-11-17
 
-**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with Q1, Q2 and Q4–Q7 answered as
-recommended (Q3 decided earlier on #4725). Applies ADR 0090 (`87e55ebc7`), ADR 0092 (`f52a661df`) and ADR 0093
-(`875aa14c7`, amended `dc32983a2`) as merged; no ADR amendment.
+**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with Q1, Q2, Q4, Q6 and Q7 answered
+as recommended, Q5 with its alternative (allow and count computed and opaque writes), and Q3 decided earlier on #4725. Applies ADR 0090 (`87e55ebc7`), ADR 0092 (`f52a661df`) and ADR 0093
+(`875aa14c7`, amended `dc32983a2`) as merged. Q5 led to one ADR amendment, merged before this spec: ADR 0090 decision 3 as amended on 2026-11-17 (#4729, `53e301034a`).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-7**,
 decisions **D-2** and **D-3**, analysis **A-3** (closed).
@@ -26,15 +26,15 @@ variables this way is refused a background placement until a background session 
 
 | ADR | What this spec takes from it | Text applied | State |
 |---|---|---|---|
-| **ADR 0090** (activities change variables as a unit of work committed with the step) | Decisions 1–7 as amended (C1–C5): input bindings stay pure; a step is a unit of work; RunJavaScript reads and writes by name resolved at publish; C# bound references and the free-name opt-in; undeclared variables refused; changes apply in the step's checkpoint commit, intents before captures; read-then-write conflicts follow ADR 0092. The A-3 section (writes are a general capability). Converter consequences. Decision 8 (host interop) is out of scope (D-16, #4103) | `87e55ebc7` | accepted 2026-11-16 |
+| **ADR 0090** (activities change variables as a unit of work committed with the step) | Decisions 1–7 as amended (C1–C5; decision 3's computed and opaque writes as amended on 2026-11-17): input bindings stay pure; a step is a unit of work; RunJavaScript reads and writes by name resolved at publish; C# bound references and the free-name opt-in; undeclared variables refused; changes apply in the step's checkpoint commit, intents before captures; read-then-write conflicts follow ADR 0092. The A-3 section (writes are a general capability). Converter consequences. Decision 8 (host interop) is out of scope (D-16, #4103) | `87e55ebc7`, decision 3 amended `53e301034a` (#4729) | accepted 2026-11-16; amendment 2026-11-17 |
 | **ADR 0092** (variable reads and writes share one versioned lifecycle) | Decision 1 (the session is the second surface over one mechanism), 3 (session reads), 4 (bases, the older dependency, own writes advance the base), 5–6 (the commit rule and the lost-update mode), 11 (a resumed step starts a fresh session), 13 (write history, source "session change") | `f52a661df`, decision 8 amended by #4316 | accepted 2026-11-12 |
 | **ADR 0093** (background execution eligibility is one set of criteria) | C9 and its *Consequences*: the change that introduces `[AccessesUndeclaredVariables]` and writable `VariableReference<T>` extends C9's check in the same change, with a test per signal | `875aa14c7`, amended `dc32983a2` (#4726) | accepted 2026-11-12 |
 | **ADR 0045** §4–§6 | §4's concurrent-write rule covers step writes; §5 input-binding purity; §6's one sanctioned exception `context.Variables.Set` | merged | accepted |
 | **ADR 0046** (value model) | V6 declared loss, V9 copy, compare, patch for scripts (built by S-8), `Any` is plain JSON | `da4dddbb9` | accepted 2026-11-16 |
 
 **Approval plan**: @j03y-nxxbz alone (coordinator decision of 2026-11-16: the ADRs were resolved together, so a spec
-needs only the coordinator's approval). **Approved 2026-11-17** with every open question answered as recommended, so
-this spec needs **no ADR amendment**. Workflow outputs, correlation id and instance name from step bodies go to a new
+needs only the coordinator's approval). **Approved 2026-11-17**: Q1, Q2, Q4, Q6 and Q7 as recommended, Q3 decided on #4725, and
+Q5 changed to the alternative (allow and count computed and opaque writes). That needed one ADR amendment: ADR 0090 decision 3 as amended on 2026-11-17 (#4729, `53e301034a`), approved by the coordinator alone. Workflow outputs, correlation id and instance name from step bodies go to a new
 board row, S-13 (Q1).
 
 ## Rule and boundary
@@ -53,8 +53,8 @@ board row, S-13 (Q1).
    member changes of a read value, resolved and pinned at publish; the may-write set.
 5. **C# references**: `VariableReference<T>` and `ReadOnlyVariableReference<T>` inputs bound by the workflow author,
    `context.Variables.Get<T>` / `Set`, and the free-name opt-in `[AccessesUndeclaredVariables]`.
-6. **Publish checks**: undeclared, computed, read-only and transient targets; unbound references; the may-write set
-   fed to the concurrent-write rule; the warning when a may-write set overlaps the step's own capture.
+6. **Publish checks**: undeclared literal, read-only and transient targets; unbound references; computed and opaque
+   writes counted as possibly writing every visible variable; the may-write set fed to the concurrent-write rule; the warning when a may-write set overlaps the step's own capture.
 7. **Background eligibility C9 extended** in `BackgroundEligibility` (S-11): an activity type marked
    `[AccessesUndeclaredVariables]` and an activity with a variable-reference input are refused a background
    placement, at publication and at the worker. `RunJavaScript` is not `[BackgroundExecutionSafe]` (coordinator
@@ -287,8 +287,10 @@ and run the converted scripts.
   applies twice.
 - A script lets a read value escape into a local, a helper call or a closure: the variable is in the may-write set
   (conservative), even if the helper does not change it.
-- A script in which the `variables` root or `setVariable` escapes (aliased, passed, spread) and that also writes:
-  refused at publish (Q5); a body that only reads through an escaped root keeps S-4's opaque read fallback.
+- A script with a computed write (`variables[k] = v`, `setVariable(k, v)`) or a write through `variables` or
+  `setVariable` used as a value (`const v = variables; v.X = "Hallo"`): it publishes, the node is marked as possibly
+  writing every visible variable, the name resolves at run time, and an undeclared or transient name faults the step
+  (Q5). Its plain `variables.X = …` writes keep working as everywhere else.
 - A changed array is written whole; one whose untouched elements would lose precision is refused with ADR 0046's
   whole-array diagnostic (S-8).
 - A free-name C# read of a name that resolves to nothing: the step faults (undeclared), matching the write rule.
@@ -364,10 +366,15 @@ and run the converted scripts.
 - **FR-019**: Publish MUST compute the node's may-write set: every variable the script assigns, changes a member of, or
   lets escape into a local, a function argument or a closure. Read-only targets are frozen, so their escapes are not
   writes.
-- **FR-020**: Publish MUST refuse a script that: writes through a computed name (`variables[k] = v`,
-  `setVariable(k, v)`); uses `setVariable` as a value; writes in a body where the `variables` root escapes (Q5); writes
-  an undeclared name; reads or writes a transient variable; or assigns, or directly assigns into, a read-only target.
-  Each refusal names the script position and the target.
+- **FR-020**: Publish MUST refuse a script that: writes an undeclared literal name; reads or writes a transient
+  variable by a literal name; or assigns, or directly assigns into, a read-only target by a literal name. Each refusal
+  names the script position and the target.
+- **FR-020a**: A computed write (`variables[k] = v`, `setVariable(k, v)`) and a write through `variables` or
+  `setVariable` used as a value (aliased, passed to a function, spread) MUST publish. Publish MUST mark the node as
+  possibly writing every visible variable (its may-write set is all variables visible there, and the mark is pinned and
+  shown), as for an `[AccessesUndeclaredVariables]` activity. At run time the name MUST resolve to the nearest visible
+  scope; an undeclared name MUST fault the step before its commit, a transient variable MUST fault the step, and a
+  read-only target is frozen, so the write throws (ADR 0090 decision 3 as amended on 2026-11-17 (#4729, `53e301034a`)).
 - **FR-021**: The runtime MUST NOT provide generated `set<Name>()` accessors.
 
 **C# references and free names (ADR 0090 decisions 4, 5)**
@@ -392,8 +399,8 @@ and run the converted scripts.
 **Publish-time write analysis (ADR 0090 decision 3, 4, 6; ADR 0045 §4)**
 
 - **FR-028**: The concurrent-write rule (`ValueFlow/ConcurrentWrite`, a warning once spec 266 lands) MUST include step
-  writers through their may-write set, and MUST treat an `[AccessesUndeclaredVariables]` activity as touching every
-  visible variable.
+  writers through their may-write set, and MUST treat an `[AccessesUndeclaredVariables]` activity and a script node
+  with a computed or opaque write (FR-020a) as touching every visible variable.
 - **FR-029**: Publish MUST warn when a node's may-write set and one of its own output captures name the same variable.
 
 **Background eligibility C9 (ADR 0093 *Consequences*)**
@@ -469,7 +476,8 @@ and run the converted scripts.
 
 ## Decisions (formerly open questions)
 
-All answered by the coordinator on 2026-11-17 as recommended (Q3 earlier, on #4725). The *Recommended answer* column is the decision.
+All answered by the coordinator on 2026-11-17: as recommended except Q5, which took the alternative (Q3 earlier, on
+#4725). The *Recommended answer* column is the decision; Q5's row states the changed decision.
 
 | # | Question | Recommended answer | Alternative |
 |---|---|---|---|
@@ -477,6 +485,6 @@ All answered by the coordinator on 2026-11-17 as recommended (Q3 earlier, on #47
 | Q2 | **`ReadOnlyVariableReference<T>` under C9.** ADR 0093's enforcement sentence names only writable references. | **Refuse it too.** C9's criterion text says the body does not *read or write* workflow variables, and the existing C9 signal (`IRuntimeScopedVariableReader`) is itself read-only. On a worker the read would see durable state that may lag (ADR 0090 open question 7). No ADR change: the criterion already covers it; recorded in research R-6. | Allow it (stale reads on the worker); needs an ADR 0093 amendment. |
 | Q3 | **`RunJavaScript` in the background.** | **Decided 2026-11-17 by the coordinator (#4725, `eb9b1b1a4a`):** `RunJavaScript` is not `[BackgroundExecutionSafe]`; a background `RunJavaScript` is refused. No rule needed here. | — |
 | Q4 | **Structural activities** (ADR 0090 open question 6). | **No session for structural activities in this spec.** They keep `IRuntimeScopedVariableReader` reads; a write from a structural evaluation is a later spec if a case appears. | Each structural evaluation is its own step with a session (the ADR's recommendation, but no current consumer). |
-| Q5 | **Writes when `variables` escapes.** S-4 lets a body read through an escaped `variables` root (opaque fallback). A write through it cannot be resolved at publish. | **Refuse at publish** a body that writes when the `variables` root or `setVariable` escapes (ADR 0090 decision 3). Read-only bodies keep S-4's opaque reads. | Allow and treat the may-write set as every visible variable, resolved at run time; needs an ADR 0090 amendment of decision 3. |
+| Q5 | **Writes the publisher cannot name** (a computed name, or a write through an aliased `variables`). | **Decided 2026-11-17 by the coordinator: allow them and count them conservatively** (FR-020a): the node may write every visible variable, the name resolves at run time, undeclared or transient names fault. Fits the model already used for C# free names. Recorded in ADR 0090 decision 3 as amended on 2026-11-17 (#4729, `53e301034a`). | Refuse at publish (the first recommendation; rejected: it blocked scripts that run correctly). |
 | Q6 | **The converted form of `setVariable('x', v)`.** | **Rewrite to `variables.x = v`**, matching S-4's `variables.X` for reads: one form in converted scripts. | Keep `setVariable('x', v)`, which the runtime supports. |
 | Q7 | **#3023** (intrinsics inside graph activities) is listed as "possibly" S-7. | **Out of S-7.** It is about `Set`/`SetOutput` nodes inside reusable graph activities, not step writes; it stays its own issue. | Include it; adds graph-runtime intrinsic support to this spec. |
