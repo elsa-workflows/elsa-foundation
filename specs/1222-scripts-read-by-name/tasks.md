@@ -169,8 +169,8 @@ not provided.
 - [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the body's variable session (ADR 0090 decision 2, ADR 0092) while their recorded reads still enter the input snapshot; record the write assumptions for verification against S-7 (R-10).
 - [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the read set with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
 - [ ] T046 [P] Cover that every read path to one variable returns the same JavaScript value within one evaluation (FR-034), and that values stay frozen until spec 1228's bridge lands (FR-037).
-- [ ] T047 Give the `RunJavaScript` body the `variables` root and `getVariable`, served by the step's variable session and recorded in the read set, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, the script evaluation request and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010 and T021.
-- [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7) when T047 is merged, and point it at spec Q2 (its `get<Name>()` wording).
+- [ ] T047 Add a `variables` root and `getVariable` to the `RunJavaScript` body, next to its `args` (spec Q4, FR-035a), served by the step's variable session and recorded in the read set, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, the script evaluation request and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010 and T021.
+- [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7, and its T007 that replaces the frozen values) when T047 is merged.
 
 ---
 

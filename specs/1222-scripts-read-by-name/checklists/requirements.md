@@ -32,8 +32,8 @@
 ## Notes
 
 - The ADRs it applies are accepted and merged: ADR 0089 (`0a381a812a`), ADR 0092 and ADR 0090. It keeps spec 1216
-  FR-025–FR-027. Approval is the coordinator's and needs answers to Q1–Q5.
+  FR-025–FR-027. Approval is the coordinator's; Q1–Q5 are answered (2026-11-17).
 - Some technical nouns (`variables` root, `args`, pinned parameter) are domain terms from ADR 0089 / spec 095 and the
   initiative board, retained deliberately for architect reviewers; they are not new implementation choices.
 - The former OQ-1 (serialized shape) and OQ-3 (transient computed read: fault) are settled by ADR 0089. Q1 (loop
-  iteration values) to Q5 are listed in the spec with recommended answers.
+  iteration values) to Q5 were answered as recommended.

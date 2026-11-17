@@ -317,12 +317,17 @@ value and confirm it is not provided.
   can see a change made through any of them (spec 1228 FR-003).
 - **FR-035**: Every body read MUST be recorded in the read set (ADR 0092 decision 3) with the variable's protection
   policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
+- **FR-035a**: A script MUST read a workflow variable through `variables` (`variables.X`, `variables['X']`,
+  `getVariable(...)`), in input expressions and in the `RunJavaScript` body alike. Variable reads are no longer lowered
+  to `args`; `args` carries inputs, activity results and instance metadata. A `RunJavaScript` body therefore gets a
+  `variables` root next to its `args` (T047). ADR 0089 decision 7's refusal of a variable declared both ways is dropped,
+  because the roots are separate objects (Q4).
 - **FR-036**: The runtime MUST NOT provide generated `get<Name>()` accessors (ADR 0089 decision 6; ADR 0090
   decision 3). `get<Name>()` survives only as an Elsa 3 import form that the converter rewrites to `variables.Name`
   (FR-026) (Q2).
 - **FR-037**: Until spec 1228's bridge lands, values MUST enter scripts as today's frozen values, so a change that no
-  write path can carry fails loudly instead of being dropped. Spec 1228 FR-001 replaces this with changeable values
-  (Q3).
+  write path can carry fails loudly instead of being dropped. This is left alone on purpose: spec 1228 records that it
+  MUST replace these frozen values with its bridge on every surface this spec adds (its FR-001 and T007) (Q3).
 
 ### Key Entities
 
@@ -391,12 +396,13 @@ value and confirm it is not provided.
 
 ## Open questions for the approver
 
-Each question has a recommended answer; the requirements follow the recommendation.
+Each question had a recommended answer. **@j03y-nxxbz accepted all five on 2026-11-17**, Q3 on the condition that
+spec 1228 records it must replace the frozen values (done in its FR-001 and T007); the requirements follow them.
 
-| # | Question | Recommended answer |
+| # | Question | Answer (accepted) |
 |---|---|---|
 | Q1 | **Loop iteration values (ADR 0028), delegated by ADR 0089.** How is a loop item or index pinned at publish and read at run time? | **As an ordinary variable declared by the loop node** (FR-004a). Publish adds the loop's iteration declarations (`currentItem`, `currentIndex` for ForEach; `index` for For) as the innermost scope of the body, which Studio's `ScopedVariableResolver` does not do today, and pins the read to the loop node and key. At run time the scoped reader takes the value from the current pass's iteration scope, so each pass reads its own item, and the fallback walks the same chain. The value is durable (ADR 0028), so it is snapshotted, not treated as transient; in a body it is frozen and untracked (ADR 0090 decision 2). No ADR change. |
 | Q2 | **`get<Name>()` in a script body.** Spec 1228 lists `get<Name>()` as a read path (its FR-003 and FR-006a, and its dependency note). ADR 0089 decision 6 and ADR 0090 decision 3 remove it from the runtime. Which holds? | **The ADRs.** The runtime gives `variables.X`, `variables['X']` and `getVariable(...)`; `get<Name>()` is only an Elsa 3 import form the converter rewrites to `variables.Name` (FR-036). Spec 1228's mentions are read as the converted form; its text is corrected in its implementation PR (a wording fix, no ADR change). Keeping `get<Name>()` at run time would need an ADR 0089 amendment. |
-| Q3 | **Frozen or changeable values.** Spec 1228 FR-001 replaces the frozen-value contract; this spec lands first. What does S-4 deliver? | **Today's frozen values** (FR-037). Without a write path a changeable value would drop a change silently; frozen values fail loudly. Spec 1228 replaces them through its bridge, and FR-034 (one value per variable per evaluation) is what it relies on. |
-| Q4 | **ADR 0089 decision 7's "declared both ways" refusal.** The ADR lets the implementing spec drop it once the roots are separate. Drop it? | **Drop it** (research R-7). `variables` and `args` are separate objects, so `variables.X` and `args.X` cannot collide and both resolve to the same value. |
+| Q3 | **Frozen or changeable values.** Spec 1228 FR-001 replaces the frozen-value contract; this spec lands first. What does S-4 deliver? | **Today's frozen values** (FR-037), left alone on purpose. Without a write path a changeable value would drop a change silently; frozen values fail loudly. Spec 1228 records that it must replace them on every surface this spec adds (its FR-001 and T007), and FR-034 (one value per variable per evaluation) is what it relies on. |
+| Q4 | **ADR 0089 decision 7's "declared both ways" refusal.** The ADR lets the implementing spec drop it once the roots are separate. Drop it? | **Drop it** (research R-7). Variables are read as `variables.X` in input expressions and in the `RunJavaScript` body, not through `args`, so the body gets a `variables` root next to `args` (FR-035a, T047). The roots are separate objects and cannot collide. |
 | Q5 | **How the fallback is served.** ADR 0089 R3 leaves it to this spec: load the conservatively reported set before evaluation, or load on demand? | **Load the reported set before evaluation** (research R-4). Jint reads synchronously and values may be stored externally, so on-demand loading would block inside the script. The cost falls only on expressions with a computed or opaque read. On-demand loading of inline-stored values can come later as an optimization. |

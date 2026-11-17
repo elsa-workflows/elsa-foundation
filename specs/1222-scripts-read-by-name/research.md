@@ -62,7 +62,7 @@ At run time `RuntimeLoopIterationScopeFactory.BuildIterationScope` builds one sc
 they are durable. ADR 0090 decision 2 makes a loop item frozen and untracked in a script. Spec 265 projects graph
 variables through synthetic frames.
 
-**Decision (recommended, spec Q1).** The publish-time resolver adds the loop's iteration declarations as the innermost
+**Decision (spec Q1, accepted).** The publish-time resolver adds the loop's iteration declarations as the innermost
 scope of every node in the loop body, resolves an iteration-scope variable as the nearest scope (innermost first) and
 pins it as a `Variable` parameter recording the loop node id + key. At run time the pinned value is taken
 from the iteration frame, through the same scoped reader the runtime already has. The fallback lookup walks the same
@@ -122,8 +122,9 @@ reliable computed-access detection, and moves the decision to publish so the run
 
 ## R-7: Decision-7 ambiguity refusal is dropped
 
-**Decision.** A script may read one value both as `variables.X` and `args.X`; the former "declare the same variable two
-ways is ambiguous" refusal is removed, because the roots are separate and both resolve to the same value.
+**Decision (spec Q4, accepted).** Variables are read as `variables.X` in input expressions and in the `RunJavaScript`
+body; variable reads are no longer lowered to `args`, so the body gets a `variables` root next to `args`. The former
+"declare the same variable two ways is ambiguous" refusal is removed, because the roots are separate objects.
 
 ## R-8: Secrets / protection
 
