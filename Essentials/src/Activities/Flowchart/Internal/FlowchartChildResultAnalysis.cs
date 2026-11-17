@@ -192,6 +192,11 @@ internal sealed class FlowchartChildResultAnalysis(
 
     private IReadOnlyCollection<string> SuccessorsOf(string node) => successors.GetValueOrDefault(node, []);
 
+    private IEnumerable<string> InboundOf(string node) => _inboundSources.GetValueOrDefault(node, []);
+
+    private bool IsWaitingJoin(string node) =>
+        InboundOf(node).Distinct(StringComparer.Ordinal).Count() > 1 && !_nonWaitingJoins.Contains(node) && !_raceJoins.Contains(node);
+
     // The join's arrivals that a branch reaches before running the join again.
     private HashSet<string> ArrivalsReachedBy(string fork, string branch, string join, ICollection<string> sources)
     {
@@ -202,18 +207,34 @@ internal sealed class FlowchartChildResultAnalysis(
             return reached;
         }
 
+        // A waiting join passes the branch's token on only when every one of its arrivals can come from the fork without
+        // the join: one that waits for the join's own run sends nothing until that run has ended.
+        var fromFork = NodesReachedWithout(fork, join);
         var visited = new HashSet<string>(StringComparer.Ordinal) { branch };
         var queue = new Queue<string>([branch]);
         while (queue.TryDequeue(out var node))
         {
             if (sources.Contains(node))
                 reached.Add(node);
+            if (IsWaitingJoin(node) && !InboundOf(node).All(source => StringComparer.Ordinal.Equals(source, fork) || fromFork.Contains(source)))
+                continue;
             foreach (var next in SuccessorsOf(node))
                 if (!StringComparer.Ordinal.Equals(next, join) && visited.Add(next))
                     queue.Enqueue(next);
         }
 
         return reached;
+    }
+
+    private HashSet<string> NodesReachedWithout(string from, string excluded)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>([from]);
+        while (queue.TryDequeue(out var node))
+            foreach (var next in SuccessorsOf(node))
+                if (!StringComparer.Ordinal.Equals(next, excluded) && visited.Add(next))
+                    queue.Enqueue(next);
+        return visited;
     }
 
     private static bool ReachDifferentArrivals(IReadOnlyList<HashSet<string>> arrivals)

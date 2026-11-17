@@ -97,10 +97,12 @@ internal sealed class BpmnTimeRelationAnalysis
         var runs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var (fork, edges) in _outgoing)
         {
-            if (BranchGroups(edges).Count < 2 || !IsReachable(fork, fork))
+            var groups = BranchGroups(edges);
+            if (groups.Count < 2 || !IsReachable(fork, fork))
                 continue;
-            foreach (var edge in edges.Where(edge => edge.Choice is null && !IsReachable(edge.Target, fork)))
-            foreach (var node in _inbound.Keys.Where(node => StringComparer.Ordinal.Equals(node, edge.Target) || IsReachable(edge.Target, node)))
+            // A group (an unconditional flow, or the choices together) none of whose targets returns to the fork.
+            foreach (var target in groups.Where(group => !group.Any(target => IsReachable(target, fork))).SelectMany(group => group))
+            foreach (var node in _inbound.Keys.Where(node => StringComparer.Ordinal.Equals(node, target) || IsReachable(target, node)))
             {
                 if (!runs.TryGetValue(node, out var forks))
                     runs[node] = forks = new HashSet<string>(StringComparer.Ordinal);
@@ -192,6 +194,10 @@ internal sealed class BpmnTimeRelationAnalysis
     private IEnumerable<string> SuccessorsOf(string node) =>
         _outgoing.TryGetValue(node, out var edges) ? edges.Select(edge => edge.Target) : [];
 
+    private IEnumerable<string> InboundOf(string node) => _inbound.TryGetValue(node, out var sources) ? sources : [];
+
+    private bool IsWaitingJoin(string node) => InboundOf(node).Count() > 1 && !_nonWaitingJoins.Contains(node);
+
     // The join's arrivals that a branch reaches before running the join again.
     private HashSet<string> ArrivalsReachedBy(string fork, string branch, string join, ICollection<string> sources)
     {
@@ -202,18 +208,34 @@ internal sealed class BpmnTimeRelationAnalysis
             return reached;
         }
 
+        // A waiting join passes the branch's token on only when every one of its arrivals can come from the fork without
+        // the join: one that waits for the join's own run sends nothing until that run has ended.
+        var fromFork = NodesReachedWithout(fork, join);
         var visited = new HashSet<string>(StringComparer.Ordinal) { branch };
         var queue = new Queue<string>([branch]);
         while (queue.TryDequeue(out var node))
         {
             if (sources.Contains(node))
                 reached.Add(node);
+            if (IsWaitingJoin(node) && !InboundOf(node).All(source => StringComparer.Ordinal.Equals(source, fork) || fromFork.Contains(source)))
+                continue;
             foreach (var next in SuccessorsOf(node))
                 if (!StringComparer.Ordinal.Equals(next, join) && visited.Add(next))
                     queue.Enqueue(next);
         }
 
         return reached;
+    }
+
+    private HashSet<string> NodesReachedWithout(string from, string excluded)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>([from]);
+        while (queue.TryDequeue(out var node))
+            foreach (var next in SuccessorsOf(node))
+                if (!StringComparer.Ordinal.Equals(next, excluded) && visited.Add(next))
+                    queue.Enqueue(next);
+        return visited;
     }
 
     private static bool ReachDifferentArrivals(IReadOnlyList<HashSet<string>> arrivals)

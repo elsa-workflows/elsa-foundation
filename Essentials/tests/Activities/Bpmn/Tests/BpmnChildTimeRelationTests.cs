@@ -248,6 +248,38 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "side", "side"));
     }
 
+    // A branch started before the loop that a waiting join holds until the task's first run ends never overlaps that run.
+    [Theory]
+    [InlineData(BpmnElementTypes.InclusiveGateway)]
+    [InlineData(BpmnElementTypes.ParallelGateway)]
+    public void A_parallel_branch_awaited_after_the_first_pass_stays_ordered(string waitingJoin)
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("p", BpmnElementTypes.ParallelGateway), Task("j", "join"),
+                Task("b", "side"), Element("w", waitingJoin), Element("x", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "p"), Flow("p", "j"), Flow("p", "b"), Flow("j", "w"), Flow("b", "w"), Flow("w", "x"), Flow("x", "j"), Flow("x", "end")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "join", "join"));
+    }
+
+    // A non-interrupting boundary that leads back into its host runs the host again while it is still active.
+    [Fact]
+    public void A_non_interrupting_boundary_leading_back_into_its_host_overlaps_the_host()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("h", "host"),
+                new BpmnElement("i", BpmnElementTypes.BoundaryEvent, attachedToRef: "h", cancelActivity: true),
+                new BpmnElement("n", BpmnElementTypes.BoundaryEvent, attachedToRef: "h", cancelActivity: false),
+                Task("a", "again"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "h"), Flow("h", "end"), Flow("i", "end"), Flow("n", "a"), Flow("a", "h")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "host", "host"));
+    }
+
     // Nested loops closed by exclusive merges pass one token around: the inner body stays sequential.
     [Fact]
     public void Nested_loops_closed_by_exclusive_merges_stay_ordered()
