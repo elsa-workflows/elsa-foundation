@@ -246,8 +246,12 @@ Because a parent keeps waiting for a parked child ([large fan-out](large-fan-out
 delete of a parked instance also send its parent a final Faulted notice in the same commit, which ends the parent's
 wait. Neither is built.
 
-**Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
-gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
+**Every operator message** is an outside add in the operator's bound scope. Its id is the tenant-qualified operation
+id `Q(t, operation)`, with a `keep_until`, so a retried command gets a duplicate-key answer and no second effect, and
+the same operation id in another tenant is a different message. An operator acts only within its bound scope: another
+tenant's instance answers not found, as a missing one does. Partition release, drain and handover are host
+administration and touch no tenant rows; cross-tenant support uses ADR 0097's support context
+([tenancy](tenancy.md#every-operation)). Inspecting metadata,
 reading payloads, recovering, discarding and handing over are separate permissions, and each action is audited with
 its principal, reason and outcome.
 

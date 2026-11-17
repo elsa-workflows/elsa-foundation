@@ -73,7 +73,15 @@ scope zero preserves store-wide ordinary deduplication under the provider's exis
 sends, job tickets, custom handles, child creators and event matches occupy separate identity domains. A public
 caller cannot select an issued domain through ordinary add or post.
 
-An event match encodes the complete stored tuple `(subscription key, event ID, instance, wait, creation)`.
+**Tenants (proposed, [tenancy](tenancy.md)).** The prototype has no tenant field. In the proposed design every name a
+caller chooses is stored tenant-qualified, `Q(t, n)`, with `t` from the bound persistence scope: outside message and
+operation ids, caller-key actor ids, the keyed-request hash and correlation keys. Store-wide scope-zero deduplication
+is then deduplication within one tenant, and two tenants' equal ids never meet. Every tenant-keyed record also carries
+a `tenant` column that the owner checks on load and consumption.
+
+An event match encodes the complete stored tuple `(subscription key, event ID, instance, wait, creation)`. Under the
+proposed tenancy contract the subscription key is tenant-qualified, so the tuple names the tenant, and a publish
+matches only its own tenant's subscriptions.
 The publisher and catch-up paths select canonical persisted events and subscriptions using provider equality;
 they do not build identity or payload from a retried caller's replacement values. SQL insertion assigns a negative
 scope within the wire ID and compares exact `EventMatch` bytes. MongoDB keeps the match in its composite `_id`.
@@ -332,11 +340,14 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
   Allocation is contiguous inside the committing batch and commits atomically with those rows. A committed position
   at or below the partition high-water mark is not awaiting a later insert; an absent positive row was explicitly deleted.
   Current journal rows need not be contiguous after deletion. Minimal commits can leave the position unchanged.
-- **Message identity:** ordinary scope-zero IDs deduplicate across the store, not just within a partition.
+- **Message identity:** ordinary scope-zero IDs deduplicate across the store, not just within a partition. Proposed:
+  outside ids are tenant-qualified at ingress, so that store-wide domain holds one tenant's ids
+  ([tenancy](tenancy.md#names-one-namespace-per-tenant)).
   Private identities additionally contain origin scope and, for events, exact match. Equal wire text in different
   domains does not deduplicate. A consumed row's removal, or a handled row's eventual sweep, ends that particular
   deduplication record. The matched row is the retained event-start acceptance receipt; no permanent receipt table is supplied.
 - **Event and subscription identity:** events are keyed by `(Key, Id)`; subscriptions by `(Key, Instance, Wait)`.
+  Proposed: `Key` is tenant-qualified, so both keys name the tenant.
   Delivery identity retains the complete canonical match, so ambiguous derived wire text does not collapse
   different matches. Ordinary caller IDs and generated actor addresses remain different namespaces.
 - **Order:** `Seq` is an order key, not a gapless commit counter. PostgreSQL sequence allocation can leave gaps;
