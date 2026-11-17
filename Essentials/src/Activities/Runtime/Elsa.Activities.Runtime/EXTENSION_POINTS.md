@@ -141,7 +141,7 @@ These consumers do not yet implement the combined callback.
 
 ## Background leaf execution
 
-- **Declaration:** `[BackgroundExecutionSafe]` pins type-level eligibility into `ActivityContract.SupportsBackgroundExecution`; authored `ActivityExecutionPlacement.Background` chooses this placement per node.
+- **Declaration:** `[BackgroundExecutionSafe]` pins type-level eligibility into `ActivityContract.SupportsBackgroundExecution`; authored `ActivityExecutionPlacement.Background` chooses this placement per node. The declaration is the author's promise of ADR 0093's C7 and C8; the engine checks the other criteria through `BackgroundEligibility` (`Elsa.Workflows.Runtime.Core`), which is a static rule set, not an extension point.
 - **Composition:** `BackgroundActivitiesFeature` enables coordinator admission and optionally the tracked worker pump (`RunWorkers`). `BackgroundActivityWorkerOptions` bounds concurrency, polling, renewal and result size.
 - **Worker host seam:** `BackgroundActivityWorker.ExecuteClaimAsync(PersistenceScope, BackgroundActivityWorkClaim, CancellationToken)` consumes a claim from `IBackgroundActivityWorkStore` in independently bound activation/renewal/receipt scopes. It validates the pinned implementation and typed result, and never directly changes native activity state.
 - **Coordinator:** `WorkflowInvokeActivitySchedulerWorkHandler` commits admission, then later applies a ready result through native output/fault/completion handling. The checkpoint enricher includes receipt acceptance or cancellation in that same native commit.

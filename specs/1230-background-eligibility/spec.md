@@ -258,7 +258,7 @@ structural activity and child handler fails C1 (16 types, including `BpmnProcess
 | **Already marked** | Agent: `AgentModelTurn` (internal, not discoverable) | Meets C1–C10 (journal keyed on `InvocationId`, linked token, no inputs). Its background node is built by hand in `AgentActivityProvider`, so publication never checks it (FR-012, Q9). |
 | **Not marked: meets C1–C10, but background makes no sense** | `WriteHttpResponse`; triggers `Cron`, `Timer` | The HTTP response is delivered only from a result committed during the synchronous inline drain; a background result would arrive too late and be lost. A trigger's body gets no trigger payload on the worker. No criterion catches either; not marking them is enough (Q8). |
 | **Not marked: C7 or C8 cannot be promised** | `SendHttpRequest`, `ReadLine`; M365 `SendMail`, `PostTeamsChannelMessage`; Slack `SendMessage`, `ReplyInThread`, `UploadFile` | Arbitrary or non-idempotent external effects (a re-run sends twice); `ReadLine` also ignores its token. |
-| **Not marked: implementation gap → issue** (FR-009) | M365 `CreateEvent` (no idempotency key from `InvocationId`), M365 `UploadFile` (conflict behaviour `rename` duplicates on a re-run; its `byte[]` input needs a C10 answer), Slack `AddReaction` (a re-run faults on `already_reacted`), `EvaluateDecision` (the body re-reads coordinator stores and a live-burst overlay; unproven on a worker) | Each could qualify after a small change. |
+| **Not marked: implementation gap → issue** (FR-009) | M365 `CreateEvent` (no idempotency key from `InvocationId`; #4721), M365 `UploadFile` (conflict behaviour `rename` duplicates on a re-run; its `byte[]` input needs a C10 answer; #4722), Slack `AddReaction` (a re-run faults on `already_reacted`; #4723), `EvaluateDecision` (the body re-reads coordinator stores and a live-burst overlay; unproven on a worker; #4724) | Each could qualify after a small change. |
 | **Ineligible** | `Inline` (C3: `object` result; lifts with S-8), `PublishEvent` (C6, by design) | |
 
 Unverified, checked before marking (T022): whether connection-based activities resolve their tenant partition on a
@@ -307,3 +307,13 @@ them.
   `Elsa.Activities.Runtime` already reference it, and it already references `Elsa.Activities.Runtime.Core`, where the
   attribute and `IStatefulActivity` live.
 - Workflow authors set placement in workflow JSON or code; there is no Studio control yet.
+
+## Release note
+
+Background activities: eligibility is now decided by one component (ADR 0093), and every refusal names its criterion
+(`VF-BG-001 (C<n>): …`). Run time now checks the same criteria as publication, so a background node pinned before this
+release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
+(C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
+without a secret reference (C10) is refused at admission with an incident (Q5). No shipped activity was marked
+before, so only custom activities are affected. Fifteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
+365 and Slack reads among them move to version 1.1.0.

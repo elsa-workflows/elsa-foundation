@@ -107,3 +107,41 @@ lost-update warning, tasks T010a, T029–T032) is deferred to a later S-10 PR. S
 `ExecutableNodeCompiler.cs` (node metadata, not the background check), and S-10's US5 will edit
 `BackgroundActivityCoordinator.cs` (admission). This spec changes one call in each, so whichever lands second merges
 the initiative branch first; no logic overlaps.
+
+## Implementation findings (2026-11-17)
+
+- **T008 (stream input, driven).** A background node whose `Stream` input is bound to a variable **published** before
+  this change: no check looked at inputs. The contract pins the input under its canonical CLR alias
+  `System.IO.Stream`, which `ValueRepresentationDefaults.Infer` does not map to `TransientResource`, so C10 reads both
+  spellings. It is now refused at publication naming C10 (`BackgroundEligibilityPublicationTests`).
+- **T011.** `BpmnProcess` is still the only shipped `IRuntimeScopedVariableReader`; it fails C1 first. C9 refuses no
+  built-in.
+- **T022, by reading the code and one run.**
+  - Tenant partition on a worker: `HttpConnectionApplicator` and `ActivitySecretInputResolver` read
+    `IWorkflowExecutionPartitionAccessor.Current`, which comes from the persistence access context. The worker runs the
+    body inside `scopeFactory.CreateAsync(claimScope)`, so both resolve the claim's partition. Not run against a live
+    connector.
+  - Secret-bound `RunJavaScript.Arguments`: publication admits it in the background (C10 lets a secret reference
+    through; the snapshot keeps the withheld envelope) — `BuiltInBackgroundAssessmentTests`. Activation-time
+    resolution on the worker uses the same resolver as inline.
+  - `DownloadFile` above the receipt limit: `BackgroundActivityCompletionCodec` refuses a result above
+    `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault. Accepted; documented on the mark.
+  - None failed, so all 15 are marked (Q10).
+- **Declaration order (data-model deviation).** The declaration check runs **after** the engine-checked criteria, not
+  before C1, so an unmarked activity that also fails C1–C10 is refused naming that criterion (US5 acceptance 2:
+  `Sequence` → C1, `Inline` → C3). An unmarked activity that passes them all is refused as "does not declare
+  BackgroundExecutionSafe" (`WriteHttpResponse`, `SendHttpRequest`, `ReadLine`, `PublishEvent`, `Timer`).
+- **Template placement (FR-012).** `ActivityTemplatePlacer` resolves a template node's CLR type from its pinned
+  activation capability, as the worker does, and runs `CheckPublication`. A frame root is **not** treated as a
+  reusable boundary: a source-owned occurrence's template root is the authored node itself (a background leaf inside
+  a graph activity). An authored node that references a reusable definition is still refused C1 by the workflow
+  compiler. A host whose type registry does not know the type refuses the node (C1), as authored nodes are; the
+  Workbench registers the agent runtime types in the publishing shell.
+- **Versions (T020).** Marking changes only the runtime contract fingerprint; the design catalog hash does not read the
+  attribute. The eight connector reads carry `[Version]` and move 1.0.0 → 1.1.0. Primitives, Scripting and BPMN use the
+  assembly version, which the per-package versioning tool moves. The activity contract surface baseline does not
+  record the flag, so it is unchanged.
+- **C9 signals of ADR 0090.** Neither `[AccessesUndeclaredVariables]` nor `VariableReference<T>` exists in code (checked
+  on the initiative branch and S-10's branch), so C9 enforces `IRuntimeScopedVariableReader` only. It is one public
+  predicate, `BackgroundEligibility.AccessesVariablesByName(Type)`, where both signals join when ADR 0090 decision 4 is
+  implemented.
