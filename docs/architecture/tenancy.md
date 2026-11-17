@@ -100,8 +100,9 @@ produce one stored name.
 **Under database collations: the grammar plus a pinned collation (decided, 17 November).** SQL Server and MySQL
 compare a stored name with its column's collation, and the EF model pins none, so the kernel's tables would inherit
 whatever the database administrator chose. The grammar alone does not make `Q` injective there: locale collations
-contract and expand letter sequences. The reviewer's runs on SQL Server 2022 and MySQL 8.4 (scripts in the review's
-evidence folder) found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` and `ssz_x` = `szsz_x` under SQL
+contract and expand letter sequences. The independent reviewer's runs on SQL Server 2022 and MySQL 8.4, recorded in
+[a comment on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060),
+found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` and `ssz_x` = `szsz_x` under SQL
 Server's `Hungarian_CI_AS` and `Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`. The same runs found `-` and
 `_` never ignored and never equal to each other in every collation tested.
 
@@ -116,14 +117,40 @@ rules, case-insensitive so that matching within a tenant stays as it is:
 | SQLite | `BINARY`, the default |
 | MongoDB | Binary comparison: no collection or index collation on these fields |
 
-The pinned columns: `Instances.Id` and `Instances.Parent`; `Messages.Id`, `Messages.Target` and `Messages.Sender`;
-`Subscriptions.Key` and `Subscriptions.Instance`; `Events.Key` and `Events.Id`; `Journal.Instance`; the instance column
-of `Views`, of value rows and of every read model, and the read models' `key` column; and every `tenant` column. Under
-these collations the grammar's letters, digits and `-` and the separator `_` each compare equal only to themselves,
-and neither collation has a contraction or expansion among those characters, so two tenants' qualified names never
-compare equal. That is reasoned from the collations' rules; T15 verifies it on both engines. Folding
-inside the caller's name (case on both engines, accents on MySQL) stays within one tenant, as it is today. The K3
-store change and the K4 migrations create the pin; case T16 checks that they do.
+The rule is the authority: every column that holds a tenant id, an actor id or a tenant-qualified name is pinned.
+The pinned columns are at least: `Instances.Id` and `Instances.Parent`, and the sketch's `root` and `correlation`
+instance columns when they are added; `Messages.Id`, `Messages.Target` and `Messages.Sender`; `Subscriptions.Key` and
+`Subscriptions.Instance`; `Events.Key` and `Events.Id`; `Journal.Instance`; the instance column of `Views`, of value
+rows and of every read model, and the read models' `key` column; and every `tenant` column.
+
+Under these collations the grammar's letters, digits and `-` and the separator `_` each compare equal only to
+themselves, and neither collation has a contraction or expansion among those characters, so two tenants' qualified
+names never compare equal. Folding inside the caller's name (case on both engines, accents on MySQL) stays within one
+tenant, as it is today. The K3 store change and the K4 migrations create the pin; case T16 checks that they do.
+
+**Measured on the pin.** The reviewer's confirmation run
+([recorded on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060)), in databases whose
+default is Hungarian on both engines: the seven names `ccs_x`, `cscs_x`, `ssz_x`, `szsz_x`, `ab_x`, `a-b_x` and
+`a_b_x` insert as seven distinct primary-key rows, and each `=` or parameter lookup finds exactly one; the same names
+in unpinned columns collide; and joining an unpinned value to a pinned column is an error, never a silent match. T15
+makes this a standing case.
+
+**Every expression uses the pin.** A query-level `COLLATE` overrides a column's collation, so the pin holds only if
+every SQL expression that compares with, joins to, partitions by or hashes a pinned column uses the pinned collation
+and never `DATABASE_DEFAULT`. The rule covers the owned SQL and the EF path, and table-valued inputs such as `OPENJSON`
+and `JSON_TABLE` whose values meet a pinned column. Two prototype sites break it today. They are evidence, unchanged
+here, and the kernel build must not carry them over:
+
+- **The actor-alias lookup,** `EfStore.LoadActorsAsync` on SQL Server, joins `OPENJSON` values cast `COLLATE
+  DATABASE_DEFAULT` to `Instances.Id`, and partitions by that value for the alias canonical spelling and
+  `FirstEquivalent`. In a Hungarian-default database the input `ccs_x` matched the stored `cscs_x` (measured, one
+  match; zero with the pinned collation). The load-time tenant check stops anything crossing tenants; tenant `ccs`'s
+  work is still resolved to, or dropped because of, tenant `cscs`'s row. MySQL's `JSON_TABLE` shape returned zero matches,
+  because its columns come back `utf8mb4_0900_ai_ci`.
+- **The event-insertion stripe,** `EventInsert.cs` on SQL Server, takes its application-lock resource from
+  `CHECKSUM(... COLLATE DATABASE_DEFAULT)`. Under a case-sensitive default, `Q(a, X)` and `Q(a, x)` are equal under the
+  pin and can checksum differently, so two concurrent inserts of one match would take different locks and are not
+  serialized. This is reasoned and not run.
 
 **`_` is a `LIKE` wildcard.** Selecting a tenant's rows uses the `tenant` column, or a prefix match with `_` escaped;
 an unescaped `LIKE 'acme_%'` would also match `acmex...`, so no query uses one.
@@ -228,7 +255,10 @@ administrator who must inspect a tenant's work enters that tenant through the su
   hash, qualified correlation keys, the tenant check on load and consumption, read-model indexes led by tenant, and
   the conformance cases below. Fairness's tenant column on the instance row is part of this.
 - **Kernel-behaviour store change for K3 (two reviews):** the collation pin (decision 6) on every pinned column, created
-  by the schema and the migrations of every relational provider, with T16.
+  by the schema and the migrations of every relational provider, and the pinned collation in every expression that
+  compares with, joins to, partitions by or hashes a pinned column, with T16 and T17. The two known prototype sites
+  that use `DATABASE_DEFAULT`, the actor-alias lookup in `EfStore.LoadActorsAsync` and the stripe in `EventInsert`,
+  are not carried over.
 
 ## Acceptance cases
 
@@ -253,6 +283,7 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 | T14 | T2 to T11 in Embedded with the fixed tenant, and in Cluster with two nodes and two tenants | All pass on both profiles | K12 |
 | T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id. Then T2 and T3 run against the pinned schema on SQL Server 2022 in databases whose default collation is `SQL_Latin1_General_CP1_CI_AS` (SQL Server's default, accent-sensitive) and `Hungarian_100_CI_AS`, and on MySQL 8.4 with database defaults `utf8mb4_0900_ai_ci` and `utf8mb4_hu_0900_ai_ci`. Tenant pairs: `ab`/`a-b`, `a`/`a-b` (`a_b_x` against `a-b_x`), `ccs`/`cscs` and `ssz`/`szsz` | The four ids are refused at the binder; every pair stays two rows, two matches and two answers, including `ccs_x` and `cscs_x` in the Hungarian-default databases | K4 |
 | T16 | Inspect the schema the K3 store change and the K4 migrations create, on SQL Server and MySQL, in a database with a locale default collation | Every pinned column has the pinned collation; a column created without it fails the check | K3, K4 |
+| T17 | In a Hungarian-default database on SQL Server and MySQL, run T2 and T3 through the actor-alias lookup (keyed commands to `ccs_x` and `cscs_x`, each with its own row) and through event-start insertion; on SQL Server, also in a case-sensitive-default database, insert one event match concurrently under two spellings equal under the pin. A guard greps the owned and EF SQL for `COLLATE DATABASE_DEFAULT` applied to a pinned value | Each lookup resolves to its own tenant's row; the two concurrent inserts are serialized and land one match; the guard finds no such expression | K3, K4 |
 
 The two-tenant fairness run of K12 measures latency and refusals; it does not replace these cases.
 
