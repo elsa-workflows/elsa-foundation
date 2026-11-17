@@ -20,7 +20,10 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 - [ ] T003 Add optional `CausedBy` to `ActivitySchedulingProvenance`
   (`Essentials/src/Workflows/Runtime/Core/Models/ActivitySchedulingProvenance.cs`) and fill it where a completion
   schedules: parent callbacks, `Do`/`While`/`For`/`ForEach` next iterations, join and `Parallel` completions.
-- [ ] T004 Tests: each of those schedulings records its cause; `Sequence` keeps passing its completed child; overhead
+- [ ] T003a Add optional `LostUpdateWarningCount` to `ActivityExecutionState`, set when the row is written from its
+  lost-update warning records; store columns and an index for `FirstCommitSequence`, `LastCommitSequence` and
+  `LostUpdateWarningCount` with a migration in every runtime store provider (FR-016).
+- [ ] T004 Tests: each of those schedulings records its cause; the row columns match the document; `Sequence` keeps passing its completed child; overhead
   within noise of spec 1221's benchmark (SC-006).
 
 ## Phase 3: User Story 1 — who wrote a variable, which write won (P1) 🎯 MVP
@@ -44,7 +47,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 - [ ] T010 [US2] Happens-before walk and concurrent-overwrite marking in the read model (research R-3), bounded by the
   replaced write's commit sequence; `concurrentOverwriteTotal` on the filtered history.
-- [ ] T011 [US2] Instance details: `LostUpdateWarningCount` from the instance
+- [ ] T011 [US2] Instance details: `LostUpdateWarningCount` summed over the instance's rows
   (`Api/Handlers/WorkflowInstanceDetailsService.cs`, `WorkflowInstanceDetailsView`).
 - [ ] T012 [US2] Tests: two branches `count + 1` → one lost update naming both writers and branches and the overwritten
   value's state; blind `Set` on a third branch → concurrent overwrite, not lost update; sequential, join, `Parallel`
@@ -71,8 +74,8 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 ## Phase 7: User Story 5 — current variable state (P3)
 
-- [ ] T019 [US5] Variable summary from current frames plus the last applied entry; closed-scope variables shown as
-  unversioned.
+- [ ] T019 [US5] Variable summary from current frames and closed-scope rows (their version, digest and writer kept
+  with the row) plus the last applied entry.
 - [ ] T020 [US5] Tests: root, container and iteration variables; legacy instance at version 0 with "no history
   recorded".
 

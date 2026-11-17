@@ -36,8 +36,9 @@ ADR 0090 apply.
 
 **What spec 1221 provides and what this spec adds.** Spec 1221 records the write-time data this spec reads: the write
 records with their frame, digest and instance commit sequence, the activity lifecycle stamps with their commit
-sequence, the alteration write records, and the instance's lost-update warning count (*Data* in the data model). This
-spec adds only the scheduling causes of an invocation (Q3) and the read side.
+sequence, each activity execution's commit-sequence range, the alteration write records, and the written values as
+activity value evidence (*Data* in the data model). This spec adds the scheduling causes of an invocation (Q3), a
+per-activity lost-update count and the store columns it queries by (Q2, Q7), and the read side.
 
 **Out of scope.** Studio presentation (pages, diagnostics badges, diff views) belongs in elsa-studio and is specified
 there against the API this spec defines. The physical storage of the write history is spec 1221's choice. Write-time
@@ -50,7 +51,8 @@ behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy
   iterations and container activations each have their own history.
 - *Applied write*: a write that changed the value (its new version differs from the version it met), whatever its
   outcome: blind, current base, returned value, lost-update warning or accepted override. A refused `Fault` write is
-  listed in the history but is not applied.
+  listed in the history but is not applied. A write on a stale base that wrote the value already there (two branches
+  both writing 1) is listed as a lost-update warning but is not applied: the version does not change.
 - *Commit sequence*: a per-instance number that orders every commit point of one instance, across all variables and
   frames (Q1).
 - *Journal*: the instance's commit-ordered list of what happened: which activity executions were scheduled, started,
@@ -98,9 +100,10 @@ behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy
   inspection granularity; only values follow the capture settings (Q5).
 - **Q5 — Values: what does inspection show?**
   **Decision:** capture and retention are spec 1221's (FR-025). This spec shows each historical value through its
-  value state, and a payload only through an authorized payload read that this spec extends from activity value
-  evidence to write-record values (the written value, the value a lost-update warning overwrote, a refused `Fault`
-  value). A value that capture did not keep shows as `omitted`. Overwritten and refused values are operational data:
+  value state, and a payload only through an authorized payload read. A written value is activity value evidence of
+  the writing activity execution and uses the existing payload read. The value a lost-update warning overwrote, a
+  refused `Fault` value and an alteration's values live on the write record, so this spec extends the payload read to
+  them. A value that capture did not keep shows as `omitted`. Overwritten and refused values are operational data:
   shown under the same protection rules, never removed by inspection retention.
 - **Q6 — Which instances can be compared?**
   **Decision:** two instances of the same executable version only; any other pair is refused with a reason.
@@ -111,8 +114,10 @@ behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy
   sequence of written values differ, compared by digest, so it works when values were not captured and never
   discloses a value.
 - **Q7 — How does the lost-update warning reach the user as an "instance diagnostic"?**
-  **Decision:** as data, not as an incident. The instance details carry the count of lost-update warnings, kept with
-  the instance when the warning is raised, so reading the details stays cheap. Concurrent overwrites are derived, so
+  **Decision:** as data, not as an incident. The instance details carry the count of lost-update warnings. Each
+  activity execution keeps the count of its own lost-update warnings, written with the row that records them, and the
+  details sum it over the instance through a store column, so reading the details stays cheap and no commit writes a
+  row it would not write anyway. Concurrent overwrites are derived, so
   their count comes with the filtered history, not with the details. An incident is not used: an incident in a commit
   ends the coalescing session and would reopen the inline gap. Studio shows the count and links to the history
   (elsa-studio).
@@ -253,8 +258,8 @@ state.
 ### Edge Cases
 
 - Instance deleted: its history, journal and trace go with it; comparison with it is refused as not found.
-- Closed-scope (graph-row) variables that spec 1221 does not version: their writes are listed as blind writes with no
-  version; the gap is shown, not hidden.
+- Closed-scope (graph-row) variables keep their version, digest and writer with the row; they are listed like any
+  other variable instance.
 - A legacy instance (no write records): history is empty with "no history recorded". Records without a commit sequence
   are ordered by frame revision and time, after nothing and before every sequenced record, and are marked approximate.
 - Join rules may change; this spec records only which completions caused a scheduling, which holds for any join rule.
@@ -275,8 +280,8 @@ state.
 
 - **FR-001**: The read model MUST use the write-time data spec 1221 records: the instance commit sequence on write
   records and lifecycle stamps (including the scheduling commit), the frame and digest on write records, the
-  alteration write records, each activity execution's first and last commit sequence, and the instance's lost-update
-  warning count. Records without them MUST read back as absent and be handled as legacy (*Edge Cases*).
+  alteration write records, each activity execution's first and last commit sequence, and the written values as
+  activity value evidence. Records without them MUST read back as absent and be handled as legacy (*Edge Cases*).
 
 **Write history (#3290)**
 
@@ -306,13 +311,13 @@ state.
 - **FR-008**: A lost-update entry MUST name both writers and both branches or paths, base and current versions, and the
   state of the overwritten value (or refused value under `Fault`). A refused `Fault` write MUST NOT be marked as an
   overwrite.
-- **FR-009**: The instance details MUST carry the lost-update warning count (Q7); the filtered history MUST return the
-  total of concurrent overwrites.
+- **FR-009**: The instance details MUST carry the lost-update warning count, summed from a per-activity count kept
+  with each row (Q7); the filtered history MUST return the total of concurrent overwrites.
 
 **Journal and comparison (#3291)**
 
 - **FR-010**: The API MUST return an instance's journal in commit sequence order, paged, with each commit's activity
-  transitions (scheduled, started, suspended, resumed, completed, faulted, cancelled, superseded), branch or path,
+  transitions (scheduled, started, suspended, resumed, completed, faulted, cancelled), branch or path,
   input refreshes, and applied writes.
 - **FR-011**: The API MUST compare two instances of the same executable version: activity executions matched by
   run-time path (Q6); the first diverging commit; per variable whether the final digest and the sequence of written
@@ -325,8 +330,11 @@ state.
   existing sensitive-value rules (Q8).
 - **FR-014**: Paging MUST use a cursor of commit sequence and position within the commit, so a page never ends inside
   a commit without the next page continuing exactly there.
-- **FR-015**: The run-time cost this spec adds MUST be limited to the scheduling causes (FR-007); everything else it
-  presents is recorded by spec 1221 or computed when read.
+- **FR-015**: The run-time cost this spec adds MUST be limited to the scheduling causes (FR-007) and the per-activity
+  lost-update count on rows already being written (FR-009); everything else it presents is recorded by spec 1221 or
+  computed when read.
+- **FR-016**: The store MUST be able to filter an instance's activity executions by their commit-sequence range and
+  sum their lost-update counts without reading the rows' documents (store columns and an index, every provider).
 
 ### Key Entities
 
@@ -353,11 +361,13 @@ state.
   not change measurably.
 - **SC-005**: No value is shown to a caller who cannot see it through the existing inspection reads (0 disclosures in
   the access tests).
-- **SC-006**: Run-time overhead of the scheduling causes is within noise of spec 1221's benchmark.
+- **SC-006**: Run-time overhead of the scheduling causes and the per-activity count is within noise of spec 1221's
+  benchmark.
 
 ## Assumptions
 
-- Spec 1221 records the write-time data of FR-001; this spec adds only the scheduling causes and the read side.
+- Spec 1221 records the write-time data of FR-001; this spec adds the scheduling causes, the per-activity
+  lost-update count, the store columns and the read side.
 - Merging activity rows by commit sequence, using each row's commit-sequence range, is fast enough per page; a
   projection follows only on measurement (Q2).
 - Studio presentation is specified in elsa-studio against this API.

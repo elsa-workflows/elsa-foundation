@@ -18,13 +18,14 @@ Each item records the decision, why, and the alternatives weighed. Alternatives 
 - **Alternatives**: a counter stored on the workflow execution state (the workflow execution change is optional in a
   commit today, so every numbered commit would write that row); frame revision plus timestamp (not total); a global
   database sequence (cross-instance cost, provider-specific).
-- **Limit**: a commit made outside an execution lease is not numbered. Task T002 lists such commit paths (recovery and
+- **Limits**: a byte-identical commit replayed under a later lease is renumbered; the instance's last number is the
+  highest `LastCommitSequence` over its rows. A commit made outside an execution lease is not numbered. Task T002 lists such commit paths (recovery and
   deletion among them) and how the read model orders what they commit (as legacy, approximate).
 
 ## R-2 — Derived read model, no new store (Q2)
 
 - **Decision**: page an instance's activity execution rows by their commit-sequence range (`FirstCommitSequence`,
-  `LastCommitSequence`): a page from cursor C reads the rows whose range reaches past C, flattens their stamps and
+  `LastCommitSequence`, kept by spec 1221; this spec adds store columns and an index for them in every provider): a page from cursor C reads the rows whose range reaches past C, flattens their stamps and
   records, merges alteration records, sorts by (commit sequence, position) and cuts at the page size. The cursor is
   (commit sequence, position), so a page may end inside a commit.
 - **Rationale**: spec 1221 measured and chose records on the writer's state; a second copy would double write cost. A
@@ -60,15 +61,17 @@ Each item records the decision, why, and the alternatives weighed. Alternatives 
 
 ## R-4 — Values (Q5)
 
-- **Decision**: map each value to a value state and read payloads through an authorized payload read extended to
-  write-record values (written, overwritten, refused), addressed by owner (activity execution or alteration), entry and
-  which value, under the existing payload permission.
+- **Decision**: map each value to a value state. A written value is an activity value-evidence snapshot of the writing
+  activity execution (subject `VariableWrite`, name = variable key, phase = scope id, sequence = new version, with the
+  scope id and new version in its metadata), so it uses the existing payload read. The overwritten value, a refused
+  `Fault` value and an alteration's values are envelopes on the write record; the payload read is extended to them,
+  addressed by owner (activity execution or alteration), entry and which value, under the existing payload
+  permission.
 - **Mapping from the existing activity value-evidence states**: `notCaptured`, `metadataOnly` → `omitted`;
   `payloadCaptured`, `diagnosticSnapshotCaptured` with access → `captured`; access `redacted` → `redacted`; a value
   removed by spec 1221's retention → `expired` (new; FR-025).
-- **Alternatives**: inline values in the history view (a second disclosure path); the existing route only (needs an
-  activity execution id and resolves only activity value evidence, so it cannot reach write-record values or
-  alterations).
+- **Alternatives**: inline values in the history view (a second disclosure path); the existing route only (resolves
+  activity value evidence, so it cannot reach record envelopes or alterations).
 
 ## R-5 — Comparison (Q6)
 
@@ -83,10 +86,12 @@ Each item records the decision, why, and the alternatives weighed. Alternatives 
 
 ## R-6 — Lost-update diagnostic (Q7)
 
-- **Decision**: a lost-update warning count kept on the instance by spec 1221 in the committing write; concurrent
-  overwrites counted by the filtered history. No incident.
-- **Rationale**: computing derived counts on every details read would run the whole read model; an incident in a
-  commit ends the coalescing session and would reopen the inline gap.
+- **Decision**: each activity execution keeps `LostUpdateWarningCount`, set when its row is written from the
+  lost-update warnings among its records, and stored as a column; the details sum it over the instance. Concurrent
+  overwrites are counted by the filtered history. No incident.
+- **Rationale**: computing derived counts on every details read would run the whole read model. A count on the
+  workflow row would make commits that do not otherwise write that row (row writes, background results) write it. An
+  incident in a commit ends the coalescing session and would reopen the inline gap.
 
 ## R-7 — Alteration write record (Q9)
 
@@ -96,5 +101,7 @@ Each item records the decision, why, and the alternatives weighed. Alternatives 
 ## R-8 — Applied and current value
 
 - **Decision**: applied means the write changed the version; the current value is the applied entry whose new version
-  equals the variable instance's current version. Writes that changed nothing are not recorded by spec 1221 (an
-  unchanged value writes nothing) and are skipped if met in older records.
+  equals the variable instance's current version. Spec 1221 records a write only when it changed the value or was a
+  lost update. An equal-value write on a stale base is therefore recorded as a lost-update warning without changing
+  the version: it is listed and counted as a lost update, and is neither applied nor an overwrite. Unchanged writes met
+  in older records are skipped.

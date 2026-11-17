@@ -13,13 +13,15 @@ of one version. Research R-1 to R-8 hold the reasons.
 
 - **Write-time data from spec 1221 (Q1, Q7, Q9, R-1).** The instance commit sequence on write records and lifecycle
   stamps (including the scheduling commit), frame and digest on write records, each row's commit-sequence range, the
-  alteration write record, and the lost-update warning count. This plan only reads them.
+  alteration write record, and the written values as activity value evidence. This plan only reads them.
+- **Store columns and per-activity count (Q2, Q7, R-2, R-6).** Columns and an index for each row's commit-sequence
+  range, and a per-activity lost-update count summed for the details; a migration in every runtime store provider.
 - **Scheduling causes (Q3, R-3).** The one run-time change of this plan: provenance records the completions that
   caused a scheduling (a callback's or next iteration's completed child, a join's arrivals).
 - **Derived read model (Q2, R-2).** Rows paged by their commit-sequence range, stamps and records flattened, alteration
   records merged, ordered by (commit sequence, position). No new store.
 - **Concurrent overwrite marking (Q3, Q4, R-3).** A bounded happens-before walk over provenance, when read.
-- **Values by state, payload read extended to write records (Q5, R-4).**
+- **Values by state; written values through the existing payload read, record envelopes through its extension (Q5, R-4).**
 - **Comparison by run-time path and digest (Q6, R-5).**
 - **Lost-update count on instance details, no incident (Q7, R-6).** **Existing permission (Q8).**
 
@@ -30,8 +32,10 @@ of one version. Research R-1 to R-8 hold the reasons.
 **Primary Dependencies**: the existing runtime API endpoints in `Elsa.Workflows.Runtime.Api`,
 System.Text.Json source-generated context `WorkflowsRuntimeJsonContext`; no new external dependency.
 
-**Storage**: no new store. One additive optional member of its own: `CausedBy` on `ActivitySchedulingProvenance`.
-Everything else it reads is recorded by spec 1221. Older records read back with members absent.
+**Storage**: no new store. Optional members of its own: `CausedBy` on `ActivitySchedulingProvenance` and
+`LostUpdateWarningCount` on `ActivityExecutionState`; store columns and an index for the row's commit-sequence range
+and the count, with a migration in every runtime store provider. Everything else it reads is recorded by spec 1221.
+Older records read back with members absent.
 
 **Testing**: xUnit (no FluentAssertions). Read-model unit tests over built record sets; runtime drives (parallel
 branches, blind `Set`, joins, `Parallel`, loops, suspension, `Fault`, accepted completion, coalesced segments,
@@ -41,7 +45,8 @@ causes overhead for SC-006.
 **Target Platform**: Elsa 4 server hosts (Foundation host, Workbench).
 
 **Project Type**: libraries — `Elsa.Workflows.Runtime.Core` (provenance member), `Elsa.Activities.Runtime` and the
-control-flow activities (scheduling causes where callbacks, iterations and joins schedule), `Elsa.Workflows.Runtime.Api`
+control-flow activities (scheduling causes where callbacks, iterations and joins schedule), the runtime store
+providers (columns, index, migration), `Elsa.Workflows.Runtime.Api`
 (read model, payload read, endpoints, views).
 
 **Performance Goals**: run time: the cause ids on a callback, iteration or join scheduling (SC-006). Read time: first
