@@ -125,7 +125,7 @@ the initiative branch first; no logic overlaps.
     keeps the withheld envelope) — `BackgroundEligibilityPublicationTests`. Activation-time
     resolution on the worker uses the same resolver as inline.
   - `DownloadFile` above the receipt limit: `BackgroundActivityCompletionCodec` refuses a result above
-    `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault. Accepted; documented on the mark.
+    `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault. Accepted; to be shown for `DownloadFile` itself by its background run in #4737.
   - None failed by reading. *Amended 2026-11-18 (Q10):* reading is not enough for a mark, so the eight connector
     activities stay unmarked until their background runs in #4737 pass.
 - **`RunJavaScript` is not marked (C9).** Specs 1222 (S-4) and S-7 give the script body variable reads by name
