@@ -37,7 +37,7 @@ marked `TypeCheckedAtRunTime` skips the CLR-type checks (C1 interfaces, C2, C9 a
 
 | Field | Meaning |
 |---|---|
-| `Criterion` | `C1` … `C10`, or none for the declaration precondition |
+| `Criterion` | `C1` … `C10`, or none for the declaration and placement preconditions |
 | `NodeId` | the node refused |
 | `Reason` | plain text, as in today's messages |
 | `Code` | always `VF-BG-001` |

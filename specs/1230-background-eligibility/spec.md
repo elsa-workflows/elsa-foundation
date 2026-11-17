@@ -72,7 +72,8 @@ and no ADR amendment; if one turns out to be needed, it goes in its own small PR
 
 A platform engineer adds or changes a background criterion once, and publication and the worker both apply it. A
 workflow that publishes with a background node is never refused at run time for a criterion publication also checks,
-unless the activity type changed between the two.
+unless the activity type changed between the two, or a template placement could not see the CLR type and left the
+type-only checks to admission (FR-012).
 
 **Why this priority**: The drift between the two lists is the root problem ADR 0093 names. Every other story builds on
 the single component.
@@ -234,7 +235,8 @@ read-modify-write) and that the recorded commit order matches the order applied.
   subclass inherits the promise (Q6), and say that an activity whose result is only used during the inline drain, or a
   trigger activity, is not marked (Q8).
 - **FR-009**: Every built-in activity MUST be assessed against C1–C10 and the result recorded in this spec. Activities
-  that meet every criterion, including C7 and C8 as their owner confirms, MUST be marked. An activity that misses a
+  that meet every criterion, including C7 and C8 as their owner confirms, MUST be marked, unless the background makes no sense for them (Q8:
+  an HTTP response delivered only during the inline drain, a trigger with no payload on a worker). An activity that misses a
   criterion only because of its implementation MUST get an issue, not an exception (ADR 0093 decision 4).
 - **FR-010**: On every persistence provider, applying a background result MUST preserve causal dependencies, complete
   atomically, follow the agreed conflict rules and leave an inspectable record of the actual commit order. No order is
@@ -301,7 +303,7 @@ them.
   checks it, and the refusal names the criterion.
 - **SC-003**: A background placement of a variable-reading activity never reaches a worker.
 - **SC-004**: Every built-in activity has a recorded verdict against C1–C10, and every activity that qualifies is
-  marked.
+  marked, apart from the Q8 cases.
 - **SC-007**: No background node reaches a pinned executable without passing the publication check, and none runs on
   a worker without passing every enforced criterion (the type-only checks run at admission when placement could not
   see the CLR type).
