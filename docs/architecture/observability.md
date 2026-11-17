@@ -407,9 +407,10 @@ calls one new model hook.
   the model's own id. Native, Flowchart and StateMachine each implement it.
 - **Checks.** The `ParkSelection` matches (above), no resolution is open, and the instance is recoverable under
   decision 1. After the window's expiry the Park is resolved, so recover is refused in
-  both modes. Open splits the selection before it writes anything: a handle that names a row this Park keeps with
-  reason `Consumed` goes to the `Selected` marking and its count check; a handle that names a timer this Park retains
-  as `Suppressed` (below) goes to the re-arm path (below), and takes no part in the marking or its count; a handle that is neither refuses the whole command before Open. A refusal
+  both modes. Open splits the selection before it writes anything, reading the disposition first, as the lookup does:
+  a handle that names a timer this Park retains as `Suppressed` (below) goes to the re-arm path (below), even while
+  its row is still kept, and is never marked `Selected` nor counted in the marking; any other handle that names a row
+  this Park keeps with reason `Consumed` goes to the `Selected` marking and its count check; a handle that is neither refuses the whole command before Open. A refusal
   changes nothing and is recorded.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
@@ -435,16 +436,17 @@ calls one new model hook.
   |---|---|---|
   | Pending | Stays | Stays |
   | Kept, `Arrived` (a timer that fired, or a job result that came, while parked) | Restored by the drain | Restored by the drain |
-  | Kept, `Consumed` or `Selected`, and the selection names it | Not applicable | Restored by the drain |
+  | Kept, `Consumed` or `Selected`, and the selection names it, with no `Suppressed` disposition | Not applicable | Restored by the drain |
   | Kept, `Consumed`, not selected | Cleared; a timer stays unarmed and is recorded `Suppressed`; a job restarts and is recorded `Restarted(g)` | The same |
-  | Disposition `Suppressed`, whatever the row now is (ordinary done after an earlier page cleared it, or swept) | Stays unarmed | Stays unarmed, unless the selection names it: then re-armed, and recorded `Rearmed` |
+  | Disposition `Suppressed`, whatever the row now is (still kept because an interruption came before its page, ordinary done after a page cleared it, or swept); the disposition takes precedence over the row | Stays unarmed | Stays unarmed, unless the selection names it: then re-armed, and recorded `Rearmed` |
   | Disposition `Rearmed` | The re-arm never runs again; the timer's row decides by the rows above (pending: stays; kept after a re-park consumed it: as a kept row) | The same; a selection naming it re-arms nothing |
   | Disposition `Restarted(g)` | The generation-`g` ticket's row decides, by the rows above | The same |
   | No disposition and no `KeptBy`: ordinary done or absent | A timer is re-armed and recorded `Rearmed`; a job restarts. Done and absent are treated alike, so the sweep's timing cannot change the outcome | The same |
 
   **The re-arm.** A timer is re-armed under its own full key, by the branch the disposition step's point lookup chose:
-  - **The row is present and done:** an update by full key, `WHERE ... AND Done`, with a count check of 1. It sets
-    `Done = false`, `KeptBy` null, `Attempts = 0`, `Trial` none, `Seen = 0`, the original due time, and `KeepUntil` to
+  - **The row is present and done:** an update by full key, `WHERE ... AND Done`, with a count check of 1. A still-kept
+    row is done with `KeptBy` set, so it matches too, and the same update releases it. It sets `Done = false`,
+    `KeptBy` null, `Attempts = 0`, `Trial` none, `Seen = 0`, the original due time, and `KeepUntil` to
     the value a newly inserted timer has, so the revived row carries no trace of the page that cleared it.
   - **The row is absent:** a create-only insert of the same row.
 
@@ -724,7 +726,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | P-7 | A parent's tree terminate (composed by the actor type) and a combiner's FailFast (an application send through `ITurn.Send`) reach a parked child: each is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. An application send of `kernel.terminate` from a non-parent, an outside add naming the parent as sender, a terminate from an earlier creation of the parent, and an actor-type `Add` of a `kernel.terminate` whose `Sender` is another actor (refused at commit as a definite error) are refused | K3, K6 |
 | S-1 | Kept rows whose payloads are `B` − 1, `B` and `B` + 1 bytes, and an oversized first row of 5 MiB: every page progresses on metadata alone and each restored payload is read only on delivery. Run under resume, discard and delete, with a takeover between pages | K3, K4, K12 |
 | S-2 | A kept row whose handle is at the provider's key limit, as the first row of a page: the page takes it and the drain completes | K3, K4 |
-| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a suppressed timer is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, re-arms nothing | K3, K4, K11 |
+| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a suppressed timer is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, re-arms nothing; a timer that is `Suppressed` and still kept `Consumed` (a re-park came before the page that would clear it), named by a retry, is re-armed once by the revive, which also clears its `KeptBy`, fires once, is never marked `Selected`, and is skipped by the later pages | K3, K4, K11 |
 | S-4 | MongoDB: a page next to a kept row of 5 MiB stays within the document, message and transaction-lifetime limits | K4 |
 | R-2 | Inspect, retry, resume and discard through the operator API on the parked-work read model, by handle | K9, K11 |
 
