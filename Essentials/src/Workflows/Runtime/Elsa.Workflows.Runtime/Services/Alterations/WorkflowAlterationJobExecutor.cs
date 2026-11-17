@@ -41,7 +41,7 @@ public sealed class WorkflowAlterationJobExecutor
         var staging = new WorkflowAlterationStagingWorkspace();
         var preflight = await PreflightAsync(request, staging, cancellationToken);
         var now = _timeProvider.GetUtcNow();
-        var terminalChange = CreateTerminalChange(request.Job, request.Envelopes, preflight, now);
+        var terminalChange = CreateTerminalChange(request.Job, request.Envelopes, preflight, now, staging.StagedChanges);
         var writeRequest = new WorkflowAlterationCheckpointWriteRequest(
             request.Job,
             preflight.IsSuccessful ? staging.StagedChanges : [],
@@ -123,10 +123,21 @@ public sealed class WorkflowAlterationJobExecutor
         WorkflowAlterationJobState job,
         IReadOnlyList<WorkflowAlterationEnvelope> envelopes,
         PreflightRun preflight,
-        DateTimeOffset recordedAt)
+        DateTimeOffset recordedAt,
+        IReadOnlyList<IWorkflowAlterationStagedChange> stagedChanges)
     {
         var status = preflight.IsSuccessful ? WorkflowAlterationJobStatus.Succeeded : WorkflowAlterationJobStatus.Failed;
         var outcomes = CreateOutcomes(envelopes, preflight, recordedAt);
+        if (preflight.IsSuccessful)
+        {
+            // Spec 1221 FR-024: an applied alteration that wrote variables keeps its write records on its own outcome.
+            var writes = stagedChanges.OfType<IWorkflowAlterationVariableWriteStagedChange>().ToArray();
+            outcomes = outcomes
+                .Select(outcome => writes.Where(change => change.Ordinal == outcome.Ordinal).SelectMany(change => change.VariableWrites).ToArray() is { Length: > 0 } records
+                    ? outcome with { VariableWrites = records }
+                    : outcome)
+                .ToArray();
+        }
         var failure = preflight.IsSuccessful
             ? null
             : new WorkflowAlterationSafeFailure("AlterationPreflightFailed", "The requested alteration is not valid for the current execution.");

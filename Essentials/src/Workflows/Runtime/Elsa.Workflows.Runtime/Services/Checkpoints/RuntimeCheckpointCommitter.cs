@@ -111,6 +111,10 @@ public sealed class RuntimeCheckpointCommitter
         // decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        // Spec 1221 FR-024: number this logical checkpoint under the lease, before any coalescing fold, and stamp the
+        // number on the writes and lifecycle transitions it commits.
+        commit = RuntimeCommitSequenceStamper.Stamp(commit, _ownershipContextAccessor.Current);
+
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
             throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
         if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)

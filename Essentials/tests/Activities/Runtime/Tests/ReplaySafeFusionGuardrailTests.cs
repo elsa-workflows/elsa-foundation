@@ -368,6 +368,10 @@ public sealed class ReplaySafeFusionGuardrailTests
     {
         fingerprint = System.Text.RegularExpressions.Regex.Replace(fingerprint, "[0-9a-f]{32}", "<id>");
         fingerprint = System.Text.RegularExpressions.Regex.Replace(fingerprint, "\"(LeaseId|OwnerId)\":\"[^\"]*\"", "\"$1\":\"<id>\"");
+        // Spec 1221 FR-024: the instance commit sequence numbers checkpoints in the order they are committed. Fusion runs
+        // a cascade inline, so the same checkpoints can be reached in a different order; the committed contents still
+        // match, which is what this guardrail compares.
+        fingerprint = System.Text.RegularExpressions.Regex.Replace(fingerprint, "\"CommitSequence\":\\d+", "\"CommitSequence\":<seq>");
         return fingerprint;
     }
 

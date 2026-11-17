@@ -68,7 +68,14 @@ public sealed class OperatorActionsTests
         await using var fixture = await Fixture.StartAsync();
         var source = fixture.Run.State("node-f");
 
-        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await fixture.ModifyCountAsync(10)).Status);
+        var modify = await fixture.ModifyCountAsync(10);
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, modify.Status);
+        // FR-024: the operator's change is in the write history, on its job outcome, numbered and without a value.
+        var modifyRecord = Assert.Single(Assert.Single(modify.Outcomes).VariableWrites!);
+        Assert.Equal(VariableWriteSource.Alteration, modifyRecord.Writer.Source);
+        Assert.Equal((0L, 1L), (modifyRecord.CurrentVersion, modifyRecord.NewVersion));
+        Assert.Null(modifyRecord.OverwrittenValue);
+        Assert.NotNull(modifyRecord.CommitSequence);
         var job = await fixture.ApplyAsync(RetryFaultedActivityAlterationHandler.Kind, source.Execution.ActivityExecutionId);
 
         Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
@@ -90,6 +97,8 @@ public sealed class OperatorActionsTests
         var record = Assert.Single(successor.VariableWrites!);
         Assert.Equal(VariableCommitOutcome.LostUpdateWarning, record.Outcome);
         Assert.Equal(VariableWriteSource.Alteration, record.OverwrittenWriter!.Source);
+        // The retried write is ordered after the operator's change it overwrote.
+        Assert.True(record.CommitSequence > modifyRecord.CommitSequence);
         Assert.Equal(10, record.OverwrittenValue!.InlineValue!.Value.GetInt32());
     }
 

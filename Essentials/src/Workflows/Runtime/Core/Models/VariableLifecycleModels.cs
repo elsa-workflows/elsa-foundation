@@ -154,6 +154,13 @@ public sealed record VariableWriteRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ValueEnvelope? RejectedValue { get; init; }
 
+    /// <summary>
+    /// The instance commit sequence of the checkpoint that committed this write (spec 1221 FR-024): it orders writes
+    /// across all frames of the instance. Absent on records committed outside an execution lease and on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? CommitSequence { get; init; }
+
     [JsonIgnore]
     public bool IsLostUpdate => Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.LostUpdateFault;
 

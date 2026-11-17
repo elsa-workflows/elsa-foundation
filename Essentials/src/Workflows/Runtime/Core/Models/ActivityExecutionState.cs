@@ -144,6 +144,14 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActivityInputRefresh>? InputRefreshes { get; init; }
 
+    /// <summary>
+    /// One stamp per lifecycle transition of this invocation (started, suspended, resumed, completed, faulted,
+    /// cancelled, superseded), each with the instance commit sequence that committed it (spec 1221 FR-024), so writes
+    /// and transitions share one order. Stamped by the checkpoint committer; absent on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityLifecycleStamp>? Transitions { get; init; }
+
     /// <summary>Appends write-history records to this invocation.</summary>
     public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
     {

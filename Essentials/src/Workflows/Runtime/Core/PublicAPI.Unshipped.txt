@@ -10598,3 +10598,35 @@ static Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.operator !=(Elsa.
 static Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? left, Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableInputChange.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableInputChange? left, Elsa.Workflows.Runtime.Core.Models.VariableInputChange? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableInputChange.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableInputChange? left, Elsa.Workflows.Runtime.Core.Models.VariableInputChange? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Transitions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Transitions.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp!
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.ActivityLifecycleStamp(Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind kind, long commitSequence, string? branchId = null, string? executionPathId = null, int? evaluation = null) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.BranchId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.CommitSequence.get -> long
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Evaluation.get -> int?
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.ExecutionPathId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Kind.get -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Cancelled = 5 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Completed = 3 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Faulted = 4 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Resumed = 2 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Started = 0 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Superseded = 6 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Suspended = 1 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationOutcome.VariableWrites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord!>?
+Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationOutcome.VariableWrites.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.CommitSequence.get -> long?
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.CommitSequence.init -> void
+override Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp? left, Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp? left, Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.Compose(long fencingToken, long ordinal) -> long
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.FencingTokenOf(long sequence) -> long
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.OrdinalOf(long sequence) -> long
