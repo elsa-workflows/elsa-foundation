@@ -96,9 +96,10 @@ together. Then every write in its subtree is an unordered write, even a single n
   two arrivals are in flight together unless they exclude each other or exactly one of them is reached from the join
   within one pass (the way back of a loop, which comes only after the join's run). In a Flowchart one source counts
   once (spec 1208 FR-022); in BPMN every incoming flow is its own token, judged with the choice it leaves an exclusive
-  split on (a split's "skip" flow excludes the step it skips). The exception does not hold when a fork that a run of
-  the join leads to sends two branches back into the join along different arrivals: that one run puts two runs of the
-  join in flight together, whichever pass each arrival closes.
+  split on (a split's "skip" flow excludes the step it skips). The exception does not hold when a fork (before the loop
+  or on it) sends two branches into the join along different arrivals: that one run puts two runs of the join in
+  flight together, whichever pass each arrival closes. A BPMN host's normal flow counts as a branch beside each
+  non-interrupting boundary, also when interrupting boundaries make it a choice.
 - A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
   successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
   run of the branch, which also overlaps the next pass of the cycle. This includes a Flowchart loop that repeats

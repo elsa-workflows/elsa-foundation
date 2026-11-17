@@ -24,6 +24,7 @@ internal sealed class FlowchartChildResultAnalysis(
     private readonly Dictionary<(string, string, bool), bool> _reachable = [];
     private Dictionary<string, HashSet<string>>? _dominators;
     private Dictionary<string, HashSet<string>>? _forkCycleRuns;
+    private readonly Dictionary<string, bool> _arrivalsCanOverlap = new(StringComparer.Ordinal);
 
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _inboundSources =
         inboundSources ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -157,6 +158,13 @@ internal sealed class FlowchartChildResultAnalysis(
 
     private bool ArrivalsCanOverlap(string join)
     {
+        if (!_arrivalsCanOverlap.TryGetValue(join, out var overlap))
+            _arrivalsCanOverlap[join] = overlap = ComputeArrivalsCanOverlap(join);
+        return overlap;
+    }
+
+    private bool ComputeArrivalsCanOverlap(string join)
+    {
         // Two connections from one source are one arrival: a completion schedules each target once (spec 1208 FR-022).
         var sources = _inboundSources.GetValueOrDefault(join, []).Distinct(StringComparer.Ordinal).ToArray();
         for (var left = 0; left < sources.Length; left++)
@@ -174,12 +182,11 @@ internal sealed class FlowchartChildResultAnalysis(
         return AForkSendsTwoRunsBack(join, sources);
     }
 
-    // A fork that a run of the join leads to (or the join itself) and that sends two branches back into the join along
-    // different arrivals puts two runs of the join in flight together, whatever pass each arrival closes. Branches that
-    // meet in a waiting join first reach the same arrivals and send one run back.
+    // A fork that sends two branches into the join along different arrivals puts two runs of the join in flight
+    // together, whatever pass each arrival closes and wherever the fork sits (before the loop or on it). Branches that
+    // meet in a waiting join first reach the same arrivals and send one run.
     private bool AForkSendsTwoRunsBack(string join, string[] sources) =>
         _forkBranches.Any(entry =>
-            (StringComparer.Ordinal.Equals(entry.Key, join) || IsReachable(join, entry.Key)) &&
             ReachDifferentArrivals(entry.Value.Distinct(StringComparer.Ordinal)
                 .Select(branch => ArrivalsReachedBy(entry.Key, branch, join, sources)).ToList()));
 

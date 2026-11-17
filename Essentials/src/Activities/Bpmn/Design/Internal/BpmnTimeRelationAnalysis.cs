@@ -33,6 +33,7 @@ internal sealed class BpmnTimeRelationAnalysis
     private Dictionary<string, HashSet<string>>? _forkCycleRuns;
     private HashSet<string>? _overlappingNodes;
     private bool _computingOverlap;
+    private readonly Dictionary<(string, bool), bool> _arrivalsCanOverlap = [];
 
     private BpmnTimeRelationAnalysis(Dictionary<string, BpmnElement> elements, Dictionary<string, string> elementOfChild)
     {
@@ -96,7 +97,7 @@ internal sealed class BpmnTimeRelationAnalysis
         var runs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var (fork, edges) in _outgoing)
         {
-            if (edges.Count(edge => edge.Choice is null) < 2 || !IsReachable(fork, fork))
+            if (BranchGroups(edges).Count < 2 || !IsReachable(fork, fork))
                 continue;
             foreach (var edge in edges.Where(edge => edge.Choice is null && !IsReachable(edge.Target, fork)))
             foreach (var node in _inbound.Keys.Where(node => StringComparer.Ordinal.Equals(node, edge.Target) || IsReachable(edge.Target, node)))
@@ -139,7 +140,16 @@ internal sealed class BpmnTimeRelationAnalysis
         }
     }
 
+    // Cached per join, separately while the overlapping nodes are computed (exclusivity then ignores overlaps).
     private bool ArrivalsCanOverlap(string join)
+    {
+        var key = (join, _computingOverlap);
+        if (!_arrivalsCanOverlap.TryGetValue(key, out var overlap))
+            _arrivalsCanOverlap[key] = overlap = ComputeArrivalsCanOverlap(join);
+        return overlap;
+    }
+
+    private bool ComputeArrivalsCanOverlap(string join)
     {
         // Every incoming flow is its own token, judged with the choice it leaves its source on.
         var arrivals = Arrivals(join);
@@ -158,17 +168,26 @@ internal sealed class BpmnTimeRelationAnalysis
         return AForkSendsTwoRunsBack(join, arrivals.Select(arrival => arrival.Source).ToHashSet(StringComparer.Ordinal));
     }
 
-    // A fork that a run of the join leads to (or the join itself) and that sends two branches back into the join along
-    // different arrivals puts two runs of the join in flight together, whatever pass each arrival closes. Branches that
-    // meet in a waiting join first reach the same arrivals and send one run back.
-    // Only splits that are not exclusive send a token down every unconditional flow.
+    // A fork that sends two branches into the join along different arrivals puts two runs of the join in flight
+    // together, whatever pass each arrival closes and wherever the fork sits (before the loop or on it). Branches that
+    // meet in a waiting join first reach the same arrivals and send one run.
     private bool AForkSendsTwoRunsBack(string join, HashSet<string> sources) =>
-        _outgoing.Any(entry =>
-            entry.Value.Count(edge => edge.Choice is null) >= 2 &&
-            (StringComparer.Ordinal.Equals(entry.Key, join) || IsReachable(join, entry.Key)) &&
-            ReachDifferentArrivals(entry.Value.Where(edge => edge.Choice is null).Select(edge => edge.Target)
-                .Distinct(StringComparer.Ordinal)
-                .Select(branch => ArrivalsReachedBy(entry.Key, branch, join, sources)).ToList()));
+        _outgoing.Any(entry => BranchGroups(entry.Value) is { Count: >= 2 } groups &&
+            ReachDifferentArrivals(groups
+                .Select(group => group.SelectMany(branch => ArrivalsReachedBy(entry.Key, branch, join, sources)).ToHashSet(StringComparer.Ordinal))
+                .ToList()));
+
+    // The branches that run side by side when a node completes: each unconditional flow, plus its choices as one branch
+    // (a host's normal flow and interrupting boundaries exclude each other but run beside each non-interrupting one).
+    private static List<string[]> BranchGroups(List<Edge> edges)
+    {
+        var groups = edges.Where(edge => edge.Choice is null).Select(edge => edge.Target).Distinct(StringComparer.Ordinal)
+            .Select(target => new[] { target }).ToList();
+        var choices = edges.Where(edge => edge.Choice is not null).Select(edge => edge.Target).Distinct(StringComparer.Ordinal).ToArray();
+        if (choices.Length > 0)
+            groups.Add(choices);
+        return groups;
+    }
 
     private IEnumerable<string> SuccessorsOf(string node) =>
         _outgoing.TryGetValue(node, out var edges) ? edges.Select(edge => edge.Target) : [];

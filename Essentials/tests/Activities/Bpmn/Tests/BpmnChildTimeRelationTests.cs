@@ -217,6 +217,37 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "step", "step"));
     }
 
+    // A parallel split before a loop that feeds two of the loop's entries puts two tokens on the loop.
+    [Fact]
+    public void A_parallel_split_feeding_two_entries_of_a_loop_overlaps_the_loop()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("p", BpmnElementTypes.ParallelGateway),
+                Task("j", "join"), Element("a", BpmnElementTypes.ExclusiveGateway), Task("b", "back"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "p"), Flow("p", "j"), Flow("p", "b"), Flow("j", "a"), Flow("a", "b"), Flow("a", "end"), Flow("b", "j")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
+    }
+
+    // A non-interrupting boundary runs beside its host's normal flow, also when another boundary interrupts: on a loop,
+    // the boundary's path overlaps the next pass.
+    [Fact]
+    public void A_non_interrupting_boundary_beside_an_interrupting_one_on_a_loop_overlaps_the_next_pass()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("m", BpmnElementTypes.ExclusiveGateway), Task("h", "host"),
+                new BpmnElement("i", BpmnElementTypes.BoundaryEvent, attachedToRef: "h", cancelActivity: true),
+                new BpmnElement("n", BpmnElementTypes.BoundaryEvent, attachedToRef: "h", cancelActivity: false),
+                Element("x", BpmnElementTypes.ExclusiveGateway), Task("w", "side"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "m"), Flow("m", "h"), Flow("h", "x"), Flow("x", "m"), Flow("x", "end"), Flow("n", "w"), Flow("i", "end")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "side", "side"));
+    }
+
     // Nested loops closed by exclusive merges pass one token around: the inner body stays sequential.
     [Fact]
     public void Nested_loops_closed_by_exclusive_merges_stay_ordered()
