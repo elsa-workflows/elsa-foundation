@@ -159,7 +159,9 @@ built.
 2. **Kept rows leave only through their instance.** The sweep's predicate becomes
    `Done AND KeepUntil < :now AND KeptBy IS NULL`, so it never removes a kept row. The `Parked` window still applies:
    Park's commit arms a `kernel.park-expiry` timer for the Park's time plus the window (none when the window is null,
-   the default). **The window's expiry is an automatic discard:** when the timer fires, the instance's own drain
+   the default), and records that deadline and the armed timer's full key in `ParkRecord.Expiry`
+   ([internal controls](#every-park-operation-names-its-park)). **The window's expiry is an automatic discard:** when
+   the timer fires, the instance's own drain
    resolves the Park as discard does (below). It clears the kept rows, giving them the ordinary window and clearing
    `KeptBy`; records the disposition "expired"; sends the parent its final Faulted notice; leaves the instance
    Faulted; and writes the terminal mark, so the `Faulted` retention window runs from it. After the expiry the Park is
@@ -202,17 +204,66 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
 
 // kernel.recover   {operation, park: ParkSelection, mode, selection}
 // kernel.discard   {operation, park: ParkSelection}
-// kernel.terminate {operation, creation, park: ParkSelection?}   // an operator's: park required when the row is parked
-// kernel.drain       {creation, parkRevision, parkAt, generation}
-// kernel.park-expiry {creation, parkRevision, parkAt, generation}
+// kernel.terminate {operation, creation, park: ParkSelection?}   // an operator's: park required when the row is parked,
+//                                                                 // and checked whenever present, whatever the status
+// private controls, minted by layer 2 only, under the control scope (below):
+// kernel.drain       {creation, parkRevision, parkAt, generation, serial}
+// kernel.park-expiry {creation, parkRevision, parkAt, generation, serial}
 ```
 
 - **The tenant** comes from the operator's bound scope ([tenancy](tenancy.md#every-operation)), never from the payload.
+- **The target creation is the row's at the store's acceptance (proposed).** A reused caller key keeps its instance
+  id under a higher creation, since a creation is unique per tenant and id across deletes, with the high-water mark
+  kept for every id kind ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). The Park binding rests
+  on that: `ParkSelection` names no id, so its creation check tells A from B only because both have one id and B's
+  creation is higher. An operator command addressed by key gets its target and `TargetCreation` pinned when the
+  store accepts its add, to the instance and creation the key resolves to at that moment. The operator path never
+  copies the `ParkSelection`'s creation into `TargetCreation`. So a command whose add lands after the key was reused
+  targets the successor B and passes the built `TargetError` at B, and the check that refuses it is the
+  `ParkSelection` creation check below. A command whose add lands while A still exists targets A, and if it is
+  delivered after A's retirement, the built protocol refuses it as `RetiredCreation` before the reuse and as
+  `WrongCreation` after it (`Creation.cs` 103–109; case P-1c). P-1, P-1b, P-1c and P-3 hold under this same-id
+  addressing.
+
+  Nothing builds this yet. No operator path for Park commands exists, the stores' public add writes the message as
+  supplied (`InMemoryStore.cs` 227–232, `EfStore.cs` 593, `MongoStore.cs` 390), and today's key admission binds each
+  creation of a key to a fresh run id, `g{n}/key/{serial}`, and sets no `TargetCreation` (existing prototype
+  behaviour, `KeyAdmission.cs` 59–73). Under fresh run ids A and B could both hold creation 1 with equal Park marks,
+  and a command pinned to B would pass every Park check. Release 1's key admission replaces that behaviour with the
+  same-id rule above.
 - **The owner's checks before Open,** in the actor's command turn, refusing on the first that fails: the tenant equals
   the row's; the creation equals the row's and both are known; the row is parked and its Park mark equals the
   selection's. An operator's terminate that reaches a parked row without a `ParkSelection` is refused as ambiguous. A refusal
   changes nothing, is recorded in the operation's outcome and counts in `elsa.kernel.park.refused` by reason (tenant,
-  run, Park, ambiguous, resolution open).
+  run, Park, ambiguous, resolution open, control).
+- **A selection binds the command whatever the row's status when it arrives.** An operator's terminate that carries a
+  `ParkSelection` is a Park operation: the checks above run on it even when the row is no longer parked. So a terminate
+  selected against a Park and delivered after that Park's recover completed, with the model now Running, is refused
+  (reason Park): the Park it names is resolved, and the run the operator would cancel is one the operator never saw.
+  The operator reads the current state and sends a new terminate; one with no `ParkSelection` is the ordinary
+  terminate of a running instance. Delivered after an interrupting re-park, the Park mark is back and the same
+  terminate is accepted. The selection is checked every time it is present: by the checks above, or, while a recover
+  drain is open, by the comparison with `ParkRecord`'s Park identity in the next bullet.
+- **A terminate of a recovering instance.** While a recover drain is open the row is Running, so an operator's
+  terminate needs no `ParkSelection`: with none, it is the ordinary terminate of a running instance and interrupts the
+  drain. With one, the row's Park mark is cleared, so the selection is compared with `ParkRecord`'s Park identity,
+  which the drain still holds: the tenant and creation must equal the row's and the Park mark must equal
+  `ParkRecord`'s. A match is accepted and interrupts the drain; a mismatch is refused (reason Park). Only a recover
+  drain can be interrupted this way; with a discard, expiry, terminate or delete drain open, a selected terminate is
+  refused (reason resolution open). Once the recover completes, `ParkRecord` holds no identity and the selected
+  terminate is refused, as above.
+- **A terminate after the model ended during an open recover drain.** Once the model has ended, the row has its end
+  status and the mark the end wrote, so the bullet above does not apply: interruption happens only while the model
+  runs, nothing reopens the Park after the end, and the end's own turn already sent the parent its one notice. A
+  selected terminate is refused (reason resolution open), as the `MaxAttempts` table's second row treats a late
+  input. An unselected one is the built terminate of an ended row (existing prototype behaviour): an ended row that
+  still has children or jobs goes to the control path (`WorkflowInstance.cs` 63–64, then `Terminate` at 158), whose
+  turn (177–203) raises the revision, clears and cancels the jobs and sends terminate to the children, keeps the end
+  status and sends the parent no notice; an ended row with neither is consumed with no change (78–90). Either way it
+  opens no drain, and the recover drain runs on. A terminate with `ThenDelete` keeps its own contract
+  ([`ThenDelete` follows its own contract](#delete-during-a-drain)): it takes the qualified-delete path of an ended
+  run and takes the drain over; if it carries a `ParkSelection`, the selection must first equal `ParkRecord`'s Park
+  identity, or the command is refused (reason Park).
 - **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
   actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends
   `kernel.terminate` through `ITurn.Send`, an application send. Neither carries a Park identity, and requiring one
@@ -240,15 +291,113 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
   terminate of that child, the same parent-bound send. An accepted one opens the terminate drain: the child resolves as
   Cancelled, and its Complete sends the parent the one final notice every terminate resolution sends, and no other; a
   parent that has already ended consumes and drops it.
-- **Internal controls are bound too.** `ParkRecord.ResolutionGeneration` grows by one at every Open of this creation.
-  Both controls check the Park mark against `ParkRecord`'s Park identity, never the row's terminal mark, which a
-  recover drain clears. A `kernel.drain` acts only if its creation equals the row's, its Park mark equals
-  `ParkRecord`'s, and its generation equals the open Resolution's. A `kernel.park-expiry` carries the generation
-  current when it was armed, and acts only if its creation equals the row's, its Park mark equals `ParkRecord`'s, no
-  resolution is open, and its generation equals `ParkRecord.ResolutionGeneration`. Every Open bumps the generation, so
-  an expiry already delivered or in flight when a recover's Open recalled it is dropped, and it can never open a
-  discard against an active recovery. Any other control is consumed and dropped. Their message ids derive from those fields, so the controls of a
-  later resolution or a successor creation never share an id with a delayed one.
+- **Internal controls are minted by the kernel and bound to what it armed.** `kernel.drain` and `kernel.park-expiry`
+  are **private controls**. Their payload carries the creation and the Park mark, which the parked-work read model
+  shows, and a small generation, so the payload alone grants nothing. Six rules, all proposed, give them an issuer
+  and an outstanding instance:
+  - **The kinds are reserved.** Every kind under `kernel.` other than the public commands (`kernel.suspend`,
+    `kernel.resume`, `kernel.terminate`, `kernel.delete`, `kernel.recover`, `kernel.discard`) is reserved for layer 2.
+    `Kinds.RequireApplicationSend` refuses a reserved kind with a definite error. Existing prototype behaviour: it
+    refuses the job and event tickets by name ([Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs)
+    lines 75–79); the proposal replaces the list with the prefix rule, so a later private kind is refused without a
+    new entry. The producers outside layer 2, and how each meets the rule:
+    - **Calls that already run the check** (existing call sites): the stores' public add (`InMemoryStore.cs`
+      227–232, `EfStore.cs` 593, `MongoStore.cs` 390), the worker's in-memory posts (`Worker.cs` 546 and 561), a
+      model's `ITurn.Send` through `DurableTurn.Send`, and an actor type's `SendFromReceivedAddress`, `Add` and
+      `AddTerminalNotice` (`Turns.cs` 313–361). An outside add is answered with the error and writes no row; a turn
+      that calls one of these throws at the call, so the sender's own turn fails by the ordinary fault rule and its
+      commit carries nothing to the target.
+    - **Key admission**, `IKeyAdmission.AcceptAsync`, has its own deny-list in `KeyRequest.Validate` (existing
+      prototype behaviour, `KeyAdmission.cs` 29–30, called at 48–50), which names job, event and child-completion
+      kinds and does not call `RequireApplicationSend`, so under the prefix rule alone it would admit a keyed
+      `kernel.park-expiry` in scope 0. Proposed: `Validate` also applies the reserved-kind rule, so a keyed request
+      of a reserved kind is refused before any row is written. Key admission is a release 1 path, so this is a
+      release 1 change.
+    - **Direct outcome composition.** An actor type can build `TurnOutcome.Sent` itself, with no call that could
+      throw: existing prototype behaviour, `Turns.cs` 208, and the tree terminate is built that way
+      (`WorkflowInstance.cs` 196). The commit-side check below refuses such a message as a definite error, so the
+      commit lands nothing and the sending turn fails by the commit's failure rule.
+  - **They live in a protected identity domain.** Layer 2 writes a private control only in the commit that writes the
+    `ParkRecord` field naming it, with the instance itself as `Sender` and `SenderCreation`, its own creation as
+    `TargetCreation` when positive and none otherwise, as the built self-send sets it (`Turns.cs` 335), and no `Start`. So the built creation protocol
+    checks every private control too: the worker runs `CreationError`, then `CreationProtocol.TargetError`, on every
+    delivery, controls included, and refuses a differing creation as `WrongCreation` and a missing one on a
+    creation-qualified row as `IdentityRequired` (existing prototype behaviour, `Worker.cs` 1051–1055 and 1076–1081,
+    `Creation.cs` 103–109). Its
+    identity domain is the tuple (control scope, `Match` null, private kind), with the control scope proposed as
+    2^62. No provider allocates that value. Existing prototype behaviour, per range:
+    - 0 is the ordinary scope, and outside entry points reset a supplied scope to it (`AsOrdinary`, `Messages.cs` 49,
+      applied at `InMemoryStore.cs` 231); −1 is the issued scope (`Turns.cs` 327–330).
+    - Every scope at or below −2 is an event slot. Every provider's event envelope starts at −2 (`Store.cs` 214), and
+      the EF event insert gives each further match of one wire id the next lower scope, `MIN(InboxScope ≤ −2) − 1`, so
+      −3, −4 and below are reachable without bound (`EventInsert.cs` 24, 49–50, 76–77 and 97; read back at
+      `EfStore.cs` 582–585; conformance `Semantics.cs` 705). Event slots always carry a non-null `Match`.
+    - Tickets take the origin's length plus one, below 2^31 (`Messages.cs` 31); custom ids take `int.MaxValue + 2`
+      plus the actor's length, below 2^32 + 1 (`Messages.cs` 30); child creators take `long.MaxValue`
+      (`Messages.cs` 27). A .NET string is shorter than 2^31 units, which bounds both lengths.
+    - On PostgreSQL and SQLite, an issued key whose id holds a NUL or an unpaired UTF-16 unit is stored base64-encoded
+      under an escaped scope: 2^33 plus its scope, and `long.MaxValue − 1` for an escaped child creator. The read path
+      decodes every scope in [2^33 − 1, 2^33 + 2^32] and `long.MaxValue − 1` (`IssuedMailKey.cs` 10–23;
+      [storage model](storage-model.md#inbox-identity-and-public-names)).
+
+    2^62 is above every one of these ranges and below `long.MaxValue − 1`. The control scope is positive, so it counts
+    as an issued origin (`Messages.cs` 28), and on PostgreSQL and SQLite a control id holding a NUL or an unpaired
+    unit takes the escape too. Proposed: the escape maps the control scope to its own escaped value, 2^62 + 1, as it
+    maps the child creator to `long.MaxValue − 1`, and the read path maps 2^62 + 1 back to 2^62. Without that rule
+    the existing escape would store the control at 2^33 + 2^62, which the read path does not decode. A positive
+    value also leaves the event slot allocation unchanged, since that allocation takes the minimum, and PostgreSQL's
+    form, `least(-1, min(...)) - 1` over every row of the wire id (`EventInsert.cs` 24), would overflow near
+    `long.MinValue`. A row matches the domain only with all three parts, so even a scope collision could not
+    make an event or ticket a control. No turn method mints a private control, and the commit refuses, as a
+    definite error, any message of a private control kind or in the control scope that layer 2's resolution step did not mint in that commit. Job and event
+    tickets keep their own minting turn methods and scopes (`StartJob`, `Subscribe`, `Publish`, `Turns.cs` 394–487).
+  - **Each control has one outstanding identity.** `ParkRecord.ControlSerial` grows by one at every private control
+    layer 2 mints for this Park. A control's id derives from the instance's origin (actor and creation), the Park mark,
+    the generation and that serial, so successive pages and every delayed gate retry within one generation have
+    distinct full keys, and the store's deduplication by full key never merges two of them. A page commit retaken
+    after an unknown outcome reads the serial from the committed `ParkRecord`, so it mints the same key it would have
+    minted. `ParkRecord.Resolution.Drain` holds the full key of the one outstanding `kernel.drain`: every commit that
+    sends a drain (Open, a page, a gate retry) consumes the previous one and records the new key. `ParkRecord.Expiry`
+    holds `At`, the deadline the Park's commit computed (the Park's time plus the window; null for the null window,
+    and then null for the whole Park), and `Armed`, the full key of the armed `kernel.park-expiry`, if any. Park's
+    commit arms one when `At` is set. Every Open recalls it and clears `Armed`. A re-park arms a fresh one, due at
+    `At` (at once if it has passed) under the current generation, only when `At` is set and nothing is armed;
+    otherwise it keeps the armed one.
+  - **The consumer checks the issuer and the outstanding key first.** A private control acts only if it is in the
+    control identity domain (control scope, no `Match`, a private kind), its `Sender` and `SenderCreation` are the instance's own id and creation, and its full key equals
+    the one `ParkRecord` records as outstanding: `Resolution.Drain` for a drain, `Expiry.Armed` for an expiry. A
+    `kernel.park-expiry` also needs `Expiry.At` set and the turn's database time at or after it. Then the payload
+    checks of the second review: a `kernel.drain` acts only if its creation equals the row's, its Park mark equals
+    `ParkRecord`'s, and its generation equals the open Resolution's; a `kernel.park-expiry` acts only if its creation
+    and Park mark match, no resolution is open, and its generation equals `ParkRecord.ResolutionGeneration`, which
+    grows by one at every Open of this creation. Both compare the Park mark with `ParkRecord`'s Park identity, never
+    the row's terminal mark, which a recover drain clears. A control that fails any check is consumed and dropped
+    with no other change and counts as refused (reason control). This extends a built check: the worker already
+    discards a job or event ticket kind that arrives in the ordinary scope as a supplied ticket (existing prototype
+    behaviour, `Turns.cs` 110–111, used at `Worker.cs` 640–654). One exception keeps a genuine expiry from being
+    lost: the armed expiry itself, taken before `At`, is dropped and re-armed at `At` under the next serial in the
+    same commit, which records the new key in `Expiry.Armed`. Only a defect or a clock fault can deliver it early,
+    since the worker offers a turn only due rows (existing prototype behaviour, `Worker.cs` 830, `Eligible`).
+  - **The null window never discards.** With no window, `Expiry.At` is null for the whole Park, so no
+    `kernel.park-expiry`, minted or injected, can open a discard.
+  - **The generation lives as long as the creation.** `ParkRecord.ResolutionGeneration` is monotonic for the
+    creation's lifetime: it grows by one at every Open of any Park of this creation, and it never resets. When a Park
+    resolves, its commit clears the Park's own fields (the Park identity, `Resolution`, `Dispositions`, `Expiry` and
+    `ControlSerial`) and keeps `ResolutionGeneration` on the instance row. A later Park of the same creation
+    continues from it, so a generation value names at most one Open of the creation. A private control left over
+    from an earlier Park therefore matches nothing in a later one. A restored row's `ReleasedBy` tag (creation and
+    generation) from an earlier Park never equals a later resolution's (creation, generation), so it never makes a
+    row deliverable during that resolution; such a row, if no turn consumed it, is a `Stale` row of the later Park
+    (a lower generation of this creation, `NOT Done`): withheld while that Park's resolution is open, restored by a
+    recover's page through the `Stale` arm, and consumed and dropped at Complete by any other kind. A new creation under the same id is a new row identity and starts again, and the creation
+    in every control key and tag keeps its values apart. This claim covers the private controls and `ReleasedBy`
+    only; a restarted job's ticket generation is its own counter, defined under "Retained dispositions"
+    ([Recover](#recover)).
+
+  Every Open bumps the generation and clears `Expiry.Armed`, so an expiry already delivered or in flight when a
+  recover's Open recalled it is dropped, and it can never open a discard against an active recovery. The controls of
+  a later resolution, a later Park or a successor creation never share a full key with a delayed one, since the
+  generation, the Park mark or the origin differs.
 - **Operators read the identity** from the parked-work read model (`ParkedItem` carries creation, Park revision and
   Park time) and from `KeptAsync`, whose pages carry the `ParkSelection` they were read under.
 - **Release 1 has no unqualified intent** such as "the current Park of key K". A command always names the Park the
@@ -265,19 +414,21 @@ Park decision.
 
 | Step | What its commit does |
 |---|---|
-| **Open** (the `kernel.recover`, `kernel.discard` or `kernel.terminate` turn, the delete of a parked instance, or the expiry timer's turn) | Checks the operation (below); recalls the expiry timer; increments `ParkRecord.ResolutionGeneration` and writes `ParkRecord.Resolution {operation, kind, mode, generation, cursor}` on the instance row, with the cursor before the first row; for a `retry` with an explicit selection, marks each selected row `KeptBy = Selected` by its full key, with its count checked; sends the instance a `kernel.drain` bound to the generation. For recover it also restores the waits (below) and sets the instance running, so restored rows are delivered as the drain goes. From this commit on, arrivals are no longer kept. |
-| **Page** (each `kernel.drain` turn) | Reads the next page of metadata: `Target = :instance AND KeptBy IS NOT NULL AND (Seq, Id, Scope, Match) > :cursor`, ordered by that tuple, at most `P` rows and `B` bytes of metadata (below), never a payload. Updates each row by its full key, with its count checked (restore or clear, below), moves the cursor to the page's last tuple, and sends the next `kernel.drain`. |
-| **Complete** (the page that finds no row) | Clears `ParkRecord.Resolution`, journals the outcome with its counts, and does the kind's last step: recover ends the withholding above the cursor; discard and expiry record the disposition ("discarded" or "expired"), leave the instance Faulted and write its terminal mark; terminate sets the end status Cancelled; delete finishes the built delete. Discard, expiry, terminate and delete each send the parent one final notice (Faulted, or Cancelled for terminate), since a parent keeps waiting for a parked child ([large fan-out](large-fan-out.md), decision 5). |
+| **Open** (the `kernel.recover`, `kernel.discard` or `kernel.terminate` turn, the delete of a parked instance, or the expiry timer's turn) | Checks the operation (below); recalls the expiry timer; increments `ParkRecord.ResolutionGeneration` and writes `ParkRecord.Resolution {operation, kind, mode, generation, cursor}` on the instance row, with the cursor before the first row; for a `retry` with an explicit selection, marks each selected row `KeptBy = Selected` by its full key, with its count checked; sends the instance a `kernel.drain` bound to the generation. For recover it also restores the waits (below) and sets the instance running, so restored rows are delivered as the drain goes. From this commit on, arrivals are no longer kept, and while a recover drain is open the instance receives only control kinds and the rows this resolution released (below). |
+| **Page** (each `kernel.drain` turn) | Reads the next page of metadata: `Target = :instance AND (KeptBy IS NOT NULL OR Stale) AND (Seq, Id, Scope, Match) > :cursor`, ordered by that tuple, where `Stale` selects a row an earlier resolution of this creation released and nobody has consumed (`ReleasedBy` of this creation and a lower generation, `NOT Done`; see "Interruption" below), at most `P_page` rows (below), never a payload. Updates each row by its full key, with its count checked (restore, which also marks the row released by this resolution, or clear, below), moves the cursor to the page's last tuple, and sends the next `kernel.drain`. |
+| **Complete** (the page that finds no row) | Clears `ParkRecord.Resolution`, journals the outcome with its counts, and does the kind's last step: recover ends the withholding of the rows it did not release; discard and expiry record the disposition ("discarded" or "expired"), leave the instance Faulted and write its terminal mark; terminate sets the end status Cancelled; delete finishes the built delete. Discard, expiry, terminate and delete each send the parent one final notice (Faulted, or Cancelled for terminate), since a parent keeps waiting for a parked child ([large fan-out](large-fan-out.md), decision 5). |
 
 - **The cursor is a tuple.** `seq` alone is not a total order: MongoDB can give two rows one `seq` from its separate
   allocation clocks and sorts by id as well ([storage model](storage-model.md#invariants-carried-by-the-records)).
   A cursor on `seq` alone would skip the rest of a tie at a page boundary, and those rows would stay kept for good,
-  since the sweep skips kept rows. So the cursor, the page order and the withholding all use `(Seq, Id, Scope, Match)`,
-  the store's poll order with the full key as its tie-break.
+  since the sweep skips kept rows. So the cursor and the page order use `(Seq, Id, Scope, Match)`, the store's poll
+  order with the full key as its tie-break. The cursor orders the paging only. It never decides which rows the
+  instance may receive (below).
 
 - **Restore or clear, per row.** Both recover modes restore `Arrived` rows; `retry` also restores the rows its
   selection marked `Selected` at Open (or every `Consumed` row, for retry-all). Restoring sets `Done = false`, `KeptBy = null`, `Attempts = 0`,
-  `Trial` to none, `Seen = 0`, and `KeepUntil` to the ordinary outside-command window from now, by the predicate
+  `Trial` to none, `Seen = 0`, `KeepUntil` to the ordinary outside-command window from now, and `ReleasedBy` to the
+  open Resolution's `(creation, generation)`, by the predicate
   `Id = :id AND Scope = :scope AND Match IS NOT DISTINCT FROM :match AND Done AND KeptBy = :reason`. Every other kept
   row, and every row under discard, expiry, terminate or delete, is cleared: `KeptBy = null` and the ordinary window, by the same
   key predicate. Resetting the poison counters matters: the owner parks any delivery whose attempts reached the
@@ -288,12 +439,29 @@ Park decision.
   `ChildFinished` check), and a copy under a new id would be refused by `CreationProtocol.Refuse`
   ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)). Nothing is handed over in memory
   ahead of the disk, so invariant 9 holds.
-- **Order during a recover drain.** The instance runs from the open commit, but receives only rows at or below the
-  cursor in the tuple order; a row above it waits, withheld as for a suspended instance. Restored rows keep their `seq`
-  and the cursor passes kept rows in that order, so no message from one sender overtakes an earlier one from the same
-  sender. Rows that arrive during the drain, and the tickets the open restarted, are new rows above the cursor and are
-  withheld until Complete. A re-armed timer is withheld until Complete as well, whatever its `seq` (see "The re-arm"
-  below), so a re-armed timer due at once fires after the drain.
+- **Eligibility during a recover drain: released rows only.** The instance runs from the open commit. While the
+  recover Resolution is open, the owner gives the instance a row only when the row is a control kind (below) or its
+  `ReleasedBy` equals the open Resolution's `(creation, generation)`. Every other row for the instance waits, withheld
+  as for a suspended instance, until Complete, whatever its `seq`: rows that arrive during the drain, rows that were
+  pending at the Open and not yet kept, the instance's own new sends, the tickets the open restarted, and the timers
+  the open re-armed (see "The re-arm" below).
+  - **Why the cursor cannot decide.** No `seq` is an arrival watermark. One sender's rows get increasing `seq`, but
+    on MongoDB each sender's partition clock, and the separate outside-add clock, allocate independently
+    ([storage model](storage-model.md#values-and-embedded-shape)), so a row committed during the drain can get a `seq`
+    below the cursor, or the cursor's `seq` with a lower tie-break. On the engines that generate `seq`, a transaction
+    can draw its value before a page reads and become visible after the cursor has passed it. A test on the tuple
+    would let such a row through, and if it ended the model, the pages after the end would clear the kept rows
+    the cursor had not reached, which were never delivered.
+  - **The marker is durable and generation-bound.** The page sets `ReleasedBy` in the same update that restores the
+    row, so it commits with the cursor; a new owner reads it from the polled row and the generation from the instance
+    row, and an ownership change neither releases nor withholds a row. The generation is monotonic for the creation's
+    lifetime and kept when a Park resolves ([the internal controls' rules](#every-park-operation-names-its-park)),
+    so a row released by an earlier resolution, of this Park or an earlier one, matches no later one, and the creation
+    keeps a row of an earlier creation of the same id from matching. A stale marker on a consumed row stays and
+    matches nothing; an unconsumed one rejoins the Park ("Interruption" below).
+  - **Order.** Restored rows keep their `seq`, and the poll delivers released rows in that order, so no message from
+    one sender overtakes an earlier one from the same sender: a sender's kept rows are released during the drain, and
+    its later rows only after Complete. A timer due at once that the open re-armed fires after the drain.
 - **Controls during a drain.** Suspend and resume act as usual. `kernel.drain` and `kernel.park-expiry` are kernel
   control kinds: like the other control kinds they pass withholding, are never suspects, and are exempt from the
   poison check before Park (`Worker.cs`, the `MaxAttempts` check), so a drain is never parked by its own messages.
@@ -307,12 +475,26 @@ Park decision.
     `kernel.park-expiry` for the window's remaining time (from the Park's time in the `ParkRecord`; due at once if it
     has passed), under the current generation, since the recover's open had recalled the old one and bumped the
     generation past it. A new recover then drains every row still kept.
+  - **Released rows rejoin the Park.** Rows the interrupted drain released and nobody consumed belong to the Park
+    again, by one mechanism: the parked instance consumes those it reaches as `Arrived` arrivals, and any still
+    unconsumed when the next recover opens are read by that drain's pages through the `Stale` arm of the page
+    predicate. A page restores such a row as an `Arrived` row, by the same update with `NOT Done AND ReleasedBy =
+    :stale` in place of `Done AND KeptBy = :reason`, giving it the new `ReleasedBy`. So a released row and a later
+    kept row of its sender are restored in tuple order, and neither can overtake the other: in the trace R1, R2, K of
+    one sender, with R2 released and pending when an operator's recover, given a lower `seq` by MongoDB's outside-add
+    clock, opens the next drain, the pages restore R2 before K. Discard, expiry, terminate and delete pages, and recover
+    pages after the model's end, skip the `Stale` arm, and at Complete those rows meet the ordinary rule for the
+    instance that drain leaves (consumed and dropped). **The bound:** the progress gate bounds the restored rows no
+    poll has yet taken up, at most one page; rows a poll has taken up that no turn has consumed (held, on trial, or in
+    the owner's memory) can be more, up to every row the interrupted drain restored. All of them are paged with the
+    kept rows, at most `P_page` per page, so no commit touches them all at once.
   - **A terminate** opens its own drain over the rows still kept, which clears them (below).
 - **The model ends during a recover drain.** The instance runs from the open, so its model can finish, be cancelled or
   end faulted by its own outcome before the last page. That end does not stop the drain: `kernel.drain` is a control
   kind and keeps its turns after the end. From the end on, each page clears the rows it reaches (`KeptBy = null` and
-  the ordinary window) and restores none, since a finished instance would drop them. At Complete the withholding ends,
-  so the rows above the cursor meet the ordinary rule for a finished instance (consumed and dropped), and
+  the ordinary window), restores none, since a finished instance would drop them, and skips the `Stale` arm. Rows released before the end
+  stay eligible and meet the ordinary rule for a finished instance (consumed and dropped). At Complete the withholding
+  ends, so the unreleased rows meet the same rule, and
   `ParkRecord.Resolution` is cleared, so the Park is resolved and no row keeps `KeptBy`. The end itself is the built
   one: its own turn writes the end status and terminal mark and sends the parent its one notice, so Complete sends
   none. A turn that throws before the end is a re-park, handled under "Interruption" above.
@@ -329,7 +511,8 @@ Park decision.
     | A discard, expiry, terminate or delete drain is open | The same failed late input |
     | No resolution is open and the Park is unresolved | A re-park, which continues the Park |
     | The row has ended and has no unresolved Park (after a completed discard or expiry, a recovered instance that later ended, one that never parked) | A failed late input, the built behaviour; it never opens a Park or keeps rows |
-  - **A delete after the end takes the drain over,** as it does for discard, expiry and terminate (below). Without
+  - **A delete after the end takes the drain over** when its selection names the mark the end wrote, as it does for
+    discard, expiry and terminate ([Delete during a drain](#delete-during-a-drain)). Without
     that, the trace is: the model finishes, rows above the cursor still carry `KeptBy`, a delete removes the ended row,
     the next `kernel.drain` finds no target and is dropped, and the remaining rows keep `KeptBy` for good, since the
     sweep skips them; a later creation under the same id could then meet them. With the takeover, the drain runs on
@@ -339,7 +522,8 @@ Park decision.
   built terminate's one turn in two:
   - **Its open** does everything the built terminate does except the end: it stops delivery to the model at once,
     removes the instance's waits, cancels its jobs and sends terminate to its children. No model turn runs after the
-    terminate is accepted. Pending rows, restored ones included, are withheld from then on.
+    terminate is accepted. Pending rows, restored ones included, are withheld from then on: the terminate's Open is a
+    new generation, and its pages release nothing.
   - **Its Complete** records the end status Cancelled, so the pending rows meet the ordinary rule for a finished
     instance (consumed and dropped, as for any terminated instance), and sends the parent one final notice.
   - **Between the two** the row keeps its current status, with the terminate's `ParkRecord.Resolution` open: Faulted
@@ -348,19 +532,83 @@ Park decision.
     terminate's operation as in progress. The built
     terminate sends a notice only when the child is running (`WorkflowInstance.cs`, the terminate path); this one sends
     none at its open, so the parent hears once.
-- **Delete during a drain.** During a recover drain whose model still runs, the built delete refuses a running
-  instance, so the delete is consumed with no change and the refusal recorded, as for any delete of a running instance;
-  terminate first, then delete. During a discard, expiry or terminate drain, or a recover drain whose model has ended,
-  the delete takes the drain over from its cursor. Its Complete first ends the instance where the drain had not yet done so (for a taken-over terminate:
-  Cancelled, with its terminal mark), then runs the built delete, as the data lifecycle page's terminate-then-delete
-  does, and sends the one parent notice that drain owed.
-- **What counts toward `B`.** A page reads and writes metadata only: each row's full key (`Id`, `Scope`, `Match`),
-  `Seq`, kind, sender, `KeptBy` and payload size. Restoring and clearing set flags by full key and never carry the
-  payload. `B` counts the encoded metadata, so a row's payload size plays no part in its page. A row's metadata is
-  bounded by the provider's declared key limits ([storage model](storage-model.md#inbox-identity-and-public-names);
-  the wide-key sample in [WRITES.md](../../prototypes/kernel-model/WRITES.md#15-november-card4-physical-identity-experiment-on-landed-park)
-  measured 11,008 encoded octets for a 4,096-unit key), far below `B`, and a page always takes at least its first
-  row, so no row can stop a drain. A restored row's payload is read later by the ordinary poll that delivers it, under
+  - **The row's terminal mark depends on where the terminate came from.** A terminate of a parked instance with no resolution open leaves the
+    Park's mark on the row, since its Open writes no mark. A terminate that interrupts a running recover finds no mark,
+    since the recover's Open cleared it. In both cases Complete writes the Cancelled mark, and from then on the row
+    carries that mark.
+  - **`ThenDelete` is part of the terminate.** Its Open records `ThenDelete` in the terminate's Resolution, and its
+    Complete does the deletion as the last step of the same commit ([Delete during a drain](#delete-during-a-drain)).
+  - **A further terminate while a terminate drain is open** changes nothing and is refused as "resolution open". Its
+    `ThenDelete`, if any, is not added to the open drain.
+- **Delete during a drain.** A delete takes a drain over only when its qualified checks pass against the row's
+  current terminal mark ([Delete during a drain](#delete-during-a-drain), below).
+- **What a page reads, and its metadata bound.** A page reads and writes metadata only: each row's full key (`Id`,
+  `Scope`, `Match`), `Seq`, `Kind`, `Sender`, `KeptBy`, `ReleasedBy` and the payload's size. Restoring and clearing
+  set flags by full key and never carry the payload. `B` counts the encoded metadata, so a row's payload size plays
+  no part in its page. Every projected field is bounded at admission (proposed limits), so a row's encoded metadata
+  has a maximum `M` strictly below `B`.
+  - **The unit.** Lengths are WTF-8 bytes: UTF-8, with NUL as one byte and each unpaired UTF-16 unit as three bytes,
+    so every string the kernel accepts has a length (`"high\uD800"` is 7). `N` applies to the caller's or model's
+    own name, before tenant qualification and the virtual-partition prefix; `Q` adds at most 65 bytes and `{vp}/` at
+    most 5 ([tenancy](tenancy.md#names-one-namespace-per-tenant)), and the derived limits include them.
+
+  | Field | Limit |
+  |---|---|
+  | A name an application or model supplies: an actor id (instance id or caller key), an ordinary wire id, an operation id, a job key, a wait id, a subscription key, an event id | `N` = 1,024 bytes each, before qualification |
+  | `Kind` | 256 bytes |
+  | `Id` of an issued message or a ticket (qualified origin, key, creation, generation and ordinal) | At most 2`N` + 160, from bounded parts |
+  | `Match` (qualified subscription key, event id, qualified instance, wait, creation) | At most 4`N` + 192, from bounded parts |
+  | `Sender` (a qualified actor id, or an address the instance received) | At most `N` + 160 |
+  | `Scope`, `Seq`, `KeptBy`, `ReleasedBy`, payload size | Fixed width, 64 bytes together |
+
+  The variable fields come to at most 7`N` + 768 = 7,936 bytes. `M` is set by the widest provider encoding: SQL
+  Server's UTF-16 at most doubles a length, to 15,872, and the reversible binary path of PostgreSQL and SQLite for
+  names with NUL or unpaired units ([storage model](storage-model.md#inbox-identity-and-public-names)) stores UTF-16
+  bytes as base64, at most 8/3 of a length, 21,163. With the fixed 64 bytes and an allowance for the provider's own
+  framing (BSON names and type bytes, row headers), `M` = 24 KiB. The limits are checked where a row is first
+  written, at every ingress class, before any write:
+  - **An outside add** (a command, a start, a publish, an operator message): the entry point refuses it with a
+    validation error, and no row exists.
+  - **A turn's sends** (`ITurn.Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`): the call
+    throws a typed `MetadataLimitExceeded` before the message joins the turn's output, so the turn fails as any model
+    fault does. The message is never written, and a Park that follows keeps only the turn's consumed deliveries,
+    which were admitted under the same limits. A received address enters a turn inside a message that was itself
+    admitted, and `SendFromReceivedAddress` checks it again as the new row's `Sender`.
+  - **An actor type's composed `Add`** (a parent's notice, a tree terminate) and every kernel-composed row (tickets,
+    `kernel.drain`, `kernel.park-expiry`, job results, child notices): the commit checks the same limits and refuses
+    an over-limit row as a definite error. These rows are built from fields already bounded, so the check is a
+    defence.
+
+  Where a provider has a tighter limit of its own, admission applies that one, so the refusal comes before the write
+  and never from the store: SQL Server's 450 UTF-16 units and MySQL's 255 scalar values
+  ([storage model](storage-model.md#inbox-identity-and-public-names)), and PostgreSQL's B-tree entry limit of about
+  2,704 bytes on each indexed key ([tenancy](tenancy.md#names-one-namespace-per-tenant)), and PostgreSQL's refusal
+  of NUL in text (SQLSTATE 22021, `Kernel.Ef.Conformance` Program.cs), so on PostgreSQL admission refuses a NUL in
+  `Kind`, `Sender`, an ordinary `Id` and `Match` (issued ids take the reversible binary path). On every provider,
+  admission refuses an unpaired UTF-16 unit in an ordinary text field (`Kind`, `Sender`, an ordinary `Id`, `Match`):
+  only issued ids have the reversible encoding (`IssuedMailKey.cs`), and a UTF-8 text column on PostgreSQL, MySQL or
+  MongoDB would make the client throw or replace the unit with U+FFFD, merging two keys. **Where names enter
+  (a proposed admission rule).** These refusals apply at the ingress of every caller- or model-chosen name that later
+  becomes a `Sender`, part of a `Match` or a stored actor id: a caller key and an actor id (at a start or an outside
+  add naming it), a wait id, a subscription key and an event id (at `Subscribe`, `Publish` and an outside publish),
+  a message's `Target` (at every turn send, where a refusal throws as a model fault, at every composed send and at
+  every outside add), and the caller-chosen name in a job-queue actor id `queue/Q(t, name)/{shard}`
+  ([tenancy](tenancy.md#names-one-namespace-per-tenant)), wherever that name is configured or admitted.
+  An unpaired UTF-16 unit is refused there on every provider, and a NUL wherever a provider refuses it (PostgreSQL),
+  so no admitted instance meets a refusal at its own later sends or at the instance insert. Each name is checked
+  in its maximum stored form: a generation or revision counts as 20 digits, an ordinal as 10,
+  and a notice or ticket suffix at its fixed width, so a later restart's generation suffix, or any other suffix a
+  kernel-composed row adds, can never grow an admitted name past a provider limit. Today's fixtures above `N` become refusal
+  fixtures (S-6): SQL Server's `LargestInboxId`, `"0/a!"` with 446 × `界` (1,342 bytes, `Kernel.Ef.Conformance`
+  Program.cs). The 4,096-unit random keys of `UnicodeKeys.cs` (Recreate.Run) keep their path: key admission maps
+  each to a generated run id and keys its wire id by SHA-256 (`KeyAdmission.cs`), so the caller's units reach no
+  projected field. The wide-key sample in
+  [WRITES.md](../../prototypes/kernel-model/WRITES.md#15-november-card4-physical-identity-experiment-on-landed-park)
+  measured 11,008 encoded octets for a 4,096-unit key: one measured row, no maximum, and a key above `N`. The third
+  review's SQLite probe stored a 5,242,882-byte key; under these limits such a key never reaches the store. So no row
+  a page can meet exceeds `M`, and a page always has room for its first row. **Measured at K4:** each provider's
+  encoded size of a row with every field at its limit in that provider's widest encoding, which must not exceed `M`.
+  The doubling, the base64 factor and the framing allowance are unmeasured. A restored row's payload is read later by the ordinary poll that delivers it, under
   the poll's own limits, as for any accepted message; a cleared row's payload is never read. So a kept delivery of
   5 MiB, which MongoDB's 16 MiB document admits, moves through a page like any other. Payload size is bounded at
   admission and by the provider, and write volume's values by reference concern instance state, so nothing here
@@ -371,7 +619,9 @@ Park decision.
   the Resolution never stores the selection and Open writes at most `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
   at most `P` rows, so the next recover starts from the Park's own reasons.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
-  owned commit, and `B` = 4 MiB of metadata. A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
+  owned commit, and `B` = 4 MiB of metadata. A page takes at most `P_page` = min(`P`, ⌊`B` / `M`⌋) = 170 rows, so its
+  metadata is at most `B` by construction: a plain row limit that every provider supports, with no byte count in the
+  query. An explicit selection keeps its own bound of `P` handles (above). A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
   document and 48 MiB message limits and short against its transaction lifetime
   ([MONGO.md](../../prototypes/kernel-model/MONGO.md), M10). Pages are ordinary turns under the turn budget per pass,
   so other instances of the partition keep their share.
@@ -387,8 +637,12 @@ Park decision.
     one point lookup by full key, so a takeover adds no free page.
   - **While the instance is suspended the gate waits.** Resume is a control kind that passes withholding, so it always
     reaches the instance and releases the gate; suspension cannot deadlock the drain.
-  - **A row the model holds counts as taken up**, because a held row may wait for a later row, perhaps one above the
-    cursor that only Complete releases. Counting it otherwise could stall the drain for good.
+  - **A row the model holds counts as taken up**, because a held row may wait for a later row, perhaps an unreleased
+    one that only Complete lets through. Counting it otherwise could stall the drain for good.
+  - **The gate row is always deliverable.** It is a row the previous page restored, so it carries the open
+    Resolution's `ReleasedBy`; and a kept row was consumed, so it was due. Only suspension withholds it, and resume
+    passes. A row whose delivery needs Complete (an unreleased arrival, a timer the open re-armed, a restarted ticket)
+    is never a gate row, since no page restores it. So the gate never waits for a row that only Complete can release.
   - **The bound, stated honestly:** the drain's own addition to due depth is at most one page of restored rows not
     yet taken up plus the rows the model holds. Held rows stay due and unconsumed, and the built `Hold` hands them
     back to every turn (FINDINGS section 14), so a model that defers everything (a StateMachine during a suspended action) can
@@ -397,16 +651,122 @@ Park decision.
     models that hold for a later row. The `elsa.kernel.drain.held` gauge reports held restored rows, so an operator
     sees that cost.
   - **The partition's backlog is no part of the gate.** The trace it avoids: rows that arrive during a recover drain
-    are withheld above the cursor, yet they count in the partition's backlog; a gate on that backlog above the high
+    are withheld as unreleased rows, yet they count in the partition's backlog; a gate on that backlog above the high
     water mark would make every page wait, the withheld rows would never be released, and the backlog would never
     fall. Unrelated ingress is still refused by the ingress threshold alone, which counts the withheld rows until
     Complete releases them.
-- **Crash and takeover.** The cursor and the next `kernel.drain` commit with each page, so a new owner continues from
-  the cursor. A page whose commit outcome is unknown is reset and taken as any commit is; rows a landed page restored
+- **Crash and takeover.** The cursor, the rows' `ReleasedBy` and the next `kernel.drain` commit with each page, so a
+  new owner continues from the cursor and withholds exactly what the old owner withheld. A page whose commit outcome is unknown is reset and taken as any commit is; rows a landed page restored
   or cleared no longer match the page read, so the drain neither repeats nor skips a row.
 - **When it is complete.** The open's reply says the resolution started; the operation's outcome (complete, with
-  restored, cleared and refused counts, or interrupted) appears in the parked-work read model by operation id, and a
+  restored, cleared, refused and already re-armed counts, or interrupted) appears in the parked-work read model by operation id, and a
   synchronous API call can wait for it through a reply address until its deadline.
+
+#### Delete during a drain
+
+This is proposed. A delete is the data lifecycle page's [qualified delete](data-lifecycle.md#proposed-the-qualified-delete)
+in every state of the row, a drain included. Its checks run in the actor's command turn against the row as it is then,
+its current terminal mark included. When they pass while a drain is open, the delete takes the drain over. The
+takeover never lets a delete name a mark the row does not carry, so decision 9A holds: every delete is qualified, and
+none has a force form. A delete compares the row's terminal mark only. `ParkRecord`'s Park identity outlives the row's
+mark during a recover, and a delete never reads it.
+
+| Open drain | Row status | The row's terminal mark | A separate delete |
+|---|---|---|---|
+| Recover, model running | Running | None: the recover's Open cleared it | Refused as "transition": no selection can name a mark the row lacks |
+| Recover, model ended | The end's status | The mark the end wrote | Naming that mark, reason Operator: takes over |
+| Discard or expiry | Faulted | The Park's mark | Naming the Park's mark, reason Operator: takes over |
+| Terminate of a parked instance | Faulted, "terminating" | The Park's mark | Naming the Park's mark, reason Operator: takes over |
+| Terminate that interrupted a running recover | Running, "terminating" | None until Complete writes the Cancelled mark | Refused as "transition"; after Complete, a delete naming the Cancelled mark is an ordinary delete of an ended row |
+| Delete, a taken-over drain, or a terminate with `ThenDelete` | As in the rows above | As in the rows above | Checks 1 to 3 as in the rows above; a delete that passes them changes nothing and is refused as "in progress", with the operation that will delete named in its outcome |
+
+**Where "in progress" sits.** It is tested after checks 1 to 3 and before check 4, so a delete from another tenant, for
+another creation or naming another mark gets the reason of the check it fails (tenant, run or transition) and learns
+nothing of the drain. Two consequences follow. A terminate with `ThenDelete` that interrupted a running recover leaves
+the row with no mark, so a separate delete during it fails check 3 as "transition", the same answer as during any
+terminate of that origin (DT-5). And "in progress" comes before check 5, so a separate delete during a drain that
+already ends in a delete is refused as "in progress" even while `ProtectsDeletion` protects the row; during a drain
+that does not end in a delete, the same delete is refused at check 5 as "protected" (DT-6).
+
+A Retention delete that passes check 3 while a drain is open is refused as "in progress" when a delete already owns
+the drain, and otherwise at check 4 as "not eligible", since the Park stays unresolved. In the rows with no mark it
+fails check 3 as "transition". The retention worker selects the run again after Complete, under the mark Complete
+leaves.
+
+- **The takeover.** The delete's command turn records its operation and selection in the open
+  `ParkRecord.Resolution`. The kind, the cursor, the generation and the `kernel.drain` in flight stay as they are, so
+  the drain runs on from its cursor and no page is repeated or skipped.
+- **Complete of a drain that ends in a delete** (the delete of a parked instance, a taken-over drain, or a terminate
+  with `ThenDelete`) does three things in one commit:
+  1. the kind's own end, where the drain has not yet ended the instance: the disposition, Faulted and the terminal
+     mark for discard and expiry; Cancelled and the terminal mark for terminate. A recover whose model ended has
+     nothing left to end. The delete of a parked instance has no end of its own while the delete goes ahead; when
+     step 3 finds the row protected, it ends as a discard would (below);
+  2. the one parent notice the drain owed: Faulted for discard, expiry and the delete of a parked instance, Cancelled
+     for terminate, and none after a model end, whose own turn sent it;
+  3. `ProtectsDeletion` once more, at Complete's time, since it reads the state and the owner's clock
+     (`WorkflowInstance.cs`). An unprotected row gets the built delete, whose single journal row is the deletion
+     marker. A protected row stays, ended under the mark of step 1, which is journalled as any end, and the delete's
+     outcome is "protected".
+
+  **A protected Complete of a parked instance's delete.** Protection can begin between the delete's command turn and
+  its Complete. By then the drain has cleared every kept row, so the Complete resolves the Park as a discard would:
+  the row stays Faulted with a new terminal mark, the parent gets the one Faulted notice the drain owed, the journal
+  records the delete refused as protected and the Park discarded, and the row's `Faulted` retention window starts from
+  the new mark. This is a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)); it
+  fills a gap in decision 9A's protection rule, which never deletes a protected row.
+
+  The deletion marker carries the drain's counts and the outcome of each operation the drain served, so the
+  parked-work read model keeps them by operation id after it removes the view: the taken-over operation as complete
+  (for a terminate, Cancelled and then deleted by the named delete), and the delete as deleted.
+- **`ThenDelete` follows its own contract.** The deletion is the terminate operation's own last step, so it names no
+  terminal mark and waits for none ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). On a parked
+  row, or during a recover whose model runs, the terminate is a drain, and its Complete runs steps 1 to 3. A parked
+  row has not ended for this purpose, since its Park is unresolved. During a recover drain whose model has ended, the
+  run has ended, so the command takes the qualified-delete path of an ended run (checks 1, 2 and 5) and takes the drain
+  over.
+
+> **Third review: counterexample and answer** ([third gate 2 review, R3-M5](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6960856712)).
+> The trace: A parks at mark r1. A recover opens and clears the row's mark, while `ParkRecord` keeps r1. A terminate
+> interrupts the still-running model: its Open stops the model's turns, and the status stays Running. Its Complete
+> will write the Cancelled mark r2. In between, a separate operator delete naming r1 fails the mark check, a delete with
+> no mark is ambiguous, and no selector can name r2 yet, while M3-6 required every delete during a terminate drain to
+> take it over. `ThenDelete` is a different command.
+>
+> The answer, step by step:
+> 1. A takeover needs the delete's checks to pass against the row's current mark. In this interval the row has none,
+>    so the delete naming r1 is refused as "transition" and changes nothing. M3-6 now asks for exactly that.
+> 2. The terminate drain runs on, clears every kept row and completes: Cancelled, mark r2, one Cancelled notice to the
+>    parent.
+> 3. A new delete selected under r2 passes the mark check. Operator needs no policy; Retention waits for the
+>    `Cancelled` window from r2's time; a run that `ProtectsDeletion` protects is refused as "protected".
+> 4. A terminate of A while it is parked, with no recover between, leaves r1 on the row. A delete naming r1 passes and
+>    takes the drain over; its Complete ends A Cancelled under r2, sends the one Cancelled notice and deletes.
+> 5. An operator who wants the run gone without waiting sends the terminate with `ThenDelete`, whose deletion is that
+>    operation's own last step and needs no mark.
+> 6. Comparing the delete with `ParkRecord`'s r1 when the row has no mark would accept step 1's delete, which was
+>    selected before the recover ran. DT-2's mutation is that comparison.
+
+**Worked example: a recovered child is terminated, its parent hears once, and it is deleted.** Parent P waits on
+child A.
+
+1. A parks: Faulted, with Park mark r1 on the row and in `ParkRecord`; 1,200 rows are kept over time. An operator reads
+   r1 from `ParkedItem` and sends delete D1 (Operator, r1), which is delayed.
+2. A `resume` recover R opens: the row's mark is cleared, `ParkRecord` keeps r1, and A runs. Page 1 reads 500 rows,
+   restores the `Arrived` ones and clears the rest, and the model takes some of the restored rows.
+3. A terminate T of A is accepted. Its Open clears R's Resolution and opens its own, stops the model's turns, removes
+   the waits, cancels the jobs and terminates A's children. A shows Running, "terminating", with no mark.
+4. D1 arrives. The row has no mark, so check 3 fails: D1 is refused as "transition", nothing changes, and
+   `elsa.kernel.delete.refused` counts it.
+5. T's pages clear the 700 rows still kept, and the page that finds none is its Complete. Complete records Cancelled
+   with mark r2, resolves the Park and sends P one Cancelled notice. The restored rows A had not consumed meet the rule
+   for a finished instance and are dropped.
+6. P consumes the notice once; the instance list shows A Cancelled under r2.
+7. An operator sends delete D2 (Operator, r2). Every check passes and `ProtectsDeletion` does not protect A, so A is
+   deleted, with the deletion marker as the commit's journal row. P receives nothing more.
+
+Had T reached A while it was parked, without R, D1 would have named the row's mark at step 4 and taken the drain over,
+and T's Complete would have deleted A after the same single Cancelled notice.
 
 ### Recover
 
@@ -414,15 +774,48 @@ Park decision.
 calls one new model hook.
 
 - **The contract gains a hook,** beside `UpgradeState`: `RestorePlan RestoreWaits(object state, ParkRecord park)`. It
-  returns the subscriptions, timers and jobs the model's committed state still waits on, each timer and job ticket by
-  the model's own id. Native, Flowchart and StateMachine each implement it.
+  returns the subscriptions, timers and jobs the model's committed state still waits on, each job by the model's own
+  key, and each timer as a full spec, `TimerSpec(string Id, string Kind, object? Payload, long Due)`: the id
+  `ITurn.Send` returned, the kind and typed payload the model sent, and the absolute due time the row was written
+  with. Native, Flowchart and StateMachine each implement it.
+  - **One read of the due time.** Today `DurableTurn.Send` computes `Due` from its own read of the clock plus the
+    delay (Turns.cs, `Send`), and the owner's clock advances between reads (Worker.cs, `Now`, anchored on a monotonic
+    tick), so a value the model computed separately could differ. `SendOptions` therefore gains `DueAt`, an absolute
+    time on `ITurn.Now`'s clock, and the kernel writes it as the row's `Due` unchanged. A model arming a timer it may
+    need to restore reads `ITurn.Now` once, passes `DueAt`, and records that same value. A `DueAt` already in the past makes the row due at
+    once, under the ordinary due rule. A send that gives both `Delay` and `DueAt` throws, so the turn fails as a model fault and the instance parks.
+  - **The layer 3 contract change.** A model keeps, for every timer it waits on, the kind, payload and due time it
+    sent, and returns them in the plan. The spec uses only the turn contract's own terms (an id `Send` returned, a
+    kind, a payload, a time on `ITurn.Now`), so layer 3 stays host-neutral: no partition, position or SQL appears.
+    Native's `WaitEntry` holds frame, kind, key and creation, and its timer arm stores only the send's id
+    (NativeModel.cs, `WaitEntry` and `Register`), so it gains `long Due`: the arm reads `turn.Now` once, adds the
+    timer's milliseconds, sends with that value as `DueAt` and stores the same value. Its plan returns `TimerSpec(entry.Key, NativeKinds.Timer, new TimerFired(wait), entry.Due)`
+    for each timer entry that still has a key, with the `TimerFired(wait)` payload its timer handler reads. Native's
+    state version steps from 13 to 14; release 1 starts with no stored state (the switch basis), so no older entry
+    needs a due.
+  - **The plan bound.** A plan names at most `W_max` = 4,096 timers and jobs (proposed). A model refuses to establish
+    a wait past it (Native faults the activity that would arm it, TR-4), and the kernel checks it at Open: a larger plan refuses the recover
+    with reason "plan" and changes nothing, and discard stays available.
 - **Checks.** The `ParkSelection` matches (above), no resolution is open, and the instance is recoverable under
   decision 1. After the window's expiry the Park is resolved, so recover is refused in
-  both modes. Open splits the selection before it writes anything, reading the disposition first, as the lookup does:
-  a handle that names a timer this Park retains as `Suppressed` (below) goes to the re-arm path (below), even while
-  its row is still kept, and is never marked `Selected` nor counted in the marking; any other handle that names a row
-  this Park keeps with reason `Consumed` goes to the `Selected` marking and its count check; a handle that is neither refuses the whole command before Open. A refusal
-  changes nothing and is recorded.
+  both modes. Open splits the selection before it writes anything, reading the disposition first, as the lookup does,
+  and gives each handle one meaning:
+  - a handle that names a timer this Park retains as `Suppressed` (below) goes to the re-arm path (below), even while
+    its row is still kept, and is never marked `Selected` nor counted in the marking;
+  - a handle that names a timer this Park retains as `Rearmed`, whose row is pending or kept `Arrived`, is an
+    authorized idempotent no-op: it writes nothing, is counted "already re-armed" in the outcome, and the rest of the
+    selection proceeds. The timer is armed once already: a pending one fires after Complete, and an `Arrived` one is
+    restored by the drain as every `Arrived` row is;
+  - a `Rearmed` timer whose row a later re-park consumed is kept `Consumed`, and its handle is marked `Selected` like
+    any other `Consumed` handle;
+  - any other handle that names a row this Park keeps with reason `Consumed` goes to the `Selected` marking and its
+    count check;
+  - a handle that is none of these (an `Arrived` row with no disposition, an unknown handle, another instance's, a
+    timer whose disposition has retired, below) refuses the whole command before Open.
+
+  A refusal changes nothing and is recorded. **Retry-all** restores every `Consumed` row and re-arms, once each, every
+  plan timer retained as `Suppressed`, before or after the sweep, recording `Rearmed`; a timer already `Rearmed` is
+  not re-armed again, so retry-all writes at most one re-arm per plan timer.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
   as the owner decided.
@@ -431,7 +824,7 @@ calls one new model hook.
   turns change its kept rows (the sweep skips them), and its turns are serial under the partition fence, so what the
   lookup sees is what the open commit and the later drain pages write against. The writes still carry the lookups as
   preconditions, as a defence against a defect: a restarted ticket is a create-only insert under its new generation's
-  key, a re-arm is the count-checked revive-or-insert below, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
+  key, a re-arm is the count-checked delete-and-insert, or the insert, below, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
   computes the step again from the rows as they are, under the same operation id; a failed create-only insert is a
   definite error, which parks the instance again under the commit's failure rule, and the operator can repeat the
   recover.
@@ -439,9 +832,42 @@ calls one new model hook.
   **Retained dispositions.** A decision a resolution takes about a timer or ticket must survive an interruption, or a
   second resume could undo it. `ParkRecord.Dispositions` keeps, for each timer and ticket of the plan, the decision
   taken under this Park: `Suppressed` (a Park-consumed timer that a resume left unarmed), `Rearmed` (a timer this Park
-  has armed once) or `Restarted(g)` (a job restarted under ticket generation `g`). Open writes them; a re-park keeps them; they are cleared only when the Park
-  resolves. The set is bounded by the model's waits, the same bound as the plan. The lookup reads the disposition
-  first, then the row:
+  has armed once) or `Restarted(g)` (a job restarted under ticket generation `g`). Open writes them; a re-park keeps
+  them; the Park's resolution clears them.
+  - **Job ticket generations.** The instance row keeps a per-creation `JobGeneration` counter, which no Park
+    resolution resets, and its job registry (`Jobs`) records each in-flight job's key with its generation. Every
+    `StartJob`, fresh or a recover's restart, takes the next value of the counter, and the ticket id carries it beside
+    instance, key and creation. So a ticket never reuses a generation, across Parks or across fresh starts of the
+    same key, and never collides with an earlier ticket's done row still within its window. The model never sees the
+    generation: the job context and `job-finished` carry the model's own key.
+  - **Each disposition names the exact wait.** A timer's disposition is keyed by its issued id, unique per send
+    (instance origin, revision and ordinal, `SendNext` in Turns.cs). A job's is keyed by the model's job key, the
+    name the plan uses, and `Restarted(g)` holds `g` in plain. At Open a job disposition applies only while the
+    registry's current generation for that key is `g`; a later `StartJob` under the same key has a higher generation,
+    so the old disposition is obsolete and the new job is decided by its own ticket. Layer 2 stores each key as the
+    SHA-256 digest of its canonical encoding (a timer's full key as the delivery handle encodes it, or the job key),
+    whose collisions are cryptographically negligible. A packed entry (32-byte digest, 1-byte tag, 8-byte generation) is 41 bytes, and the
+    proposed `D` = 64 bytes allows for the provider's framing; a natural BSON layout is near 69 bytes, so the K4
+    measurement may raise `D`, and `R` with it.
+  - **Obsolete dispositions retire at each Open.** Every recover Open replaces the set, in its own commit, with the
+    dispositions of the waits its plan names. One whose timer the plan no longer names, or whose job key the plan no
+    longer names or names at a newer generation (the model finished or cancelled that wait during an earlier drain),
+    is dropped. So the set never exceeds the current plan, at most
+    `W_max` entries, however many times the drain is interrupted.
+  - **A retired handle revives nothing.** A handle of a retired timer names no disposition. If its row is ordinary
+    done or swept, the handle is refused before Open. If its row is still kept `Consumed`, it is an ordinary
+    `Consumed` handle: the drain restores that delivery, and the model, which no longer waits for it, resumes no frame
+    (Native's timer handler finds no wait for it). No handle can name a newer wait, since a handle encodes the full key.
+  - **The envelope bound and its headroom.** `ParkRecord` encodes in at most `R` = 56 KiB plus `D` per disposition:
+    the Park identity, the Resolution with its cursor and gate handle (each at most `M`), the operation id, the
+    generation and the controls' keys fit in 56 KiB. With `W_max` entries that is 312 KiB (proposed, like `D`).
+    Every commit refuses as a definite error an instance envelope, measured without `ParkRecord`, above the
+    provider's row limit less 312 KiB (MongoDB: 16 MiB less 312 KiB); `ParkRecord` counts only against its own
+    312 KiB. So a recover Open's `ParkRecord` always fits beside the committed state. The relational providers declare no
+    comparable limit on the instance row; the rule binds where a provider declares one. Measured at K4: the encoded
+    `ParkRecord` at `W_max` on each provider, and a MongoDB envelope at the reserve.
+
+  The lookup reads the disposition first, then the row:
 
   | What the lookup finds for a timer or ticket the plan waits on | `resume` | `retry` |
   |---|---|---|
@@ -449,36 +875,52 @@ calls one new model hook.
   | Kept, `Arrived` (a timer that fired, or a job result that came, while parked) | Restored by the drain | Restored by the drain |
   | Kept, `Consumed` or `Selected`, and the selection names it, with no `Suppressed` disposition | Not applicable | Restored by the drain |
   | Kept, `Consumed`, not selected | Cleared; a timer stays unarmed and is recorded `Suppressed`; a job restarts and is recorded `Restarted(g)` | The same |
-  | Disposition `Suppressed`, whatever the row now is (still kept because an interruption came before its page, ordinary done after a page cleared it, or swept); the disposition takes precedence over the row | Stays unarmed | Stays unarmed, unless the selection names it: then re-armed, and recorded `Rearmed` |
-  | Disposition `Rearmed` | The re-arm never runs again; the timer's row decides by the rows above (pending: stays; kept after a re-park consumed it: as a kept row) | The same; a selection naming it re-arms nothing |
-  | Disposition `Restarted(g)` | The generation-`g` ticket's row decides, by the rows above | The same |
+  | Disposition `Suppressed`, whatever the row now is (still kept because an interruption came before its page, ordinary done after a page cleared it, or swept); the disposition takes precedence over the row | Stays unarmed | Stays unarmed, unless the selection names it or the mode is retry-all: then re-armed once, and recorded `Rearmed` |
+  | Disposition `Rearmed` | The re-arm never runs again; the timer's row decides by the rows above (pending: stays; kept after a re-park consumed it: as a kept row) | The same; a selection naming it is accepted as a no-op ("already re-armed") while its row is pending or kept `Arrived`, and marks it `Selected` if a re-park consumed it |
+  | Disposition `Restarted(g)`, and the registry's current generation for the key is `g` | The generation-`g` ticket's row decides, by the rows above | The same |
   | No disposition and no `KeptBy`: ordinary done or absent | A timer is re-armed and recorded `Rearmed`; a job restarts. Done and absent are treated alike, so the sweep's timing cannot change the outcome | The same |
 
-  **The re-arm.** A timer is re-armed under its own full key, by the branch the disposition step's point lookup chose:
-  - **The row is present and done:** an update by full key, `WHERE ... AND Done`, with a count check of 1. A still-kept
-    row is done with `KeptBy` set, so it matches too, and the same update releases it. It sets `Done = false`,
-    `KeptBy` null, `Attempts = 0`, `Trial` none, `Seen = 0`, the original due time, and `KeepUntil` to
-    the value a newly inserted timer has, so the revived row carries no trace of the page that cleared it.
-  - **The row is absent:** a create-only insert of the same row.
+  **The re-arm.** A timer is re-armed under its own full key from one durable source, whichever branch the
+  disposition step's point lookup chose. The plan's `TimerSpec`, from the model's committed state, gives `Kind`,
+  `Payload` (encoded as `Send` encodes it) and `Due`, the original absolute deadline. The instance row gives the rest:
+  layer 2 maps the spec's id to the full key (the id, the issued scope, no match) and refuses as a definite error an id
+  whose origin is not this instance's creation; `Target` is the instance, `Sender` its id, `TargetCreation` and
+  `SenderCreation` its creation, with no reply address and no start, and the trace is the recover operation's. Every
+  branch writes that envelope as a new row, with `Done = false`, `KeptBy` and `ReleasedBy` null, `Attempts = 0`,
+  `Trial` none, `Seen = 0`, `KeepUntil` as a newly inserted timer has, and a new `seq`.
+  - **The row is present and done:** a conditional delete by full key, `WHERE ... AND Done`, with a count check of
+    1, then, in the same commit, a create-only insert under the same full key of the envelope rebuilt from the
+    plan's `TimerSpec` and the instance row, as above. Nothing is copied from the deleted row, so a payload-free done
+    marker (a page cleared it, and [data lifecycle](data-lifecycle.md) format item 6 dropped its payload) is replaced
+    by a row with its payload. A still-kept row is done with `KeptBy` set, so the delete matches it too, and the
+    rebuilt envelope equals the values it held.
+  - **The row is absent:** the same create-only insert of the rebuilt envelope.
 
-  These are plain statements on every engine, with one meaning per count: an update by key reports one matched row
-  on each (MySQL with `UseAffectedRows=false` reports matched rows; MongoDB's `matchedCount`). A pending row needs no
-  re-arm, since the lookup's "Pending" row leaves it. A count of zero on the update, the sweep having removed the row
+  So both branches write one and the same row, with a new `seq` and no marker; it carries no trace of the page that
+  cleared it or of an earlier drain that released it. An update could not give the row a new `seq` (SQL Server does
+  not update an identity column), which is why the present branch deletes and inserts. A re-armed timer is therefore
+  unreleased and never `Stale` (above), so no page restores it, and it waits for Complete in both branches. These are
+  plain statements on every engine, with one meaning per count: a delete by key reports one matched row on each
+  (MySQL with `UseAffectedRows=false` reports matched rows; MongoDB's `deletedCount`). A pending row needs no
+  re-arm, since the lookup's "Pending" row leaves it. A count of zero on the delete, the sweep having removed the row
   after the lookup, answers "not landed", so the owner resets and recomputes the step, and the lookup then finds the
   row absent and inserts it. A key violation on the insert can only come from a defect; it is a definite error, and
   the instance re-parks under the commit's failure rule.
 
-  **When a re-armed timer fires.** A revived row keeps its original, low `seq`, at or below the drain cursor, and an
-  inserted row gets a new one above it. So a re-armed timer is withheld until Complete whatever its `seq`: while the
-  Resolution is open, a timer whose disposition is `Rearmed` is withheld. It fires at the same point, after Complete,
-  whichever branch armed it, so the sweep's timing changes neither whether nor when it fires. Reviving the row keeps
+  **When a re-armed timer fires.** A re-arm is a write of the open, never a page's restore, so it sets no
+  `ReleasedBy`, and the released rule withholds the timer until Complete. Both branches give it a new `seq`, so it
+  fires at the same point after Complete, and in the same order against the instance's other pending rows, whichever
+  branch armed it: the sweep's timing changes neither whether, when, nor in what order it fires. A timer
+  with a `Rearmed` disposition that a later page restores (it fired while parked after an interrupting re-park, so it
+  is kept `Arrived`) is released by that page like any restored row and is delivered during the drain; no rule
+  withholds a released row, so the progress gate cannot wait for it. Re-arming under the same full key keeps
   the model's own timer id, so `Recall` by that id still works; a new timer generation mapped back, as tickets have,
   was rejected because `Recall` and the timer's id would then need the same mapping.
 
-  A restarted job's ticket id derives from instance, key, creation and the recovery's ordinal (`Worker.TicketId` takes
-  the first three today), so it collides with neither the old ticket nor its kept row. The model never sees the
-  generation: the job context and `job-finished` carry the model's own key, and the kernel maps the generation back. A
-  result of the old generation matches no live ticket and is dropped.
+  A restarted job's ticket id derives from instance, key, creation and the next `JobGeneration` (`Worker.TicketId`
+  takes the first three today), so it collides with neither the old ticket nor its kept row, nor with a ticket of an
+  earlier Park. The kernel maps the generation back to the model's key through the registry. A result of an older
+  generation matches no live ticket and is dropped.
 - **Side effects** of a retried turn may repeat, with the same effect keys.
 
 **Discard** `{operation, park}` makes the same Park checks and opens a discard drain. The instance stays
@@ -491,28 +933,53 @@ store conformance suite need it:
 - a new transition that clears `Done` on a restored row, with its poison counters reset;
 - the sweep's predicate excluding kept rows;
 - a paged read of an instance's kept rows after a cursor, and point lookups by full key, served by an index on
-  `(Target, Seq)` partial on `KeptBy IS NOT NULL` where the engine supports it (MySQL takes the full index);
+  `(Target, Seq)` partial on `KeptBy IS NOT NULL OR (ReleasedBy IS NOT NULL AND NOT Done)` where the engine supports it (MySQL takes the full index);
 - the delivery handle, encoded and decoded by layer 2 only;
 - `ParkRecord.Resolution` with the handle of the previous page's last restored row, which the progress gate reads, and
   its cursor on `(Seq, Id, Scope, Match)`, the store's poll order with the full key as
-  tie-break, and the withholding of rows above a recover drain's cursor;
+  tie-break;
+- `ReleasedBy` on the message row, the `(creation, generation)` of the resolution whose page restored it, the
+  eligibility rule that gives a recovering instance only control kinds and the rows the open resolution released, and
+  the page's `Stale` arm that returns rows an interrupted drain released and nobody consumed;
 - two kernel control kinds, `kernel.drain` and `kernel.park-expiry`, which pass withholding, are never suspects and
   are exempt from the poison check;
 - the consume rule that keeps no arrival after a resolution opens, and the interruption rules that resume keeping;
-- the ticket generation that `Worker.TicketId` gains for jobs restarted by a recover;
+- the per-creation `JobGeneration` counter that every `StartJob` and restart draws from, carried in the ticket id and
+  the job registry;
 - the incident binding: `ParkSelection` on every Park operation, checked against the row's tenant, creation and Park
   mark, and `ParkRecord.ResolutionGeneration` binding `kernel.drain` and `kernel.park-expiry`;
-- `ParkRecord.Dispositions`, retained until the Park resolves;
-- the input bounds: metadata-only pages, the `Selected` reason and the selection's maximum.
+- the private controls: the reserved `kernel.` kinds refused at every producer outside layer 2, the control scope,
+  `ParkRecord.ControlSerial`, `ParkRecord.Resolution.Drain` and `ParkRecord.Expiry`, checked by the consumer;
+- `ParkRecord.Dispositions`, keyed by the digest of each wait's full key, pruned at every recover Open to the waits
+  of its plan and cleared when the Park resolves, with the envelope reserve that keeps `ParkRecord` within the
+  provider's row limit;
+- the `TimerSpec` plan entries, from which every re-arm writes the timer's kind, payload and original due, the plan
+  bound `W_max`, the selection's no-op for a `Rearmed` timer and retry-all's re-arm of `Suppressed` timers;
+- the input bounds: metadata-only pages of at most `P_page` rows, the `Selected` reason and the selection's maximum;
+- the admission limits on every projected metadata field, checked at every ingress class before any write.
 
 **Every operator message** is an outside add in the operator's bound scope. Its id is the tenant-qualified operation
 id `Q(t, operation)`, with a `keep_until`, so a retried command gets a duplicate-key answer and no second effect, and
 the same operation id in another tenant is a different message. An operator acts only within its bound scope: another
 tenant's instance answers not found, as a missing one does. Partition release, drain and handover are host
-administration and touch no tenant rows; cross-tenant support uses ADR 0097's support context
+administration under host-admin permissions. The administrator's own writes go to `partition` and `node` rows and read
+no tenant payload. The ownership change they cause then runs the ownership protocol's bookkeeping on tenant message
+rows, as the [tenancy page's host-administration row](tenancy.md#every-operation) states: a take by another node after
+an expired lease adds one attempt to each row on trial at the old epoch, a take after a release or by the same node
+adds none (`InMemoryStore.TakeAsync`), and the new owner marks what it polls `Seen` and puts suspects on trial. After that, the new owner's ordinary commits carry each tenant's work in its own
+tenant. None of these steps changes a row's tenant, ids or payload. T12 checks this in release 1, and T12b with the
+forced handover after it. Cross-tenant support uses ADR 0097's support context
 ([tenancy](tenancy.md#every-operation)). Inspecting metadata,
 reading payloads, recovering, discarding and handing over are separate permissions, and each action is audited with
 its principal, reason and outcome.
+
+> **Third review: counterexample and answer** ([third gate 2 review, R3-m2](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6960856712)).
+> The trace: this paragraph said that release, drain and handover touch no tenant rows, while the tenancy page, T12 and
+> the built take let ownership bookkeeping change `Seen`, `Trial` and `Attempts` on tenant message rows after a
+> crash and a cross-node take. The answer: the paragraph now separates the administrator's own writes (`partition`
+> and `node` rows only), the protocol bookkeeping those writes lead to, and the new owner's later tenant-scoped
+> commits, and it points to the tenancy page's row as the rule. T12 stays a release 1 case at K5 and K11, and T12b
+> stays with the forced handover after release 1.
 
 ## Read models: how layer 3 stays off partitions
 
@@ -580,7 +1047,7 @@ record ParkedDetail(ParkedItem Item, IReadOnlyList<string> ConsumedHandles, Reso
 | Trace context | About 27 bytes per message row write in binary; 16 bytes per sampled journal row | Estimated, unmeasured |
 | Metrics | In memory, from poll answers and the owner's memory, except the depth beyond a full poll, which reuses question 3's capped count (once per behind virtual partition per sample interval); the parked gauge reads the read model's count | No database work of their own on the hot path |
 | Park keeping its deliveries (decision 2) | A done mark with `KeptBy` in place of a delete for each consumed delivery and each arrival while parked, a journal row, and rows kept until their Park is resolved; one nullable column on every message row, and one partial index written only for kept rows | Only when an instance parks |
-| Recover, discard, delete of a parked instance, expiry | The open: one outside add (none for expiry), its seen mark and one commit, with one point lookup per timer and job the plan names and at most `P` selection marks. Then one turn per page of up to `P` rows: one paged read and the page's share of a commit. Completion takes one more page turn | Per resolution; proportional to the kept rows, never in one transaction |
+| Recover, discard, delete of a parked instance, expiry | The open: one outside add (none for expiry), its seen mark and one commit, with one point lookup per timer and job the plan names and at most `P` selection marks. Then one turn per page of up to `P_page` rows: one paged read and the page's share of a commit. Completion takes one more page turn | Per resolution; proportional to the kept rows, never in one transaction |
 
 ## Not verified
 
@@ -590,10 +1057,15 @@ record ParkedDetail(ParkedItem Item, IReadOnlyList<string> ConsumedHandles, Reso
 - The byte cost of the trace column, against WRITES.md's cost run.
 - That restoring a kept row (done mark cleared, poison counters reset, unseen) passes every provider's consume and
   authentication paths unchanged, and that the new transition keeps invariants 4, 9 and 14.
-- The drain: its page bounds, the withholding above the cursor, and its cost on a busy partition (acceptance cases
-  M3-1 to M3-14 below).
+- The drain: its page bounds, the released-row eligibility, and its cost on a busy partition (acceptance cases
+  M3-1 to M3-14 and E-1 to E-6 below).
+- The admission limits on projected metadata and the maximum `M` on every provider (cases S-5 and S-6).
+- The timer restore source, the repeated selection and the disposition lifetime (cases TR-1 to TR-4, S-7 to S-9 and
+  D-1 to D-4).
 - The Park identity checks, the bound controls, the retained dispositions and the metadata-only pages (cases P-1 to
-  P-5 and S-1 to S-4).
+  P-5 and S-1 to S-4), and the private controls' issuer, outstanding key and selected terminate (cases P-1b, P-1c and P-8
+  to P-12).
+- The delete takeover under the row's current terminal mark and `ThenDelete` on a drain (cases DT-1 to DT-6).
 
 ## Counterexamples and answers
 
@@ -641,7 +1113,7 @@ faults in the Park and recovery design. Each trace is restated, then followed th
    resume had to read, update and hand over all of them in one transaction, with no bound in rows, bytes or
    transaction lifetime.
 2. Revised: no resolution touches the kept rows in one transaction. The open is bounded by the model's waits and the
-   selection. Each page is bounded by `P` rows and `B` bytes, and nothing goes into memory ahead of the disk.
+   selection. Each page is bounded by `P_page` rows and `B` bytes (third review), and nothing goes into memory ahead of the disk.
 3. Arrivals stop being kept at the open, so the drain ends. The cursor survives crashes and takeovers.
 4. Restored rows rejoin due depth one page at a time. A page waits while the previous page's last restored row is
    not yet taken up, read from durable state, and while the instance is suspended, so the drain adds at most one page of
@@ -694,6 +1166,165 @@ found four more faults on this page. Each trace is restated, then followed throu
 ordinary X, by the general rule. B2-1 now says so, adds an unselected `Consumed` twin that must stay cleared, and
 asserts full keys and delivery counts.
 
+## Third review: counterexamples and answers
+
+The [third gate 2 review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6960856712)
+found more faults in the recovery drain and in the Park controls and their cases. Each trace is restated, then
+followed through the revised design.
+
+**R3-B2: a late low-order arrival could run ahead of the recovery backlog.**
+
+1. Trace: the kept prefix holds rows from a sender whose MongoDB clock is ahead. Page 1 moves the cursor to
+   `(1000, …)`, and a kept suffix still waits for page 2. During the drain another sender, or the outside-add clock,
+   gives a newly committed arrival A `seq` 900 (or 1000 with a lower tie-break). The only test was the tuple against
+   the cursor, so A passed. A ends the model; page 2 runs after the end and clears the suffix, which is never
+   delivered.
+2. Revised: page 1 sets `ReleasedBy = (c, g)` on each row it restores. A is a new row with no `ReleasedBy`, so while
+   the recover Resolution is open it is withheld, whatever its `seq` ("Eligibility during a recover drain" above).
+3. Page 2 restores the suffix, and those rows are released and delivered. Complete ends the withholding, and only
+   then is A delivered. If A ends the model, it does so after every kept row was delivered once.
+4. A takeover between the pages changes nothing: the new owner reads `ReleasedBy` from the rows and the generation
+   from the instance row. The relational case, a `seq` drawn before page 1 and visible after it, is the same: the
+   row has no marker.
+5. An interrupting re-park and a later recover bump the generation, so rows the first drain released and nobody
+   consumed are unreleased under the second. They rejoin the Park: the second drain's pages read them through the
+   `Stale` arm and restore them in tuple order with the kept rows, so in the trace with R1 and R2 released,
+   K kept and a low-`seq` recover command opening the next drain while R2 is pending, R2 is restored and delivered
+   before K, and a model end at K drops nothing kept.
+
+**R3-M3: the metadata page could exceed its byte bound.**
+
+1. Trace: a message with a short key, a small payload and a `Kind` above 4 MiB is admitted, since only the payload
+   and the provider's key limits were bounded. It is kept. A page must take its first row, so the singleton page
+   exceeds `B` = 4 MiB. The review's SQLite probe stored a 5,242,882-byte key in the provider's key shape, so a key
+   alone could do it too.
+2. Revised: every projected field has an admission limit, checked at every ingress class before any write, so a
+   row's encoded metadata is at most `M` = 24 KiB, strictly below `B` ("What a page reads, and its metadata bound"
+   above). The over-limit kind or key is refused where it is first written, so it is never kept.
+3. A page takes at most `P_page` = 170 rows, so its metadata is at most `B` by construction, and its first row always
+   fits. A large payload still moves through a page as metadata (S-1).
+
+**R3-B1: a revived timer could have no deliverable payload.**
+
+1. Trace: a Native frame F waits on timer T, whose row carries `TimerFired(w)`. The Park consumes T. A resume
+   suppresses T, and an early page clears it, leaving an ordinary done marker that format item 6 makes
+   payload-free. Arrival X re-parks. A retry names T before the sweep, and the update restores flags, due and window
+   but no payload. After Complete, Native's timer handler reads `TimerFired` from an empty payload, and F never
+   resumes. After the sweep the insert had no source for the envelope either: `WaitEntry` holds no deadline.
+2. Revised: `RestoreWaits` returns `TimerSpec(t, NativeKinds.Timer, TimerFired(w), Due)`, with `Due` recorded at the
+   arm. Both re-arm branches write `Kind`, `Payload` and `Due` from the spec and the key, target, sender and creations
+   from the instance row ("The re-arm" above).
+3. Before the sweep the delete and insert replace the marker with the full envelope; after it the insert writes the
+   same envelope. A takeover
+   between Open and Complete finds the committed row. After Complete the handler reads `TimerFired(w)` and resumes F
+   once, at the original deadline. The still-kept row, revived before its page clears it, gets the values it held.
+
+**R3-M1: the validator and the repeat-retry case disagreed.**
+
+1. Trace: retry R1 names suppressed T and re-arms it (`Rearmed`). X interrupts before Complete. A fresh retry R2 names
+   T and a valid `Consumed` Y. T is pending (or, after firing while parked, kept `Arrived`): neither `Suppressed` nor
+   kept `Consumed`, so the whole of R2 was refused, and Y was never selected.
+2. Revised: a handle of a `Rearmed` timer whose row is pending or `Arrived` is an accepted no-op, counted "already
+   re-armed" ("Checks" above). R2 is accepted; Y is marked `Selected`; T is not armed again.
+3. If T is pending, it stays unreleased and fires once after Complete. If T is kept `Arrived`, a page restores and
+   releases it, so it is delivered during the drain, once; the gate can wait for it, since it is released
+   ("The gate row is always deliverable" above). A timer the Open re-armed is unreleased and never a gate row. An
+   unreleased row that the owner has polled and holds in memory, seen at the current epoch, is never consulted by the
+   gate, and a re-armed timer not yet due cannot be polled at all; neither can stall a page.
+4. Retry-all re-arms every `Suppressed` timer once, before or after the sweep, and nothing `Rearmed`.
+
+**R3-M2: retained dispositions grew across a Park's successive wait sets.**
+
+1. Trace: during each recover drain the model finishes its wait on T_k and establishes T_k+1, then a later input
+   re-parks. Each Open decided a new timer, and dispositions cleared only at resolution, so after n interruptions the
+   set held T_1 … T_n while at most two waits were live. On MongoDB the envelope could pass 16 MiB and defeat every
+   later recover commit.
+2. Revised: each recover Open replaces the dispositions with those of the waits its plan names, in its own commit
+   ("Retained dispositions" above), so after interruption n the set holds the dispositions of T_n and its live
+   neighbours only. Entries are keyed by the SHA-256 digest of a timer's full key or of a job's key (with `g` in plain); `D` = 64
+   bytes is proposed, which K4 may raise; and `ParkRecord` is at
+   most 312 KiB (proposed), which every commit reserves.
+3. A handle of T_1 names no disposition: refused if its row is done or swept, an ordinary stale delivery if still
+   kept. It can never name T_n, since keys are unique per send.
+
+**Worked example: one timer under the combined rules.** A Native frame F waits on T (id t, payload `TimerFired(w)`,
+due d0).
+
+1. *Suppression.* A turn consuming T and X throws: Park, mark r1; T and X are kept `Consumed`. A resume opens with
+   generation 1; the plan names `TimerSpec(t, …, d0)`; T is kept `Consumed` and unselected, so `Dispositions` = {t:
+   `Suppressed`}.
+2. *Marker clearing.* Page 1 clears T to an ordinary done marker with no payload, and restores an `Arrived` Y with
+   `ReleasedBy` = (c, 1). Y's turn throws: a re-park, mark r1 back, dispositions kept.
+3. *Explicit retry.* A retry naming T opens with generation 2, after the sweep removed T's marker. The plan still
+   names t, so pruning keeps t; the disposition is `Suppressed`, so the re-arm inserts T from the spec: kind, payload
+   `TimerFired(w)`, due d0, the instance's key, target, sender and creations. `Dispositions` = {t: `Rearmed`}. T has no
+   `ReleasedBy`, so it waits until Complete.
+4. *Re-park.* An arrival Z, kept while parked after step 2 and restored by this drain with `ReleasedBy` = (c, 2),
+   throws before Complete: a re-park; T is still pending. T is already due (d0 has passed), so the parked instance
+   consumes it while parked: kept `Arrived`.
+5. *Takeover.* Ownership moves. The new owner reads `ParkRecord`: mark r1, {t: `Rearmed`}, no Resolution.
+6. *Complete.* A resume opens with generation 3. The plan names t, so t's disposition stays; it is `Rearmed`, so no
+   re-arm. A page restores T as an `Arrived` row with `ReleasedBy` = (c, 3). Ownership moves again before T is
+   polled; the new owner reads the marker and the open generation and delivers T. Native's handler reads
+   `TimerFired(w)` and resumes F once. A retry naming T in this Open would have been a no-op. Complete clears
+   the Resolution and the dispositions. T fired once, from one envelope, and F resumed once.
+
+The Park controls and their cases follow. All of them are proposed; the prototype has no `ParkRecord` and no
+private control.
+
+**R3-M4: a private control had no issuer.**
+
+1. Trace: A parks under the default null window. Its creation and Park mark are on the parked-work read model, and
+   its generation is a small counter. An application, a model through `ITurn.Send`, or an actor type through `Add` or
+   `SendFromReceivedAddress` sends A a `kernel.park-expiry` with those values. Today's `RequireApplicationSend`
+   refuses only job and event tickets, so the send is written. At A, the second review's checks pass: creation and
+   mark match, no resolution is open, the generation is current. The expiry opens a discard that the null window
+   never scheduled. A forged `kernel.drain` with the open Resolution's generation runs an extra page past the gate.
+2. Revised, at the producer: every `kernel.` kind outside the public commands is reserved, and every existing call
+   site of `RequireApplicationSend` (the stores' adds, the worker's posts, the model's and actor type's send paths)
+   refuses it with a definite error, and key admission's `Validate` applies the same rule. The outside add writes no
+   row; a turn that calls a send method throws at the call and fails by the ordinary fault rule. An actor type that
+   composes `TurnOutcome.Sent` directly reaches the commit-side check, which refuses a private kind, or the control
+   identity domain, that layer 2's resolution step did not mint. Either way nothing reaches A.
+3. Revised, at the consumer, for a row that exists anyway (P-10 writes one directly into the store): the control must
+   be in the control identity domain (control scope 2^62, no `Match`, a private kind; the EF event slots at −3 and
+   below and the PostgreSQL and SQLite text-key escape scopes cannot meet it), sent by A itself, and its full key must equal the outstanding one in
+   `ParkRecord`. Under
+   the null window `Expiry.At` is null for the whole Park, so no expiry acts. With a finite window an injected
+   expiry has another key and is dropped, and the armed one acts only at or after `At`; taken early by a clock fault,
+   it is dropped and re-armed at `At` in the same commit. A forged drain is not `Resolution.Drain` and runs no page.
+4. Delayed legitimate controls are still dropped by the payload checks of the second review, and also by the
+   outstanding key: a stale drain after a second Open, an expiry recalled by a recover's Open, an expiry of a resolved
+   Park after a later Park, and A's controls at a successor creation (P-4, each injected in its own run).
+5. Successive pages and gate retries within one generation take successive values of `ParkRecord.ControlSerial`, so
+   each has its own full key and the store's deduplication never merges two; exactly one drain is outstanding (P-11).
+
+**R3-m1: P-3 could pass with the creation check removed.**
+
+1. Trace: A and B both park at revision 7, at different times. Remove the creation check: A's late command still
+   fails at B on `ParkAt`, so P-3's mutant is refused and the case passes without testing the creation check.
+2. Revised: P-1 pins the clock so that A and B have equal tenant, caller key, Park revision and `ParkAt`, and asserts
+   that precondition. The late command is routed to B at the transport layer with A's `ParkSelection`. The creation
+   check is then the only one that refuses, so the mutant clears B and fails P-3; a mutant that drops only the
+   Park-mark check still passes, which shows the isolation.
+3. A command handled before retirement is P-1's positive case. One enqueued before the reuse and delivered after it is
+   the separate case P-1b, and it is refused.
+
+**Architecture section: a selected terminate delivered after recovery.**
+
+1. Trace: an operator sees A parked and sends a terminate with A's `ParkSelection`. Before it is delivered, a resume
+   completes and A runs. The earlier rule required the selection only while the row is parked, so the terminate,
+   meeting a Running row, could act as an ordinary terminate and cancel a run the operator never saw.
+2. Revised: a selection, when present, is checked whatever the row's status. A's Park is resolved, so the terminate is
+   refused (reason Park) and A keeps running. After an interrupting re-park the mark is back and the terminate is
+   accepted. A terminate with no selection is unchanged (P-8).
+3. While the recover drain is still open, the row's mark is cleared and `ParkRecord` still holds the Park identity.
+   A selected terminate is checked against that identity and accepted, and it interrupts the drain; one with no
+   selection is the ordinary terminate of a running instance (P-8).
+4. If the model ended while the drain is open, the run has ended and its end already sent the one notice. A
+   selected terminate is refused (reason resolution open), an unselected one is the built terminate of an ended row
+   and opens no drain, and a terminate with `ThenDelete` keeps its own ended-run path (P-8).
+
 ## Acceptance cases
 
 Milestones are those of the [program plan](../program-goals/clean-slate-kernel.md#milestones). K3 holds each case on
@@ -713,33 +1344,65 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M1-3 | The recover's acknowledgement is lost after its commit. The operator's retry with the same operation id is a duplicate; the read model shows one outcome; no second drain runs | K3, K11 |
 | M1-4 | The expiry fires before a recover arrives: recover is refused in both modes; the expiry drain clears every kept row, records "expired", sends the parent one final Faulted notice, and the `Faulted` retention window starts from its terminal mark. A recover arrives first: the expiry is recalled | K3 |
 | M1-5 | Mutation: drop `KeptBy IS NULL` from the sweep's predicate. M1-1 or M1-2 fails | K3 |
-| M3-1 | A Park with the null window receives 100,000 arrivals, then `resume`. Every page stays within `P` rows and `B` bytes, the drain completes, and every arrival is delivered once, in per-sender order | K3, K12 |
+| M3-1 | A Park with the null window receives 100,000 arrivals, then `resume`. Every page stays within `P_page` rows and `B` bytes, the drain completes, and every arrival is delivered once, in per-sender order | K3, K12 |
 | M3-2 | Ownership changes at a page boundary, and a page commit has an unknown outcome. The drain continues from the committed cursor, with no row restored twice or skipped | K3, K4 |
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
 | M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is not yet taken up (done, or seen at the current epoch) or the instance is suspended, and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
-| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once; the re-park keeps the Park mark and the retained dispositions and reverts `Selected` rows to `Consumed`. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain is refused with no change; a delete during a discard, expiry or terminate drain takes the drain over; at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
+| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once; the re-park keeps the Park mark and the retained dispositions and reverts `Selected` rows to `Consumed`. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain whose model runs is refused with no change; a delete whose checks pass against the row's current terminal mark during a discard, expiry or terminate drain takes the drain over (DT-1), and a terminate that interrupted a running recover leaves no mark to name until its Complete (DT-2); at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept. The prototype's MongoDB store sorts by `(seq, _id)` (`MongoStore.cs`), so the tuple cursor is a provider contract implemented and qualified here | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
-| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
-| M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
-| M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
+| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete naming the end's mark after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`; one naming the Park's mark is refused as naming an earlier transition. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
+| M3-11 | The deadlock trace: during a recover drain, unreleased arrivals withheld until Complete push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
+| M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused, except a timer's handle that its Park retains as `Suppressed` (re-armed) or `Rearmed` (accepted as a no-op) | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
-| R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap, retained dispositions, and the interrupted-resume trace of M3-14 | K6, K7 |
-| M3-14 | The interrupted-resume trace: timer T consumed by the Park is cleared unarmed in an early page; arrival X re-parks in a later page; the sweep runs before the second Open and, in a second run, after it; a takeover is injected between every pair of steps. A second `resume` leaves T unarmed in every run; a `retry` naming T re-arms it once, with the sweep before and after that retry, and a second retry after an interrupted one leaves exactly one armed T and one firing; in both sweep orders T fires at the same point, after Complete, and the revived row's `KeepUntil` equals an inserted row's; a job restarted by the first resume is not restarted again | K3, K4, K6, K7 |
-| P-1 | The stale-Park trace: A parks at first revision 7 and a discard is prepared from A's `ParkSelection`; A is resolved and deleted; B reuses the key and parks at first revision 7. The command submitted after B exists is refused for its creation and changes nothing of B; submitted before the reuse, it discards A only | K3, K4 |
+| R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap, retained dispositions, and the interrupted-resume trace of M3-14; each plan's `TimerSpec` equals the timer row the model sent (TR-2) | K6, K7 |
+| M3-14 | The interrupted-resume trace: timer T consumed by the Park is cleared unarmed in an early page; arrival X re-parks in a later page; the sweep runs before the second Open and, in a second run, after it; a takeover is injected between every pair of steps. A second `resume` leaves T unarmed in every run; a `retry` naming T re-arms it once, with the sweep before and after that retry, and a second retry after an interrupted one is accepted and leaves exactly one armed T and one firing; in both sweep orders T fires at the same point, after Complete, and the revived row's `KeepUntil` equals an inserted row's; a job restarted by the first resume is not restarted again. A further schedule: a drain releases T, the consuming turn throws, and the re-park keeps T `Consumed` with that marker; a second resume suppresses T and clears it; a retry revives T before the sweep, and in a second run inserts it after the sweep. In both runs T has no `ReleasedBy`, no page restores it, and it fires once after Complete. A message Y pending at that Open, added after an earlier R, is delivered in the same order against T in both sweep orders. Mutation: the revive keeps the old marker; the `Stale` arm restores T and it fires during the drain in the revive run only. Mutation: revive by update, keeping the old `seq`; T runs before Y in the revive run and after it in the insert run | K3, K4, K6, K7 |
+| P-1 | The stale-Park trace with the clock pinned: A and B share tenant t and caller key K, and both park at first revision 7 at the same `ParkAt`, so their Park marks are equal and only the creation differs; the test asserts this precondition before injecting anything. A discard is prepared from A's `ParkSelection`. Handled before retirement: its turn runs while A is still parked, before A is resolved and deleted, and discards A only. Submitted after B exists: refused for its creation (reason run); B's kept rows and their reasons, status, Park mark, waits and parent notices are unchanged, and the outcome records the refusal under its operation id | K3, K4 |
+| P-1b | Enqueued before the reuse, delivered after it, a separate case from P-1's handled-before-retirement one. P-1's pinned preconditions. The operator API accepts the discard while A is parked; the fixture holds it at the transport layer, between the API's acceptance and the store's add, while another operator resolves and deletes A and B parks under K; then the add lands addressed to K with A's `ParkSelection`, so the store pins `TargetCreation` to B's creation, and it is delivered to B. It passes `TargetError` at B (the test asserts this) and is refused by the `ParkSelection` creation check, B unchanged as in P-1, the refusal recorded under its operation id. Its mutation is P-3 | K3, K4 |
+| P-1c | Landed while A exists, delivered after A's retirement. P-1's pinned preconditions. A discard prepared from A's `ParkSelection` is added while A is parked, so the store pins its target and `TargetCreation` to A; the fixture holds its delivery while another operator resolves and deletes A. Run 1: it is delivered before the reuse and refused by the built protocol as `RetiredCreation`, before any Park check. Run 2: it is delivered after B parks under K, which keeps A's instance id under a higher creation, and is refused as `WrongCreation`; B is unchanged as in P-1 in both runs. The case runs under same-id addressing, as P-1, P-1b and P-3 do; today's fresh run ids per creation are prototype behaviour that release 1's key admission replaces. Mutation: pin at delivery time; the command is retargeted to B and reaches the Park checks, so the asserted built refusal changes to the Park-check refusal, and with P-3's mutant as well it discards B | K3, K4 |
 | P-2 | The same trace for `resume` with an empty selection, retry-all and terminate of a parked instance; and a stale command after A recovers and parks again (same creation, new Park mark) is refused | K3, K4 |
-| P-3 | Mutation: the owner skips the creation check. P-1's late command discards B, and the invariant "a Park operation changes only the Park it names" fails | K3 |
-| P-4 | A delayed `kernel.drain` of an interrupted resolution arrives after a second Open, a delayed `kernel.park-expiry` of a resolved Park arrives after the same creation parks again, and either reaches a successor creation: each is consumed and dropped, and no row changes. An expiry delivered or in flight when a recover's Open recalled it arrives during the drain and is dropped; after an interrupting re-park, only the expiry armed under the new generation acts | K3, K4 |
+| P-3 | Mutation: the owner skips the creation check and keeps every other check. With P-1's pinned clock B's tenant and Park mark equal the selection's, and the late command's `TargetCreation`, pinned when the store accepted its add after the reuse, is B's creation, so the built `TargetError` passes at B and the `ParkSelection` creation check is the only one that refuses; the test asserts both preconditions. P-1's late command and P-1b's delayed one, each addressed to B at the transport layer with A's `ParkSelection`, discard B in the mutant: B's kept rows are cleared and B's parent receives a Faulted notice, so the invariant "a Park operation changes only the Park it names" fails; the conforming owner refuses both and B is untouched. Negative control: a second mutant that drops only the Park-mark check leaves P-1 and P-1b passing, which shows the case isolates the creation check | K3 |
+| P-4 | Delayed legitimate controls, each injected in its own run; the checks are layered, so each run lists every check that refuses it alone, and its mutant drops all of them. (1) Stale drain: a `kernel.drain` of an interrupted resolution, held in transit, is delivered after a second Open; refused alone by the generation check and by the outstanding key (`Resolution.Drain`). (2a) Recalled expiry during the drain: an expiry delivered or in flight when a recover's Open recalled it is delivered while that drain runs; refused alone by the generation check, by "no resolution is open" and by the outstanding key (`Expiry.Armed` is cleared). (2b) The same expiry delivered after an interrupting re-park has armed a new one, with a finite window and delivery at or after `At`; refused alone by the generation check and by the outstanding key, and only the new expiry acts. (3) Later Park: an expiry of a resolved Park, held in transit, is delivered after the same creation parks again under a new mark, with a finite window pinned and delivery at or after the new Park's `At`, so the `Expiry.At` check passes; refused alone by the Park-mark check, by the generation check (the generation is monotonic for the creation) and by the outstanding key. (4) Successor creation, under P-1's clock pin so that A's and B's Park marks are equal. (4a) A's expiry, armed at A's Park under generation 0 and held in transit, is delivered to B, which is parked with a finite window, no resolution open, generation 0 and delivery at or after B's `At`. (4b) A's drain, minted by a recover's Open at A's generation 1 and held in transit while a terminate interrupts that recover and A is resolved and deleted, is delivered to B while B's own first recover is open at generation 1. With the mark, generation, open-resolution and `At` checks pinned to pass, each is refused alone by the built `TargetError` (its `TargetCreation` is A's creation, so `WrongCreation` at B), by the payload creation check, by the issuer check on `SenderCreation` and by the outstanding key. Each is consumed and dropped and no row changes. Mutations, one per run, each dropping every check listed for it: the stale drain runs a page outside its resolution (1); the recalled expiry opens a discard against the recovery (2a); after the re-park no recovery is active, so the old expiry opens the expiry drain in place of the new one, an outcome otherwise the same as the genuine expiry's, which only the assertion that the acting key equals `Expiry.Armed` and the old key is refused catches (2b); the old expiry discards the new Park (3); A's expiry discards B and A's drain runs a page of B's recover (4a, 4b). A mutant that keeps any one of a run's checks leaves that run passing, the intended redundancy, which the case records | K3, K4 |
 | P-5 | `ParkedItem` and `KeptAsync` expose creation and Park mark; a command built from them lands; one built before a recovery and a second Park is refused; refusals count by reason | K9, K11 |
 | P-6 | The interrupted recover and the Park mark: an operator delete naming the Park mark, and separately a discard naming the `ParkSelection`, are prepared while A is parked, before a recover opens. Delivered while the recover drain runs, each is refused (the mark is cleared and a resolution is open). Delivered after an interrupting re-park, the mark is back, so the delete opens the delete drain and the discard opens the discard drain. After a recover that completes, both are refused as naming an earlier transition | K3, K11 |
 | P-7 | A parent's tree terminate (composed by the actor type) and a combiner's FailFast (an application send through `ITurn.Send`) reach a parked child: each is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. An application send of `kernel.terminate` from a non-parent, an outside add naming the parent as sender, a terminate from an earlier creation of the parent, and an actor-type `Add` of a `kernel.terminate` whose `Sender` is another actor (refused at commit as a definite error) are refused | K3, K6 |
+| P-8 | A terminate selected against a Park and delivered after that Park's recovery. A is parked at mark (7, t0); an operator's terminate carries A's `ParkSelection`; the fixture holds it at the transport layer while a `resume` runs to Complete with the model still running, so A shows Running with no Park mark and no Park identity. Delivered then, the terminate is refused (reason Park): A keeps running, its waits, jobs and children are untouched, its parent receives no notice, and the operation's outcome records the refusal. Delivered instead while the recover drain is open, it matches `ParkRecord`'s Park identity and is accepted: it interrupts the drain and opens the terminate drain, and a terminate selected against another Park of A is refused there; delivered after an interrupting re-park, it is accepted and opens the terminate drain; delivered after A later parks again under a new mark, it is refused. Model ended during the drain: A's model finishes while the recover drain is still open, then the held selected terminate is delivered and refused (reason resolution open); the drain runs to Complete, the parent has received exactly the one notice from the end's turn, and no Park reopens; an unselected terminate delivered at the same point, with the fixture pinned to an ended row that has no children and no jobs, is consumed with no change, and in a second fixture with a child and a job it raises the revision, cancels the job and sends the child a terminate, keeping the end status and sending the parent nothing; a terminate with `ThenDelete` at the same point takes the qualified-delete path of an ended run and takes the drain over, as DT-3 requires. Negative control: an operator terminate with no `ParkSelection`, delivered after the recovery, is the ordinary terminate of a running instance and is accepted. Mutation: check the selection only while the row is parked, and the held terminate cancels the recovered run; a second mutant that compares the selection with the row's mark alone refuses the terminate during the open recover drain; a third mutant that accepts the selected terminate after the model's end reopens a terminate drain on an ended run and sends the parent a second notice | K3, K11 |
+| P-9 | No producer outside layer 2 creates a private control. For each of `kernel.drain`, `kernel.park-expiry` and an unknown `kernel.x`: an outside add on each store, `Worker.Post`, `PostRequest` and an operator command fail with a definite error and write no row; a keyed request through `IKeyAdmission.AcceptAsync` is refused by `KeyRequest.Validate` before any row is written; a model's `ITurn.Send` and an actor type's `SendFromReceivedAddress`, `Add` and `AddTerminalNotice` throw at the call, the sending turn fails by the ordinary fault rule, and the addressed parked instance's rows, `ParkRecord` and status are unchanged. A test actor type that composes `TurnOutcome.Sent` directly, the existing path the tree terminate uses, with a private-kind message, and separately with an ordinary kind in the control scope, is refused at the commit as a definite error, and nothing of its commit lands. An outside add with an ordinary kind and a supplied control scope lands in scope 0. Mutations: today's list check, which refuses only job and event tickets, lets the outside add of `kernel.park-expiry` write a row; key admission without the reserved-kind rule admits a keyed `kernel.park-expiry` in scope 0 | K3, K4, K6 |
+| P-10 | The consumer refuses a control the kernel did not arm. A fixture writes each row directly into the store, below every producer, with payload fields (creation, Park mark, current generation) that match. Under the null window: a `kernel.park-expiry` in the control scope with the instance as sender is dropped, and with the clock advanced by ten years no expiry ever discards; kept rows, reasons and status stay. With a finite window: an expiry with another serial, due before `Expiry.At`, is dropped; the armed expiry delivered with the turn's database time before `At` (an injected clock fault) is dropped and re-armed at `At`, and exactly one expiry drain opens, at or after `At`; an expiry while a recover's Resolution is open is dropped. A drain with matching fields and another serial is dropped and runs no page. A private kind in scope 0, or with another sender, is dropped. On the EF providers (K4): an event delivery in slot −3 (the first further match of one wire id, its second match overall) beside a private control of the same instance is delivered as an event under its `Match`, and the control acts as a control; neither is classified as the other, and a control row with a non-null `Match` is dropped. Each refusal counts with reason control. Mutation: the second review's consumer, which checks only creation, Park mark and generation, opens a discard under the null window and an extra page for the injected drain | K3, K4 |
+| P-11 | Successive controls within one generation have distinct identities. A resume drain of at least three pages, whose progress gate waits twice with delayed retries, with a takeover between two pages and a page commit of unknown outcome retaken: every `kernel.drain` row has a distinct full key, the store accepts every insert with no duplicate answer, at most one drain of the instance is pending at any time, the retaken page mints the key the committed serial gives, and an earlier consumed drain re-injected with its original key is dropped. Across Parks: Park 1 of creation c resolves, and c parks again (Park 2). Park 2's first Open takes a generation above every value Park 1 used, and a stale drain or expiry of Park 1 matches nothing in Park 2. A row Park 1's drain released with `ReleasedBy` = (c, g1) and no turn consumed is withheld while Park 2's resolution is open, since its tag never equals Park 2's (c, g2); with a `resume` as Park 2's resolution, a page restores it once through the `Stale` arm as an `Arrived` row with the new tag, in tuple order; with a discard, it is skipped by the pages and consumed and dropped at Complete. Mutations: derive the id from the generation alone, and either the next page's insert is merged with an earlier row and the drain stalls, or the re-injected drain is taken as outstanding and a second drain chain outruns the gate; reset `ResolutionGeneration` when a Park resolves, and Park 2's first Open reuses Park 1's first generation, so the Park 1 tag equals Park 2's open generation and the row is delivered at once, ahead of Park 2's kept rows, while the `Stale` arm, which reads only lower generations, never selects it | K3, K4 |
+| P-12 | The control scope survives the text-key escape on PostgreSQL and SQLite. Preconditions: an instance whose actor id holds a NUL, and one whose actor id holds an unpaired UTF-16 unit, each parked with a recover drain open, so the outstanding `kernel.drain` id holds that unit; beside it, an escaped child creator under the same actor. Interleaving: the drain is written, polled and taken, and the page commit is retaken after an unknown outcome. Outcome: the control is stored at the escaped control scope 2^62 + 1 and read back at 2^62 with its exact id, matches `Resolution.Drain` and runs its page; the child creator is read back at `long.MaxValue` as an escaped child and is never classified as a control; no insert throws. Mutations: a control scope of `long.MaxValue − 1`, which with a NUL or unpaired-unit id makes `ToTextKey` throw `OverflowException` at the insert (`checked(2^33 + scope)`, `IssuedMailKey.cs` 15–16), so the commit minting the drain fails; with a further plain-id fixture for this mutant, a control id with no NUL and no unpaired unit is stored unescaped at `long.MaxValue − 1` and read back as an escaped child, so the read base64-decodes its id: an id that is not valid base64 (any id with a `#` separator) fails the read with `FormatException`, valid base64 that decodes to an odd number of bytes fails it with `JsonException` (`DurableKeyJson.cs` 39), and any other decodes to another id under scope `long.MaxValue`, no longer matches `Resolution.Drain`, and the drain stalls; the fixture asserts either failure; and the existing escape without the control mapping, which stores 2^33 + 2^62, is not decoded on read and stalls the same way | K4 |
 | S-1 | Kept rows whose payloads are `B` − 1, `B` and `B` + 1 bytes, and an oversized first row of 5 MiB: every page progresses on metadata alone and each restored payload is read only on delivery. Run under resume, discard and delete, with a takeover between pages | K3, K4, K12 |
-| S-2 | A kept row whose handle is at the provider's key limit, as the first row of a page: the page takes it and the drain completes | K3, K4 |
-| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a suppressed timer is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, re-arms nothing; a timer that is `Suppressed` and still kept `Consumed` (a re-park came before the page that would clear it), named by a retry, is re-armed once by the revive, which also clears its `KeptBy`, fires once, is never marked `Selected`, and is skipped by the later pages | K3, K4, K11 |
+| S-2 | A kept row whose handle is at the admission limits (every key field at its limit), as the first row of a page: the page takes it and the drain completes | K3, K4 |
+| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a timer this Park retains as `Suppressed` or `Rearmed` is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, is accepted, re-arms nothing and is counted "already re-armed" (S-7); a timer that is `Suppressed` and still kept `Consumed` (a re-park came before the page that would clear it), named by a retry, is re-armed once by the re-arm's delete and insert, which also removes its `KeptBy`, fires once, is never marked `Selected`, and is skipped by the later pages; a suppressed timer that an earlier drain had released, revived by a retry, has no `ReleasedBy` and fires after Complete, as an inserted one does (mutation: the revive keeps the old marker, and the timer fires during the drain) | K3, K4, K11 |
 | S-4 | MongoDB: a page next to a kept row of 5 MiB stays within the document, message and transaction-lifetime limits | K4 |
 | R-2 | Inspect, retry, resume and discard through the operator API on the parked-work read model, by handle | K9, K11 |
+| DT-1 | **A delete takes over the terminate drain of a parked child.** Preconditions: parent P waits on child A, parked at mark r1 with more than `2P` kept rows; a terminate T of A opens the terminate drain, once as P's tree terminate and once as an operator's naming A's `ParkSelection`. Interleaving: an operator delete D naming A's tenant, creation and r1 arrives after T's Open, once before the first page and once between pages, with an ownership takeover between D's commit and the next page; a Retention delete naming r1 arrives once before D and once after D's takeover; a second operator delete arrives after D's takeover; during the drain, a delete from another tenant with A's id and one naming another creation of A's key arrive, before and after D. Outcome: D takes the drain over, which continues from its cursor with no row repeated or skipped; Complete ends A Cancelled under a new mark r2, sends P exactly one Cancelled notice and deletes A in the same commit, whose only journal row is the deletion marker; no row keeps `KeptBy`; T's outcome is complete (Cancelled, then deleted by D) and D's is deleted; the Retention delete before D is refused as not eligible and after D as in progress, the second operator delete as in progress, the other tenant's as tenant and the other creation's as run, never as in progress, each with no change. Protection: with `ProtectsDeletion` true when D arrives, D is refused as protected and T completes alone; with a test model whose protection starts between D's takeover and Complete, A ends Cancelled under r2 and is kept, and D's outcome is protected. Mutations: the takeover's Complete skips `ProtectsDeletion` (the protected run is deleted); the taken-over Complete also sends the Faulted notice of a parked delete (P receives two) | K3, K4, K11 |
+| DT-2 | **No separate delete qualifies while a terminate that interrupted a running recover drains.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows; an operator delete D1 naming r1 is prepared while A is parked; a `resume` recover R opens (the row's mark cleared, A Running), its first page restores rows, and the model still runs; a terminate T is accepted and opens its drain, interrupting R. Interleaving: D1 arrives after T's Open before its first page, between its pages, and after an ownership takeover between pages; a delete naming creation 0 arrives in the same window. Outcome: D1 is refused as "transition" and the creation-0 delete as ambiguous, each with no change and counted by reason; T's drain runs on and its Complete writes the Cancelled mark r2, leaves no row with `KeptBy` and sends P exactly one Cancelled notice; R's outcome is interrupted and T's is complete. After Complete: a new delete naming r1 is refused as "transition"; an operator delete D2 naming r2 deletes A, and P receives no further notice; in a second run with `ProtectsDeletion` true, D2 is refused as protected and A stays under r2; a Retention delete under r2 is refused before the `Cancelled` window has elapsed and deletes A after it. Mutation `DeleteAcceptsParkRecordMark`: when the row has no mark, check 3 compares the selection with `ParkRecord`'s Park identity; D1 then takes the drain over and deletes A, and the case fails | K3, K4, K11 |
+| DT-3 | **`ThenDelete` on both origins.** Preconditions: A parked at r1 as in DT-1, and separately a running recover of A as in DT-2. Interleaving: an operator's terminate with `ThenDelete`, accepted under the terminate's checks, opens the terminate drain; in the parked origin a separate operator delete naming r1 arrives mid-drain; an ownership takeover comes between pages; each runs once with `ProtectsDeletion` false and once true. Outcome: `ThenDelete` is recorded at Open; the separate delete is refused as in progress with no change; Complete ends A Cancelled under r2, sends P exactly one Cancelled notice and, unprotected, deletes A in the same commit, whose only journal row is the deletion marker; protected, A is kept under r2 and the answer reaches the API request's reply address; no row keeps `KeptBy` in either case. A `ThenDelete` reaching a recover drain whose model has ended takes the drain over through checks 1, 2 and 5, and P receives only the end's notice. Mutation `ThenDeleteAtOpen`: the terminate deletes the row in its Open, as RD8's proposed one-turn path does for a running instance; the next `kernel.drain` finds no target, kept rows keep `KeptBy`, and the case fails | K3, K4, K11 |
+| DT-4 | **Protection begins before a parked instance's delete completes.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is false when the delete D (Operator, r1) arrives and turns true before the drain's Complete. Interleaving: D opens the delete drain; an ownership takeover comes between pages; protection turns true after the last page and before Complete. Outcome: no row keeps `KeptBy`; Complete leaves A Faulted under a new mark r2, sends P exactly one Faulted notice, and journals D refused as protected with the Park discarded; D's outcome is protected; A's `Faulted` retention window runs from r2, and a Retention delete under r2 after it is refused as protected while protection holds. Mutations: the protected Complete deletes A anyway; the protected Complete leaves A with no mark, so no later delete can name it | K3, K4, K11 |
+| DT-5 | **The refusal order when a `ThenDelete` terminate interrupted a running recover.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows; a `resume` recover R opens, so the row has no mark, and the model still runs; an operator's terminate with `ThenDelete` is accepted and opens its drain, interrupting R. Interleaving: between pages, an Operator delete naming r1, a Retention delete naming r1, a delete from another tenant with A's id and one naming another creation arrive, with an ownership takeover between pages. Outcome: the r1 deletes are refused as "transition" (check 3 fails before "in progress" or check 4 is reached), the other tenant's as tenant and the other creation's as run, each with no change; Complete ends A Cancelled under r2, sends P exactly one Cancelled notice and deletes A, with no row keeping `KeptBy`; the terminate's outcome is deleted. Mutation: "in progress" tested before check 3; the r1 deletes then answer "in progress", and the case fails | K3, K4, K11 |
+| DT-6 | **Protection against a separate delete during a drain.** Preconditions: A parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is true throughout. Interleaving: in one run an operator's terminate without `ThenDelete` opens the terminate drain; in a second, a terminate with `ThenDelete`; in each, an Operator delete naming r1 arrives between pages. Outcome: in the first run the delete is refused at check 5 as "protected", and Complete ends A Cancelled under r2 and keeps it; in the second it is refused as "in progress", and Complete ends A Cancelled under r2 and keeps it, with the terminate's answer protected on the API request's reply address; in both, P receives exactly one Cancelled notice and no row keeps `KeptBy`. Mutations: check 5 tested before "in progress" (the second run answers "protected"); a separate delete during a protected terminate drain takes it over and deletes A | K3, K4, K11 |
+| E-1 | The R3-B2 trace on the in-memory store, with A's `seq` injected below the cursor (the K3 allocation hook, plan): two pages of kept rows; after page 1's commit, an arrival A from another sender is committed with a `seq` below the cursor; A's delivery ends the model. A is delivered only after Complete; every kept row of page 2 is restored and delivered exactly once, before A; no `KeptBy` remains. Run with A committed just before page 1's commit and just after it. Mutation: eligibility by the tuple against the cursor; A runs first, the model ends, page 2 clears the suffix, and its rows have zero deliveries | K3 |
+| E-2 | As E-1, with A injected at the cursor's `seq` and a lower `(Id, Scope, Match)` tie-break, at a page boundary. The same outcome; the same mutation fails | K3, K4 |
+| E-3 | As E-1 (injected `seq` at K3), with an ownership change between page 1 and page 2, and separately between A's commit and its first poll. The new owner withholds A and delivers the suffix; each kept row is delivered once and A after Complete. Mutation: the new owner recomputes eligibility from the cursor | K3, K4 |
+| E-4 | MongoDB: A is an outside add whose `clocks` value is behind the partition clock, and in a second run a send from another partition whose clock is behind. Each A gets a `seq` below the cursor, is withheld until Complete, and the suffix is delivered first. Mutation: eligibility by cursor comparison | K4 |
+| E-5 | Relational providers that generate `seq` (PostgreSQL, SQL Server, MySQL): while the instance is parked, a transaction draws A's `seq`, then the kept rows that will end page 1 are allocated and committed, and A's transaction commits only after page 1's commit, so A becomes visible with a `seq` below the cursor. A is withheld until Complete, and the suffix is delivered first. SQLite, which assigns `seq` explicitly under one writer, runs as a control. Mutation: eligibility by cursor comparison; A is delivered after page 1 and, as a model-ending input, the suffix is cleared undelivered | K4 |
+| E-6 | Interrupted release and generations. (a) Sender S has kept rows R1, R2 and K in `seq` order; page 1 of generation g restores R1 and R2, and K stays kept; a re-park interrupts before R2 is polled; an operator recover arrives, on MongoDB as an outside add whose outside-add clock gives it a `seq` below R2's (injected at K3), and opens generation g + 1 while R2 is pending with the stale marker. The pages restore R2 before K; each is delivered once, in `seq` order. A model-end variant, where K ends the model, delivers R2 before K and drops nothing kept. Mutation: no `Stale` arm (a stale-released row waits for Complete); K overtakes R2, and in the model-end variant R2 is never delivered. (b) After a recover completes and the same creation parks again, a row the first Park's drain released carries a lower generation than every Open of the second Park. Mutation: reset the generation when a Park resolves; the old marker matches the second Park's drain and the row reaches the model ahead of its sender's kept rows. (c) A terminate interrupting a recover drain delivers no released row to the model. (d) The model ends during the second drain before its pages reach R2: later pages skip the `Stale` arm, R2 meets the finished-instance rule at Complete, and the drain completes. Mutation: a page after the end clears a `Stale` row by the kept-row predicate; the count check fails and the owner resets without end. | K3, K4 |
+| S-5 | The metadata bound. Rows with every projected field at its limit, in each provider's widest encoding (SQL Server: single-byte characters, doubled by UTF-16; PostgreSQL and SQLite: names with NUL or unpaired units, on the base64 path; MySQL and MongoDB: three-byte characters), and a small payload are admitted and kept: a page of `P_page` such rows is at most `B` and takes them all; `P_page` + 1 rows give a page of `P_page` and a page of one; rows summing to `B` − 1 take one page; the largest accepted row is the first row of a page and is taken. Run under resume, discard, expiry, terminate and delete, with a takeover at a page boundary: every page's encoded metadata is at most `B` and every drain completes. At K4 each provider's encoded size of the limit row is measured and is at most `M`. Mutation: drop the `Kind` limit; a row with a 4 MiB + 1 byte kind is kept, and its singleton page exceeds `B` | K3, K4 |
+| S-6 | Admission at each ingress class: an outside add, each turn send (`Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`) and an actor type's composed `Add`. A field at its limit is accepted; one byte over is refused before any write, as is a row whose encoded metadata would be `B` − 1, `B` or `B` + 1 bytes (a long kind, small payload): no row exists and no Park keeps it; the turn-send case fails the turn as a model fault, and the composed case is a definite error. On SQLite, the probe's 5,242,882-byte key is refused at admission; SQL Server's `LargestInboxId` (1,342 bytes, measured in WTF-8) is refused on every provider, and `UnicodeKeys`' 4,096-unit keys still pass key admission, which maps them to generated run ids under a SHA-256 wire id; a start whose caller key holds an unpaired unit, or on PostgreSQL a NUL, is refused at the start with no row, so no later send of that instance is refused; a turn send, a composed send and an outside add whose `Target` holds an unpaired unit, or on PostgreSQL a NUL, are refused before any write (the turn send throws as a model fault), so no commit fails with 22021 and no message is redirected; a job-queue name with such a unit, or a NUL on PostgreSQL, is refused where it is configured or admitted; on PostgreSQL a key whose index entry would pass the B-tree limit is refused at admission and never reaches the engine. On PostgreSQL a NUL in `Kind`, `Sender`, an ordinary `Id` or `Match` is refused at admission. On every provider an unpaired UTF-16 unit in `Kind`, `Sender`, an ordinary `Id` or `Match` is refused at admission, while an issued id holding one is accepted through its reversible encoding and stored and read back unchanged. A job key admitted at the largest form SQL Server's 450-unit limit allows, counting the widest generation suffix, is restarted by a recover, and the recover's Open lands. Mutation: admit names in their first form; the restart's ticket passes the limit and the Open fails as a definite error on every attempt. Mutation: remove the check at one ingress class; the over-limit row lands, a Park keeps it, and S-5's page assertion fails | K3, K4 |
+| TR-1 | The R3-B1 trace with Native: frame F waits on T, a second frame F2 on its own timer; the Park consumes T; a resume suppresses T and a page clears it to a payload-free marker; X re-parks; a retry names T. Three runs: before the sweep (revive the payload-free marker), after it (insert), and the control, a retry before the clearing page (still-kept row). A takeover between Open and Complete, and between Complete and the firing. In every run the re-armed row's kind, payload, `Due` (the original absolute deadline), full key, `Sender` and creations equal the row the model first sent (`seq` aside), T fires once, Native's handler deserializes `TimerFired(w)` and resumes F exactly once, and F2 is untouched. Mutation: the present branch updates the marker's flags only; the first run delivers no payload and F never resumes. Mutation: `Due` = now + delay; the deadline assertion fails | K3, K4, K6, K7 |
+| TR-2 | The plan contract: for Native, Flowchart and StateMachine, over waiting states with timers armed at different times, each `TimerSpec` equals the timer row the model sent (kind, payload bytes, `Due`), under a test clock that advances at every read. Mutation: the arm sends with `Delay` and records `turn.Now` plus the delay from a second read; the spec's due differs from the row's | K6, K7 |
+| TR-3 | A plan whose timer id has another instance's or another creation's origin is a definite error: the recover re-parks and no row is written. A plan above `W_max` refuses the recover with reason "plan" and no change; a discard then lands. Mutation: map the id without the origin check; another instance's row is revived | K3 |
+| TR-4 | The model-side plan bound: a Native workflow that would arm its `W_max` + 1st timer or job faults that activity, and the instance's plan stays at `W_max`; a later Park recovers. Mutation: no model-side refusal; after a later Park the recover is refused with reason "plan" | K6 |
+| S-7 | The R3-M1 trace: retry R1 re-arms suppressed T; X interrupts before Complete; retry R2 names T and a `Consumed` Y. Runs: T still pending; T fired while parked and kept `Arrived`; T consumed by a re-park and kept `Consumed`. A takeover between R2's Open and Complete. R2 is accepted; T counts "already re-armed" (or, in the third run, is marked `Selected`); Y is delivered once; one armed T row exists; T fires once, and the model resumes T's frame once. Mutation: the earlier validator (a handle neither `Suppressed` nor kept `Consumed` refuses the command); R2 is refused and Y is never delivered. Mutation: re-arm a `Rearmed` timer again; in the pending run the delete matches no done row, so the Open answers "not landed" and never commits, and in the `Arrived` run the delete and insert drop its `KeptBy`, so no page releases it and T is delivered after Complete in place of during the drain | K3, K4, K6, K11 |
+| S-8 | Retry-all with suppressed timers: a resume suppresses T1 (still kept when a re-park interrupts) and T2 (cleared, then swept). A retry-all re-arms T1 (present: delete and insert) and T2 (absent: insert), once each, records `Rearmed` and restores every `Consumed` row; after another interruption a second retry-all re-arms nothing. Each timer fires once and resumes its frame once. Mutation: retry-all skips `Suppressed` timers; neither fires | K3, K4, K6 |
+| S-9 | The gate never waits for a row only Complete releases: the previous page's last restored row is a `Rearmed` T kept `Arrived`, which is released and delivered, and the drain completes; a timer the Open re-armed, due at once, and an unreleased arrival polled and seen at the current epoch are never the gate row, and the drain completes before either is delivered. Mutation: withhold every `Rearmed` timer while a Resolution is open; the first run never completes | K3, K6 |
+| D-1 | Rotating waits: a model with at most two simultaneous waits finishes T_k and arms T_k+1 in each drain, then re-parks, 1,000 times, with takeovers at random Open and page boundaries. After every Open the dispositions name only the plan's waits, `ParkRecord` encodes within 56 KiB plus 64 bytes per entry, and on MongoDB the envelope stays within the reserve; the handle of every earlier T_k is refused or, if still kept, delivered as a stale input that resumes no frame; none selects a newer wait. Mutation: clear dispositions only at resolution; the encoded size grows with the interruptions and the bound fails | K3, K4, K6, K12 |
+| D-2 | Job generations: (a) a job restarted at a first Open as `Restarted(g)` finishes during the drain, the model starts a new job under the same key, which takes a higher generation, and a re-park follows; the next Open decides the new job by its own ticket and prunes the old disposition. (b) Cross-Park: Park 1 restarts job J and resolves; Park 2 restarts J again while Park 1's done ticket is still within its window; the restart's create-only insert lands under a new generation, and the instance does not re-park. Mutation for (a): key the disposition by the job key with no generation check; the new job is decided by the old ticket's row. Mutation for (b): reset the counter when a Park resolves; the insert collides with Park 1's done ticket and re-parks the instance on every retry | K3, K6 |
+| D-3 | Headroom: on MongoDB an instance whose envelope, measured without `ParkRecord`, is at its limit less 312 KiB, with `W_max` timers, parks, and a recover Open commits a `ParkRecord` at its maximum; a commit one byte over the reserve is refused as a definite error. Measured: the encoded `ParkRecord` at `W_max` on each provider | K4, K12 |
+| D-4 | A restart survives an interruption: a resume restarts job J at Open 1 (`Restarted(g)`); a re-park comes while the job is in flight; a resume at Open 2 finds the generation-`g` ticket pending and leaves it, so the job is not restarted again and its result is delivered once. Mutation: the disposition loses `g` (only a digest of the ticket key is kept); Open 2 falls back to the original ticket, kept `Consumed`, and restarts the job a second time | K3, K6 |
 
 ## Decisions (owner, 16–17 November 2026)
 
