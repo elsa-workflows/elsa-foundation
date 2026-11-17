@@ -7,6 +7,11 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -108,6 +113,41 @@ public sealed class BackgroundRefreshTests
         Assert.Null(run.State("node-right").InputRefreshes);
     }
 
+    // FR-014 / ADR 0092 decision 8: a retry keeps its committed inputs, in the background too. The background step read
+    // count = 0 and faulted; the operator sets count to 5 and retries. The successor is not refreshed at admission: the
+    // worker runs on the 0 it read, and its write on the stale base warns and keeps the operator's 5.
+    [Fact]
+    public async Task A_retried_background_step_keeps_its_committed_inputs()
+    {
+        var reads = new CountReadLog();
+        await using var harness = NewHarness(services => services
+            .AddSingleton(reads)
+            .AddSingleton(new FailureBudget(1))
+            .AddSingleton(new JoinDirective()));
+        var executable = WorkflowExecutionHarness.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(JoiningInterventionParentActivity),
+                VariableLifecycleTestGraph.Increment("node-right", typeof(FlakyBackgroundIncrementActivity), ActivityExecutionPlacement.Background)),
+            VariableLifecycleTestGraph.CountDeclaration());
+        var run = await RunAsync(harness, executable, allowFault: true);
+        var source = run.State("node-right");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded,
+            (await SubmitAsync(harness, "ModifyVariable", new { variableKey = VariableLifecycleTestGraph.CountKey, value = 5 }, "modify-5")).Status);
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded,
+            (await SubmitAsync(harness, RetryFaultedActivityAlterationHandler.Kind, new { sourceActivityExecutionId = source.Execution.ActivityExecutionId }, "retry")).Status);
+        run = await DrainWorkersAsync(harness);
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal([0, 0], reads.Observed.Select(item => item.Count));
+        var successor = Assert.Single(run.States("node-right"), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.Null(successor.InputRefreshes);
+        Assert.Equal(1, successor.InputSnapshot!.EvaluationNumber);
+        var record = Assert.Single(successor.VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.LostUpdateWarning, record.Outcome);
+        Assert.Equal(5, record.OverwrittenValue!.InlineValue!.Value.GetInt32());
+    }
+
     // With nothing changed between Start and admission, the inputs Start read are the ones the worker receives.
     [Fact]
     public async Task Unchanged_inputs_are_not_refreshed()
@@ -134,45 +174,97 @@ public sealed class BackgroundRefreshTests
                         : null)),
             VariableLifecycleTestGraph.CountDeclaration());
 
-    private static WorkflowExecutionHarness NewHarness() =>
+    private static WorkflowExecutionHarness NewHarness(Action<IServiceCollection>? configure = null) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services))
-            .ConfigureServices(services => services.AddLogging().AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false })
-                .AddScoped<IRuntimeResumptionService, Elsa.Workflows.Runtime.Services.Recovery.RuntimeResumptionService>())
-            .Build(Ids);
+            .ConfigureServices(services =>
+            {
+                services.AddLogging().AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false })
+                    .AddScoped<IRuntimeResumptionService, Elsa.Workflows.Runtime.Services.Recovery.RuntimeResumptionService>();
+                configure?.Invoke(services);
+            })
+            .Build(["actexec-parent", .. Ids]);
+
+    private static readonly WorkflowAlterationAuthorityScope Authority =
+        new(WorkflowExecutionHarness.Partition.Value, "activity-behavioural-drive", "activity-behavioural-drive");
+
+    private static async Task<WorkflowAlterationJobState> SubmitAsync(WorkflowExecutionHarness harness, string kind, object payload, string idempotencyKey)
+    {
+        WorkflowAlterationPlanAdmissionResult admission;
+        await using (var scope = harness.Services.CreateAsyncScope())
+            admission = await scope.ServiceProvider.GetRequiredService<WorkflowAlterationPlanService>().SubmitAsync(
+                new WorkflowAlterationSubmission(
+                    Authority,
+                    WorkflowAlterationTargetSelector.ForExecutionIds([harness.ExecutionId]),
+                    [new WorkflowAlterationEnvelope(kind, 1, JsonSerializer.SerializeToElement(payload))]),
+                new WorkflowAlterationOperatorProvenance("operator-1", correlationId: null),
+                idempotencyKey);
+        var jobId = WorkflowAlterationIdentity.CreateJobId(admission.Plan.PlanId, harness.ExecutionId);
+        WorkflowAlterationJobState? job = null;
+        for (var sweep = 0; sweep < 8 && job?.Status is not (WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed); sweep++)
+        {
+            await using var scope = harness.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationOrchestrationSweep>()
+                .ExecuteAsync(new WorkflowAlterationOrchestrationOptions { WorkerId = "test-worker" }, "test-worker");
+            job = await scope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>().FindJobAsync(jobId);
+        }
+
+        return job!;
+    }
 
     // Starts the run, then plays the worker: each admitted piece of work runs and its result is delivered, until none is left.
     private static async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutionHarness harness, WorkflowExecutable executable, bool allowFault = false)
     {
         var reference = await harness.PublishAsync(executable, "background-refresh");
         await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
+        var run = await DrainWorkersAsync(harness);
+        if (!allowFault)
+            run.AssertWorkflowCompleted();
+        return run;
+    }
+
+    // Plays the runtime and the worker in the run's partition: sweep the scheduler, run each admitted piece of work,
+    // deliver its receipt, until no work is left.
+    private static async Task<WorkflowExecutionRun> DrainWorkersAsync(WorkflowExecutionHarness harness)
+    {
         var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
-        for (var round = 0; round < 4; round++)
+        for (var round = 0; round < 6; round++)
         {
             BackgroundActivityWorkClaim? claim;
-            // The work store is partitioned: claims are taken inside the run's persistence scope, as a worker does.
-            await using (var scope = await harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>()
-                             .CreateAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value)))
-                claim = await scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
-                    .ClaimNextAsync("refresh-test-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
-            if (claim is null)
-                break;
-            await worker.ExecuteClaimAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value), claim);
-            // The worker's receipt is delivered by a recovery sweep in the run's partition.
             await using (var scope = await harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>()
                              .CreateAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value)))
             {
                 var runtime = scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>();
                 for (var pass = 0; pass < 4; pass++)
                     await runtime.SweepAsync(new RuntimeResumptionSweepRequest(backlogBatchSize: 100, recoveryScanBatchSize: 100, maxExecutionsPerSweep: 100));
+                // The work store is partitioned: claims are taken inside the run's persistence scope, as a worker does.
+                claim = await scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+                    .ClaimNextAsync("refresh-test-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
             }
+
+            if (claim is null)
+                break;
+            await worker.ExecuteClaimAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value), claim);
         }
 
-        var run = await harness.ReadRunAsync(harness.ExecutionId);
-        if (!allowFault)
-            run.AssertWorkflowCompleted();
-        return run;
+        return await harness.ReadRunAsync(harness.ExecutionId);
+    }
+}
+
+/// <summary>A background-safe leaf that records the <c>Count</c> it ran on, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>
+[BackgroundExecutionSafe]
+public sealed class FlakyBackgroundIncrementActivity(FailureBudget budget, CountReadLog reads) : Activity<Incremented>
+{
+    [ActivityInput]
+    public int Count { get; set; }
+
+    protected override ValueTask<ActivityTransition<Incremented>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        reads.Add(Count, context.OperationKey, context.LogicalInvocationId);
+        return ValueTask.FromResult(budget.TakeFailure()
+            ? ActivityTransition.Fault<Incremented>(new ActivityFault("TEST-FLAKY", "The service was unavailable."))
+            : ActivityTransition.Complete(new Incremented(Count + 1), ActivityOutcomes.Done));
     }
 }
 

@@ -608,6 +608,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken),
                 invocation: stagedState,
+                durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>(),
                 source: backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult);
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
@@ -779,8 +780,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         IReadOnlyList<RuntimePostCommitIntent> publishIntents) =>
-        completedState.Completion is { } completion && durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0
-            ? new RecordedActivityCompletion(completion, completedState.Attempts?.LastOrDefault(), captureCommit.RecordedWrites)
+        completedState.Completion is { } completion && completedState.Attempts?.LastOrDefault() is { } attempt &&
+        durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0
+            ? new RecordedActivityCompletion(completion, attempt, captureCommit.RecordedWrites)
             : null;
 
     // This is where an activity fault stops: it is recorded here, not re-thrown, so it never reaches the scheduler

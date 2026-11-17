@@ -682,7 +682,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken),
-                invocation: currentParentState);
+                invocation: currentParentState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
             // Spec 1221 T003: a refused closed-scope row write refuses the completion, as a refused frame write does.
             if (captureProjection.LostUpdateFault is { } rowLostUpdate)
                 throw new VariableLostUpdateException(rowLostUpdate);
@@ -1025,6 +1025,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                                            payload.ActivityExecutionId,
                                            cancellationToken)
                                        ?? fallbackState;
+        // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
+        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Contains(refusal.Record) != true)
+            latestFaultedParentState = latestFaultedParentState.WithVariableWrites([refusal.Record]);
         // Every arm that records a thrown exception records through here, so this is where a value resolved for the
         // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
         // that masked fault directly, without coming through here.

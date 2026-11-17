@@ -179,7 +179,7 @@ public sealed record VariableWriteRecord
     public static bool IsRecorded(VariableCommitDecision decision)
     {
         ArgumentNullException.ThrowIfNull(decision);
-        return decision.ChangesValue || decision.IsLostUpdate;
+        return decision.ChangesValue || decision.IsLostUpdate || decision.Outcome == VariableCommitOutcome.ReturnedValue;
     }
 
     [JsonIgnore]
@@ -206,7 +206,10 @@ public sealed record VariableWriteRecord
             lostUpdate && decision.ChangesValue ? write.OverwrittenValue : null)
         {
             FrameId = before.FrameId,
-            Digest = decision.Applies ? decision.Resulting.Digest : null
+            // A value whose policy hides it keeps no digest in the history, which is meant to be structural.
+            Digest = decision.Applies && write.Frame.Values.TryGetValue(variableKey, out var written) && !written.Policy.HidesValue()
+                ? decision.Resulting.Digest
+                : null
         };
     }
 }

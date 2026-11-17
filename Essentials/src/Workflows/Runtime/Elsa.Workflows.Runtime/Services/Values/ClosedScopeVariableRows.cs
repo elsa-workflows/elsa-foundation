@@ -14,7 +14,7 @@ public static class ClosedScopeVariableRows
         RuntimeClosedScope.CreateFrame(boundary, rows);
 
     /// <summary><paramref name="row"/> carrying <paramref name="version"/> (its version, digest and writer).</summary>
-    public static DurableValueState WithVersion(DurableValueState row, VariableVersion version)
+    public static DurableValueState WithVersion(DurableValueState row, VariableVersion version, bool hidesValue = false)
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(version);
@@ -29,6 +29,6 @@ public static class ClosedScopeVariableRows
             row.ExternalReference,
             row.SourceActivityExecutionId,
             row.CapturedAt,
-            RuntimeClosedScope.WithRowVersion(row.Metadata, version));
+            RuntimeClosedScope.WithRowVersion(row.Metadata, version, hidesValue));
     }
 }

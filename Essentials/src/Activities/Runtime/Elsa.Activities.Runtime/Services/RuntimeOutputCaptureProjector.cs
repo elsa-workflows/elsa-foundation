@@ -19,7 +19,6 @@ public sealed class RuntimeOutputCaptureProjector
 {
     private readonly IRuntimeDurableValueStorageDriverRegistry _storageDrivers;
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
-    private readonly IDurableValueStateStore? _durableValueStateStore;
 
     public RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDriverRegistry storageDrivers)
         : this(storageDrivers, new RuntimeValueConversionExecutor())
@@ -37,17 +36,6 @@ public sealed class RuntimeOutputCaptureProjector
         _valueConversionExecutor = valueConversionExecutor;
     }
 
-    /// <summary>With the durable value store, a capture into a closed scope's variable row is versioned (spec 1221 T003).</summary>
-    public RuntimeOutputCaptureProjector(
-        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-        IRuntimeValueConversionExecutor valueConversionExecutor,
-        IDurableValueStateStore durableValueStateStore)
-        : this(storageDrivers, valueConversionExecutor)
-    {
-        ArgumentNullException.ThrowIfNull(durableValueStateStore);
-        _durableValueStateStore = durableValueStateStore;
-    }
-
     public async ValueTask<RuntimeOutputCaptureProjection> ProjectAsync(
         string workflowExecutionId,
         string activityExecutionId,
@@ -58,7 +46,8 @@ public sealed class RuntimeOutputCaptureProjector
         CancellationToken cancellationToken = default,
         ActivityExecutionState? closedScopeBoundary = null,
         ActivityExecutionState? invocation = null,
-        VariableWriteSource source = VariableWriteSource.Capture)
+        VariableWriteSource source = VariableWriteSource.Capture,
+        IDurableValueStateStore? durableValueStateStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -89,7 +78,7 @@ public sealed class RuntimeOutputCaptureProjector
                 var row = await ProjectGraphVariableAsync(
                     workflowExecutionId, activityExecutionId, capture, projectionContract, projected, transition, targetScopeId,
                     closedScopeBoundary, capturedAt, cancellationToken);
-                var versioned = await VersionRowAsync(workflowExecutionId, node, row, closedScopeBoundary!, invocation, source, capturedAt, cancellationToken);
+                var versioned = await VersionRowAsync(workflowExecutionId, node, row, closedScopeBoundary!, invocation, source, durableValueStateStore, capturedAt, cancellationToken);
                 if (versioned.Record is { } record)
                     rowWrites.Add(record);
                 if (versioned.Record?.Outcome == VariableCommitOutcome.LostUpdateFault)
@@ -185,14 +174,16 @@ public sealed class RuntimeOutputCaptureProjector
         ActivityExecutionState boundary,
         ActivityExecutionState? invocation,
         VariableWriteSource source,
+        IDurableValueStateStore? durableValueStateStore,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken)
     {
-        if (invocation is null || _durableValueStateStore is null || row.State is not { } written)
+        // The store is the caller's scoped one, so the row is read in the drain's persistence scope.
+        if (invocation is null || durableValueStateStore is null || row.State is not { } written)
             return (row, null);
 
         var key = written.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey];
-        var current = await _durableValueStateStore.FindAsync(workflowExecutionId, written.DurableValueId, cancellationToken);
+        var current = await durableValueStateStore.FindAsync(workflowExecutionId, written.DurableValueId, cancellationToken);
         var value = RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes([written], boundary.InvocationId, ActivityExecutionScopeValues.VariableRole)[key];
         var frame = ClosedScopeVariableRows.ReadFrame(boundary, current is null ? [] : [current]);
         if (!frame.Values.ContainsKey(key))
@@ -206,7 +197,7 @@ public sealed class RuntimeOutputCaptureProjector
         if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
             return (row, record with { RejectedValue = value });
 
-        var versioned = ClosedScopeVariableRows.WithVersion(written, write.Frame.VersionOf(key));
+        var versioned = ClosedScopeVariableRows.WithVersion(written, write.Frame.VersionOf(key), value.Policy.HidesValue());
         return (row with { State = versioned, Metadata = versioned.Metadata }, VariableWriteRecord.IsRecorded(write.Decision) ? record : null);
     }
 

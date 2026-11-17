@@ -338,6 +338,13 @@ public sealed class RuntimeCheckpointCommitter
         return [pending];
     }
 
+    /// <summary>
+    /// Numbers <paramref name="commit"/> as <see cref="CommitAsync"/> will (spec 1221 FR-024), for a caller that returns
+    /// what it committed. Committing the numbered commit numbers it again to the same values.
+    /// </summary>
+    internal RuntimeCheckpointCommit NumberCommit(RuntimeCheckpointCommit commit) =>
+        RuntimeCommitSequenceStamper.Stamp(commit, _ownershipContextAccessor.Current);
+
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {
         if (_ownershipContextAccessor.Current is not { } lease)

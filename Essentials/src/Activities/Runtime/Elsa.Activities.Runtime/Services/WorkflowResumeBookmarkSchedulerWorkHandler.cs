@@ -579,7 +579,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
-                invocation: completedState);
+                invocation: completedState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
         // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
         if (captureProjection.LostUpdateFault is { } rowLostUpdate)
         {

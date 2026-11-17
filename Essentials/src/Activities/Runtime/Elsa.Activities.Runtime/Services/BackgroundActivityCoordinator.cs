@@ -124,6 +124,10 @@ internal sealed class BackgroundActivityCoordinator(
         CancellationToken cancellationToken)
     {
         var snapshot = state.InputSnapshot!;
+        // A retry keeps its committed inputs (FR-014, ADR 0092 decision 8): a successor in a retry lineage carries the
+        // source's snapshot on purpose and is not refreshed. A re-execution read its inputs at its own Start.
+        if (state.Attempt is not null)
+            return state;
         if (snapshot.InputReadSet is not { Entries.Count: > 0 } readSet ||
             (node.Metadata.TryGetValue(RuntimeMetadataKeys.BackgroundInputRefresh, out var refresh) &&
              StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))

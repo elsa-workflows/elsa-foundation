@@ -74,11 +74,12 @@ internal static class RuntimeClosedScope
     }
 
     /// <summary>The row metadata that stores <paramref name="version"/> (spec 1221 T003).</summary>
-    public static IReadOnlyDictionary<string, string> WithRowVersion(IReadOnlyDictionary<string, string> metadata, VariableVersion version)
+    public static IReadOnlyDictionary<string, string> WithRowVersion(IReadOnlyDictionary<string, string> metadata, VariableVersion version, bool hidesValue = false)
     {
         var result = metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         result[RuntimeMetadataKeys.RowVariableVersion] = version.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (version.Digest is not null)
+        // Row metadata is not scanned as a value: a hidden value keeps no digest there.
+        if (version.Digest is not null && !hidesValue)
             result[RuntimeMetadataKeys.RowVariableDigest] = version.Digest;
         if (version.Writer is not null)
             result[RuntimeMetadataKeys.RowVariableWriter] = System.Text.Json.JsonSerializer.Serialize(version.Writer);
