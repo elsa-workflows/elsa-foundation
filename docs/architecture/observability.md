@@ -614,7 +614,8 @@ calls one new model hook.
     delay (Turns.cs, `Send`), and the owner's clock advances between reads (Worker.cs, `Now`, anchored on a monotonic
     tick), so a value the model computed separately could differ. `SendOptions` therefore gains `DueAt`, an absolute
     time on `ITurn.Now`'s clock, and the kernel writes it as the row's `Due` unchanged. A model arming a timer it may
-    need to restore reads `ITurn.Now` once, passes `DueAt`, and records that same value.
+    need to restore reads `ITurn.Now` once, passes `DueAt`, and records that same value. A `DueAt` already in the past makes the row due at
+    once, under the ordinary due rule. A send that gives both `Delay` and `DueAt` fails as a definite error.
   - **The layer 3 contract change.** A model keeps, for every timer it waits on, the kind, payload and due time it
     sent, and returns them in the plan. The spec uses only the turn contract's own terms (an id `Send` returned, a
     kind, a payload, a time on `ITurn.Now`), so layer 3 stays host-neutral: no partition, position or SQL appears.
@@ -1062,8 +1063,9 @@ found more faults in the recovery drain. Each trace is restated, then followed t
    later recover commit.
 2. Revised: each recover Open replaces the dispositions with those of the waits its plan names, in its own commit
    ("Retained dispositions" above), so after interruption n the set holds the dispositions of T_n and its live
-   neighbours only. Entries are keyed by a digest of the wait's full key, at most 64 bytes, and `ParkRecord` is at
-   most 312 KiB, which every commit reserves.
+   neighbours only. Entries are keyed by the SHA-256 digest of a timer's full key or of a job's key (with `g` in plain); `D` = 64
+   bytes is proposed, which K4 may raise; and `ParkRecord` is at
+   most 312 KiB (proposed), which every commit reserves.
 3. A handle of T_1 names no disposition: refused if its row is done or swept, an ordinary stale delivery if still
    kept. It can never name T_n, since keys are unique per send.
 
