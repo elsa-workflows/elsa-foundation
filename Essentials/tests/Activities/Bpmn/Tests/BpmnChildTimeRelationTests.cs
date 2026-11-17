@@ -217,9 +217,10 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "step", "step"));
     }
 
-    // A parallel split before a loop that feeds two of the loop's entries puts two tokens on the loop.
+    // A cycle with two ways in has no loop head: the runtime picks its back flows by flow-id order, so the process
+    // declares nothing.
     [Fact]
-    public void A_parallel_split_feeding_two_entries_of_a_loop_overlaps_the_loop()
+    public void A_parallel_split_feeding_two_entries_of_a_loop_declares_nothing()
     {
         var process = Process(
             [
@@ -228,7 +229,7 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
             ],
             [Flow("start", "p"), Flow("p", "j"), Flow("p", "b"), Flow("j", "a"), Flow("a", "b"), Flow("a", "end"), Flow("b", "j")]);
 
-        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "join", "join"));
     }
 
     // A non-interrupting boundary runs beside its host's normal flow, also when another boundary interrupts: on a loop,
@@ -248,11 +249,12 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "side", "side"));
     }
 
-    // A branch started before the loop that a waiting join holds until the task's first run ends never overlaps that run.
+    // A cycle with two ways in has no loop head: the runtime picks its back flows by flow-id order, so the process
+    // declares nothing.
     [Theory]
     [InlineData(BpmnElementTypes.InclusiveGateway)]
     [InlineData(BpmnElementTypes.ParallelGateway)]
-    public void A_parallel_branch_awaited_after_the_first_pass_stays_ordered(string waitingJoin)
+    public void A_parallel_branch_awaited_inside_a_two_entry_loop_declares_nothing(string waitingJoin)
     {
         var process = Process(
             [
@@ -261,15 +263,15 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
             ],
             [Flow("start", "p"), Flow("p", "j"), Flow("p", "b"), Flow("j", "w"), Flow("b", "w"), Flow("w", "x"), Flow("x", "j"), Flow("x", "end")]);
 
-        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "join", "join"));
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "join", "join"));
     }
 
-    // A waiting join whose other arrival comes from an earlier split, not through the task, fires without the task's run:
-    // the token it passes on runs the task again while the first run is in flight.
+    // A cycle with two ways in has no loop head: the runtime picks its back flows by flow-id order, so the process
+    // declares nothing.
     [Theory]
     [InlineData(BpmnElementTypes.InclusiveGateway)]
     [InlineData(BpmnElementTypes.ParallelGateway)]
-    public void A_waiting_join_fed_from_before_the_loop_does_not_hold_the_branch(string waitingJoin)
+    public void A_loop_entered_after_a_waiting_join_and_at_its_task_declares_nothing(string waitingJoin)
     {
         var process = Process(
             [
@@ -282,7 +284,7 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
                 Flow("w", "y"), Flow("y", "x"), Flow("j", "x"), Flow("x", "j"), Flow("x", "end")
             ]);
 
-        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "join", "join"));
     }
 
     // A fork after the task frees a waiting join with its own branches, while it also runs the task again.
@@ -341,6 +343,67 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
             ]);
 
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "after", "after"));
+    }
+
+    // The same retry loop before a parallel join: the keys never pair, the join never fires, so nothing runs twice.
+    [Fact]
+    public void A_parallel_join_after_a_retry_loop_on_one_branch_stays_a_waiting_join()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("fork", BpmnElementTypes.ParallelGateway), Task("a", "left"),
+                Task("y", "retry"), Element("gw", BpmnElementTypes.ExclusiveGateway), Element("w", BpmnElementTypes.ParallelGateway),
+                Task("b", "after"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "fork"), Flow("fork", "a"), Flow("a", "w"), Flow("fork", "y"), Flow("y", "gw"), Flow("gw", "y"), Flow("gw", "w"),
+                Flow("w", "b"), Flow("b", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "after", "after"));
+    }
+
+    // Two parallel blocks in one loop body, the second one optional: its branches cross no back flow before its join, so
+    // they pair, and the earlier block's branches merge at their own join first.
+    [Theory]
+    [InlineData(BpmnElementTypes.InclusiveGateway)]
+    [InlineData(BpmnElementTypes.ParallelGateway)]
+    public void An_optional_parallel_block_after_another_inside_a_loop_stays_ordered(string waitingJoin)
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("m", BpmnElementTypes.ExclusiveGateway),
+                Element("f1", BpmnElementTypes.ParallelGateway), Task("a1", "check-a"), Task("b1", "check-b"), Element("w1", BpmnElementTypes.ParallelGateway),
+                Element("g2", BpmnElementTypes.ExclusiveGateway), Element("f2", BpmnElementTypes.ParallelGateway), Task("a2", "left"), Task("b2", "right"),
+                Element("w2", waitingJoin), Task("t", "after"), Element("x", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "m"), Flow("m", "f1"), Flow("f1", "a1"), Flow("f1", "b1"), Flow("a1", "w1"), Flow("b1", "w1"), Flow("w1", "g2"),
+                Flow("g2", "f2"), Flow("f2", "a2"), Flow("f2", "b2"), Flow("a2", "w2"), Flow("b2", "w2"), Flow("w2", "t"), Flow("t", "x"),
+                Flow("g2", "x"), Flow("x", "m"), Flow("x", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "left", "after"));
+    }
+
+    // Rework that loops back into one branch of a parallel block enters that cycle at two places: the process declares
+    // nothing.
+    [Fact]
+    public void Rework_looping_back_into_one_branch_of_a_parallel_block_declares_nothing()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("fork", BpmnElementTypes.ParallelGateway), Task("a", "left"),
+                Task("b", "redo"), Element("w", BpmnElementTypes.InclusiveGateway), Task("c", "after"), Element("g", BpmnElementTypes.ExclusiveGateway),
+                Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "fork"), Flow("fork", "a"), Flow("fork", "b"), Flow("a", "w"), Flow("b", "w"), Flow("w", "c"), Flow("c", "g"),
+                Flow("g", "b"), Flow("g", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "after", "after"));
     }
 
     // A parallel split and its waiting join inside a loop body stay one sequential pass.

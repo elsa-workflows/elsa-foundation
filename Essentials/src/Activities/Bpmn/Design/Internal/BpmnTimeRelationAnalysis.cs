@@ -487,45 +487,117 @@ internal sealed class BpmnTimeRelationAnalysis
                 analysis._nonWaitingJoins.Add(node);
         }
 
-        // A waiting join pairs only arrivals of one loop iteration: a token that went round a loop after a fork (a retry
-        // on one branch) arrives in a later iteration than its sibling, so each runs the join on its own.
-        foreach (var join in analysis._inbound.Where(entry => entry.Value.Count >= 2 && !analysis._nonWaitingJoins.Contains(entry.Key))
-                     .Select(entry => entry.Key).ToList())
-            if (analysis.ALoopSeparatesArrivals(join))
+        // A cycle with more than one way in has no loop head: the runtime then picks its back flows by visiting order, so
+        // which runs pair up at a join depends on flow ids. Declare nothing rather than guess.
+        if (!analysis.IsReducible())
+            return null;
+
+        // A token gets a new iteration key whenever it crosses a back flow, and an inclusive join pairs only arrivals with
+        // one key. Two branches of a fork reach such a join with different keys when one of them goes round a loop that
+        // avoids the join (a retry on one branch): each then runs the join on its own. A parallel join in that shape
+        // never fires, so it runs nothing twice and stays a waiting join.
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var join in analysis._inbound
+                         .Where(entry => entry.Value.Count >= 2 && !analysis._nonWaitingJoins.Contains(entry.Key) &&
+                                         analysis._elements.TryGetValue(entry.Key, out var element) &&
+                                         element.ElementType == BpmnElementTypes.InclusiveGateway)
+                         .Select(entry => entry.Key).ToList())
+            {
+                if (!analysis.BranchesReachWithDifferentKeys(join))
+                    continue;
                 analysis._nonWaitingJoins.Add(join);
+                changed = true;
+            }
+        } while (changed);
 
         return analysis;
     }
 
-    // Whether a fork reaches the join both through a cycle that avoids the join and along a path that avoids that cycle.
-    private bool ALoopSeparatesArrivals(string join)
+    private bool IsBackFlow(string source, string target) => Dominates(target, source);
+
+    // Reducible: dropping the flows back into a loop head (a node that dominates the flow's source) leaves no cycle.
+    private bool IsReducible()
     {
-        var loopNodes = _inbound.Keys
-            .Where(node => !StringComparer.Ordinal.Equals(node, join) && ReachesAvoiding(node, node, join) && ReachesAvoiding(node, join, join))
-            .ToList();
-        if (loopNodes.Count == 0)
-            return false;
-        return _outgoing.Where(entry => !StringComparer.Ordinal.Equals(entry.Key, join) && BranchGroups(entry.Value).Count >= 2)
-            .Any(fork => loopNodes.Any(node =>
-                (StringComparer.Ordinal.Equals(fork.Key, node) || ReachesAvoiding(fork.Key, node, join)) &&
-                ReachesAvoiding(fork.Key, join, node)));
+        var nodes = _inbound.Keys.Concat(_outgoing.Keys).Where(node => node == Root || Dominates(Root, node)).ToHashSet(StringComparer.Ordinal);
+        var indegree = nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
+        foreach (var node in nodes)
+            foreach (var next in SuccessorsOf(node).Where(next => nodes.Contains(next) && !IsBackFlow(node, next)))
+                indegree[next]++;
+        var queue = new Queue<string>(indegree.Where(entry => entry.Value == 0).Select(entry => entry.Key));
+        var visited = 0;
+        while (queue.TryDequeue(out var node))
+        {
+            visited++;
+            foreach (var next in SuccessorsOf(node).Where(next => nodes.Contains(next) && !IsBackFlow(node, next)))
+                if (--indegree[next] == 0)
+                    queue.Enqueue(next);
+        }
+
+        return visited == nodes.Count;
     }
 
-    // Whether target is reachable from source in at least one step without entering avoid (target itself may be avoid).
-    private bool ReachesAvoiding(string source, string target, string avoid)
+    // Whether two branches of one fork can reach the join and at least one of them along a path that crosses a back flow
+    // (so their keys differ). A branch stops at a waiting join another branch of the fork also reaches: the two merge there.
+    private bool BranchesReachWithDifferentKeys(string join) =>
+        _outgoing.Where(entry => !StringComparer.Ordinal.Equals(entry.Key, join))
+            .Select(entry => (Fork: entry.Key, Groups: BranchGroups(entry.Value)))
+            .Where(fork => fork.Groups.Count >= 2)
+            .Any(fork =>
+            {
+                var plain = fork.Groups.Select(group => NodesReachedAvoiding(group, join)).ToList();
+                var reaches = fork.Groups.Select((group, index) =>
+                {
+                    var others = plain.Where((_, other) => other != index).SelectMany(nodes => nodes).ToHashSet(StringComparer.Ordinal);
+                    return KeyedArrival(fork.Fork, group, join, others);
+                }).ToList();
+                return reaches.Count(reach => reach.Plain || reach.Crossed) >= 2 && reaches.Any(reach => reach.Crossed);
+            });
+
+    private HashSet<string> NodesReachedAvoiding(IEnumerable<string> starts, string avoid)
     {
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var queue = new Queue<string>([source]);
+        var visited = new HashSet<string>(starts, StringComparer.Ordinal);
+        var queue = new Queue<string>(visited);
         while (queue.TryDequeue(out var node))
             foreach (var next in SuccessorsOf(node))
-            {
-                if (StringComparer.Ordinal.Equals(next, target))
-                    return true;
                 if (!StringComparer.Ordinal.Equals(next, avoid) && visited.Add(next))
                     queue.Enqueue(next);
+        return visited;
+    }
+
+    // Whether the branch reaches the join without crossing a back flow (Plain) and along one that does (Crossed).
+    private (bool Plain, bool Crossed) KeyedArrival(string fork, IEnumerable<string> branch, string join, HashSet<string> otherBranches)
+    {
+        var plain = false;
+        var crossed = false;
+        var visited = new HashSet<(string, bool)>();
+        var queue = new Queue<(string Node, bool Crossed)>();
+        foreach (var target in branch)
+            Visit(fork, target, false);
+        while (queue.TryDequeue(out var state))
+        {
+            if (IsWaitingJoin(state.Node) && !_nonWaitingJoins.Contains(state.Node) && otherBranches.Contains(state.Node))
+                continue;
+            foreach (var next in SuccessorsOf(state.Node))
+                Visit(state.Node, next, state.Crossed);
+        }
+
+        return (plain, crossed);
+
+        void Visit(string from, string to, bool hasCrossed)
+        {
+            var nowCrossed = hasCrossed || IsBackFlow(from, to);
+            if (StringComparer.Ordinal.Equals(to, join))
+            {
+                if (nowCrossed) crossed = true; else plain = true;
+                return;
             }
 
-        return false;
+            if (visited.Add((to, nowCrossed)))
+                queue.Enqueue((to, nowCrossed));
+        }
     }
 
     private sealed record Edge(string Target, string? Choice);
