@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// Spec 1230 US5 (T019): a marked built-in placed in the background is admitted, runs on a worker and its result is
-/// applied on the coordinator, under both persistence modes.
+/// applied on the coordinator: <c>WriteLine</c> and <c>Fault</c> under both persistence modes, the others on EF Core.
 /// </summary>
 public sealed partial class NativeBackgroundActivityFlowchartEfTests
 {

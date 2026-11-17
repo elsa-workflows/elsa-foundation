@@ -1,7 +1,7 @@
 # Research: Background eligibility
 
 Read in code on the initiative branch at `2c84e802f`, and in S-10's implementation branch
-(`claude/3052-s10-impl-dc93e8`, PR #4316) where noted. Nothing here was run.
+(`claude/3052-s10-impl-dc93e8`, PR #4316) where noted. R-1 to R-4 were read, not run; the implementation findings at the end cite the tests that ran.
 
 ## R-1 Where the rules live today
 

@@ -51,7 +51,7 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// The CLR type is not known to this host but is checked again where the node runs. Template placement sets it
     /// when the publishing host does not register a template node's runtime type (a design-only shell): the criteria
     /// that read the contract and node shape still apply, and the ones that need the CLR type (the interface part of
-    /// C1, C2 and C9) are left to admission and the worker, which always re-check them. Only publication honours it:
+    /// C1, C2, C9 and the CLR parts of C3 and C4) are left to admission and the worker, which always re-check them. Only publication honours it:
     /// <see cref="BackgroundEligibility.CheckRunTime"/> ignores it, so a run-time subject without a CLR type is refused.
     /// </summary>
     public bool TypeCheckedAtRunTime { get; init; }

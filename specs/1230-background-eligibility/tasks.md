@@ -63,7 +63,10 @@
   no raw secret in the persisted input snapshot or the work record (SC-005). *Done in*
   `NativeBackgroundActivityFlowchartEfTests.Inputs` on both providers; the EF case also scans the database files.
 - [x] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3. *Done in*
-  `NativeBackgroundActivityFlowchartEfTests.Inputs` (worker run, both providers) and `BackgroundEligibilityPublicationTests`.
+  `NativeBackgroundActivityFlowchartEfTests.Inputs` (worker run, both providers) and
+  `BackgroundEligibilityPublicationTests` (the input); the `Any` result in `ActivityTemplatePlacementTests` (placement),
+  `BackgroundActivityWorkerTests` (worker) and `BackgroundEligibilityTests` (component). A CLR result type never maps
+  to `Any`, so an authored node cannot carry one; the compiler refuses a CLR `object` result (`WorkflowExecutableCompilerTests`).
 
 ## Phase 6: User Story 4 — the promise on the attribute (P2)
 
@@ -79,11 +82,15 @@
 - [x] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
   test per assessed-but-unmarked category, naming its criterion. *Done as:* the five Essentials built-ins publish in
   the background and run end to end on a worker (`WriteLine` and `Fault` on both persistence modes; `Break`,
-  `WriteLines`, `BpmnDecision` on EF Core; `BpmnDecision` with an outcome from its pinned set), every unmarked category is refused
-  naming why (`BuiltInBackgroundAssessmentTests`). The eight connector activities are not marked, so they have no run
+  `WriteLines`, `BpmnDecision` on EF Core; `BpmnDecision` with an outcome from its pinned set), the unmarked categories with Essentials
+  representatives are refused naming why (`BuiltInBackgroundAssessmentTests`: C1, C3, C9, the Q8 cases and the C7/C8
+  category). The implementation-gap and qualifies-by-reading categories are connector or decision activities without a
+  declaration; they are refused the same way as any undeclared type (`VF-BG-001: … does not declare`). The eight connector activities are not marked, so they have no run
   here: #4737 runs them on a worker and marks the ones that pass (Q10).
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
-  changes); regenerate the contract surface baselines.
+  changes); regenerate the contract surface baselines. *Done as:* the five marked activities use their assembly
+  version, which the per-package versioning tool moves; the surface baseline does not record the flag, so nothing
+  changed in this PR (research, *Versions (T020)*).
 - [x] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
   read resolves its connection's tenant partition on a worker; a secret-bound input resolves on the
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An

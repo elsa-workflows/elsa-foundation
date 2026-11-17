@@ -156,6 +156,8 @@ public sealed class ActivityTemplatePlacementTests
                  {
                      (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'node-"),
                      (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("any", result: new ActivityResultContract(new("Any"), true, ActivityValuePolicy.Default, [])),
+                         "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-"),
                      (BackgroundLeaf("parent", children: [Node("child")]), "VF-BG-001 (C1): Background execution is not eligible for activity node 'node-"),
                      (BackgroundLeaf("stateful", BackgroundStatefulLeafAlias), "VF-BG-001 (C2): Background execution is not eligible for activity node 'node-"),
                      (BackgroundLeaf("stream", result: new ActivityResultContract(new(typeof(Stream).FullName!), true, ActivityValuePolicy.Default, [])),
