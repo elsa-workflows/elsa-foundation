@@ -244,7 +244,7 @@ describe("agent editor", () => {
     const { container, latest } = await render(context, { ...configured(), model: { providerKey: "anthropic", connectionName: "writer", modelId: "old-model" } });
 
     expect(container.textContent).toContain("This connection now uses claude-fable-5-1, but the agent still names old-model.");
-    expect(container.textContent).toContain("cannot be used by agents right now");
+    expect(container.textContent).toContain("isn't available for agents right now");
     button(container, "Use claude-fable-5-1")!.click();
     await settle();
 
@@ -257,7 +257,7 @@ describe("agent editor", () => {
 
     expect(container.textContent).toContain("You can see the saved model, but choosing a model needs permission to author agents.");
     expect(container.textContent).toContain("Reading what this model supports needs permission to author agents.");
-    expect(container.textContent).not.toContain("cannot be used by agents");
+    expect(container.textContent).not.toContain("isn't available for agents");
     expect(container.querySelector("[data-testid='agent-model']")?.textContent).toContain("claude-fable-5-1");
     expect(changes).toHaveLength(0);
   });
