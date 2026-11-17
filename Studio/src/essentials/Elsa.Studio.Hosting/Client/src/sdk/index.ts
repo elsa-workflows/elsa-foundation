@@ -1152,9 +1152,19 @@ export interface StudioExpressionEditorContext {
 }
 
 /** Optional installed syntax adapter. The workflow host does not parse member-access syntax. */
+export interface StudioExpressionReferenceFix {
+  from: number;
+  to: number;
+  current: string;
+  replacement: string;
+}
+
 export interface StudioExpressionSourceInsertion {
-  render(request: { alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
+  render(request: { namespace?: "args" | "variables"; alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
     { supported: true; insert: string; /** UTF-16 positions relative to the inserted text. */ selection?: { anchor: number; head: number } } | { supported: false; reason: string };
+  /** Finds direct argument references for which the host can supply an unambiguous replacement. */
+  findArgumentFixes?(source: string, resolve: (name: string) => { namespace: "args" | "variables"; name: string } | undefined):
+    StudioExpressionReferenceFix[];
 }
 /** Ephemeral editor state never enters the authored workflow document. */
 export interface StudioExpressionEditorBookmark { restore(): void }
@@ -1164,7 +1174,7 @@ export interface StudioExpressionEditorSnapshot {
 }
 export interface StudioExpressionEditorController {
   capture(): StudioExpressionEditorSnapshot | null;
-  apply(edit: { expected: StudioExpressionEditorSnapshot; insert: string; historyValue: unknown; selection?: { anchor: number; head: number } }): boolean;
+  apply(edit: { expected: StudioExpressionEditorSnapshot; range?: { from: number; to: number }; insert: string; historyValue: unknown; selection?: { anchor: number; head: number } }): boolean;
 }
 export interface StudioExpressionEditorEdit {
   historyValue: unknown;

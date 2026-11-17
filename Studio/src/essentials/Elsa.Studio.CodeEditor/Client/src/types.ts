@@ -103,6 +103,7 @@ export interface StudioCodeEditorController {
   capture(): StudioCodeEditorSnapshot | null;
   apply(edit: {
     expected: StudioCodeEditorSnapshot;
+    range?: { from: number; to: number };
     insert: string;
     historyValue: unknown;
     selection?: StudioCodeEditorSelection;

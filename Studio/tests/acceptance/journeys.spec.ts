@@ -1,3 +1,4 @@
+import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { setOutputJourney } from "./setOutputJourney";
@@ -1062,6 +1063,9 @@ test("Double activity output binds to text", async ({ page }, info) => {
 
 test("choose data for activity outputs", async ({ page }, info) => {
   await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+test("repair scoped JavaScript references", async ({ page }, info) => {
+  await scopedExpressionReferencesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("insert JavaScript activity data", async ({ page }, info) => {
   await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "JavaScript");

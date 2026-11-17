@@ -22,3 +22,25 @@ it("keeps cross-interpolation delimiters untouched and accepts ordinary incomple
   expect(render("`text ${value}`", 9, 14).supported).toBe(false);
   expect(render("call(", 5).supported).toBe(true);
 });
+
+it("repairs direct argument reads inside template interpolations and skips lookalike text", () => {
+  const source = '`args.Variable1: ${args.Variable1}` + "args.Variable1" /* args.Variable1 */';
+  const fixes = adapter.findArgumentFixes!(source, name => name === "Variable1" ? { namespace: "variables", name } : undefined);
+  expect(fixes).toEqual([{
+    from: source.indexOf("${") + 2,
+    to: source.indexOf("}"),
+    current: "args.Variable1",
+    replacement: "variables.Variable1"
+  }]);
+});
+
+it("leaves shadowed arguments alone and escapes unusual public input names", () => {
+  const resolve = () => ({ namespace: "args" as const, name: "Input numbers" });
+  expect(adapter.findArgumentFixes!("(args) => args.numbers", resolve)).toEqual([]);
+  expect(adapter.findArgumentFixes!("({ args }) => args.numbers", resolve)).toEqual([]);
+  expect(adapter.findArgumentFixes!("args.numbers.reduce(sum, 0)", resolve)).toEqual([
+    { from: 0, to: 12, current: "args.numbers", replacement: 'args["Input numbers"]' }
+  ]);
+  expect(adapter.render({ namespace: "variables", alias: "Input numbers", memberPath: [], source: "", selection: { anchor: 0, head: 0 } }))
+    .toMatchObject({ supported: true, insert: 'variables["Input numbers"]' });
+});

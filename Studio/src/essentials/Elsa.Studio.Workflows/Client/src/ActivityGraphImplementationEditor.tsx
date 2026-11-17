@@ -1,3 +1,4 @@
+import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
@@ -146,6 +147,7 @@ const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
 };
 
 export function ActivityGraphPublicInterfaceEditor({
+  draftId,
   contractSection,
   context,
   contract,
@@ -240,6 +242,7 @@ export function ActivityGraphPublicInterfaceEditor({
                 return (
                   <ActivityGraphOutputMappingEditor
                     key={output.referenceKey}
+                    draftId={draftId}
                     output={output}
                     mapping={mapping}
                     assignedBySetOutput={assignedOutputNames.has(output.name)}
@@ -1178,6 +1181,7 @@ function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<strin
 const graphOutputSyntaxes = new Set(["literal", "object", "input", "variable", "javascript"]);
 
 export function ActivityGraphOutputMappingEditor({
+  draftId,
   output,
   mapping,
   assignedBySetOutput,
@@ -1191,6 +1195,7 @@ export function ActivityGraphOutputMappingEditor({
   readOnly,
   onChange
 }: {
+  draftId: string;
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
   assignedBySetOutput: boolean;
@@ -1236,7 +1241,8 @@ export function ActivityGraphOutputMappingEditor({
     descriptor,
     activity: root,
     expressionDescriptors,
-    readOnly
+    readOnly,
+    editorSessionScope: `activity-output:${draftId}:${output.referenceKey}`
   };
   const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
 
@@ -1273,7 +1279,12 @@ export function ActivityGraphOutputMappingEditor({
       </> : <>
         {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
         {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
-        {Editor ? <Editor
+        {Editor ? <ExpressionEditorWithDataInsertion
+          key={output.referenceKey}
+          editor={Editor}
+          contribution={active.contribution}
+          ownerValue={mapping.source.value}
+          reusableOutput
           descriptor={descriptor}
           syntax={currentSyntax}
           value={mapping.source.value}
