@@ -174,10 +174,13 @@ dispatch gets no notice). Decision 5 changes the rule for every waiting parent: 
 parked, and the parent keeps the child in its registry, and a combiner keeps it in `Outstanding` with its credit, until
 the child's Park is resolved. `WorkflowInstance` consumes a parked notice in its registry, marking the child parked,
 before any model turn: no waiting activity sees it, so a Native `DispatchWorkflow` (whose `ResumeAsync` today completes
-for every `ChildDone` status) and a combiner stay waiting. Every resolution that ends the child sends the parent exactly
-one final notice, so its wait ends ([observability](observability.md#resolving-a-park-a-bounded-drain)): discard
-(Faulted), the `Parked` window's expiry (Faulted, an automatic discard), terminate (Cancelled) and delete (Faulted). A
-recover sends no final notice: the child continues, and its later end sends the ordinary notice. A final notice is the
+for every `ChildDone` status) and a combiner stay waiting. How the parent is released is fix-round design ([observability](observability.md#resolving-a-park-a-bounded-drain)):
+every resolution except recover sends the parent the one final notice its drain owed. Discard sends Faulted; the
+`Parked` window's expiry, an automatic discard, sends Faulted (a coordinator design choice, see the
+[register](decisions.md#the-gate-2-fix-round-17-november)); terminate sends Cancelled; delete sends Faulted for a parked
+instance, Cancelled when it takes over a terminate drain, and none after the model ended during a recover drain, since
+the end's own turn already sent the notice. A recover sends no final notice: the child continues, and its later end
+sends the ordinary notice. A final notice is the
 ordinary Faulted or Cancelled notice, so each parent applies its own policy to it: a combiner under FailFast faults and
 terminates its outstanding children, under Collect it counts the fault and frees the credit, and a waiting
 `DispatchWorkflow` receives it as it receives any faulted or cancelled child's notice. A tree with parked leaves visibly waits, and a retried leaf's result is
@@ -258,11 +261,11 @@ the rest of the kernel's. Rejected options are kept for the record.
 4. **A combiner's retry reaches leaves only (a).** Rejected: (b) unfinished items of a sub-range; (c) whole
    sub-ranges.
 5. **A parked child later retried: the parent keeps waiting (a).** The notice says "parked"; the parent's registry and a
-   combiner's `Outstanding` keep the child until the child's Park is resolved. Every resolution sends the parent exactly
-   one final notice: discard (Faulted), expiry (Faulted, an automatic discard), terminate (Cancelled) and delete
-   (Faulted). A recover sends none; the child continues, and its later end sends the ordinary notice. This changes `WorkflowInstance`'s
+   combiner's `Outstanding` keep the child until a later notice or a discard. This changes `WorkflowInstance`'s
    registry and notice (layer 3) for every waiting parent. Rejected: (b) a parked child's fault is final for its
-   parent.
+   parent. How the parent is released after the gate 2 fix round is design, set out under "Parked leaves" above: every
+   resolution except recover sends the one final notice its drain owed, with expiry's notice a coordinator design
+   choice ([register](decisions.md#the-gate-2-fix-round-17-november)).
 
 ## Contract and evidence
 
