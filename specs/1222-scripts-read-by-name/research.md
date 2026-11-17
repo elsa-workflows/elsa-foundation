@@ -173,8 +173,9 @@ previously published version is a publish warning. Published versions never chan
 **Decision.** Input-binding expressions read the step's input snapshot (pinned values plus recorded fallback reads) and
 never see pending writes. The `RunJavaScript` body reads — literal and computed — go through its variable **session**
 (ADR 0090 decision 2, ADR 0092), which shows the body's own pending writes. Its reads go into the body's **session reads** (ADR 0092 decision 3), recorded per attempt, not into the input snapshot; ADR 0089
-R3's "part of the input snapshot" applies to input-binding expressions. The session and the read set are built by
-S-10 (spec 1221); this spec's body surface waits on it. Writes
+R3's "part of the input snapshot" applies to input-binding expressions. S-10 (spec 1221) provides the read-set types;
+S-7 builds the variable session and records its session reads (spec 1221 T015 and T016 moved to S-7 on 2026-11-17);
+this spec's body surface waits on both. Writes
 (ADR 0090 / S-7) are out of scope; the spec records the write assumptions it relies on (writes commit at output
 evaluation; the session shows pending writes; a computed write to a non-existent variable refuses) to be verified
 against S-7. This is the distinction D-7 asks to preserve explicitly.
