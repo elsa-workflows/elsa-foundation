@@ -42,6 +42,15 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 17 November 2026:** the [clean-slate execution kernel #4229](../program-goals/clean-slate-kernel.md)
+is an active program, under the owner's goal of 12 November 2026 and his instruction of 17 November to record it now,
+with the proposal. Its scope is the goal's: build the kernel, prove it in the prototype, get the design approved
+([ADR 0099](0099-clean-slate-execution-kernel.md), proposed), ship release 1 on it, switch Elsa's default and delete the
+old core, in small PRs. Product code waits for design approval at gate 2. It runs beside the active programs and
+preserves consolidation's priority one. It reactivates no parked work; the disposition of
+[Unified Execution #2892](../program-goals/unified-execution.md) is an open owner item. Azure or multi-machine spend,
+releases, deployments and production credentials are outside it without the owner's approval.
+
 **Owner amendment, 9 November 2026 (triage review):** the owner recorded eight end-to-end delivery
 authorizations that were given in issue comments between 4 and 6 November and had not reached this ADR or the
 [registry](../program-goals/README.md): [external authentication and OIDC #3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579#issuecomment-6627537005)

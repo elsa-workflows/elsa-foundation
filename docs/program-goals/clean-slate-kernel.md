@@ -1,6 +1,7 @@
 # Clean-slate execution kernel
 
-- **Status:** Proposed program plan, 17 November 2026. Owner goal of 12 November 2026 (build the kernel, prove it,
+- **Status:** Active program, recorded in [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) on
+  17 November 2026; this plan is proposed with the design. Owner goal of 12 November 2026 (build the kernel, prove it,
   get the design approved, ship release 1, switch, delete the old core). Gate 2, design approval, is open; this plan
   authorizes no product code before it.
 - **Area:** The execution core: actor runtime, durable actors, the workflow instance actor and its execution models,
@@ -40,7 +41,7 @@ gate 5.
 | K0 | **Design approval** (gate 2) | ADR 0099, the register, the seven answers and the supersede list reviewed by the independent architecture review; every material finding resolved; the owner's delegated approval recorded on #4229 |
 | K1 | **Contracts package and storage contract** | Layer 3's contracts package (turn contract, the four seams, read models) and the store contract with the in-memory store; an architecture guard fails any layer 3 reference to layers 1 and 2; the store conformance suite passes on the in-memory store |
 | K2 | **Store changes the answer pages flag** (each its own PR, two reviews) | See "Store and kernel changes" below; each with conformance cases on every engine and a simulation invariant or mutation that fails without it |
-| K3 | **Providers** | EF Core schema and migrations with the owned commit SQL: PostgreSQL, SQL Server and SQLite tuned, MySQL supported; MongoDB conformance in CI on a replica set; killed-connection stress on each relational engine |
+| K3 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine; MongoDB conformance in CI on a replica set. **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned |
 | K4 | **Durable layer, built-in runtime, profiles** | Embedded and Cluster; 1,024 virtual partitions; the wake signal; the runtime conformance suite; graceful stop ends owned work before persistence is disposed (#3939's row) |
 | K5 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported |
 | K6 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4; both in Embedded and Cluster |
@@ -49,8 +50,8 @@ gate 5.
 | K9 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
 | K10 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans; parked-work inspect, retry and discard; values by reference |
 | K11 | **Qualification** | See "Release 1 qualification" below |
-| K12 | **Default switch** (gate 4) | Release acceptance; the coexistence, rollback and live-run disposition below carried out; the docs at the switch; the owner's go |
-| K13 | **Old-core removal** (gate 5) | The retirement inventory below, shown to the owner and approved; retained readers and artifacts recorded |
+| K12 | **Default switch** (gate 4) | **Release acceptance:** K1 to K11 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
+| K13 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
 
 ### Store and kernel changes the answer pages flag
 
@@ -69,7 +70,15 @@ Each changes kernel behaviour, so each needs two independent reviews when built.
 | Value rows in the same fenced batch, removed by the instance's delete | [Write volume](../architecture/write-volume.md) 1 |
 | The command-kind seam (`IActorType.IsCommand`) for `Migrate` | [Migration](../architecture/migrating-running-instances.md) |
 | Persisted creation headers on every provider, replacing the id-only fallback | Migration |
-| Compaction of non-positive journal rows below the cursor (after release 1) | Data lifecycle 8 |
+| A turn budget per pass (`PassTurnBudget`) | [Fairness](../architecture/fairness-and-backpressure.md#fair-scheduling-within-a-pass), release 1 |
+| Deficit round robin by tenant within a pass, with the tenant column on the instance row | Fairness, release 1 |
+| The age hint that `RunAsync` reports to layer 1 (a change to the seam between layers 1 and 2) | Fairness, release 1 |
+| The `(partition, done, due)` index, partial on `done = false`, for the capped due-depth count | Fairness, release 1 |
+| `StartJob`'s optional timeout, as a timer message in the same commit, recalled when the result arrives | [Job workers](../architecture/job-workers.md#release-1) |
+| The job ticket carrying the effect key and the attempt id as opaque strings | Job workers, release 1 |
+
+After release 1, also kernel behaviour: compaction of non-positive journal rows below the projector's cursor (data
+lifecycle decision 8), and a forced handover from an unresponsive owner (observability).
 
 ## Release 1 qualification
 
@@ -87,57 +96,45 @@ Gate 3 takes on #2531's M5 rows ([hand-off](https://github.com/elsa-workflows/el
 4. **M1 controls:** a start completes under a clock that moves backwards; generated and caller-supplied ids stay
    distinct under concurrent starts.
 5. **Inputs:** #3915's payload and topology profile design.
-6. **Graceful stop** (#3939) and 7. **uncertain commits** (#3698): a landed commit is never reported as refused.
+6. **Graceful stop** (#3939): a stop ends all owned work, off-turn work included, before persistence is disposed.
+7. **Uncertain commits** (#3698): a landed commit is never reported as refused, including after a late lease loss or an
+   ambiguous COMMIT.
 
 Also before release, from the answer pages: the `pad=` PostgreSQL run that accepts values by reference; the
 state-size benchmark that confirms or lowers the ForEach cap; a write-volume run on the final schema; the two-tenant
 stress test with admission on and off. No Azure or multi-machine spend without the owner's approval.
 
-## Coexistence, rollback and live runs (proposed)
+## The switch
 
-This section is a proposal for the review; the owner decides the live-run disposition and the switch at K12.
+**The basis** (owner, 17 November): the old core is unreleased software with no user data. Its databases are local
+ones on developers' machines. So there are no live runs to carry over, no data migration and no old tables to keep:
+"we'll simply delete the database and have it regenerated."
 
-**Until the switch.** The kernel ships in its own packages (the contracts package, then layers 1 and 2, then the
-workflow instance actor and models) that no old-core package references. A host sends new work to one core, chosen
-by the host switch; the old core is the default. The kernel keeps its own tables and migrations and never reads or writes the old
-core's tables, so the two can share a database without touching each other's data. The activity library and the
-definitions are shared; the adapted activity context is the one point where the two cores meet the same code, and K5
-keeps the old core's tests green while it changes.
+- Until K12 the kernel is built in its own packages behind a host switch, with the old core the default. The two never
+  read each other's tables.
+- The switch PR makes the kernel the default. Developers delete their local databases and let the kernel's migrations
+  create them again.
+- **Rollback** is a revert of the switch PR, followed by the same database reset. There is no data rollback, because
+  no user data exists.
 
-**No data migration.** Running or finished old-core instances are not converted to kernel instances: the owner
-accepted the clean break on 11 and 12 November (sketch trade-off 17). The old core has shipped only as the contributor
-preview `contributor-preview-2026-10-07.1` (#2531).
+## Open owner items
 
-**Live runs at the switch.** A host switches cores only when its old-core
-instances are drained:
+Asked of the owner on 17 November; this plan records the answers when they come.
 
-1. The host stops starting new old-core instances: new starts go to the kernel.
-2. Running and suspended old-core instances finish on the old core, which stays composed beside the kernel for that
-   period and takes no new starts, or an operator terminates them.
-3. The switch tool reports how many old-core instances are still running, and refuses to remove the old core while
-   any are.
-
-**Readers of old-core data.** Old-core run history stays readable through the old core's API and Studio views while
-the old core is installed. The kernel's migrations never drop old-core tables. Removing the old core (K13) removes
-its code; dropping its tables is a separate, documented operator step.
-
-**Rollback.**
-
-- **Before the switch:** turn the host switch back. Kernel instances stop running and their rows stay untouched.
-- **After the switch:** a host can return to the old core only for new work; kernel instances are not readable by the
-  old core, so they stay in their tables until the host switches forward again.
-- **Within the kernel:** a release that bumps a state version is rolled back as built: instances already written at
-  the new version are withheld on older nodes until the roll-forward, with a metric for withheld instances
-  (migration decision 1).
+- **Rebalance strategy** for virtual partitions ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026), decision 4).
+- **When the Worker refactor to range ownership happens** (PARTITIONS.md, decision 5).
+- **The disposition of the Unified Execution program** [#2892](unified-execution.md), whose shared durable host the
+  kernel replaces.
 
 ## Retirement (proposed)
 
-**The inventory method.** The deletion list comes from a fresh inventory on the switch commit, never from historical
+**The inventory method.** The deletion list comes from a fresh inventory taken on the removal PR's base, never from historical
 counts. The 18,920 files, 513 projects and 2,583 references recorded earlier in the program make nothing eligible for
 deletion. The inventory takes the project-reference graph and the namespaces of the old core's engine (scheduler,
 drainer, checkpoint commit stores, runtime EF contexts and their migrations, and tests bound to those internals), and
-classifies each item as delete, port (layer 3 code and tests that carry over) or keep. It records the readers and
-artifacts that stay (old-core tables, exported history). **The owner sees the list before anything is deleted.**
+classifies each item as delete, port (layer 3 code and tests that carry over) or keep. It also lists every reader of
+old-core code (projects, tests, docs, samples, CI workflows) so that none is left pointing at deleted code. **The owner
+sees the list before anything is deleted.**
 
 **Docs to rewrite or retire at the switch** (the sketch's
 [architecture documentation](../reports/clean-slate-kernel/design-sketch-draft-5.md#architecture-documentation-owner-decision-12-november)
