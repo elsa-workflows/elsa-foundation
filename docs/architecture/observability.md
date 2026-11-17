@@ -185,9 +185,15 @@ today such a notice closes the entry without the model.
 A Park is identified by the instance's immutable **creation** and the **Park mark**: the revision and time that the
 Park's commit records as the row's terminal mark ([data lifecycle](data-lifecycle.md#retention-and-deletion-of-finished-instances)).
 `ParkRecord` keeps it as the Park identity from the first Park until the Park resolves, and a re-park continues the
-same Park under it. While a recover drain runs, the row's terminal mark is cleared, as the data lifecycle page says of
-recovery, and `ParkRecord` still holds the identity; an interrupting re-park writes the same mark back. Once the Park
-resolves, the identity is gone, and the next Park of the same creation writes a new mark. Revisions restart
+same Park under it. The row's terminal mark follows one rule, which the data lifecycle page states too:
+
+- a recover's Open clears the Park's mark on the row, and `ParkRecord` still holds the identity;
+- a mark the model's end writes during the drain stays through Complete, and Complete does not clear it;
+- a recover that completes with the model still running leaves no mark, and the run's next end, Park or discard
+  writes one;
+- a re-park that interrupts the drain, which can happen only while the model runs, writes the Park's mark back.
+
+Once the Park resolves, the identity is gone, and the next Park of the same creation writes a new mark. Revisions restart
 for each creation, so the mark identifies a Park only together with the creation. This mirrors the qualified delete of
 the owner's decision 9A: every Park operation is qualified, and none has a force form.
 
@@ -198,7 +204,7 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
 // kernel.discard   {operation, park: ParkSelection}
 // kernel.terminate {operation, creation, park: ParkSelection?}   // an operator's: park required when the row is parked
 // kernel.drain       {creation, parkRevision, parkAt, generation}
-// kernel.park-expiry {creation, parkRevision, parkAt}
+// kernel.park-expiry {creation, parkRevision, parkAt, generation}
 ```
 
 - **The tenant** comes from the operator's bound scope ([tenancy](tenancy.md#every-operation)), never from the payload.
@@ -235,9 +241,13 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
   Cancelled, and its Complete sends the parent the one final notice every terminate resolution sends, and no other; a
   parent that has already ended consumes and drops it.
 - **Internal controls are bound too.** `ParkRecord.ResolutionGeneration` grows by one at every Open of this creation.
-  A `kernel.drain` acts only if its creation, Park mark and generation equal the row's and an open Resolution has that
-  generation; a `kernel.park-expiry` acts only if its creation and Park mark equal the row's and the Park is
-  unresolved. Any other is consumed and dropped. Their message ids derive from those fields, so the controls of a
+  Both controls check the Park mark against `ParkRecord`'s Park identity, never the row's terminal mark, which a
+  recover drain clears. A `kernel.drain` acts only if its creation equals the row's, its Park mark equals
+  `ParkRecord`'s, and its generation equals the open Resolution's. A `kernel.park-expiry` carries the generation
+  current when it was armed, and acts only if its creation equals the row's, its Park mark equals `ParkRecord`'s, no
+  resolution is open, and its generation equals `ParkRecord.ResolutionGeneration`. Every Open bumps the generation, so
+  an expiry already delivered or in flight when a recover's Open recalled it is dropped, and it can never open a
+  discard against an active recovery. Any other control is consumed and dropped. Their message ids derive from those fields, so the controls of a
   later resolution or a successor creation never share an id with a delayed one.
 - **Operators read the identity** from the parked-work read model (`ParkedItem` carries creation, Park revision and
   Park time) and from `KeptAsync`, whose pages carry the `ParkSelection` they were read under.
@@ -295,7 +305,8 @@ Park decision.
     drain restored that were not yet delivered, and rows that arrived during the drain, are consumed while parked as
     any arrival and get `Arrived`; kept rows the drain had not reached keep their reasons. The re-park re-arms
     `kernel.park-expiry` for the window's remaining time (from the Park's time in the `ParkRecord`; due at once if it
-    has passed), since the recover's open had recalled it. A new recover then drains every row still kept.
+    has passed), under the current generation, since the recover's open had recalled the old one and bumped the
+    generation past it. A new recover then drains every row still kept.
   - **A terminate** opens its own drain over the rows still kept, which clears them (below).
 - **The model ends during a recover drain.** The instance runs from the open, so its model can finish, be cancelled or
   end faulted by its own outcome before the last page. That end does not stop the drain: `kernel.drain` is a control
@@ -711,7 +722,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept. The prototype's MongoDB store sorts by `(seq, _id)` (`MongoStore.cs`), so the tuple cursor is a provider contract implemented and qualified here | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
-| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. | K3, K6 |
+| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
 | M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
@@ -720,7 +731,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | P-1 | The stale-Park trace: A parks at first revision 7 and a discard is prepared from A's `ParkSelection`; A is resolved and deleted; B reuses the key and parks at first revision 7. The command submitted after B exists is refused for its creation and changes nothing of B; submitted before the reuse, it discards A only | K3, K4 |
 | P-2 | The same trace for `resume` with an empty selection, retry-all and terminate of a parked instance; and a stale command after A recovers and parks again (same creation, new Park mark) is refused | K3, K4 |
 | P-3 | Mutation: the owner skips the creation check. P-1's late command discards B, and the invariant "a Park operation changes only the Park it names" fails | K3 |
-| P-4 | A delayed `kernel.drain` of an interrupted resolution arrives after a second Open, a delayed `kernel.park-expiry` of a resolved Park arrives after the same creation parks again, and either reaches a successor creation: each is consumed and dropped, and no row changes | K3, K4 |
+| P-4 | A delayed `kernel.drain` of an interrupted resolution arrives after a second Open, a delayed `kernel.park-expiry` of a resolved Park arrives after the same creation parks again, and either reaches a successor creation: each is consumed and dropped, and no row changes. An expiry delivered or in flight when a recover's Open recalled it arrives during the drain and is dropped; after an interrupting re-park, only the expiry armed under the new generation acts | K3, K4 |
 | P-5 | `ParkedItem` and `KeptAsync` expose creation and Park mark; a command built from them lands; one built before a recovery and a second Park is refused; refusals count by reason | K9, K11 |
 | P-6 | The interrupted recover and the Park mark: an operator delete naming the Park mark, and separately a discard naming the `ParkSelection`, are prepared while A is parked, before a recover opens. Delivered while the recover drain runs, each is refused (the mark is cleared and a resolution is open). Delivered after an interrupting re-park, the mark is back, so the delete opens the delete drain and the discard opens the discard drain. After a recover that completes, both are refused as naming an earlier transition | K3, K11 |
 | P-7 | A parent's tree terminate (composed by the actor type) and a combiner's FailFast (an application send through `ITurn.Send`) reach a parked child: each is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. An application send of `kernel.terminate` from a non-parent, an outside add naming the parent as sender, a terminate from an earlier creation of the parent, and an actor-type `Add` of a `kernel.terminate` whose `Sender` is another actor (refused at commit as a definite error) are refused | K3, K6 |
