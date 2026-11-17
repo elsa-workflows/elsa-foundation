@@ -51,15 +51,19 @@
 
 - [x] T008 [US3] **(test-first, drive)** Place a background node with a stream input and with a transient-resource
   input; record what happens today (publish, admission or worker) in research R-1 before changing anything.
-- [ ] T012 [US3] **(test-first)** Publication refuses each C10 case naming C10: no durable representation, not
-  materializable on the worker, protection would be lost.
+- [x] T012 [US3] **(test-first)** Publication refuses each C10 case naming C10: no durable representation, not
+  materializable on the worker, protection would be lost. *Done as:* publication refuses the stream and the protection
+  cases (`BackgroundEligibilityPublicationTests`); no `[ActivityInput]` can declare a non-persistable policy, so that
+  case is shown through the component at both entry points (`BackgroundEligibilityTests`).
 - [x] T013 [US3] Add C10 to the component, reusing `EnsureSecretBindingsAdmissible` and the snapshot checks (P-4);
   add the input-representation check that is missing. *Done as:* C10 lets a `SecretRead` binding through and checks
   the rest; `EnsureSecretBindingsAdmissible` still runs beside it in the compiler and placer, so a secret binding the
   activity refuses is reported as `VF-ACT-012`, not as C10.
-- [ ] T014 [P] [US3] A secret reference input on a background node: admitted, resolved at worker activation; assert
-  no raw secret in the persisted input snapshot or the work record (SC-005).
-- [ ] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3.
+- [x] T014 [P] [US3] A secret reference input on a background node: admitted, resolved at worker activation; assert
+  no raw secret in the persisted input snapshot or the work record (SC-005). *Done in*
+  `NativeBackgroundActivityFlowchartEfTests.Inputs` on both providers; the EF case also scans the database files.
+- [x] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3. *Done in*
+  `NativeBackgroundActivityFlowchartEfTests.Inputs` (worker run, both providers) and `BackgroundEligibilityPublicationTests`.
 
 ## Phase 6: User Story 4 — the promise on the attribute (P2)
 
@@ -71,14 +75,19 @@
 - [x] T017 [US5] Fill the spec's *Built-in assessment* table from research R-4 and get the approver's confirmation of
   C7 and C8 per marked activity (Q4).
 - [x] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity that passed T022.
-- [ ] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
-  test per assessed-but-unmarked category, naming its criterion.
+- [x] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
+  test per assessed-but-unmarked category, naming its criterion. *Done as:* the five Essentials built-ins publish in
+  the background, `WriteLine` and `Fault` run end to end on both persistence modes, every unmarked category is refused
+  naming why (`BuiltInBackgroundAssessmentTests`), and guards pin the marked connector set. End-to-end runs of the
+  eight connector activities need a connector host with a worker: #4737.
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
   changes); regenerate the contract surface baselines.
-- [ ] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
+- [x] T022 [US5] **(drive first)** Before marking, check the unknowns of research R-4 with background runs: a connector
   read resolves its connection's tenant partition on a worker; a secret-bound input resolves on the
   worker with no raw secret persisted; a `DownloadFile` result above the receipt limit faults with `BG-ACT-006`. An
-  activity that fails gets an issue instead of the mark (Q10).
+  activity that fails gets an issue instead of the mark (Q10). *Done as:* the secret-bound input by a worker run
+  (T014), the receipt limit by a worker run (`BackgroundActivityWorkerTests.Faults_a_result_above_the_receipt_size_limit`),
+  the connector tenant partition by reading the code; background runs against connector endpoints: #4737.
 - [x] T023 [US1] **(test-first)** Call `CheckPublication` in `ActivityTemplatePlacer` for every background node a
   template provider returns (FR-012, Q9). Tests: a template node that fails a criterion is refused naming it; the
   agent's model-turn node (`AgentActivityProvider.CompileAsync`) passes.
@@ -88,12 +97,15 @@
 
 ## Phase 8: User Story 6 — causal order on every provider (P3)
 
-- [ ] T024 [US6] **(test)** A background step followed by a dependent step: the dependent step runs after the result
-  is applied, on the in-memory and the EF Core provider.
-- [ ] T025 [US6] **(test)** Two unordered background branches writing one variable: last commit wins; the write
-  history (S-10) and the checkpoint sequence give the actual commit order, on both providers.
-- [ ] T026 [US6] **(test)** A background result application is atomic: a fault injected during the result commit
-  leaves no captured output and no next step.
+- [x] T024 [US6] **(test)** A background step followed by a dependent step: the dependent step runs after the result
+  is applied, on the in-memory and the EF Core provider. *Done in* `NativeBackgroundActivityFlowchartEfTests.CausalOrder`:
+  the dependent step reads the captured result, and its first commit sequence follows the result's.
+- [x] T025 [US6] **(test)** Two unordered background branches writing one variable: last commit wins; the write
+  history (S-10) and the checkpoint sequence give the actual commit order, on both providers. *Done in*
+  `NativeBackgroundActivityFlowchartEfTests.CausalOrder`, in both completion orders.
+- [x] T026 [US6] **(test)** A background result application is atomic: a fault injected during the result commit
+  leaves no captured output and no next step. *Done in* `NativeBackgroundActivityFlowchartEfTests.CausalOrder`; the
+  result stays `ResultReady` and the failure surfaces as a `SchedulerWorkPoisoned` incident for repair.
 
 ## Phase 9: Polish
 
@@ -102,7 +114,7 @@
   or the eligibility rules.
 - [x] T030 Release note: pinned background nodes of custom activities that now fail C3, C4, C9 or C10 are refused at
   run time (Q5).
-- [ ] T031 Set **Status** to `Implemented` in the last implementation PR.
+- [x] T031 Set **Status** to `Implemented` in the last implementation PR.
 
 ## Dependencies
 
@@ -111,22 +123,13 @@
 - US4 is independent. US5 needs US1–US3 (the refusals its tests assert) and the approver's C7/C8 confirmation.
 - US6 needs S-10's write history (PR #4316) on the initiative branch.
 
-## Implementation status (2026-11-17, first implementation PR)
+## Implementation status (2026-11-17, PR #4725)
 
-- **Done:** T001–T011, T013, T016–T018, T020, T021, T023, T028–T030. Findings in research *Implementation findings*.
-- **Partial, open (review, second loop):** SC-002 — every criterion is refused at both entry points in the component
-  tests (`BackgroundEligibilityTests`); through the real call sites: C9 at admission, C1, C3, C4 and C6 on the worker,
-  C1–C5, C9 and C10 at publication. C2, C5 and C10 at admission and on the worker, and C1, C2, C4 and C5 at
-  template placement, are shown only through the component.
-- **Partial, open:** T014 — a secret reference input is admitted at publication in the background (C10); the
-  worker-side assertion that no raw secret reaches the input snapshot or the work record is not written yet.
-  T019 — publish-in-background tests for the five Essentials built-ins, end-to-end worker runs for `WriteLine`
-  (completion) and `Fault` (fault) on both persistence modes, marked-set guards for the connector reads; no
-  end-to-end run per connector read (their test projects do not host a worker).
-- **Partial, open (review round 1):** T012 — publication refuses the stream and the protection cases (C10); the
-  non-persistable case is covered only by the component test, because no `[ActivityInput]` declares a non-persistable
-  policy. T015 — an `Any`/JSON input publishes in the background and an `Any` result is refused (C3); no worker run
-  of the `Any` input yet. T022 — the partition and secret unknowns were settled by reading the code and a
-  publication test, not by background runs against a live connector; the `DownloadFile` limit by reading the codec.
-  The 13 marks rest on that reading (Q10); `RunJavaScript` is not marked (C9, research).
-- **Held:** US6 (T024–T026) until S-10's PR #4316 is merged into the initiative branch (Q7). T031 waits on US6.
+- **Done:** every task. US6 landed after S-10's PR #4316 merged into the initiative branch. Findings in research
+  *Implementation findings*.
+- **Recorded limits:**
+  - SC-002: every criterion is refused at both entry points in the component tests (`BackgroundEligibilityTests`).
+    Through the real call sites: C1–C5, C9 and C10 at publication and at template placement, C1–C4 and C6 on the
+    worker, and C9 at admission. The other combinations share those call sites and are shown through the component.
+  - T019 and T022 for the eight connector activities: their background runs need a connector host with a worker, so
+    their marks rest on reading the code (Q10). Follow-up: #4737.

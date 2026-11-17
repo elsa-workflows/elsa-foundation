@@ -155,7 +155,13 @@ public sealed class ActivityTemplatePlacementTests
         foreach (var (leaf, criterion) in new[]
                  {
                      (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'node-"),
-                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-")
+                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("parent", children: [Node("child")]), "VF-BG-001 (C1): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("stateful", BackgroundStatefulLeafAlias), "VF-BG-001 (C2): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("stream", result: new ActivityResultContract(new(typeof(Stream).FullName!), true, ActivityValuePolicy.Default, [])),
+                         "VF-BG-001 (C4): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("sensitive", result: new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default with { IsSensitive = true }, [])),
+                         "VF-BG-001 (C5): Background execution is not eligible for activity node 'node-")
                  })
         {
             var template = Template("template-root", "hash-root", Node("root", leaf));
@@ -871,27 +877,51 @@ public sealed class ActivityTemplatePlacementTests
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(BackgroundWriteLeaf), BackgroundWriteLeafAlias);
         registry.RegisterType(typeof(BackgroundVariableReaderLeaf), BackgroundVariableReaderLeafAlias);
+        registry.RegisterType(typeof(BackgroundStatefulLeaf), BackgroundStatefulLeafAlias);
         return registry;
     }
 
     private const string BackgroundWriteLeafAlias = "test.background-write-leaf";
     private const string BackgroundVariableReaderLeafAlias = "test.background-variable-reader-leaf";
+    private const string BackgroundStatefulLeafAlias = "test.background-stateful-leaf";
 
     // An eligible background leaf as a template provider compiles it: a pinned contract naming a registered,
     // [BackgroundExecutionSafe] CLR type through its activation capability.
-    private static ExecutableNode BackgroundLeaf(string id, string alias = BackgroundWriteLeafAlias) => new(
-        id, id, alias, "1", new(WellKnownRuntimeActivityConsumers.ClrActivity, "1", Json("{}")),
-        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
-        activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+    private static ExecutableNode BackgroundLeaf(
+        string id,
+        string alias = BackgroundWriteLeafAlias,
+        ActivityResultContract? result = null,
+        ExecutableNode[]? children = null)
+    {
+        var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
             alias, "1", "clr", Json("{}"), [],
-            new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default, []), ["Done"],
-            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution: true));
+            result ?? new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default, []), ["Done"],
+            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution: true);
+        return children is null
+            ? new(id, id, alias, "1", new(WellKnownRuntimeActivityConsumers.ClrActivity, "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+                activityContract: contract)
+            : new(executableNodeId: id, authoredActivityId: id, activityType: alias, activityTypeVersion: "1",
+                descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity, descriptorPayload: Json("{}"),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(), metadata: new Dictionary<string, string>(),
+                childSlots: [new ExecutableChildSlot("Activities", children)], activityContract: contract,
+                executionPlacement: ActivityExecutionPlacement.Background);
+    }
 
     [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
     private sealed class BackgroundWriteLeaf : Activity<int>
     {
         protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundStatefulLeaf : Activity<int>, Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+
+        public ValueTask<ActivityTransition> ResumeAsync(Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest request) => throw new NotSupportedException();
     }
 
     [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]

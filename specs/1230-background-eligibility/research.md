@@ -162,3 +162,21 @@ the initiative branch first; no logic overlaps.
   contract without `SupportsBackgroundExecution`, so a background leaf placed as an occurrence root (a background
   step inside a graph activity) was pinned as not background-safe and refused at admission. It now keeps the flag,
   and the placer checks the node as pinned (occurrence bindings, stamped contract), not the template's node.
+
+## Implementation findings, US6 and the closing tasks (2026-11-17)
+
+- **Providers.** The background test harness runs on the in-memory and the EF Core provider
+  (`NativeBackgroundActivityFlowchartEfTests`, `RuntimeProvider`). Both pass the same US6 tests.
+- **Causal order (T024).** A step after a background step reads the captured result, and its first commit sequence
+  follows the result's last. While the body runs, the coordinator drains other work and the next step waits.
+- **Commit order (T025).** With two unordered branches writing one variable, the value is the second-committed
+  branch's. S-10's write history (`VariableWriteRecord.CommitOrder`, `NewVersion`) and the rows' commit sequence
+  (`LastCommitSequence`) agree on that order in both completion orders. No lost-update fault: captures are plain writes
+  (ADR 0092, last commit wins).
+- **Atomic application (T026).** A fault injected in the commit that applies the result (a final-envelope validator)
+  commits nothing: no captured value, no completion, no write record, no next step. The scheduler's default policy
+  does not retry: it parks the item as poisoned with a `SchedulerWorkPoisoned` incident, and the work stays
+  `ResultReady`, so the operator's repair can still apply the result.
+- **Worker inputs (T014, T015).** A secret-bound input resolves at worker activation. The work record keeps only the
+  withheld reference, and the raw value is in no serialized record and, on EF Core, in neither database file. A JSON
+  (`Any`) input reaches the worker body intact.

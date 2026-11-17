@@ -119,6 +119,36 @@ public sealed class BackgroundActivityWorkerTests
     }
 
     [Fact]
+    public async Task Faults_a_result_above_the_receipt_size_limit()
+    {
+        // The limit is 4096 bytes in this harness; a large read (for example DownloadFile) faults instead of persisting.
+        var large = new string('x', 8192);
+        var probe = new Probe(_ => ActivityTransition.Complete(new WorkerDto(large, 1)));
+        await using var harness = await Harness.CreateAsync<WorkerDto>(probe, JsonSerializer.Serialize(new { name = large, count = 1 }));
+
+        await harness.RunAsync();
+
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Contains("BG-ACT-006", harness.Store.Item.Result.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_an_activated_stateful_activity_from_background_execution()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(ActivityUnit.Value));
+        await using var harness = await Harness.CreateAsync<ActivityUnit>(
+            probe,
+            "{}",
+            activationOverride: () => new StatefulProbeActivity(probe));
+
+        await harness.RunAsync();
+
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Contains("VF-BG-001 (C2):", harness.Store.Item.Result.Fault!.Message, StringComparison.Ordinal);
+        Assert.Equal(0, probe.Executions);
+    }
+
+    [Fact]
     public async Task Records_returned_fault_and_cancel_as_distinct_terminal_results()
     {
         var faultProbe = new Probe(_ => ActivityTransition.Fault<int>(new ActivityFault("business-error", "No")));
@@ -392,6 +422,11 @@ public sealed class BackgroundActivityWorkerTests
     {
         public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private sealed class StatefulProbeActivity(Probe probe) : ProbeActivityCore<ActivityUnit>(probe), IStatefulActivity
+    {
+        public ValueTask<ActivityTransition> ResumeAsync(ActivityResumeRequest request) => throw new NotSupportedException();
     }
 
     private sealed class Probe(Func<ActivityExecutionContext, ActivityTransition> execute)
