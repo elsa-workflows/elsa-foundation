@@ -1526,8 +1526,6 @@ public sealed class GraphActivityProvider(
         // The body is a closed value scope. Placement reads this to remap body references and mark the
         // boundary; versions compiled before it keep resolving their body against the caller.
         closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
-        if (graph.OutputMappings.Any(mapping => StringComparer.OrdinalIgnoreCase.Equals(mapping.Source.Syntax, "JavaScript")))
-            closedPayload["useInputReferenceKeysInOutputExpressions"] = true;
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
             return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
 

@@ -11,7 +11,7 @@ type Props = StudioExpressionEditorProps & {
   editor: ComponentType<StudioExpressionEditorProps>;
   contribution: StudioExpressionEditorContribution | null;
   ownerValue: unknown;
-  reusableOutput?: boolean;
+  reusableOutput?: "referenceKey" | "name";
 };
 
 /** One surface of the current owner. Chooser state, cursor tokens and controllers are never authored data. */
@@ -25,7 +25,7 @@ function ScopedExpressionEditor(props: Props) {
   return <ExpressionEditor {...props} references={useWorkflowReferenceAuthoring()} />;
 }
 
-function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOutput = false, references, ...props }: Props & {
+function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOutput, references, ...props }: Props & {
   references?: ReturnType<typeof useWorkflowReferenceAuthoring>;
 }) {
   const host = useActivityDataSelectionHost();
@@ -63,6 +63,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
     const parameters = readPortableExpressionDefinition(ownerValue, props.syntax)?.parameters ?? {};
     return adapter.findArgumentFixes(sourceText, name => {
       if (reusableOutput) {
+        if (reusableOutput !== "referenceKey") return;
         if (inputs.some(input => input.referenceKey === name)) return;
         const named = inputs.find(input => input.name === name);
         if (named) return { namespace: "args", name: named.referenceKey };
@@ -180,7 +181,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
         {inputs.length > 0 ? <div role="group" aria-label="Activity inputs" className="wf-data-chooser-group">
           <span className="wf-data-chooser-group-label">Activity inputs</span>
           {inputs.map(input => <StudioButton key={input.referenceKey} variant="ghost" size="sm"
-            onClick={() => applyScoped("args", input.referenceKey)}>{input.displayName || input.name} · {formatArgumentType(input.type)}</StudioButton>)}
+            onClick={() => applyScoped("args", reusableOutput === "referenceKey" ? input.referenceKey : input.name)}>{input.displayName || input.name} · {formatArgumentType(input.type)}</StudioButton>)}
         </div> : null}
         {variables.length > 0 ? <div role="group" aria-label="Variables" className="wf-data-chooser-group">
           <span className="wf-data-chooser-group-label">{reusableOutput ? "Activity variables" : "Variables"}</span>

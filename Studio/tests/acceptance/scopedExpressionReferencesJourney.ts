@@ -26,14 +26,24 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
     layout: [], activityPresentation: []
   });
   const draft = `/design/activities/drafts/${created.draft.draftId}`;
-  const read = () => s.api<{ revision: number; contract: { inputs: { name: string; referenceKey: string }[] }; provider: { payload: { outputMappings: { source: { value: string } }[] } } }>(draft);
-  const savedSource = async () => (await read()).provider.payload.outputMappings[0].source.value;
+  const read = () => s.api<{ revision: number; contract: { inputs: { name: string; referenceKey: string }[] }; provider: { payload: { outputMappings: { source: { value: string | { source: string; inputBinding: "referenceKey" } } }[] } } }>(draft);
+  const savedValue = async () => (await read()).provider.payload.outputMappings[0].source.value;
+  const savedSource = async () => {
+    const value = await savedValue();
+    return typeof value === "string" ? value : value.source;
+  };
   const route = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
   const outputs = page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Outputs/ });
   const source = page.getByRole("region", { name: "Value source for Sum" });
   const expression = source.getByRole("textbox", { name: "JavaScript expression" });
   await page.goto(route);
   await outputs.click();
+  await expect.poll(savedValue).toBe(legacy);
+  const switchKeys = source.getByRole("button", { name: "Use stable input keys", exact: true });
+  await switchKeys.scrollIntoViewIfNeeded();
+  await capture(page, info, "sum-binding-mode");
+  await switchKeys.press("Enter");
+  await expect.poll(savedValue).toEqual({ source: legacy, inputBinding: "referenceKey" });
   const fixOutput = source.getByRole("button", { name: "Use args.numbers", exact: true });
   await expect(fixOutput).toBeVisible();
   await fixOutput.scrollIntoViewIfNeeded();
@@ -41,6 +51,10 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await capture(page, info, "sum-fix");
   await fixOutput.press("Enter");
   await expect(expression).toBeFocused();
+  await expect.poll(savedValue).toEqual({ source: stable, inputBinding: "referenceKey" });
+  await expression.press("ControlOrMeta+z");
+  await expect.poll(savedSource).toBe(legacy);
+  await expression.press("ControlOrMeta+Shift+z");
   await expect.poll(savedSource).toBe(stable);
 
   await expression.fill("0");
@@ -97,6 +111,9 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
 
   const text = page.getByRole("textbox", { name: "JavaScript expression", exact: true });
   await expect(text).toBeFocused();
+  await s.publishRun(caller, "Sum: 10", {}, true, "expression");
+  await capture(page, info, "calculator-direct-repair");
+  await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   await text.fill('"Sum: " + ');
   await text.press("ControlOrMeta+End");
   await page.getByRole("button", { name: "Insert data", exact: true }).press("Enter");

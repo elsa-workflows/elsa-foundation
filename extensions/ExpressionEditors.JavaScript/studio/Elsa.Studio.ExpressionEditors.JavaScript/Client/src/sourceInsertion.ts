@@ -9,8 +9,11 @@ export const javaScriptSourceInsertion: StudioExpressionSourceInsertion = {
       return { supported: false, reason: "The expression selection changed. Choose the insertion position again." };
     if (!alias || ["__proto__", "prototype", "constructor"].includes(alias))
       return { supported: false, reason: "This parameter name cannot be inserted safely in JavaScript." };
+    const tree = parser.parse(source);
+    if (shadowedNamespaces(source, tree).has(namespace))
+      return { supported: false, reason: "A local JavaScript binding may shadow this reference." };
     let blocked = false;
-    parser.parse(source).iterate({ enter(ref) {
+    tree.iterate({ enter(ref) {
       // Lezer does not flag an unterminated RegExp token; its end boundary is conservatively unsafe.
       const lexicalEnd = ref.name === "LineComment" || ref.name === "RegExp" || ref.node.lastChild?.type.isError === true;
       const inside = from === to ? from > ref.from && (from < ref.to || from === ref.to && lexicalEnd) : from < ref.to && to > ref.from;
@@ -32,32 +35,67 @@ export const javaScriptSourceInsertion: StudioExpressionSourceInsertion = {
 
   findArgumentFixes(source, resolve) {
     const fixes: StudioExpressionReferenceFix[] = [];
-    const shadowed = new Set<string>();
-    parser.parse(source).iterate({ enter(ref) {
-      const { node, name, from, to } = ref;
-      // Conservatively refuse fixes when a local binding could shadow either runtime namespace.
-      if (name === "VariableDefinition" || name === "ObjectPattern" || name === "ImportDeclaration") {
-        const declared = source.slice(from, to);
-        for (const namespace of ["args", "variables"])
-          if (new RegExp(`\\b${namespace}\\b`).test(declared)) shadowed.add(namespace);
-      }
-      if (name !== "MemberExpression") return;
-      const receiver = node.firstChild;
-      const operator = receiver?.nextSibling;
-      const member = operator?.nextSibling;
-      if (receiver?.name !== "VariableName" || source.slice(receiver.from, receiver.to) !== "args" ||
-          operator?.name !== "." || member?.name !== "PropertyName") return;
-      const argument = source.slice(member.from, member.to);
-      if (["__proto__", "prototype", "constructor"].includes(argument)) return;
-      const replacement = resolve(argument);
-      if (!replacement) return;
-      fixes.push({ from, to, current: source.slice(from, to), replacement: memberAccess(replacement.namespace, replacement.name) });
-    } });
+    const tree = parser.parse(source);
+    const shadowed = shadowedNamespaces(source, tree);
     if (shadowed.has("args")) return [];
-    return fixes.filter(fix => !shadowed.has("variables") || !fix.replacement.startsWith("variables"));
+    let parseError = false;
+    tree.iterate({ enter({ node, name, from, to, type }) {
+      if (type.isError) parseError = true;
+      if (name !== "MemberExpression" || isWriteTarget(node)) return;
+      const receiver = node.firstChild;
+      if (receiver?.name !== "VariableName" || source.slice(receiver.from, receiver.to) !== "args") return;
+      const operator = receiver.nextSibling;
+      const optional = operator?.name === "?.";
+      const member = operator?.nextSibling;
+      const bracket = operator?.name === "[" ? operator : optional && member?.name === "[" ? member : null;
+      const argument = bracket ? readStringMember(source, bracket.nextSibling) :
+        (operator?.name === "." || optional) && member?.name === "PropertyName" ? source.slice(member.from, member.to) : undefined;
+      if (!argument || ["__proto__", "prototype", "constructor"].includes(argument)) return;
+      const replacement = resolve(argument);
+      if (!replacement || shadowed.has(replacement.namespace)) return;
+      fixes.push({ from, to, current: source.slice(from, to), replacement: memberAccess(replacement.namespace, replacement.name, optional) });
+    } });
+    return parseError ? [] : fixes;
   }
 };
 
-function memberAccess(namespace: "args" | "variables", name: string) {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? `${namespace}.${name}` : `${namespace}[${JSON.stringify(name)}]`;
+type JavaScriptTree = ReturnType<typeof parser.parse>;
+type JavaScriptNode = JavaScriptTree["topNode"];
+
+function shadowedNamespaces(source: string, tree: JavaScriptTree) {
+  const shadowed = new Set<string>();
+  tree.iterate({ enter({ name, type, from, to }) {
+    const syntax = source.slice(from, to);
+    if (type.isError && syntax.includes("\\")) {
+      // The grammar can split Unicode-escaped identifiers into errors and partial bindings.
+      shadowed.add("args");
+      shadowed.add("variables");
+    }
+    if (name === "VariableDefinition" || name === "ObjectPattern" || name === "ImportDeclaration") {
+      for (const namespace of ["args", "variables"])
+        if (new RegExp(`\\b${namespace}\\b`).test(syntax)) shadowed.add(namespace);
+    }
+  } });
+  return shadowed;
+}
+
+function isWriteTarget(node: JavaScriptNode) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (parent.name === "AssignmentExpression") return node.to <= (parent.firstChild?.to ?? -1);
+    if (parent.name === "PostfixExpression" ||
+        parent.name === "UnaryExpression" && ["delete", "ArithOp"].includes(parent.firstChild?.name ?? "")) return true;
+  }
+  return false;
+}
+
+function readStringMember(source: string, member: JavaScriptNode | null) {
+  if (member?.name !== "String" || member.nextSibling?.name !== "]") return;
+  const literal = source.slice(member.from, member.to);
+  if (literal.startsWith("'") && !literal.includes("\\")) return literal.slice(1, -1);
+  try { return JSON.parse(literal) as string; } catch { return undefined; }
+}
+
+function memberAccess(namespace: "args" | "variables", name: string, optional = false) {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? `${namespace}${optional ? "?." : "."}${name}` :
+    `${namespace}${optional ? "?." : ""}[${JSON.stringify(name)}]`;
 }

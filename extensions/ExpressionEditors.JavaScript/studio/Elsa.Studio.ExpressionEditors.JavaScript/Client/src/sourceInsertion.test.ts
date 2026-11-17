@@ -44,3 +44,28 @@ it("leaves shadowed arguments alone and escapes unusual public input names", () 
   expect(adapter.render({ namespace: "variables", alias: "Input numbers", memberPath: [], source: "", selection: { anchor: 0, head: 0 } }))
     .toMatchObject({ supported: true, insert: 'variables["Input numbers"]' });
 });
+
+it.each([
+  String.raw`((\u0061rgs) => args.Count)({Count: 7})`,
+  "args.Count = 5",
+  "args.Count.member = 5",
+  "args.Count++",
+  "delete args.Count"
+])("does not offer a read repair for %s", source => {
+  expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" }))).toEqual([]);
+});
+
+it("blocks insertion when a plain or escaped local binding can shadow the namespace", () => {
+  for (const source of ["(args) => x", String.raw`(\u0061rgs) => x`])
+    expect(render(source, source.length).supported).toBe(false);
+});
+
+it.each([
+  ['args["Count"]', "args.count"],
+  ["args['Count']", "args.count"],
+  ["args?.Count", "args?.count"],
+  ['args?.["Count"]', "args?.count"]
+])("preserves read semantics and optional chaining for %s", (source, replacement) => {
+  expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" })))
+    .toEqual([{ from: 0, to: source.length, current: source, replacement }]);
+});

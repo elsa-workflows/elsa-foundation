@@ -121,9 +121,6 @@ public sealed class GraphActivityDescriptor
     public IReadOnlyList<GraphActivityVariableDescriptor> Variables { get; }
     public IReadOnlyList<GraphActivityOutputDescriptor> Outputs { get; }
     public IReadOnlyList<GraphActivityOutputMappingDescriptor> OutputMappings { get; }
-    /// <summary>Whether output expressions use stable input keys as their primary argument names.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool UseInputReferenceKeysInOutputExpressions { get; init; }
     public IReadOnlyList<GraphActivityOutcomeMappingDescriptor> OutcomeMappings { get; }
 
     /// <summary>

@@ -327,34 +327,26 @@ public sealed class GraphActivity(
             var expected = ReadType(expectedType);
             var parameterValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var parameterBindings = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
-            var publicNames = new HashSet<string>(StringComparer.Ordinal);
-            var useReferenceKeys = evaluatingOutputs && Descriptor.UseInputReferenceKeysInOutputExpressions;
-            var referenceKeys = useReferenceKeys
-                ? Descriptor.Inputs.Select(input => input.ReferenceKey).ToHashSet(StringComparer.Ordinal)
-                : null;
+            var argumentNames = new HashSet<string>(StringComparer.Ordinal);
+            var source = expression.Value;
+            var useReferenceKeys = evaluatingOutputs && source.ValueKind == JsonValueKind.Object &&
+                source.TryGetProperty("inputBinding", out var binding) && binding.ValueKind == JsonValueKind.String &&
+                StringComparer.Ordinal.Equals(binding.GetString(), "referenceKey") &&
+                source.TryGetProperty("source", out source);
+            if (source.ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("A graph JavaScript expression requires source text.");
+
             foreach (var input in Descriptor.Inputs)
             {
-                var name = input.Name ?? input.ReferenceKey;
-                if (string.IsNullOrWhiteSpace(name))
-                    throw new InvalidOperationException($"Graph input '{input.ReferenceKey}' has no public name for expression access.");
-                if (!publicNames.Add(name))
-                    throw new InvalidOperationException($"Graph public input name '{name}' is declared more than once and cannot be exposed through args.");
+                var name = useReferenceKeys ? input.ReferenceKey : input.Name ?? input.ReferenceKey;
+                if (string.IsNullOrWhiteSpace(name) || !argumentNames.Add(name))
+                    throw new InvalidOperationException($"Graph argument name '{name}' is blank or declared more than once.");
 
                 var captured = await scope.ReadInputAsync(input.ReferenceKey, cancellationToken);
                 if (!captured.Exists)
-                    continue; // An omitted optional input remains absent; expressions that do not read it still run.
+                    continue;
 
                 var value = ToJsonElement(captured.Value);
-                if (useReferenceKeys)
-                    AddParameter(input.ReferenceKey, value);
-                // Keep name-based expressions working where an alias cannot shadow a stable key,
-                // including the key of an omitted optional input.
-                if (referenceKeys is null || !referenceKeys.Contains(name))
-                    AddParameter(name, value);
-            }
-
-            void AddParameter(string name, JsonElement value)
-            {
                 parameterValues.Add(name, value);
                 parameterBindings.Add(name, new LiteralExpressionParameterBinding(value));
             }
@@ -371,12 +363,9 @@ public sealed class GraphActivity(
                     ambientVariables.Add(variable.Name, ToJsonElement(captured.Value));
             }
 
-            if (expression.Value.ValueKind != JsonValueKind.String)
-                throw new InvalidOperationException("A graph JavaScript expression must contain its source as a JSON string.");
-
             var definition = new ExpressionDefinition(
                 "JavaScript",
-                expression.Value.GetString()!,
+                source.GetString()!,
                 expected.ToTypeReference(),
                 parameterBindings,
                 JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
