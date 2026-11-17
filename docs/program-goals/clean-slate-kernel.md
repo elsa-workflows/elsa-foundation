@@ -220,13 +220,14 @@ provider.
 | K2 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T1 |
 | K3 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD1, RD2, RD3, RD4, RD4b, RD5, RD6, RD7, RD7b, RD8c; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP1, MP2; [Observability](../architecture/observability.md#acceptance-cases): B2-1, B2-2, B2-3, B2-4, B2-5, B2-6, M1-1, M1-2, M1-3, M1-4, M1-5, M3-1, M3-2, M3-4, M3-5, M3-6, M3-9, M3-10, M3-11, M3-13; [Tenancy](../architecture/tenancy.md#acceptance-cases): T2, T3, T4, T7, T11, T13, T16, T17 |
 | K4 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD1, RD2, RD5, RD6, RD7, RD7b; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP2, MP4; [Observability](../architecture/observability.md#acceptance-cases): B2-1, B2-2, B2-3, B2-4, M1-1, M1-2, M3-2, M3-7, M3-8, M3-9; [Tenancy](../architecture/tenancy.md#acceptance-cases): T2, T3, T4, T15, T16, T17 |
-| K5 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T12 (release, drain and a crash takeover; the forced-handover case T12b follows the forced handover after release 1) |
+| K5 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T12 |
 | K6 | [Observability](../architecture/observability.md#acceptance-cases): M3-6, M3-10, R-1; [Tenancy](../architecture/tenancy.md#acceptance-cases): T5, T7 |
 | K7 | [Observability](../architecture/observability.md#acceptance-cases): M3-13, R-1 |
 | K8 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T8 |
 | K9 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD10; [Observability](../architecture/observability.md#acceptance-cases): M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T6 |
 | K11 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD3, RD4, RD4b, RD8, RD8b, RD8c, RD9; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP1, MP3; [Observability](../architecture/observability.md#acceptance-cases): B2-5, M1-3, M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T9, T10, T11, T12 |
 | K12 | [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP4; [Observability](../architecture/observability.md#acceptance-cases): M3-1, M3-3, M3-5, M3-11, M3-13; [Tenancy](../architecture/tenancy.md#acceptance-cases): T14 |
+| After release 1 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T12b, with the forced handover |
 
 ## The switch
 
