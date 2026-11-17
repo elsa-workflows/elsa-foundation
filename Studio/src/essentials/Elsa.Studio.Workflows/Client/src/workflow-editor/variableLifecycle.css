@@ -1,0 +1,145 @@
+.wf-lost-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--studio-warning);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+button.wf-lost-update-badge {
+  cursor: pointer;
+}
+
+button.wf-lost-update-badge:hover {
+  filter: brightness(0.96);
+}
+
+.wf-variable-writes .wf-runtime-evidence-heading h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-variable-write-list {
+  display: grid;
+  gap: 8px;
+}
+
+.wf-variable-write,
+.wf-recorded-completion,
+.wf-input-refreshes {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+}
+
+.wf-variable-write[data-outcome="LostUpdateWarning"],
+.wf-variable-write[data-outcome="LostUpdateFault"] {
+  border-left: 3px solid var(--studio-warning);
+}
+
+.wf-variable-write header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wf-variable-write-outcome {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wf-variable-write p,
+.wf-recorded-completion p,
+.wf-input-refreshes p {
+  margin: 0;
+}
+
+.wf-variable-write-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+
+.wf-variable-write-facts > div {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.wf-variable-write-facts dt {
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-variable-write-facts dd {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-variable-value-state-label {
+  font-weight: 600;
+}
+
+.wf-variable-value-state[data-tone="muted"] .wf-variable-value-state-label {
+  color: var(--studio-text-muted);
+}
+
+.wf-variable-value-digest {
+  font-size: 11px;
+}
+
+.wf-variable-write-hint,
+.wf-incident-operator-explanation {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-incident-operator-explanation {
+  flex-basis: 100%;
+}
+
+.wf-input-refreshes strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-input-refreshes ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.wf-node-lifecycle-settings {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.wf-node-lifecycle-settings label {
+  display: grid;
+  gap: 4px;
+}
+
+.wf-node-lifecycle-settings .wf-node-lifecycle-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}

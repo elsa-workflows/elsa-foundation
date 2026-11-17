@@ -17,6 +17,8 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import { InputRefreshHistory, LostUpdateBadge, VariableWriteDiagnosticsSection } from "./VariableLifecycleEvidence";
+import { countLostUpdates } from "../variableLifecycle";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -64,9 +66,12 @@ export function WorkflowActivityExecutionDetails({
   onSelectEvidence,
   refreshKey = 0,
   compact = false,
-  prepared
+  prepared,
+  nodeLabelOf
 }: {
   prepared?: PreparedAttachedExecution;
+  /** The authored label of an executable node, so a lost-update warning names the other writer by name. */
+  nodeLabelOf?(executableNodeId: string): string | undefined;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -217,6 +222,7 @@ export function WorkflowActivityExecutionDetails({
             <span className="wf-activity-overview-eyebrow">Selected activity</span>
             <div className="wf-activity-copy-line">
               <h4>{activityLabel}</h4>
+              {currentInspectionState.status === "ready" ? <LostUpdateBadge count={countLostUpdates(currentInspectionState.inspection?.variableWrites)} /> : null}
               <CopyValueButton
                 value={activityLabel}
                 ariaLabel="Copy activity name"
@@ -272,6 +278,9 @@ export function WorkflowActivityExecutionDetails({
         </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
       </section> : null}
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
+        {currentInspectionState.status === "ready" && currentInspectionState.inspection ? (
+          <VariableWriteDiagnosticsSection inspection={currentInspectionState.inspection} labelOf={nodeLabelOf} />
+        ) : null}
         <WorkflowActivityInputEvidence
           state={currentInspectionState}
           declarations={declaredInputs}
@@ -476,6 +485,7 @@ function WorkflowActivityInputEvidence({
           ))}
         </div>
       ) : null}
+      {state.status === "ready" ? <InputRefreshHistory refreshes={state.inspection?.inputRefreshes} /> : null}
     </section>
   );
 }

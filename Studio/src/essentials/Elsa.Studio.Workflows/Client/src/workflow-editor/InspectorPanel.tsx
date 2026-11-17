@@ -32,6 +32,7 @@ import { describeSlotContents } from "./editorHelpers";
 import { ConnectMenu } from "./graph";
 import { ActivityPresentationFields } from "./ActivityPresentationFields";
 import { StudioLink } from "../StudioLink";
+import { VariableLifecycleNodeSettings } from "./VariableLifecycleNodeSettings";
 
 // The open change-activity picker. Holds only the slot ID (not the ChildSlot descriptor): the menu can
 // stay open across draft edits (autosave merge, Weaver batch), so the pick handler re-resolves the slot
@@ -439,6 +440,9 @@ export function InspectorPanel({
           <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
             label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />
+          {!intrinsicDescriptor && !selectedReusableDefinitionId ? (
+            <VariableLifecycleNodeSettings node={selectedNode} readOnly={readOnly} onChange={onSelectedActivityChange} />
+          ) : null}
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("version")}>
           <div className="wf-inspector-version">
