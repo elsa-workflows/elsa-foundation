@@ -529,14 +529,9 @@ internal sealed class BpmnTimeRelationAnalysis
         foreach (var node in queue)
             started.Add(node);
         while (queue.TryDequeue(out var node))
-            foreach (var next in SuccessorsOf(node))
-            {
-                if (node.StartsWith(HostEntryPrefix, StringComparison.Ordinal) && _elements.TryGetValue(next, out var element) &&
-                    element.ElementType == BpmnElementTypes.BoundaryEvent)
-                    continue;
+            foreach (var next in SequenceSuccessorsOf(node))
                 if (started.Add(next))
                     queue.Enqueue(next);
-            }
 
         var outside = _inbound.Keys.Concat(_outgoing.Keys)
             .Where(node => !StringComparer.Ordinal.Equals(node, Root) && !started.Contains(node))
@@ -544,12 +539,18 @@ internal sealed class BpmnTimeRelationAnalysis
         return outside.Any(node => CyclesWithin(node, outside));
     }
 
+    // The runtime's walk follows sequence flows only: a host does not lead to its boundary events.
+    private IEnumerable<string> SequenceSuccessorsOf(string node) =>
+        SuccessorsOf(node).Where(next => !(node.StartsWith(HostEntryPrefix, StringComparison.Ordinal) &&
+                                           _elements.TryGetValue(next, out var element) &&
+                                           element.ElementType == BpmnElementTypes.BoundaryEvent));
+
     private bool CyclesWithin(string node, HashSet<string> region)
     {
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue = new Queue<string>([node]);
         while (queue.TryDequeue(out var current))
-            foreach (var next in SuccessorsOf(current).Where(region.Contains))
+            foreach (var next in SequenceSuccessorsOf(current).Where(region.Contains))
             {
                 if (StringComparer.Ordinal.Equals(next, node))
                     return true;

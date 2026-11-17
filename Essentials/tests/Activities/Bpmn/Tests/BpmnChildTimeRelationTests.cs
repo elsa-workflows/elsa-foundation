@@ -444,6 +444,23 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "work", "work"));
     }
 
+    // A reminder loop on a boundary path (a timer on the step leads back to the notification) is a cycle only through the
+    // host's boundary, which the runtime's walk does not follow: the process still declares.
+    [Fact]
+    public void A_reminder_loop_on_a_boundary_path_still_declares()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("a", "work"), Element("end", BpmnElementTypes.EndEvent),
+                new BpmnElement("ba", BpmnElementTypes.BoundaryEvent, attachedToRef: "a", cancelActivity: true),
+                Task("notify", "notify"), Task("h2", "approve"), Element("end2", BpmnElementTypes.EndEvent),
+                new BpmnElement("bt", BpmnElementTypes.BoundaryEvent, attachedToRef: "h2", cancelActivity: true)
+            ],
+            [Flow("start", "a"), Flow("a", "end"), Flow("ba", "notify"), Flow("notify", "h2"), Flow("h2", "end2"), Flow("bt", "notify")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "notify", "approve"));
+    }
+
     // A boundary path that returns into the started flow's loop is walked with that loop: the process still declares.
     [Fact]
     public void A_boundary_path_back_into_a_started_loop_still_declares()
