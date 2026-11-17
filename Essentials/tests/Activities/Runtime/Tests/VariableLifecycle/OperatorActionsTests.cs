@@ -102,6 +102,37 @@ public sealed class OperatorActionsTests
         Assert.Equal(10, record.OverwrittenValue!.InlineValue!.Value.GetInt32());
     }
 
+    // Spec 1231 T016: a retried or re-executed step gets a new variable session. Its faulted attempt's session write was
+    // never saved; the new attempt reads the committed value again and writes once.
+    [Theory]
+    [InlineData(ReExecuteFaultedActivityAlterationHandler.Kind)]
+    [InlineData(RetryFaultedActivityAlterationHandler.Kind)]
+    public async Task A_recovered_step_starts_a_new_session_and_reads_committed_values_again(string kind)
+    {
+        await using var fixture = await Fixture.StartAsync(
+            WorkflowExecutionHarness.NewExecutable(
+                StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(InterventionParentActivity),
+                    StepVariableTestGraph.CountLeaf("node-f", typeof(FlakySessionIncrementActivity))),
+                VariableLifecycleTestGraph.CountDeclaration(initial: 5)),
+            "actexec-parent", "actexec-f");
+        var source = fixture.Run.State("node-f");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        // The faulted attempt wrote 6 in its session; the fault discarded it.
+        Assert.Equal(5, VariableLifecycleTestGraph.ReadCount(fixture.Run));
+        Assert.Null(source.VariableWrites);
+
+        var job = await fixture.ApplyAsync(kind, source.Execution.ActivityExecutionId);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        var run = await fixture.ReadRunAsync();
+        run.AssertWorkflowCompleted();
+        var successor = Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.Equal(6, VariableLifecycleTestGraph.ReadCount(run));
+        var read = Assert.Single(successor.SessionReads!);
+        Assert.Equal(successor.Attempts!.Last().AttemptId, read.AttemptId);
+        Assert.Equal(VariableWriteSource.SessionChange, Assert.Single(successor.VariableWrites!).Writer.Source);
+    }
+
     // T020 / FR-016: a re-executed loop body owns exactly one iteration frame, activated once by its own Start for the
     // same iteration, and reads the loop item from it again. The source's activated frame is not carried over and not
     // activated a second time.
@@ -587,6 +618,21 @@ public sealed class LoopItemFlakyActivity(FailureBudget budget, CountReadLog rea
 }
 
 /// <summary>An External leaf that reads <c>Count</c>, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>
+/// <summary>Increments <c>count</c> in its session, then faults the first time it runs (spec 1231 T016).</summary>
+public sealed class FlakySessionIncrementActivity(FailureBudget budget) : Activity
+{
+    [ActivityInput]
+    public VariableReference<int> Count { get; set; } = default!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        context.Variables.Set(Count, context.Variables.Get(Count) + 1);
+        return ValueTask.FromResult(budget.TakeFailure()
+            ? ActivityTransition.Fault<ActivityUnit>(new ActivityFault(OutcomeUnknownActivity.Code, "The response was lost.", category: OutcomeUnknownActivity.Category))
+            : ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
+}
+
 public sealed class FlakyIncrementActivity(FailureBudget budget, CountReadLog reads) : Activity<Incremented>
 {
     [ActivityInput]

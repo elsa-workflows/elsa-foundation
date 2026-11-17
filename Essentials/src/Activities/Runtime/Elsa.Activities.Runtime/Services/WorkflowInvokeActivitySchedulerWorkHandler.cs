@@ -351,10 +351,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             }
             else
             {
-                returnedTransition = await activity!.ExecuteAsync(context!.ToActivityExecutionContext() with
-                {
-                    Variables = (IStepVariables?)stepSession ?? Elsa.Activities.Runtime.Core.Models.StepVariables.Unavailable
-                });
+                returnedTransition = await activity!.ExecuteAsync(context!.ToActivityExecutionContext().WithVariables(
+                    (IStepVariables?)stepSession ?? Elsa.Activities.Runtime.Core.Models.StepVariables.Unavailable));
                 // A fault the session raised (undeclared name, withheld value, failed type check) faults the step even when
                 // the body caught it (spec 1231 FR-006b, FR-014); nothing the step staged is saved.
                 if (stepSession?.PendingFault is { } sessionFault)

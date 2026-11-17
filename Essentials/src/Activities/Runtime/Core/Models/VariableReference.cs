@@ -44,8 +44,11 @@ public sealed class VariableReference<T> : IVariableReference
         VariableKey = variableKey;
     }
 
+    [JsonPropertyName("name")]
     public string Name { get; }
+    [JsonPropertyName("scopeId")]
     public string ScopeId { get; }
+    [JsonPropertyName("variableKey")]
     public string VariableKey { get; }
 
     [JsonIgnore]
@@ -74,8 +77,11 @@ public sealed class ReadOnlyVariableReference<T> : IVariableReference
         VariableKey = variableKey;
     }
 
+    [JsonPropertyName("name")]
     public string Name { get; }
+    [JsonPropertyName("scopeId")]
     public string ScopeId { get; }
+    [JsonPropertyName("variableKey")]
     public string VariableKey { get; }
 
     [JsonIgnore]

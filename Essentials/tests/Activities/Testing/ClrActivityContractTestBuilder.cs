@@ -27,6 +27,23 @@ public static class ClrActivityContractTestBuilder
             {
                 var attribute = candidate.Attribute!;
                 var hasDefault = attribute.DefaultValue is not null;
+                // Mirror ExecutableNodeCompiler: a variable-reference input pins the reference, never a value (spec 1231).
+                if (VariableReferenceTypes.TryGet(candidate.Property.PropertyType, out var access, out var valueType))
+                {
+                    return new ActivityInputContract(
+                        attribute.Key ?? candidate.Property.Name,
+                        candidate.Property.Name,
+                        new ValueTypeDescriptor(VariableReferenceTypes.Alias),
+                        isRequired: true,
+                        isNullable: false,
+                        hasDefault: false,
+                        defaultValue: null,
+                        ActivityValuePolicy.Default)
+                    {
+                        VariableReference = new ActivityInputVariableReference(access, ValueType(valueType))
+                    };
+                }
+
                 return new ActivityInputContract(
                     attribute.Key ?? candidate.Property.Name,
                     candidate.Property.Name,
@@ -76,9 +93,10 @@ public static class ClrActivityContractTestBuilder
                 .ToArray(),
             new ActivityActivationRequirement(descriptorType, alias),
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
-            sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
+            activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External,
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
+            accessesUndeclaredVariables: activityType.IsDefined(typeof(AccessesUndeclaredVariablesAttribute), inherit: true));
     }
 
     public static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(
