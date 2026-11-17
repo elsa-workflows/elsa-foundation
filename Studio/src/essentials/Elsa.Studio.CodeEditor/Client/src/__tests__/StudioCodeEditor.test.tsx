@@ -46,6 +46,23 @@ describe("StudioCodeEditor", () => {
     }
   });
 
+  it("does not hand off an untouched fallback cursor during expansion", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const fallbackSelection: NonNullable<StudioCodeEditorEngineProps["fallbackSelection"]> = { current: null };
+    const props: StudioCodeEditorEngineProps = {
+      document: codeDocument({ value: "args.data" }), profile: "expanded", session: { id: "untouched-fallback" },
+      fallbackSelection, readOnly: false, theme: "studio", minHeight: "220px",
+      ariaLabel: "Expression", diagnostics: [], onChange() {}
+    };
+    flushSync(() => root.render(<FallbackCodeEditor {...props} />));
+    editorInput(host).focus();
+    flushSync(() => root.unmount());
+    host.remove();
+    expect(fallbackSelection.current).toBeNull();
+  });
+
   it("renders the fallback editor for unsupported languages and emits document changes", () => {
     const document = codeDocument({ language: "liquid", value: "{{ total }}" });
     const onChange = vi.fn();

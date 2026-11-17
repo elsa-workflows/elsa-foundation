@@ -62,7 +62,7 @@ it("consumes the fallback selection belonging to each mounted editor surface", (
     <CodeMirrorStudioCodeEditor {...props} fallbackSelection={compact} />
     <CodeMirrorStudioCodeEditor {...props} profile="expanded" fallbackSelection={expanded} />
   </>));
-  const [compactView, expandedView] = Array.from(host.querySelectorAll(".cm-editor"), node => EditorView.findFromDOM(node)!);
+  const [compactView, expandedView] = Array.from(host.querySelectorAll<HTMLElement>(".cm-editor"), node => EditorView.findFromDOM(node)!);
   expect(compactView.state.selection.main).toMatchObject({ anchor: 0, head: 2 });
   expect(expandedView.state.selection.main).toMatchObject({ anchor: 1, head: 4 });
   expect(compact.current).toBeNull();
