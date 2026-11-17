@@ -266,7 +266,7 @@ Park decision.
 | Step | What its commit does |
 |---|---|
 | **Open** (the `kernel.recover`, `kernel.discard` or `kernel.terminate` turn, the delete of a parked instance, or the expiry timer's turn) | Checks the operation (below); recalls the expiry timer; increments `ParkRecord.ResolutionGeneration` and writes `ParkRecord.Resolution {operation, kind, mode, generation, cursor}` on the instance row, with the cursor before the first row; for a `retry` with an explicit selection, marks each selected row `KeptBy = Selected` by its full key, with its count checked; sends the instance a `kernel.drain` bound to the generation. For recover it also restores the waits (below) and sets the instance running, so restored rows are delivered as the drain goes. From this commit on, arrivals are no longer kept, and while a recover drain is open the instance receives only control kinds and the rows this resolution released (below). |
-| **Page** (each `kernel.drain` turn) | Reads the next page of metadata: `Target = :instance AND KeptBy IS NOT NULL AND (Seq, Id, Scope, Match) > :cursor`, ordered by that tuple, at most `P_page` rows (below), never a payload. Updates each row by its full key, with its count checked (restore, which also marks the row released by this resolution, or clear, below), moves the cursor to the page's last tuple, and sends the next `kernel.drain`. |
+| **Page** (each `kernel.drain` turn) | Reads the next page of metadata: `Target = :instance AND (KeptBy IS NOT NULL OR Stale) AND (Seq, Id, Scope, Match) > :cursor`, ordered by that tuple, where `Stale` selects a row an earlier resolution of this creation released and nobody has consumed (`ReleasedBy` of this creation and a lower generation, `NOT Done`; see "Interruption" below), at most `P_page` rows (below), never a payload. Updates each row by its full key, with its count checked (restore, which also marks the row released by this resolution, or clear, below), moves the cursor to the page's last tuple, and sends the next `kernel.drain`. |
 | **Complete** (the page that finds no row) | Clears `ParkRecord.Resolution`, journals the outcome with its counts, and does the kind's last step: recover ends the withholding of the rows it did not release; discard and expiry record the disposition ("discarded" or "expired"), leave the instance Faulted and write its terminal mark; terminate sets the end status Cancelled; delete finishes the built delete. Discard, expiry, terminate and delete each send the parent one final notice (Faulted, or Cancelled for terminate), since a parent keeps waiting for a parked child ([large fan-out](large-fan-out.md), decision 5). |
 
 - **The cursor is a tuple.** `seq` alone is not a total order: MongoDB can give two rows one `seq` from its separate
@@ -305,10 +305,11 @@ Park decision.
     the cursor had not reached, which were never delivered.
   - **The marker is durable and generation-bound.** The page sets `ReleasedBy` in the same update that restores the
     row, so it commits with the cursor; a new owner reads it from the polled row and the generation from the instance
-    row, and an ownership change neither releases nor withholds a row. The generation grows at every Open of the
-    creation ([the internal controls' rules](#every-park-operation-names-its-park)), so a row released by an earlier, interrupted resolution matches no later one, and the creation
-    keeps a row of an earlier creation of the same id from matching. The marker is never cleared, since a stale one
-    matches nothing.
+    row, and an ownership change neither releases nor withholds a row. The generation is monotonic for the creation's
+    lifetime and kept when a Park resolves ([the internal controls' rules](#every-park-operation-names-its-park)),
+    so a row released by an earlier resolution, of this Park or an earlier one, matches no later one, and the creation
+    keeps a row of an earlier creation of the same id from matching. A stale marker on a consumed row stays and
+    matches nothing; an unconsumed one rejoins the Park ("Interruption" below).
   - **Order.** Restored rows keep their `seq`, and the poll delivers released rows in that order, so no message from
     one sender overtakes an earlier one from the same sender: a sender's kept rows are released during the drain, and
     its later rows only after Complete. A timer due at once that the open re-armed fires after the drain.
@@ -324,10 +325,19 @@ Park decision.
     any arrival and get `Arrived`; kept rows the drain had not reached keep their reasons. The re-park re-arms
     `kernel.park-expiry` for the window's remaining time (from the Park's time in the `ParkRecord`; due at once if it
     has passed), under the current generation, since the recover's open had recalled the old one and bumped the
-    generation past it. A new recover then drains every row still kept. Rows the interrupted drain released keep a
-    `ReleasedBy` that no later resolution matches. The parked instance consumes them in poll order, before any later
-    row of the same sender, so a row still pending at the next Open has no kept successor from its sender; it waits
-    for that drain's Complete like any other unreleased row.
+    generation past it. A new recover then drains every row still kept.
+  - **Released rows rejoin the Park.** Rows the interrupted drain released and nobody consumed belong to the Park
+    again, by one mechanism: the parked instance consumes those it reaches as `Arrived` arrivals, and any still
+    unconsumed when the next recover opens are read by that drain's pages through the `Stale` arm of the page
+    predicate. A page restores such a row as an `Arrived` row, by the same update with `NOT Done AND ReleasedBy =
+    :stale` in place of `Done AND KeptBy = :reason`, giving it the new `ReleasedBy`. So a released row and a later
+    kept row of its sender are restored in tuple order, and neither can overtake the other: in the trace R1, R2, K of
+    one sender, with R2 released and pending when an operator's recover, given a lower `seq` by MongoDB's outside-add
+    clock, opens the next drain, the pages restore R2 before K. Discard, expiry, terminate and delete pages leave
+    `Stale` rows alone, and at Complete they meet the ordinary rule for the instance that drain leaves (consumed and
+    dropped). **The bound:** at an interruption at most one page of restored rows not yet taken up, plus the rows the
+    model held, are unconsumed (the progress gate's bound, below), and the next drain pages them with the kept rows,
+    at most `P_page` per page; no commit touches them all at once.
   - **A terminate** opens its own drain over the rows still kept, which clears them (below).
 - **The model ends during a recover drain.** The instance runs from the open, so its model can finish, be cancelled or
   end faulted by its own outcome before the last page. That end does not stop the drain: `kernel.drain` is a control
@@ -385,41 +395,52 @@ Park decision.
 - **What a page reads, and its metadata bound.** A page reads and writes metadata only: each row's full key (`Id`,
   `Scope`, `Match`), `Seq`, `Kind`, `Sender`, `KeptBy`, `ReleasedBy` and the payload's size. Restoring and clearing
   set flags by full key and never carry the payload. `B` counts the encoded metadata, so a row's payload size plays
-  no part in its page. Every projected field is bounded at admission (proposed limits, in UTF-8 bytes), so a row's
-  encoded metadata has a maximum `M` strictly below `B`:
+  no part in its page. Every projected field is bounded at admission (proposed limits), so a row's encoded metadata
+  has a maximum `M` strictly below `B`.
+  - **The unit.** Lengths are WTF-8 bytes: UTF-8, with NUL as one byte and each unpaired UTF-16 unit as three bytes,
+    so every string the kernel accepts has a length (`"high\uD800"` is 7). `N` applies to the caller's or model's
+    own name, before tenant qualification and the virtual-partition prefix; `Q` adds at most 65 bytes and `{vp}/` at
+    most 5 ([tenancy](tenancy.md#names-one-namespace-per-tenant)), and the derived limits include them.
 
   | Field | Limit |
   |---|---|
-  | A name an application or model supplies: an actor id (instance id or caller key), an ordinary wire id, an operation id, a job key, a wait id, a subscription key, an event id | `N` = 1,024 bytes each |
+  | A name an application or model supplies: an actor id (instance id or caller key), an ordinary wire id, an operation id, a job key, a wait id, a subscription key, an event id | `N` = 1,024 bytes each, before qualification |
   | `Kind` | 256 bytes |
-  | `Id` of an issued message or a ticket (origin, key, creation and ordinal) | At most 2`N` + 128, from bounded parts |
-  | `Match` (subscription key, event id, instance, wait, creation) | At most 4`N` + 128, from bounded parts |
-  | `Sender` (an actor id, or an address the instance received) | At most `N` + 128 |
+  | `Id` of an issued message or a ticket (qualified origin, key, creation, generation and ordinal) | At most 2`N` + 160, from bounded parts |
+  | `Match` (qualified subscription key, event id, qualified instance, wait, creation) | At most 4`N` + 192, from bounded parts |
+  | `Sender` (a qualified actor id, or an address the instance received) | At most `N` + 160 |
   | `Scope`, `Seq`, `KeptBy`, `ReleasedBy`, payload size | Fixed width, 64 bytes together |
 
-  The variable fields come to at most 7`N` + 640 = 7,808 bytes. A provider that stores text as UTF-16 at most doubles
-  that, to 15,616. With the fixed 64 bytes and 704 bytes for the provider's own framing (BSON names and type bytes, row
-  headers), `M` = 16 KiB. The limits are checked where a row is first written, at every ingress class, before any
-  write:
+  The variable fields come to at most 7`N` + 768 = 7,936 bytes. `M` is set by the widest provider encoding: SQL
+  Server's UTF-16 at most doubles a length, to 15,872, and the reversible binary path of PostgreSQL and SQLite for
+  names with NUL or unpaired units ([storage model](storage-model.md#inbox-identity-and-public-names)) stores UTF-16
+  bytes as base64, at most 8/3 of a length, 21,163. With the fixed 64 bytes and an allowance for the provider's own
+  framing (BSON names and type bytes, row headers), `M` = 24 KiB. The limits are checked where a row is first
+  written, at every ingress class, before any write:
   - **An outside add** (a command, a start, a publish, an operator message): the entry point refuses it with a
     validation error, and no row exists.
   - **A turn's sends** (`ITurn.Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`): the call
     throws a typed `MetadataLimitExceeded` before the message joins the turn's output, so the turn fails as any model
     fault does. The message is never written, and a Park that follows keeps only the turn's consumed deliveries,
-    which were admitted under the same limits.
+    which were admitted under the same limits. A received address enters a turn inside a message that was itself
+    admitted, and `SendFromReceivedAddress` checks it again as the new row's `Sender`.
   - **An actor type's composed `Add`** (a parent's notice, a tree terminate) and every kernel-composed row (tickets,
     `kernel.drain`, `kernel.park-expiry`, job results, child notices): the commit checks the same limits and refuses
     an over-limit row as a definite error. These rows are built from fields already bounded, so the check is a
     defence.
 
-  The kernel's limit is the tighter one where a provider has its own (SQL Server 450 UTF-16 units, MySQL 255 scalar
-  values, [storage model](storage-model.md#inbox-identity-and-public-names)). The wide-key sample in
+  Where a provider has a tighter limit of its own, admission applies that one, so the refusal comes before the write
+  and never from the store: SQL Server's 450 UTF-16 units and MySQL's 255 scalar values
+  ([storage model](storage-model.md#inbox-identity-and-public-names)), and PostgreSQL's B-tree entry limit of about
+  2,704 bytes on each indexed key ([tenancy](tenancy.md#names-one-namespace-per-tenant)). Today's fixtures above `N` become refusal
+  fixtures (S-6): SQL Server's `LargestInboxId`, `"0/a!"` with 446 × `界` (1,342 bytes, `Kernel.Ef.Conformance`
+  Program.cs), and the 4,096-unit random keys of `UnicodeKeys.cs` (Recreate.Run). The wide-key sample in
   [WRITES.md](../../prototypes/kernel-model/WRITES.md#15-november-card4-physical-identity-experiment-on-landed-park)
-  measured 11,008 encoded octets for a 4,096-unit key: one measured row, no maximum, and a key above `N`, so it is
-  refused at admission under these limits. The third review's SQLite probe stored a 5,242,882-byte key; under these
-  limits such a key never reaches the store. So no row a page can meet exceeds `M`, and a page always has room for its
-  first row. **Measured at K4:** each provider's encoded size of a row with every field at its limit, which must not
-  exceed `M`. The UTF-16 doubling and the framing allowance are unmeasured. A restored row's payload is read later by the ordinary poll that delivers it, under
+  measured 11,008 encoded octets for a 4,096-unit key: one measured row, no maximum, and a key above `N`. The third
+  review's SQLite probe stored a 5,242,882-byte key; under these limits such a key never reaches the store. So no row
+  a page can meet exceeds `M`, and a page always has room for its first row. **Measured at K4:** each provider's
+  encoded size of a row with every field at its limit in that provider's widest encoding, which must not exceed `M`.
+  The doubling, the base64 factor and the framing allowance are unmeasured. A restored row's payload is read later by the ordinary poll that delivers it, under
   the poll's own limits, as for any accepted message; a cleared row's payload is never read. So a kept delivery of
   5 MiB, which MongoDB's 16 MiB document admits, moves through a page like any other. Payload size is bounded at
   admission and by the provider, and write volume's values by reference concern instance state, so nothing here
@@ -430,7 +451,7 @@ Park decision.
   the Resolution never stores the selection and Open writes at most `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
   at most `P` rows, so the next recover starts from the Park's own reasons.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
-  owned commit, and `B` = 4 MiB of metadata. A page takes at most `P_page` = min(`P`, ⌊`B` / `M`⌋) = 256 rows, so its
+  owned commit, and `B` = 4 MiB of metadata. A page takes at most `P_page` = min(`P`, ⌊`B` / `M`⌋) = 170 rows, so its
   metadata is at most `B` by construction: a plain row limit that every provider supports, with no byte count in the
   query. An explicit selection keeps its own bound of `P` handles (above). A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
   document and 48 MiB message limits and short against its transaction lifetime
@@ -462,7 +483,7 @@ Park decision.
     models that hold for a later row. The `elsa.kernel.drain.held` gauge reports held restored rows, so an operator
     sees that cost.
   - **The partition's backlog is no part of the gate.** The trace it avoids: rows that arrive during a recover drain
-    are withheld above the cursor, yet they count in the partition's backlog; a gate on that backlog above the high
+    are withheld as unreleased rows, yet they count in the partition's backlog; a gate on that backlog above the high
     water mark would make every page wait, the withheld rows would never be released, and the backlog would never
     fall. Unrelated ingress is still refused by the ingress threshold alone, which counts the withheld rows until
     Complete releases them.
@@ -627,7 +648,7 @@ calls one new model hook.
 
   **The re-arm.** A timer is re-armed under its own full key, by the branch the disposition step's point lookup chose:
   - **The row is present and done:** an update by full key, `WHERE ... AND Done`, with a count check of 1. A still-kept
-    row is done with `KeptBy` set, so it matches too, and the same update releases it. It sets `Done = false`,
+    row is done with `KeptBy` set, so it matches too, and the same update clears its `KeptBy` (it sets no `ReleasedBy`). It sets `Done = false`,
     `KeptBy` null, `Attempts = 0`, `Trial` none, `Seen = 0`, the original due time, and `KeepUntil` to
     the value a newly inserted timer has, so the revived row carries no trace of the page that cleared it.
   - **The row is absent:** a create-only insert of the same row.
@@ -665,13 +686,14 @@ store conformance suite need it:
 - a new transition that clears `Done` on a restored row, with its poison counters reset;
 - the sweep's predicate excluding kept rows;
 - a paged read of an instance's kept rows after a cursor, and point lookups by full key, served by an index on
-  `(Target, Seq)` partial on `KeptBy IS NOT NULL` where the engine supports it (MySQL takes the full index);
+  `(Target, Seq)` partial on `KeptBy IS NOT NULL OR (ReleasedBy IS NOT NULL AND NOT Done)` where the engine supports it (MySQL takes the full index);
 - the delivery handle, encoded and decoded by layer 2 only;
 - `ParkRecord.Resolution` with the handle of the previous page's last restored row, which the progress gate reads, and
   its cursor on `(Seq, Id, Scope, Match)`, the store's poll order with the full key as
   tie-break;
-- `ReleasedBy` on the message row, the `(creation, generation)` of the resolution whose page restored it, and the
-  eligibility rule that gives a recovering instance only control kinds and the rows the open resolution released;
+- `ReleasedBy` on the message row, the `(creation, generation)` of the resolution whose page restored it, the
+  eligibility rule that gives a recovering instance only control kinds and the rows the open resolution released, and
+  the page's `Stale` arm that returns rows an interrupted drain released and nobody consumed;
 - two kernel control kinds, `kernel.drain` and `kernel.park-expiry`, which pass withholding, are never suspects and
   are exempt from the poison check;
 - the consume rule that keeps no arrival after a resolution opens, and the interruption rules that resume keeping;
@@ -771,7 +793,7 @@ record ParkedDetail(ParkedItem Item, IReadOnlyList<string> ConsumedHandles, Reso
 | Trace context | About 27 bytes per message row write in binary; 16 bytes per sampled journal row | Estimated, unmeasured |
 | Metrics | In memory, from poll answers and the owner's memory, except the depth beyond a full poll, which reuses question 3's capped count (once per behind virtual partition per sample interval); the parked gauge reads the read model's count | No database work of their own on the hot path |
 | Park keeping its deliveries (decision 2) | A done mark with `KeptBy` in place of a delete for each consumed delivery and each arrival while parked, a journal row, and rows kept until their Park is resolved; one nullable column on every message row, and one partial index written only for kept rows | Only when an instance parks |
-| Recover, discard, delete of a parked instance, expiry | The open: one outside add (none for expiry), its seen mark and one commit, with one point lookup per timer and job the plan names and at most `P` selection marks. Then one turn per page of up to `P` rows: one paged read and the page's share of a commit. Completion takes one more page turn | Per resolution; proportional to the kept rows, never in one transaction |
+| Recover, discard, delete of a parked instance, expiry | The open: one outside add (none for expiry), its seen mark and one commit, with one point lookup per timer and job the plan names and at most `P` selection marks. Then one turn per page of up to `P_page` rows: one paged read and the page's share of a commit. Completion takes one more page turn | Per resolution; proportional to the kept rows, never in one transaction |
 
 ## Not verified
 
@@ -834,7 +856,7 @@ faults in the Park and recovery design. Each trace is restated, then followed th
    resume had to read, update and hand over all of them in one transaction, with no bound in rows, bytes or
    transaction lifetime.
 2. Revised: no resolution touches the kept rows in one transaction. The open is bounded by the model's waits and the
-   selection. Each page is bounded by `P` rows and `B` bytes, and nothing goes into memory ahead of the disk.
+   selection. Each page is bounded by `P_page` rows and `B` bytes (third review), and nothing goes into memory ahead of the disk.
 3. Arrivals stop being kept at the open, so the drain ends. The cursor survives crashes and takeovers.
 4. Restored rows rejoin due depth one page at a time. A page waits while the previous page's last restored row is
    not yet taken up, read from durable state, and while the instance is suspended, so the drain adds at most one page of
@@ -907,7 +929,10 @@ found more faults in the recovery drain. Each trace is restated, then followed t
    from the instance row. The relational case, a `seq` drawn before page 1 and visible after it, is the same: the
    row has no marker.
 5. An interrupting re-park and a later recover bump the generation, so rows the first drain released and nobody
-   consumed are unreleased under the second.
+   consumed are unreleased under the second. They rejoin the Park: the second drain's pages read them through the
+   `Stale` arm and restore them in tuple order with the kept rows, so in the trace with R1 and R2 released,
+   K kept and a low-`seq` recover command opening the next drain while R2 is pending, R2 is restored and delivered
+   before K, and a model end at K drops nothing kept.
 
 **R3-M3: the metadata page could exceed its byte bound.**
 
@@ -916,9 +941,9 @@ found more faults in the recovery drain. Each trace is restated, then followed t
    exceeds `B` = 4 MiB. The review's SQLite probe stored a 5,242,882-byte key in the provider's key shape, so a key
    alone could do it too.
 2. Revised: every projected field has an admission limit, checked at every ingress class before any write, so a
-   row's encoded metadata is at most `M` = 16 KiB, strictly below `B` ("What a page reads, and its metadata bound"
+   row's encoded metadata is at most `M` = 24 KiB, strictly below `B` ("What a page reads, and its metadata bound"
    above). The over-limit kind or key is refused where it is first written, so it is never kept.
-3. A page takes at most `P_page` = 256 rows, so its metadata is at most `B` by construction, and its first row always
+3. A page takes at most `P_page` = 170 rows, so its metadata is at most `B` by construction, and its first row always
    fits. A large payload still moves through a page as metadata (S-1).
 
 ## Acceptance cases
@@ -950,7 +975,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept. The prototype's MongoDB store sorts by `(seq, _id)` (`MongoStore.cs`), so the tuple cursor is a provider contract implemented and qualified here | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
 | M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete naming the end's mark after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`; one naming the Park's mark is refused as naming an earlier transition. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
-| M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
+| M3-11 | The deadlock trace: during a recover drain, unreleased arrivals withheld until Complete push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
 | R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap, retained dispositions, and the interrupted-resume trace of M3-14 | K6, K7 |
@@ -973,14 +998,14 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | DT-4 | **Protection begins before a parked instance's delete completes.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is false when the delete D (Operator, r1) arrives and turns true before the drain's Complete. Interleaving: D opens the delete drain; an ownership takeover comes between pages; protection turns true after the last page and before Complete. Outcome: no row keeps `KeptBy`; Complete leaves A Faulted under a new mark r2, sends P exactly one Faulted notice, and journals D refused as protected with the Park discarded; D's outcome is protected; A's `Faulted` retention window runs from r2, and a Retention delete under r2 after it is refused as protected while protection holds. Mutations: the protected Complete deletes A anyway; the protected Complete leaves A with no mark, so no later delete can name it | K3, K4, K11 |
 | DT-5 | **The refusal order when a `ThenDelete` terminate interrupted a running recover.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows; a `resume` recover R opens, so the row has no mark, and the model still runs; an operator's terminate with `ThenDelete` is accepted and opens its drain, interrupting R. Interleaving: between pages, an Operator delete naming r1, a Retention delete naming r1, a delete from another tenant with A's id and one naming another creation arrive, with an ownership takeover between pages. Outcome: the r1 deletes are refused as "transition" (check 3 fails before "in progress" or check 4 is reached), the other tenant's as tenant and the other creation's as run, each with no change; Complete ends A Cancelled under r2, sends P exactly one Cancelled notice and deletes A, with no row keeping `KeptBy`; the terminate's outcome is deleted. Mutation: "in progress" tested before check 3; the r1 deletes then answer "in progress", and the case fails | K3, K4, K11 |
 | DT-6 | **Protection against a separate delete during a drain.** Preconditions: A parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is true throughout. Interleaving: in one run an operator's terminate without `ThenDelete` opens the terminate drain; in a second, a terminate with `ThenDelete`; in each, an Operator delete naming r1 arrives between pages. Outcome: in the first run the delete is refused at check 5 as "protected", and Complete ends A Cancelled under r2 and keeps it; in the second it is refused as "in progress", and Complete ends A Cancelled under r2 and keeps it, with the terminate's answer protected on the API request's reply address; in both, P receives exactly one Cancelled notice and no row keeps `KeptBy`. Mutations: check 5 tested before "in progress" (the second run answers "protected"); a separate delete during a protected terminate drain takes it over and deletes A | K3, K4, K11 |
-| E-1 | The R3-B2 trace on the in-memory store: two pages of kept rows; after page 1's commit, an arrival A from another sender is committed with a `seq` below the cursor; A's delivery ends the model. A is delivered only after Complete; every kept row of page 2 is restored and delivered exactly once, before A; no `KeptBy` remains. Run with A committed just before page 1's commit and just after it. Mutation: eligibility by the tuple against the cursor; A runs first, the model ends, page 2 clears the suffix, and its rows have zero deliveries | K3 |
-| E-2 | As E-1, with A at the cursor's `seq` and a lower `(Id, Scope, Match)` tie-break, at a page boundary. The same outcome; the same mutation fails | K3, K4 |
-| E-3 | As E-1, with an ownership change between page 1 and page 2, and separately between A's commit and its first poll. The new owner withholds A and delivers the suffix; each kept row is delivered once and A after Complete. Mutation: the new owner recomputes eligibility from the cursor | K3, K4 |
+| E-1 | The R3-B2 trace on the in-memory store, with A's `seq` injected below the cursor (the K3 allocation hook, plan): two pages of kept rows; after page 1's commit, an arrival A from another sender is committed with a `seq` below the cursor; A's delivery ends the model. A is delivered only after Complete; every kept row of page 2 is restored and delivered exactly once, before A; no `KeptBy` remains. Run with A committed just before page 1's commit and just after it. Mutation: eligibility by the tuple against the cursor; A runs first, the model ends, page 2 clears the suffix, and its rows have zero deliveries | K3 |
+| E-2 | As E-1, with A injected at the cursor's `seq` and a lower `(Id, Scope, Match)` tie-break, at a page boundary. The same outcome; the same mutation fails | K3, K4 |
+| E-3 | As E-1 (injected `seq` at K3), with an ownership change between page 1 and page 2, and separately between A's commit and its first poll. The new owner withholds A and delivers the suffix; each kept row is delivered once and A after Complete. Mutation: the new owner recomputes eligibility from the cursor | K3, K4 |
 | E-4 | MongoDB: A is an outside add whose `clocks` value is behind the partition clock, and in a second run a send from another partition whose clock is behind. Each A gets a `seq` below the cursor, is withheld until Complete, and the suffix is delivered first. Mutation: eligibility by cursor comparison | K4 |
-| E-5 | Relational providers that generate `seq` (PostgreSQL, SQL Server, MySQL): a transaction draws A's `seq` before page 1 reads and commits after page 1's commit. A is withheld until Complete. SQLite, which assigns `seq` explicitly under one writer, runs as a control | K4 |
-| E-6 | Generations: a recover drain releases rows, a re-park interrupts it before some are delivered, and a second recover opens before the parked instance has consumed all of them. Under the second drain those rows wait until its Complete or a page of the second drain restores them, and each sender's rows are delivered in `seq` order; a terminate interrupting a recover drain delivers no released row to the model. Mutation: eligibility by `ReleasedBy IS NOT NULL`, ignoring the generation; a stale released row reaches the model during the second drain | K3 |
-| S-5 | The metadata bound. Rows with every projected field at its limit and a small payload (encoded metadata `M`) are admitted and kept: a page of `P_page` such rows is at most `B` and takes them all; `P_page` + 1 rows give a page of `P_page` and a page of one; rows summing to `B` − 1 take one page; the largest accepted row is the first row of a page and is taken. Run under resume, discard, expiry, terminate and delete, with a takeover at a page boundary: every page's encoded metadata is at most `B` and every drain completes. At K4 each provider's encoded size of the limit row is measured and is at most `M`. Mutation: drop the `Kind` limit; a row with a 4 MiB + 1 byte kind is kept, and its singleton page exceeds `B` | K3, K4 |
-| S-6 | Admission at each ingress class: an outside add, each turn send (`Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`) and an actor type's composed `Add`. A field at its limit is accepted; one byte over is refused before any write, as is a row whose encoded metadata would be `B` − 1, `B` or `B` + 1 bytes (a long kind, small payload): no row exists and no Park keeps it; the turn-send case fails the turn as a model fault, and the composed case is a definite error. On SQLite, the probe's 5,242,882-byte key is refused at admission. Mutation: remove the check at one ingress class; the over-limit row lands, a Park keeps it, and S-5's page assertion fails | K3, K4 |
+| E-5 | Relational providers that generate `seq` (PostgreSQL, SQL Server, MySQL): while the instance is parked, a transaction draws A's `seq`, then the kept rows that will end page 1 are allocated and committed, and A's transaction commits only after page 1's commit, so A becomes visible with a `seq` below the cursor. A is withheld until Complete, and the suffix is delivered first. SQLite, which assigns `seq` explicitly under one writer, runs as a control. Mutation: eligibility by cursor comparison; A is delivered after page 1 and, as a model-ending input, the suffix is cleared undelivered | K4 |
+| E-6 | Interrupted release and generations. (a) Sender S has kept rows R1, R2 and K in `seq` order; page 1 of generation g restores R1 and R2, and K stays kept; a re-park interrupts before R2 is polled; an operator recover arrives, on MongoDB as an outside add whose outside-add clock gives it a `seq` below R2's (injected at K3), and opens generation g + 1 while R2 is pending with the stale marker. The pages restore R2 before K; each is delivered once, in `seq` order. A model-end variant, where K ends the model, delivers R2 before K and drops nothing kept. Mutation: no `Stale` arm (a stale-released row waits for Complete); K overtakes R2, and in the model-end variant R2 is never delivered. (b) After a recover completes and the same creation parks again, a row the first Park's drain released carries a lower generation than every Open of the second Park. Mutation: reset the generation when a Park resolves; the old marker matches the second Park's drain and the row reaches the model ahead of its sender's kept rows. (c) A terminate interrupting a recover drain delivers no released row to the model | K3, K4 |
+| S-5 | The metadata bound. Rows with every projected field at its limit, in each provider's widest encoding (SQL Server: single-byte characters, doubled by UTF-16; PostgreSQL and SQLite: names with NUL or unpaired units, on the base64 path; MySQL and MongoDB: three-byte characters), and a small payload are admitted and kept: a page of `P_page` such rows is at most `B` and takes them all; `P_page` + 1 rows give a page of `P_page` and a page of one; rows summing to `B` − 1 take one page; the largest accepted row is the first row of a page and is taken. Run under resume, discard, expiry, terminate and delete, with a takeover at a page boundary: every page's encoded metadata is at most `B` and every drain completes. At K4 each provider's encoded size of the limit row is measured and is at most `M`. Mutation: drop the `Kind` limit; a row with a 4 MiB + 1 byte kind is kept, and its singleton page exceeds `B` | K3, K4 |
+| S-6 | Admission at each ingress class: an outside add, each turn send (`Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`) and an actor type's composed `Add`. A field at its limit is accepted; one byte over is refused before any write, as is a row whose encoded metadata would be `B` − 1, `B` or `B` + 1 bytes (a long kind, small payload): no row exists and no Park keeps it; the turn-send case fails the turn as a model fault, and the composed case is a definite error. On SQLite, the probe's 5,242,882-byte key is refused at admission; SQL Server's `LargestInboxId` (1,342 bytes) and `UnicodeKeys`' 4,096-unit keys, measured in WTF-8, are refused on every provider; on PostgreSQL a key whose index entry would pass the B-tree limit is refused at admission and never reaches the engine. Mutation: remove the check at one ingress class; the over-limit row lands, a Park keeps it, and S-5's page assertion fails | K3, K4 |
 
 ## Decisions (owner, 16–17 November 2026)
 
