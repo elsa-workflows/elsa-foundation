@@ -82,7 +82,9 @@ profile, and no capability flag makes it fail on one. Inline execution is chosen
 
 ### 5. Virtual partitions and the fence
 
-1,024 fixed virtual partitions, one fence row each. One owner node writes a partition; its commit lands only while the
+1,024 fixed virtual partitions, one fence row each: decided on 16 November and not built. The prototype still has
+`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership,
+whose timing and rebalance strategy are open (PARTITIONS.md decisions 4 and 5). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
 commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
@@ -156,9 +158,10 @@ Each answer is a Proposed page with the owner's decisions of 17 November at its 
 
 ## Consequences
 
-- **Clean break.** No running instance moves from the current core; the activity library and definitions carry over
-  with an adapted activity context; the runtime API and Studio's run views are re-pointed. Two cores coexist until the
-  switch ([program plan](../program-goals/clean-slate-kernel.md)).
+- **Clean break.** The old core is unreleased and holds no user data; its databases are local ones on developers'
+  machines, deleted and regenerated at the switch (owner, 17 November). The activity library and definitions carry
+  over with an adapted activity context; the runtime API and Studio's run views are re-pointed
+  ([program plan](../program-goals/clean-slate-kernel.md)).
 - **Costs accepted.** Failover takes about one lease (10 s). Activity code runs at least once in Balanced. No instance
   reads another's state; lists and counts lag the projector. The whole state is rewritten at each commit, which values
   by reference bound. One shared database is the cluster's write ceiling. The sketch's
@@ -190,30 +193,49 @@ until then the listed ADRs keep governing the current core.
 | ADR | Disposition | Why |
 |---|---|---|
 | [0001](0001-checkpoint-gated-activity-execution-inspection.md) checkpoint-gated inspection | Supersede | Viewer rows are projected from the journal after the commit |
-| [0020](0020-runtime-checkpoint-commit-post-commit-work.md) checkpoint commit and post-commit work | Supersede | The recipient's inbox is the outbox; nothing is dispatched after the commit |
+| [0020](0020-runtime-checkpoint-commit-post-commit-work.md) checkpoint commit and post-commit work | Supersede | Its checkpoint-commit port and post-commit dispatcher go. The kernel records every obligation (sends, job tickets, publish tickets, the held HTTP response) in the fenced commit and acts on it afterwards from those rows: the recorded send of section 3, jobs, the HTTP release and the projector |
 | [0029](0029-runtime-execution-flows-through-the-pipelines.md) execution pipelines | Supersede | The drain dispatch point it wraps goes; any activity pipeline is a native-model question |
 | [0031](0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) sticky single-writer burst | Supersede | One owner per partition runs turns in memory; work items and the drainer go |
 | [0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) checkpoint cadence | Supersede | Persistence modes are turn boundaries (section 6) |
 | [0033](0033-runtime-core-splits-contracts-from-engine.md) Runtime.Core split | Supersede | Release 1's package layout replaces those packages (section 8) |
 | [0047](0047-replaysafe-activities-execute-as-fused-hops-with-precomputed-routing.md) ReplaySafe fused hops | Supersede | A turn runs many activities in memory; there are no hops to fuse |
-| [0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md) alterations as snapshotted atomic jobs | Supersede | Owner, 17 November: migration widens to running instances at a turn boundary, through a plan actor |
+| [0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md) alterations as snapshotted atomic jobs | Supersede | Owner, 17 November: migration widens to running instances at a turn boundary, through a plan actor. 0049 governs every runtime alteration; its parts and what replaces each are listed below |
 | [0084](0084-runtime-commit-journal.md) commit journal | Supersede | The kernel's per-partition journal is the commit journal it proposed |
 | 0098 journal-first core (PR #4176, not on main) | Supersede | Superseded by the clean-slate decision of 12 November |
 | 0096 Elsa.Jobs (Codex branch, not on main) | Supersede | Standalone Jobs are rebuilt as a job actor type in 1.x |
 | [0073](0073-ef-core-is-the-only-first-party-persistence-family.md) EF Core only | Amend | The kernel's commit SQL is hand-written per engine; a MongoDB provider is first-party from 1.1 |
 | [0074](0074-first-party-ef-stores-retry-in-bounded-application-loops.md) bounded EF retry | Amend | The kernel's commit classifies failures itself (reset, retry as is, park); 0074 keeps governing other stores |
 | [0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) virtual actors, membership | Amend | Virtual actors stay; ownership is per partition under a fence. How the membership contract maps to the built-in runtime's node rows is settled in the runtime slice |
-| [0080](0080-elsa-4-simplification-decisions.md) simplification | Amend | D2's modes keep their names on turn boundaries; D0 gains the kernel program's registry row |
+| [0080](0080-elsa-4-simplification-decisions.md) simplification | Amend | D2's modes keep their names on turn boundaries; D0 gains the kernel program (owner, 17 November: now, with the proposal; the amendment and registry row are in the program plan's PR) |
 | [0094](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) agent content | Amend, terminology | "Agent turn" becomes "agent request" when agents run on the kernel, since a turn is the kernel's term |
 | [0052](0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md)–[0062](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) execution evidence | Keep, revisit | Proposed and parked; checkpoint-atomic capture maps to journal entries in the turn's commit when the program resumes |
 | 0087 ETL, 0088 Rules, 0095 Decisions | Keep, revisit | Domain ownership holds; each runs as an execution model or job on the kernel when built |
 | 0063 BPMN library, 0064 Flowchart dead paths, 0086 compensation | Keep | The kernel hosts Bpmn.Semantics; the graph engine keeps dead-path joins; compensation semantics are the models' |
 | 0027, 0028, 0045, 0046, 0048, 0089, 0090 variables and value flow | Keep | Layer 3 native-model semantics; a step's unit of work commits with its turn |
 | 0043 publication slots, 0038–0040 artifacts, 0077 schema upgrade, 0079 host package sets | Keep | Definition, artifact and hosting rules; the route table is built from publications, and F14 withholding fits 0077 |
+| [0075](0075-oracle-is-not-a-supported-ef-core-engine.md) Oracle not supported | Keep | It fixes the four relational engines the owned commit SQL covers |
+| [0076](0076-persistence-tooling-runs-inside-the-host-closure.md) persistence tooling in the host closure | Keep | The kernel's EF schema and migrations use the same tooling; the owned commit SQL needs no tooling of its own |
+| [0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) serialization alias registry | Keep | The kernel treats state and payloads as opaque; the native model serializes its state, messages and job arguments under 0035, with state versions added on top |
 | 0097 multi-tenancy (PR #4156, open) | Check when it lands | Its scope must fit the kernel's tenant column and tenant checks on sends |
+| 0091 JSON data integrity (PR #3408), 0092 variable lifecycle (PR #4316), both open | Check when they land | Layer 3 value semantics; each must commit with the turn and keep to opaque state |
 
-Every other ADR concerns authoring, Studio, APIs, identity, packaging or the Extension Builder, and the kernel does not
-touch it. ADRs 0030, 0041, 0042, 0065, 0069 and 0072 are already superseded.
+The remaining ADRs on main (0002, 0003, 0021–0026, 0034, 0036, 0037, 0044, 0050, 0051, 0066–0068, 0070, 0071, 0081–0083,
+0085 and the EB series) concern authoring, expressions, Studio, APIs, identity, packaging, the agent harness or the
+Extension Builder; none describes the runtime core or its persistence. ADRs 0030, 0041, 0042, 0065, 0069 and 0072 are
+already superseded.
+
+**ADR 0049's parts.** Release 1's only alteration is migration; the rest of 0049's alterations wait for their own design.
+
+| Part of 0049 | On the kernel |
+|---|---|
+| A sealed snapshot of the target cohort before dispatch | Replaced: a plan actor selects from the instance-list read model with a cursor and adds one `Migrate` per instance ([migration](../architecture/migrating-running-instances.md)) |
+| One atomic job per target through the single-writer boundary | Replaced: the `Migrate` command runs alone in the instance's turn and lands in one fenced commit |
+| Wire envelopes (kind, schema version, payload) with registered handlers | Replaced for migration by a command kind (`IActorType.IsCommand`); open for other alteration kinds |
+| Tenant-scoped idempotent submission | Replaced: operator messages are outside adds keyed by the operation id with a `keep_until` ([observability](../architecture/observability.md#recover)) |
+| Permission and execution-authority scope, provenance | Replaced: separate operator permissions, audited with principal, reason and outcome; the kernel's tenant check on sends |
+| Durable per-target results | Replaced: outcome messages feed the plan-outcomes read model |
+| Cooperative cancellation | Partly: "close plan" ends a plan with pending instances; cancelling work in flight is open |
+| Redaction of deferred payloads from reads | Open |
 
 ## References
 
