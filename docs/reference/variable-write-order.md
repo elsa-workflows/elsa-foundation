@@ -62,7 +62,10 @@ Each structure declares how its children relate in time; the warning has no list
   the next pass runs, so it is unordered with itself and with the cycle. In a Flowchart this includes a loop whose
   decision repeats through one port and leaves through another, because the decision may select both.
   Two branches of one pass that both lead back into the loop are unordered with each other too; a waiting join
-  that closes the loop still follows both.
+  that closes the loop still follows both. When two such branches return into the loop separately, the loop's steps
+  overlap themselves. A Flowchart refuses to start when a loop leads back into a node that has another incoming
+  connection, so it runs a loop only through a node whose sole incoming connection is the way back; the
+  multi-entry loop shapes above occur in BPMN.
 - **A structure that declares nothing** is treated as unordered, and the warning says that it does not declare how
   its children are ordered.
 

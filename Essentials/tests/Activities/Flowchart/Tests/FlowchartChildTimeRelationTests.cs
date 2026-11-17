@@ -265,6 +265,17 @@ public sealed class FlowchartChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "b", "b"));
     }
 
+    // A fork that sends one branch straight back into a merge and one around the outer loop runs the merge twice at once.
+    [Fact]
+    public void A_fork_sending_both_branches_back_into_a_merge_overlaps_it()
+    {
+        var flow = Flowchart(["start", "d", "t", "p"],
+            [("start", "d", null), ("d", "t", null), ("t", "p", null), ("p", "t", null), ("p", "d", null)], "start",
+            new Dictionary<string, FlowchartNodeMetadata> { ["d"] = new("merge"), ["t"] = new("merge") });
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _structures.RelateChildren(flow, "t", "t"));
+    }
+
     private static ActivityNode Flowchart(
         string[] children,
         (string Source, string Target, string? Port)[] edges,

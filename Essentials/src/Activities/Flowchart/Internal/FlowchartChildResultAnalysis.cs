@@ -171,6 +171,50 @@ internal sealed class FlowchartChildResultAnalysis(
             return true;
         }
 
+        return AForkSendsTwoRunsBack(join, sources);
+    }
+
+    // A fork that a run of the join leads to (or the join itself) and that sends two branches back into the join along
+    // different arrivals puts two runs of the join in flight together, whatever pass each arrival closes. Branches that
+    // meet in a waiting join first reach the same arrivals and send one run back.
+    private bool AForkSendsTwoRunsBack(string join, string[] sources) =>
+        _forkBranches.Any(entry =>
+            (StringComparer.Ordinal.Equals(entry.Key, join) || IsReachable(join, entry.Key)) &&
+            ReachDifferentArrivals(entry.Value.Distinct(StringComparer.Ordinal)
+                .Select(branch => ArrivalsReachedBy(entry.Key, branch, join, sources)).ToList()));
+
+    private IReadOnlyCollection<string> SuccessorsOf(string node) => successors.GetValueOrDefault(node, []);
+
+    // The join's arrivals that a branch reaches before running the join again.
+    private HashSet<string> ArrivalsReachedBy(string fork, string branch, string join, ICollection<string> sources)
+    {
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        if (StringComparer.Ordinal.Equals(branch, join))
+        {
+            reached.Add(fork);
+            return reached;
+        }
+
+        var visited = new HashSet<string>(StringComparer.Ordinal) { branch };
+        var queue = new Queue<string>([branch]);
+        while (queue.TryDequeue(out var node))
+        {
+            if (sources.Contains(node))
+                reached.Add(node);
+            foreach (var next in SuccessorsOf(node))
+                if (!StringComparer.Ordinal.Equals(next, join) && visited.Add(next))
+                    queue.Enqueue(next);
+        }
+
+        return reached;
+    }
+
+    private static bool ReachDifferentArrivals(IReadOnlyList<HashSet<string>> arrivals)
+    {
+        for (var left = 0; left < arrivals.Count; left++)
+        for (var right = left + 1; right < arrivals.Count; right++)
+            if (arrivals[left].Except(arrivals[right]).Any() && arrivals[right].Except(arrivals[left]).Any())
+                return true;
         return false;
     }
 

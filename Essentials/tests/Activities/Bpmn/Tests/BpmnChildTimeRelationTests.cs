@@ -202,6 +202,36 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "step", "after"));
     }
 
+    // A parallel split that sends one token straight back into the task and one around the outer loop runs the task
+    // twice at once.
+    [Fact]
+    public void A_parallel_split_sending_both_branches_back_into_a_task_overlaps_it()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("d", BpmnElementTypes.ExclusiveGateway),
+                Task("t", "step"), Element("p", BpmnElementTypes.ParallelGateway)
+            ],
+            [Flow("start", "d"), Flow("d", "t"), Flow("t", "p"), Flow("p", "t"), Flow("p", "d")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "step", "step"));
+    }
+
+    // Nested loops closed by exclusive merges pass one token around: the inner body stays sequential.
+    [Fact]
+    public void Nested_loops_closed_by_exclusive_merges_stay_ordered()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("o", BpmnElementTypes.ExclusiveGateway),
+                Element("i", BpmnElementTypes.ExclusiveGateway), Task("ta", "a"), Element("xs", BpmnElementTypes.ExclusiveGateway),
+                Element("xo", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [Flow("start", "o"), Flow("o", "i"), Flow("i", "ta"), Flow("ta", "xs"), Flow("xs", "i"), Flow("xs", "xo"), Flow("xo", "o"), Flow("xo", "end")]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "a", "a"));
+    }
+
     [Fact]
     public void An_event_subprocess_is_unordered_with_the_process_flow()
     {
