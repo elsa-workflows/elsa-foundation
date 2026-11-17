@@ -458,6 +458,7 @@ public sealed class EfWorkflowAlterationAndScopeTests
         public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask CancelPendingJobsAsync(string planId, IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes, DateTimeOffset completedAt, int maximumCount, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string planId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();

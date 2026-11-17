@@ -476,7 +476,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             provenance.ExecutionPathId,
             provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, RuntimeMetadataKeys.FlowchartExecutionScopeId),
             provenance.SchedulingCause ?? schedulePayload.Reason,
-            provenance.Metadata);
+            provenance.Metadata).WithCausedBy(provenance.CausedBy);
     }
 
     private static string? ReadMetadata(IReadOnlyDictionary<string, string> metadata, string key) =>

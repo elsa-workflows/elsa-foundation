@@ -32,6 +32,13 @@ public interface IWorkflowAlterationStore
     /// <summary>Locates terminal evidence by its deterministic checkpoint identity for acknowledgement reconciliation.</summary>
     ValueTask<WorkflowAlterationJobState?> FindJobByCheckpointCommitIdAsync(string checkpointCommitId, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<WorkflowAlterationJobState?>(null);
+    /// <summary>
+    /// Spec 1229 FR-005: the terminal jobs that changed variables of one workflow execution (their outcomes carry
+    /// variable write records), so inspection can merge operator changes into the variable history. Bounded by the
+    /// number of alterations applied to the instance.
+    /// </summary>
+    ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+
     ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default);
     /// <summary>Claims the next leaseable job belonging to one sealed plan.</summary>
     ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string planId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default);

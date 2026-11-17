@@ -327,6 +327,19 @@ internal static class StructuralParentEvaluationSupport
     /// lands, all in one checkpoint alongside the staged subtree cancellations and <paramref name="incidentChanges"/>
     /// (a structural intervention's incident outcome).
     /// </summary>
+    // Spec 1229 FR-007: a callback schedules because a child ended: the completed child the command names, and the
+    // children this evaluation processed (a faulted child the parent handles).
+    private static IReadOnlyCollection<string> SchedulingCauses(IActivityCommandPayload payload, IReadOnlyCollection<ActivityExecutionState> processedChildStates)
+    {
+        var causes = new List<string>();
+        if (payload is RuntimeCompleteActivityCommandPayload { CompletedChildActivityExecutionId: { } completedChild } && !string.IsNullOrWhiteSpace(completedChild))
+            causes.Add(completedChild);
+        foreach (var child in processedChildStates)
+            if (!causes.Contains(child.Execution.ActivityExecutionId, StringComparer.Ordinal))
+                causes.Add(child.Execution.ActivityExecutionId);
+        return causes;
+    }
+
     public static async ValueTask CommitDeferredParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
@@ -365,7 +378,8 @@ internal static class StructuralParentEvaluationSupport
             activityExecutionId,
             scheduleRequests,
             source.DerivedCommandMetadata,
-            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState)).ToArray();
+            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState),
+            SchedulingCauses(source.Payload, processedChildStates)).ToArray();
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(

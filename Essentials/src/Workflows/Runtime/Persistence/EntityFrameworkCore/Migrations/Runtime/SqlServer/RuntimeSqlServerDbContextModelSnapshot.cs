@@ -301,6 +301,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<long>("ExecutionSequence")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("FirstCommitSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("LastCommitSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("LostUpdateWarningCount")
+                        .HasColumnType("int");
+
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -353,6 +362,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "LastCommitSequence")
+                        .HasDatabaseName("IX_elsa_runtime_activity_execution_state_commit_range");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash");
 
@@ -2186,6 +2198,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "CaptureOrdinal", "JobIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash")
+                        .HasDatabaseName("IX_elsa_runtime_workflow_alteration_job_workflow");
 
                     b.ToTable("elsa_runtime_workflow_alteration_job", (string)null);
                 });

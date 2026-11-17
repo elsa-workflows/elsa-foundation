@@ -19,6 +19,16 @@ public sealed class ActivityExecutionStateEntity
     public long ExecutionSequence { get; set; }
     public long ScheduledAtUtcTicks { get; set; }
     public int ScheduledAtOffsetMinutes { get; set; }
+
+    /// <summary>Spec 1229 FR-016: the row's commit-sequence range, projected from its content.</summary>
+    public long? FirstCommitSequence { get; set; }
+
+    /// <inheritdoc cref="FirstCommitSequence"/>
+    public long? LastCommitSequence { get; set; }
+
+    /// <summary>Spec 1229 FR-009: the row's lost-update warnings, projected from its content and summed per instance.</summary>
+    public int? LostUpdateWarningCount { get; set; }
+
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }

@@ -29,6 +29,13 @@ public sealed class ActivityExecutionStateEntityConfiguration : IEntityTypeConfi
         // provider can use the compact scope/hash predicates before sorting it.
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash });
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.ParentActivityExecutionIdHash });
+        // Spec 1229 FR-016: page an instance's rows by their commit-sequence range and sum their lost-update warnings
+        // without reading documents.
+        builder.Property(row => row.FirstCommitSequence).IsRequired(false);
+        builder.Property(row => row.LastCommitSequence).IsRequired(false);
+        builder.Property(row => row.LostUpdateWarningCount).IsRequired(false);
+        builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.LastCommitSequence })
+            .HasDatabaseName("IX_elsa_runtime_activity_execution_state_commit_range");
     }
 
     internal static void ConfigureEnvelope<T>(EntityTypeBuilder<T> builder) where T : class
