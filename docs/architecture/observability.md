@@ -158,18 +158,20 @@ built.
 2. **Kept rows leave only through their instance.** The sweep's predicate becomes
    `Done AND KeepUntil < :now AND KeptBy IS NULL`, so it never removes a kept row. The `Parked` window still applies:
    Park's commit arms a `kernel.park-expiry` timer for the Park's time plus the window (none when the window is null,
-   the default), and when it fires the instance's own expiry drain ends the kept rows (below). After it, `retry` is
-   refused, because the consumed deliveries are gone; `resume` stays possible from the committed state and delivers
-   nothing kept. The instance falls under the `Faulted` window from the expiry.
+   the default). **The window's expiry is an automatic discard:** when the timer fires, the instance's own drain
+   resolves the Park as discard does (below). It clears the kept rows, giving them the ordinary window and clearing
+   `KeptBy`; records the disposition "expired"; sends the parent its final Faulted notice; leaves the instance
+   Faulted; and writes the terminal mark, so the `Faulted` retention window runs from it. After the expiry the Park is
+   resolved, so recover is refused in both modes.
 
 3. **Park writes a journal row at every history level**, so the projector can maintain the parked-work read model at
    Minimal. The data lifecycle page's format item 4 is adopted too, so this row is its "ended" entry and adds nothing;
    the two land as one rule. The data lifecycle page's format item 6 (payload-free done markers) exempts kept rows, so
    a retry finds their payloads.
 
-**Invariant: `KeptBy` is non-null only while its Park is unresolved.** A Park is resolved by recover, discard,
-terminate or the delete of the parked instance; the expiry of its window ends its kept rows the same way while the Park
-stays open for `resume`. Each of these is a **drain** (below) that clears `KeptBy` on every row the Park kept, restored
+**Invariant: `KeptBy` is non-null only while its Park is unresolved.** A Park is resolved by recover, discard, the
+expiry of its window (an automatic discard), terminate or the delete of the parked instance. Each of these is a
+**drain** (below) that clears `KeptBy` on every row the Park kept, restored
 or not, and the Park counts as resolved when its drain completes. Revisions start
 again for a new creation under the same id, so no later Park of a new run can find a predecessor's rows, and an ordinary
 delete needs nothing extra.
@@ -190,7 +192,7 @@ Park decision.
 |---|---|
 | **Open** (the `kernel.recover`, `kernel.discard` or `kernel.terminate` turn, the delete of a parked instance, or the expiry timer's turn) | Checks the operation (below); recalls the expiry timer; writes `ParkRecord.Resolution {operation, kind, mode, selection, cursor}` on the instance row, with the cursor before the first row; sends the instance a `kernel.drain` message. For recover it also restores the waits (below) and sets the instance running, so restored rows are delivered as the drain goes. From this commit on, arrivals are no longer kept. |
 | **Page** (each `kernel.drain` turn) | Reads the next page: `Target = :instance AND KeptBy IS NOT NULL AND (Seq, Id, Scope, Match) > :cursor`, ordered by that tuple, at most `P` rows and `B` bytes. Updates each row by its full key, with its count checked (restore or clear, below), moves the cursor to the page's last tuple, and sends the next `kernel.drain`. |
-| **Complete** (the page that finds no row) | Clears `ParkRecord.Resolution`, journals the outcome with its counts, and does the kind's last step: recover ends the withholding above the cursor; discard records the disposition; terminate and delete finish the built terminate or delete. Discard and delete also send the parent its final Faulted notice ([large fan-out](large-fan-out.md), decision 5). |
+| **Complete** (the page that finds no row) | Clears `ParkRecord.Resolution`, journals the outcome with its counts, and does the kind's last step: recover ends the withholding above the cursor; discard and expiry record the disposition ("discarded" or "expired"), leave the instance Faulted and write its terminal mark; terminate sets the end status Cancelled; delete finishes the built delete. Discard, expiry, terminate and delete each send the parent one final notice (Faulted, or Cancelled for terminate), since a parent keeps waiting for a parked child ([large fan-out](large-fan-out.md), decision 5). |
 
 - **The cursor is a tuple.** `seq` alone is not a total order: MongoDB can give two rows one `seq` from its separate
   allocation clocks and sorts by id as well ([storage model](storage-model.md#invariants-carried-by-the-records)).
@@ -202,7 +204,7 @@ Park decision.
   its selection names (or all of them, if it says so). Restoring sets `Done = false`, `KeptBy = null`, `Attempts = 0`,
   `Trial` to none, `Seen = 0`, and `KeepUntil` to the ordinary outside-command window from now, by the predicate
   `Id = :id AND Scope = :scope AND Match IS NOT DISTINCT FROM :match AND Done AND KeptBy = :reason`. Every other kept
-  row, and every row under discard, delete or expiry, is cleared: `KeptBy = null` and the ordinary window, by the same
+  row, and every row under discard, expiry, terminate or delete, is cleared: `KeptBy = null` and the ordinary window, by the same
   key predicate. Resetting the poison counters matters: the owner parks any delivery whose attempts reached the
   threshold, so a retried poison message or job ticket would park the instance again at once.
 - **Restored rows are delivered by the ordinary poll.** They are unseen, due rows that keep their id, sender, kind,
@@ -223,11 +225,16 @@ Park decision.
   `ParkRecord.Resolution` is cleared in the interrupting commit, and nothing is dropped:
   - **A re-park** continues the same Park, and keeping resumes. The rows of the parking turn get `Consumed`; rows the
     drain restored that were not yet delivered, and rows that arrived during the drain, are consumed while parked as
-    any arrival and get `Arrived`; kept rows the drain had not reached keep their reasons. A new recover then drains
-    them all.
+    any arrival and get `Arrived`; kept rows the drain had not reached keep their reasons. The re-park re-arms
+    `kernel.park-expiry` for the window's remaining time (from the Park's time in the `ParkRecord`; due at once if it
+    has passed), since the recover's open had recalled it. A new recover then drains every row still kept.
   - **A terminate** opens its own drain over the rows still kept, which clears them. The instance ends Cancelled, so
     its pending rows, restored ones included, meet the ordinary rule for a finished instance: consumed and dropped, as
     for any terminated instance.
+- **Terminate's notice.** The built terminate sends the parent a notice only when the child is running
+  (`WorkflowInstance.cs`, the terminate path). A terminate of a parked instance, or one that interrupts a recover
+  drain, is a resolution: it sets the end status Cancelled and sends the parent one final notice at its Complete, and
+  none at its open, so the parent hears once.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
   owned commit, and `B` = 4 MiB. A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
   document and 48 MiB message limits and short against its transaction lifetime
@@ -251,8 +258,8 @@ calls one new model hook.
   the model's own id. Native, Flowchart and StateMachine each implement it.
 - **Checks.** The instance is parked, no resolution is open, the Park's first revision (in the `ParkRecord`, the
   revision the parked-work read model shows) equals the expected revision, which stays valid across a re-park, and the
-  instance is recoverable under decision 1. After an expired window `retry` is refused and `resume` is allowed. Every
-  handle in the selection must name a row the Park kept with reason
+  instance is recoverable under decision 1. After the window's expiry the Park is resolved, so recover is refused in
+  both modes. Every handle in the selection must name a row the Park kept with reason
   `Consumed`; one that does not refuses the whole command. A refusal changes nothing and is recorded.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
@@ -273,7 +280,7 @@ calls one new model hook.
   | Kept, `Arrived` (a timer that fired, or a job result that came, while parked) | Restored by the drain | Restored by the drain |
   | Kept, `Consumed`, selected | Not applicable | Restored by the drain |
   | Kept, `Consumed`, not selected | Cleared; a timer is not re-armed, so its wait keeps waiting; a job restarts under a new ticket generation | The same |
-  | Absent | A timer is re-armed with its original due time; a job restarts under a new ticket generation | The same |
+  | Absent (never kept: no resolution has run, and the sweep skips kept rows) | A timer is re-armed with its original due time; a job restarts under a new ticket generation | The same |
 
   A restarted job's ticket id derives from instance, key, creation and the recovery's ordinal (`Worker.TicketId` takes
   the first three today), so it collides with neither the old ticket nor its kept row. The model never sees the
@@ -402,8 +409,9 @@ faults in the Park and recovery design. Each trace is restated, then followed th
    re-armed it. The job-ticket branch had the same gap.
 2. Revised: the sweep's predicate excludes `KeptBy IS NOT NULL`, so it cannot delete a kept row, before the read,
    between the read and the write, or at any other time.
-3. The window's expiry is a drain of the instance itself. It is one of the instance's serial turns, and recover's open
-   recalls its timer, so it cannot interleave with a recover.
+3. The window's expiry is an automatic discard, run as a drain of the instance itself. It is one of the instance's
+   serial turns, and recover's open recalls its timer, so it cannot interleave with a recover; after it, recover is
+   refused, so no recover ever plans over cleared or swept rows.
 4. So the open's point lookups see exactly the rows its commit writes against. A count mismatch can no longer come
    from the sweep. If one comes from anything else, the commit answers "not landed" and the open is recomputed under
    the same operation id.
@@ -441,14 +449,14 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M1-1 | With a finite window passed and the expiry not yet run, the sweep runs before recover's read. No kept row is removed; the resulting wait is armed once; the job's durable ticket exists once | K3, K4 |
 | M1-2 | The same sweep injected between the read and the commit, and after the commit. The open lands; the wait and the ticket are as in M1-1; restored rows survive the later sweep | K3, K4 |
 | M1-3 | The recover's acknowledgement is lost after its commit. The operator's retry with the same operation id is a duplicate; the read model shows one outcome; no second drain runs | K3, K11 |
-| M1-4 | The expiry fires before a recover arrives: `retry` is refused, `resume` succeeds from the committed state and delivers nothing kept, discard succeeds. A recover arrives first: the expiry is recalled | K3 |
+| M1-4 | The expiry fires before a recover arrives: recover is refused in both modes; the expiry drain clears every kept row, records "expired", sends the parent one final Faulted notice, and the `Faulted` retention window starts from its terminal mark. A recover arrives first: the expiry is recalled | K3 |
 | M1-5 | Mutation: drop `KeptBy IS NULL` from the sweep's predicate. M1-1 or M1-2 fails | K3 |
 | M3-1 | A Park with the null window receives 100,000 arrivals, then `resume`. Every page stays within `P` rows and `B` bytes, the drain completes, and every arrival is delivered once, in per-sender order | K3, K12 |
 | M3-2 | Ownership changes at a page boundary, and a page commit has an unknown outcome. The drain continues from the committed cursor, with no row restored twice or skipped | K3, K4 |
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
 | M3-5 | A drain under a virtual partition above its high water mark waits; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
-| M3-6 | A re-park during a recover drain: the Resolution is cleared, restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons, and a second recover delivers every row once. A terminate during a recover drain: the remaining kept rows are cleared and the instance ends Cancelled. Delete during a drain; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
+| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once. A terminate during a recover drain, and a terminate of a parked child: the kept rows are cleared, the status is Cancelled, and the parent receives exactly one final notice. Delete during a drain; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
