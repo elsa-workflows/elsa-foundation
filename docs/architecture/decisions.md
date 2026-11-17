@@ -115,7 +115,7 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | Distributed form | An explicit option on ForEach. | Large fan-out 2 |
 | Combiner faults | FailFast by default. | Large fan-out 3 |
 | Combiner retry | Leaves only. | Large fan-out 4 |
-| Parked child | The parent keeps waiting: the notice says "parked", and the registry and `Outstanding` keep the child until a later notice or a discard (a layer 3 change for every waiting parent). | Large fan-out 5 |
+| Parked child | The parent keeps waiting: the notice says "parked", and the registry and `Outstanding` keep the child until its Park is resolved. Every resolution sends the parent exactly one final notice: discard and expiry (Faulted; expiry is an automatic discard), terminate (Cancelled) and delete (Faulted). A recover sends none; the child continues and its later end sends the ordinary notice. A layer 3 change for every waiting parent. | Large fan-out 5 |
 | Retention | A retention worker over the instance-list read model, with lifecycle entries at every history level, landed as one rule with Park's journalling. | [Data lifecycle](data-lifecycle.md#decisions-owner-1617-november-2026) 1 |
 | Shortened policy | Applies to ended instances, with a count, confirmation above a threshold and a bounded delete rate. | Data lifecycle 2 |
 | Erasure | Delete and values by reference now, with the format items fixed; per-instance data keys in 1.x, opt-in per definition. | Data lifecycle 3 |

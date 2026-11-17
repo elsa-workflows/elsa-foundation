@@ -172,13 +172,15 @@ generation-tracked parent refuses it as `UnknownChildCreation`; an untracked par
 This holds for every waiting parent, a Native `DispatchWorkflow` that waits for its child included (a fire-and-forget
 dispatch gets no notice). Decision 5 changes the rule for every waiting parent: a parked child's notice says it was
 parked, and the parent keeps the child in its registry, and a combiner keeps it in `Outstanding` with its credit, until
-a later notice or a discard. `WorkflowInstance` consumes a parked notice in its registry, marking the child parked,
+the child's Park is resolved. `WorkflowInstance` consumes a parked notice in its registry, marking the child parked,
 before any model turn: no waiting activity sees it, so a Native `DispatchWorkflow` (whose `ResumeAsync` today completes
-for every `ChildDone` status) and a combiner stay waiting. Discard and delete of a parked child send the parent a final
-Faulted notice, so its wait ends ([observability](observability.md#recover)). That notice is the ordinary Faulted
-notice, so each parent applies its own fault policy to it: a combiner under FailFast faults and terminates its
-outstanding children, under Collect it counts the fault and frees the credit, and a waiting `DispatchWorkflow` receives
-it as it receives any faulted child's notice. A tree with parked leaves visibly waits, and a retried leaf's result is
+for every `ChildDone` status) and a combiner stay waiting. Every resolution that ends the child sends the parent exactly
+one final notice, so its wait ends ([observability](observability.md#resolving-a-park-a-bounded-drain)): discard
+(Faulted), the `Parked` window's expiry (Faulted, an automatic discard), terminate (Cancelled) and delete (Faulted). A
+recover sends no final notice: the child continues, and its later end sends the ordinary notice. A final notice is the
+ordinary Faulted or Cancelled notice, so each parent applies its own policy to it: a combiner under FailFast faults and
+terminates its outstanding children, under Collect it counts the fault and frees the credit, and a waiting
+`DispatchWorkflow` receives it as it receives any faulted or cancelled child's notice. A tree with parked leaves visibly waits, and a retried leaf's result is
 merged. The change is in `WorkflowInstance`'s registry and notice (layer 3) and is not built.
 
 **Retries.** A leaf's activity retries inside the leaf: each retry is a new generation in its iteration path, so a new
@@ -256,8 +258,9 @@ the rest of the kernel's. Rejected options are kept for the record.
 4. **A combiner's retry reaches leaves only (a).** Rejected: (b) unfinished items of a sub-range; (c) whole
    sub-ranges.
 5. **A parked child later retried: the parent keeps waiting (a).** The notice says "parked"; the parent's registry and a
-   combiner's `Outstanding` keep the child until a later notice or a discard; discard and delete of a parked child send
-   the parent a final Faulted notice, which ends the wait. This changes `WorkflowInstance`'s
+   combiner's `Outstanding` keep the child until the child's Park is resolved. Every resolution sends the parent exactly
+   one final notice: discard (Faulted), expiry (Faulted, an automatic discard), terminate (Cancelled) and delete
+   (Faulted). A recover sends none; the child continues, and its later end sends the ordinary notice. This changes `WorkflowInstance`'s
    registry and notice (layer 3) for every waiting parent. Rejected: (b) a parked child's fault is final for its
    parent.
 
