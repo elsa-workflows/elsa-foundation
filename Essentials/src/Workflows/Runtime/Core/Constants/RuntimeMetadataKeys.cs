@@ -68,6 +68,30 @@ public static class RuntimeMetadataKeys
     public const string StructuralFaultHandlingChild = "child";
     public const string StructuralFaultHandlingDescendant = "descendant";
     /// <summary>
+    /// The node's lost-update mode (spec 1221 FR-012), pinned by the publish compiler from the activity type's
+    /// declaration or the node's own setting: <see cref="LostUpdateModeFault"/> for strict read-modify-write. Absent
+    /// for the default mode (last write wins with a lost-update warning).
+    /// </summary>
+    public const string LostUpdateMode = "runtime.lostUpdateMode";
+    public const string LostUpdateModeFault = "fault";
+    /// <summary>
+    /// Whether a background node's inputs are refreshed at admission when a variable they read changed since Start
+    /// (spec 1221 FR-018, FR-019), pinned by the publish compiler from the node's setting: <see cref="BackgroundInputRefreshOff"/>
+    /// turns the refresh off, so a stale base meets the commit rule instead. Absent means on.
+    /// </summary>
+    public const string BackgroundInputRefresh = "runtime.backgroundInputRefresh";
+    public const string BackgroundInputRefreshOff = "off";
+    /// <summary>On a variable-write value snapshot (spec 1221 FR-025): the scope id and the version the write produced.</summary>
+    public const string VariableWriteScopeId = "runtime.variableWrite.scopeId";
+    /// <summary>
+    /// On a closed scope's variable row (spec 1221 T003, ADR 0048 D-9): the variable's version, value digest and writer,
+    /// the same per-variable version a frame keeps, so a row follows the same commit rule.
+    /// </summary>
+    public const string RowVariableVersion = "runtime.variable.version";
+    public const string RowVariableDigest = "runtime.variable.digest";
+    public const string RowVariableWriter = "runtime.variable.writer";
+    public const string VariableWriteNewVersion = "runtime.variableWrite.newVersion";
+    /// <summary>
     /// Executable-node capability compiled from the node's activity type when it implements
     /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
     /// </summary>
@@ -349,6 +373,12 @@ public static class RuntimeMetadataKeys
     public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
     /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>
     public const string RetryOfActivityExecutionId = "runtime.retryOfActivityExecutionId";
+    /// <summary>
+    /// On a retry successor that runs on the input snapshot it carried over from its source (spec 1221 FR-014): the
+    /// source's activity execution id. A background admission does not refresh such a snapshot. Absent on every row that
+    /// read its inputs at its own Start.
+    /// </summary>
+    public const string InputSnapshotCarriedFrom = "runtime.inputSnapshotCarriedFrom";
     /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
     /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>

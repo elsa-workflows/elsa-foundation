@@ -93,7 +93,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             try
             {
                 backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
-                    .GetResultOrAdmitAsync(workItem, invokePayload, executableNode, state, cancellationToken);
+                    .GetResultOrAdmitAsync(workItem, invokePayload, executable, executableNode, state, serviceProvider, cancellationToken);
             }
             catch (BackgroundActivityValidationException exception)
             {
@@ -163,6 +163,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
             RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
+        // Spec 1221 T003: captures into closed-scope variable rows, versioned by the projector.
+        IReadOnlyList<VariableWriteRecord> rowVariableWrites = [];
+        VariableWriteRecord? rowLostUpdateFault = null;
 
         // Carrier identity (correlation id / instance name) is projected from the IdentityName-tagged durable
         // values this invocation already re-lists, so a plain activity populates the carrier without
@@ -603,9 +606,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken),
+                invocation: stagedState,
+                durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>(),
+                source: backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult);
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
+            rowVariableWrites = captureProjection.VariableWrites;
+            rowLostUpdateFault = captureProjection.LostUpdateFault;
             return valueFlowCompletion.Projections
                 .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
@@ -695,18 +703,56 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var occurredAt = TimeProvider.GetUtcNow();
 
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
-        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame. Each capture is judged against
+        // the base the invocation's input read set holds (spec 1221 commit rule); its write history rides the completion.
+        var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             workItem.WorkflowExecutionId,
-            invokePayload.ExecutableNodeId,
+            executableNode,
+            completedState,
             workflowVariableWrites,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = invokePayload.Reason
             },
+            backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult,
+            occurredAt,
             cancellationToken);
+        if (rowLostUpdateFault is { } rowLostUpdate)
+        {
+            // A refused write into a closed scope's variable row refuses the completion the same way (T003). Its
+            // completion produced durable rows, so it is not recorded for acceptance.
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                invokePayload, state.WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(rowVariableWrites);
+        if (captureCommit.LostUpdateFault is { } lostUpdate)
+        {
+            // A Fault-mode lost update refuses the whole completion: no capture applies, the step faults through the
+            // ordinary incident path, and the faulted invocation keeps the refused write in its history and the whole
+            // refused completion for an operator to accept (spec 1221 FR-017).
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                invokePayload,
+                state.WithVariableWrites(captureCommit.Records) with
+                {
+                    RecordedCompletion = RecordCompletion(completedState, captureCommit, durableValueChanges, stagedWorkflowDispatch, stagedPublishIntents,
+                        parentNotificationWorkItems.Count + ancestorNotificationWorkItems.Count)
+                },
+                new VariableLostUpdateException(lostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureCommit.Records);
+        // FR-025: each value written joins the write history as an inspection value, under the capture policy.
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
+            captureCommit.Records, captureCommit.RecordedWrites, occurredAt));
+        var workflowVariableWriteBack = captureCommit.Change;
 
         await CommitCompletedActivityAsync(
             checkpointCommitter,
@@ -725,6 +771,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             occurredAt,
             cancellationToken);
     }
+
+    // The completion an operator may accept later is the whole transition: result, outcome selection and every
+    // variable write. A completion that also produced durable outputs, a workflow dispatch, a published stimulus or a
+    // parent or ancestor notification is not recorded: an alteration cannot replay those effects, so accepting it is refused rather than half applied.
+    private static RecordedActivityCompletion? RecordCompletion(
+        ActivityExecutionState completedState,
+        RuntimeWorkflowVariableCaptureCommit captureCommit,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        WorkflowDispatchCheckpointRequest? workflowDispatch,
+        IReadOnlyList<RuntimePostCommitIntent> publishIntents,
+        int structuralNotifications) =>
+        completedState.Completion is { } completion && completedState.Attempts?.LastOrDefault() is { } attempt &&
+        durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0 && structuralNotifications == 0
+            ? new RecordedActivityCompletion(completion, attempt, captureCommit.RecordedWrites)
+            : null;
 
     // This is where an activity fault stops: it is recorded here, not re-thrown, so it never reaches the scheduler
     // drainer's fault arm and never produces a poison record. Whether the resulting blocking incident terminates the

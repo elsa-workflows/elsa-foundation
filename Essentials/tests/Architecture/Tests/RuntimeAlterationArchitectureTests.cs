@@ -96,6 +96,8 @@ public sealed class RuntimeAlterationArchitectureTests
         AssertDescriptor(services, typeof(ScheduleActivityAlterationHandler), ServiceLifetime.Scoped);
         AssertDescriptor(services, typeof(RescheduleActivityAlterationHandler), ServiceLifetime.Scoped);
         AssertDescriptor(services, typeof(RetryFaultedActivityAlterationHandler), ServiceLifetime.Scoped);
+        AssertDescriptor(services, typeof(ReExecuteFaultedActivityAlterationHandler), ServiceLifetime.Scoped);
+        AssertDescriptor(services, typeof(AcceptRecordedCompletionAlterationHandler), ServiceLifetime.Scoped);
         AssertDescriptor(services, typeof(DecideInterventionAlterationHandler), ServiceLifetime.Scoped);
         AssertDescriptor(services, typeof(MigrateWorkflowAlterationHandler), ServiceLifetime.Scoped);
 
@@ -105,7 +107,7 @@ public sealed class RuntimeAlterationArchitectureTests
             .OrderBy(identity => identity.Kind, StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(
-            new[] { ("CancelWorkflow", 1), ("DecideIntervention", 1), ("Migrate", 1), ("ModifyVariable", 1), ("RescheduleActivity", 1), ("RetryFaultedActivity", 1), ("ScheduleActivity", 1) },
+            new[] { ("AcceptRecordedCompletion", 1), ("CancelWorkflow", 1), ("DecideIntervention", 1), ("Migrate", 1), ("ModifyVariable", 1), ("ReExecuteFaultedActivity", 1), ("RescheduleActivity", 1), ("RetryFaultedActivity", 1), ("ScheduleActivity", 1) },
             descriptors);
 
         using var provider = services.BuildServiceProvider();

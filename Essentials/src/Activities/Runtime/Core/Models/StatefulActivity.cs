@@ -173,6 +173,7 @@ public sealed class ActivityStartContext<TTrigger>
         CancellationToken = attempt.CancellationToken;
         OperationKey = attempt.OperationKey;
         TargetOperationKey = attempt.TargetOperationKey;
+        LogicalInvocationId = attempt.LogicalInvocationId;
         IsDirectInvocation = attempt.TriggerNodeId is null;
         IsTriggerDelivery = StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId);
         HasTrigger = hasTrigger;
@@ -190,6 +191,9 @@ public sealed class ActivityStartContext<TTrigger>
 
     /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
     public string? TargetOperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.LogicalInvocationId"/>
+    public string LogicalInvocationId { get; }
 
     public bool IsDirectInvocation { get; }
     public bool IsTriggerDelivery { get; }
@@ -305,6 +309,7 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         CancellationToken = attempt.CancellationToken;
         OperationKey = attempt.OperationKey;
         TargetOperationKey = attempt.TargetOperationKey;
+        LogicalInvocationId = attempt.LogicalInvocationId;
         State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
         Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
         RegistrationId = registrationId;
@@ -322,6 +327,9 @@ public sealed class ActivityResumeContext<TState, TTrigger>
 
     /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
     public string? TargetOperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.LogicalInvocationId"/>
+    public string LogicalInvocationId { get; }
 
     public TState State { get; }
     public TTrigger Trigger { get; }

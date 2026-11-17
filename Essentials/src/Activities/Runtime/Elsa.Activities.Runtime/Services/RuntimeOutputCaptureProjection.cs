@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -17,6 +18,15 @@ public sealed record RuntimeOutputCaptureProjection(
     public static RuntimeOutputCaptureProjection Empty { get; } = new(
         [],
         new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal));
+
+    /// <summary>The write-history records of captures into closed-scope variable rows (spec 1221 T003).</summary>
+    public IReadOnlyList<VariableWriteRecord> VariableWrites { get; init; } = [];
+
+    /// <summary>
+    /// A <c>Fault</c> lost update on a closed-scope variable row: the completion is refused, nothing is written, and the
+    /// faulted invocation keeps this refused write.
+    /// </summary>
+    public VariableWriteRecord? LostUpdateFault { get; init; }
 }
 
 /// <summary>
@@ -59,19 +69,83 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             Metadata: RuntimeModelMetadata.Snapshot(metadata));
     }
 
+    /// <summary>
+    /// Commits an invocation's workflow-variable captures under the commit rule (spec 1221 FR-005, FR-009): each capture
+    /// is judged against the base the invocation's input read set holds for that variable (none → a blind write), in the
+    /// node's lost-update mode. Returns the checkpoint state change, one write-history record per capture, and the
+    /// <c>Fault</c> lost update that refuses the completion, if any. When a capture faults, no capture applies.
+    /// </summary>
+    public static async ValueTask<RuntimeWorkflowVariableCaptureCommit> CommitCapturesAsync(
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        string workflowExecutionId,
+        ExecutableNode executableNode,
+        ActivityExecutionState invocation,
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
+        IReadOnlyDictionary<string, string> metadata,
+        VariableWriteSource source,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(executableNode);
+        ArgumentNullException.ThrowIfNull(invocation);
+        ArgumentNullException.ThrowIfNull(writes);
+
+        if (writes.Count == 0)
+            return RuntimeWorkflowVariableCaptureCommit.None;
+
+        var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Output capture on executable node '{executableNode.ExecutableNodeId}' targets a workflow variable, but workflow execution '{workflowExecutionId}' has no durable state.");
+        var writer = new VariableWriter(source, executableNode.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
+        var result = Apply(
+            workflowState,
+            executableNode.ExecutableNodeId,
+            writes,
+            invocation.InputSnapshot?.InputReadSet,
+            LostUpdateModes.Of(executableNode),
+            writer,
+            occurredAt);
+        if (result.LostUpdateFault is not null)
+            return result with { Change = null };
+
+        return result with
+        {
+            Change = new RuntimeStateChange<WorkflowExecutionState>(
+                StateId: workflowExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: result.State!,
+                Metadata: RuntimeModelMetadata.Snapshot(metadata))
+        };
+    }
+
+    /// <summary>Applies captures as blind writes (no base, no history), the form callers without an invocation use.</summary>
     public static WorkflowExecutionState Apply(
         WorkflowExecutionState workflowState,
         string executableNodeId,
-        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes)
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes) =>
+        Apply(workflowState, executableNodeId, writes, readSet: null, LostUpdateMode.Default, writer: null, DateTimeOffset.MinValue).State!;
+
+    private static RuntimeWorkflowVariableCaptureCommit Apply(
+        WorkflowExecutionState workflowState,
+        string executableNodeId,
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
+        VariableInputReadSet? readSet,
+        LostUpdateMode mode,
+        VariableWriter? writer,
+        DateTimeOffset occurredAt)
     {
         ArgumentNullException.ThrowIfNull(workflowState);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentNullException.ThrowIfNull(writes);
 
+        var records = new List<VariableWriteRecord>();
         var frame = workflowState.RootVariableFrame
             ?? throw new InvalidOperationException(
                 $"Output capture on executable node '{executableNodeId}' targets a workflow variable, but workflow execution '{workflowState.WorkflowExecutionId}' has no canonical root variable frame.");
 
+        var resolved = new List<RecordedVariableWrite>(writes.Count);
         foreach (var (variableKey, encoding) in writes.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             if (!frame.Values.TryGetValue(variableKey, out var declared))
@@ -102,9 +176,48 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
                     ValueEnvelope.Inline(declared.Type, inline, declared.Policy),
                 _ => ValueEnvelope.Null(declared.Type, declared.Policy)
             };
-            frame = frame.Set(variableKey, envelope, frame.Revision);
+            resolved.Add(new RecordedVariableWrite(variableKey, envelope));
         }
 
-        return workflowState with { RootVariableFrame = frame };
+        foreach (var (variableKey, envelope) in resolved.Select(item => (item.VariableKey, item.Value)))
+        {
+            var write = frame.Commit(variableKey, envelope, frame.Revision, readSet?.BaseFor(frame.ScopeId, variableKey), mode, writer);
+            if (writer is not null && VariableWriteRecord.IsRecorded(write.Decision))
+            {
+                var record = VariableWriteRecord.From(frame, write, variableKey, writer, occurredAt);
+                if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
+                {
+                    // Nothing in the batch applies, so only the refused write is recorded, not the captures before it.
+                    var refused = record with { RejectedValue = envelope };
+                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [refused], refused) { RecordedWrites = resolved };
+                }
+                records.Add(record);
+            }
+
+            frame = write.Frame;
+        }
+
+        return new RuntimeWorkflowVariableCaptureCommit(null, workflowState with { RootVariableFrame = frame }, records, null) { RecordedWrites = resolved };
     }
+}
+
+/// <summary>
+/// The outcome of committing an invocation's workflow-variable captures: the checkpoint state change (null when nothing
+/// is written or a capture faulted), the write-history records, and the <c>Fault</c> lost update that refused the
+/// completion.
+/// </summary>
+public sealed record RuntimeWorkflowVariableCaptureCommit(
+    RuntimeStateChange<WorkflowExecutionState>? Change,
+    WorkflowExecutionState? State,
+    IReadOnlyList<VariableWriteRecord> Records,
+    VariableWriteRecord? LostUpdateFault)
+{
+    public static RuntimeWorkflowVariableCaptureCommit None { get; } = new(null, null, [], null);
+
+    /// <summary>
+    /// Every write of the batch, resolved to its value: on a <c>Fault</c> lost update, what the refused batch would have
+    /// written, for the faulted invocation's recorded completion (spec 1221 FR-017); otherwise what it wrote, for the
+    /// write history's value snapshots (FR-025).
+    /// </summary>
+    public IReadOnlyList<RecordedVariableWrite> RecordedWrites { get; init; } = [];
 }
