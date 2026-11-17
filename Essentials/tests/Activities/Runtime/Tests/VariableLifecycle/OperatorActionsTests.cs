@@ -220,6 +220,10 @@ public sealed class OperatorActionsTests
         var successor = Assert.Single(run.States("node-right"), state => state.Status == ActivityExecutionStatus.Completed);
         Assert.Equal(source.LogicalInvocationId, successor.LogicalInvocationId);
         Assert.Equal(recorded.Completion.Selection, successor.Completion!.Selection);
+        // The successor's history is its own: no inherited refused completion, its own attempt id and lifecycle.
+        Assert.Null(successor.RecordedCompletion);
+        Assert.NotEqual(recorded.Attempt!.AttemptId, Assert.Single(successor.Attempts!).AttemptId);
+        Assert.DoesNotContain(successor.Transitions ?? [], stamp => stamp.Kind == ActivityLifecycleTransitionKind.Faulted);
         var accepted = Assert.Single(successor.VariableWrites!);
         Assert.Equal(VariableCommitOutcome.AcceptedOverride, accepted.Outcome);
         Assert.Equal(VariableWriteSource.AcceptedCompletion, accepted.Writer.Source);
@@ -268,6 +272,31 @@ public sealed class OperatorActionsTests
         Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
         Assert.Equal("NoRecordedCompletion", Assert.Single(job.Outcomes).Code);
         Assert.Equal(ActivityExecutionStatus.Faulted, (await fixture.ReadRunAsync()).State("node-f").Status);
+    }
+
+    // T039 / FR-026: a value a lost-update warning overwrote can be restored. Both leaves read 0; the left writes 1 and
+    // the right writes 2 over it with a warning that keeps the 1. The parent waits for one more child, so the run is still
+    // running, and the operator writes the kept value back with ModifyVariable.
+    [Fact]
+    public async Task A_value_a_lost_update_overwrote_can_be_restored()
+    {
+        var executable = WorkflowExecutionHarness.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(JoiningInterventionParentActivity),
+                VariableLifecycleTestGraph.Increment("node-left", typeof(IncrementActivity)),
+                VariableLifecycleTestGraph.Increment("node-right", typeof(DoublingIncrementActivity))),
+            VariableLifecycleTestGraph.CountDeclaration());
+        await using var fixture = await Fixture.StartAsync(executable, fusion: false,
+            services => services.AddSingleton(new JoinDirective(ExtraChildren: 1)), "actexec-parent", "actexec-left", "actexec-right");
+        Assert.Equal(WorkflowExecutionStatus.Running, fixture.Run.WorkflowState!.Status);
+        Assert.Equal(2, VariableLifecycleTestGraph.ReadCount(fixture.Run));
+        var warning = Assert.Single(fixture.Run.State("node-right").VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.LostUpdateWarning, warning.Outcome);
+        var kept = warning.OverwrittenValue!.InlineValue!.Value.GetInt32();
+
+        var job = await fixture.ModifyCountAsync(kept);
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        Assert.Equal(1, VariableLifecycleTestGraph.ReadCount(await fixture.ReadRunAsync()));
     }
 
     private static WorkflowExecutable AcceptExecutable() =>

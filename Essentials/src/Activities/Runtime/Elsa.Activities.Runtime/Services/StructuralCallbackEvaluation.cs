@@ -388,7 +388,11 @@ internal static class StructuralCallbackEvaluation
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken),
+                invocation: currentParentState);
+            // Spec 1221 T003: a refused closed-scope row write refuses the completion, as a refused frame write does.
+            if (captureProjection.LostUpdateFault is { } rowLostUpdate)
+                throw new VariableLostUpdateException(rowLostUpdate);
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)
@@ -416,7 +420,7 @@ internal static class StructuralCallbackEvaluation
             completionWorkflowVariableWriteBack = captureCommit.Change;
             writesBeforeCapture = currentParentState.VariableWrites;
             captureRecordsAdded = true;
-            currentParentState = currentParentState.WithVariableWrites(captureCommit.Records);
+            currentParentState = currentParentState.WithVariableWrites([.. captureProjection.VariableWrites, .. captureCommit.Records]);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
                 openAttempt.StartedAt, completedAt, openAttempt.TriggerDeliveryId,

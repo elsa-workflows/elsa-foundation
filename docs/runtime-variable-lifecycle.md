@@ -17,6 +17,7 @@ without a record. This page describes how the runtime does that. The decisions a
 | Base | The version a write was built on: the read-set entry for that variable. A write to a variable the step never read has no base and is a *blind* write. |
 | Lost update | A write whose base is no longer the current version: someone else wrote the variable after this step read it. |
 | Write history | One record per applied write and per lost update, kept on the writing step's activity execution state. |
+| Commit sequence | The instance-wide number of the checkpoint that committed a write or a lifecycle transition. It orders writes across all frames and rows of the instance. |
 
 ## The commit rule
 
@@ -96,7 +97,38 @@ suspended. A variable it only read never produces a lost update.
 The alteration records the target variable's version when the job is captured and applies only if that variable is
 still at that version. A write to another variable in the same frame does not conflict with it. The operator's value
 is versioned with an `Alteration` writer, so a later write on a stale base names the operator's change in its
-warning and keeps the operator's value.
+warning and keeps the operator's value. The job's outcome keeps a write record for the change (versions and writer,
+no value), numbered with the alteration's checkpoint.
+
+## Write history
+
+Every applied write and every lost update leaves a `VariableWriteRecord` on the writing step's activity state: the
+variable (scope and key), the writer (node, invocation, attempt), the source (capture, intrinsic, background result,
+alteration, accepted completion), the base and new versions, the outcome and the commit sequence. A `ModifyVariable`
+keeps its record on the alteration job's outcome.
+
+- **Order.** The committer numbers every checkpoint of an instance under its execution lease: the lease's fencing token
+  (one higher on every acquisition) followed by the checkpoint's ordinal within the lease. Each new record, and each
+  lifecycle transition of an activity (`Transitions`: scheduled, started, suspended, resumed, completed, faulted,
+  cancelled), carries that number. Numbers grow with commit order and are not dense. A record also names its frame and
+  the digest of the value it left, and an activity row keeps the first and last number on it (`FirstCommitSequence`,
+  `LastCommitSequence`). A write of an equal value leaves no record unless it was a lost update. A coalescing drain numbers each
+  logical checkpoint before folding them, so writes inside one folded segment keep their own order. Code:
+  `RuntimeCommitSequenceStamper`.
+- **Values.** The value each write wrote is an inspection value of the writing step (subject `VariableWrite`; name =
+  variable key, phase = scope id, sequence = the version it produced), decided by the payload capture policy under the
+  `variableWrites` diagnostics setting, which is off unless configured. A value not captured has no payload and its
+  capture mode says why; a sensitive one is withheld; retention applies as for any inspection value. None of these
+  reads as `null`.
+- **Operational data.** The value a lost-update warning overwrote (`OverwrittenValue`), a refused write
+  (`RejectedValue`) and a refused completion (`RecordedCompletion`) stay on the activity state whatever the capture
+  policy says, so a warning can be repaired (write the kept value back with `ModifyVariable`) and a refusal accepted.
+
+## Closed scopes
+
+The variables of a closed scope (a graph activity's body) are rows, not a frame. They follow the same rules: a row
+carries its version, digest and writer, a body node's read records them, and a capture into a row is judged by the
+commit rule against them. A refused row write refuses the completion as a refused frame write does.
 
 ## Retry, re-execute, accept
 
@@ -129,9 +161,12 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   ambient variables an expression references. An expression with computed access (`variables[x]`, `getVariable(x)`)
   is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
   warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
-- A `ModifyVariable` leaves no write-history record of its own; its version carries an `Alteration` writer, and the
-  alteration job keeps its own outcome.
-- Variables of a closed scope (graph rows) are read and written outside the root frame; their writes are blind.
+- An intrinsic cannot write a closed scope's variables yet; only captures write rows.
+- Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
+  second does not see the first.
+- A commit resubmitted byte for byte under a later lease is numbered again, so it no longer matches the stored copy.
+  Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
   accept.
-- The write history is data only; the inspection surfaces that present it are spec S-6.
+- The write history is data; the read API that presents it is spec S-6, and Studio presents it in its own work
+  (elsa-workflows/elsa-foundation-studio#601).

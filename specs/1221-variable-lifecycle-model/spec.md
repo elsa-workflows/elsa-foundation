@@ -4,7 +4,9 @@
 
 **Created**: 2026-11-09
 
-**Status**: Approved — agreed 2026-11-12, together with ADR 0092 (#3411, merged as `f52a661df`).
+**Status**: Implemented — in #4316 (2026-11-17). Approved 2026-11-12, together with ADR 0092 (#3411, merged as
+`f52a661df`). Session reads and own-write bases moved to S-7 and Studio presentation to elsa-foundation-studio
+(*Scope moved*).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-10**,
 analysis **A-2**, decisions **D-8** and **D-9**.

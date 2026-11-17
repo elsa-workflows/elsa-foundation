@@ -18,6 +18,15 @@ public sealed record RuntimeOutputCaptureProjection(
     public static RuntimeOutputCaptureProjection Empty { get; } = new(
         [],
         new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal));
+
+    /// <summary>The write-history records of captures into closed-scope variable rows (spec 1221 T003).</summary>
+    public IReadOnlyList<VariableWriteRecord> VariableWrites { get; init; } = [];
+
+    /// <summary>
+    /// A <c>Fault</c> lost update on a closed-scope variable row: the completion is refused, nothing is written, and the
+    /// faulted invocation keeps this refused write.
+    /// </summary>
+    public VariableWriteRecord? LostUpdateFault { get; init; }
 }
 
 /// <summary>
@@ -173,7 +182,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
         foreach (var (variableKey, envelope) in resolved.Select(item => (item.VariableKey, item.Value)))
         {
             var write = frame.Commit(variableKey, envelope, frame.Revision, readSet?.BaseFor(frame.ScopeId, variableKey), mode, writer);
-            if (writer is not null)
+            if (writer is not null && VariableWriteRecord.IsRecorded(write.Decision))
             {
                 var record = VariableWriteRecord.From(frame, write, variableKey, writer, occurredAt);
                 if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
@@ -188,7 +197,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             frame = write.Frame;
         }
 
-        return new RuntimeWorkflowVariableCaptureCommit(null, workflowState with { RootVariableFrame = frame }, records, null);
+        return new RuntimeWorkflowVariableCaptureCommit(null, workflowState with { RootVariableFrame = frame }, records, null) { RecordedWrites = resolved };
     }
 }
 
@@ -206,8 +215,9 @@ public sealed record RuntimeWorkflowVariableCaptureCommit(
     public static RuntimeWorkflowVariableCaptureCommit None { get; } = new(null, null, [], null);
 
     /// <summary>
-    /// On a <c>Fault</c> lost update: every write of the refused batch, resolved to the value it would have written, for
-    /// the faulted invocation's recorded completion (spec 1221 FR-017).
+    /// Every write of the batch, resolved to its value: on a <c>Fault</c> lost update, what the refused batch would have
+    /// written, for the faulted invocation's recorded completion (spec 1221 FR-017); otherwise what it wrote, for the
+    /// write history's value snapshots (FR-025).
     /// </summary>
     public IReadOnlyList<RecordedVariableWrite> RecordedWrites { get; init; } = [];
 }

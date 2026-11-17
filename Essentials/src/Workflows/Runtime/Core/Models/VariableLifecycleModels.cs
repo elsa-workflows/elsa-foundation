@@ -161,6 +161,27 @@ public sealed record VariableWriteRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? CommitSequence { get; init; }
 
+    /// <summary>
+    /// The frame the write went to. Versions count per frame, and loop iterations and containers reuse a scope id, so
+    /// a variable's history is keyed by frame and key. Absent on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FrameId { get; init; }
+
+    /// <summary>The digest of the value the variable holds after this write (its resulting version's digest), when known.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Digest { get; init; }
+
+    /// <summary>
+    /// Whether a write is recorded: one that changed the value, and every lost update. A write of an equal value writes
+    /// nothing and keeps the version (spec 1221), so it leaves no record unless it was judged against a stale base.
+    /// </summary>
+    public static bool IsRecorded(VariableCommitDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+        return decision.ChangesValue || decision.IsLostUpdate;
+    }
+
     [JsonIgnore]
     public bool IsLostUpdate => Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.LostUpdateFault;
 
@@ -182,7 +203,11 @@ public sealed record VariableWriteRecord
             write.Frame.Revision,
             occurredAt,
             lostUpdate ? decision.Current.Writer : null,
-            lostUpdate && decision.ChangesValue ? write.OverwrittenValue : null);
+            lostUpdate && decision.ChangesValue ? write.OverwrittenValue : null)
+        {
+            FrameId = before.FrameId,
+            Digest = decision.Applies ? decision.Resulting.Digest : null
+        };
     }
 }
 

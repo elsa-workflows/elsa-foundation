@@ -3,16 +3,15 @@
 **Input**: Design documents from `specs/1221-variable-lifecycle-model/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 
-**Status**: provisional. These tasks are the implementation plan for when ADR 0092 is agreed and the initiative branch
-lands; nothing is implemented before then. They also serve the provisional spec's purpose — the reproduction drives and
-the no-gap PoC test whether ADR 0092 works in code, and findings flow back to #3411.
+**Status**: implemented in #4316 (2026-11-17). Every task is done there, moved (T015, T016 to S-7; T024a to S-5), or
+the coordinator's post on #3411 (T028).
 
 **Tests / cadence**: Elsa uses xUnit, no FluentAssertions (constitution). The two reproduction drives (US1, US2) and the
 no-gap proof (US4) are **test-first** — the ADR's *Required evidence* needs them failing before and passing after. Other
 tests follow §2.23 (behaviour tests for logic-bearing implementations; feature-registration tests only where wiring
 carries logic) at the application cadence (§2.21.2). No new CI tier (existing Full tier runs them).
 
-**Implementation status (first implementation PR, #4316):** the ticked tasks are done there. Open, with the reason:
+**Implementation status (#4316):** the ticked tasks are done there. Notes per task:
 
 - **T015, T016 (session reads, own-write bases): moved to S-7** (coordinator, 2026-11-17; see the spec's *Scope
   moved*). No variable session exists before S-7 (ADR 0090) builds it. The read-set model keeps one entry per variable
@@ -46,28 +45,40 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   opt-out is `ActivityNode.DisableBackgroundInputRefresh`, pinned as `runtime.backgroundInputRefresh=off`. Drives in
   `BackgroundRefreshTests`: refresh on change, no refresh when unchanged, opt-out warns by default and faults under
   `Fault`, and two background branches (T010a) total `1` with a warning on the second commit.
-- **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`
-  opt-in goes in with S-5's implementation.
-- **T028, T042:** coordinator steps on #3411; the PoC result is in #4316's description.
-- **T003 (partly):** versions and digests are on frames; closed-scope variables (graph rows) are not versioned yet, so
-  their writes stay blind.
+- **T024a: delivered by S-5** (coordinator, 2026-11-17): spec 266's unordered-writer warning is S-5's (#4669), so
+  the pointer to the `Fault` opt-in goes into that warning there; S-10 does not wait for it.
+- **T028:** the PoC result (feasible: inline `External` and `ReplaySafe` leaves fuse) is in #4316's description; posting
+  it on #3411 is the coordinator's step. **T042:** checked against the merged ADR text.
+- **T003:** versions and digests are on frames and on closed-scope variable rows (row metadata
+  `runtime.variable.version/digest/writer`). A body node reads rows through a frame that carries those versions, so its
+  read set records them, and a capture into a row is judged by the commit rule (`RuntimeOutputCaptureProjector`,
+  `ClosedScopeVariableRows`); a refused row write refuses the completion. Intrinsics cannot write a closed scope's
+  variables yet, so captures are the only row writers.
 - **T021a:** the warning is its write-history entry, with both writers, both versions and the overwritten value; the
   API that exposes it is S-6 and Studio presentation is its own elsa-foundation-studio work (spec *Scope moved*). A
   warning incident was not used: an incident in a commit ends the coalescing session and would re-open the inline gap
   for later leaves.
 - **T033:** resume keeps the snapshot and read set and starts with no refresh. Advancing own-write bases on resume
   moved to S-7 with T016.
-- **T036, T037 (partly):** every applied write and lost update leaves a record on the writer's activity state, with
-  the operational data (overwritten value, refused write), and a `ModifyVariable` stamps its version's writer instead
-  of a record. Inspection-value capture with retention, and telling omitted/redacted/expired apart from `null`, are not
-  built yet.
-- **T038 (partly):** measured; storage chosen (records ride the writer's checkpoint, no extra rows); an SC-005 budget is
-  proposed in #4316 for the coordinator to settle on #3411.
-- **T009 (partly):** no document version is bumped. The new members are additive and omitted while empty, so an older frame or
-  snapshot reads back at version 0 with no base, which a test covers.
-- **T039:** partly done (capture, `Fault` and buffered-segment records are covered); intrinsic and background-result
-  records, and restoring an overwritten value, come with US2/US5.
-- **T041:** after the remaining stories.
+- **T036, T037:** every applied write and lost update leaves a record on the writer's activity state; a
+  `ModifyVariable` leaves one on its job outcome (versions and writer, no value). FR-024's instance commit order:
+  `RuntimeCommitSequenceStamper` numbers each logical checkpoint under the execution lease (fencing token, then the
+  ordinal within the lease) before any coalescing fold, and stamps new records and activity lifecycle transitions
+  (`ActivityExecutionState.Transitions`); no read or write per commit. FR-025: each written value is an inspection
+  value of the writer (subject `VariableWrite`, setting `variableWrites`, off unless configured), so capture,
+  sensitivity and retention follow the existing rules and a value not captured never reads as `null`. FR-026: the
+  overwritten value, the refused write and the refused completion stay on the state whatever that setting says.
+  Intermediate writes inside one folded segment keep their own records and numbers (FR-027).
+- **T038:** measured; storage chosen (records ride the writer's checkpoint, no extra rows); the SC-005 budget is
+  proposed in #4316's description and posted on #3411 with T028.
+- **T009:** no document version is bumped, by design: every new member is additive and omitted while empty, so an older
+  frame, row, snapshot or record reads back at version 0, with no base, no commit sequence and no transitions, which
+  tests cover. A reader treats a missing commit sequence as order unknown (S-6 marks it approximate).
+- **T039:** `WriteHistoryTests` (values captured and not captured, required metadata, an intrinsic write), operational
+  data and restoring a value a warning overwrote (`OperatorActionsTests.A_value_a_lost_update_overwrote_can_be_restored`),
+  background-result records (`BackgroundRefreshTests`), buffered-segment records and commit order (`CommitOrderTests`,
+  `CommitSequenceStampingTests`), closed-scope rows (`GraphBodyScopeTests`).
+- **T041:** the evidence suite is in #4316's description, checked against SC-001 to SC-005.
 - **For the next implementation PR:** keep the positional signatures of `VariableFrameState` and
   `WorkflowAlterationCapturedConcurrency` as they are now (Code Review, #4316); add members as optional ones.
 
@@ -80,13 +91,13 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 **Purpose**: the data model and the commit rule every story depends on.
 
-- [ ] T003 Add per-variable `Version` and `Digest` to `VariableFrameState` in `Essentials/src/Workflows/Runtime/Core/Models/VariableFrameState.cs`, beside the frame revision; mirror in the row store.
+- [x] T003 Add per-variable `Version` and `Digest` to `VariableFrameState` in `Essentials/src/Workflows/Runtime/Core/Models/VariableFrameState.cs`, beside the frame revision; mirror in the row store.
 - [x] T004 [P] Add `ReadSetEntry`, `InputReadSet` and `SessionReads` types in `Essentials/src/Workflows/Runtime/Core/Models/` (per data-model.md).
 - [x] T005 [P] Add the `WriteHistoryRecord` type (mandatory metadata; optional value; conditional operational data) in `Essentials/src/Workflows/Runtime/Core/Models/`.
 - [x] T006 Add the digest computation over ADR 0091 canonical form (one per applied write) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/VariableFrameFactory.cs`.
 - [x] T007 Implement `VariableCommitRule` (blind / current / returned-value / lost-update) in `Essentials/src/Workflows/Runtime/Core/` per contracts/commit-rule.md.
 - [x] T008 [P] Behaviour tests for `VariableCommitRule`: blind applies; base==current applies; `0→1→0` applies + records mismatch; stale+changed is a lost update; unchanged value writes nothing but two 0→1 writers do not hide the second. In `.../Tests/VariableLifecycle/CommitRuleTests.cs`.
-- [ ] T009 Document/schema version increment + upcast for `VariableFrameState` and `WriteHistoryRecord` (missing version → 0 / no base); test old-record read-back.
+- [x] T009 Document/schema version increment + upcast for `VariableFrameState` and `WriteHistoryRecord` (missing version → 0 / no base); test old-record read-back.
 
 **Checkpoint**: data model and commit rule exist and are unit-tested; no write site uses them yet.
 
@@ -132,7 +143,7 @@ default of FR-011 depends on it (FR-013a).
 - [x] T022 [US3] Add the `Fault` opt-in: `LostUpdateMode` per activity type (attribute) and per node (setting) in the runtime policy resolution, pinned in the executable; `Fault` nodes record stored digests in their read sets and use the exact check.
 - [x] T023 [US3] Route a `Fault` lost update through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
 - [x] T024 [P] [US3] Behaviour tests: default warns and applies (incl. `0 → 1 → 0`); `Fault` (type and node) applies `0 → 1 → 0` with a recorded mismatch and faults a real lost update through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
-- [ ] T024a [P] [US3] Point spec 266's unordered-writer publish warning to the `Fault` opt-in (FR-012a); coordinate with S-5 (#3286).
+- [x] T024a [P] [US3] **Delivered by S-5 (#4669).** Point spec 266's unordered-writer publish warning to the `Fault` opt-in (FR-012a); coordinate with S-5 (#3286).
 
 ---
 
@@ -164,18 +175,18 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 9: User Story 7 — Write history data (D-13) (Priority: P3) — Open question B
 
-- [ ] T036 [US7] Record a `WriteHistoryRecord` at every applied write and lost update (metadata always, with the outcome and both writers; value opt-in + retention; operational data — rejected completion, the value a warning overwrote — retained for recovery and repair).
-- [ ] T037 [US7] Preserve every intermediate write incl. `0→1→0` within one buffered segment; distinguish omitted/redacted/expired from `null`.
-- [ ] T038 [US7] **Measurement (Open question B)**: benchmark rows vs. derived-from-checkpoint under large payloads / hot loops; choose the physical storage; set the SC-005 overhead threshold. Post the result on #3411 (reviewer Q12).
-- [ ] T039 [P] [US7] Tests: required metadata present for each write source; intermediate writes survive folding; operational data (rejected completion, overwritten value) available with inspection values off/expired; an overwritten value can be restored. In `.../Tests/VariableLifecycle/WriteHistoryTests.cs`.
+- [x] T036 [US7] Record a `WriteHistoryRecord` at every applied write and lost update (metadata always, with the outcome and both writers; value opt-in + retention; operational data — rejected completion, the value a warning overwrote — retained for recovery and repair).
+- [x] T037 [US7] Preserve every intermediate write incl. `0→1→0` within one buffered segment; distinguish omitted/redacted/expired from `null`.
+- [x] T038 [US7] **Measurement (Open question B)**: benchmark rows vs. derived-from-checkpoint under large payloads / hot loops; choose the physical storage; set the SC-005 overhead threshold. Post the result on #3411 (reviewer Q12).
+- [x] T039 [P] [US7] Tests: required metadata present for each write source; intermediate writes survive folding; operational data (rejected completion, overwritten value) available with inspection values off/expired; an overwritten value can be restored. In `.../Tests/VariableLifecycle/WriteHistoryTests.cs`.
 
 ---
 
 ## Phase 10: Polish & cross-cutting
 
 - [x] T040 [P] Update `docs/runtime-fault-behavior.md` and the variable/lifecycle docs for the commit rule, the lost-update warning and the `Fault` opt-in, and the operator actions; document how to sequence branches or aggregate results, and when to opt in to `Fault` (§2.22).
-- [ ] T041 Confirm the full reproduction + evidence suite from the ADR's *Required evidence* list passes; cross-check against SC-001…SC-005.
-- [ ] T042 Coordinator check: on #3411, confirm the agreed ADR 0092 text still says option C (decision 6) and the suspended-keeps-base contract (decision 11) as this spec applies them; recheck the spec if it changed.
+- [x] T041 Confirm the full reproduction + evidence suite from the ADR's *Required evidence* list passes; cross-check against SC-001…SC-005.
+- [x] T042 **Checked 2026-11-17 against the merged ADR text on the branch: decision 6 is option C, decision 11 the suspended-keeps-base contract, decision 8 as amended 2026-11-16.** Coordinator check: on #3411, confirm the agreed ADR 0092 text still says option C (decision 6) and the suspended-keeps-base contract (decision 11) as this spec applies them; recheck the spec if it changed.
 
 ## Dependencies & order
 

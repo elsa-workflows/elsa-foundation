@@ -99,6 +99,9 @@ public static class RuntimeDiagnosticsSubjects
     public const string ContainerVariables = "containerVariables";
     public const string DurableValues = "durableValues";
 
+    /// <summary>The values variable writes wrote, in the write history (spec 1221 FR-025). Off unless configured.</summary>
+    public const string VariableWrites = "variableWrites";
+
     public static readonly IReadOnlyCollection<string> All =
     [
         WorkflowInputs,
@@ -108,7 +111,8 @@ public static class RuntimeDiagnosticsSubjects
         Incidents,
         Diagnostics,
         ContainerVariables,
-        DurableValues
+        DurableValues,
+        VariableWrites
     ];
 
     public static string FromCaptureSubject(RuntimePayloadCaptureSubject subject) =>
@@ -122,6 +126,7 @@ public static class RuntimeDiagnosticsSubjects
             RuntimePayloadCaptureSubject.Diagnostic => Diagnostics,
             RuntimePayloadCaptureSubject.ContainerVariable => ContainerVariables,
             RuntimePayloadCaptureSubject.DurableValue => DurableValues,
+            RuntimePayloadCaptureSubject.VariableWrite => VariableWrites,
             _ => throw new ArgumentOutOfRangeException(nameof(subject), subject, "Unknown runtime payload capture subject.")
         };
 }
@@ -271,6 +276,7 @@ public static class RuntimeDiagnosticsSettingsResolver
             RuntimeDiagnosticsSubjects.Diagnostics => "Diagnostics",
             RuntimeDiagnosticsSubjects.ContainerVariables => "Container variables",
             RuntimeDiagnosticsSubjects.DurableValues => "Durable values",
+            RuntimeDiagnosticsSubjects.VariableWrites => "Variable writes",
             _ => subject
         };
 }

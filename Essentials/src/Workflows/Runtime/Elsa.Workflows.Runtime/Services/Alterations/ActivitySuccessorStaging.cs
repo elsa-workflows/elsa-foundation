@@ -116,7 +116,14 @@ internal static class ActivitySuccessorStaging
             // The kept values keep the read set they were materialized against (spec 1221), so the successor's captures
             // are still judged against the versions those values were read at.
             InputSnapshot = source.InputSnapshot is { } input ? new ActivityInputSnapshot(successorId,
-                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet } : null,
+                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet, Evaluation = input.Evaluation } : null,
+            // Per-invocation history belongs to the source row: the successor starts its own lifecycle and history, and
+            // a refused completion stays with the row that refused it.
+            RecordedCompletion = null,
+            Transitions = null,
+            InputRefreshes = null,
+            FirstCommitSequence = null,
+            LastCommitSequence = null,
             Completion = null,
             Fault = null,
             TriggerRegistrations = [],

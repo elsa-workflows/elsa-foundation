@@ -82,6 +82,22 @@ public sealed class CommitSequenceStampingTests
             Transitions(store.Commits[3]).Select(item => item.Kind));
     }
 
+    // A commit the store did not persist leaves no stamp behind for a later commit to merge in.
+    [Fact]
+    public async Task Stamps_of_a_commit_that_failed_are_not_merged_into_a_later_one()
+    {
+        var (committer, store, accessor) = NewCommitter();
+        using var _ = accessor.Push(Lease(fencingToken: 1));
+        store.FailNext = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await committer.CommitAsync(Commit("commit-1", Activity(ActivityExecutionStatus.Completed))));
+        await committer.CommitAsync(Commit("commit-2", Activity(ActivityExecutionStatus.Faulted)));
+
+        var transitions = Transitions(Assert.Single(store.Commits));
+        Assert.Equal(ActivityLifecycleTransitionKind.Faulted, Assert.Single(transitions).Kind);
+    }
+
     [Fact]
     public async Task A_commit_outside_a_lease_is_not_numbered()
     {
@@ -143,12 +159,19 @@ public sealed class CommitSequenceStampingTests
     private sealed class RecordingStore : IRuntimeCheckpointCommitStore
     {
         public List<RuntimeCheckpointCommit> Commits { get; } = [];
+        public bool FailNext { get; set; }
 
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
             RuntimeCheckpointCommit commit,
             RuntimeCheckpointPersistenceDecision decision,
             CancellationToken cancellationToken = default)
         {
+            if (FailNext)
+            {
+                FailNext = false;
+                throw new InvalidOperationException("The store did not persist the commit.");
+            }
+
             Commits.Add(commit);
             return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]));
         }

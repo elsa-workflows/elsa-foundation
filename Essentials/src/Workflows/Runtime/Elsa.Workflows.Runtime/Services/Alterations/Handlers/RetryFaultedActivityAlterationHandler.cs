@@ -266,8 +266,9 @@ public sealed class RetryFaultedActivityAlterationHandler(
     {
         var recorded = source.RecordedCompletion!;
         var successorId = successor.Execution.ActivityExecutionId;
+        // The successor's attempt is its own (a new id), carrying the recorded attempt's timing and ordinal.
         var attempt = recorded.Attempt is { } recordedAttempt
-            ? new ActivityAttempt(recordedAttempt.AttemptId, successorId, recordedAttempt.Ordinal, recordedAttempt.Reason,
+            ? new ActivityAttempt(Elsa.Workflows.Runtime.Services.Checkpoints.RuntimeChainId.Derive(successorId, $"accepted:{recordedAttempt.AttemptId}"), successorId, recordedAttempt.Ordinal, recordedAttempt.Reason,
                 recordedAttempt.StartedAt, recordedAttempt.EndedAt ?? now, recordedAttempt.TriggerDeliveryId, ActivityTransitionKind.Complete)
             : null;
         var writer = new VariableWriter(VariableWriteSource.AcceptedCompletion, sourceNode.ExecutableNodeId, successorId, attempt?.AttemptId);
@@ -279,6 +280,9 @@ public sealed class RetryFaultedActivityAlterationHandler(
             var previousValue = before.Values[write.VariableKey];
             var committed = before.Commit(write.VariableKey, write.Value, before.Revision, writeBase: null, Elsa.Primitives.Models.LostUpdateMode.Default, writer);
             var decision = committed.Decision;
+            frame = committed.Frame;
+            if (!decision.ChangesValue)
+                continue;
             records.Add(new VariableWriteRecord(
                 before.ScopeId,
                 write.VariableKey,
@@ -289,9 +293,12 @@ public sealed class RetryFaultedActivityAlterationHandler(
                 decision.Resulting.Version,
                 committed.Frame.Revision,
                 now,
-                decision.ChangesValue ? decision.Current.Writer : null,
-                decision.ChangesValue ? previousValue : null));
-            frame = committed.Frame;
+                decision.Current.Writer,
+                previousValue)
+            {
+                FrameId = before.FrameId,
+                Digest = decision.Resulting.Digest
+            });
         }
 
         var completion = recorded.Completion;

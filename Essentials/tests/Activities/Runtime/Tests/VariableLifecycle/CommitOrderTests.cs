@@ -27,11 +27,17 @@ public sealed class CommitOrderTests
         Assert.NotNull(second.CommitSequence);
         // The lost update committed after the write it overwrote.
         Assert.True(second.CommitSequence > first.CommitSequence);
+        // Records name their frame and the digest of the value they leave.
+        Assert.Equal(run.WorkflowState!.RootVariableFrame!.FrameId, second.FrameId);
+        Assert.NotNull(second.Digest);
 
         foreach (var nodeId in new[] { "node-parallel", "node-left", "node-right" })
         {
             var transitions = run.State(nodeId).Transitions!;
-            Assert.Equal(ActivityLifecycleTransitionKind.Started, transitions[0].Kind);
+            Assert.Equal(ActivityLifecycleTransitionKind.Scheduled, transitions[0].Kind);
+            Assert.Contains(transitions, stamp => stamp.Kind == ActivityLifecycleTransitionKind.Started);
+            Assert.Equal(transitions[0].CommitSequence, run.State(nodeId).FirstCommitSequence);
+            Assert.Equal(transitions[^1].CommitSequence, run.State(nodeId).LastCommitSequence);
             Assert.Equal(ActivityLifecycleTransitionKind.Completed, transitions[^1].Kind);
             Assert.True(transitions.Zip(transitions.Skip(1)).All(pair => pair.First.CommitSequence < pair.Second.CommitSequence));
         }
@@ -41,7 +47,7 @@ public sealed class CommitOrderTests
         var right = run.State("node-right").Transitions!;
         Assert.Equal(left[^1].CommitSequence, first.CommitSequence);
         Assert.Equal(right[^1].CommitSequence, second.CommitSequence);
-        Assert.True(right[0].CommitSequence < left[^1].CommitSequence);
+        Assert.True(right.Single(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Started).CommitSequence < left[^1].CommitSequence);
         Assert.True(run.State("node-parallel").Transitions![^1].CommitSequence > second.CommitSequence);
     }
 }

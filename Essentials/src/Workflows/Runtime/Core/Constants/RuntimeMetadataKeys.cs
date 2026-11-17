@@ -81,6 +81,16 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string BackgroundInputRefresh = "runtime.backgroundInputRefresh";
     public const string BackgroundInputRefreshOff = "off";
+    /// <summary>On a variable-write value snapshot (spec 1221 FR-025): the scope id and the version the write produced.</summary>
+    public const string VariableWriteScopeId = "runtime.variableWrite.scopeId";
+    /// <summary>
+    /// On a closed scope's variable row (spec 1221 T003, ADR 0048 D-9): the variable's version, value digest and writer,
+    /// the same per-variable version a frame keeps, so a row follows the same commit rule.
+    /// </summary>
+    public const string RowVariableVersion = "runtime.variable.version";
+    public const string RowVariableDigest = "runtime.variable.digest";
+    public const string RowVariableWriter = "runtime.variable.writer";
+    public const string VariableWriteNewVersion = "runtime.variableWrite.newVersion";
     /// <summary>
     /// Executable-node capability compiled from the node's activity type when it implements
     /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).

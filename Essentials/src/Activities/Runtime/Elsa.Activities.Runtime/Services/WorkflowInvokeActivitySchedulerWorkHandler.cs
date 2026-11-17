@@ -163,6 +163,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
             RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
+        // Spec 1221 T003: captures into closed-scope variable rows, versioned by the projector.
+        IReadOnlyList<VariableWriteRecord> rowVariableWrites = [];
+        VariableWriteRecord? rowLostUpdateFault = null;
 
         // Carrier identity (correlation id / instance name) is projected from the IdentityName-tagged durable
         // values this invocation already re-lists, so a plain activity populates the carrier without
@@ -603,9 +606,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken),
+                invocation: stagedState,
+                source: backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult);
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
+            rowVariableWrites = captureProjection.VariableWrites;
+            rowLostUpdateFault = captureProjection.LostUpdateFault;
             return valueFlowCompletion.Projections
                 .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
@@ -711,6 +718,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult,
             occurredAt,
             cancellationToken);
+        if (rowLostUpdateFault is { } rowLostUpdate)
+        {
+            // A refused write into a closed scope's variable row refuses the completion the same way (T003). Its
+            // completion produced durable rows, so it is not recorded for acceptance.
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                invokePayload, state.WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(rowVariableWrites);
         if (captureCommit.LostUpdateFault is { } lostUpdate)
         {
             // A Fault-mode lost update refuses the whole completion: no capture applies, the step faults through the
@@ -728,6 +746,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
 
         completedState = completedState.WithVariableWrites(captureCommit.Records);
+        // FR-025: each value written joins the write history as an inspection value, under the capture policy.
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
+            captureCommit.Records, captureCommit.RecordedWrites, occurredAt));
         var workflowVariableWriteBack = captureCommit.Change;
 
         await CommitCompletedActivityAsync(

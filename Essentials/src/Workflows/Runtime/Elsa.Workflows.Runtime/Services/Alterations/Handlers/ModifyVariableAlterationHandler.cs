@@ -63,7 +63,7 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
             ? ValueEnvelope.Null(declaration.Type, declaration.Policy)
             : ValueEnvelope.Inline(declaration.Type, replacement, declaration.Policy);
         VariableFrameState updatedFrame;
-        VariableWriteRecord record;
+        VariableWriteRecord? record;
         try
         {
             // The operator's value is versioned with an Alteration writer, so a later write on a stale base names it
@@ -78,7 +78,9 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
                 writer);
             updatedFrame = write.Frame;
             // Spec 1221 FR-024: the operator's change is in the write history, on the job outcome, with no value.
-            record = VariableWriteRecord.From(rootFrame, write, variableKey, writer, (timeProvider ?? TimeProvider.System).GetUtcNow());
+            record = VariableWriteRecord.IsRecorded(write.Decision)
+                ? VariableWriteRecord.From(rootFrame, write, variableKey, writer, (timeProvider ?? TimeProvider.System).GetUtcNow())
+                : null;
         }
         catch (InvalidOperationException)
         {
@@ -87,7 +89,7 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
 
         var updatedWorkflow = workflow with { RootVariableFrame = updatedFrame };
         context.ProjectedState.Set(updatedWorkflow);
-        context.Staging.Stage(new ModifyRootVariableStagedChange(context.Ordinal, variableKey, updatedWorkflow, [record]));
+        context.Staging.Stage(new ModifyRootVariableStagedChange(context.Ordinal, variableKey, updatedWorkflow, record is null ? [] : [record]));
         return WorkflowAlterationPreflightResult.Accepted();
     }
 

@@ -249,6 +249,9 @@ public sealed class RuntimeCheckpointCommitter
         // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
         PublishInProcessHopWorkItems(commit);
 
+        // Spec 1221 FR-024: only now are this commit's stamps persisted, so only now may a later commit merge them back.
+        RuntimeCommitSequenceStamper.Acknowledge(commit, _ownershipContextAccessor.Current);
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 

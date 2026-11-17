@@ -146,9 +146,19 @@ internal sealed class BackgroundActivityCoordinator(
             return state;
 
         var refreshedAt = timeProvider.GetUtcNow();
-        // Resolved only when a refresh is due, from the invocation's own services, as the Start handler materializes.
-        var fresh = await serviceProvider.GetRequiredService<RuntimeActivityInputSnapshotMaterializer>().MaterializeAsync(executable, node, state, serviceProvider, refreshedAt, cancellationToken)
-            with { Evaluation = snapshot.EvaluationNumber + 1 };
+        ActivityInputSnapshot fresh;
+        try
+        {
+            // Resolved only when a refresh is due, from the invocation's own services, as the Start handler materializes.
+            fresh = await serviceProvider.GetRequiredService<RuntimeActivityInputSnapshotMaterializer>().MaterializeAsync(executable, node, state, serviceProvider, refreshedAt, cancellationToken)
+                with { Evaluation = snapshot.EvaluationNumber + 1 };
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not BackgroundActivityValidationException)
+        {
+            // Reading the inputs again failed: the step faults with a visible incident, as a failed Start would, rather
+            // than going to the scheduler's retry policy.
+            throw new BackgroundActivityValidationException($"BG-ACT-004: The background step's inputs could not be read again at admission: {exception.Message}");
+        }
         return state with
         {
             InputSnapshot = fresh,

@@ -371,7 +371,7 @@ public sealed class ReplaySafeFusionGuardrailTests
         // Spec 1221 FR-024: the instance commit sequence numbers checkpoints in the order they are committed. Fusion runs
         // a cascade inline, so the same checkpoints can be reached in a different order; the committed contents still
         // match, which is what this guardrail compares.
-        fingerprint = System.Text.RegularExpressions.Regex.Replace(fingerprint, "\"CommitSequence\":\\d+", "\"CommitSequence\":<seq>");
+        fingerprint = System.Text.RegularExpressions.Regex.Replace(fingerprint, "\"(CommitSequence|FirstCommitSequence|LastCommitSequence)\":\\d+", "\"$1\":<seq>");
         return fingerprint;
     }
 

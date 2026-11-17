@@ -5,13 +5,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>A lifecycle transition of an activity invocation (spec 1221 FR-024).</summary>
 public enum ActivityLifecycleTransitionKind
 {
+    Scheduled,
     Started,
     Suspended,
     Resumed,
     Completed,
     Faulted,
-    Cancelled,
-    Superseded
+    Cancelled
 }
 
 /// <summary>

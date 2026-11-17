@@ -578,7 +578,18 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 _timeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
+                invocation: completedState);
+        // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
+        if (captureProjection.LostUpdateFault is { } rowLostUpdate)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                executionState.WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureProjection.VariableWrites);
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame. A resumed step keeps the input
         // snapshot and read set it committed before it suspended (spec 1221 FR-022): its captures meet the commit rule
@@ -606,6 +617,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         completedState = completedState.WithVariableWrites(captureCommit.Records);
+        // FR-025: each value written joins the write history as an inspection value, under the capture policy.
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId,
+            captureCommit.Records, captureCommit.RecordedWrites, _timeProvider.GetUtcNow()));
         var workflowVariableWriteBack = captureCommit.Change;
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(

@@ -10610,13 +10610,6 @@ Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Evaluation.get -> int?
 Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.ExecutionPathId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.Kind.get -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
 Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Cancelled = 5 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Completed = 3 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Faulted = 4 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Resumed = 2 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Started = 0 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Superseded = 6 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
-Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Suspended = 1 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
 Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationOutcome.VariableWrites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord!>?
 Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationOutcome.VariableWrites.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence
@@ -10630,3 +10623,27 @@ static Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleStamp.operator ==(Els
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.Compose(long fencingToken, long ordinal) -> long
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.FencingTokenOf(long sequence) -> long
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCommitSequence.OrdinalOf(long sequence) -> long
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSubject.VariableWrite = 3 -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSubject
+Elsa.Workflows.Runtime.Core.Models.RuntimePayloadCaptureSubject.VariableWrite = 8 -> Elsa.Workflows.Runtime.Core.Models.RuntimePayloadCaptureSubject
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.VariableWriteNewVersion = "runtime.variableWrite.newVersion" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.VariableWriteScopeId = "runtime.variableWrite.scopeId" -> string!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSubjects.VariableWrites = "variableWrites" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.RowVariableDigest = "runtime.variable.digest" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.RowVariableVersion = "runtime.variable.version" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.RowVariableWriter = "runtime.variable.writer" -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.FirstCommitSequence.get -> long?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.FirstCommitSequence.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.LastCommitSequence.get -> long?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.LastCommitSequence.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Cancelled = 6 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Completed = 4 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Faulted = 5 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Resumed = 3 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Scheduled = 0 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Started = 1 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Suspended = 2 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.Digest.get -> string?
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.Digest.init -> void
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.FrameId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.FrameId.init -> void
+static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.IsRecorded(Elsa.Workflows.Runtime.Core.Models.VariableCommitDecision! decision) -> bool

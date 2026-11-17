@@ -152,6 +152,18 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActivityLifecycleStamp>? Transitions { get; init; }
 
+    /// <summary>
+    /// The lowest and highest commit sequence over this row's transitions and write records (spec 1221 FR-024), kept by
+    /// the committer so a reader can page the instance's history by commit order. Absent when nothing on the row is
+    /// numbered.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? FirstCommitSequence { get; init; }
+
+    /// <inheritdoc cref="FirstCommitSequence"/>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? LastCommitSequence { get; init; }
+
     /// <summary>Appends write-history records to this invocation.</summary>
     public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
     {
