@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
+using static Elsa.Activities.ControlFlow.Tests.NamedSelectionConformance;
 using IfActivity = Elsa.Activities.If.Activities.If;
 
 namespace Elsa.Activities.If.Tests;
@@ -66,6 +67,19 @@ public sealed class IfRuntimeTests
         run.AssertOutcomes("node-if", ActivityOutcomes.True);
         run.AssertDidNotRun("node-then", "node-else");
         run.AssertWorkflowCompleted();
+    }
+
+    // Spec 1208 FR-002b: If declares no Done, so every completion selects True or False by name.
+    [Theory]
+    [InlineData(true, "actexec-then", ActivityOutcomes.True)]
+    [InlineData(false, "actexec-else", ActivityOutcomes.False)]
+    public async Task Every_completion_selects_a_named_outcome(bool condition, string branchExecutionId, string expected)
+    {
+        await using var harness = NewHarness("actexec-if", branchExecutionId);
+
+        var run = await harness.RunAsync(NewExecutable(condition));
+
+        AssertNamedSelection(run, "node-if", expected);
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>

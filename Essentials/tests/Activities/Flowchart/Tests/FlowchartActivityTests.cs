@@ -26,7 +26,7 @@ public sealed class FlowchartActivityTests : IDisposable
         var continuation = await ExecuteAsync(context);
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -83,12 +83,29 @@ public sealed class FlowchartActivityTests : IDisposable
         var context = NewContext(root);
         var flowchart = NewActivity();
 
-        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", []));
+        // An unspecified selection reaches the parent already resolved as Done (spec 1208 FR-002).
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-b", request.ExecutableNodeId);
         Assert.Equal("actexec-a", request.SchedulingActivityExecutionId);
         Assert.True(continuation.IsDeferred);
+    }
+
+    [Fact]
+    public async Task OnChildCompletedAsync_EmptySelectionFollowsNoConnection()
+    {
+        // Spec 1208 FR-004: an explicitly empty selection follows no outgoing connection; it is not Done.
+        var root = NewFlowchartNode(
+            [NewNode("node-a"), NewNode("node-b")],
+            connections: [NewConnection("node-a", "node-b", sourcePort: null)]);
+        var context = NewContext(root);
+        var flowchart = NewActivity();
+
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", []));
+
+        Assert.Empty(context.GetChildActivityScheduleRequests());
+        Assert.True(continuation.IsComplete);
     }
 
     [Fact]
@@ -141,7 +158,7 @@ public sealed class FlowchartActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -156,21 +173,25 @@ public sealed class FlowchartActivityTests : IDisposable
     }
 
     [Fact]
-    public async Task OnChildCompletedAsync_ThrowsWhenCompletionContainsDuplicateTargets()
+    public async Task OnChildCompletedAsync_TwoSelectedOutcomesToOneTarget_RunTheTargetOnce()
     {
+        // Spec 1208 FR-022: two selected outcomes whose connections lead to the same node do not fault the engine;
+        // the target's implicit join runs it once after both arrivals.
         var root = NewFlowchartNode(
             [NewNode("node-a"), NewNode("node-b")],
             connections:
             [
-                NewConnection("node-a", "node-b"),
-                NewConnection("node-a", "node-b")
+                NewConnection("node-a", "node-b", "Approved"),
+                NewConnection("node-a", "node-b", "Notify")
             ]);
         var context = NewContext(root);
         var flowchart = NewActivity();
 
-        await Assert.ThrowsAsync<FlowchartExecutionException>(() => flowchart
-            .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]))
-            .AsTask());
+        var continuation = await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", ["Approved", "Notify"]));
+
+        var request = Assert.Single(context.GetChildActivityScheduleRequests());
+        Assert.Equal("node-b", request.ExecutableNodeId);
+        Assert.True(continuation.IsDeferred);
     }
 
     public void Dispose() => _serviceProvider.Dispose();

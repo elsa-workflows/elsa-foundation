@@ -262,7 +262,7 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         var tamperedActivity = originalActivity with
         {
             Completion = new ActivityCompletion(originalCompletion.InvocationId, originalCompletion.AttemptId,
-                alteredValue, originalCompletion.OutcomeKey, originalCompletion.CompletedAt,
+                alteredValue, originalCompletion.Selection, originalCompletion.CompletedAt,
                 originalCompletion.ContractFingerprint)
         };
         await SaveActivityStateAsync(tamperedActivity);

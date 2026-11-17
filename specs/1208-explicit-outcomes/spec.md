@@ -7,7 +7,7 @@
 **Amendment proposed 2026-11-16 (PR #4658)**: no multi-outcome declaration. Every activity may select several of its
 declared outcomes; FR-014, FR-017 and FR-023 change accordingly, and join behaviour goes to initiative #4193.
 
-**Status**: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
+**Status**: Implemented — on the initiative branch by #4314 (lands on `main` with initiative #3052); the hand-run quickstart (T036) is waived by the coordinator. Previously: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-3**,
 decision **D-4**.

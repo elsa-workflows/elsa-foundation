@@ -21,6 +21,8 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
     ActivityOutcome(DispatchWorkflowOutcomes.Cancelled),
     ActivityOutcome(DispatchWorkflowOutcomes.DispatchFailed)
 ]
+// Every completion selects Dispatched or the child's terminal outcome, so the set needs no Done (spec 1208 FR-002b).
+[SelectsOutcomeOnEveryCompletion]
 [RefusesSecretBinding(nameof(WorkflowDefinitionId), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(Inputs), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]

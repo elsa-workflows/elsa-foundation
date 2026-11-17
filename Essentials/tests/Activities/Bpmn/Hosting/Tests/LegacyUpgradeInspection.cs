@@ -40,6 +40,25 @@ internal static class LegacyUpgradeInspection
                 before is JsonValue oldValue && after is JsonValue newValue && oldValue.TryGetValue<string>(out var oldText) &&
                 newValue.TryGetValue<string>(out var newText) && DateTimeOffset.TryParse(oldText, out var oldTime) &&
                 DateTimeOffset.TryParse(newText, out var newTime) && oldTime.UtcTicks == newTime.UtcTicks) return;
+            // Spec 1208 FR-025: a value-flow document of version 2 is read as version 3, and its completion's single
+            // outcome key as a named selection of exactly that key. Both are the upgrade itself, not a lost fact.
+            if (field is "documentVersion" && before is JsonValue oldVersion && after is JsonValue newVersion &&
+                oldVersion.TryGetValue<int>(out var oldNumber) && newVersion.TryGetValue<int>(out var newNumber) &&
+                oldNumber == 2 && newNumber == 3) return;
+            if (before is JsonObject legacyCompletion && after is JsonObject currentCompletion &&
+                legacyCompletion["outcomeKey"] is JsonValue outcomeKey && outcomeKey.TryGetValue<string>(out var legacyKey) &&
+                !legacyCompletion.ContainsKey("selection") && currentCompletion["selection"] is JsonObject selection)
+            {
+                var upcast = legacyCompletion.DeepClone().AsObject();
+                upcast.Remove("outcomeKey");
+                upcast["selection"] = new JsonObject { ["state"] = "Named", ["names"] = new JsonArray(legacyKey) };
+                if (JsonNode.DeepEquals(upcast["selection"], selection))
+                {
+                    upcast["selection"] = selection.DeepClone();
+                    Compare(upcast, currentCompletion, path, differences);
+                    return;
+                }
+            }
             if (before is JsonObject left && after is JsonObject right)
                 foreach (var key in left.Select(pair => pair.Key).Union(right.Select(pair => pair.Key))) Compare(left[key], right[key], path + "." + key, differences);
             else if (before is JsonArray first && after is JsonArray second && first.Count == second.Count)

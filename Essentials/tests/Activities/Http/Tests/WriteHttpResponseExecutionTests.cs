@@ -148,7 +148,7 @@ public sealed class WriteHttpResponseExecutionTests
                     ValueType(typeof(string)),
                     JsonSerializer.SerializeToElement("from-prior-activity"),
                     ValueProtectionPolicy.InstanceInline),
-                "Done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
                 completedAt,
                 "contract"),
             CompletedAt = completedAt

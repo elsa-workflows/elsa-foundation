@@ -25,6 +25,8 @@ internal static class Elsa3FlowchartGraphBuilder
     private const string Break = "Break";
     private const string SwitchCaseSlot = "Switch.Case";
     private const string MatchPlaceholder = "{match}";
+    // Same spelling as Elsa3BuiltInActivityMap.ValueOutcomesPlaceholder: every outcome a node derives from its value input.
+    private const string ValueOutcomesPlaceholder = "{valueOutcomes}";
     private static readonly HashSet<string> TerminalTypes = new(StringComparer.Ordinal) { "Elsa.Complete", "Elsa.End", "Elsa.Break" };
 
     /// <summary>Whether <paramref name="node"/> converts to the Elsa 4 Flowchart.</summary>
@@ -252,8 +254,18 @@ internal static class Elsa3FlowchartGraphBuilder
                         continue;
                     }
 
+                    if (rule.Elsa4Outcomes.Contains(ValueOutcomesPlaceholder, StringComparer.Ordinal) && ValueOutcomes(sourcePlan) is null)
+                    {
+                        EdgeError(GraphOutcomeUnmapped, edge,
+                            $"Connection {edge.Index} leaves '{NodeId(edge.Source)}' on '{edge.Port}', which Elsa 3 fires with every outcome its input names, but an expression decides them.",
+                            "List the input's values literally, so each Elsa 4 outcome can be connected, before converting.");
+                        continue;
+                    }
+
                     edge.Elsa4Ports = rule.Elsa4Outcomes
-                        .SelectMany(outcome => StringComparer.Ordinal.Equals(outcome, MatchPlaceholder) ? SwitchMatches(sourcePlan) : [outcome])
+                        .SelectMany(outcome => StringComparer.Ordinal.Equals(outcome, MatchPlaceholder)
+                            ? SwitchMatches(sourcePlan)
+                            : StringComparer.Ordinal.Equals(outcome, ValueOutcomesPlaceholder) ? ValueOutcomes(sourcePlan)! : [outcome])
                         .Distinct(StringComparer.Ordinal)
                         .ToArray();
                     continue;
@@ -274,7 +286,11 @@ internal static class Elsa3FlowchartGraphBuilder
         private static bool Emits(Elsa3NodePlan node, string port) =>
             EmittedOutcomes(node) is { } emitted && emitted.Contains(port, StringComparer.Ordinal);
 
-        /// <summary>Every outcome the node can complete with, or null when an input bound by expression decides them.</summary>
+        /// <summary>
+        /// Every outcome the node can complete with, or null when an input bound by expression decides them. Mirrors the
+        /// publish compiler: with configured items, an activity that selects on every completion has no <c>Done</c> and
+        /// one that may choose no branch keeps it; an activity with no outcome at all completes with <c>Done</c> (spec 1208).
+        /// </summary>
         private static IReadOnlyList<string>? EmittedOutcomes(Elsa3NodePlan node)
         {
             var outcomes = node.Resolved!.Outcomes;
@@ -283,12 +299,33 @@ internal static class Elsa3FlowchartGraphBuilder
             {
                 if (DynamicItems(node, dynamic.SourceInputKey) is not { } items)
                     return null;
-                emitted.AddRange(items);
-                if (dynamic.UnmatchedOutcome is { } unmatched)
-                    emitted.Add(unmatched);
+                if (items.Count > 0)
+                {
+                    emitted.AddRange(items);
+                    if (dynamic.UnmatchedOutcome is { } unmatched)
+                        emitted.Add(unmatched);
+                    if (dynamic.SelectsOnEveryCompletion)
+                        emitted.RemoveAll(outcome => StringComparer.Ordinal.Equals(outcome, Done));
+                    else
+                        emitted.Add(Done);
+                }
             }
 
+            if (emitted.Count == 0)
+                emitted.Add(Done);
             return emitted.Distinct(StringComparer.Ordinal).ToArray();
+        }
+
+        /// <summary>The outcomes a node derives from its value input (items and catch-all), <c>[Done]</c> without items, or null for an expression.</summary>
+        private static IReadOnlyList<string>? ValueOutcomes(Elsa3NodePlan node)
+        {
+            if (node.Resolved!.Outcomes.Dynamic is not { } dynamic)
+                return [Done];
+            if (DynamicItems(node, dynamic.SourceInputKey) is not { } items)
+                return null;
+            if (items.Count == 0)
+                return [Done];
+            return dynamic.UnmatchedOutcome is { } unmatched ? [.. items, unmatched] : items;
         }
 
         private static IEnumerable<string> SwitchMatches(Elsa3NodePlan node) =>

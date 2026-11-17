@@ -70,7 +70,7 @@ public sealed class UserTaskRuntimeJourneyTests
                 Assert.Equal("Approve", completed.Decision!.Response.Action);
                 var state = await third.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync("user-task-run", completed.InvocationId);
                 Assert.Equal(ActivityExecutionStatus.Completed, state!.Status);
-                Assert.Equal("Approve", state.Completion!.OutcomeKey);
+                Assert.Equal(new[] { "Approve" }, state.Completion!.OutcomeNames);
                 Assert.Single(completed.History.Where(x => x.Operation == "accepted"));
                 Assert.Single(completed.History.Where(x => x.Operation == "completed"));
                 Assert.Empty((await third.Services.GetRequiredService<IBookmarkStateStore>().ListPageAsync(new("user-task-run"))).Items);
@@ -189,7 +189,7 @@ public sealed class UserTaskRuntimeJourneyTests
             var complete = await operations.CompleteAsync(task.Id, request); Assert.Equal(UserTaskStatus.Completed, complete.Status);
             Assert.True(JsonElement.DeepEquals(data, complete.Decision!.Response.Data)); Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(form), JsonSerializer.SerializeToElement(complete.Form)));
             var state = await host.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(task.WorkflowExecutionId, task.InvocationId);
-            Assert.Equal("Approve", state!.Completion!.OutcomeKey); Assert.True(JsonElement.DeepEquals(data, state.Completion.Result.InlineValue!.Value.GetProperty("data")));
+            Assert.Equal(new[] { "Approve" }, state!.Completion!.OutcomeNames); Assert.True(JsonElement.DeepEquals(data, state.Completion.Result.InlineValue!.Value.GetProperty("data")));
         }
         finally { directory.Delete(true); }
     }

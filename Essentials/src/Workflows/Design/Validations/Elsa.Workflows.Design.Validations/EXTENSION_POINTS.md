@@ -72,6 +72,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - `Elsa.Workflows.Design.Validations` — `RequiredInputOutputValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `VariableExpressionResolverValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations`: `CredentialLiteralValidator` *(intra-domain default; reports the credential-literal findings on the validation panel; the rule is enforced through `ICredentialLiteralValidator` by the writers listed under that contract, not by this registration)*
+- `Elsa.Workflows.Design.Validations`: `ScriptOutcomeValidator` *(intra-domain default; spec 1208 script outcome checks `Scripts/UnknownOutcome` (VF-AUTH-010), `Scripts/ReturnedOutcomeName` (VF-AUTH-012, warning) and `Scripts/ReservedName`; consumes the optional `IJavaScriptScriptOutcomeAnalyzer` from `Elsa.Expressions.JavaScript.Core`, and checks nothing without it)*
 - Activity feature validators *(cross-domain — each activity feature ships its own `IDraftValidator` per FR-034)*
 - Graph-specific validators such as orphan checks belong to the activity feature that owns graph semantics, such as a future Flowchart module.
 

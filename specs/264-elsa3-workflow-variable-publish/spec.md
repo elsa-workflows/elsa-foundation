@@ -6,6 +6,12 @@
 
 **Status**: Implemented
 
+**Superseded in part** (proposed, 2026-10-29): the
+[ADR 0046 amendment](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md#kinds) retires the
+`Object` alias in favour of `Any`. Where this spec converts to `Object` (an unknown type, `ObjectDictionary`,
+`HttpHeaders`), the converter converts to `Any`; a JSON starting value stays that JSON, and a text starting value
+becomes a JSON string with the same text. This takes effect when the amendment is approved.
+
 **Issue**: [#3122](https://github.com/elsa-workflows/elsa-foundation/issues/3122)
 
 **Input**: An Elsa 3 workflow that declares a workflow-level variable imports without a diagnostic, and publishing

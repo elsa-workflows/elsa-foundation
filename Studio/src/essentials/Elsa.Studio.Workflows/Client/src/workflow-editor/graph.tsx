@@ -149,9 +149,10 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         const placement = ports.sources[index];
         return (
           <React.Fragment key={port.name}>
-            <span className="wf-node-port-label" data-side={placement.side} title={port.displayName}
+            <span className={port.missing ? "wf-node-port-label wf-node-port-missing" : "wf-node-port-label"} data-side={placement.side}
+              title={port.missing ? `${port.displayName}: no longer an outcome of this activity; reconnect or remove its connection` : port.displayName}
               style={{ ...portPlacementStyle(placement), maxWidth: placement.labelWidth }}>{port.displayName}</span>
-            <Handle type="source" position={placement.side} id={port.name} style={portPlacementStyle(placement)} />
+            <Handle type="source" position={placement.side} id={port.name} style={portPlacementStyle(placement)} isConnectableStart={!port.missing} />
           </React.Fragment>
         );
       })}

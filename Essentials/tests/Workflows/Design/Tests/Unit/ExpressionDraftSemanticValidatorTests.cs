@@ -170,6 +170,19 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Assert.Equal("node/inputs/text", diagnostic.AuthoredPath);
     }
 
+    // Spec 1208 FR-007a: an input binding that declares the reserved built-in 'complete' fails draft validation.
+    [Fact]
+    public async Task Real_JavaScript_provider_refuses_a_binding_that_declares_complete()
+    {
+        var adapter = new ExpressionDraftValidator(Validator(ExpressionServices.JavaScriptToolingProvider()));
+        var draft = new WorkflowDefinitionDraftModel("draft", "definition", StateWith("const complete = 1;\nreturn complete;"));
+
+        var error = Assert.Single(await adapter.Validate(draft, CancellationToken.None));
+
+        Assert.Equal("node/inputs/text", error.Path);
+        Assert.Equal("Expressions/JavaScript/ReservedName", error.Type);
+    }
+
     [Fact]
     public async Task A_case_variant_expression_type_still_reaches_the_real_provider()
     {
