@@ -43,12 +43,17 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await switchKeys.scrollIntoViewIfNeeded();
   await switchKeys.press("Enter");
   const replacement = source.getByRole("textbox", { name: "Expression using stable input keys", exact: true });
+  const currentExpression = source.getByRole("textbox", { name: "Current expression using input names", exact: true });
   await expect(replacement).toBeFocused();
+  await expect(currentExpression).toHaveValue(legacy);
+  await expect(currentExpression).not.toBeEditable();
+  await expect(source.getByRole("button", { name: "Insert data", exact: true })).toHaveCount(0);
   await expect(source.getByRole("button", { name: "Apply replacement", exact: true })).toBeDisabled();
   await replacement.fill(stable);
   await capture(page, info, "sum-binding-mode");
   await source.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
   await expect(switchKeys).toBeFocused();
+  await expect(source.getByRole("button", { name: "Insert data", exact: true })).toBeEnabled();
   await expect.poll(savedValue).toBe(legacy);
   await switchKeys.press("Enter");
   await expect(replacement).toHaveValue("");

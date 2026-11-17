@@ -1235,7 +1235,7 @@ export function ActivityGraphOutputMappingEditor({
   const outputSource = useRef<HTMLDivElement>(null);
   const replacementInput = useRef<HTMLTextAreaElement>(null);
   const replacementButton = useRef<HTMLButtonElement>(null);
-  const replacementOpen = replacementSource !== null;
+  const replacementOpen = !valueReadOnly && replacementSource !== null;
   useEffect(() => {
     if (replacementOpen) replacementInput.current?.focus();
   }, [replacementOpen]);
@@ -1286,17 +1286,22 @@ export function ActivityGraphOutputMappingEditor({
 
   return (
     <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
-      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
+      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}
       {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
       <div data-output-source ref={outputSource} tabIndex={-1}>{!mapping ? <>
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly || replacementOpen}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
         {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
         {javaScript && Editor && !stableInputKeys && typeof expressionValue === "string" && !valueReadOnly ? <div>
-          <p className="wf-muted">This expression uses input names.</p>
-          {replacementSource === null ? <StudioButton ref={replacementButton} size="sm" onClick={() => setReplacementSource("")}>Replace with stable-key expression</StudioButton> : <>
+          {replacementSource === null ? <>
+            <p className="wf-muted">This expression uses input names.</p>
+            <StudioButton ref={replacementButton} size="sm" onClick={() => setReplacementSource("")}>Replace with stable-key expression</StudioButton>
+          </> : <>
+            <StudioField label="Current expression using input names">
+              <textarea value={expressionValue} readOnly />
+            </StudioField>
             <StudioField label="Expression using stable input keys">
               <textarea ref={replacementInput} value={replacementSource} onChange={event => setReplacementSource(event.target.value)} />
             </StudioField>
@@ -1311,7 +1316,7 @@ export function ActivityGraphOutputMappingEditor({
             }}>Cancel</StudioButton>
           </>}
         </div> : null}
-        {Editor ? <ExpressionEditorWithDataInsertion
+        {replacementOpen ? null : Editor ? <ExpressionEditorWithDataInsertion
           key={output.referenceKey}
           editor={Editor}
           contribution={active.contribution}
