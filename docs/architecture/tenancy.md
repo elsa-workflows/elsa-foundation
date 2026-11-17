@@ -102,9 +102,10 @@ compare a stored name with its column's collation, and the EF model pins none, s
 whatever the database administrator chose. The grammar alone does not make `Q` injective there: locale collations
 contract and expand letter sequences. The independent reviewer's runs on SQL Server 2022 and MySQL 8.4, recorded in
 [a comment on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060),
-found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` and `ssz_x` = `szsz_x` under SQL
-Server's `Hungarian_CI_AS` and `Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`. The same runs found `-` and
-`_` never ignored and never equal to each other in every collation tested.
+found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` under SQL Server's `Hungarian_CI_AS` and
+`Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`, and `ssz_x` = `szsz_x` under `Hungarian_100_CI_AS` and
+`utf8mb4_hu_0900_ai_ci`. The same runs found `-` and `_` never ignored and never equal to each other in every collation
+tested.
 
 So every column that holds a tenant id, an actor id or a tenant-qualified name gets one fixed collation with no locale
 rules, case-insensitive so that matching within a tenant stays as it is:
@@ -128,7 +129,7 @@ themselves, and neither collation has a contraction or expansion among those cha
 names never compare equal. Folding inside the caller's name (case on both engines, accents on MySQL) stays within one
 tenant, as it is today. The K3 store change and the K4 migrations create the pin; case T16 checks that they do.
 
-**Measured on the pin.** The reviewer's confirmation run
+**Measured on the pin.** The reviewer's confirmation runs
 ([recorded on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060)), in databases whose
 default is Hungarian on both engines: the seven names `ccs_x`, `cscs_x`, `ssz_x`, `szsz_x`, `ab_x`, `a-b_x` and
 `a_b_x` insert as seven distinct primary-key rows, and each `=` or parameter lookup finds exactly one. In unpinned
@@ -155,9 +156,11 @@ prototype sites break it today. They are evidence, unchanged here, and the kerne
   serialized. This is reasoned and not run.
 - **The MySQL event-insert procedure,** `kernel_insert_event` in `EventInsert.cs` (`InstallMySql`), declares
   `IN wire VARCHAR(255)` with no `COLLATE`, so in a Hungarian-default database the parameter takes
-  `utf8mb4_hu_0900_ai_ci`. Measured by the reviewer: `WHERE Id=wire` raises ERROR 1267 against a pinned
-  `Messages.Id`, so event-start insertion fails loudly on a pinned, locale-default MySQL database; and the stripe
-  `MOD(CRC32(WEIGHT_STRING(wire)),64)` is computed under the locale collation, so `ccs_x` and `cscs_x` share stripe 10.
+  `utf8mb4_hu_0900_ai_ci`.
+  [Measured by the reviewer](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060):
+  `WHERE Id=wire` raises ERROR 1267 against a pinned `Messages.Id`, so event-start insertion fails loudly on a pinned,
+  locale-default MySQL database; and the stripe `MOD(CRC32(WEIGHT_STRING(wire)),64)` is computed under the locale
+  collation, so `ccs_x` and `cscs_x` share stripe 10.
 
 **`_` is a `LIKE` wildcard.** Selecting a tenant's rows uses the `tenant` column, or a prefix match with `_` escaped;
 an unescaped `LIKE 'acme_%'` would also match `acmex...`, so no query uses one.
