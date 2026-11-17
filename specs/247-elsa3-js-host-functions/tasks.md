@@ -191,7 +191,8 @@ converted Elsa 3 calls lower to it.
   - Keep the codes
 - [X] T030 [P] [US5] Tests in `Elsa3JavaScriptHostFunctionTests.cs`:
   - A theory over every refusal-table row asserting code, message and guidance substrings (FR-017 to FR-019, SC-004)
-  - `setOutcome('x')` inside RunJavaScript refuses the whole definition (`result.Succeeded == false`, no `Value`)
+  - `setOutcome('x')` inside RunJavaScript refuses the whole definition (`result.Succeeded == false`, no `Value`).
+    Superseded by spec 1208 (S-3), 2026-11: it now converts there (FR-027)
   - Every spec 236 refusal row in `Elsa3JavaScriptConversionTests.cs` keeps its code (FR-020)
 - [X] T031 [US5] Rewrite the JavaScript section of `Extensions/Elsa3/src/Mapping/README.md` as the migration story (FR-021, SC-005):
   - What converts

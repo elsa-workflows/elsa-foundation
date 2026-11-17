@@ -16,6 +16,7 @@ namespace Elsa.Agent.Review.Activities;
 /// </summary>
 [Activity(Icon = "UserCheck")]
 [ActivityOutcome("Approved"), ActivityOutcome("Rejected")]
+[SelectsOutcomeOnEveryCompletion]
 public sealed class HumanReview(IWorkflowExecutionStateStore workflows, IPersistenceAccessContextAccessor access,
     ISecretValueProtector protector) : StatefulActivity<HumanReviewResult, HumanReviewState, ReviewDecisionDelivery>
 {

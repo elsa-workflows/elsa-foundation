@@ -552,9 +552,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        IReadOnlyCollection<string> outcomeNames = typedCompletion is null
-            ? [ActivityOutcomes.Done]
-            : [typedCompletion.Completion.OutcomeKey];
+        var outcomeNames = typedCompletion is null
+            ? OutcomeSelection.Unspecified.ResolveNames()
+            : typedCompletion.Completion.OutcomeNames;
         var completedState = CompleteActivity(workItem, resumePayload, executionState, outcomeNames);
         if (typedCompletion is not null)
         {

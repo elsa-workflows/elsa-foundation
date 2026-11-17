@@ -102,6 +102,12 @@ No activation by a program goal is needed for any phase.
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
 this page, needs an authorized role, a scope, a reason and a record on the PR.
 
+**Spec approval once the ADRs are agreed.** When the approvers have agreed the ADRs an initiative needs, the
+coordinator may record on the board that a spec's approval plan is the coordinator alone. The approvers are then asked
+to review only what a spec adds to the decisions: a new ADR or an ADR amendment, each in its own small PR with them as
+reviewers. A spec that applies an ADR point still open keeps waiting for that point; only the spec review is dropped.
+The rule covers specs, never ADRs, and the board records its date and the coordinator who set it.
+
 **Alternatives.** Every ADR records, in an **Alternatives considered** section, the alternatives its author weighed
 and why each was not chosen, including doing nothing. The section exposes the angles the author used, so a reviewer
 can judge whether every real option was seen — or whether none of them addresses the actual problem. A spec does not

@@ -63,6 +63,24 @@ public sealed class SendHttpRequestExecutionTests
         run.AssertWorkflowCompleted();
     }
 
+    // Spec 1208 FR-002b: with expected codes configured the pinned set has no Done, so every response, matched or not,
+    // completes with a named selection, never an unspecified one.
+    [Theory]
+    [InlineData(HttpStatusCode.Created, "201")]
+    [InlineData(HttpStatusCode.OK, HttpActivityOutcomes.UnmatchedStatusCode)]
+    public async Task With_expected_codes_every_response_completes_with_a_named_selection(HttpStatusCode status, string expected)
+    {
+        await using var harness = NewHarness(_ => Respond(status, "body"));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            NewSendNode(expectedStatusCodes: new[] { 201, 202 })));
+
+        var completion = run.AssertCompleted(NodeId).Completion;
+        Assert.True(completion is not null, "SendHttpRequest recorded no completion, so its selection is unknown.");
+        Assert.Equal(OutcomeSelectionState.Named, completion.Selection.State);
+        Assert.Equal([expected], completion.Selection.ResolveNames());
+    }
+
     [Fact]
     public async Task ErrorStatus_WithoutExpectedCodes_EmitsFailedOutcome()
     {

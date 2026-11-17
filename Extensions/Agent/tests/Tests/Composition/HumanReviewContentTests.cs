@@ -69,7 +69,7 @@ public sealed class HumanReviewContentTests
 
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Approved", review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, review.Completion!.OutcomeNames);
         var resolved = Assert.IsType<HumanReviewView>(await host.ReadReviewAsync(pending.InvocationId));
         Assert.Equal(HumanReviewStatus.Approved, resolved.Status);
         Assert.Equal(before.ContentHash, resolved.ContentHash);

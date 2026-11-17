@@ -80,7 +80,7 @@ public sealed class ForEachActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class ForEachActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ForEachActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     // The completion callback must publish the next item in the typed iteration frame. This pins the

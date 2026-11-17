@@ -56,7 +56,7 @@ public sealed class TypedActivityAuthoringContractTests
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<Greeting>>(transition);
 
         Assert.Equal(new Greeting("Hello Ada"), completion.Result);
-        Assert.Equal("Greeted", completion.Outcome);
+        Assert.Equal(new[] { "Greeted" }, completion.Selection.ResolveNames());
         Assert.Equal("invocation-1", activity.ObservedContext!.InvocationId);
         Assert.Equal("node-1", activity.ObservedContext.ExecutableNodeId);
         Assert.Equal(cancellation.Token, activity.ObservedContext.CancellationToken);

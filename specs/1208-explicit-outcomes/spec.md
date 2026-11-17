@@ -7,7 +7,7 @@
 **Amendment proposed 2026-11-16 (PR #4658)**: no multi-outcome declaration. Every activity may select several of its
 declared outcomes; FR-014, FR-017 and FR-023 change accordingly, and join behaviour goes to initiative #4193.
 
-**Status**: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
+**Status**: Implemented — on the initiative branch by #4314 (lands on `main` with initiative #3052); the hand-run quickstart (T036) is waived by the coordinator. Previously: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-3**,
 decision **D-4**.
@@ -397,8 +397,13 @@ pins exactly those ports, and a connection on a port the node does not declare i
   - A behaviour-changing conversion exception needs a separate, explicit, approved and documented decision; S-3 adds
     none.
 - **FR-028**: The converter MUST convert an Elsa 3 Switch in "match any" mode to an Elsa 4 Switch in "match any" mode.
-- **FR-029**: The converter MUST convert an Elsa 3 Complete with several literal outcomes to a completion that selects
-  all of them. An outcome given by an expression stays refused.
+  A "match any" Switch whose cases hold activities is out of scope: it is refused with `ELS3-ACTIVITY-UNSUPPORTED-MODE`
+  and guidance until spec row S-12 is implemented (amendment of 2026-11-17).
+- **FR-029**: The converter MUST convert an Elsa 3 Complete with several literal outcomes, in a workflow converted to a
+  reusable activity, to a Graph `Complete` that names all of them (FR-032). An outcome given by an expression stays
+  refused. In a workflow that is not reusable, several outcomes have no consumer in Elsa 4 (the `finish` intrinsic
+  records one outcome that nothing routes on), so they are refused with guidance to name one outcome or make the
+  workflow usable as an activity (amendment of 2026-11-17).
 - **FR-029a**: The converter MUST map Elsa 3's always-firing `Done` onto every branch outcome of the converted node,
   as it already does for If, Switch and DispatchWorkflow. For SendHttpRequest with expected status codes, `Done` maps to
   every code and the unmatched status code; whether `Failed` and `Timeout` are included follows the Elsa 3 source
@@ -408,7 +413,9 @@ pins exactly those ports, and a connection on a port the node does not declare i
 **Switch and Complete**
 
 - **FR-031**: The Elsa 4 Switch MUST offer a "match any" mode that selects every matching case, and `Default` when none
-  matches. "Match first" stays the default mode.
+  matches. "Match first" stays the default mode. In "match any" mode the cases route through their outcome connections;
+  a case that holds an activity is refused at publication until spec row S-12 defines how several matching cases run
+  their activities (amendment of 2026-11-17).
 - **FR-032**: The Graph `Complete` activity MAY name several literal boundary outcomes, and the graph boundary MUST
   pass every one to its parent instead of requiring exactly one. An outcome given by an expression stays refused.
 
@@ -468,7 +475,8 @@ the publish warning for a returned string that equals a connected outcome (FR-00
 - **SC-004**: A selection of several outcomes reaches a downstream join exactly once, after every taken path.
 - **SC-005**: Unspecified, named and empty selections survive a restart unchanged.
 - **SC-006**: Zero converter refusals remain for Elsa 3 `setOutcome` / `setOutcomes` with a non-empty
-  `PossibleOutcomes` or literal names, Switch "match any", and Complete with several literal outcomes; every converted
+  `PossibleOutcomes` or literal names, Switch "match any" without case activities (S-12), and Complete with several
+  literal outcomes in a reusable workflow; every converted
   computed selection runs the same paths as in Elsa 3, including names outside the known set.
 - **SC-007**: Every fixture script that returns a string literal equal to a connected outcome name gets the FR-008a
   warning at publication.

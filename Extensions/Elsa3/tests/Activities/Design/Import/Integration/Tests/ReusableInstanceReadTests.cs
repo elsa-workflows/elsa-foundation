@@ -25,6 +25,6 @@ public sealed class ReusableInstanceReadTests
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, activity.Completion?.OutcomeNames);
     }
 }

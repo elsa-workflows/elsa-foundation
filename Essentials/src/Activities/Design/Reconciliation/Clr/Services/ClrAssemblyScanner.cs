@@ -49,6 +49,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string ActivityScriptOutcomesAttributeFullName = typeof(ActivityScriptOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
@@ -353,6 +354,7 @@ public sealed class ClrAssemblyScanner(
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
+        string? scriptInput = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
@@ -361,6 +363,13 @@ public sealed class ClrAssemblyScanner(
                 if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
                 {
                     valueOutcomes ??= attribute;
+                    continue;
+                }
+
+
+                if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
+                {
+                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string scriptKey }] ? scriptKey : null;
                     continue;
                 }
 
@@ -373,14 +382,17 @@ public sealed class ClrAssemblyScanner(
         }
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
-        if (outcomes.Count == 0 && dynamicOutcomes is null)
+        if (outcomes.Count == 0 && dynamicOutcomes is null && scriptInput is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = dynamicOutcomes is null
-            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
-        return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+        var payload = new Dictionary<string, object> { ["ports"] = ports };
+        if (dynamicOutcomes is not null)
+            payload["dynamicOutcomes"] = dynamicOutcomes;
+        // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
+        if (!string.IsNullOrWhiteSpace(scriptInput))
+            payload["scriptInput"] = scriptInput;
+        return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     /// <summary>
@@ -395,14 +407,26 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(sourceInput))
             return null;
 
-        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
-        return new
+        // Absent means the attribute's default catch-all; an explicit null declares none (a RunJavaScript, spec 1208).
+        // A default CustomAttributeNamedArgument has no member, so look the arguments up by name instead of FirstOrDefault.
+        var named = attribute.NamedArguments.ToDictionary(argument => argument.MemberName, argument => argument.TypedValue.Value, StringComparer.Ordinal);
+        var unmatched = named.TryGetValue(nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome), out var unmatchedValue)
+            ? unmatchedValue as string
+            : "Unmatched";
+        var selectsOnEveryCompletion = !named.TryGetValue(nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion), out var selects) || selects is true;
+        var descriptor = new Dictionary<string, object>
         {
-            kind = "valuePerItem",
-            source = sourceInput,
-            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+            ["kind"] = "valuePerItem",
+            ["source"] = sourceInput,
+            // With items configured: true drops Done (every completion selects an item or the catch-all), false keeps
+            // Done next to the items (the Done rule, ADR 0045 §6).
+            ["selectsOnEveryCompletion"] = selectsOnEveryCompletion
         };
+        if (!string.IsNullOrWhiteSpace(unmatched))
+            descriptor["unmatched"] = unmatched;
+        return descriptor;
     }
+
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
         new(

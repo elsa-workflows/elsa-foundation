@@ -241,6 +241,58 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal(14, diagnostic.Range!.Value.Start.Character);
     }
 
+    // Spec 1208 FR-007a: 'complete' is a reserved built-in name in every JavaScript surface, input bindings included.
+    [Theory]
+    [InlineData("const complete = 1; return complete;")]
+    [InlineData("let { complete } = { complete: 1 }; return 1;")]
+    [InlineData("const [complete] = [1]; return 1;")]
+    [InlineData("function complete() { return 1; }\nreturn complete();")]
+    [InlineData("class complete {}\nreturn 1;")]
+    [InlineData("(complete => complete)(1)")]
+    [InlineData("(function (a, complete = 2) { return a; })(1)")]
+    [InlineData("(function complete() { return 1; })()")]
+    [InlineData("try { return 1; } catch (complete) { return 2; }")]
+    public async Task JavaScript_validation_refuses_a_binding_that_declares_complete(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.Success, result.State);
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/ReservedName", diagnostic.Code);
+        Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.NotNull(diagnostic.Range);
+    }
+
+    [Theory]
+    [InlineData("({ complete: true })")]
+    [InlineData("const { complete: done } = { complete: 1 }; return done;")]
+    [InlineData("args.complete")]
+    [InlineData("const completed = 1; return completed;")]
+    public async Task JavaScript_validation_accepts_complete_as_a_property_name(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, result.State);
+        Assert.Empty(result.Payload!.Diagnostics);
+    }
+
+    [Fact]
+    public async Task JavaScript_reserved_name_diagnostic_points_at_the_declaration()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), "const value = 1;\nconst complete = value;\nreturn complete;"), CancellationToken.None);
+
+        var range = Assert.Single(result.Payload!.Diagnostics).Range!.Value;
+        Assert.Equal(1, range.Start.Line);
+        Assert.Equal(6, range.Start.Character);
+        Assert.Equal(14, range.End.Character);
+    }
+
     [Fact]
     public async Task JavaScript_validation_accepts_anonymous_function_expressions_like_runtime()
     {

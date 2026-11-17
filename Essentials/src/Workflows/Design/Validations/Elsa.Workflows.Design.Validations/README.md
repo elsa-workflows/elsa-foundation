@@ -88,11 +88,25 @@ persisted.
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
 | `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
 | `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
+| `ScriptOutcomeValidator` | Catalog-backed root + nested (recurses); nodes whose `elsa.outcomes` facet names a `scriptInput` with a literal script | `{NodeId}/inputs/{scriptInput}` · `Scripts/UnknownOutcome` (`VF-AUTH-010`, error), `Scripts/ReturnedOutcomeName` (`VF-AUTH-012`, warning), `Scripts/ReservedName` (error) (see below) |
 
 Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
 `CatalogVersionResolver` (Internal), which translates the version store's throwing Get contract
 into a nullable result — see the Faulting note in `EXTENSION_POINTS.md` before writing a new
 catalog-consulting validator.
+
+## Script outcome checks (spec 1208)
+
+`ScriptOutcomeValidator` checks the script of an activity that selects outcomes by returning
+`complete(result, outcomes)` (the input its `elsa.outcomes` facet names as `scriptInput`, such as `RunJavaScript`'s
+`script`): a literal outcome name outside the node's outcome set (`VF-AUTH-010`, FR-015), a top-level returned string
+equal to a connected outcome (`VF-AUTH-012`, a warning: a returned value selects nothing, FR-008a) and a declaration of
+the reserved name `complete` (FR-007a). The outcome set follows the publish compiler's rule; a set an expression decides
+is not checked. Computed names are left to the run-time check (`VF-ACT-006`).
+
+The script is read through `IJavaScriptScriptOutcomeAnalyzer` (`Elsa.Expressions.JavaScript.Core`), which the
+JavaScript feature registers, so this project holds no JavaScript parser. The dependency is optional: in a host without
+the JavaScript feature the validator returns nothing.
 
 ## The credential-literal rule (spec 188, FR-008, FR-009)
 

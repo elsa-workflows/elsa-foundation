@@ -89,6 +89,12 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     /// <summary>The Elsa 4 keys a null member was bound to Elsa 3's value for (spec 267), which count as bound when blank.</summary>
     public HashSet<string> NullEmits { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Properties a rewrite strategy wrote under an Elsa 4 key. Removing the consumed Elsa 3 structure members keeps
+    /// them, even when an Elsa 3 member has the same name (Complete <c>Outcomes</c> and the Elsa 4 <c>outcomes</c> input).
+    /// </summary>
+    public HashSet<string> RewrittenProperties { get; } = new(StringComparer.Ordinal);
+
     /// <summary>The Elsa 4 key of the node's script body, rewritten in script mode, when the node runs a script.</summary>
     public string? ScriptProperty { get; set; }
 
@@ -111,5 +117,10 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     public List<Elsa3Activity> FollowedBy { get; } = [];
 }
 
-/// <summary>One child placed in a slot. <see cref="Label"/> is the collection item's label (branch name, case match).</summary>
-internal sealed record Elsa3SlotChild(string SlotName, string? Label, Elsa3Activity? Child);
+/// <summary>
+/// One child placed in a slot. <see cref="Label"/> is the collection item's label (branch name, case match),
+/// <see cref="ItemId"/> its identity where the slot declares one (a Switch <c>caseId</c>), and
+/// <see cref="ConditionProperty"/> the node property that holds the item's lowered condition (a Switch case in
+/// <c>MatchAny</c> mode, spec 1208 FR-028).
+/// </summary>
+internal sealed record Elsa3SlotChild(string SlotName, string? Label, Elsa3Activity? Child, string? ItemId = null, string? ConditionProperty = null);

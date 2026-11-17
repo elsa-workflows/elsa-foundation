@@ -188,7 +188,7 @@ public sealed class MemberReadRunTests
         {
             Completion = new ActivityCompletion(completion.InvocationId, completion.AttemptId,
                 ValueEnvelope.Inline(completion.Result.Type, JsonSerializer.SerializeToElement(new { address = new { street = "Changed" } }), completion.Result.Policy),
-                completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint)
+                completion.Selection, completion.CompletedAt, completion.ContractFingerprint)
         });
 
         var resumed = await harness.ResumeAsync(WorkflowExecutionHarness.Identity, Assert.Single(wait.BookmarkIds), wait.InvocationId, "node-wait",
@@ -426,6 +426,7 @@ public sealed class MemberReadRunTests
     /// <summary>A reader that also closes a loop with the run's next scripted outcome.</summary>
     [ActivityOutcome("again")]
     [ActivityOutcome("done")]
+    [SelectsOutcomeOnEveryCompletion]
     public sealed class LoopingReader(ActivityResultOccurrenceTests.LoopOutcomes outcomes) : Activity<Echo>
     {
         [ActivityInput] public object? Value { get; set; }
