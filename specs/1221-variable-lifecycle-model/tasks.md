@@ -39,8 +39,13 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   the completion once. A repeated request finds the source superseded and is refused. Not recorded, so refused
   (`NoRecordedCompletion`): a faulted body, a completion that also produced durable outputs, a workflow dispatch or a
   published stimulus (an alteration cannot replay those), and a refusal on resume or on a composite's completion.
-- **T010a, T029–T032 (background branches, admission refresh):** with US5 in a later implementation PR. The stale-base
-  drives of T010/T011 cover the commit rule a background result meets.
+- **T010a, T029–T032 (background branches, admission refresh):** `BackgroundActivityCoordinator.RefreshInputsAsync`
+  compares the pinned snapshot's read set with the current versions of the visible frames at admission; on a change it
+  materializes the inputs again as evaluation n+1 of the same invocation (the work id names the evaluation), keeps the
+  superseded snapshot in `InputRefreshes` with the changed variables, and pins the fresh one for the worker. The node
+  opt-out is `ActivityNode.DisableBackgroundInputRefresh`, pinned as `runtime.backgroundInputRefresh=off`. Drives in
+  `BackgroundRefreshTests`: refresh on change, no refresh when unchanged, opt-out warns by default and faults under
+  `Fault`, and two background branches (T010a) total `1` with a warning on the second commit.
 - **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`
   opt-in goes in with S-5's implementation.
 - **T028, T042:** coordinator steps on #3411; the PoC result is in #4316's description.
@@ -95,7 +100,7 @@ repairable lost-update warning (background, suspension), never silently loses an
 default of FR-011 depends on it (FR-013a).
 
 - [x] T010 [US1] **(test-first)** Reproduction drive: `Parallel` of two inline `External` leaves taking `count` and capturing `count + 1`; assert silent `1` today, `2` after (with US4). In `.../Tests/VariableLifecycle/ParallelLostUpdateTests.cs`.
-- [ ] T010a [P] [US1] **(test-first)** Drive: the same with two background branches → `1` with a lost-update warning on the second commit (instance diagnostic + write-history entry naming both writers, overwritten value kept).
+- [x] T010a [P] [US1] **(test-first)** Drive: the same with two background branches → `1` with a lost-update warning on the second commit (instance diagnostic + write-history entry naming both writers, overwritten value kept).
 - [x] T011 [P] [US1] **(test-first)** Drive: two branches read 0 and write 1 → second is a lost update (warning), not a no-op; `0 → 1 → 0` in default mode warns.
 - [x] T012 [US1] Capture the input read set during materialization in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`; commit it with the input snapshot.
 - [x] T013 [US1] Apply the commit rule and base at the capture site in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjection.cs`.
@@ -142,10 +147,10 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 7: User Story 5 — Background runs on fresh inputs (D-9) (Priority: P2)
 
-- [ ] T029 [US5] Implement the admission refresh: compare input read set to current versions; on change, a new evaluation (same `InvocationId`, own sequence + idempotency keys) on the background admission path.
-- [ ] T030 [P] [US5] Per-node refresh opt-out; a stale base then handled at commit.
-- [ ] T031 [US5] Retain both snapshots linked with the reason; the worker's snapshot immutable thereafter; cover only Start→admission.
-- [ ] T032 [P] [US5] Tests: refresh on changed input; opt-out meets the commit rule (warning by default, fault under `Fault`); superseded snapshot stays in history. In `.../Tests/VariableLifecycle/BackgroundRefreshTests.cs`.
+- [x] T029 [US5] Implement the admission refresh: compare input read set to current versions; on change, a new evaluation (same `InvocationId`, own sequence + idempotency keys) on the background admission path.
+- [x] T030 [P] [US5] Per-node refresh opt-out; a stale base then handled at commit.
+- [x] T031 [US5] Retain both snapshots linked with the reason; the worker's snapshot immutable thereafter; cover only Start→admission.
+- [x] T032 [P] [US5] Tests: refresh on changed input; opt-out meets the commit rule (warning by default, fault under `Fault`); superseded snapshot stays in history. In `.../Tests/VariableLifecycle/BackgroundRefreshTests.cs`.
 
 ---
 

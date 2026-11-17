@@ -206,6 +206,17 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             VariableWrites = [WriteRecord() with { RejectedValue = value }]
         })),
+        ["superseded input"] = new("ActivityExecutionState.InputRefreshes[].Superseded.Values[]", $"Activity execution '{ActivityExecutionId}' superseded input 'token'", value => ActivityChanges(ActivityState() with
+        {
+            InputRefreshes =
+            [
+                new ActivityInputRefresh(
+                    new ActivityInputSnapshot(ActivityExecutionId, "contract", "binding", new Dictionary<string, ValueEnvelope> { ["token"] = value }, OccurredAt),
+                    2,
+                    [new VariableInputChange("scope-1", "count", 0, 1)],
+                    OccurredAt)
+            ]
+        })),
         ["recorded completion result"] = new("ActivityExecutionState.RecordedCompletion.Completion.Result", $"Activity execution '{ActivityExecutionId}' recorded completion result", value => ActivityChanges(ActivityState() with
         {
             RecordedCompletion = new RecordedActivityCompletion(new ActivityCompletion(ActivityExecutionId, "attempt-1", value, OutcomeSelection.Unspecified, OccurredAt, "fingerprint"), null, [])

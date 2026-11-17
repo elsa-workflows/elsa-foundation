@@ -2348,6 +2348,27 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.LostUpdateMode));
     }
 
+    // Spec 1221 FR-019 (T030): the author's opt-out of the background admission refresh is pinned on the node; refresh
+    // on (the default) leaves no key.
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, RuntimeMetadataKeys.BackgroundInputRefreshOff)]
+    public async Task The_node_pins_its_background_input_refresh_opt_out(bool disable, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(typeof(LegacyTriggerActivity));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []) { DisableBackgroundInputRefresh = disable })),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BackgroundInputRefresh));
+    }
+
     [ActivityLostUpdateMode(LostUpdateMode.Fault)]
     private sealed class StrictLostUpdateProbe : IActivityResult<ActivityUnit>;
 

@@ -75,6 +75,13 @@ public static class RuntimeMetadataKeys
     public const string LostUpdateMode = "runtime.lostUpdateMode";
     public const string LostUpdateModeFault = "fault";
     /// <summary>
+    /// Whether a background node's inputs are refreshed at admission when a variable they read changed since Start
+    /// (spec 1221 FR-018, FR-019), pinned by the publish compiler from the node's setting: <see cref="BackgroundInputRefreshOff"/>
+    /// turns the refresh off, so a stale base meets the commit rule instead. Absent means on.
+    /// </summary>
+    public const string BackgroundInputRefresh = "runtime.backgroundInputRefresh";
+    public const string BackgroundInputRefreshOff = "off";
+    /// <summary>
     /// Executable-node capability compiled from the node's activity type when it implements
     /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
     /// </summary>

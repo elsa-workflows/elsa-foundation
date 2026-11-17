@@ -93,7 +93,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             try
             {
                 backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
-                    .GetResultOrAdmitAsync(workItem, invokePayload, executableNode, state, cancellationToken);
+                    .GetResultOrAdmitAsync(workItem, invokePayload, executable, executableNode, state, serviceProvider, cancellationToken);
             }
             catch (BackgroundActivityValidationException exception)
             {

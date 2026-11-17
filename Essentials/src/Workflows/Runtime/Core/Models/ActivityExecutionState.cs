@@ -137,6 +137,13 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RecordedActivityCompletion? RecordedCompletion { get; init; }
 
+    /// <summary>
+    /// The input snapshots a background admission refresh superseded (spec 1221 FR-020), oldest first, each linked to
+    /// the evaluation that replaced it and the variables that changed. Absent when the inputs were never refreshed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityInputRefresh>? InputRefreshes { get; init; }
+
     /// <summary>Appends write-history records to this invocation.</summary>
     public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
     {

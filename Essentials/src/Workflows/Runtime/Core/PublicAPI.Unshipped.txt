@@ -10564,3 +10564,37 @@ static Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.operator !=
 static Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion.operator ==(Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? left, Elsa.Workflows.Runtime.Core.Models.RecordedActivityCompletion? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.operator !=(Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? left, Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite.operator ==(Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? left, Elsa.Workflows.Runtime.Core.Models.RecordedVariableWrite? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.InputRefreshes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.InputRefreshes.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh!
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.ActivityInputRefresh(Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot! superseded, int replacedByEvaluation, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableInputChange!>! changes, System.DateTimeOffset refreshedAt) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.Changes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableInputChange!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.Reason.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.RefreshedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.ReplacedByEvaluation.get -> int
+Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.Superseded.get -> Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot!
+Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.Evaluation.get -> int
+Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.Evaluation.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.EvaluationNumber.get -> int
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.VariableInputChange!
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.CurrentVersion.get -> long
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.Equals(Elsa.Workflows.Runtime.Core.Models.VariableInputChange? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.ReadVersion.get -> long
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.ScopeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.VariableInputChange(string! scopeId, string! variableKey, long readVersion, long currentVersion) -> void
+Elsa.Workflows.Runtime.Core.Models.VariableInputChange.VariableKey.get -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.BackgroundInputRefresh = "runtime.backgroundInputRefresh" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.BackgroundInputRefreshOff = "off" -> string!
+override Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.VariableInputChange.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.VariableInputChange.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.VariableInputChange.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? left, Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? left, Elsa.Workflows.Runtime.Core.Models.ActivityInputRefresh? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.VariableInputChange.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableInputChange? left, Elsa.Workflows.Runtime.Core.Models.VariableInputChange? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.VariableInputChange.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableInputChange? left, Elsa.Workflows.Runtime.Core.Models.VariableInputChange? right) -> bool

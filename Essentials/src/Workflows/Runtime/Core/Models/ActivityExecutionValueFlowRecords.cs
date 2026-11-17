@@ -90,6 +90,17 @@ public sealed record ActivityInputSnapshot
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public VariableInputReadSet? InputReadSet { get; init; }
+
+    /// <summary>
+    /// Which evaluation of the invocation's inputs this is (spec 1221 FR-018): 1 for the snapshot Start materialized, one
+    /// more for each background admission refresh. Omitted while 1.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int Evaluation { get; init; }
+
+    /// <summary>The evaluation number, reading an omitted one as the first.</summary>
+    [JsonIgnore]
+    public int EvaluationNumber => Evaluation <= 0 ? 1 : Evaluation;
 }
 
 /// <summary>

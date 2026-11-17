@@ -203,7 +203,10 @@ public static class RuntimeCheckpointCommitValidator
             .Concat((state.VariableWrites ?? []).SelectMany(record => WriteRecordEnvelopes(subject, record)))
             // Spec 1221 FR-017: the completion a Fault lost update refused, kept for an operator to accept.
             .Concat((state.RecordedCompletion?.VariableWrites ?? [])
-                .Select(write => ($"{subject} recorded variable write '{write.VariableKey}'", write.Value)));
+                .Select(write => ($"{subject} recorded variable write '{write.VariableKey}'", write.Value)))
+            // Spec 1221 FR-020: the input snapshots a background admission refresh superseded.
+            .Concat((state.InputRefreshes ?? []).SelectMany(refresh => refresh.Superseded.Values
+                .Select(input => ($"{subject} superseded input '{input.Key}'", input.Value))));
     }
 
     private static IEnumerable<(string Location, ValueEnvelope Value)> WriteRecordEnvelopes(string subject, VariableWriteRecord record)

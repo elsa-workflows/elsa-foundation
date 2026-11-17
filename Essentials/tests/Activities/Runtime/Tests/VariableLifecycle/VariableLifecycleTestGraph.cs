@@ -92,7 +92,18 @@ internal static class VariableLifecycleTestGraph
     }
 
     /// <summary>One increment leaf: input <c>Count</c> reads <c>count</c>; the result is captured into <c>count</c>.</summary>
-    public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true, string captureKey = CountKey)
+    public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true, string captureKey = CountKey) =>
+        Increment(nodeId, incrementActivity, ActivityExecutionPlacement.Inline, mode, readsCount, captureKey);
+
+    /// <summary>The same leaf with the given placement and extra node metadata.</summary>
+    public static ExecutableNode Increment(
+        string nodeId,
+        Type incrementActivity,
+        ActivityExecutionPlacement placement,
+        LostUpdateMode mode = LostUpdateMode.Default,
+        bool readsCount = true,
+        string captureKey = CountKey,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(incrementActivity);
         var projection = contract.Result.Projections.Count == 1
@@ -127,11 +138,18 @@ internal static class VariableLifecycleTestGraph
             inputBindings: readsCount
                 ? new Dictionary<string, RuntimeInputBinding> { [read.InputKey] = read }
                 : new Dictionary<string, RuntimeInputBinding> { [read.InputKey] = Literal(read.InputKey, 41) },
-            metadata: mode == LostUpdateMode.Fault
-                ? new Dictionary<string, string> { [RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault }
-                : new Dictionary<string, string>(),
+            metadata: NodeMetadata(mode, metadata),
+            executionPlacement: placement,
             activityContract: contract,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture> { [projection] = capture });
+    }
+
+    private static Dictionary<string, string> NodeMetadata(LostUpdateMode mode, IReadOnlyDictionary<string, string>? extra)
+    {
+        var metadata = new Dictionary<string, string>(extra ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+        if (mode == LostUpdateMode.Fault)
+            metadata[RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault;
+        return metadata;
     }
 
     private static RuntimeInputBinding Literal(string inputKey, int value) =>

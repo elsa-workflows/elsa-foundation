@@ -169,14 +169,14 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode),
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
             executionPlacement: activity.ExecutionPlacement);
     }
 
-    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType, LostUpdateMode nodeLostUpdateMode)
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType, LostUpdateMode nodeLostUpdateMode, bool disableBackgroundInputRefresh = false)
     {
         var metadata = new Dictionary<string, string>
         {
@@ -189,6 +189,9 @@ public sealed class ExecutableNodeCompiler(
         if (nodeLostUpdateMode == LostUpdateMode.Fault ||
             clrActivityType?.GetCustomAttribute<ActivityLostUpdateModeAttribute>(inherit: true)?.Mode == LostUpdateMode.Fault)
             metadata[RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault;
+        // Spec 1221 FR-019: the author's opt-out of the background admission refresh; refresh on is pinned by absence.
+        if (disableBackgroundInputRefresh)
+            metadata[RuntimeMetadataKeys.BackgroundInputRefresh] = RuntimeMetadataKeys.BackgroundInputRefreshOff;
 
         // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
         if (StructuralFaultHandling(clrActivityType) is { } faultHandling)

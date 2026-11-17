@@ -72,6 +72,19 @@ it takes effect on the next published version. Only `Fault` nodes store digests 
 - Keep independent data in separate variables. Two branches that change different fields of one object both write
   the whole object, so the second is a lost update.
 
+## Background steps run on fresh inputs
+
+A background step reads its inputs at Start, on the coordinator, and is admitted later. If a variable those inputs read
+has a newer version at admission, the coordinator reads the inputs again as a new evaluation of the same invocation
+(`InputSnapshot.Evaluation`), and the worker receives that snapshot. The superseded snapshot stays on the activity
+state (`InputRefreshes`) with the variables that changed, for example `count v0 → v1`, and the admitted snapshot is not
+changed again. The refresh covers only the gap between Start and admission: two background steps admitted on the same
+value still meet the commit rule when their results arrive. Code: `BackgroundActivityCoordinator.RefreshInputsAsync`.
+
+A node can turn the refresh off (`DisableBackgroundInputRefresh`, pinned as `runtime.backgroundInputRefresh=off`). The
+worker then runs on the inputs Start read, and a stale base meets the commit rule: a warning by default, a fault under
+`Fault`.
+
 ## Suspension
 
 A suspended step keeps the input snapshot and read set it committed. It is not refreshed because time passed. When
