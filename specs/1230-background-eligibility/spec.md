@@ -214,7 +214,9 @@ read-modify-write) and that the recorded commit order matches the order applied.
 - **FR-002**: The component MAY expose one method for publication (with design-time information such as the CLR result
   type) and one for run time (with the pinned node and the activated activity), but the criteria MUST be defined
   once (ADR 0093 decision 3).
-- **FR-003**: Every refusal MUST carry `VF-BG-001`, the criterion id (`C1` … `C10`) and a plain reason. When several
+- **FR-003**: Every refusal MUST carry `VF-BG-001`, the criterion id (`C1` … `C10`) and a plain reason. The one
+  exception is a missing `[BackgroundExecutionSafe]` declaration, which is not a criterion: its refusal carries
+  `VF-BG-001` and says the activity does not declare it. When several
   criteria fail, the first in criterion order MUST be reported.
 - **FR-004**: The run-time check MUST cover the same criteria as publication (C1–C5, C9, C10), closing today's gaps:
   C3 (typed result) and C4 (stream and transient-resource results) at run time.
@@ -237,7 +239,10 @@ read-modify-write) and that the recorded commit order matches the order applied.
 - **FR-011**: Spec 241's background contract MUST point to ADR 0093 for eligibility.
 - **FR-012**: Every background node an activity template provider returns from its own compilation (today the agent
   template's model-turn node) MUST pass the same publication check when `ActivityTemplatePlacer` places it, before the
-  executable is pinned. No path may set `supportsBackgroundExecution` or a background placement without it.
+  executable is pinned. No path may set `supportsBackgroundExecution` or a background placement without it. When the
+  placing host cannot resolve the activity's CLR type, placement checks what the pinned contract shows and the
+  type-only checks (C1's handler interfaces, C2, C9, and the CLR parts of C3 and C4) run at admission and on the worker
+  (ADR 0093 decision 3).
 
 ### Key Entities
 
@@ -281,7 +286,7 @@ them.
 | Q7 | **Commit-order evidence (FR-010).** Is S-10's write history (one record per applied write, in commit order, PR #4316) enough as "an inspectable record of the actual commit order", or is a separate record needed? | **S-10's write history plus the checkpoint sequence is enough**; no new store. The tests read it back on both providers. This makes US6 depend on PR #4316 being merged. |
 | Q8 | **Two gaps no criterion catches.** `WriteHttpResponse` only works inline (its result is delivered during the inline drain), and a trigger activity (`Cron`, `Timer`) gets no trigger payload on the worker. Add criteria to ADR 0093, or only leave them unmarked? | **Leave them unmarked, no ADR change.** Only a marked type can be placed in the background, and marking is the author's declaration, so not marking closes both gaps for the built-ins. The attribute's documentation adds both as things an author checks before marking (FR-008). If a third-party activity hits them, a criterion is proposed then, in its own ADR 0093 amendment PR. |
 | Q9 | **Template providers build their own background nodes.** The agent template compiles its model-turn node itself (`AgentActivityProvider.CompileAsync`, current on `main`), and `ActivityTemplatePlacer` copies the placement without an eligibility check, so any template provider can bypass publication. Route these nodes through the check (FR-012), or accept the bypass because the agent activity is internal? | **Route them through the check, in the template placer**, so it holds for every template provider, not only the agent. ADR 0093 decision 3 says no other code decides eligibility. The run-time check at admission and on the worker already applies to these nodes. |
-| Q10 | **Which qualifying activities are marked?** 15 meet C1–C10 by reading (14 after `RunJavaScript` was moved to ineligible under C9, see the table); some (`Break`, `Fault`) have little use in the background. | **Mark all that qualify** once the unknowns are checked (T022): ADR 0093 decision 4 marks what qualifies, not what seems useful, and placement stays the workflow author's choice. A connector read whose partition does not resolve on a worker gets an issue instead. |
+| Q10 | **Which qualifying activities are marked?** 14 meet C1–C10 by reading (13 after `RunJavaScript` was moved to ineligible under C9, see the table); some (`Break`, `Fault`) have little use in the background. | **Mark all that qualify** once the unknowns are checked (T022): ADR 0093 decision 4 marks what qualifies, not what seems useful, and placement stays the workflow author's choice. A connector read whose partition does not resolve on a worker gets an issue instead. |
 
 ## Success Criteria *(mandatory)*
 
@@ -294,7 +299,9 @@ them.
 - **SC-003**: A background placement of a variable-reading activity never reaches a worker.
 - **SC-004**: Every built-in activity has a recorded verdict against C1–C10, and every activity that qualifies is
   marked.
-- **SC-007**: No background node reaches a pinned executable without passing the publication check.
+- **SC-007**: No background node reaches a pinned executable without passing the publication check, and none runs on
+  a worker without passing every enforced criterion (the type-only checks run at admission when placement could not
+  see the CLR type).
 - **SC-005**: No raw secret value appears in any persisted background input snapshot in the test suite.
 - **SC-006**: The causal-order tests pass on both the in-memory and the EF Core provider.
 
@@ -315,6 +322,6 @@ Background activities: eligibility is now decided by one component (ADR 0093), a
 release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
 without a secret reference (C10) is refused at admission with an incident (Q5). No shipped activity was marked
-before, so only custom activities are affected. Fourteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
+before, so only custom activities are affected. Thirteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
 365 and Slack reads among them move to version 1.1.0. `RunJavaScript` is not marked: scripts read and write variables by
 name, and a background worker has no access to variables (C9).

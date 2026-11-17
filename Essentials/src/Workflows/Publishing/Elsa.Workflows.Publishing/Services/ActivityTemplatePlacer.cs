@@ -69,6 +69,23 @@ public sealed class ActivityTemplatePlacer(
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    /// <summary>
+    /// Keeps the constructor shape from before the placer gained its type registry
+    /// (adding an optional parameter is binary-breaking, review checklist §E5). Without the registry, background
+    /// template nodes are checked from their pinned contract; admission and the worker check their CLR type.
+    /// </summary>
+    public ActivityTemplatePlacer(
+        IActivityDefinitionVersionPublicationStore publications,
+        IExecutableActivityTemplateReader templates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        IActivityPlacementHasher placementHasher,
+        IActivityStructureService activityStructureService,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler)
+        : this(publications, templates, sourceReferences, placementHasher, activityStructureService, inputBindingCompiler, outputCaptureCompiler, null)
+    {
+    }
+
     internal static ActivityTemplateDataSelectionFacts DescribeTemplateDataSelectionFacts(
         ExecutableNode root,
         IEnumerable<string> publicRequestNames,

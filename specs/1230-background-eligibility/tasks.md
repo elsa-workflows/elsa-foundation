@@ -39,7 +39,8 @@
 
 - [x] T009 [US2] **(test-first)** A test activity `[BackgroundExecutionSafe]` + `IRuntimeScopedVariableReader`: placed
   in the background, publication refuses naming C9; a pinned node of it is refused at admission naming C9; placed
-  inline it publishes and reads its variables.
+  inline it publishes and reads its variables. *Done as:* the inline placement publishes; the inline read path is
+  unchanged by this spec and not re-run here.
 - [x] T010 [US2] Add C9 to the component as one predicate over the CLR type (Q3), so ADR 0090's later signals are one
   change.
 - [x] T011 [US2] Check that no shipped activity implementing `IRuntimeScopedVariableReader` is a C1 leaf (today only
@@ -52,7 +53,9 @@
 - [ ] T012 [US3] **(test-first)** Publication refuses each C10 case naming C10: no durable representation, not
   materializable on the worker, protection would be lost.
 - [x] T013 [US3] Add C10 to the component, reusing `EnsureSecretBindingsAdmissible` and the snapshot checks (P-4);
-  add the input-representation check that is missing.
+  add the input-representation check that is missing. *Done as:* C10 lets a `SecretRead` binding through and checks
+  the rest; `EnsureSecretBindingsAdmissible` still runs beside it in the compiler and placer, so a secret binding the
+  activity refuses is reported as `VF-ACT-012`, not as C10.
 - [ ] T014 [P] [US3] A secret reference input on a background node: admitted, resolved at worker activation; assert
   no raw secret in the persisted input snapshot or the work record (SC-005).
 - [ ] T015 [P] [US3] An `Any` input holding JSON is admitted and runs; an `Any` result stays refused by C3.
@@ -112,7 +115,7 @@
 - **Done:** T001–T011, T013, T016–T018, T020, T021, T023, T028–T030. Findings in research *Implementation findings*.
 - **Partial, open:** T014 — a secret reference input is admitted at publication in the background (C10); the
   worker-side assertion that no raw secret reaches the input snapshot or the work record is not written yet.
-  T019 — publish-in-background tests for the six Essentials built-ins, end-to-end worker runs for `WriteLine`
+  T019 — publish-in-background tests for the five Essentials built-ins, end-to-end worker runs for `WriteLine`
   (completion) and `Fault` (fault) on both persistence modes, marked-set guards for the connector reads; no
   end-to-end run per connector read (their test projects do not host a worker).
 - **Partial, open (review round 1):** T012 — publication refuses the stream and the protection cases (C10); the
@@ -120,5 +123,5 @@
   policy. T015 — an `Any`/JSON input publishes in the background and an `Any` result is refused (C3); no worker run
   of the `Any` input yet. T022 — the partition and secret unknowns were settled by reading the code and a
   publication test, not by background runs against a live connector; the `DownloadFile` limit by reading the codec.
-  The 14 marks rest on that reading (Q10); `RunJavaScript` is not marked (C9, research).
+  The 13 marks rest on that reading (Q10); `RunJavaScript` is not marked (C9, research).
 - **Held:** US6 (T024–T026) until S-10's PR #4316 is merged into the initiative branch (Q7). T031 waits on US6.

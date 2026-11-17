@@ -245,6 +245,7 @@ public static class BackgroundEligibility
         var result = subject.Contract!.Result;
         var resultType = subject.ActivityType is { } type ? FindResultType(type) : null;
         if ((resultType is not null && typeof(Stream).IsAssignableFrom(resultType)) ||
+            IsLiveResource(result.Type) ||
             result.Projections.Values.Select(projection => projection.EffectiveSourceRepresentation)
                 .Prepend(result.EffectiveSourceRepresentation)
                 .Any(representation => representation == ValueRepresentation.TransientResource) ||

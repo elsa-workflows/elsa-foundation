@@ -62,6 +62,16 @@ public sealed class BackgroundEligibilityTests
 
     [Theory]
     [MemberData(nameof(EntryPoints))]
+    public void C4_refuses_a_pinned_stream_result_when_the_type_is_checked_at_run_time(string entryPoint)
+    {
+        // A placement that cannot see the CLR type reads the stream from the pinned result alias alone.
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C4,
+            Subject<SafeLeaf>(Contract<SafeLeaf>(result: Result(typeof(Stream).FullName!))) with { ActivityType = null, TypeCheckedAtRunTime = true },
+            "transient");
+    }
+
+    [Theory]
+    [MemberData(nameof(EntryPoints))]
     public void C5_refuses_hidden_results(string entryPoint)
     {
         AssertRefused(entryPoint, BackgroundEligibilityCriterion.C5,

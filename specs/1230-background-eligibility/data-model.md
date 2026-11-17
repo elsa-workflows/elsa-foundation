@@ -12,8 +12,9 @@ The criterion ids of ADR 0093 decision 2: `C1` … `C10`. Each has a check kind:
 | C6 no coordinator effects from the body | R | worker, after the body ran |
 | C7 tolerates re-runs, C8 cancels cooperatively | D | not checked; documented on the attribute |
 
-The component also checks a precondition before C1: the activity type declares `[BackgroundExecutionSafe]`
-(`SupportsBackgroundExecution` in the pinned contract). Its refusal names no criterion but "does not declare
+The component also checks a precondition after the engine-checked criteria: the activity type declares
+`[BackgroundExecutionSafe]` (`SupportsBackgroundExecution` in the pinned contract). It runs last so a refusal names
+the criterion an activity fails before the missing promise (research, *Declaration order*). Its refusal names no criterion but "does not declare
 BackgroundExecutionSafe", because the declaration is how the author promises C7 and C8.
 
 ## BackgroundEligibilitySubject
@@ -24,7 +25,7 @@ criteria that need it run only where it is present (C6 only at the worker).
 | Field | Publication | Admission | Worker |
 |---|---|---|---|
 | node id | yes | yes | yes |
-| is intrinsic / is reusable boundary | yes (authored node) | yes (pinned `IntrinsicKind`) | yes |
+| is intrinsic / is reusable boundary | yes (authored node) | intrinsic only (pinned `IntrinsicKind`); a boundary is refused at publication | intrinsic only |
 | has structure or child slots | yes | yes | yes |
 | CLR activity type | resolved | well-known type registry | activated object's type |
 | pinned activity contract (declaration, result type, policies, representations, inputs) | yes | yes | yes |

@@ -131,7 +131,7 @@ the initiative branch first; no logic overlaps.
   (ADR 0089, including a run-time lookup for computed names) and writes by name (ADR 0090 decision 3). A background
   worker has no access to variables, so the activity does not meet C9. C9 checks the activity type and a script's
   variable access differs per node; rather than a per-node rule, the activity is not marked. Marking it needs an
-  isolated worker to get variable access (the variable session that lifts C9). The 14 remaining marks stand.
+  isolated worker to get variable access (the variable session that lifts C9). The 13 remaining marks stand.
 - **Declaration order (data-model deviation).** The declaration check runs **after** the engine-checked criteria, not
   before C1, so an unmarked activity that also fails C1–C10 is refused naming that criterion (US5 acceptance 2:
   `Sequence` → C1, `Inline` → C3). An unmarked activity that passes them all is refused as "does not declare

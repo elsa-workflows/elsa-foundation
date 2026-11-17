@@ -43,7 +43,7 @@ public sealed class BuiltInBackgroundAssessmentTests
     [Theory]
     [InlineData(typeof(SequenceActivity), "VF-BG-001 (C1):")]
     [InlineData(typeof(Inline), "VF-BG-001 (C3):")]
-    [InlineData(typeof(RunJavaScript), "does not declare BackgroundExecutionSafe")] // C9: scripts read and write variables by name
+    [InlineData(typeof(RunJavaScript), "does not declare BackgroundExecutionSafe")] // not marked because of C9 (scripts read and write variables by name); C9 itself checks the type only
     [InlineData(typeof(WriteHttpResponse), "does not declare BackgroundExecutionSafe")]
     [InlineData(typeof(SendHttpRequest), "does not declare BackgroundExecutionSafe")]
     [InlineData(typeof(ReadLine), "does not declare BackgroundExecutionSafe")]
