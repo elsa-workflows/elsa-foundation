@@ -207,14 +207,23 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
   selection's. An operator's terminate that reaches a parked row without a `ParkSelection` is refused as ambiguous. A refusal
   changes nothing, is recorded in the operation's outcome and counts in `elsa.kernel.park.refused` by reason (tenant,
   run, Park, ambiguous, resolution open).
-- **A terminate the kernel issues needs no `ParkSelection`.** A parent's tree terminate, and a combiner's FailFast
-  under large fan-out decision 5, send each registered child `kernel.terminate` as an issued message
-  (`WorkflowInstance.cs`, the terminate path), with the child's creation and no Park identity. Requiring one would
-  strand the child: the parent ends, the child stays parked under the default null window, and an unresolved Park is
-  never eligible for retention, so it would stay for good. Such a terminate is accepted when it is issued (an
-  application send cannot carry the issued scope), its `TargetCreation` equals the row's creation, and its sender and
-  `SenderCreation` equal the row's recorded `Parent` and `ParentCreation`. A stale send from an earlier parent creation,
-  or a forged one, fails that binding and is refused. An accepted one opens the terminate drain: the child resolves as
+- **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
+  actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends
+  `kernel.terminate` through `ITurn.Send`, an application send. Neither carries a Park identity, and requiring one
+  would strand the child: the parent ends, the child stays parked under the default null window, and an unresolved
+  Park is never eligible for retention, so it would stay for good. Both are sends from a committing actor, and the
+  built send path stamps them the same way: `DurableTurn.Send` gives every send an issued id and sets `Sender` to the
+  committing actor's id and `SenderCreation` to its creation (`Turns.cs`), so a model cannot choose either. An outside
+  add never carries the issued scope (outside entry points discard a supplied scope, `Messages.cs`). So a terminate is
+  accepted at a parked child without a `ParkSelection` when it has an issued origin, its `TargetCreation` equals the
+  row's creation, and its stamped `Sender` and `SenderCreation` equal the row's recorded `Parent` and
+  `ParentCreation`, whether the actor type composed it or the model sent it. Any other sender, an application send
+  from a non-parent included, needs a `ParkSelection`. A send from an earlier creation of the parent fails the binding
+  and is refused.
+- **Which path each fan-out takes.** A combiner's FailFast is the application send above. Release 1's parallel
+  ForEach runs its bodies as frames inside one instance ([large fan-out](large-fan-out.md)), so its FailFast cancels
+  frames in the model and sends no kernel terminate; a body's child workflow is cancelled through its parent's
+  terminate of that child, the same parent-bound send. An accepted one opens the terminate drain: the child resolves as
   Cancelled, and its Complete sends the parent the one final notice every terminate resolution sends, and no other; a
   parent that has already ended consumes and drops it.
 - **Internal controls are bound too.** `ParkRecord.ResolutionGeneration` grows by one at every Open of this creation.
@@ -391,8 +400,7 @@ calls one new model hook.
   decision 1. After the window's expiry the Park is resolved, so recover is refused in
   both modes. Open splits the selection before it writes anything: a handle that names a row this Park keeps with
   reason `Consumed` goes to the `Selected` marking and its count check; a handle that names a timer this Park retains
-  as `Suppressed` (below) goes to the re-arm path, a create-only insert of the timer with its original due time, and
-  takes no part in the marking or its count; a handle that is neither refuses the whole command before Open. A refusal
+  as `Suppressed` (below) goes to the re-arm path (below), and takes no part in the marking or its count; a handle that is neither refuses the whole command before Open. A refusal
   changes nothing and is recorded.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
@@ -401,16 +409,16 @@ calls one new model hook.
   layer 2 maps the model's id to the full key of the instance's own send and looks that row up. Only the instance's own
   turns change its kept rows (the sweep skips them), and its turns are serial under the partition fence, so what the
   lookup sees is what the open commit and the later drain pages write against. The writes still carry the lookups as
-  preconditions, as a defence against a defect: a re-armed timer and a restarted ticket are create-only inserts by full
-  key, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
+  preconditions, as a defence against a defect: a restarted ticket is a create-only insert under its new generation's
+  key, a re-arm is the count-checked revive-or-insert below, and each drain update has its count checked. A count mismatch answers "not landed", so the owner resets and
   computes the step again from the rows as they are, under the same operation id; a failed create-only insert is a
   definite error, which parks the instance again under the commit's failure rule, and the operator can repeat the
   recover.
 
   **Retained dispositions.** A decision a resolution takes about a timer or ticket must survive an interruption, or a
   second resume could undo it. `ParkRecord.Dispositions` keeps, for each timer and ticket of the plan, the decision
-  taken under this Park: `Suppressed` (a Park-consumed timer that a resume left unarmed) or `Restarted(g)` (a job
-  restarted under ticket generation `g`). Open writes them; a re-park keeps them; they are cleared only when the Park
+  taken under this Park: `Suppressed` (a Park-consumed timer that a resume left unarmed), `Rearmed` (a timer this Park
+  has armed once) or `Restarted(g)` (a job restarted under ticket generation `g`). Open writes them; a re-park keeps them; they are cleared only when the Park
   resolves. The set is bounded by the model's waits, the same bound as the plan. The lookup reads the disposition
   first, then the row:
 
@@ -420,9 +428,20 @@ calls one new model hook.
   | Kept, `Arrived` (a timer that fired, or a job result that came, while parked) | Restored by the drain | Restored by the drain |
   | Kept, `Consumed` or `Selected`, and the selection names it | Not applicable | Restored by the drain |
   | Kept, `Consumed`, not selected | Cleared; a timer stays unarmed and is recorded `Suppressed`; a job restarts and is recorded `Restarted(g)` | The same |
-  | Disposition `Suppressed`, whatever the row now is (ordinary done after an earlier page cleared it, or swept) | Stays unarmed | Stays unarmed, unless the selection names it: then re-armed once with its original due time |
+  | Disposition `Suppressed`, whatever the row now is (ordinary done after an earlier page cleared it, or swept) | Stays unarmed | Stays unarmed, unless the selection names it: then re-armed, and recorded `Rearmed` |
+  | Disposition `Rearmed` | The re-arm never runs again; the timer's row decides by the rows above (pending: stays; kept after a re-park consumed it: as a kept row) | The same; a selection naming it re-arms nothing |
   | Disposition `Restarted(g)` | The generation-`g` ticket's row decides, by the rows above | The same |
-  | No disposition and no `KeptBy`: ordinary done or absent | A timer is re-armed with its original due time; a job restarts. Done and absent are treated alike, so the sweep's timing cannot change the outcome | The same |
+  | No disposition and no `KeptBy`: ordinary done or absent | A timer is re-armed and recorded `Rearmed`; a job restarts. Done and absent are treated alike, so the sweep's timing cannot change the outcome | The same |
+
+  **The re-arm.** A timer is re-armed under its own full key in one count-checked step that revives the row if it is
+  still there and inserts it if the sweep has removed it: on PostgreSQL and SQLite `INSERT ... ON CONFLICT (key) DO
+  UPDATE ... WHERE Done`, on SQL Server a `MERGE`, on MySQL `ON DUPLICATE KEY UPDATE` guarded on `Done`, on MongoDB an
+  upsert filtered on `Done`. Either branch leaves the same pending row: `Done = false`, `KeptBy` null, `Attempts = 0`,
+  `Trial` none, `Seen = 0` and the original due time. So the sweep's timing cannot change the outcome. A count of zero
+  means the row is pending already; the commit answers "not landed", and the recomputed lookup finds it pending and
+  leaves it. Reviving the row keeps the model's own timer id, so `Recall` by that id still works; a new timer
+  generation mapped back, as tickets have, was rejected because `Recall` and the timer's id would then need the same
+  mapping.
 
   A restarted job's ticket id derives from instance, key, creation and the recovery's ordinal (`Worker.TicketId` takes
   the first three today), so it collides with neither the old ticket nor its kept row. The model never sees the
@@ -676,17 +695,17 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
 | R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap, retained dispositions, and the interrupted-resume trace of M3-14 | K6, K7 |
-| M3-14 | The interrupted-resume trace: timer T consumed by the Park is cleared unarmed in an early page; arrival X re-parks in a later page; the sweep runs before the second Open and, in a second run, after it; a takeover is injected between every pair of steps. A second `resume` leaves T unarmed in every run; a `retry` naming T re-arms it once; a job restarted by the first resume is not restarted again | K3, K4, K6, K7 |
+| M3-14 | The interrupted-resume trace: timer T consumed by the Park is cleared unarmed in an early page; arrival X re-parks in a later page; the sweep runs before the second Open and, in a second run, after it; a takeover is injected between every pair of steps. A second `resume` leaves T unarmed in every run; a `retry` naming T re-arms it once, with the sweep before and after that retry, and a second retry after an interrupted one leaves exactly one armed T and one firing; a job restarted by the first resume is not restarted again | K3, K4, K6, K7 |
 | P-1 | The stale-Park trace: A parks at first revision 7 and a discard is prepared from A's `ParkSelection`; A is resolved and deleted; B reuses the key and parks at first revision 7. The command submitted after B exists is refused for its creation and changes nothing of B; submitted before the reuse, it discards A only | K3, K4 |
 | P-2 | The same trace for `resume` with an empty selection, retry-all and terminate of a parked instance; and a stale command after A recovers and parks again (same creation, new Park mark) is refused | K3, K4 |
 | P-3 | Mutation: the owner skips the creation check. P-1's late command discards B, and the invariant "a Park operation changes only the Park it names" fails | K3 |
 | P-4 | A delayed `kernel.drain` of an interrupted resolution arrives after a second Open, a delayed `kernel.park-expiry` of a resolved Park arrives after the same creation parks again, and either reaches a successor creation: each is consumed and dropped, and no row changes | K3, K4 |
 | P-5 | `ParkedItem` and `KeptAsync` expose creation and Park mark; a command built from them lands; one built before a recovery and a second Park is refused; refusals count by reason | K9, K11 |
 | P-6 | The interrupted recover and the Park mark: an operator delete naming the Park mark, and separately a discard naming the `ParkSelection`, are prepared while A is parked, before a recover opens. Delivered while the recover drain runs, each is refused (the mark is cleared and a resolution is open). Delivered after an interrupting re-park, the mark is back, so the delete opens the delete drain and the discard opens the discard drain. After a recover that completes, both are refused as naming an earlier transition | K3, K11 |
-| P-7 | A parent's tree terminate, and a combiner's FailFast, reach a parked child: the issued terminate is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. A terminate from an earlier parent creation, and an application send of `kernel.terminate` naming the child, are refused | K3, K6 |
+| P-7 | A parent's tree terminate (composed by the actor type) and a combiner's FailFast (an application send through `ITurn.Send`) reach a parked child: each is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. An application send of `kernel.terminate` from a non-parent, an outside add naming the parent as sender, and a terminate from an earlier creation of the parent are refused | K3, K6 |
 | S-1 | Kept rows whose payloads are `B` − 1, `B` and `B` + 1 bytes, and an oversized first row of 5 MiB: every page progresses on metadata alone and each restored payload is read only on delivery. Run under resume, discard and delete, with a takeover between pages | K3, K4, K12 |
 | S-2 | A kept row whose handle is at the provider's key limit, as the first row of a page: the page takes it and the drain completes | K3, K4 |
-| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row | K3, K4, K11 |
+| S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a suppressed timer is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, re-arms nothing | K3, K4, K11 |
 | S-4 | MongoDB: a page next to a kept row of 5 MiB stays within the document, message and transaction-lifetime limits | K4 |
 | R-2 | Inspect, retry, resume and discard through the operator API on the parked-work read model, by handle | K9, K11 |
 
