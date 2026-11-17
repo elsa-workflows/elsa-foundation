@@ -105,7 +105,9 @@ Gate 3 takes on #2531's M5 rows ([hand-off](https://github.com/elsa-workflows/el
 
 Also before release, from the answer pages: the `pad=` PostgreSQL run that accepts values by reference; the
 state-size benchmark that confirms or lowers the ForEach cap; a write-volume run on the final schema; the two-tenant
-stress test with admission on and off. No Azure or multi-machine spend without the owner's approval.
+stress test with admission on and off; an ownership-traffic run (takes, beats, takeovers and rebalance under load);
+and a retention and recovery load run. No capacity conclusion is drawn before these runs. No Azure or multi-machine
+spend without the owner's approval.
 
 ## The HTTP error and timeout contract (K8, proposed)
 
@@ -117,15 +119,18 @@ records it, and nothing retries it. Built and run in the prototype except where 
 | Case | The caller receives |
 |---|---|
 | The turn's commit lands, the response is released | The response, once |
+| The turn that wrote the response writes nothing else, so it has no commit (Ephemeral, or nothing to write) | The response, at once (run: NATIVE.md section 4, case 5) |
 | The owner resets on the receiving node while the request waits | 503 at once (run) |
 | The owning process dies after `COMMIT` and before the release, and it is also the receiving node | A dropped connection, with the process (reasoned) |
-| The owner is on another node and is lost, before or after its commit | 504 at the reply deadline, the route's timeout (reasoned: no signal from the owner reaches the receiving node) |
-| The turn that wrote the response parks | An error at once; the held response is dropped (proposed: 500) |
-| The client disconnects or times out | Nothing; the workflow is not cancelled unless the route maps the disconnect to a cancel |
+| The owner is on another node and is lost before its turn commits | The delivery keeps `ReplyTo` on its durable row (`ReplyTo` in `EfStore.cs`, written by the owned insert in `EfStore.Owned.cs`). The new owner runs the turn again; if that commit lands within the reply deadline, the response goes to the reply address, otherwise the caller gets 504 at the deadline (reasoned: the field is built, the takeover path is not run end to end) |
+| The owner is on another node and is lost after its turn commits, before the release | 504 at the reply deadline, the route's timeout (reasoned: no signal from the owner reaches the receiving node) |
+| The turn that wrote the response parks | 500 at once; the held response is dropped (owner, 17 November) |
+| The client disconnects or times out | Nothing; the workflow is not cancelled. A route option that maps a disconnect to a cancel is proposed and not built (NATIVE.md section 4, "Not done") |
 
-In every case the workflow's committed state is unaffected and continues under its owner; its later output reaches no
-caller. A caller never receives two responses, and never a response for a turn whose commit did not land, unless the
-route opted out.
+In every case the workflow's committed state is unaffected and continues under its owner. A turn that runs again
+before the reply deadline answers the waiting caller through `ReplyTo`; output after the caller has had its answer, or
+after the deadline, reaches no caller. A caller never receives two responses. For a turn that writes, the caller never
+receives a response whose commit did not land, unless the route opted out.
 
 ## Kernel schema and protocol compatibility (proposed)
 
@@ -140,17 +145,23 @@ projector no way to read a new durable marker. The kernel's families:
 | Journal and payload codec | The journal envelope and the codec header on every payload | Owned commit SQL | Projector, viewer, retention worker through read models |
 
 **The rule.** The store records one version per family. Before a take, a sweep or a projector round, a process
-compares them with the versions it can read, and refuses, processing nothing and reporting the versions, when one is
-higher. In release 1, a change that a running version cannot read is a coordinated stop: stop every node, migrate,
-start the new version.
+checks that each stored version is in the set of versions it can read, and refuses, processing nothing and reporting
+the versions, when one is not: a version it does not read is refused whether it is higher or lower. Readers that hold no ownership, the viewer tail read and the read-model APIs, compare the versions when they
+start and refuse to serve while a family version is above theirs. In release 1, a change that a running version cannot
+read is a coordinated stop: stop every node, migrate, start the new version (owner, 17 November). The coordinated stop
+is the only guard for an owner that already holds partitions: it does not re-check before each poll or commit. To make
+a missed stop visible, every node's heartbeat row carries the family versions it reads, and the migration that raises
+a family version refuses while any live node row reports it cannot read the new one.
 
-**The rollback floor** is the oldest kernel version that reads all of the store's current family versions. Release
-notes state it for every release. A version below the floor refuses; going below it needs a database restored from
+**The rollback floor** (accepted by the owner, 17 November) is the oldest kernel version that reads all of the store's
+current family versions. Each release's notes state it. A version below the floor refuses; going below it needs a database restored from
 before the upgrade. Before release no user data exists, so developers regenerate their databases instead (K13).
 
 **The rehearsal (K12).** Upgrade one node to a build that raises a family version (a new codec header or a new
 `KeptBy` meaning) and let it write. Then start a pre-upgrade owner, sweeper and projector against the same store: each
-must refuse before it processes any row, and the upgraded node keeps running. Record the floor this produces.
+must refuse before it processes any row, and the upgraded node keeps running. Then start an old-version owner that
+already holds partitions, and run the migration that raises a family version: the migration must refuse while that
+owner's node row is live. Record the floor this produces.
 
 ## Gate 2 review: counterexamples and answers
 
@@ -180,8 +191,12 @@ their own pages.
 | A `StartJob` timeout against the job's completion, in both orders and across a takeover, selects one durable outcome for the current ticket generation | K6 |
 | Park, then recover, against a late result from the old ticket generation: the late result is dropped and the new generation's outcome applies once | K6 |
 | Each row of the HTTP error and timeout contract, including a process killed between `COMMIT` and the release, with the caller's answer and the workflow's committed state checked | K8 |
+| A remote owner lost before its turn commits: the new owner's re-run lands within the reply deadline and answers through `ReplyTo`; and the same race where it lands after the deadline, where the caller gets 504 and no second response | K8 |
 | A plan run on a mix of creation-qualified and creation-0 rows: the fallback outcomes are marked id-only and listed apart in the operator API | K11 |
 | The mixed-version rehearsal: an upgraded node raises a family version; a pre-upgrade owner, sweeper and projector each refuse before processing; the floor is recorded | K12 |
+| A stored family version below the reader's readable set is refused, as a higher one is | K4 |
+| With an old-version owner holding partitions, the migration that raises a family version refuses while its node row is live | K12 |
+| The k-row fence locks in ascending id on every engine; two overlapping range commits on SQL Server, PostgreSQL and MySQL complete with no deadlock | K1 (prototype), K4 (providers) |
 | MongoDB on a three-member replica set: primary loss and an uncertain commit, before production support | After release 1 (1.1) |
 
 ## The switch
