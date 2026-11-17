@@ -31,9 +31,9 @@ export function ExpressionEditorWithDataInsertion({ editor: Editor, contribution
   const textMode = props.context.expressionDescriptors.some(item => item.type === props.syntax && item.editingMode === "text");
   const adapter = contribution?.sourceInsertion;
   const scoped = !!adapter?.findArgumentFixes && references?.status === "ready";
-  const inputs = scoped && reusableOutput ? references.workflowInputs : [];
-  const variables = scoped ? references.visibleVariables.filter((variable, index, all) =>
-    all.findIndex(other => other.name === variable.name) === index) : [];
+  const inputs = useMemo(() => scoped && reusableOutput ? references.workflowInputs : [], [references?.workflowInputs, reusableOutput, scoped]);
+  const variables = useMemo(() => scoped ? references.visibleVariables.filter((variable, index, all) =>
+    all.findIndex(other => other.name === variable.name) === index) : [], [references?.visibleVariables, scoped]);
   const hasEarlierOutputs = !reusableOutput && host?.expressionInsertion === true && !!document;
   const hasScope = !hasEarlierOutputs && (inputs.length > 0 || variables.length > 0);
   const available = textMode && (hasEarlierOutputs || hasScope);
@@ -147,7 +147,16 @@ export function ExpressionEditorWithDataInsertion({ editor: Editor, contribution
       minWidth={220} onDismiss={() => close("none")} onPositioned={() => chooserPanel.current?.querySelector("button")?.focus()}>
       <div ref={chooserPanel} role="dialog" aria-labelledby={chooserId} className="wf-data-chooser-panel"
         onKeyDown={event => {
-          if (event.key === "Escape") { event.stopPropagation(); close("opener"); }
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            close("opener");
+          }
+          if (event.key === "Tab") {
+            const buttons = event.currentTarget.querySelectorAll("button");
+            if (event.target !== buttons[event.shiftKey ? 0 : buttons.length - 1]) return;
+            event.preventDefault();
+            close(event.shiftKey ? "previous" : "next");
+          }
         }}>
         <div id={chooserId} className="wf-data-chooser-heading">Insert data</div>
         {inputs.length > 0 ? <div role="group" aria-label="Activity inputs" className="wf-data-chooser-group">
@@ -157,7 +166,7 @@ export function ExpressionEditorWithDataInsertion({ editor: Editor, contribution
         </div> : null}
         {variables.length > 0 ? <div role="group" aria-label="Variables" className="wf-data-chooser-group">
           <span className="wf-data-chooser-group-label">{reusableOutput ? "Activity variables" : "Variables"}</span>
-          {variables.map(variable => <StudioButton key={variable.referenceKey} variant="ghost" size="sm"
+          {variables.map(variable => <StudioButton key={`${variable.scopeId}:${variable.referenceKey}`} variant="ghost" size="sm"
             onClick={() => applyScoped("variables", variable.name)}>{variable.name}{variable.type ? ` · ${formatArgumentType(variable.type)}` : null}</StudioButton>)}
         </div> : null}
       </div>

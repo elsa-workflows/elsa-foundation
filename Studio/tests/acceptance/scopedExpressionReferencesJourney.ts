@@ -14,8 +14,8 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
     displayName: `Sum ${info.project.name} ${Date.now()}`, category: "Qualification",
     contract: {
       contractSchemaVersion: "1",
-      inputs: [{ referenceKey: "numbers", name: "Numbers", type: { ...double, collectionKind: "Array" }, storageDriverKey: "elsa.json", isRequired: true }],
-      outputs: [{ referenceKey: "sum", name: "Sum", type: double, storageDriverKey: "elsa.json", isRequired: true }],
+      inputs: [{ referenceKey: "numbers", name: "Numbers", type: { ...double, collectionKind: "Array" }, storageDriverKey: "elsa.json", isRequired: true, isNullable: false }],
+      outputs: [{ referenceKey: "sum", name: "Sum", type: double, storageDriverKey: "elsa.json", isRequired: true, isNullable: false }],
       outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
     },
     provider: {
