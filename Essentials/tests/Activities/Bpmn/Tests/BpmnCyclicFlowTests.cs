@@ -358,6 +358,7 @@ public sealed class BpmnCyclicFlowTests
 /// </summary>
 [ActivityOutcome(LoopBack)]
 [ActivityOutcome(Exit)]
+[SelectsOutcomeOnEveryCompletion]
 public sealed class BpmnLoopDecisionActivity(BpmnLoopDecisionCounter counter) : Activity<ActivityUnit>
 {
     public const string LoopBack = "again";

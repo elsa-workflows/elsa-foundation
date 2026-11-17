@@ -1305,13 +1305,11 @@ Elsa.Workflows.Runtime.Core.Models.ActivityAttemptReason.Resume = 2 -> Elsa.Work
 Elsa.Workflows.Runtime.Core.Models.ActivityAttemptReason.Retry = 1 -> Elsa.Workflows.Runtime.Core.Models.ActivityAttemptReason
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityCompletion!
-Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.ActivityCompletion(string! invocationId, string! attemptId, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! result, string! outcomeKey, System.DateTimeOffset completedAt, string! contractFingerprint) -> void
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.AttemptId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.CompletedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.ContractFingerprint.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityCompletion? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.InvocationId.get -> string!
-Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.OutcomeKey.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.Result.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
 Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.ResultType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecution
@@ -1934,7 +1932,6 @@ Elsa.Workflows.Runtime.Core.Models.ActivityExecutionScopeKeys
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ActivityExecutionState(Elsa.Workflows.Runtime.Core.Models.ActivityExecution! Execution, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus Status, string? SubStatus, System.DateTimeOffset ScheduledAt, System.DateTimeOffset? StartedAt, System.DateTimeOffset? CompletedAt, string? SchedulingActivityExecutionId, string? ParentActivityExecutionId, string? BranchId, string? IterationId, int? CallStackDepth, System.Collections.Generic.IReadOnlyCollection<string!>! BookmarkIds, System.Collections.Generic.IReadOnlyCollection<string!>! IncidentIds, int FaultCount, int AggregateFaultCount, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
-Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ActivityExecutionState(Elsa.Workflows.Runtime.Core.Models.ActivityExecution! Execution, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus Status, string? SubStatus, long ExecutionSequence, System.DateTimeOffset ScheduledAt, System.DateTimeOffset? StartedAt, System.DateTimeOffset? CompletedAt, string? SchedulingActivityExecutionId, string? ParentActivityExecutionId, string? BranchId, string? IterationId, Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance! Provenance, int? CallStackDepth, System.Collections.Generic.IReadOnlyCollection<string!>! BookmarkIds, System.Collections.Generic.IReadOnlyCollection<string!>! IncidentIds, int FaultCount, int AggregateFaultCount, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata, int DocumentVersion = 2, Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity? ContractIdentity = null, Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot? InputSnapshot = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityAttempt!>? Attempts = null, Elsa.Workflows.Runtime.Core.Models.ActivityPrivateState? PrivateState = null, Elsa.Workflows.Runtime.Core.Models.ActivityCompletion? Completion = null, Elsa.Workflows.Runtime.Core.Models.NormalizedActivityFault? Fault = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration!>? TriggerRegistrations = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDelivery!>? TriggerDeliveries = null, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null, string? ExecutionScopeId = null, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionAttemptLineage? Attempt = null, string? SupersededByActivityExecutionId = null, System.DateTimeOffset? SupersededAt = null) -> void
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.AggregateFaultCount.get -> int
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.AggregateFaultCount.init -> void
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Attempt.get -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionAttemptLineage?
@@ -2573,12 +2570,10 @@ Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkStatus.Pending = 0 -> E
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkStatus.ResultReady = 2 -> Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkStatus
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult!
-Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.BackgroundActivityWorkTerminalResult(Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkResultKind kind, string! outcome = "Done", string? resultJson = null, Elsa.Workflows.Runtime.Core.Models.NormalizedActivityFault? fault = null, string? cancellationReason = null) -> void
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.CancellationReason.get -> string?
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Equals(Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Fault.get -> Elsa.Workflows.Runtime.Core.Models.NormalizedActivityFault?
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Kind.get -> Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkResultKind
-Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Outcome.get -> string!
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.ResultJson.get -> string?
 Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest
 Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ActivityExecutionState.get -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
@@ -4823,7 +4818,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Fault.get -> El
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.IsComplete.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.IsDeferred.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Kind.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuationKind
-Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.OutcomeName.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.StateUpdate.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralStateUpdate?
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithState(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! value, int stateVersion = 1) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuationKind
@@ -7100,7 +7094,6 @@ const Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.WithheldIn
 const Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerPreflightException.PlacementFacet = "Placement" -> string!
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionHierarchyPager.DefaultLimit = 100 -> int
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionHierarchyPager.MaximumLimit = 500 -> int
-const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.Current = 2 -> int
 const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.Legacy = 1 -> int
 const Elsa.Workflows.Runtime.Core.Models.BookmarkSuspension.SuspendedSubStatus = "BookmarkWaiting" -> string!
 const Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion = "1" -> string!
@@ -8576,7 +8569,6 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest.ValidateLimit(
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? left, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? left, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Cancel(string! reason) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
-static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName = "Done") -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Defer.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Faulted(Elsa.Activities.Runtime.Core.Models.ActivityFault! fault) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralStateProjector.Apply(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! state, Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation! continuation, System.DateTimeOffset committedAt) -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
@@ -10370,3 +10362,16 @@ Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.ResolveReadScope(stri
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.CanRecordFenced.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.RecordFencedAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! record, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionFence! fence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord!>
+Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.ActivityCompletion(string! invocationId, string! attemptId, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! result, Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection, System.DateTimeOffset completedAt, string! contractFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityCompletion.Selection.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.ActivityExecutionState(Elsa.Workflows.Runtime.Core.Models.ActivityExecution! Execution, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus Status, string? SubStatus, long ExecutionSequence, System.DateTimeOffset ScheduledAt, System.DateTimeOffset? StartedAt, System.DateTimeOffset? CompletedAt, string? SchedulingActivityExecutionId, string? ParentActivityExecutionId, string? BranchId, string? IterationId, Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance! Provenance, int? CallStackDepth, System.Collections.Generic.IReadOnlyCollection<string!>! BookmarkIds, System.Collections.Generic.IReadOnlyCollection<string!>! IncidentIds, int FaultCount, int AggregateFaultCount, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata, int DocumentVersion = 3, Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity? ContractIdentity = null, Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot? InputSnapshot = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityAttempt!>? Attempts = null, Elsa.Workflows.Runtime.Core.Models.ActivityPrivateState? PrivateState = null, Elsa.Workflows.Runtime.Core.Models.ActivityCompletion? Completion = null, Elsa.Workflows.Runtime.Core.Models.NormalizedActivityFault? Fault = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration!>? TriggerRegistrations = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDelivery!>? TriggerDeliveries = null, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null, string? ExecutionScopeId = null, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionAttemptLineage? Attempt = null, string? SupersededByActivityExecutionId = null, System.DateTimeOffset? SupersededAt = null) -> void
+Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.BackgroundActivityWorkTerminalResult(Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkResultKind kind, Elsa.Activities.Runtime.Core.Models.OutcomeSelection? selection = null, string? resultJson = null, Elsa.Workflows.Runtime.Core.Models.NormalizedActivityFault? fault = null, string? cancellationReason = null) -> void
+Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Selection.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection?
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Selection.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection?
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.Current = 3 -> int
+static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete() -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.Complete(string! outcomeName) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+const Elsa.Workflows.Runtime.Core.Models.ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey = 2 -> int

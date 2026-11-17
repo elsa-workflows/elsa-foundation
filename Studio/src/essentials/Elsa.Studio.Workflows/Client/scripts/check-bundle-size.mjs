@@ -87,10 +87,13 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
 // computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
 // All budget limits and the 16 deferred-entry guards remain unchanged.
+// Explicit outcomes (spec 1208, #4314): the shared graph adapter now flags connections on ports that are gone and
+// reads the Done rule from the outcomes facet; CI measured the definitions path at 402.64 kB, so its budget gains
+// 1 kB. No deferred surface moved eager.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 402_000,
+  definitionsLandingTotal: 403_000,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };

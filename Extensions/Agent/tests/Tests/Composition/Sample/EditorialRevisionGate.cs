@@ -15,6 +15,7 @@ namespace Elsa.Agent.Tests.Composition.Sample;
 /// </summary>
 [Activity(Icon = "GitBranch")]
 [ActivityOutcome("Write"), ActivityOutcome("Review"), ActivityOutcome("Approved"), ActivityOutcome("Exhausted")]
+[SelectsOutcomeOnEveryCompletion]
 public sealed class EditorialRevisionGate(TimeProvider time) : Activity<EditorialRevisionResult>
 {
     public const int MaximumRounds = 3;

@@ -43,7 +43,7 @@ public sealed class EditorialBpmnTests
         Assert.Equal(ReviewDecisionReceiptStatus.AlreadyResolved, (await host.DecideAsync(command with { RequestId = "request-bpmn-late" }, Reviewer)).Status);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal(outcome, review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { outcome }, review.Completion!.OutcomeNames);
         Assert.Single(review.TriggerDeliveries!, x => x.Status == ActivityTriggerDeliveryStatus.Consumed);
         Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == "editorial-flowchart" && x.Status == ActivityExecutionStatus.Completed);
         Assert.Equal(4, host.Model.Calls.Count);
@@ -63,7 +63,7 @@ public sealed class EditorialBpmnTests
         Assert.DoesNotContain(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
         // Every gate pass routed: three rewrites, then the exhausted end, never a dead-ended token.
         var routes = (await host.ActivitiesAsync()).Where(x => x.Execution.ExecutableNodeId == EditorialHost.GateNodeId)
-            .Select(x => x.Completion?.OutcomeKey).Order(StringComparer.Ordinal).ToArray();
+            .Select(x => x.Completion?.OutcomeNames.SingleOrDefault()).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(["Exhausted", "Write", "Write", "Write"], routes);
     }
 }

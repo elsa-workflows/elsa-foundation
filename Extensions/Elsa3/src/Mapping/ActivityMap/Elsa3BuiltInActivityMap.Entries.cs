@@ -215,7 +215,10 @@ internal sealed partial class Elsa3BuiltInActivityMap
         return Catalog(elsa3Type, Http + "SendHttpRequest",
             members.ToArray(),
             [
-                Outcome("Done", "Done"),
+                // Elsa 3 fires Done with every response, next to the code or "Unmatched status code", but not on "Failed
+                // to connect" or "Timeout" (FlowSendHttpRequest). With expected codes the Elsa 4 node has no Done, so
+                // Done maps onto every response outcome; without codes Done stays Done (spec 1208 FR-029a).
+                Outcome("Done", ValueOutcomesPlaceholder),
                 Outcome("Failed to connect", "Failed"),
                 Outcome("Timeout", "Timeout"),
                 Outcome("Unmatched status code", "Unmatched status code")
@@ -295,11 +298,11 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("RunJavaScript", RunJavaScript,
             [
                 Narrow("Script", "script", Elsa3ValueContract.ScriptBody) with { OnNull = NullRefused("Elsa 3 runs nothing without a script, and Elsa 4 requires one.") },
-                Carry("PossibleOutcomes", "possibleOutcomes", ScriptOutcomeRouting) with { OnNull = NullAsNull },
+                Carry("PossibleOutcomes", "possibleOutcomes") with { OnNull = NullAsNull },
                 CarryOutput("Result", "result")
-            ],
-            // Elsa 3 completes with Done unless the script calls setOutcome (refused, #2717); Elsa 4 completes with
-            // Unmatched when the return value names no possible outcome (spec 239 R-3).
-            [Outcome("Done", "Unmatched")]),
+            ]),
+            // Elsa 3 completes with Done unless the script calls setOutcome; Elsa 4 completes with Done unless the
+            // converted script returns complete(result, outcomes) (spec 1208 FR-026, FR-027). Done maps to Done, so no
+            // outcome rule: every Elsa 3 port the node emits is the same Elsa 4 port.
     ];
 }

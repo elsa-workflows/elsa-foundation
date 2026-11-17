@@ -369,7 +369,7 @@ public sealed class CausalActivityResultResolverTests
                     new ValueTypeDescriptor("System.String"),
                     JsonSerializer.SerializeToElement($"result-{invocationId}"),
                     ValueProtectionPolicy.InstanceInline),
-                "done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("done"),
                 timestamp,
                 "contract-fingerprint")
             : null;

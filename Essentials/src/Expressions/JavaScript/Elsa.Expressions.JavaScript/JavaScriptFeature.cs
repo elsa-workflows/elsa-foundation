@@ -1,5 +1,6 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,7 @@ public class JavaScriptFeature : IShellFeature
         services
             .AddScoped<IPortableExpressionHandler, PortableJavaScriptExpressionHandler>()
             .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>()
-            .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>();
+            .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>()
+            .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>();
     }
 }

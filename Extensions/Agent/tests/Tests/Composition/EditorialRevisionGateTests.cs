@@ -25,7 +25,7 @@ public sealed class EditorialRevisionGateTests
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EditorialRevisionResult>>(
             await RunAsync(new(new FakeTimeProvider(Now)) { Awaiting = awaiting, Round = round, Article = article, Verdict = verdict, ReviewComments = "comments", Deadline = Now.AddMinutes(5) }));
 
-        Assert.Equal(outcome, completion.Outcome);
+        Assert.Equal(new[] { outcome }, completion.Selection.ResolveNames());
         Assert.Equal(nextRound, completion.Result.Round);
         Assert.Equal(next, completion.Result.Awaiting);
         if (outcome == "Write" && round > 0)
@@ -80,7 +80,7 @@ public sealed class EditorialRevisionGateTests
     {
         var gate = new EditorialRevisionGate(new FakeTimeProvider(Now)) { Awaiting = "review", Round = 3, Article = "draft", Verdict = "changes_requested", Deadline = Now.AddDays(-1) };
 
-        Assert.Equal("Exhausted", Assert.IsAssignableFrom<IActivityCompletionTransition>(await RunAsync(gate)).Outcome);
+        Assert.Equal(new[] { "Exhausted" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(await RunAsync(gate)).Selection.ResolveNames());
     }
 
     [Theory]

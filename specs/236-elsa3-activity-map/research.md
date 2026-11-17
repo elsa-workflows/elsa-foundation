@@ -301,6 +301,8 @@ Making more Elsa 3 functions convert is a follow-up issue and spec (#2717). See 
   be one expression. They see frozen `args`, plus `getVariable`, `variables` and generated `get<Name>()` for referenced
   variables; `Date`, `Math.random` and `Intl` are removed. Scripts run as `"use strict"; (() => { <source> })()`
   (`JintJavaScriptScriptEvaluator.cs:20`), see only `args`, and must `return`; no `setOutcome`.
+  Superseded by spec 1208 (S-3), 2026-11: a script selects outcomes by returning `complete(result, outcomes)`, and
+  the converter turns `setOutcome(s)` into that form (spec 1208 FR-027).
 - **The rewriter** (`Elsa3ExpressionRewriter.cs`) lowers `getVariable("x")`, `getInput("x")` and `variables.x` to
   parameter bindings read as `args.<name>`. It refuses every other bare call with VF-IMP-005 (L324), generated
   accessors included. Gaps it lets through, which then fail at run time:

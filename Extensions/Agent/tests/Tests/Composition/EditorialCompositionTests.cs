@@ -72,7 +72,7 @@ public sealed class EditorialCompositionTests
         Assert.Single(finished, x => x.Execution.ExecutableNodeId == "editorial-flowchart" && x.Status == ActivityExecutionStatus.Completed);
         Assert.Single(finished, x => x.Execution.ExecutableNodeId == "editorial-sequence" && x.Status == ActivityExecutionStatus.Completed);
         var completed = Assert.Single(finished, x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Approved", completed.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, completed.Completion!.OutcomeNames);
         Assert.Single(completed.TriggerDeliveries!, x => x.Status == ActivityTriggerDeliveryStatus.Consumed);
         Assert.Equal(4, host.Model.Calls.Count);
     }
@@ -92,7 +92,7 @@ public sealed class EditorialCompositionTests
         Assert.Contains(receipt.Status, new[] { ReviewDecisionReceiptStatus.Accepted, ReviewDecisionReceiptStatus.Pending });
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Rejected", review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Rejected" }, review.Completion!.OutcomeNames);
         Assert.Equal("Deny", review.Completion.Result.InlineValue!.Value.GetProperty("decision").GetString());
         Assert.Equal(HumanReviewStatus.Rejected, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
         Assert.Equal(ReviewDecisionReceiptStatus.AlreadyResolved,
@@ -114,7 +114,7 @@ public sealed class EditorialCompositionTests
         var activities = await host.ActivitiesAsync();
         Assert.DoesNotContain(activities, x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
         var last = activities.Where(x => x.Execution.ExecutableNodeId == EditorialHost.GateNodeId).OrderBy(x => x.ExecutionSequence).Last();
-        Assert.Equal("Exhausted", last.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Exhausted" }, last.Completion!.OutcomeNames);
         var result = last.Completion.Result.InlineValue!.Value;
         Assert.Equal(3, result.GetProperty("round").GetInt32());
         Assert.Equal("Moss gardens, third draft.", result.GetProperty("article").GetString());
@@ -239,7 +239,7 @@ public sealed class EditorialCompositionTests
 
         Assert.Equal(WorkflowExecutionStatus.Cancelled, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.NotEqual("Approved", review.Completion?.OutcomeKey);
+        Assert.NotEqual("Approved", review.Completion?.OutcomeNames.SingleOrDefault());
         Assert.Contains((await host.DecideAsync(Command(host, pending, view, ReviewDecision.Approve, "request-after-cancel"), Reviewer)).Status,
             new[] { ReviewDecisionReceiptStatus.Closed, ReviewDecisionReceiptStatus.NotFound });
     }
@@ -259,7 +259,7 @@ public sealed class EditorialCompositionTests
         await host.PumpAsync();
 
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Approved", review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, review.Completion!.OutcomeNames);
         Assert.Equal(HumanReviewStatus.Approved, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
         Assert.Equal(ReviewDecisionReceiptStatus.Accepted, (await host.DecideAsync(command, Reviewer)).Status);
     }
@@ -290,7 +290,7 @@ public sealed class EditorialCompositionTests
 
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Approved", review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, review.Completion!.OutcomeNames);
         Assert.Single(review.TriggerDeliveries!, x => x.Status == ActivityTriggerDeliveryStatus.Consumed);
         Assert.Equal(ReviewDecisionReceiptStatus.Accepted, (await host.DecideAsync(command, Reviewer)).Status);
         Assert.Equal(2, host.Model.Calls.Count);
@@ -344,7 +344,7 @@ public sealed class EditorialCompositionTests
         var activities = await host.ActivitiesAsync();
         var review = Assert.Single(activities, x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
         Assert.Single(review.TriggerDeliveries ?? [], x => x.Status == ActivityTriggerDeliveryStatus.Consumed);
-        Assert.Equal("Approved", review.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, review.Completion?.OutcomeNames);
         Assert.DoesNotContain(activities, x => x.Execution.ExecutableNodeId == "editorial-sequence" && x.Status == ActivityExecutionStatus.Completed);
         Assert.Contains((await host.DecideAsync(Command(host, pending, view, ReviewDecision.Deny, "request-after-race"), Reviewer)).Status,
             new[] { ReviewDecisionReceiptStatus.AlreadyResolved, ReviewDecisionReceiptStatus.Closed });

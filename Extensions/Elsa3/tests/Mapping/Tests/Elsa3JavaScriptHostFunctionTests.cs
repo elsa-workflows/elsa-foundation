@@ -191,10 +191,106 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains(guidance, diagnostic.Guidance, StringComparison.Ordinal);
     }
 
+    // Spec 1208 FR-027: a RunJavaScript script's setOutcome / setOutcomes converts to the returned completion form.
     [Theory]
     [InlineData("setOutcome('Approved')")]
     [InlineData("setOutcomes(['Approved', 'Logged'])")]
-    public async Task A_script_setting_an_outcome_refuses_the_whole_definition(string script)
+    public async Task A_script_setting_a_literal_outcome_converts_to_the_returned_completion_form(string script)
+    {
+        var root = Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal(script))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
+        Assert.Contains("complete(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcome(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcomes(", converted, StringComparison.Ordinal);
+    }
+
+    // Review round 1: a returned comma expression stays one argument of complete(...), whose value is its last
+    // operand as Elsa 3 returned it, not two arguments that would shift the selection.
+    [Theory]
+    [InlineData("setOutcome('Approved'); return 1, 2;", "complete((1, 2), ")]
+    [InlineData("setOutcome('Approved'); 1, 2", "complete((1, 2), ")]
+    public async Task A_returned_comma_expression_stays_one_completion_result(string script, string expected)
+    {
+        var root = Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal(script))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Contains(expected, Text(Input(Node(result.Value!.State, "node"), "script")), StringComparison.Ordinal);
+    }
+
+    // Review round 1: Elsa 4 reserves 'complete' in a script activity whether or not the script sets an outcome, so a
+    // script that declares it is refused at import (with the rename) rather than importing and failing draft validation.
+    [Theory]
+    [InlineData("function complete(x) { return x; } return complete(1);")]
+    [InlineData("var complete = 1; return complete;")]
+    [InlineData("function complete(x) { return x; } setOutcome('Approved'); return complete(1);")]
+    public async Task A_script_declaring_complete_is_refused_with_rename_guidance(string script)
+    {
+        var root = Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal(script))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains("'complete'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Rename", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    // Review round 2: 'complete' is reserved in every JavaScript surface, so an input expression that declares it is
+    // refused at import too, rather than importing and failing draft validation (JavaScript/ReservedName).
+    [Theory]
+    [InlineData("(function () { var complete = 'x'; return complete; })()")]
+    [InlineData("((complete) => complete)('x')")]
+    public async Task An_expression_declaring_complete_is_refused_with_rename_guidance(string expression)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains("'complete'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Rename", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Spec 1208 FR-027: a computed name declares the catch-all on the possible outcomes whichever order the members
+    /// have, and the possible outcomes are published as a JSON list, not as text Elsa 4 would split at its commas.
+    /// </summary>
+    [Fact]
+    public async Task A_computed_outcome_declares_the_catch_all_on_the_possible_outcomes_list()
+    {
+        var root = Sequence("root",
+            Activity("node", "Elsa.RunJavaScript",
+                ("script", Literal("setOutcome(variables.decision)")),
+                ("possibleOutcomes", Literal("[\"Approved\",\"Rejected\"]", "List<String>"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root,
+            variables: [new Elsa3Variable { Id = "decision", Name = "decision", TypeName = "String" }]));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var possibleOutcomes = Input(Node(result.Value!.State, "node"), "possibleOutcomes");
+        var list = Assert.IsType<JsonElement>(possibleOutcomes.Value.Value);
+        Assert.Equal(["Approved", "Rejected", "Unlisted outcome"], list.EnumerateArray().Select(item => item.GetString()));
+    }
+
+    // Spec 1208 FR-027, Q7: a computed name is refused when the activity lists no possible outcomes.
+    [Theory]
+    [InlineData("var name = 'Appro' + 'ved'; setOutcome(name)")]
+    [InlineData("var names = ['Approved']; setOutcomes(names)")]
+    public async Task A_script_setting_a_computed_outcome_without_possible_outcomes_refuses_the_whole_definition(string script)
     {
         var root = Sequence("root",
             Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
@@ -205,7 +301,21 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.False(result.Succeeded);
         Assert.Null(result.Value);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
-        Assert.Contains("Decision or Switch", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains("computed name", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Possible Outcomes", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    // Spec 1208 FR-027: outside a RunJavaScript script (an input expression) setOutcome stays refused.
+    [Theory]
+    [InlineData("setOutcome('Approved')", "setOutcome")]
+    [InlineData("setOutcomes(['Approved', 'Logged'])", "setOutcomes")]
+    public async Task An_input_expression_setting_an_outcome_is_refused(string expression, string named)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]

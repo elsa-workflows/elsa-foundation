@@ -119,7 +119,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
         var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
         Assert.Equal(ActivityExecutionStatus.Completed, completed.Status);
-        Assert.Equal(expectedOutcome, completed.Completion!.OutcomeKey);
+        Assert.Equal(new[] { expectedOutcome }, completed.Completion!.OutcomeNames);
         if (expectedResult is null)
             Assert.Equal("Elsa.Activities.Runtime.Core.Models.ActivityUnit", completed.Completion.Result.Type.Alias);
         else
@@ -190,7 +190,7 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal(WorkflowExecutionStatus.Completed, commit.StateChanges.WorkflowExecution!.State.Status);
         Assert.Equal(Now, commit.StateChanges.WorkflowExecution.State.CompletedAt);
         var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
-        Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Aborted" }, completed.Completion!.OutcomeNames);
     }
 
     [Theory]
