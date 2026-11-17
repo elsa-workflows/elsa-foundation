@@ -228,13 +228,20 @@ Park decision.
     any arrival and get `Arrived`; kept rows the drain had not reached keep their reasons. The re-park re-arms
     `kernel.park-expiry` for the window's remaining time (from the Park's time in the `ParkRecord`; due at once if it
     has passed), since the recover's open had recalled it. A new recover then drains every row still kept.
-  - **A terminate** opens its own drain over the rows still kept, which clears them. The instance ends Cancelled, so
-    its pending rows, restored ones included, meet the ordinary rule for a finished instance: consumed and dropped, as
-    for any terminated instance.
-- **Terminate's notice.** The built terminate sends the parent a notice only when the child is running
-  (`WorkflowInstance.cs`, the terminate path). A terminate of a parked instance, or one that interrupts a recover
-  drain, is a resolution: it sets the end status Cancelled and sends the parent one final notice at its Complete, and
-  none at its open, so the parent hears once.
+  - **A terminate** opens its own drain over the rows still kept, which clears them (below).
+- **Terminate as a resolution.** A terminate of a parked instance, or one that interrupts a recover drain, splits the
+  built terminate's one turn in two:
+  - **Its open** does everything the built terminate does except the end: it stops delivery to the model at once,
+    removes the instance's waits, cancels its jobs and sends terminate to its children. No model turn runs after the
+    terminate is accepted. Pending rows, restored ones included, are withheld from then on.
+  - **Its Complete** records the end status Cancelled, so the pending rows meet the ordinary rule for a finished
+    instance (consumed and dropped, as for any terminated instance), and sends the parent one final notice. The built
+    terminate sends a notice only when the child is running (`WorkflowInstance.cs`, the terminate path); this one sends
+    none at its open, so the parent hears once.
+- **Delete during a drain.** During a recover drain the instance is running, and the built delete refuses a running
+  instance, so the delete is consumed with no change and the refusal recorded, as for any delete of a running instance;
+  terminate first, then delete. During a discard, expiry or terminate drain the delete takes the drain over from its
+  cursor, and its Complete runs the built delete, with the one parent notice that drain owed.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
   owned commit, and `B` = 4 MiB. A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
   document and 48 MiB message limits and short against its transaction lifetime
@@ -456,7 +463,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
 | M3-5 | A drain under a virtual partition above its high water mark waits; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
-| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once. A terminate during a recover drain, and a terminate of a parked child: the kept rows are cleared, the status is Cancelled, and the parent receives exactly one final notice. Delete during a drain; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
+| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain is refused with no change; a delete during a discard, expiry or terminate drain takes the drain over and deletes at its Complete, with one parent notice; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
