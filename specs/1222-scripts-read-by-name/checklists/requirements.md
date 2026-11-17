@@ -31,11 +31,9 @@
 
 ## Notes
 
-- This spec is **provisional** (initiative process): approval waits on ADR 0089 with the minimal D-7 amendment
-  (PR #3420, being rewritten to that scope) and is kept consistent with ADR 0092 (PR #3411, in review) and spec 1216
-  FR-025–FR-027 (PR #3726). Earlier findings F-1–F-3 are superseded by the D-7 decision (2026-11-11 revision).
+- The ADRs it applies are accepted and merged: ADR 0089 (`0a381a812a`), ADR 0092 and ADR 0090. It keeps spec 1216
+  FR-025–FR-027. Approval is the coordinator's and needs answers to Q1–Q5.
 - Some technical nouns (`variables` root, `args`, pinned parameter) are domain terms from ADR 0089 / spec 095 and the
   initiative board, retained deliberately for architect reviewers; they are not new implementation choices.
-- Open questions OQ-1 (serialized shape) and OQ-2 (loop iteration exposure) are resolved in the plan, not the spec.
-  OQ-3 (a computed read that resolves to a transient variable: fault vs `undefined` + warning) is proposed as fault in
-  research R-5 and left for Sipke to verify.
+- The former OQ-1 (serialized shape) and OQ-3 (transient computed read: fault) are settled by ADR 0089. Q1 (loop
+  iteration values) to Q5 are listed in the spec with recommended answers.

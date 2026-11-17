@@ -4,48 +4,41 @@
 
 **Created**: 2026-11-09
 
-**Status**: Draft — provisional (see *Initiative status* below)
+**Status**: Draft — defined and awaiting the coordinator's approval. Every ADR it applies is accepted and merged into the initiative branch; the open questions below need answers.
 
-**Spec number**: 1222 (reserved on the #3052 board; S-10 = 1221, S-1 = 1223)
+**Spec number**: 1222
 
-**Input**: Epic #3052 spec **S-4**, implementing **ADR 0089** as changed by the **minimal D-7 amendment** (scripts read
-variables by name; publish pins the names it can resolve; computed and opaque reads fall back to a run-time lookup).
-Analysis **A-4**, decision **D-7**. Issues: #3204, #3296, #3287 (arguments part).
+**Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-4**,
+analysis **A-4**, decision **D-7**.
 
-## Initiative status *(provisional)*
+**Issues**: #3204, #3296. (#3287, the arguments type, is fixed by #4315 and is no longer part of this spec.)
 
-This spec is **provisional**, written as if its ADRs were agreed, so that its plan and tasks test those decisions
-against the code (initiative process, *Provisional specs*). Formal approval waits on the ADRs below.
+**Input**: implement **ADR 0089** as accepted: scripts read variables by name; publish pins the names it can resolve;
+computed names and opaque host-function reads fall back to a recorded run-time lookup.
 
-**Decision this spec implements — D-7 / A-4, minimal amendment.** Chosen by Sipke on 6 Nov
-([#3420 comment](https://github.com/elsa-workflows/elsa-foundation/pull/3420#issuecomment-6698998180)), approved by
-Frans on 27 Oct, accepted by Joey on 11 Nov:
+## Approval
 
-- A **literal** variable name is resolved and **pinned at publish** to the nearest declaring scope.
-- A **computed** name (`getVariable(expr)`, `variables[expr]`) and an **opaque host-function read** fall back to a
-  **lookup at run time**.
-- Publish reports computed reads **conservatively** (which variables could be read).
-- The **actual** reads are recorded, checked for protection, and become part of the step's input snapshot.
-- A computed name that matches no visible variable reads `undefined` with a warning, and the read is marked absent.
-- Reading a transient variable keeps its existing publish diagnostic.
-- Readable names stay in source; rename updates the references tooling can resolve and flags the rest.
-- Input snapshots and an activity body's variable session stay distinct; the session shows the body's pending writes.
+**Which ADR text this spec applies.** All three ADRs are accepted and merged into the initiative branch.
 
-**Depends on:**
+| ADR | What this spec takes from it | Text applied | State |
+|---|---|---|---|
+| **ADR 0089** (scripts read variables by name and publish pins them as declared parameters) | Decisions 1–3 and 6–8; decisions 4 and 5 as amended by R3 (static pinning plus a run-time fallback); R1 (rename safety), R2 (input snapshot versus the body's variable session), R3 (computed and opaque reads, including the fault on a transient match), R4 (no `activities` root) | merged as `0a381a812a` | accepted 2026-11-17 |
+| **ADR 0092** (variable reads and writes share one versioned lifecycle) | Decision 3: pinned reads and the fallback's actual reads enter the read set. The body's variable session | merged as `f52a661df` | accepted 2026-11-12 |
+| **ADR 0090** (activities change variables as a unit of work committed with the step) | Decision 2: a body read returns the committed value plus the step's own pending writes (read-your-writes); loop items and indexes are frozen. Decision 3: the body's read forms and that the runtime provides no generated accessors. Writes themselves are S-7 | merged as `87e55ebc7` | accepted 2026-11-16 |
 
-- **ADR 0089** — *Scripts read variables by name and publish pins them as declared parameters*, with the minimal D-7
-  amendment of decisions 4 and 5. The amendment text on **PR #3420** is being rewritten to this scope in parallel.
-- **ADR 0092** (PR #3411, in review) — the `RunJavaScript` body reads through its *variable session*, which this spec
-  stays consistent with, including the visibility of the body's pending writes.
-- **spec 095** — the expression contract: declared parameters, the `Variable` parameter binding, and the importer
-  lowering (§6). This spec adds exposure of pinned `Variable` parameters under a `variables` root and a run-time
-  fallback lookup for computed names (changes §1 / §6; *Open question OQ-1*).
-- **spec 1216 / S-2** (PR #3726) — FR-025 to FR-027 (a missing computed name reads `undefined` in JavaScript and nil in
-  Liquid with a warning; a missing literal name stays a publish diagnostic). This spec keeps them.
+It also keeps **spec 1216** (S-2) FR-025 to FR-027 (a missing computed name reads `undefined` in JavaScript and nil in
+Liquid with a warning; a missing literal name stays a publish diagnostic), and it changes **spec 095**'s expression
+contract §1 and §6 (the `variables` surface flag and the fallback marker, research R-2).
 
-**Superseded findings.** The earlier findings F-1 (refuse computed reads, collapse #3420 to the original ADR 0089),
-F-2 (body-session carve-out) and F-3 (split out the `activities` root) are superseded by the D-7 decision. F-2's
-carve-out is now part of the decision text; F-3's split stays as this spec's scope boundary.
+**Spec 1228 (S-8) builds on this spec.** Its User Stories 3 and 7, and the variable scenarios of its User Story 1, need
+the read surface this spec gives a `RunJavaScript` body: `variables.X`, `variables['X']` and `getVariable(...)`, read
+through the body's variable session, with every read recorded in the read set (FR-033 to FR-035). S-8 owns how values
+enter and leave JavaScript (its bridge, FR-001); this spec owns which variable a name reads and how the read is
+recorded.
+
+**Approval plan**: @j03y-nxxbz alone (coordinator decision of 2026-11-16: specs need only the coordinator's approval).
+Approval needs answers to the open questions below. This spec needs no new ADR and no ADR amendment; if one turns out
+to be needed, it goes in its own small PR reviewed by @sfmskywalker and @FransVanEk.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -117,9 +110,9 @@ snapshot, and the `undefined` + warning for a name that matches nothing.
 
 An Elsa 3 workflow whose scripts read variables (`Variables.X`, `getVariable("X")`, `getVariable(expr)`, generated
 `get<Name>()`) is converted so that the Elsa 4 script reads the same variables, without the script's own `args`
-swallowing the reads and without publish failing on an arguments type mismatch.
+swallowing the reads.
 
-**Why this priority**: These are the concrete defects (#3296, #3287) blocking real converted workflows; they are the
+**Why this priority**: These are the concrete defects (#3204, #3296) blocking real converted workflows; they are the
 reason S-4 is on the board.
 
 **Independent Test**: Convert an Elsa 3 `RunJavaScript` that reads a variable by literal and by computed name, publish
@@ -135,14 +128,11 @@ converter refuses with guidance rather than silently mis-binding.
 3. **Given** an Elsa 3 script that declares its own `args` in a scope that also contains converted reads, **When**
    converted, **Then** the converter refuses with guidance (faithful-or-refuse) rather than emitting reads that bind
    to the author's `args` (#3296).
-4. **Given** a converted `RunJavaScript` that reads a variable or input, **When** published, **Then** it is not
-   refused for an arguments type mismatch — the `arguments` expression carries the real type, not a hard-coded
-   `Object` (#3287; the full fix pairs with #3167 in S-0).
-5. **Given** a converted statement body, **When** emitted, **Then** it is not wrapped in an immediately-invoked
+4. **Given** a converted statement body, **When** emitted, **Then** it is not wrapped in an immediately-invoked
    function for the `RunJavaScript` body path (#3010).
-6. **Given** an Elsa 3 literal read whose nearest-scope resolution in Elsa 4 would pick a different declaration than
+5. **Given** an Elsa 3 literal read whose nearest-scope resolution in Elsa 4 would pick a different declaration than
    Elsa 3 did, **When** converted, **Then** the converter refuses that read (faithful-or-refuse).
-7. **Given** an Elsa 3 computed read whose candidate names include a name declared in more than one visible scope,
+6. **Given** an Elsa 3 computed read whose candidate names include a name declared in more than one visible scope,
    **When** converted, **Then** the converter records an import warning that the run-time lookup resolves
    nearest-scope-first.
 
@@ -207,8 +197,11 @@ value and confirm it is not provided.
 - A computed name that matches no visible variable at run time → `undefined` in JavaScript, nil in Liquid, a warning,
   and the read marked absent (US2 #3–#4; spec 1216 FR-025/FR-026).
 - A literal read of a **transient** (non-durable) variable → publish diagnostic (retained rule; its value cannot be
-  snapshotted). A computed read that resolves at run time to a transient variable faults the step with the same
-  diagnostic; publish lists transient candidates in the conservative report (*OQ-3*).
+  snapshotted). A computed read that resolves at run time to a transient variable faults the step, naming the node
+  and the variable (ADR 0089 R3); it never reads `undefined`, which would hide the failure. Publish lists transient
+  candidates in the conservative report as a warning.
+- A body read of a loop item or index (ADR 0028) returns a frozen value (ADR 0090 decision 2); the loop item is never
+  tracked and is durable, so it is not a transient read (Q1).
 - A converted read of a variable that is transient in Elsa 4 is flagged at import with its own diagnostic.
 - A script that ends with a line comment must still parse at publish (the publish parser accepts what the runtime
   parser accepts — #3171 is a side track fixing the underlying parse bug on `main`).
@@ -231,7 +224,14 @@ value and confirm it is not provided.
   declaring scope and variable key, without rewriting the authored source.
 - **FR-003**: The evaluator MUST expose pinned variable reads under a `variables` root that is distinct from the
   `args` root, so a read of `variables.X` does not collide with an explicit `args.X` parameter.
-- **FR-004**: A literal read MUST see the pinned value; it MUST NOT be served by the run-time fallback lookup.
+- **FR-004**: A literal read MUST NOT be served by the run-time fallback lookup. In an input-binding expression it
+  MUST see the pinned value; in a `RunJavaScript` body it reads the pinned target through the body's variable session
+  (FR-033).
+- **FR-004a**: A loop item or index (ADR 0028) MUST resolve like any other variable: its declaring scope is the loop
+  node and its key is the loop's variable key (`currentItem` and `currentIndex` for ForEach, `index` for For). Publish
+  MUST add the loop's iteration declarations as the innermost scope of every node in the loop body, and pin the read
+  to the loop node and key. At run time the value MUST come from the current pass's iteration scope, so each pass reads
+  its own item; the read is recorded per step execution like any pinned read (Q1).
 - **FR-005**: Liquid templates MUST read variables through the same `variables` root and the same nearest-scope
   resolution as JavaScript.
 - **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`.
@@ -266,7 +266,8 @@ value and confirm it is not provided.
 
 - **FR-017**: Publish MUST keep its existing diagnostic for a literal read of a transient (non-durable) variable,
   because its value cannot be snapshotted. A computed read that resolves at run time to a transient variable MUST fault
-  the step with the same diagnostic.
+  the step, and the fault MUST name the node and the variable (ADR 0089 R3). It MUST NOT read `undefined`. Host-interop
+  mode (ADR 0090 decision 8), in which a body may read transient variables, is out of scope here.
 - **FR-018**: A literal read of a protected (secret) variable MUST be protection-checked at publish (the name is
   known); a computed or opaque read MUST be protection-checked at run time for the variable actually read.
 - **FR-019**: Secret variable values MUST NOT appear in logs or diagnostics (redaction) at publish or run time,
@@ -296,9 +297,6 @@ value and confirm it is not provided.
   it for being computed.
 - **FR-028**: The converter MUST refuse (faithful-or-refuse), with guidance, when a script's own declared `args`
   would collide with lowered `args` reads in the same scope (#3296).
-- **FR-029**: The converter MUST give the `RunJavaScript` `arguments` expression its real result type instead of a
-  hard-coded `Object`, so a converted script that reads a variable or input is not refused at publish for a type
-  mismatch (#3287; the full fix pairs with #3167 in S-0).
 - **FR-030**: The converter MUST emit statement bodies without the immediately-invoked-function wrapper for the
   `RunJavaScript` body path (#3010).
 - **FR-031**: The converter MUST refuse a literal read when Elsa 4's nearest-scope resolution would pick a different
@@ -309,10 +307,22 @@ value and confirm it is not provided.
 
 - **FR-032**: Input-binding expressions MUST read from the step's input snapshot (pinned literal reads plus recorded
   fallback reads) and MUST NOT see pending writes.
-- **FR-033**: `RunJavaScript` body reads — literal and computed — MUST read through the body's variable session
-  (ADR 0092), which shows the body's own pending writes; the recorded reads of the body MUST still enter its input
-  snapshot. Writes themselves are out of scope (ADR 0090 / S-7); this spec MUST record the write assumptions it relies
-  on for verification against S-7.
+- **FR-033**: A `RunJavaScript` body MUST get the `variables` root and `getVariable` (today it gets only `args`).
+  Its reads — literal and computed — MUST go through the body's variable session (ADR 0089 R2, ADR 0090 decision 2,
+  ADR 0092), which returns the committed value plus the step's own pending writes; the recorded reads of the body MUST
+  still enter its input snapshot. Writes themselves are out of scope (ADR 0090 / S-7); until S-7 lands the session
+  has no pending writes and equals the committed state.
+- **FR-034**: Within one evaluation, every read path to the same variable (`variables.x`, `variables['x']`,
+  `getVariable('x')`, and a computed name that resolves to `x`) MUST return the same JavaScript value, so spec 1228
+  can see a change made through any of them (spec 1228 FR-003).
+- **FR-035**: Every body read MUST be recorded in the read set (ADR 0092 decision 3) with the variable's protection
+  policy, so spec 1228 can give a script result the protection of what it read (spec 1228 User Story 7).
+- **FR-036**: The runtime MUST NOT provide generated `get<Name>()` accessors (ADR 0089 decision 6; ADR 0090
+  decision 3). `get<Name>()` survives only as an Elsa 3 import form that the converter rewrites to `variables.Name`
+  (FR-026) (Q2).
+- **FR-037**: Until spec 1228's bridge lands, values MUST enter scripts as today's frozen values, so a change that no
+  write path can carry fails loudly instead of being dropped. Spec 1228 FR-001 replaces this with changeable values
+  (Q3).
 
 ### Key Entities
 
@@ -335,10 +345,10 @@ value and confirm it is not provided.
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of the tracked variable-read issues' reproduction cases (#3204, #3296, #3287 arguments part)
-  publish and run correctly, or are refused with a clear diagnostic where faithful-or-refuse applies.
-- **SC-002**: A converted Elsa 3 script that reads a variable, which previously failed to publish with an arguments
-  type mismatch, now publishes.
+- **SC-001**: 100% of the tracked variable-read issues' reproduction cases (#3204, #3296) publish and run correctly,
+  or are refused with a clear diagnostic where faithful-or-refuse applies.
+- **SC-002**: A `RunJavaScript` body reads `variables.X` and `getVariable(...)` through its variable session, and every
+  read appears in the read set with its protection policy (the surface spec 1228 builds on).
 - **SC-003**: A converted Elsa 3 script using a computed `getVariable(expr)` publishes and reads the same value it read
   in Elsa 3 for every name that resolves to the same declaration in both.
 - **SC-004**: Every run-time read served by the fallback appears in the step's input snapshot as a recorded read; a
@@ -354,14 +364,13 @@ value and confirm it is not provided.
 
 - Elsa 4 is unreleased and has no production script data, so there is no backward-compatibility cost to the read model
   (ADR 0089 context).
-- The `RunJavaScript` body's variable session (ADR 0092, PR #3411) is the read surface for bodies, including the
-  body's pending writes; until writes exist it equals the input snapshot.
+- The `RunJavaScript` body's variable session (ADR 0090 decision 2, ADR 0092) is the read surface for bodies,
+  including the body's pending writes; until writes exist (S-7) it equals the committed state.
 - Writes from scripts (`setVariable`, captures) are governed by ADR 0090 / S-7 and are out of scope here; the write
   assumptions this spec relies on (writes commit at output evaluation; the body session shows pending writes; a
   computed write to a non-existent variable refuses) are recorded for verification against S-7.
 - The runtime and publish parsers accept the same source; the trailing-line-comment parse bug is fixed by the #3171
   side track on `main` and consumed here (publish must not reject source the runtime accepts).
-- `#3167` (JSON alias inference) is delivered in S-0 and is a prerequisite for the full #3287 fix.
 - The fallback's loading cost (making the conservative candidate set readable before a synchronous script runs) is
   accepted for expressions that use computed or opaque reads; publish makes it visible through the conservative report.
 
@@ -372,12 +381,22 @@ value and confirm it is not provided.
 - Writing variables from scripts — ADR 0090 / S-7.
 - The trailing-line-comment parse bug — the #3171 side track on `main`.
 
-## Open questions
+## Settled by the ADRs
 
-- **OQ-1**: The serialized shape marking a pinned `Variable` parameter as exposed under `variables` rather than `args`
-  (a per-parameter surface flag vs a separate map), and how the compiled binding marks an expression that needs the
-  fallback. This changes spec 095's expression contract and is settled in the plan.
-- **OQ-2**: How loop iteration values (ADR 0028) are exposed to the pinned read and to the fallback lookup at run time
-  (confirmed in the plan).
-- **OQ-3**: Whether a computed read that resolves to a transient variable should fault the step (this spec's choice)
-  or read `undefined` with a warning like a missing name. To verify with Sipke against the retained transient rule.
+- **Serialized shape (former OQ-1).** A per-parameter surface flag (`variables` | `args`, default `args`), as ADR 0089
+  states; the expression-level fallback marker that carries the conservative read report is research R-2.
+- **A computed read that resolves to a transient variable (former OQ-3).** It faults the step, naming the node and the
+  variable (ADR 0089 R3). It does not read `undefined`, which would hide the failure behind a value the script may
+  treat as valid (FR-017).
+
+## Open questions for the approver
+
+Each question has a recommended answer; the requirements follow the recommendation.
+
+| # | Question | Recommended answer |
+|---|---|---|
+| Q1 | **Loop iteration values (ADR 0028), delegated by ADR 0089.** How is a loop item or index pinned at publish and read at run time? | **As an ordinary variable declared by the loop node** (FR-004a). Publish adds the loop's iteration declarations (`currentItem`, `currentIndex` for ForEach; `index` for For) as the innermost scope of the body, which Studio's `ScopedVariableResolver` does not do today, and pins the read to the loop node and key. At run time the scoped reader takes the value from the current pass's iteration scope, so each pass reads its own item, and the fallback walks the same chain. The value is durable (ADR 0028), so it is snapshotted, not treated as transient; in a body it is frozen and untracked (ADR 0090 decision 2). No ADR change. |
+| Q2 | **`get<Name>()` in a script body.** Spec 1228 lists `get<Name>()` as a read path (its FR-003 and FR-006a, and its dependency note). ADR 0089 decision 6 and ADR 0090 decision 3 remove it from the runtime. Which holds? | **The ADRs.** The runtime gives `variables.X`, `variables['X']` and `getVariable(...)`; `get<Name>()` is only an Elsa 3 import form the converter rewrites to `variables.Name` (FR-036). Spec 1228's mentions are read as the converted form; its text is corrected in its implementation PR (a wording fix, no ADR change). Keeping `get<Name>()` at run time would need an ADR 0089 amendment. |
+| Q3 | **Frozen or changeable values.** Spec 1228 FR-001 replaces the frozen-value contract; this spec lands first. What does S-4 deliver? | **Today's frozen values** (FR-037). Without a write path a changeable value would drop a change silently; frozen values fail loudly. Spec 1228 replaces them through its bridge, and FR-034 (one value per variable per evaluation) is what it relies on. |
+| Q4 | **ADR 0089 decision 7's "declared both ways" refusal.** The ADR lets the implementing spec drop it once the roots are separate. Drop it? | **Drop it** (research R-7). `variables` and `args` are separate objects, so `variables.X` and `args.X` cannot collide and both resolve to the same value. |
+| Q5 | **How the fallback is served.** ADR 0089 R3 leaves it to this spec: load the conservatively reported set before evaluation, or load on demand? | **Load the reported set before evaluation** (research R-4). Jint reads synchronously and values may be stored externally, so on-demand loading would block inside the script. The cost falls only on expressions with a computed or opaque read. On-demand loading of inline-stored values can come later as an optimization. |

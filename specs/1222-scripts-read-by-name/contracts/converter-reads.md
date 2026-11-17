@@ -1,6 +1,6 @@
 # Contract: Elsa 3 converter — variable reads
 
-**Spec**: [../spec.md](../spec.md) · Provisional (initiative #3052). Reconciles spec 247 with the D-7 read model:
+**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Reconciles spec 247 with the D-7 read model:
 static pinning for literal names plus a run-time fallback for computed names.
 
 ## Emission
@@ -35,11 +35,7 @@ variable reads). Computed reads are converted faithfully, not refused.
 
 ## Fixes
 
-1. **#3287 — arguments type.** `Elsa3ValueFlowLowerer.LowerScript` gives the `RunJavaScript` `arguments` expression its
-   real result type from the input contract instead of the hard-coded `Object`, so a converted script that reads a
-   variable or input is not refused at publish for a type mismatch. Full fix pairs with **#3167** (S-0: `JsonElement`
-   alias inference).
-2. **#3010 — no IIFE wrap.** Statement bodies are emitted as-is on the `RunJavaScript` body path (no
+1. **#3010 — no IIFE wrap.** Statement bodies are emitted as-is on the `RunJavaScript` body path (no
    `(function(){…})()`). Confirm the Expression-mode completion-value wrap is a separate concern (outcomes / S-3), out
    of scope here.
 

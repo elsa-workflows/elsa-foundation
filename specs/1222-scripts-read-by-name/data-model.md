@@ -1,6 +1,6 @@
 # Data Model: Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · Provisional (initiative #3052)
+**Spec**: [spec.md](spec.md) · Draft (initiative #3052)
 
 These are conceptual entities for the read model, not storage schemas. Reads add no new persisted state beyond the
 existing input snapshot, which now also holds the reads recorded by the run-time fallback.
@@ -15,7 +15,7 @@ A spec 095 declared parameter produced by publish for one resolved literal read.
 |---|---|
 | `declaringScopeNodeId` | The scope whose declaration the name resolved to (iteration / container / workflow). |
 | `variableKey` | The variable's key, as declared. |
-| `surface` | `variables` or `args` (default `args`). `variables` exposes it under the `variables` root (R-2 / OQ-1). |
+| `surface` | `variables` or `args` (default `args`). `variables` exposes it under the `variables` root (R-2; settled by ADR 0089). |
 
 Validation: the name MUST resolve to exactly one visible declaration at publish (else refused); the variable MUST be
 durable (a transient literal read keeps its publish diagnostic).
@@ -75,7 +75,7 @@ fallback marker.
 | Transient candidate | A computed read's candidates include a transient variable | warn at publish |
 | Missing computed name | A computed name matches no visible variable (spec 1216 FR-025/FR-026) | warn at run time; read marked absent |
 | Withheld read | A read reaches a value the context may not read | fault at run time (value not provided) |
-| Transient computed read | A computed name resolves to a transient variable (OQ-3) | fault at run time |
+| Transient computed read | A computed name resolves to a transient variable (ADR 0089 R3) | fault the step, naming the node and the variable |
 | Converter: `args` collision | A script's own `args` would collide with lowered `args` reads (#3296) | refuse at import |
 | Converter: resolution differs | Elsa 4 nearest-scope resolution ≠ Elsa 3 resolution for a literal read | refuse at import |
 | Converter: shadowed candidate | A computed read's candidate name is declared in more than one visible scope | warn at import |

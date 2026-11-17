@@ -1,5 +1,5 @@
 ---
-description: "Task list for Scripts Read Variables By Name (spec 1222, provisional)"
+description: "Task list for Scripts Read Variables By Name (spec 1222)"
 ---
 
 # Tasks: Scripts Read Variables By Name
@@ -8,10 +8,10 @@ description: "Task list for Scripts Read Variables By Name (spec 1222, provision
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 
-**Status**: **Provisional** (initiative #3052). These tasks are the implementation plan for when the initiative branch
-lands; no production code is written until ADR 0089 with the minimal D-7 amendment (PR #3420, being rewritten to that
-scope) is agreed. External prerequisites: #3167 (S-0, `JsonElement` alias inference) for the full #3287 fix; #3171
-(side track on `main`) for the parser parity; spec 1216 / S-2 (PR #3726) FR-025–FR-027 for the missing-name behaviour.
+**Status**: Draft (initiative #3052). ADR 0089 is accepted and merged (`0a381a812a`); these tasks are implemented on
+the initiative branch once the spec is approved (D-18). External prerequisites: #3171 (side track on `main`) for the
+parser parity; spec 1216 / S-2 FR-025–FR-027 for the missing-name behaviour. The former #3287 tasks (T026, T030) are
+dropped: #4315 fixed the `arguments` type. Spec 1228 (S-8) User Stories 3 and 7 wait on Phase 8 (T039, T045–T048).
 
 **Tests**: xUnit only (no FluentAssertions). Include framework §2.23 tests for logic-bearing implementations and for
 feature wiring that carries logic. Cadence: the Elsa derived constitution does not declare TDD; tests are listed per
@@ -27,7 +27,7 @@ story and may be written alongside implementation (no failing-run gate assumed).
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm external prerequisites and record them in the PR: #3167 (S-0) status for the #3287 type fix, #3171 (side track) status for publish/runtime parser parity, and spec 1216 FR-025–FR-027 wording.
+- [ ] T001 Confirm external prerequisites and record them in the PR: #3171 (side track) status for publish/runtime parser parity, and spec 1216 FR-025–FR-027 wording.
 - [ ] T002 [P] Capture a baseline of current read-path tests in `Essentials/tests/` and `Extensions/Elsa3/tests/Mapping/Tests/` that this work changes (ambient-variable tests, declared-parameter tests, `Elsa3JavaScriptConversionTests`), so regressions are visible.
 
 ---
@@ -36,9 +36,9 @@ story and may be written alongside implementation (no failing-run gate assumed).
 
 **⚠️ Blocks all user stories.**
 
-- [ ] T003 Add a per-parameter `surface` flag (`variables` | `args`, default `args`) to the compiled spec 095 `Variable` parameter, and an optional expression-level fallback marker carrying the conservative read report, in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and the binding model, per contracts/variables-read-surface.md (OQ-1 / R-2).
+- [ ] T003 Add a per-parameter `surface` flag (`variables` | `args`, default `args`) to the compiled spec 095 `Variable` parameter, and an optional expression-level fallback marker carrying the conservative read report, in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and the binding model, per contracts/variables-read-surface.md (R-2).
 - [ ] T004 Update `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` §1 (surface flag, fallback marker, `variables` root, recorded reads in the evaluation result) and §6 (importer keeps `variables.X` and computed `getVariable(expr)`), recorded as a contract change flowing to #3420 / spec 095.
-- [ ] T005 Build the publish-time read-set resolver (Design side): parse JS/Liquid source with the language parser, resolve each literal name nearest-scope-first by reusing `ScopedVariableResolver` plus the loop iteration scope (ADR 0028), and detect computed/opaque access to set the fallback marker, in `Essentials/src/Workflows/Design/...`. No regex (R-6).
+- [ ] T005 Build the publish-time read-set resolver (Design side): parse JS/Liquid source with the language parser, resolve each literal name nearest-scope-first by reusing `ScopedVariableResolver` and adding the loop's iteration declarations (`currentItem`, `currentIndex`, `index`; declaring scope = loop node) as the innermost scope of the body (ADR 0028, FR-004a, Q1), and detect computed/opaque access to set the fallback marker, in `Essentials/src/Workflows/Design/...`. No regex (R-6).
 
 **Checkpoint**: the surface flag, marker, contract and resolver exist; user stories can proceed.
 
@@ -53,7 +53,7 @@ script sees the nearest-scope value; an unset variable reads `null`; only named 
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Cover nearest-scope resolution + shadowing (workflow/container/iteration) of the publish resolver in `Essentials/tests/.../VariableReadResolutionTests.cs`.
+- [ ] T006 [P] [US1] Cover nearest-scope resolution + shadowing (workflow/container/iteration) of the publish resolver in `Essentials/tests/.../VariableReadResolutionTests.cs`, and a ForEach body reading `variables.currentItem` that reads each pass's own item at run time (FR-004a).
 - [ ] T007 [P] [US1] Cover run-time exposure of the `variables` root from pinned params, unset → `null`, and selective load (a large/external unnamed variable is not loaded on a literal-only expression) in `Essentials/tests/.../VariablesRootEvaluationTests.cs`.
 - [ ] T008 [P] [US1] Cover Liquid `{{ variables.X }}` parity in `Essentials/tests/.../LiquidVariableReadTests.cs`.
 
@@ -83,7 +83,7 @@ reads the right value, records the read in the input snapshot, and reads `undefi
 - [ ] T015 [P] [US2] Cover publish of each computed form (non-literal index, non-literal `getVariable` arg) and a host-function read: publish succeeds, the fallback marker is set, and the conservative report lists the visible variables, in `Essentials/tests/.../ComputedReadPublishTests.cs`.
 - [ ] T016 [P] [US2] Cover run-time fallback: nearest-scope lookup (including iteration scope), recorded reads in the input snapshot, unread candidates not recorded, mixed literal + computed reads of the same variable, in `Essentials/tests/.../ComputedReadFallbackTests.cs`.
 - [ ] T017 [P] [US2] Cover a missing computed name: JavaScript reads `undefined` (not `null`), Liquid reads nil, a warning is recorded, the read is marked absent (spec 1216 FR-025/FR-026); a missing literal name stays a publish diagnostic (FR-027).
-- [ ] T018 [P] [US2] Cover a computed read resolving to a transient variable faulting the step (OQ-3), and the transient-candidate publish warning.
+- [ ] T018 [P] [US2] Cover a computed read resolving to a transient variable faulting the step with a fault that names the node and the variable (ADR 0089 R3, FR-017), and the transient-candidate publish warning.
 
 ### Implementation for User Story 2
 
@@ -100,28 +100,25 @@ reads the right value, records the read in the input snapshot, and reads `undefi
 ## Phase 5: User Story 3 — Converter reads faithfully (Priority: P2)
 
 **Goal**: Elsa 3 literal variable reads convert to `variables.X`, computed reads convert to their Elsa 4 computed form,
-both publish, and are faithful-or-refused; #3296 and #3287 (arguments) fixed.
+both publish, and are faithful-or-refused; #3204 and #3296 fixed.
 
 **Independent Test**: convert `getVariable("order")` → `variables.order` and `getVariable(name)` → `getVariable(name)`,
-both publish; a script declaring its own `args` is refused with guidance; a converted read/input `RunJavaScript`
-publishes (no type mismatch).
+both publish; a script declaring its own `args` is refused with guidance.
 
 ### Tests for User Story 3
 
 - [ ] T024 [P] [US3] Cover emission of `variables.X` for `Variables.X` / `getVariable("X")` / `get<Name>()`, and of `getVariable(expr)` / `variables[expr]` for computed reads (not refused), in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`.
 - [ ] T025 [P] [US3] Cover the #3296 `args`-collision refusal (declared `args` + lowered reads) in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`.
-- [ ] T026 [P] [US3] Cover the #3287 fix (converted read/input `RunJavaScript` publishes; `arguments` carries the real type) in `Extensions/Elsa3/tests/Mapping/Tests/` and the publish/compile tests.
 - [ ] T027 [P] [US3] Cover the literal faithfulness refusal (Elsa 4 resolution ≠ Elsa 3 resolution), the shadowed-candidate import warning for computed reads, and the transient-in-Elsa-4 import flag.
 
 ### Implementation for User Story 3
 
 - [ ] T028 [US3] Emit `variables.X` for Elsa 3 literal variable reads (stop lowering them to `args`) and keep computed reads as `getVariable(expr)` / `variables[expr]` (remove the computed-read refusal); keep `args.X` for inputs/activity-results/metadata, in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` and `Elsa3ValueFlowLowerer.cs`.
 - [ ] T029 [US3] Refuse (faithful-or-refuse) with guidance when a script's own declared `args` collides with lowered `args` reads in scope (#3296), extending the guard in `Elsa3ExpressionRewriter.cs`.
-- [ ] T030 [US3] Give the `arguments` expression its real result type from the input contract instead of hard-coded `Object` in `Elsa3ValueFlowLowerer.LowerScript` (#3287; pairs with #3167 from S-0).
 - [ ] T031 [US3] Confirm statement bodies emit without the IIFE wrap on the `RunJavaScript` body path (#3010) and add a regression test.
 - [ ] T032 [US3] Add the literal faithfulness check (refuse when Elsa 4 nearest-scope resolution differs from Elsa 3), the shadowed-candidate import warning for computed reads, and the transient-in-Elsa-4 import-time flag.
 
-**Checkpoint**: converter faithful; #3204/#3296/#3287 (arguments) covered; computed Elsa 3 reads convert.
+**Checkpoint**: converter faithful; #3204/#3296 covered; computed Elsa 3 reads convert.
 
 ---
 
@@ -167,9 +164,13 @@ not provided.
 
 ---
 
-## Phase 8: Input snapshot vs body session (cross-cutting)
+## Phase 8: Input snapshot vs body session; the body read surface for S-8 (cross-cutting)
 
-- [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the ADR 0092 session view while their recorded reads still enter the input snapshot; record the write assumptions for verification against S-7 (R-10).
+- [ ] T039 [P] Cover that input-binding expressions read the input snapshot and never see pending writes, and that `RunJavaScript` body reads (literal and computed) go through the body's variable session (ADR 0090 decision 2, ADR 0092) while their recorded reads still enter the input snapshot; record the write assumptions for verification against S-7 (R-10).
+- [ ] T045 [P] Cover a `RunJavaScript` body reading `variables.X`, `variables['X']`, `getVariable('X')` and `getVariable(expr)`: each read is recorded in the read set with the variable's protection policy (FR-033, FR-035), and `get<Name>()` is not defined (FR-036).
+- [ ] T046 [P] Cover that every read path to one variable returns the same JavaScript value within one evaluation (FR-034), and that values stay frozen until spec 1228's bridge lands (FR-037).
+- [ ] T047 Give the `RunJavaScript` body the `variables` root and `getVariable`, served by the step's variable session and recorded in the read set, in `Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs`, the script evaluation request and `IsolatedJintEngine.cs` (FR-033–FR-037). Depends on T010 and T021.
+- [ ] T048 Tell the S-8 implementation (spec 1228 User Stories 3 and 7) when T047 is merged, and point it at spec Q2 (its `get<Name>()` wording).
 
 ---
 
@@ -178,7 +179,7 @@ not provided.
 - [ ] T040 [P] Update docs/glossary or CONTEXT for the `variables` read surface and the run-time fallback if warranted (domain terms only).
 - [ ] T041 [P] Confirm architecture guard tests pass: `Runtime_projects_do_not_add_design_references`, `Elsa3MigrationBoundaryTests`, `FeatureCompositionTests`; place new tests in the correct CI tier (§E7).
 - [ ] T042 Run `specs/1222-scripts-read-by-name/quickstart.md` validation end-to-end.
-- [ ] T043 Confirm ADR 0089 on PR #3420 carries the minimal D-7 amendment this spec implements, and the spec 095 contract change, before this spec's formal approval.
+- [ ] T043 Confirm the spec 095 contract change (T004) lands with the first implementation PR.
 - [ ] T044 Set this spec's `**Status**:` line to `Implemented` in the delivery PR, before it merges (spec-lifecycle rule; never a separate status PR).
 
 ---
@@ -189,10 +190,10 @@ not provided.
 - **Foundational (P2: T003–T005)** → blocks all stories.
 - **US1 (P1)** after Foundational — MVP.
 - **US2 (P1)** after T005 (marker) and T010 (`variables` root).
-- **US3 (P2)** after US1's pinning/`variables` root (T009–T010) and US2's fallback (T021) for computed conversions; needs #3167 (S-0) for the full #3287 fix.
+- **US3 (P2)** after US1's pinning/`variables` root (T009–T010) and US2's fallback (T021) for computed conversions.
 - **US4 (P3)** after T005/T009/T019 (resolver, pinning, conservative report).
 - **US5 (P3)** after T009 and T021 (pinned reads, fallback check).
-- **Phase 8** after US1 and US2.
+- **Phase 8** after US1 and US2. Spec 1228 (S-8) User Stories 3 and 7 start after T047.
 - **Polish** after the desired stories.
 
 ### Parallel opportunities

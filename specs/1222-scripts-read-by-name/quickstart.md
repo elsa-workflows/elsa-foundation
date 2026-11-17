@@ -1,6 +1,6 @@
 # Quickstart: validating Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · Provisional (initiative #3052)
+**Spec**: [spec.md](spec.md) · Draft (initiative #3052)
 
 How to confirm the read model once implemented. Each maps to a spec success criterion.
 
@@ -23,13 +23,12 @@ How to confirm the read model once implemented. Each maps to a spec success crit
    read of `order`, and no recorded read for candidates the script did not read.
 9. Run it with a name that matches nothing. Expect: JavaScript reads `undefined` (not `null`), Liquid reads nil, a
    warning is recorded, and the read is marked absent.
-10. Run it with a name that matches a transient variable. Expect: the step faults with the transient-read diagnostic
-    (OQ-3).
+10. Run it with a name that matches a transient variable. Expect: the step faults, and the fault names the node and the
+    variable (ADR 0089 R3).
 
 ## Converter faithfulness (US3 / SC-001, SC-002, SC-003)
 
-11. Convert an Elsa 3 `RunJavaScript` reading `getVariable("order")`. Expect: emits `variables.order`; publishes (no
-    arguments type-mismatch refusal — #3287, with #3167 from S-0).
+11. Convert an Elsa 3 `RunJavaScript` reading `getVariable("order")`. Expect: emits `variables.order`; publishes.
 12. Convert an Elsa 3 script reading `getVariable(name)`. Expect: emits `getVariable(name)`; publishes; reads the same
     value as in Elsa 3 through the fallback.
 13. Convert a script that declares its own `args` alongside converted reads. Expect: converter refuses with guidance

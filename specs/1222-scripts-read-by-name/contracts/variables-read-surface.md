@@ -1,7 +1,7 @@
 # Contract: The `variables` read surface, publish read-set and run-time fallback
 
-**Spec**: [../spec.md](../spec.md) · Provisional (initiative #3052). Amends spec 095 expression contract §1 and §6.
-Implements decision D-7 (minimal ADR 0089 amendment).
+**Spec**: [../spec.md](../spec.md) · Draft (initiative #3052). Amends spec 095 expression contract §1 and §6.
+Implements decision D-7 as ADR 0089 records it (accepted).
 
 ## Authoring surface
 
@@ -33,15 +33,17 @@ A script reads a workflow variable by name:
 
 ## Run time (evaluation)
 
-- The evaluator installs a frozen `variables` object. A pinned name returns its pinned (snapshot) value; an unset
-  declared variable reads JSON `null` (never `undefined`).
+- The evaluator installs a frozen `variables` object (frozen values until spec 1228's bridge replaces them, FR-037).
+  A pinned name returns its pinned (snapshot) value; an unset declared variable reads JSON `null` (never `undefined`).
+- Within one evaluation every read path to one variable returns the same JavaScript value (FR-034).
 - On an expression with the fallback marker, the candidate set is made readable before evaluation. A computed or opaque
   read then resolves the name nearest-scope-first over the candidates, is protection-checked for the variable actually
   read, and is recorded (name, declaring scope, present/absent).
 - A computed name that matches no visible variable reads `undefined` in JavaScript and nil in Liquid, records a warning,
   and is recorded as absent (spec 1216 FR-025/FR-026).
 - A withheld (no-permission) value is not provided; the step faults with the protection diagnostic.
-- A computed name that resolves to a transient variable faults the step with the transient-read diagnostic (OQ-3).
+- A computed name that resolves to a transient variable faults the step; the fault names the node and the variable
+  (ADR 0089 R3).
 - The recorded reads are returned with the evaluation result and stored in the step's input snapshot.
 - An expression without the marker loads only the variables it names; there is no frame-chain projection for it.
 - `getVariable` remains as a runtime function (literal argument → pinned value; otherwise → fallback). Generated
@@ -53,9 +55,11 @@ A script reads a workflow variable by name:
 
 - Input-binding expressions read the step's input snapshot (pinned values plus recorded reads) and never see pending
   writes.
-- The `RunJavaScript` body reads — literal and computed — through its variable **session** view (ADR 0092), which shows
-  the body's own pending writes. Its recorded reads still enter its input snapshot. Writes are ADR 0090 / S-7, out of
-  scope here.
+- The `RunJavaScript` body gets `variables` and `getVariable` (today it gets only `args`). It reads — literal and
+  computed — through its variable **session** (ADR 0090 decision 2, ADR 0092), which returns the committed value plus
+  the body's own pending writes. Its recorded reads still enter its input snapshot, and every read is recorded in the
+  read set with the variable's protection policy (FR-035), which spec 1228 uses for result protection. Writes are
+  ADR 0090 / S-7, out of scope here.
 
 ## spec 095 contract changes (recorded; flow to #3420 / spec 095)
 

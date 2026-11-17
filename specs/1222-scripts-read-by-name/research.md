@@ -1,10 +1,9 @@
 # Research: Scripts Read Variables By Name
 
-**Spec**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · Provisional (initiative #3052)
+**Spec**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · Draft (initiative #3052)
 
 This resolves the plan's open questions and the mechanism choices, grounded in the current code. The read model is
-decision **D-7**, the minimal amendment of ADR 0089 decisions 4 and 5 (Sipke, 6 Nov, on #3420; Frans approved 27 Oct;
-Joey accepted 11 Nov).
+decision **D-7**, recorded in ADR 0089 as accepted (amendment R1–R4 of decisions 4 and 5).
 
 ## R-1: Two read surfaces today, and how they combine
 
@@ -32,7 +31,7 @@ instead of refusing them, and recording the actual reads keeps the snapshot hone
 faithful conversion of real Elsa 3 scripts. Ambient-only for all reads: rejected — read set unknown at publish for
 literal names that could be pinned.
 
-## R-2 (OQ-1): Serialized shape
+## R-2: Serialized shape (settled by ADR 0089)
 
 **Decision.**
 
@@ -52,13 +51,20 @@ root of #3296 and conflates the two roots. Keeping the run-time regex to decide 
 **Contract impact.** spec 095 expression contract §1 (surface flag, fallback marker, recorded reads in the evaluation
 result) and §6 (the importer keeps `variables.X` and computed `getVariable(expr)` instead of lowering or refusing).
 
-## R-3 (OQ-2): Loop iteration values
+## R-3 (spec Q1): Loop iteration values
 
-**Facts.** Nearest-scope resolution already reuses `ScopedVariableResolver.Resolve`; iteration scope (ADR 0028) is the
-innermost scope; spec 265 projects graph variables through synthetic frames.
+**Facts.** Nearest-scope resolution already reuses `ScopedVariableResolver.Resolve`, but that resolver covers
+containers and the workflow, not loop iteration scopes. ADR 0028 makes the iteration scope the innermost scope of the
+body, with the loop node as declaring scope; the loop variables are `currentItem` and `currentIndex` (ForEach) and
+`index` (For), and the Elsa 3 converter already lowers `CurrentValue` to them (`Elsa3LoopVariableReferencesRewrite`).
+At run time `RuntimeLoopIterationScopeFactory.BuildIterationScope` builds one scope per pass, and
+`TryReadScopedVariableValue` resolves through it. Iteration values follow the normal checkpoint boundary (ADR 0028), so
+they are durable. ADR 0090 decision 2 makes a loop item frozen and untracked in a script. Spec 265 projects graph
+variables through synthetic frames.
 
-**Decision.** The publish-time resolver resolves an iteration-scope variable as the nearest scope (innermost first) and
-pins it as a `Variable` parameter recording the iteration scope node id + key. At run time the pinned value is taken
+**Decision (recommended, spec Q1).** The publish-time resolver adds the loop's iteration declarations as the innermost
+scope of every node in the loop body, resolves an iteration-scope variable as the nearest scope (innermost first) and
+pins it as a `Variable` parameter recording the loop node id + key. At run time the pinned value is taken
 from the iteration frame, through the same scoped reader the runtime already has. The fallback lookup walks the same
 frame chain, innermost first, so a computed name sees the iteration value the same way.
 
@@ -94,14 +100,15 @@ the actual reads, so a withheld variable the script never reads does not block i
 **Open data point.** Frequency of computed `getVariable(name)` in the real Elsa 3 corpus would size the fallback's cost;
 the private JTest corpus is unavailable locally, so this is flagged for whoever holds it.
 
-## R-5 (OQ-3): Transient variables and the fallback
+## R-5: Transient variables and the fallback (settled by ADR 0089 R3)
 
 **Decision.** A literal read of a transient variable keeps its publish diagnostic (D-7: retain the existing rule). A
-computed read that resolves at run time to a transient variable faults the step with the same diagnostic, because its
-value cannot enter the input snapshot; publish lists transient candidates in the conservative report as a warning.
+computed read that resolves at run time to a transient variable faults the step, naming the node and the variable,
+because its value cannot enter the input snapshot (ADR 0089 R3); publish lists transient candidates in the
+conservative report as a warning. Host-interop mode (ADR 0090 decision 8) is out of scope.
 
-**Open.** The alternative is to treat it like a missing name (`undefined` + warning). Faulting is the closer match to
-the retained publish rule; to verify with Sipke.
+**Rejected.** Treating it like a missing name (`undefined` + warning) would hide the failure behind a value the script
+may treat as valid (ADR 0089 R3).
 
 ## R-6: Publish parses, never regex
 
@@ -132,8 +139,7 @@ diagnostics are emitted where detectable.
 **Decision.** Readable names stay in source (not internal ids). Studio updates references it can resolve on rename and
 flags the rest for manual repair, including computed reads whose conservative report contains the renamed variable.
 Publish refuses a literal name that no longer resolves; a literal name resolving to a *different* declaration than the
-previously published version is a publish warning. Published versions never change (Sipke's direction, reviewer Q2/Q4
-on #3420).
+previously published version is a publish warning. Published versions never change (ADR 0089 R1).
 
 ## R-10: Input snapshot vs body session
 
@@ -155,8 +161,8 @@ against S-7. This is the distinction D-7 asks to preserve explicitly.
 - **#3296:** refuse (faithful-or-refuse) with guidance when a script's own declared `args` would collide with lowered
   `args` reads in the same scope (the existing guard at `Elsa3ExpressionRewriter.cs` is extended to the declared case).
   Variable reads no longer lower to `args`, so they no longer collide.
-- **#3287:** give the `arguments` expression its real type from the input contract instead of the hard-coded `Object`
-  (`Elsa3ValueFlowLowerer.LowerScript`). Full fix pairs with #3167 (S-0, alias inference for `JsonElement`).
+- **#3287** (the `arguments` type) is already fixed by #4315 (`Elsa3ValueFlowLowerer.Lower` takes the node's input
+  contract type); nothing left here.
 - **#3010:** emit statement bodies without the IIFE wrapper on the `RunJavaScript` body path (already done for Script
   mode; confirm no regression).
 - Faithfulness: refuse a literal read when Elsa 4's nearest-scope resolution picks a different declaration than Elsa

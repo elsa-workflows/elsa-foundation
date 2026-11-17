@@ -4,9 +4,9 @@
 
 **Input**: Feature specification from `specs/1222-scripts-read-by-name/spec.md`
 
-**Status**: **Provisional** (initiative #3052). This plan tests ADR 0089, with the minimal D-7 amendment, against the
-code. No production code lands until the initiative branch lands; the gates below are enforced in the implementing PRs
-on `main`.
+**Status**: Draft (initiative #3052), awaiting the coordinator's approval of the spec. This plan applies ADR 0089 as
+accepted and merged (`0a381a812a`), with ADR 0090 and ADR 0092 (both accepted). Once the spec is approved it is
+implemented on the initiative branch (D-18); the gates below are enforced in those implementation PRs.
 
 ## Summary
 
@@ -18,16 +18,18 @@ reports which variables it could read, and each actual read is recorded, protect
 input snapshot; a name that matches nothing reads `undefined` (nil in Liquid) with a warning and the read marked absent
 (spec 1216 FR-025–FR-027). The fallback reuses today's ambient visible-variable projection, confined to expressions that
 need it. The Elsa 3 converter emits `variables.X` for literal reads, keeps computed `getVariable(expr)` (served by the
-fallback) instead of refusing it, drops the `args` rewrite for variable reads (fixing #3296), gives the `RunJavaScript`
-`arguments` expression its real type (fixing #3287), and emits unwrapped statement bodies (#3010). This is decision D-7
-(minimal amendment, Sipke 6 Nov on #3420); it supersedes findings F-1–F-3.
+fallback) instead of refusing it, drops the `args` rewrite for variable reads (fixing #3296), and emits unwrapped
+statement bodies (#3010). The `arguments` type fix (#3287) already landed with #4315. A `RunJavaScript` body gets the
+`variables` root and `getVariable`, read through its variable session (ADR 0090 decision 2, ADR 0092) with every read
+recorded in the read set; spec 1228 (S-8) builds on that surface. Loop items and indexes resolve as variables declared
+by the loop node (spec Q1). This is decision D-7, as ADR 0089 records it.
 
 ## Technical Context
 
 **Language/Version**: C# (.NET, per repo), JavaScript (Jint engine), Liquid (Fluid).
 
 **Primary Dependencies**: Jint (isolated JS engine); the spec 095 value-flow model (declared parameters, `Variable`
-binding); ADR 0092 variable session (PR #3411); Studio `ScopedVariableResolver`; the Elsa 3 converter (spec 247).
+binding); ADR 0090 / ADR 0092 variable session; Studio `ScopedVariableResolver`; the Elsa 3 converter (spec 247).
 
 **Storage**: N/A for reads (values come from the pinned input snapshot / external payload store as today).
 
@@ -46,12 +48,12 @@ conservative candidate set made readable before evaluation) and no more than tod
 — pinned values and the fallback's candidate set — must be materialized before evaluation. Runtime must not take a Design reference (§E2.2); Elsa 3 stays behind the
 import boundary (§E2.7).
 
-**Scale/Scope**: The four tracked issues (#3204, #3296, #3287 arguments part) plus the read model; converter + runtime
-+ publish validation + spec 095 contract edit.
+**Scale/Scope**: The tracked issues (#3204, #3296) plus the read model; converter + runtime + publish validation +
+spec 095 contract edit + the `RunJavaScript` body read surface that spec 1228 builds on.
 
 ## Constitution Check
 
-*GATE: applied in the implementing PRs on `main` (provisional spec: no code lands until the branch lands).*
+*GATE: applied in the implementation PRs on the initiative branch (D-18).*
 
 Relevant gates (from `.specify/memory/constitution.md`, `constitution-framework.md`, and `review-checklist.md`):
 
@@ -80,8 +82,8 @@ No violations anticipated; **Complexity Tracking** below is empty.
 ```text
 specs/1222-scripts-read-by-name/
 ├── plan.md              # This file
-├── spec.md              # Feature spec (provisional)
-├── research.md          # Phase 0 — decisions (OQ-1, OQ-2, OQ-3, selective load, run-time fallback)
+├── spec.md              # Feature spec
+├── research.md          # Phase 0 — decisions (surface flag, loop values, transient fault, selective load, run-time fallback)
 ├── data-model.md        # Phase 1 — entities
 ├── quickstart.md        # Phase 1 — how to validate
 ├── contracts/
@@ -100,6 +102,11 @@ Essentials/src/Expressions/JavaScript/Jint/Services/
 │                                      # record each fallback read; missing name → undefined + warning
 └── JintPortableJavaScriptEvaluator.cs # Pass pinned values + the fallback candidate set; return the recorded reads
 
+Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs
+                                       # Today the body gets only frozen `args`; give it `variables` and `getVariable`,
+                                       # read through the step's variable session (ADR 0090 decision 2), each read
+                                       # recorded in the read set with its protection policy (FR-033–FR-035, for S-8)
+
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/
 ├── RuntimePortableExpressionEvaluator.cs  # Remove regex read-detection; keep the visible-variable projection only for
 │                                          # expressions marked as needing the fallback; per-read protection check
@@ -109,14 +116,15 @@ Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/
 Essentials/src/Expressions/Liquid/...      # `variables` root over pinned params + fallback; missing computed name → nil + warning
 
 Essentials/src/Workflows/Design/...        # Publish-time read-set resolver: parse source, resolve literal names nearest scope
-│                                           # (reuse ScopedVariableResolver + iteration scope), mark computed/opaque expressions
+│                                           # (reuse ScopedVariableResolver + add the loop's iteration declarations as the
+│                                           # innermost scope, Q1), mark computed/opaque expressions
 │                                           # for the fallback with a conservative read report; refuse unresolvable literal /
 │                                           # transient literal reads; warn on shadow change
 
 Extensions/Elsa3/src/Mapping/
 ├── Services/Elsa3ExpressionRewriter.cs    # Emit variables.X for literal reads; keep getVariable(expr)/variables[expr] for
 │                                          # computed reads; refuse on author `args` collision (#3296)
-├── Services/Elsa3ValueFlowLowerer.cs      # arguments type Object→real (#3287); no IIFE for body (#3010); faithfulness check
+├── Services/Elsa3ValueFlowLowerer.cs      # no IIFE for body (#3010); faithfulness check
 └── Internal/Elsa3JavaScriptNames.cs       # Naming rule for converted get<Name>() (decision 6)
 
 specs/095-value-flow-redesign/contracts/expression-and-import-contract.md
