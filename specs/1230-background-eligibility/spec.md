@@ -164,7 +164,9 @@ unmarked activity is refused naming its first failing criterion (or, for C7/C8, 
 1. **Given** a marked built-in activity, **When** placed in the background, **Then** it publishes, runs on a worker and
    its result is applied on the coordinator.
 2. **Given** a built-in activity the assessment did not mark, **When** placed in the background, **Then** publication
-   refuses it naming the failed criterion, or "does not declare BackgroundExecutionSafe" when only C7/C8 are missing.
+   refuses it naming the first engine-checked criterion it fails at publication, else "does not declare
+   BackgroundExecutionSafe" (as for `PublishEvent`, whose C6 shows only at run time, and `RunJavaScript`, whose C9
+   access C9 cannot see on the type).
 
 ---
 
@@ -317,11 +319,11 @@ them.
 
 ## Release note
 
-Background activities: eligibility is now decided by one component (ADR 0093), and every refusal names its criterion
-(`VF-BG-001 (C<n>): …`). Run time now checks the same criteria as publication, so a background node pinned before this
+Background activities: eligibility is now decided by one component (ADR 0093), and every criterion refusal names its criterion
+(`VF-BG-001 (C<n>): …`); an activity that does not declare `[BackgroundExecutionSafe]` is refused as such. Run time now checks the same criteria as publication, so a background node pinned before this
 release whose **custom** activity has an untyped result (C3), a stream or transient-resource result or projection
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
 without a secret reference (C10) is refused at admission with an incident (Q5). No shipped activity was marked
 before, so only custom activities are affected. Thirteen built-ins are now `[BackgroundExecutionSafe]`; the Microsoft
-365 and Slack reads among them move to version 1.1.0. `RunJavaScript` is not marked: scripts read and write variables by
+365 and Slack activities among them move to version 1.1.0. `RunJavaScript` is not marked: scripts read and write variables by
 name, and a background worker has no access to variables (C9).

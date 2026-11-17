@@ -29,7 +29,7 @@ criteria that need it run only where it is present (C6 only at the worker).
 | has structure or child slots | yes | yes | yes |
 | CLR activity type | resolved | well-known type registry | activated object's type |
 | pinned activity contract (declaration, result type, policies, representations, inputs) | yes | yes | yes |
-| input bindings (for C10) | yes | yes (and the input snapshot) | the input snapshot |
+| input bindings (for C10) | yes | the pinned node's bindings | the pinned node's bindings |
 | staged coordinator effects (for C6) | — | — | yes |
 
 ## BackgroundEligibilityRefusal

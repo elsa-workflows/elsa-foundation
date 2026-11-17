@@ -60,12 +60,11 @@ public sealed class BackgroundEligibilityTests
             Subject<SafeLeaf>(Contract<SafeLeaf>(result: Result("Int32", policy: ActivityValuePolicy.Default with { IsPersistable = false }))), "transient");
     }
 
-    [Theory]
-    [MemberData(nameof(EntryPoints))]
-    public void C4_refuses_a_pinned_stream_result_when_the_type_is_checked_at_run_time(string entryPoint)
+    [Fact]
+    public void C4_refuses_a_pinned_stream_result_when_the_type_is_checked_at_run_time()
     {
         // A placement that cannot see the CLR type reads the stream from the pinned result alias alone.
-        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C4,
+        AssertRefused("publication", BackgroundEligibilityCriterion.C4,
             Subject<SafeLeaf>(Contract<SafeLeaf>(result: Result(typeof(Stream).FullName!))) with { ActivityType = null, TypeCheckedAtRunTime = true },
             "transient");
     }
@@ -90,6 +89,14 @@ public sealed class BackgroundEligibilityTests
         AssertRefused("publication", BackgroundEligibilityCriterion.C3, unknown with { Contract = Contract<SafeLeaf>(result: Result("Any")) }, "untyped");
         AssertRefused("publication", BackgroundEligibilityCriterion.C10, unknown with { Contract = Contract<SafeLeaf>(inputs: [Input("content", "Stream")]) }, "materialized");
         Assert.Contains("does not declare", BackgroundEligibility.CheckPublication(unknown with { Contract = Contract<SafeLeaf>(supportsBackgroundExecution: false) })!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_run_time_check_never_defers_the_CLR_type_checks()
+    {
+        var unknown = Subject<SafeLeaf>() with { ActivityType = null, TypeCheckedAtRunTime = true };
+
+        AssertRefused("run time", BackgroundEligibilityCriterion.C1, unknown, "not a registered CLR activity");
     }
 
     [Fact]

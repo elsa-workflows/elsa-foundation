@@ -62,7 +62,7 @@ unchanged.*
 | §E2.2 Runtime takes no Design reference | PASS | The component sits in Runtime Core and reads pinned runtime contracts only. |
 | §2.17 duplication beats dependency | PASS | The point is to remove a duplicated rule list; Publishing already depends on Runtime Core. |
 | §2.1 / §2.17 thin `.Core` implementation | DEVIATION | `BackgroundEligibility` is a rule set (domain-deciding branches) in `Elsa.Workflows.Runtime.Core`. Justified under Complexity Tracking. |
-| §E2.6.1 executable-always-runs | ACTION | A pinned background node that now fails C3, C4, C9 or C10 at run time is refused with an incident (Q5). No shipped activity is marked today, so only custom activities can be affected; the release notes say so (T030). |
+| §E2.6.1 executable-always-runs | ACTION | A pinned background node that now fails C3, C4, C9 or C10 at run time is refused with an incident (Q5). No shipped activity was marked before this spec, so no pinned built-in can be in the background and only custom activities can be affected; the release notes say so (T030). |
 | §E5 / §4.2 versioning | ACTION | Marking a built-in changes its contract fingerprint; each marked activity's version moves per its module's rule (T020). `BackgroundEligibility` is new public API in `PublicAPI.Unshipped.txt`. |
 | §2.22 docs | ACTION | Spec 241's contract, the attribute's docs, the background activities doc and `EXTENSION_POINTS.md` if it lists the attribute (T028–T030). |
 | §2.23.1–§2.23.2 tests | PASS | One refusal test per criterion and point; the happy path per marked built-in; provider pair for decision 6. |

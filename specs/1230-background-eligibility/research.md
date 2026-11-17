@@ -146,7 +146,7 @@ the initiative branch first; no logic overlaps.
   re-check them (`BackgroundEligibilitySubject.TypeCheckedAtRunTime`). An authored node still needs its CLR type at
   publication. This is the one place FR-012's "same publication check" is narrower; review round 1.
 - **Versions (T020).** Marking changes only the runtime contract fingerprint; the design catalog hash does not read the
-  attribute. The eight connector reads carry `[Version]` and move 1.0.0 → 1.1.0. Primitives, Scripting and BPMN use the
+  attribute. The eight connector activities (seven reads and Slack `UpdateMessage`) carry `[Version]` and move 1.0.0 → 1.1.0. Primitives, Scripting and BPMN use the
   assembly version, which the per-package versioning tool moves. The activity contract surface baseline does not
   record the flag, so it is unchanged.
 - **C9 signals of ADR 0090.** Neither `[AccessesUndeclaredVariables]` nor `VariableReference<T>` exists in code (checked

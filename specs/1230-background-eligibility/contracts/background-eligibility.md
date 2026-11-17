@@ -17,7 +17,9 @@ here once this spec is implemented.
 `BackgroundEligibility` (`Elsa.Workflows.Runtime.Core`):
 
 - `CheckPublication(subject)` — C1–C5, C9, C10. Called by `ExecutableNodeCompiler` for every node placed in the
-  background.
+  background, and by `ActivityTemplatePlacer` for every background node a template provider returns (FR-012). When the
+  placing host cannot resolve the CLR type, the placer sets `TypeCheckedAtRunTime`: the type-only checks (C1's
+  handler interfaces, C2, C9, the CLR parts of C3 and C4) are left to `CheckRunTime`, which never defers them.
 - `CheckRunTime(subject)` — C1–C5, C9, C10, and C6 when the subject carries staged effects. Called at admission
   (`BackgroundActivityCoordinator`), before activation and after the body on the worker
   (`BackgroundActivityWorker`).

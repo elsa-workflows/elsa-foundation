@@ -50,7 +50,8 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// The CLR type is not known to this host but is checked again where the node runs. Template placement sets it
     /// when the publishing host does not register a template node's runtime type (a design-only shell): the criteria
     /// that read the contract and node shape still apply, and the ones that need the CLR type (the interface part of
-    /// C1, C2 and C9) are left to admission and the worker, which always re-check them.
+    /// C1, C2 and C9) are left to admission and the worker, which always re-check them. Only publication honours it:
+    /// <see cref="BackgroundEligibility.CheckRunTime"/> ignores it, so a run-time subject without a CLR type is refused.
     /// </summary>
     public bool TypeCheckedAtRunTime { get; init; }
 
@@ -160,8 +161,12 @@ public static class BackgroundEligibility
     /// The run-time re-check at admission and on the worker: the same criteria as publication, and C6 when the subject
     /// says whether the body staged coordinator effects.
     /// </summary>
-    public static BackgroundEligibilityRefusal? CheckRunTime(BackgroundEligibilitySubject subject) =>
-        Check(subject, includeCoordinatorEffects: true);
+    public static BackgroundEligibilityRefusal? CheckRunTime(BackgroundEligibilitySubject subject)
+    {
+        ArgumentNullException.ThrowIfNull(subject);
+        // Run time is where deferred type checks land, so nothing may be deferred from here.
+        return Check(subject with { TypeCheckedAtRunTime = false }, includeCoordinatorEffects: true);
+    }
 
     /// <summary>
     /// C9 as one predicate over the CLR type: the activity reads variables by name. ADR 0090's

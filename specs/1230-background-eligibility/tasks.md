@@ -113,6 +113,10 @@
 ## Implementation status (2026-11-17, first implementation PR)
 
 - **Done:** T001–T011, T013, T016–T018, T020, T021, T023, T028–T030. Findings in research *Implementation findings*.
+- **Partial, open (review, second loop):** SC-002 — every criterion is refused at both entry points in the component
+  tests (`BackgroundEligibilityTests`); through the real call sites: C9 at admission, C1, C3, C4 and C6 on the worker,
+  C1–C5, C9 and C10 at publication. C2, C5 and C10 at admission and on the worker, and C2, C4 and C5 at template
+  placement, are shown only through the component.
 - **Partial, open:** T014 — a secret reference input is admitted at publication in the background (C10); the
   worker-side assertion that no raw secret reaches the input snapshot or the work record is not written yet.
   T019 — publish-in-background tests for the five Essentials built-ins, end-to-end worker runs for `WriteLine`
