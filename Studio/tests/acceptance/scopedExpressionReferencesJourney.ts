@@ -8,8 +8,8 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   const root = s.root([]);
   const sequence = await s.api<{ contract: { outcomes: { name: string; referenceKey: string }[] } }>(`/design/activities/versions/${root.activityVersionId}`);
   const done = sequence.contract.outcomes.find(outcome => outcome.name === "Done")!.referenceKey;
-  const wrong = "args.numbers.reduce((total, number) => total + number, 0)";
-  const right = "args.Numbers.reduce((total, number) => total + number, 0)";
+  const legacy = "args.Numbers.reduce((total, number) => total + number, 0)";
+  const stable = "args.numbers.reduce((total, number) => total + number, 0)";
   const created = await s.api<{ definition: { definitionId: string }; draft: { draftId: string } }>("/design/activities/definitions", "POST", {
     displayName: `Sum ${info.project.name} ${Date.now()}`, category: "Qualification",
     contract: {
@@ -20,13 +20,13 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
     },
     provider: {
       providerKey: "elsa.activity-graph", schemaVersion: "2",
-      payload: { rootActivity: root, variables: [], outputMappings: [{ outputReferenceKey: "sum", source: { syntax: "JavaScript", value: wrong } }],
+      payload: { rootActivity: root, variables: [], outputMappings: [{ outputReferenceKey: "sum", source: { syntax: "JavaScript", value: legacy } }],
         outcomeMappings: [{ sourceOutcomeReferenceKey: done, boundaryOutcomeReferenceKey: "done" }] }
     },
     layout: [], activityPresentation: []
   });
   const draft = `/design/activities/drafts/${created.draft.draftId}`;
-  const read = () => s.api<{ revision: number; provider: { payload: { outputMappings: { source: { value: string } }[] } } }>(draft);
+  const read = () => s.api<{ revision: number; contract: { inputs: { name: string; referenceKey: string }[] }; provider: { payload: { outputMappings: { source: { value: string } }[] } } }>(draft);
   const savedSource = async () => (await read()).provider.payload.outputMappings[0].source.value;
   const route = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
   const outputs = page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Outputs/ });
@@ -34,12 +34,12 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   const expression = source.getByRole("textbox", { name: "JavaScript expression" });
   await page.goto(route);
   await outputs.click();
-  const fixOutput = source.getByRole("button", { name: "Use args.Numbers" });
+  const fixOutput = source.getByRole("button", { name: "Use args.numbers", exact: true });
   await expect(fixOutput).toBeVisible();
   await capture(page, info, "sum-fix");
   await fixOutput.press("Enter");
   await expect(expression).toBeFocused();
-  await expect.poll(savedSource).toBe(right);
+  await expect.poll(savedSource).toBe(stable);
 
   await expression.fill("0");
   await expression.press("ControlOrMeta+a");
@@ -55,13 +55,19 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await insert.press("Enter");
   await numbers.press("Enter");
   await expect(expression).toBeFocused();
-  await expect.poll(savedSource).toBe("args.Numbers");
-  await expression.fill(right);
-  await expect.poll(savedSource).toBe(right);
+  await expect.poll(savedSource).toBe("args.numbers");
+  await expression.fill(stable);
+  await expect.poll(savedSource).toBe(stable);
+
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
+  const inputName = page.getByRole("textbox", { name: "Name", exact: true });
+  await inputName.fill("Values");
+  await inputName.press("Enter");
+  await expect.poll(async () => (await read()).contract.inputs[0]).toMatchObject({ name: "Values", referenceKey: "numbers" });
 
   await page.reload();
   await outputs.click();
-  await expect(source.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText(right);
+  await expect(source.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText(stable);
   const preflight = await s.api<{ isPublishable: boolean; minimumVersion: string; reviewToken: string; definitionHeadVersionId: string | null }>(
     `${draft}/publication-preflight`, "POST", { expectedDraftRevision: (await read()).revision, expectedDefinitionHeadVersionId: null });
   expect(preflight.isPublishable, JSON.stringify(preflight)).toBe(true);

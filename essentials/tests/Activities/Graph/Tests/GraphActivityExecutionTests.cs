@@ -506,6 +506,36 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareCompletion_UsesStableInputKeysAcrossRenamesAndGivesKeysPrecedenceOverAliases()
+    {
+        const string source = "args.numbers.reduce((total, number) => total + number, 0) + args['offset-value'] + args.Offset";
+        foreach (var inputName in new[] { "Numbers", "Values" })
+        {
+            var descriptor = Descriptor(
+                inputs:
+                [
+                    Input("numbers", name: inputName) with { Type = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind = "Array" }) },
+                    Input("other", name: "numbers") with { Type = Type("Int32") },
+                    Input("offset-value", name: "Offset") with { Type = Type("Int32") }
+                ],
+                outputs: [Output("sum") with { Type = Type("Int32") }],
+                outputMappings: [Mapping("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement(source)))],
+                requiredOutputReferenceKeys: ["sum"],
+                useInputReferenceKeysInOutputExpressions: true);
+            var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>
+            {
+                [inputName] = new[] { 1, 2, 3, 4 },
+                ["numbers"] = 100,
+                ["Offset"] = 2
+            });
+
+            var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+            Assert.Equal(14, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
+        }
+    }
+
+    [Fact]
     public async Task PrepareCompletion_ResolvesNativeInputMappingsFromCapturedPublicInputs()
     {
         var descriptor = Descriptor(
@@ -962,7 +992,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
         IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
         IReadOnlyCollection<string>? requiredOutputReferenceKeys = null,
         IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null,
-        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes = null) =>
+        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes = null,
+        bool useInputReferenceKeysInOutputExpressions = false) =>
         new(
             "definition-1",
             "definition-version-1",
@@ -977,7 +1008,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             requiredInputReferenceKeys: [],
             requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? [],
             outcomeMappings: outcomeMappings,
-            completeOutcomes: completeOutcomes);
+            completeOutcomes: completeOutcomes)
+        {
+            UseInputReferenceKeysInOutputExpressions = useInputReferenceKeysInOutputExpressions
+        };
 
     private static GraphActivityInputDescriptor Input(
         string referenceKey,

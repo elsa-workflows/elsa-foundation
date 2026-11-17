@@ -328,6 +328,10 @@ public sealed class GraphActivity(
             var parameterValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             var parameterBindings = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
             var publicNames = new HashSet<string>(StringComparer.Ordinal);
+            var useReferenceKeys = evaluatingOutputs && Descriptor.UseInputReferenceKeysInOutputExpressions;
+            var referenceKeys = useReferenceKeys
+                ? Descriptor.Inputs.Select(input => input.ReferenceKey).ToHashSet(StringComparer.Ordinal)
+                : null;
             foreach (var input in Descriptor.Inputs)
             {
                 var name = input.Name ?? input.ReferenceKey;
@@ -341,6 +345,16 @@ public sealed class GraphActivity(
                     continue; // An omitted optional input remains absent; expressions that do not read it still run.
 
                 var value = ToJsonElement(captured.Value);
+                if (useReferenceKeys)
+                    AddParameter(input.ReferenceKey, value);
+                // Keep name-based expressions working where an alias cannot shadow a stable key,
+                // including the key of an omitted optional input.
+                if (referenceKeys is null || !referenceKeys.Contains(name))
+                    AddParameter(name, value);
+            }
+
+            void AddParameter(string name, JsonElement value)
+            {
                 parameterValues.Add(name, value);
                 parameterBindings.Add(name, new LiteralExpressionParameterBinding(value));
             }

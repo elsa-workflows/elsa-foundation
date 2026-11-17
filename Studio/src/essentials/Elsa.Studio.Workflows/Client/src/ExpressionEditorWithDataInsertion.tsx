@@ -63,10 +63,11 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
     const parameters = readPortableExpressionDefinition(ownerValue, props.syntax)?.parameters ?? {};
     return adapter.findArgumentFixes(sourceText, name => {
       if (reusableOutput) {
-        if (inputs.some(input => input.name === name)) return;
-        const keyed = inputs.filter(input => input.referenceKey === name);
-        const matches = keyed.length ? keyed : inputs.filter(input => input.name.toLowerCase() === name.toLowerCase());
-        if (matches.length === 1) return { namespace: "args", name: matches[0].name };
+        if (inputs.some(input => input.referenceKey === name)) return;
+        const named = inputs.find(input => input.name === name);
+        if (named) return { namespace: "args", name: named.referenceKey };
+        const matches = inputs.filter(input => input.referenceKey.toLowerCase() === name.toLowerCase() || input.name.toLowerCase() === name.toLowerCase());
+        if (matches.length === 1) return { namespace: "args", name: matches[0].referenceKey };
       } else if (!Object.prototype.hasOwnProperty.call(parameters, name) && variables.some(variable => variable.name === name)) {
         return { namespace: "variables", name };
       }
@@ -179,7 +180,7 @@ function ExpressionEditor({ editor: Editor, contribution, ownerValue, reusableOu
         {inputs.length > 0 ? <div role="group" aria-label="Activity inputs" className="wf-data-chooser-group">
           <span className="wf-data-chooser-group-label">Activity inputs</span>
           {inputs.map(input => <StudioButton key={input.referenceKey} variant="ghost" size="sm"
-            onClick={() => applyScoped("args", input.name)}>{input.displayName || input.name} · {formatArgumentType(input.type)}</StudioButton>)}
+            onClick={() => applyScoped("args", input.referenceKey)}>{input.displayName || input.name} · {formatArgumentType(input.type)}</StudioButton>)}
         </div> : null}
         {variables.length > 0 ? <div role="group" aria-label="Variables" className="wf-data-chooser-group">
           <span className="wf-data-chooser-group-label">{reusableOutput ? "Activity variables" : "Variables"}</span>
