@@ -2,9 +2,11 @@ using System.Buffers;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
+using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
 using JintOptions = Jint.Options;
@@ -89,64 +91,94 @@ internal static class IsolatedJintEngine
     }
 
     /// <summary>
-    /// Installs the host-pinned visible-variable read surface (issue #984): a frozen <c>variables</c> object plus a
-    /// <c>getVariable('name')</c> function and per-variable <c>get&lt;Name&gt;()</c> accessors, all sourced from the
-    /// same immutable snapshot. When <paramref name="variables"/> is empty nothing is installed, so a pure binding
-    /// expression continues to see no <c>variables</c>/<c>getVariable</c> surface at all — the values are provided
-    /// data, not an engine capability, so determinism and the binding-pure-v1 grant are unaffected.
+    /// Installs the <c>variables</c> root and <c>getVariable</c> (spec 1222 FR-003, FR-008, ADR 0089). Names publish
+    /// pinned read their pinned value; on an expression with a computed or opaque read, any other name goes through the
+    /// host's <paramref name="reader"/>, which records the read. Every read path to one variable returns the same
+    /// JavaScript value within the evaluation (FR-034), and the values are frozen (FR-037). An unset declared variable
+    /// reads JSON <c>null</c> (FR-006); a computed name that matches nothing reads <c>undefined</c> (FR-011); a refused
+    /// read throws, and the host has already recorded the refusal, so catching it does not hide it (FR-017a). No
+    /// generated <c>get&lt;Name&gt;()</c> accessor is installed (ADR 0089 decision 6, FR-036). With no pinned read and
+    /// no reader nothing is installed, so an expression that reads no variable sees no <c>variables</c> surface.
     /// </summary>
     public static void SetReadOnlyVariables(
         Engine engine,
-        IReadOnlyDictionary<string, JsonElement> variables,
+        IReadOnlyDictionary<string, JsonElement> pinned,
+        IExpressionVariableReader? reader,
         FeatureOptions configured)
     {
         ArgumentNullException.ThrowIfNull(engine);
-        ArgumentNullException.ThrowIfNull(variables);
+        ArgumentNullException.ThrowIfNull(pinned);
         ArgumentNullException.ThrowIfNull(configured);
-        if (variables.Count == 0)
+        if (pinned.Count == 0 && reader is null)
             return;
-        ValidateInput(variables, configured);
+        ValidateInput(pinned, configured);
 
-        var ordered = variables.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray();
         var values = new Dictionary<string, JsValue>(StringComparer.Ordinal);
-        var container = engine.Intrinsics.Object.Construct([]);
-        foreach (var (name, element) in ordered)
+        foreach (var (name, element) in pinned.OrderBy(item => item.Key, StringComparer.Ordinal))
+            values[name] = CreateValue(engine, element);
+
+        JsValue Read(string name)
         {
-            var value = CreateValue(engine, element);
-            values[name] = value;
-            container.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: true, configurable: false));
+            if (values.TryGetValue(name, out var known))
+                return known;
+            if (reader is null)
+                return JsValue.Undefined;
+
+            var read = reader.Read(name);
+            switch (read.Outcome)
+            {
+                case ExpressionVariableReadOutcome.Present:
+                    ValidateInput(new Dictionary<string, JsonElement>(StringComparer.Ordinal) { [name] = read.Value }, configured);
+                    var value = CreateValue(engine, read.Value);
+                    values[name] = value;
+                    return value;
+                case ExpressionVariableReadOutcome.Refused:
+                    throw new JavaScriptException(engine.Intrinsics.Error, read.Refusal);
+                default:
+                    values[name] = JsValue.Undefined;
+                    return JsValue.Undefined;
+            }
         }
 
-        container.PreventExtensions();
-        engine.Global.DefineOwnProperty("variables", new PropertyDescriptor(container, writable: false, enumerable: true, configurable: false));
+        // A null-prototype target: inherited members such as toString are not variables.
+        var target = engine.Evaluate("Object.create(null)").AsObject();
+        foreach (var name in values.Keys.Order(StringComparer.Ordinal).ToArray())
+            target.DefineOwnProperty(name, new PropertyDescriptor(values[name], writable: false, enumerable: true, configurable: false));
+        if (reader is not null)
+        {
+            // Every candidate is an own, enumerable property, so enumerating or spreading `variables` sees them; reading
+            // one goes through the host and is recorded.
+            foreach (var name in reader.CandidateNames)
+            {
+                if (target.HasOwnProperty(name))
+                    continue;
+                var captured = name;
+                var getter = new ClrFunction(engine, "get " + captured, (_, _) => Read(captured));
+                target.DefineOwnProperty(captured, new GetSetPropertyDescriptor(getter, JsValue.Undefined, enumerable: true, configurable: false));
+            }
+        }
+
+        target.PreventExtensions();
+        JsValue root = target;
+        if (reader is not null)
+        {
+            // A name that is not a candidate is still looked up, so the missing read is recorded with its warning.
+            var miss = new ClrFunction(engine, "miss", (_, arguments) => Read(arguments.At(0).AsString()));
+            var factory = engine.Evaluate(
+                "(function (target, miss) {" +
+                " var has = Function.prototype.call.bind(Object.prototype.hasOwnProperty); var get = Reflect.get;" +
+                " return new Proxy(target, { get: function (t, p, r) { return typeof p === 'string' && !has(t, p) ? miss(p) : get(t, p, r); } });" +
+                " })");
+            root = engine.Invoke(factory, target, miss);
+        }
+
+        engine.Global.DefineOwnProperty("variables", new PropertyDescriptor(root, writable: false, enumerable: true, configurable: false));
 
         var getVariable = new ClrFunction(engine, "getVariable", (_, callArguments) =>
-            callArguments.Length >= 1 && callArguments[0].IsString() && values.TryGetValue(callArguments[0].AsString(), out var resolved)
-                ? resolved
+            callArguments.Length >= 1 && callArguments[0].IsString()
+                ? Read(callArguments[0].AsString())
                 : JsValue.Undefined);
         engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
-
-        foreach (var (name, _) in ordered)
-        {
-            var getterName = ToGetterName(name);
-            if (getterName is null || engine.Global.HasOwnProperty(getterName))
-                continue;
-            var captured = values[name];
-            var getter = new ClrFunction(engine, getterName, (_, _) => captured);
-            engine.Global.DefineOwnProperty(getterName, new PropertyDescriptor(getter, writable: false, enumerable: false, configurable: false));
-        }
-    }
-
-    /// <summary>
-    /// Produces the Elsa 3 convenience getter name (<c>get&lt;PascalCaseName&gt;</c>) for a variable, or
-    /// <see langword="null"/> when the variable name is not a bare JavaScript identifier (in which case only
-    /// <c>variables['name']</c> and <c>getVariable('name')</c> remain available for it).
-    /// </summary>
-    private static string? ToGetterName(string name)
-    {
-        if (name.Length == 0 || !name.All(character => char.IsLetterOrDigit(character) || character is '_' or '$'))
-            return null;
-        return $"get{char.ToUpperInvariant(name[0])}{name[1..]}";
     }
 
     private static void DisableAmbientCapabilities(Engine engine)

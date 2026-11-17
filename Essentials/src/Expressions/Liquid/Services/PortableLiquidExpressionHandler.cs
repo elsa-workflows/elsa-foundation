@@ -51,8 +51,14 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
         {
             CultureInfo = CultureInfo.InvariantCulture
         };
-        foreach (var (name, value) in request.ParameterValues)
+        foreach (var (name, value) in request.ArgumentValues())
             context.SetValue(name, DynamicValueMaterializer.Materialize(value));
+
+        // Spec 1222 FR-005: pinned variable reads and the computed-read lookup sit under one `variables` root, the
+        // same surface JavaScript gets. A template that reads no variable gets none.
+        var pinnedVariables = request.PinnedVariableValues();
+        if (pinnedVariables.Count > 0 || request.VariableReader is not null)
+            context.SetValue("variables", new LiquidVariablesValue(pinnedVariables, request.VariableReader));
 
         var rendered = await template.RenderAsync(context);
         request.CancellationToken.ThrowIfCancellationRequested();
