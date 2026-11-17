@@ -9,7 +9,7 @@
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-11**,
 analysis **A-2**.
 
-**Issues**: #4721–#4724 (built-ins with an implementation gap, FR-009). The S-11 intake on the #3052 board lists the five checks this spec settles.
+**Issues**: #4721–#4724 (built-ins with an implementation gap, FR-009); #4737 (background runs, then marks, for the eight connector activities that qualify by reading, Q10). The S-11 intake on the #3052 board lists the five checks this spec settles.
 
 **Input**: Background eligibility is one set of criteria (ADR 0093, C1–C10). One component in
 `Elsa.Workflows.Runtime.Core` holds every criterion the engine enforces, and both publication and the background
@@ -155,7 +155,7 @@ than once (C7) and must observe its cancellation token (C8), and which criteria 
 A workflow author can place qualifying built-in activities in the background without writing their own. The spec
 records, for every built-in activity, whether it qualifies and why not.
 
-**Why this priority**: No shipped activity is marked today, so background execution is unusable without custom code.
+**Why this priority**: No shipped activity an author can place is marked today (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so background execution is unusable without custom code.
 
 **Independent Test**: Each marked activity publishes and runs in the background end-to-end; each assessed but
 unmarked activity is refused naming its first failing criterion (or, for C7/C8, is simply not marked).
@@ -198,8 +198,8 @@ read-modify-write) and that the recorded commit order matches the order applied.
 - A node fails several criteria: the refusal names the **first** failing criterion in the order C1 … C10 (stable
   across publish and run time), so the message does not depend on check order.
 - An executable published before this change pins a node that now fails a criterion (C3 or C4 at run time, C9, C10):
-  the run-time check refuses it with an incident naming the criterion. No shipped activity is marked today, so this
-  can only hit a custom activity (Q5).
+  the run-time check refuses it with an incident naming the criterion. No shipped activity is marked today (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion),
+  so this can only hit a custom activity (Q5).
 - An activity type changes between publish and run (new deployment): the run-time check uses the activated object and
   the pinned contract, as today.
 - A subclass of a marked activity inherits the attribute (`Inherited = true`): the assessment must say whether that is
@@ -260,13 +260,14 @@ read-modify-write) and that the recorded commit order matches the order applied.
 
 ## Built-in assessment
 
-Read in code at `2c84e802f` (research R-4); nothing was run. *Leaves* are CLR activities that pass C1 and C2. Every
+Read in code at `2c84e802f` (research R-4). A **Mark** verdict also needs a background run of the activity (Q10, amended
+2026-11-18); the activities that qualify by reading but have no run yet are listed in their own row. *Leaves* are CLR activities that pass C1 and C2. Every
 structural activity and child handler fails C1 (16 types, including `BpmnProcess`, the only shipped
 `IRuntimeScopedVariableReader`), every intrinsic fails C1 (9), and every stateful activity fails C2 (9).
 
 | Verdict | Activities | Why |
 |---|---|---|
-| **Mark** (meets C1–C10; C7 and C8 hold by reading the code) | Primitives: `Break`, `Fault`, `WriteLine`, `WriteLines`. BPMN: `BpmnDecision` | Pure or naturally idempotent bodies that observe the token or are synchronous; each runs end to end on a worker (T019). |
+| **Mark** (meets C1–C10; C7 and C8 hold by reading the code; runs on a worker) | Primitives: `Break`, `Fault`, `WriteLine`, `WriteLines`. BPMN: `BpmnDecision` | Pure or naturally idempotent bodies that observe the token or are synchronous; each runs end to end on a worker (T019). |
 | **Qualifies by reading, not marked until it runs on a worker** (Q10) | M365: `GetUser`, `ListEvents`, `ListMessages`, `DownloadFile`. Slack: `ListChannels`, `LookupChannel`, `LookupUserByEmail`, `UpdateMessage` | Read-only or naturally idempotent bodies that observe the token. Their T022 unknowns need background runs against a connector host with a worker, which this spec has no host for; #4737 runs them and marks the ones that pass. |
 | **Already marked** | Agent: `AgentModelTurn` (internal, not discoverable) | Meets C1–C10 (journal keyed on `InvocationId`, linked token, no inputs). Its background node is built by hand in `AgentActivityProvider`; `ActivityTemplatePlacer` now checks it when it places it (FR-012, Q9). |
 | **Not marked: meets C1–C10, but background makes no sense** | `WriteHttpResponse`; triggers `Cron`, `Timer` | The HTTP response is delivered only from a result committed during the synchronous inline drain; a background result would arrive too late and be lost. A trigger's body gets no trigger payload on the worker. No criterion catches either; not marking them is enough (Q8). |
@@ -274,9 +275,10 @@ structural activity and child handler fails C1 (16 types, including `BpmnProcess
 | **Not marked: implementation gap → issue** (FR-009) | M365 `CreateEvent` (no idempotency key from `InvocationId`; #4721), M365 `UploadFile` (conflict behaviour `rename` duplicates on a re-run; its `byte[]` input needs a C10 answer; #4722), Slack `AddReaction` (a re-run faults on `already_reacted`; #4723), `EvaluateDecision` (the body re-reads coordinator stores and a live-burst overlay; unproven on a worker; #4724) | Each could qualify after a small change. |
 | **Ineligible** | `Inline` (C3: `object` result; lifts with S-8), `PublishEvent` (C6, by design), `RunJavaScript` (C9) | `RunJavaScript`: a script reads variables by name (ADR 0089) and writes them (ADR 0090 decision 3), and a background worker has no access to variables. C9 checks the activity type, and a script's variable access differs per node, so the activity is not marked; a background placement is refused for the missing declaration. Marking it needs an isolated worker to get variable access first (ADR 0093, limits of today's support for C9). |
 
-Unverified, checked before marking (T022; the connector parts in #4737): whether connection-based activities resolve their tenant partition on a
-worker, whether a secret-bound input resolves on the worker (C10), and
-whether a large `DownloadFile` result hits the receipt size limit (`BG-ACT-006`).
+Checked before marking (T022): a secret-bound input resolves on the worker with no raw secret stored (C10) and a result
+above the receipt size limit faults with `BG-ACT-006`, both by worker runs. Still open, in #4737: whether a connection
+resolves its tenant partition on a worker (shown by reading only) and the `DownloadFile` result limit on a run of
+`DownloadFile` itself.
 
 ## Open questions for the approver
 
@@ -289,7 +291,7 @@ them.
 | Q2 | **Diagnostic shape.** Keep one code `VF-BG-001` with the criterion in the message, or one code per criterion? | **One code, criterion as a structured field and in the message** (`VF-BG-001 (C9): …`). ADR 0093 decision 5 names `VF-BG-001`; a code per criterion would multiply codes without helping the author. |
 | Q3 | **C9's other signals.** ADR 0093 says C9 later also covers ADR 0090's `[AccessesUndeclaredVariables]` and a writable `VariableReference<T>` input. ADR 0090 is now accepted as amended, but neither signal exists in code yet. | **Enforce `IRuntimeScopedVariableReader` now**; the component exposes C9 as one predicate so the later signals are one change when ADR 0090 is implemented. |
 | Q4 | **Who confirms C7 and C8 for a built-in activity?** No code can prove them. | **The spec author proposes per activity in this spec's assessment table, and the approver confirms it** when approving the spec. An activity nobody can vouch for stays unmarked. |
-| Q5 | **Already published executables.** A pinned background node that now fails a criterion at run time (for example C9): refuse, or let it run? | **Refuse with an incident naming the criterion.** No shipped activity is marked, so only custom activities can be affected, and running them would keep the silent wrong value C9 exists to stop. No migration. |
+| Q5 | **Already published executables.** A pinned background node that now fails a criterion at run time (for example C9): refuse, or let it run? | **Refuse with an incident naming the criterion.** No shipped activity is marked (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so only custom activities can be affected, and running them would keep the silent wrong value C9 exists to stop. No migration. |
 | Q6 | **Inheritance.** `[BackgroundExecutionSafe]` is `Inherited = true`, so a subclass of a marked built-in is marked without its author promising C7/C8. | **Keep inheritance**, but document on the attribute that a subclass inherits the promise. Changing it would break custom activities that derive from marked bases on purpose. |
 | Q7 | **Commit-order evidence (FR-010).** Is S-10's write history (one record per applied write, in commit order, PR #4316) enough as "an inspectable record of the actual commit order", or is a separate record needed? | **S-10's write history plus the checkpoint sequence is enough**; no new store. The tests read it back on both providers. This makes US6 depend on PR #4316 being merged. |
 | Q8 | **Two gaps no criterion catches.** `WriteHttpResponse` only works inline (its result is delivered during the inline drain), and a trigger activity (`Cron`, `Timer`) gets no trigger payload on the worker. Add criteria to ADR 0093, or only leave them unmarked? | **Leave them unmarked, no ADR change.** Only a marked type can be placed in the background, and marking is the author's declaration, so not marking closes both gaps for the built-ins. The attribute's documentation adds both as things an author checks before marking (FR-008). If a third-party activity hits them, a criterion is proposed then, in its own ADR 0093 amendment PR. |
@@ -332,6 +334,6 @@ release whose **custom** activity has an untyped result (C3), a stream or transi
 (C4), reads variables by name (C9) or has a worker-bound input that is non-persistable, a live resource or sensitive
 without a secret reference (C10) is refused at admission with an incident (Q5). Publication now also refuses a background result typed
 `Any` or `System.Object` (C3), which it previously let through. No shipped activity was marked
-before, so only custom activities are affected. Five built-ins are now `[BackgroundExecutionSafe]`: `Break`, `Fault`, `WriteLine`, `WriteLines` and `BpmnDecision`. The
+before (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so only custom activities are affected. Five built-ins are now `[BackgroundExecutionSafe]`: `Break`, `Fault`, `WriteLine`, `WriteLines` and `BpmnDecision`. The
 Microsoft 365 and Slack activities that qualify stay unmarked until their background runs pass (#4737). `RunJavaScript` is not marked: scripts read and write variables by
 name, and a background worker has no access to variables (C9).

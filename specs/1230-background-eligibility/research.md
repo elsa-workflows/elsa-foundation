@@ -116,23 +116,25 @@ the initiative branch first; no logic overlaps.
   spellings. It is now refused at publication naming C10 (`BackgroundEligibilityPublicationTests`).
 - **T011.** `BpmnProcess` is still the only shipped `IRuntimeScopedVariableReader`; it fails C1 first. C9 refuses no
   built-in.
-- **T022, by reading the code and one run.**
+- **T022, by reading the code and two worker runs.**
   - Tenant partition on a worker: `HttpConnectionApplicator` and `ActivitySecretInputResolver` read
     `IWorkflowExecutionPartitionAccessor.Current`, which comes from the persistence access context. The worker runs the
     body inside `scopeFactory.CreateAsync(claimScope)`, so both resolve the claim's partition. Not run against a live
     connector.
   - Secret-bound inputs: publication admits them in the background (C10 lets a secret reference through; the snapshot
-    keeps the withheld envelope) — `BackgroundEligibilityPublicationTests`. Activation-time
-    resolution on the worker uses the same resolver as inline.
+    keeps the withheld envelope) — `BackgroundEligibilityPublicationTests`; on a worker the input resolves at activation
+    and no stored record holds the raw value, on both providers —
+    `NativeBackgroundActivityFlowchartEfTests.A_secret_input_resolves_on_the_worker_and_is_never_stored` (T014).
   - `DownloadFile` above the receipt limit: `BackgroundActivityCompletionCodec` refuses a result above
-    `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault. Accepted; to be shown for `DownloadFile` itself by its background run in #4737.
+    `MaximumResultBytes` (1 MiB default) with `BG-ACT-006`, a clear fault, shown on a worker by `BackgroundActivityWorkerTests.Faults_a_result_above_the_receipt_size_limit`.
+    Accepted; to be shown for `DownloadFile` itself by its background run in #4737.
   - None failed by reading. *Amended 2026-11-18 (Q10):* reading is not enough for a mark, so the eight connector
     activities stay unmarked until their background runs in #4737 pass.
 - **`RunJavaScript` is not marked (C9).** Specs 1222 (S-4) and S-7 give the script body variable reads by name
   (ADR 0089, including a run-time lookup for computed names) and writes by name (ADR 0090 decision 3). A background
   worker has no access to variables, so the activity does not meet C9. C9 checks the activity type and a script's
   variable access differs per node; rather than a per-node rule, the activity is not marked. Marking it needs an
-  isolated worker to get variable access (the variable session that lifts C9). The remaining marks stand (five after the Q10 amendment below).
+  isolated worker to get variable access (the variable session that lifts C9). The remaining marks stand (five after the Q10 amendment above).
 - **Declaration order (data-model updated to match).** The declaration check runs **after** the engine-checked criteria, not
   before C1, so an unmarked activity that also fails C1–C10 is refused naming that criterion (US5 acceptance 2:
   `Sequence` → C1, `Inline` → C3). An unmarked activity that passes them all is refused as "does not declare
@@ -148,7 +150,7 @@ the initiative branch first; no logic overlaps.
   publication. This is the one place FR-012's "same publication check" is narrower; review round 1.
 - **Versions (T020).** Marking changes only the runtime contract fingerprint; the design catalog hash does not read the
   attribute. The eight connector activities carry `[Version]`; they stay at 1.0.0 because they are not marked (Q10 amendment), and
-  #4737 moves each one it marks to 1.1.0. Primitives, Scripting and BPMN use the
+  #4737 moves each one it marks to 1.1.0. Primitives and BPMN use the
   assembly version, which the per-package versioning tool moves. The activity contract surface baseline does not
   record the flag, so it is unchanged.
 - **C9 signals of ADR 0090.** Neither `[AccessesUndeclaredVariables]` nor `VariableReference<T>` exists in code (checked
