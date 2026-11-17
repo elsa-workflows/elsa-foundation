@@ -330,4 +330,8 @@ ADR 0097 ([PR #4156](https://github.com/elsa-workflows/elsa-foundation/pull/4156
 follows. The [storage model](storage-model.md#inbox-identity-and-public-names) gives today's identity domains,
 [fairness and backpressure](fairness-and-backpressure.md) the per-tenant admission and turn selection,
 [observability](observability.md#recover) the operator actions, and [data lifecycle](data-lifecycle.md) the per-tenant
-keys for erasure. Nothing on this page is built or measured.
+keys for erasure. What exists today is listed under [What is built](#what-is-built); the contract this page proposes
+is not built, and no run has measured it. The measurements the page reports are earlier runs against the engines and
+today's prototype: the reviewer's collation confirmation runs under "Measured on the pin", and the actor-alias and
+MySQL procedure results under "Every expression uses the pin". They show the problem and the pin's effect on single
+statements. They qualify no part of the proposed implementation, which T15 to T17 test once it is built.
