@@ -155,6 +155,7 @@ Owner decisions are by card; the coordinator's design choice is marked as such.
 | 17 Nov | A canonical tenant-id grammar (lowercase ASCII letters, digits and `-`), enforced where the bound scope is created. | Owner card; tenancy decision 5 |
 | 17 Nov | Every column that holds a tenant-qualified name has one pinned, non-locale, case-insensitive collation (`Latin1_General_100_CI_AS_SC_UTF8` on SQL Server, `utf8mb4_0900_ai_ci` on MySQL), used in every expression over it. | Owner card; tenancy decision 6 |
 | 17 Nov | A finite `Parked` window's expiry is an automatic discard, run as a drain of the instance itself; after it, recover is refused, and the parent gets its final Faulted notice (M1). | Coordinator design choice, not an owner card; [observability](observability.md#what-park-keeps) |
+| 17 Nov | A parked instance's delete whose row `ProtectsDeletion` protects by the time its drain completes resolves the Park as a discard: the row stays Faulted with a new terminal mark, the parent gets the one Faulted notice, the journal records the delete refused as protected, and the `Faulted` retention window starts (third review R3-M5 fix). It fills a gap in decision 9's protection rule. | Coordinator design choice, not an owner card; [observability](observability.md#delete-during-a-drain) |
 
 ## Process
 
