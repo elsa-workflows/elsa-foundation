@@ -99,7 +99,10 @@ together. Then every write in its subtree is an unordered write, even a single n
   split on (a split's "skip" flow excludes the step it skips). The exception does not hold when a fork (before the loop
   or on it) sends two branches into the join along different arrivals: that one run puts two runs of the join in
   flight together, whichever pass each arrival closes. A BPMN host's normal flow counts as a branch beside each
-  non-interrupting boundary, also when interrupting boundaries make it a choice.
+  non-interrupting boundary, also when interrupting boundaries make it a choice. A branch passes a waiting join only
+  when each arrival of that join can come from the start or the fork's own run without the join; the analysis does not
+  weigh exclusive choices here, so an arrival that is free only on another choice can still give a (conservative)
+  warning.
 - A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
   successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
   run of the branch, which also overlaps the next pass of the cycle. This includes a Flowchart loop that repeats
