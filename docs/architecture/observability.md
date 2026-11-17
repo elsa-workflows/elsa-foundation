@@ -240,12 +240,15 @@ Park decision.
   one: its own turn writes the end status and terminal mark and sends the parent its one notice, so Complete sends
   none. A turn that throws before the end is a re-park, handled under "Interruption" above.
   - **After the end, nothing reopens the Park.** The end's turn records the model's end in the open
-    `ParkRecord.Resolution`. That is how the kernel tells the two cases apart, since the built `WorkflowInstance.Park`
-    treats every status other than Running as ended, and a parked row and a model that ended Faulted share a status:
-    a recover Resolution that records the model's end means a later delivery that reaches `MaxAttempts` is a failed
-    late input, so the row records the failure and stays ended, the drain continues, and no new Park opens; an
-    unresolved Park with no Resolution that records an end means a re-park, which continues the Park. Keeping never
-    resumes on an ended instance.
+    `ParkRecord.Resolution`, in the same commit as the built end, since `ParkRecord` is on the instance row. The
+    kernel needs a discriminator, because the built `WorkflowInstance.Park` treats every status other than Running as
+    ended, and a parked row and a model that ended Faulted share a status. For a delivery that reaches `MaxAttempts`:
+    - **while any resolution is open** (a recover drain whose Resolution records the model's end, or a discard,
+      expiry, terminate or delete drain, which stopped keeping at its open), it is a failed late input: the row
+      records the failure and keeps its status, the drain continues, and neither a Park nor keeping resumes;
+    - **while the Park is unresolved and no resolution is open**, it is a re-park, which continues the Park;
+    - **while a recover drain runs a model that has not ended**, it parks the instance and interrupts the drain, as
+      under "Interruption" above.
   - **A delete after the end takes the drain over,** as it does for discard, expiry and terminate (below). Without
     that, the trace is: the model finishes, rows above the cursor still carry `KeptBy`, a delete removes the ended row,
     the next `kernel.drain` finds no target and is dropped, and the remaining rows keep `KeptBy` for good, since the
@@ -531,7 +534,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
-| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, is a re-park. A turn that throws before the end is a re-park (M3-6) | K3, K6 |
+| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. A turn that throws before the end is a re-park (M3-6) | K3, K6 |
 | M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
