@@ -182,11 +182,14 @@ one commit, and calls one new model hook.
 - **Timers.** The owner reads the instance's inbox rows (one read by target, of pending rows and of rows with
   `KeptBy` not null) and passes the ids of timers still pending.
   A pending timer stays as it is. A timer that came due while parked and was kept (decision 2a) is restored as its own
-  row, below, which arms it with its original id and due time, so it fires at once. A timer the Park itself consumed is restored
+  row, below, which arms it with its original id and due time, so it fires at once. A timer that came due while parked
+  whose kept row the sweep removed (a non-null `Parked` window passed) is armed again by the plan with its original due
+  time. A timer the Park itself consumed is restored
   only in `retry`, as one of the consumed deliveries; `resume` neither restores nor re-arms it, so it cannot fire the
   poison again. No timer is armed twice.
 - **Jobs.** A job still in the row's jobs with a live ticket keeps it. A kept ticket row is restored like any kept
-  delivery, below, with its original id. A job whose ticket is gone (a ticket the Park consumed under `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation
+  delivery, below, with its original id. A job whose ticket is gone (a kept ticket the sweep removed after a non-null `Parked`
+  window, or a ticket the Park consumed under `resume`) starts again under a new ticket generation: the kernel derives the ticket id from instance, key, creation
   and the recovery's ordinal `n` (`Worker.TicketId` takes the first three today), so it collides with neither the old
   ticket nor its kept done row. The model never sees the generation: the job context and the `job-finished` result
   carry the model's own key, and the kernel maps the generation back. A result from the old generation matches no live
@@ -227,6 +230,9 @@ one commit, and calls one new model hook.
 **Discard** `{operation, expected revision}` checks, as recover does, that the instance is parked and that its Park's
 first revision (from the `ParkRecord`) equals the expected revision, and refuses otherwise. It then gives the kept
 deliveries the ordinary window and clears their `KeptBy`, or removes them, in the same commit, and records the disposition. The instance stays faulted, and retention or a delete removes it.
+Because a parent keeps waiting for a parked child ([large fan-out](large-fan-out.md), decision 5), discard and the
+delete of a parked instance also send its parent a final Faulted notice in the same commit, which ends the parent's
+wait. Neither is built.
 
 **Every operator message** is an outside add whose id is the operation id, with a `keep_until`, so a retried command
 gets a duplicate-key answer and no second effect. The kernel's tenant check on sends applies. Inspecting metadata,
