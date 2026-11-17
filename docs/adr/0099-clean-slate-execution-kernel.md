@@ -83,8 +83,10 @@ profile, and no capability flag makes it fail on one. Inline execution is chosen
 ### 5. Virtual partitions and the fence
 
 1,024 fixed virtual partitions, one fence row each: decided on 16 November and not built. The prototype still has
-`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership,
-whose timing and rebalance strategy are open (PARTITIONS.md decisions 4 and 5). One owner node writes a partition; its commit lands only while the
+`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership
+of the 1,024 virtual partitions, with a journal per virtual partition. That refactor is release 1's first milestone,
+right after design approval and before product wiring, and rebalance moves the fewest partitions, so a node's
+partitions may be scattered (owner, 17 November: PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
 commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
