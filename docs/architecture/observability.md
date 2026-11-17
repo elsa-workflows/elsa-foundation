@@ -196,7 +196,7 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
 
 // kernel.recover   {operation, park: ParkSelection, mode, selection}
 // kernel.discard   {operation, park: ParkSelection}
-// kernel.terminate {operation, creation, park: ParkSelection?}   // park is required when the row is parked
+// kernel.terminate {operation, creation, park: ParkSelection?}   // an operator's: park required when the row is parked
 // kernel.drain       {creation, parkRevision, parkAt, generation}
 // kernel.park-expiry {creation, parkRevision, parkAt}
 ```
@@ -204,9 +204,19 @@ public sealed record ParkSelection(string Tenant, long Creation, long ParkRevisi
 - **The tenant** comes from the operator's bound scope ([tenancy](tenancy.md#every-operation)), never from the payload.
 - **The owner's checks before Open,** in the actor's command turn, refusing on the first that fails: the tenant equals
   the row's; the creation equals the row's and both are known; the row is parked and its Park mark equals the
-  selection's. A terminate that reaches a parked row without a `ParkSelection` is refused as ambiguous. A refusal
+  selection's. An operator's terminate that reaches a parked row without a `ParkSelection` is refused as ambiguous. A refusal
   changes nothing, is recorded in the operation's outcome and counts in `elsa.kernel.park.refused` by reason (tenant,
   run, Park, ambiguous, resolution open).
+- **A terminate the kernel issues needs no `ParkSelection`.** A parent's tree terminate, and a combiner's FailFast
+  under large fan-out decision 5, send each registered child `kernel.terminate` as an issued message
+  (`WorkflowInstance.cs`, the terminate path), with the child's creation and no Park identity. Requiring one would
+  strand the child: the parent ends, the child stays parked under the default null window, and an unresolved Park is
+  never eligible for retention, so it would stay for good. Such a terminate is accepted when it is issued (an
+  application send cannot carry the issued scope), its `TargetCreation` equals the row's creation, and its sender and
+  `SenderCreation` equal the row's recorded `Parent` and `ParentCreation`. A stale send from an earlier parent creation,
+  or a forged one, fails that binding and is refused. An accepted one opens the terminate drain: the child resolves as
+  Cancelled, and its Complete sends the parent the one final notice every terminate resolution sends, and no other; a
+  parent that has already ended consumes and drops it.
 - **Internal controls are bound too.** `ParkRecord.ResolutionGeneration` grows by one at every Open of this creation.
   A `kernel.drain` acts only if its creation, Park mark and generation equal the row's and an open Resolution has that
   generation; a `kernel.park-expiry` acts only if its creation and Park mark equal the row's and the Park is
@@ -328,8 +338,8 @@ Park decision.
   depends on them.
 - **The selection is bounded.** An explicit `retry` selection names at most `P` handles and at most 256 KiB of
   encoded handles (proposed); a larger one is refused with no change, and the operator uses retry-all, which is one
-  flag. Open marks the selected rows `Selected`, so the Resolution never stores the selection and Open writes at most
-  `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
+  flag. Open marks the selected kept rows `Selected` and re-arms the selected suppressed timers (see "Checks" below), so
+  the Resolution never stores the selection and Open writes at most `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
   at most `P` rows, so the next recover starts from the Park's own reasons.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
   owned commit, and `B` = 4 MiB of metadata. A page is one turn's share of the partition's flush, far inside MongoDB's 16 MiB
@@ -379,8 +389,11 @@ calls one new model hook.
   the model's own id. Native, Flowchart and StateMachine each implement it.
 - **Checks.** The `ParkSelection` matches (above), no resolution is open, and the instance is recoverable under
   decision 1. After the window's expiry the Park is resolved, so recover is refused in
-  both modes. Every handle in the selection must name a row the Park kept with reason
-  `Consumed`, or a timer this Park retains as suppressed (below); one that does not refuses the whole command. A refusal changes nothing and is recorded.
+  both modes. Open splits the selection before it writes anything: a handle that names a row this Park keeps with
+  reason `Consumed` goes to the `Selected` marking and its count check; a handle that names a timer this Park retains
+  as `Suppressed` (below) goes to the re-arm path, a create-only insert of the timer with its original due time, and
+  takes no part in the marking or its count; a handle that is neither refuses the whole command before Open. A refusal
+  changes nothing and is recorded.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
   as the owner decided.
@@ -669,6 +682,8 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | P-3 | Mutation: the owner skips the creation check. P-1's late command discards B, and the invariant "a Park operation changes only the Park it names" fails | K3 |
 | P-4 | A delayed `kernel.drain` of an interrupted resolution arrives after a second Open, a delayed `kernel.park-expiry` of a resolved Park arrives after the same creation parks again, and either reaches a successor creation: each is consumed and dropped, and no row changes | K3, K4 |
 | P-5 | `ParkedItem` and `KeptAsync` expose creation and Park mark; a command built from them lands; one built before a recovery and a second Park is refused; refusals count by reason | K9, K11 |
+| P-6 | The interrupted recover and the Park mark: an operator delete naming the Park mark, and separately a discard naming the `ParkSelection`, are prepared while A is parked, before a recover opens. Delivered while the recover drain runs, each is refused (the mark is cleared and a resolution is open). Delivered after an interrupting re-park, the mark is back, so the delete opens the delete drain and the discard opens the discard drain. After a recover that completes, both are refused as naming an earlier transition | K3, K11 |
+| P-7 | A parent's tree terminate, and a combiner's FailFast, reach a parked child: the issued terminate is accepted without a `ParkSelection`, opens the terminate drain, and the child resolves as Cancelled with every `KeptBy` cleared; the parent receives the one final notice and no other. A terminate from an earlier parent creation, and an application send of `kernel.terminate` naming the child, are refused | K3, K6 |
 | S-1 | Kept rows whose payloads are `B` − 1, `B` and `B` + 1 bytes, and an oversized first row of 5 MiB: every page progresses on metadata alone and each restored payload is read only on delivery. Run under resume, discard and delete, with a takeover between pages | K3, K4, K12 |
 | S-2 | A kept row whose handle is at the provider's key limit, as the first row of a page: the page takes it and the drain completes | K3, K4 |
 | S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row | K3, K4, K11 |
