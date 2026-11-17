@@ -21,7 +21,9 @@ public sealed class RuntimeDiagnosticsSettings
         {
             [RuntimeDiagnosticsSubjects.DurableValues] = RuntimeDiagnosticsEvidenceLevel.Metadata,
             [RuntimeDiagnosticsSubjects.Incidents] = RuntimeDiagnosticsEvidenceLevel.Metadata,
-            [RuntimeDiagnosticsSubjects.Diagnostics] = RuntimeDiagnosticsEvidenceLevel.Metadata
+            [RuntimeDiagnosticsSubjects.Diagnostics] = RuntimeDiagnosticsEvidenceLevel.Metadata,
+            // Spec 1221 FR-025: the values in the write history are kept only when a host turns them on.
+            [RuntimeDiagnosticsSubjects.VariableWrites] = RuntimeDiagnosticsEvidenceLevel.Off
         };
 
     public static RuntimeDiagnosticsSettings Default { get; } = new();

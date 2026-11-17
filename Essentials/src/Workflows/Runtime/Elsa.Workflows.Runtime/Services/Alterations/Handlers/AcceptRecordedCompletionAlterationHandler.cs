@@ -14,8 +14,8 @@ namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 /// parent) and supersession, and revalidates the pinned contract and every target variable before anything applies.
 /// The successor is the same logical invocation and is committed completed; its completion is reported to the parent
 /// once. A repeated request finds the source superseded and is refused, so downstream work is never scheduled twice.
-/// A step whose body faulted, or whose completion also produced durable outputs, a workflow dispatch or a published
-/// stimulus, has no recorded completion and is refused (<c>NoRecordedCompletion</c>).
+/// A step whose body faulted, or whose completion also produced durable outputs, a workflow dispatch, a published
+/// stimulus or a parent or ancestor notification, has no recorded completion and is refused (<c>NoRecordedCompletion</c>).
 /// </remarks>
 public sealed class AcceptRecordedCompletionAlterationHandler(RetryFaultedActivityAlterationHandler retry) : IWorkflowAlterationPreflightHandler
 {

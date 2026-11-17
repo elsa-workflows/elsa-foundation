@@ -739,7 +739,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 invokePayload,
                 state.WithVariableWrites(captureCommit.Records) with
                 {
-                    RecordedCompletion = RecordCompletion(completedState, captureCommit, durableValueChanges, stagedWorkflowDispatch, stagedPublishIntents)
+                    RecordedCompletion = RecordCompletion(completedState, captureCommit, durableValueChanges, stagedWorkflowDispatch, stagedPublishIntents,
+                        parentNotificationWorkItems.Count + ancestorNotificationWorkItems.Count)
                 },
                 new VariableLostUpdateException(lostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
@@ -772,16 +773,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     }
 
     // The completion an operator may accept later is the whole transition: result, outcome selection and every
-    // variable write. A completion that also produced durable outputs, a workflow dispatch or a published stimulus is
-    // not recorded: an alteration cannot replay those effects, so accepting it is refused rather than half applied.
+    // variable write. A completion that also produced durable outputs, a workflow dispatch, a published stimulus or a
+    // parent or ancestor notification is not recorded: an alteration cannot replay those effects, so accepting it is refused rather than half applied.
     private static RecordedActivityCompletion? RecordCompletion(
         ActivityExecutionState completedState,
         RuntimeWorkflowVariableCaptureCommit captureCommit,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
-        IReadOnlyList<RuntimePostCommitIntent> publishIntents) =>
+        IReadOnlyList<RuntimePostCommitIntent> publishIntents,
+        int structuralNotifications) =>
         completedState.Completion is { } completion && completedState.Attempts?.LastOrDefault() is { } attempt &&
-        durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0
+        durableValueChanges.Count == 0 && workflowDispatch is null && publishIntents.Count == 0 && structuralNotifications == 0
             ? new RecordedActivityCompletion(completion, attempt, captureCommit.RecordedWrites)
             : null;
 

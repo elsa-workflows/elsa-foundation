@@ -86,8 +86,8 @@ run, and they are the only outcomes the incident rule lets replace a committed `
   the body again: the successor is the same logical invocation, completed with the recorded result and outcome
   selection, and each recorded variable write applies as an override that keeps the value it overwrote. It revalidates
   the pinned contract and each target variable's declaration (type and protection) first, and refuses a step without a recorded completion
-  (`NoRecordedCompletion`): a faulted body, or a completion that also produced durable outputs, a workflow dispatch or
-  a published stimulus.
+  (`NoRecordedCompletion`): a faulted body, or a completion that also produced durable outputs, a workflow dispatch,
+  a published stimulus or a parent or ancestor notification.
 - `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a
   required reason: it resolves the incident with an `OperatorDecision` outcome from `OperatorDecisionAlteration` and
   enqueues the decision for the parent, which applies it in its own evaluation

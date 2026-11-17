@@ -36,8 +36,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   supersedes the row with a completed successor of the same logical invocation; each recorded write applies as an
   override (`AcceptedOverride`, writer `AcceptedCompletion`) that keeps the value it overwrote, and the parent hears of
   the completion once. A repeated request finds the source superseded and is refused. Not recorded, so refused
-  (`NoRecordedCompletion`): a faulted body, a completion that also produced durable outputs, a workflow dispatch or a
-  published stimulus (an alteration cannot replay those), and a refusal on resume or on a composite's completion.
+  (`NoRecordedCompletion`): a faulted body, a completion that also produced durable outputs, a workflow dispatch, a
+  published stimulus or a parent or ancestor notification (an alteration cannot replay those), and a refusal on resume or on a composite's completion.
 - **T010a, T029–T032 (background branches, admission refresh):** `BackgroundActivityCoordinator.RefreshInputsAsync`
   compares the pinned snapshot's read set with the current versions of the visible frames at admission; on a change it
   materializes the inputs again as evaluation n+1 of the same invocation (the work id names the evaluation), keeps the

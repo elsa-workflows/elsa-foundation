@@ -133,24 +133,17 @@ internal sealed class BackgroundActivityCoordinator(
              StringComparer.Ordinal.Equals(refresh, RuntimeMetadataKeys.BackgroundInputRefreshOff)))
             return state;
 
-        RuntimeVisibleVariableFrames visible;
-        try
+        // Reading the scopes is a store read: a provider failure escapes to the scheduler's retry policy, as any other
+        // admission read does.
+        var scopes = new RuntimeContainerScopeService(activityStateStore, workflowStateStore);
+        var visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
+        // Inside a closed scope (a graph body) the variables are rows, carried by the durable values: those are loaded
+        // only then, so a read of a graph-body variable is checked too.
+        if (visible.ClosedScopeBoundary is not null)
         {
-            var scopes = new RuntimeContainerScopeService(activityStateStore, workflowStateStore);
-            visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
-            // Inside a closed scope (a graph body) the variables are rows, carried by the durable values: those are
-            // loaded only then, so a read of a graph-body variable is checked too.
-            if (visible.ClosedScopeBoundary is not null)
-            {
-                var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
-                    .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-                visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
-            }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException and not BackgroundActivityValidationException)
-        {
-            // The step's variable scopes could not be read: it faults with a visible incident, as below.
-            throw new BackgroundActivityValidationException($"BG-ACT-004: The background step's variable scopes could not be read at admission: {exception.Message}");
+            var durableValues = await serviceProvider.GetRequiredService<IDurableValueStateStore>()
+                .ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+            visible = await scopes.BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken, durableValues: durableValues);
         }
 
         var changes = new List<VariableInputChange>();
@@ -177,8 +170,8 @@ internal sealed class BackgroundActivityCoordinator(
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not BackgroundActivityValidationException)
         {
-            // Reading the inputs again failed: the step faults with a visible incident, as a failed Start would, rather
-            // than going to the scheduler's retry policy.
+            // Reading the inputs again failed: the step faults with a visible incident, as the invoke handler treats a
+            // failed input materialization (InputMaterializationFailed), rather than going to the retry policy.
             throw new BackgroundActivityValidationException($"BG-ACT-004: The background step's inputs could not be read again at admission: {exception.Message}");
         }
         return state with

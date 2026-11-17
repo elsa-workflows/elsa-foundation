@@ -154,7 +154,7 @@ protection. It does not refuse a variable that changed since: the override keeps
 the recorded result, and applies each recorded write as an override (`AcceptedOverride`) that keeps the value it
 overwrote. The parent hears of the completion once; a second request finds the source superseded and is refused. The
 faulted row keeps the refused write, so the conflict stays in the history. A completion that also produced durable
-outputs, a workflow dispatch or a published stimulus is not recorded, because an alteration cannot replay those
+outputs, a workflow dispatch, a published stimulus or a parent or ancestor notification is not recorded, because an alteration cannot replay those
 effects, and accepting it is refused (`NoRecordedCompletion`).
 
 ## What is not covered yet
