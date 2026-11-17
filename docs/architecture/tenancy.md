@@ -8,8 +8,9 @@ Several tenants share one Cluster database, its 1,024 virtual partitions and its
 kernel learns a tenant, how every name a caller can choose is kept apart per tenant, and what each ingress, match, read
 and administrative operation checks. It follows the product's tenancy proposal, ADR 0097
 ([PR #4156](https://github.com/elsa-workflows/elsa-foundation/pull/4156), open, read at `8c63d086`): the bound
-persistence scope is authoritative, the scope is in every tenant-keyed key, it travels explicitly across every
-asynchronous boundary, there is no nullable or wildcard tenant, and a missing scope fails closed.
+persistence scope is authoritative, it travels explicitly across every asynchronous boundary, there is no nullable or
+wildcard tenant, and a missing scope fails closed. 0097 (a) also puts the scope in every tenant-keyed key; the kernel
+amends that rule for the keys it generates itself (decision 4, below).
 
 Terms: **tenant id** and **persistence scope** have ADR 0097's meaning (the Elsa glossary). The **bound scope** is the
 scope a request's binder set from ADR 0097's resolver pipeline. A **tenant-qualified name** is `Q(t, n)`, defined below.
@@ -28,13 +29,13 @@ scope a request's binder set from ADR 0097's resolver pipeline. A **tenant-quali
 
 **The answer, step by step:**
 
-1. The ingress takes the tenant only from the bound scope (section "Where the tenant comes from"). A has `t = A`, B has
-   `t = B`.
-2. The ingress stores an outside message id as `Q(t, op-1)`. A's row has id `Q(A, op-1)` and B's has `Q(B, op-1)`.
+1. The ingress takes the tenant only from the bound scope (section "Where the tenant comes from"). A has tenant id
+   `a`, B has `b`.
+2. The ingress stores an outside message id as `Q(t, op-1)`. A's row has id `a_op-1` and B's has `b_op-1`.
    Store-wide deduplication compares the whole id, so the two never meet. A's retry meets A's row and gets the
    duplicate-key answer; B is unaffected.
 3. Subscriptions and events store their key as `Q(t, order-17)`. A's publish looks up subscriptions by
-   `Q(A, order-17)` and finds only A's waits. The match tuple's first field is the qualified key, so it names the
+   `a_order-17` and finds only A's waits. The match tuple's first field is the qualified key, so it names the
    tenant. B's wait is never matched by A's event.
 4. Every query, reply and operator action is covered by the table in "Every operation", each with its uniqueness rule,
    authorization and refusal shape. An id that belongs to another tenant answers exactly as an id that does not exist.
@@ -57,10 +58,14 @@ Everything below is **proposed and unverified**.
 ## Where the tenant comes from
 
 - **At ingress, only from the bound scope.** The kernel's ingress API (the delivery seam's add, starts, publishes,
-  operator commands, HTTP triggers, ingress adapters) takes a `BoundScope` value that only ADR 0097's binder can
-  create. It has no tenant string parameter. A tenant named in a payload, a header or a domain object is verified
-  against the bound scope and never selects it; a mismatch is refused (403) without naming the other tenant (ADR 0097
-  (a), (c)). No bound scope means refusal; the kernel never defaults a tenant.
+  operator commands, HTTP triggers, ingress adapters) takes a `BoundScope` value. It has no tenant string parameter.
+  `BoundScope` is defined in the kernel's contracts package (K2) with an internal constructor, visible only to the
+  kernel's Elsa hosting adapter package. That adapter reads the scope ADR 0097's binder bound with
+  `PersistenceAccessContext.Scoped(scope)` in the request's DI scope, checks the tenant-id grammar below, and issues the
+  `BoundScope`. The contracts package references no Elsa persistence package; only the adapter references both. A
+  tenant named in a payload, a header or a domain object is verified against the bound scope and never selects it; a
+  mismatch is refused (403) without naming the other tenant (ADR 0097 (a), (c)). No bound scope means refusal; the
+  kernel never defaults a tenant.
 - **Resolution is ADR 0097's.** Token claim, then host, then a trusted header from an authenticated caller allowed to
   select a tenant, then route prefix. Anonymous HTTP triggers resolve by host or route only.
 - **Embedded:** ADR 0097 (g)'s fixed-tenant scope source binds one ordinary scope (`"default"` unless the host sets
@@ -75,15 +80,45 @@ Everything below is **proposed and unverified**.
 
 ## Names: one namespace per tenant
 
+**The tenant-id grammar (decided, 17 November).** A tenant id is 1 to 64 characters, each a lowercase ASCII letter, a
+digit or `-`. It is enforced where the bound scope is created: the hosting adapter refuses a scope whose tenant id does
+not match, so `Acme`, `acmé` and `acme_x` never reach the kernel. ADR 0097's tenant catalog must therefore issue only
+ids in this grammar; its embedded default, `default`, already is one.
+
 **The rule.** Every name a caller can choose is stored tenant-qualified:
 
 ```text
-Q(t, n) = <length of t in UTF-16 units> ":" t ":" n          e.g. Q("acme", "op-1") = "4:acme:op-1"
+Q(t, n) = t "_" n          e.g. Q("acme", "op-1") = "acme_op-1"
 ```
 
-The length prefix makes `Q` injective whatever characters `t` and `n` contain, so two tenants never produce one
-stored name. A tenant id is at most 64 UTF-16 units (proposed), which leaves SQL Server's 450-unit ordinary id at least
-382 units for the caller's name; the storage model's per-provider limits apply to the qualified form.
+`_` is outside the grammar, so the first `_` of a stored name ends its tenant, and `Q` is injective: two tenants never
+produce one stored name.
+
+**Under SQL Server and MySQL collations.** Those engines compare a stored name with the column's collation, which may
+ignore case, accents, width and trailing spaces. Two qualified names of different tenants differ inside the tenant part,
+or at the position where the shorter tenant has `_` and the longer one a grammar character. Case and accent folding map
+only upper case to lower case and accented letters to their base letters; the grammar has neither, so its letters and
+digits stay distinct from each other and from `_`. Trailing-space padding and expansions such as `ß` = `ss` can only
+equate characters inside `n`, which is within one tenant, as today. The punctuation `-` and `_` is where collations
+differ most (SQL Server's Windows collations give the hyphen a special sort weight), so case T15 checks equality of
+names built to collide if either were ignored, on both engines.
+
+**`_` keeps the effect key fit for its receivers.** An effect key carries its instance origin, so a caller-key
+instance's key contains `Q`. `_` is RFC 5322 atext, so the key still fits the local part of the e-mail activity's
+`Message-ID` (`SendEmail.MessageId` in `models/Native/Activities.cs`), and a grammar tenant is printable ASCII, so it
+fits the `Idempotency-Key` header value too. A caller name with characters outside atext already needs encoding there
+today (`EffectKey.cs` states the fit holds "when those ids do"); the tenant part adds no such character. The receiver
+does see the tenant id: tenant ids are not secret, and a host that must not show tenant names to receivers gives its
+tenants opaque ids, which the grammar allows.
+
+**Key widths (from the EF model, not measured).** `Q` adds at most 65 characters, all single-byte ASCII:
+
+| Provider | Limit | Left for the caller's name |
+|---|---|---|
+| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`; `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together |
+| MySQL | `Messages.Id` 255 characters (`EfStore.cs`) | 190 for a message id; 185 for an actor id. The composite keys use the provider's default key width, recorded at K4 |
+| PostgreSQL | No column limit; a B-tree index entry is at most about 2,704 bytes | Composite keys stay within that, 65 bytes less for each qualified column |
+| SQLite, MongoDB | None that `Q` reaches | Not limited by `Q` |
 
 | Name | Chosen by | Stored as | Unique within |
 |---|---|---|---|
@@ -98,10 +133,15 @@ stored name. A tenant id is at most 64 UTF-16 units (proposed), which leaves SQL
 | Value row | Kernel | `(instance, digest)`; the digest is keyed per tenant where erasure needs it | The instance |
 | Effect key | Kernel | `{instance origin}/{node}/{iteration path}/{attempt}`, as decided | The store, since the origin is the store-unique id with its creation |
 
+**The kernel's amendment to ADR 0097 (a) (decided, 17 November).** 0097 (a) puts the bound scope in every
+tenant-keyed key. For the kernel: names a caller chooses are tenant-qualified, so the scope is in their keys; ids the
+kernel generates (children, event starts, job and plan actors), journal positions and value rows stay unique across
+the store, carry a `tenant` column, and the kernel checks that column (next section) in place of a scope in the key.
+
 Two consequences need no further rule:
 
-- **Effects.** Tenants A and B starting caller key `invoice-9` get ids `{vp}/Q(A, invoice-9)` and
-  `{vp'}/Q(B, invoice-9)`, so their effect keys differ. A deduplicating receiver never drops B's request as A's repeat.
+- **Effects.** Tenants A and B starting caller key `invoice-9` get ids `{vp}/a_invoice-9` and
+  `{vp'}/b_invoice-9`, so their effect keys differ. A deduplicating receiver never drops B's request as A's repeat.
 - **Placement.** The hash runs over the qualified name, so a tenant's caller keys spread over the virtual partitions
   independently of another tenant's.
 
@@ -145,7 +185,7 @@ feature.
 | Recover, retry, discard, suspend, resume, terminate, delete, migrate, plans | Bound scope | Operation id `Q(t, op)` | Separate operator permissions per tenant, audited (observability) | Another tenant's instance: not found, as above |
 | Admission (rates, `InboxFull`) | Bound scope | Token buckets per tenant | None | `RateLimited` is per tenant. `InboxFull` is per virtual partition and tenant-blind; it names no instance, key or other tenant |
 | Metrics and traces | Host-wide | Not applicable | Host monitoring | Tenant appears as a capped attribute only where a row says so; no payload, key or id |
-| Host administration: release a partition, drain a node, force a handover, initialize or migrate the schema | Host-wide, no scope | Not applicable | Host-admin permissions, distinct from any tenant role (ADR 0097 (d)) | Touches `partition` and `node` rows only; never reads or changes tenant rows' content |
+| Host administration: release a partition, drain a node, force a handover, initialize or migrate the schema | Host-wide, no scope | Not applicable | Host-admin permissions, distinct from any tenant role: the kernel's proposal; ADR 0097 (d) defers that distinction to its Phase 3 | Touches `partition` and `node` rows only; never reads or changes tenant rows' content |
 | Cross-tenant support | ADR 0097's support context (Phase 3): target-bound, expiring, audited, one tenant at a time | As the target tenant | The support profile's grants for that tenant | No wildcard, `*` tenant or permission that implies every tenant. Before Phase 3 there is none |
 
 **Global operator exceptions** are exactly the host administration row: it acts on infrastructure records, under host
@@ -184,28 +224,28 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 | T12 | Host administration forces a handover and drains a node while A and B have work | Only `partition` and `node` rows change; both tenants' work continues under the new owner | K5, K11 |
 | T13 | Simulation: two tenants with colliding operation ids, caller keys and correlation keys in the mix; mutations `TenantlessOutsideId`, `TenantlessCorrelationKey` and `SkipTenantCheckOnLoad` | The invariant "no delivery, match, read or effect crosses tenants" holds; each mutation is caught | K3 |
 | T14 | T2 to T11 in Embedded with the fixed tenant, and in Cluster with two nodes and two tenants | All pass on both profiles | K12 |
+| T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id; then T2 and T3 run on SQL Server (default case- and accent-insensitive collation) and MySQL (`utf8mb4_0900_ai_ci`) with tenant pairs `ab`/`a-b` and `a`/`a-b`, and names built to meet if `-` or `_` were ignored (`Q(a, b_x)` = `a_b_x` against `Q(a-b, x)` = `a-b_x`) | The four ids are refused at the binder; every pair stays two rows, two matches and two answers | K4 |
 
 The two-tenant fairness run of K12 measures latency and refusals; it does not replace these cases.
 
-## Decisions for the owner
+## Decisions (owner, 17 November 2026, by card)
 
-1. **How the tenant enters identities.**
-   - (a) Tenant-qualified names (`Q`) for every caller-chosen name, plus a tenant column. *Recommended:* names are
-     store-unique by construction, so store-wide deduplication, the match tuple and the decided effect-key shape stay
-     correct even if a query forgets its tenant predicate. Such a mistake could still disclose a row, which the column
-     check and T6 catch; it can never make two tenants' names collide.
-   - (b) Composite `(tenant, id)` keys on every record, with ids unique only per tenant. The effect key's origin and
-     the match tuple then need the tenant added explicitly, and every lookup that forgets it collides.
-2. **The kernel's storage model for tenants in release 1.**
-   - (a) The shared-store discriminator only, ADR 0097's v1 baseline; database per tenant later as one kernel per
-     tenant store, with its cost per store (1,024 fence rows, beats and a projector each, or fewer partitions for small
-     tenants) measured before it is offered. *Recommended:* it matches ADR 0097's Q3 default and release 1's scope.
-   - (b) A kernel per tenant store from release 1.
-3. **The tenant id length limit.** (a) 64 UTF-16 units. *Recommended:* it keeps at least 382 units for caller names on
-   SQL Server. (b) Another limit, with the storage model's key budgets recomputed.
+1. **Identities: tenant-qualified names plus the tenant column.** Names are store-unique by construction, so
+   store-wide deduplication, the match tuple and the decided effect-key shape stay correct even if a query forgets its
+   tenant predicate; such a mistake could still disclose a row, which the column check and T6 catch. Rejected:
+   composite `(tenant, id)` keys with ids unique only per tenant.
+2. **Storage: the shared store only in release 1,** ADR 0097's v1 baseline. A kernel per tenant store comes later,
+   with its cost per store (1,024 fence rows, beats and a projector each, or fewer partitions for small tenants)
+   measured before it is offered.
+3. **Tenant id length: at most 64 UTF-16 units.** The key widths above follow from it.
+4. **The kernel's amendment to ADR 0097 (a):** caller-chosen names are tenant-qualified; generated ids, journal
+   positions and value rows stay unique store-wide with a checked tenant column.
+5. **A canonical tenant-id grammar:** lowercase ASCII letters, digits and `-`, enforced where the bound scope is
+   created.
 
-ADR 0097's own questions (Q3 tenancy model, Q4 no agnostic tenant, Q7 support context) are pending owner there; this
-page follows their recommended defaults and changes nothing if they hold.
+ADR 0097's own questions (Q3 tenancy model, Q4 no agnostic tenant, Q7 support context) are pending owner there. This
+page follows their recommended defaults; decisions 4 and 5 touch 0097's section (a) and its tenant catalog, and 0097's
+author carries them into that ADR.
 
 ## Contract and evidence
 
