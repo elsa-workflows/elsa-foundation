@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Sequence.Models;
@@ -44,6 +45,37 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(harness, executionId, BuiltInNodeId));
         Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness, executionId));
         Assert.Equal(1, finalCounter.Count);
+    }
+
+    public static TheoryData<string> OtherMarkedBuiltIns => new() { nameof(Break), nameof(WriteLines), nameof(BpmnDecision) };
+
+    [Theory]
+    [MemberData(nameof(OtherMarkedBuiltIns))]
+    public async Task Every_other_marked_Essentials_built_in_runs_on_a_worker(string activity)
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        await using var harness = await StartHarnessAsync(executionId, new BackgroundBodyBarrier(), new FinalStepCounter(),
+            includeBpmnFeature: activity == nameof(BpmnDecision));
+        var node = activity switch
+        {
+            nameof(Break) => BuiltInNode<Break>(),
+            nameof(WriteLines) => BuiltInNode<WriteLines>(("Lines", new[] { "one", "two" })),
+            // Outside a BPMN process the pinned outcome set is the default one; the worker refuses any other outcome.
+            _ => BuiltInNode<BpmnDecision>(("Outcome", "Done"))
+        };
+        var reference = await PublishAsync(harness, NewBuiltInExecutable(node));
+        await CopyPublicationIntoPartitionAsync(harness, reference);
+
+        await harness.StartPublishedAsync(reference, executionId);
+        var worker = Assert.Single(await ClaimWorkersAsync(harness, executionId, 1));
+        Assert.Equal(BuiltInNodeId, worker.Request.ExecutableNodeId);
+        await harness.Services.GetRequiredService<BackgroundActivityWorker>()
+            .ExecuteClaimAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value), worker.Claim)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        await DrivePartitionAsync(harness, executionId);
+
+        Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(harness, executionId, BuiltInNodeId));
+        Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness, executionId));
     }
 
     [Theory]
@@ -92,7 +124,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         return WorkflowExecutionHarness.NewExecutable(sequence, WorkflowExecutionHarness.Identity);
     }
 
-    private static ExecutableNode BuiltInNode<TActivity>(params (string Key, string Value)[] literals)
+    private static ExecutableNode BuiltInNode<TActivity>(params (string Key, object Value)[] literals)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(typeof(TActivity));
         Assert.True(contract.SupportsBackgroundExecution);

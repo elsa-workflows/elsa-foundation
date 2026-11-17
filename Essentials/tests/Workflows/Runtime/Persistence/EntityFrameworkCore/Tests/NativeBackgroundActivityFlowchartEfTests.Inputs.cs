@@ -64,6 +64,11 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
             Assert.Equal(ValuePresence.Withheld, token.Presence);
             Assert.Null(token.InlineValue);
             Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(work), StringComparison.Ordinal);
+            var queued = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                .ListAsync(new RuntimeSchedulerWorkQuery(executionId, limit: 100));
+            Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(queued.Items), StringComparison.Ordinal);
+            var incidents = await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(executionId);
+            Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(incidents), StringComparison.Ordinal);
         }
 
         Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(await ActivityStatesAsync(harness, executionId)), StringComparison.Ordinal);

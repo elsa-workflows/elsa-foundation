@@ -77,7 +77,8 @@
 - [x] T018 [US5] Add `[BackgroundExecutionSafe]` to every confirmed activity that passed T022.
 - [x] T019 [P] [US5] One end-to-end background run per marked activity (publish, worker, result applied); one refusal
   test per assessed-but-unmarked category, naming its criterion. *Done as:* the five Essentials built-ins publish in
-  the background, `WriteLine` and `Fault` run end to end on both persistence modes, every unmarked category is refused
+  the background and run end to end on a worker (`WriteLine` and `Fault` on both persistence modes; `Break`,
+  `WriteLines`, `BpmnDecision` on EF Core; `BpmnDecision` with an outcome from its pinned set), every unmarked category is refused
   naming why (`BuiltInBackgroundAssessmentTests`), and guards pin the marked connector set. End-to-end runs of the
   eight connector activities need a connector host with a worker: #4737.
 - [x] T020 [US5] Move each marked activity's version per its module's versioning rule (the contract fingerprint
