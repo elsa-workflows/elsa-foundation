@@ -72,6 +72,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
         services.AddScoped<IDraftValidator, ScriptOutcomeValidator>();
+        services.AddScoped<IDraftValidator, ScriptVariableReadValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();

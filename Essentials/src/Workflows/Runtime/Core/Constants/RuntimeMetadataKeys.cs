@@ -81,6 +81,13 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string BackgroundInputRefresh = "runtime.backgroundInputRefresh";
     public const string BackgroundInputRefreshOff = "off";
+    /// <summary>
+    /// The script body read plan of a script activity node (spec 1222 FR-004, FR-033): the variables its script names
+    /// literally, pinned at publish, and its fallback marker, as <see cref="Models.ScriptBodyReadPlan"/> JSON. Kept apart
+    /// from the input snapshot: body reads go through the body's variable session, never into the snapshot. Absent when
+    /// the body reads no variable.
+    /// </summary>
+    public const string ScriptBodyReadPlan = "runtime.scriptBodyReadPlan";
     /// <summary>On a variable-write value snapshot (spec 1221 FR-025): the scope id and the version the write produced.</summary>
     public const string VariableWriteScopeId = "runtime.variableWrite.scopeId";
     /// <summary>

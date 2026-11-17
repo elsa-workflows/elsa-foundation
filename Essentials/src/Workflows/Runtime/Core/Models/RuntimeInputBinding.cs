@@ -307,10 +307,13 @@ public sealed class RuntimeExpressionBinding
         IReadOnlyDictionary<string, ExpressionParameterBinding>? parameters = null,
         JsonElement? options = null,
         string? capabilityProfile = null,
-        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans = null)
+        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans = null,
+        VariableReadFallback? variableReadFallback = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+        if (parameters is not null)
+            ExpressionParameterSurfaces.Validate(parameters, nameof(parameters));
 
         Language = language;
         Expression = expression;
@@ -333,6 +336,7 @@ public sealed class RuntimeExpressionBinding
         CapabilityProfile = string.IsNullOrWhiteSpace(capabilityProfile)
             ? ExpressionCapabilityProfiles.BindingPureV1
             : capabilityProfile;
+        VariableReadFallback = variableReadFallback;
     }
 
     // System.Text.Json binds a constructor parameter to a property only when their declared types match
@@ -348,8 +352,9 @@ public sealed class RuntimeExpressionBinding
         IReadOnlyDictionary<string, ExpressionParameterBinding>? parameters,
         JsonElement options,
         string? capabilityProfile,
-        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans)
-        : this(language, expression, resultType, metadata, parameters, (JsonElement?)options, capabilityProfile, parameterConversionPlans)
+        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans,
+        VariableReadFallback? variableReadFallback)
+        : this(language, expression, resultType, metadata, parameters, (JsonElement?)options, capabilityProfile, parameterConversionPlans, variableReadFallback)
     {
     }
 
@@ -361,6 +366,13 @@ public sealed class RuntimeExpressionBinding
     public IReadOnlyDictionary<string, ValueConversionPlan> ParameterConversionPlans { get; }
     public JsonElement Options { get; }
     public string CapabilityProfile { get; }
+
+    /// <summary>
+    /// The fallback marker publish set for a computed or opaque variable read (spec 1222 FR-008, FR-013). The runtime
+    /// makes the visible variables readable and records each read only when it is present.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VariableReadFallback? VariableReadFallback { get; }
 }
 
 public sealed record RuntimeResolvedInput(

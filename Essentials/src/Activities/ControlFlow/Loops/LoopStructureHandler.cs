@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
@@ -37,6 +39,40 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
         ActivityChildTimeRelation.FirstBeforeSecond;
 
     public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
+    /// <summary>
+    /// The iteration values a script in the body reads as variables declared by this loop node (spec 1222 FR-004a).
+    /// ForEach's <c>currentIndex</c> is declared unless <c>ExposeIndex</c> is a literal <c>false</c>: an unauthored
+    /// input defaults to <c>true</c>, and an expression is only resolved at run time.
+    /// </summary>
+    public IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        var names = loop.IterationVariableNames;
+        if (loop.IndexSwitchInputKey is { } switchKey && IsLiteralFalse(activity.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, switchKey))))
+            names = names.Where(name => !StringComparer.Ordinal.Equals(name, loop.SwitchedIndexVariableName)).ToArray();
+
+        return names
+            .Select(name => new VariableDefinition(name, name, new TypeReference("Any"), null, null))
+            .ToArray();
+    }
+
+    /// <summary>Whether a loop input is authored as the literal <c>false</c> (not an expression, not unauthored).</summary>
+    internal static bool IsLiteralFalse(ArgumentState? input)
+    {
+        if (input?.Value is not { } value ||
+            (value.ExpressionType is { } type && !StringComparer.OrdinalIgnoreCase.Equals(type, "Literal")))
+            return false;
+
+        return value.Value switch
+        {
+            bool flag => !flag,
+            string text => bool.TryParse(text.Trim(), out var parsed) && !parsed,
+            JsonElement { ValueKind: JsonValueKind.False } => true,
+            JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString()?.Trim(), out var parsed) && !parsed,
+            _ => false
+        };
+    }
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {

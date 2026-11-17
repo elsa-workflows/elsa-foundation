@@ -1355,3 +1355,5 @@ static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.o
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.init -> void

@@ -324,8 +324,8 @@ public sealed class RuntimeContainerScopeService(
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         // Frames run root → innermost, so a later (inner) write of a shadowed name overwrites the outer one:
         // innermost scope wins.
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
-            result[name] = Materialize(name, envelope);
+        foreach (var variable in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
+            result[variable.Name] = Materialize(variable.Name, variable.Envelope);
         return result;
     }
 
@@ -341,31 +341,53 @@ public sealed class RuntimeContainerScopeService(
     {
         ArgumentNullException.ThrowIfNull(visibleFrames);
         var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
-            result[name] = envelope;
+        foreach (var variable in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
+            result[variable.Name] = variable.Envelope;
         return result;
     }
 
     /// <summary>
-    /// Projects an ordered (root → innermost) visible frame chain into the author-facing name → committed-envelope
-    /// view for the JavaScript ambient read surface (issue #984), with the innermost scope winning for a shadowed
-    /// name. Unlike the strict scoped-variable reader projection, this is a best-effort convenience surface: a frame whose
-    /// scope or key cannot be resolved to an author name is silently skipped rather than faulting expression
-    /// evaluation — the value remains reachable through statically declared parameters. Exposed as a static so
-    /// producers that assemble the visible chain by hand (e.g. the intrinsic executor) reuse one name resolution.
+    /// Projects an ordered (root → innermost) visible frame chain into the variables a script's computed or opaque read
+    /// can reach (spec 1222 FR-008): nearest scope first, each name once (the innermost declaration shadows an outer
+    /// one), each with the scope that declares it and its key, so a read is recorded with where it resolved (FR-010).
+    /// Loop iteration values are included as variables declared by the loop node (FR-004a). A frame whose scope or key
+    /// cannot be resolved to an author name is skipped: a statically declared parameter still reaches its value.
+    /// Exposed as a static so producers that assemble the visible chain by hand (e.g. the intrinsic executor) reuse one
+    /// name resolution.
     /// </summary>
-    public static IReadOnlyDictionary<string, ValueEnvelope> ProjectAmbientVisibleVariableEnvelopes(
+    public static IReadOnlyList<RuntimeVisibleVariable> ProjectReadableVariables(
         WorkflowExecutable executable,
         IReadOnlyList<VariableFrameState> orderedFrames,
         IReadOnlyDictionary<string, string>? rootVariableNames = null)
     {
-        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, orderedFrames, lenient: true, rootVariableNames))
-            result[name] = envelope;
-        return result;
+        var byName = new Dictionary<string, RuntimeVisibleVariable>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var variable in EnumerateVisibleVariables(executable, orderedFrames, lenient: true, rootVariableNames))
+        {
+            if (!byName.ContainsKey(variable.Name))
+                order.Add(variable.Name);
+            byName[variable.Name] = variable;
+        }
+
+        // Innermost wins; list the winners nearest scope first.
+        return order
+            .Select(name => byName[name])
+            .OrderByDescending(variable => FrameDepth(orderedFrames, variable.ScopeId))
+            .ToArray();
     }
 
-    private static IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
+    private static int FrameDepth(IReadOnlyList<VariableFrameState> orderedFrames, string scopeId)
+    {
+        for (var index = orderedFrames.Count - 1; index >= 0; index--)
+        {
+            if (StringComparer.Ordinal.Equals(orderedFrames[index].ScopeId, scopeId))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static IEnumerable<RuntimeVisibleVariable> EnumerateVisibleVariables(
         WorkflowExecutable executable,
         IReadOnlyList<VariableFrameState> orderedFrames,
         bool lenient,
@@ -381,7 +403,7 @@ public sealed class RuntimeContainerScopeService(
             {
                 // Iteration-frame keys are the exposed variable names directly (e.g. loopIndex / the item key).
                 foreach (var (key, value) in frame.Values)
-                    yield return (key, value);
+                    yield return new RuntimeVisibleVariable(key, frame.ScopeId, key, value);
                 continue;
             }
 
@@ -389,7 +411,7 @@ public sealed class RuntimeContainerScopeService(
             if (RuntimeClosedScope.IsClosedScopeFrame(frame))
             {
                 foreach (var (key, value) in frame.Values)
-                    yield return (rootVariableNames?.GetValueOrDefault(key) ?? key, value);
+                    yield return new RuntimeVisibleVariable(rootVariableNames?.GetValueOrDefault(key) ?? key, frame.ScopeId, key, value);
                 continue;
             }
 
@@ -414,7 +436,7 @@ public sealed class RuntimeContainerScopeService(
                     throw new InvalidOperationException($"Variable frame '{frame.FrameId}' contains undeclared variable key '{key}'.");
                 }
 
-                yield return (declaration.Name, value);
+                yield return new RuntimeVisibleVariable(declaration.Name, frame.ScopeId, key, value);
             }
         }
     }

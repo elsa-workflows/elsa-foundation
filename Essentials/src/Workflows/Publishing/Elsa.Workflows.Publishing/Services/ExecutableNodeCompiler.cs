@@ -32,8 +32,15 @@ public sealed class ExecutableNodeCompiler(
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
-    ValueConversionPlanResolver? conversionPlanResolver = null)
+    ValueConversionPlanResolver? conversionPlanResolver = null,
+    ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
+    /// <summary>
+    /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the
+    /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, ScopedVariableVisibility> ReadVisibility = new();
+
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -45,14 +52,20 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null,
         IEnumerable<VariableDefinition>? workflowVariables = null,
-        IEnumerable<InputDefinition>? workflowInputs = null) =>
-        CompileNode(
+        IEnumerable<InputDefinition>? workflowInputs = null)
+    {
+        var variables = workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [];
+        if (scriptVariableReadResolver is not null)
+            ReadVisibility.AddOrUpdate(projection, new ScopedVariableResolver(activityStructureService)
+                .Resolve(variables, rootActivity, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true));
+        return CompileNode(
             rootActivity,
             projection,
             activityRows,
             placedActivities ?? new Dictionary<string, ExecutableNode>(),
-            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
+            variables,
             workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? []);
+    }
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -140,7 +153,12 @@ public sealed class ExecutableNodeCompiler(
         var projectedInputs = ProjectInputs(activity, inputDefinitions, activityStructureService.ProjectInputs(activity));
         projectedInputs.States = LowerWorkflowInputReads(projectedInputs.States, workflowInputs);
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
-        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States);
+        var inputBindings = PinScriptReads(
+            activity.NodeId,
+            inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
+            projection,
+            clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey,
+            out var bodyReadPlan);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
@@ -169,11 +187,125 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh),
+            metadata: WithBodyReadPlan(CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh), bodyReadPlan),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
             executionPlacement: activity.ExecutionPlacement);
+    }
+
+    private static Dictionary<string, string> WithBodyReadPlan(Dictionary<string, string> metadata, ScriptBodyReadPlan? plan)
+    {
+        if (plan is not null)
+            metadata[RuntimeMetadataKeys.ScriptBodyReadPlan] = plan.Serialize();
+        return metadata;
+    }
+
+    /// <summary>
+    /// Pins the variable reads of every script input of a node (spec 1222 FR-001 to FR-004, FR-008, FR-009, FR-012,
+    /// FR-014, FR-017, FR-023). Each input expression in a language that reads variables by name is parsed; each name it
+    /// reads literally becomes a <c>Variable</c> parameter keyed <c>variables.&lt;name&gt;</c> that records the nearest
+    /// declaring scope, and a computed or opaque read adds the fallback marker with the conservative read report. The
+    /// authored source is never rewritten. Pins are derived, so any authored <c>variables.</c> parameter is replaced by
+    /// what publish resolves; explicit <c>args</c> parameters stay. A name that resolves to no visible declaration, or to
+    /// a transient variable, refuses publication. The script input of a script activity becomes its body read plan,
+    /// kept apart from the input snapshot (FR-004, FR-033).
+    /// </summary>
+    private IReadOnlyDictionary<string, RuntimeInputBinding> PinScriptReads(
+        string nodeId,
+        IReadOnlyDictionary<string, RuntimeInputBinding> bindings,
+        ActivityTreeProjection projection,
+        string? scriptBodyInputKey,
+        out ScriptBodyReadPlan? bodyReadPlan)
+    {
+        bodyReadPlan = null;
+        if (scriptVariableReadResolver is null || !ReadVisibility.TryGetValue(projection, out var visibility))
+            return bindings;
+
+        var scopes = visibility.GetVisibleScopes(nodeId);
+        var pinned = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var (key, binding) in bindings)
+        {
+            if (scriptBodyInputKey is not null &&
+                StringComparer.Ordinal.Equals(key, scriptBodyInputKey) &&
+                binding.Source == RuntimeInputBindingSource.Literal &&
+                binding.Literal?.InlineValue is { ValueKind: JsonValueKind.String } script &&
+                scriptVariableReadResolver.Resolve("JavaScript", script.GetString()!, scopes, scriptBody: true) is { } bodyPlan)
+            {
+                EnsureResolvable(nodeId, key, bodyPlan);
+                if (bodyPlan.Pinned.Count > 0 || bodyPlan.NeedsFallback)
+                    bodyReadPlan = new ScriptBodyReadPlan("JavaScript", bodyPlan.PinnedParameters(), bodyPlan.Fallback());
+                pinned[key] = binding;
+                continue;
+            }
+
+            if (binding.Expression is not { } expression ||
+                !scriptVariableReadResolver.Supports(expression.Language) ||
+                scriptVariableReadResolver.Resolve(expression.Language, expression.Expression, scopes) is not { } plan)
+            {
+                pinned[key] = binding;
+                continue;
+            }
+
+            EnsureResolvable(nodeId, key, plan);
+            var parameters = expression.Parameters
+                .Where(parameter => !ExpressionParameterSurfaces.TryGetVariableName(parameter.Key, out _))
+                .ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+            foreach (var (name, parameter) in plan.PinnedParameters())
+                parameters[name] = parameter;
+            pinned[key] = new RuntimeInputBinding(
+                binding.InputName,
+                binding.TargetType,
+                binding.EffectivePolicy,
+                binding.Source,
+                binding.Selection,
+                binding.Literal,
+                binding.WorkflowRequest,
+                binding.Variable,
+                binding.ActivityResult,
+                new RuntimeExpressionBinding(
+                    expression.Language,
+                    expression.Expression,
+                    expression.ResultType,
+                    expression.Metadata,
+                    parameters,
+                    expression.Options,
+                    expression.CapabilityProfile,
+                    expression.ParameterConversionPlans
+                        .Where(conversion => parameters.ContainsKey(conversion.Key))
+                        .ToDictionary(conversion => conversion.Key, conversion => conversion.Value, StringComparer.Ordinal),
+                    plan.Fallback()),
+                binding.Metadata,
+                binding.ConversionPlan,
+                binding.ConversionRequest,
+                binding.Secret);
+        }
+
+        return pinned;
+    }
+
+    private static void EnsureResolvable(string nodeId, string inputKey, ScriptVariableReadPlan plan)
+    {
+        if (plan.Unresolved.Count > 0)
+        {
+            var name = plan.Unresolved[0];
+            throw new ArgumentException(
+                $"{ScriptVariableReadDiagnostics.UnresolvedLiteralRead}: Input '{inputKey}' on activity node '{nodeId}' reads variable '{name}' by name, " +
+                "but no variable with that name is visible from the node. Declare it on the workflow or an enclosing container, " +
+                "or correct the name. A loop index is visible only inside the loop's body, and ForEach declares currentIndex only " +
+                "while ExposeIndex is not the literal false.");
+        }
+
+        foreach (var read in plan.Pinned.Where(read => !read.IsIterationValue))
+        {
+            var storageProfile = StringComparer.Ordinal.Equals(read.Variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
+                ? null
+                : read.Variable.StorageDriverType;
+            if (ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(storageProfile)).Lifecycle == DurableValueLifecycle.None)
+                throw new ArgumentException(
+                    $"{ScriptVariableReadDiagnostics.TransientLiteralRead}: Input '{inputKey}' on activity node '{nodeId}' reads transient variable '{read.Name}' by name; " +
+                    "its value cannot enter the step's input snapshot. Make the variable durable or stop reading it here.");
+        }
     }
 
     private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType, LostUpdateMode nodeLostUpdateMode, bool disableBackgroundInputRefresh = false)
@@ -410,6 +542,9 @@ public sealed class ExecutableNodeCompiler(
                     IsNullable: false,
                     IsRequired: true),
                 authoredInputs[input.Key].Value),
+            StringComparer.Ordinal);
+        bindings = new Dictionary<string, RuntimeInputBinding>(
+            PinScriptReads(activity.NodeId, bindings, projection, scriptBodyInputKey: null, out _),
             StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {

@@ -85,6 +85,12 @@ public interface IActivityStructureService
     IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity);
 
     /// <summary>
+    /// Projects the loop iteration values <paramref name="activity"/> gives its body (spec 1222 FR-004a). Returns an
+    /// empty collection when the node has no structure handler or is not a loop with iteration values.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity) => [];
+
+    /// <summary>
     /// Whether <paramref name="activity"/> is a container scope that can own container-scoped
     /// variable declarations. Used by authoring tooling to discover which activities can
     /// declare container variables.
