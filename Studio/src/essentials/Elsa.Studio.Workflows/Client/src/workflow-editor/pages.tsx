@@ -1,7 +1,7 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
-import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
@@ -139,7 +139,7 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], incidentRootCauseProviders = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
@@ -147,6 +147,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   navigate(path: string): void;
 }) {
   // A background workspace tab can render while another tab owns the address bar.
@@ -202,7 +203,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} onRunTitleChange={setRunTitle} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} onRunTitleChange={setRunTitle} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
