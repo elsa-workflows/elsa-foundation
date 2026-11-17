@@ -97,12 +97,9 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
   await capture(page, info, "write-line-picker");
   await variable.press("Enter");
   const useWhole = data.getByRole("button", { name: "Use whole value", exact: true });
-  await expect(useWhole.or(text)).toBeVisible();
-  if (await useWhole.isVisible()) {
-    // Scalar sources can commit immediately, while other shapes open the whole-value control.
-    await expect.poll(async () => await useWhole.isEnabled().catch(() => false) || !await data.isVisible()).toBe(true);
-    if (await data.isVisible()) await useWhole.press("Enter");
-  }
+  // Scalar sources can commit immediately. Other shapes ask the author to use the whole value.
+  await expect.poll(async () => !await data.isVisible() || (await useWhole.isVisible() && await useWhole.isEnabled())).toBe(true);
+  if (await data.isVisible()) await useWhole.press("Enter");
   await expect.poll(() => s.stored(caller)).toMatchObject({
     expressionType: "JavaScript",
     value: { source: '"Sum: " + args.data', parameters: { data: { kind: "Variable", variableKey: "variable-1" } } }
