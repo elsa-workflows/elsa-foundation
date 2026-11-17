@@ -317,7 +317,8 @@ state.
 **Journal and comparison (#3291)**
 
 - **FR-010**: The API MUST return an instance's journal in commit sequence order, paged, with each commit's activity
-  transitions (scheduled, started, suspended, resumed, completed, faulted, cancelled), branch or path,
+  transitions (scheduled, started, suspended, resumed, completed, faulted, cancelled,
+  superseded), branch or path,
   input refreshes, and applied writes.
 - **FR-011**: The API MUST compare two instances of the same executable version: activity executions matched by
   run-time path (Q6); the first diverging commit; per variable whether the final digest and the sequence of written

@@ -9,7 +9,7 @@ Additive optional members; older records read back with them absent.
 | `VariableWriteRecord` | `CommitSequence: long?` | Commit sequence of the logical checkpoint that committed the write: lease fencing token, then ordinal within the lease (ordered, not dense). |
 | `VariableWriteRecord` | `FrameId: string?` | The frame written; with the key it identifies the variable instance. |
 | `VariableWriteRecord` | `Digest: string?` | Digest of the value the write produced, when it applied. |
-| `ActivityExecutionState` | `Transitions: IReadOnlyList<ActivityLifecycleStamp>?` | One stamp per scheduled, started, suspended, resumed, completed, faulted, cancelled. |
+| `ActivityExecutionState` | `Transitions: IReadOnlyList<ActivityLifecycleStamp>?` | One stamp per scheduled, started, suspended, resumed, completed, faulted, cancelled, superseded (replaced by a successor row). |
 | `ActivityExecutionState` | `FirstCommitSequence: long?`, `LastCommitSequence: long?` | Range of the row's stamps and records. |
 | Alteration job outcome | `VariableWrites: IReadOnlyList<VariableWriteRecord>?` | The `ModifyVariable` write, source `Alteration` (Q9). |
 | `ActivityExecutionState.ValueSnapshots` | snapshot with subject `VariableWrite` | The written value: name = variable key, phase = scope id, sequence = new version, metadata `runtime.variableWrite.scopeId` and `runtime.variableWrite.newVersion`. |
