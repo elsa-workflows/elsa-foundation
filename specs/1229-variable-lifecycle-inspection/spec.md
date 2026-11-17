@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Approved — it applies ADR 0092 as merged (`f52a661df`); no ADR change is needed.
+**Status**: Approved — re-confirmed 2026-11-17 after the pre-merge review; it applies ADR 0092 as merged (`f52a661df`); no ADR change is needed.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-6**,
 decisions **D-8** and **D-9**.
