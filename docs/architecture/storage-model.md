@@ -93,6 +93,7 @@ SQL row mutations also check the expected match, so a reused physical scope cann
 | Private issued IDs on SQL Server/MySQL | Raw big-endian UTF-16 in `IssuedWire`, with empty text `Id`; ordinary/event IDs retain native text. Declared binary limits are 900/1,020 bytes respectively; ordinary IDs retain 450 UTF-16 units on SQL Server and 255 Unicode scalar values on MySQL. This is not an unbounded-key guarantee. |
 | Private issued IDs on PostgreSQL/SQLite | NUL or unpaired UTF-16 units use reversible binary/base64 encoding with a distinct scope. Representable issued IDs retain text. No ordinary caller prefix is reserved by this encoding. |
 | Opaque keys in JSON | `DurableKeyJson` preserves unsupported UTF-16 units and escapes tagged property names. It applies to annotated framework keys and registries, not every application state field. |
+| Projected message metadata (proposed) | Every field a recovery page reads (full key, `Kind`, `Sender` and the fixed fields) has an admission limit checked at every ingress, giving a per-row maximum `M` = 16 KiB below the page bound `B` = 4 MiB ([observability](observability.md#resolving-a-park-a-bounded-drain)). The kernel's limit is the tighter one where a provider declares its own. Unmeasured until K4. |
 
 Child addresses are bounded issuer identities containing destination partition, issuer partition, fenced epoch
 and checked ordinal. They do not recursively concatenate their parent's address. Event starts use a provider
@@ -124,6 +125,10 @@ The embedded MongoDB documents in the inventory are the composite `_id` keys.
 Lease, due, retention and membership timestamps use epoch milliseconds. MongoDB order keys advance a clock using
 `max(previous, timeInMicrosecondUnits) + sends`. The checked fence and outside add use primary time; the batch fence
 uses the owner's UTC clock with its remembered-clock condition. Its `seq` must not be interpreted as a timestamp.
+Nor is it an arrival watermark: a row committed later can get a lower `seq` from another clock, or from an engine
+generator drawn before an earlier row became visible. The proposed recover drain therefore decides eligibility by a
+row's `ReleasedBy` marker and uses `seq` only to order its pages
+([observability](observability.md#resolving-a-park-a-bounded-drain)).
 SQL Server/MySQL/PostgreSQL assign message sequence values through engine generation; SQLite assigns them explicitly.
 A sequence value and a journal position have different allocation rules.
 
