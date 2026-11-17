@@ -263,9 +263,9 @@ internal static class StructuralCallbackEvaluation
                         timeProvider.GetUtcNow(),
                         cancellationToken);
                     var completionTransition = (IActivityCompletionTransition)completionCheckpointPreparation.Transition;
-                    if (!StringComparer.Ordinal.Equals(completionTransition.Outcome, continuation.OutcomeName))
+                    if (!completionTransition.Selection.Equals(continuation.Selection))
                         throw new InvalidOperationException(
-                            $"Checkpoint participant completion outcome '{completionTransition.Outcome}' does not match structural continuation outcome '{continuation.OutcomeName}'.");
+                            $"Checkpoint participant completion outcome '{completionTransition.Selection}' does not match structural continuation outcome '{continuation.Selection}'.");
                 }
             }
         }
@@ -381,7 +381,7 @@ internal static class StructuralCallbackEvaluation
             var openAttempt = currentParentState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
                 ?? throw new InvalidOperationException($"VF-ACT-009: Running structural activity invocation '{currentParentState.InvocationId}' has no open committed attempt.");
             var completionTransition = completionCheckpointPreparation?.Transition
-                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!);
+                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.Selection!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, openAttempt, contract, completionTransition, completedAt, cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
@@ -443,7 +443,7 @@ internal static class StructuralCallbackEvaluation
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, timeProvider.GetUtcNow());
-            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(workItem, payload, currentParentState, [completionProjection.Completion.OutcomeKey], completedAt);
+            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(workItem, payload, currentParentState, completionProjection.Completion.Selection, completedAt);
 
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);

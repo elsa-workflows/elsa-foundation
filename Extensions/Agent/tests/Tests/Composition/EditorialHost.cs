@@ -209,7 +209,7 @@ internal sealed class EditorialHost : IAsyncDisposable
         var incidents = await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowExecutionId);
         return JsonSerializer.Serialize(new
         {
-            States = states.Select(x => new { x.Execution.ExecutableNodeId, x.Status, x.SubStatus, Fault = x.Fault?.ToString(), Outcome = x.Completion?.OutcomeKey }),
+            States = states.Select(x => new { x.Execution.ExecutableNodeId, x.Status, x.SubStatus, Fault = x.Fault?.ToString(), Outcome = x.Completion?.Selection.ToString() }),
             Incidents = incidents, FirstChance = FirstChance.ToArray()
         });
     }

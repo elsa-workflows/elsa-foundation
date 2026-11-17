@@ -473,10 +473,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         TimeProvider.GetUtcNow(),
                         cancellationToken);
                     var completionTransition = (IActivityCompletionTransition)completionCheckpointPreparation.Transition;
-                    if (!StringComparer.Ordinal.Equals(completionTransition.Outcome, continuation.OutcomeName))
+                    if (!completionTransition.Selection.Equals(continuation.Selection))
                     {
                         throw new InvalidOperationException(
-                            $"Checkpoint participant completion outcome '{completionTransition.Outcome}' does not match structural continuation outcome '{continuation.OutcomeName}'.");
+                            $"Checkpoint participant completion outcome '{completionTransition.Selection}' does not match structural continuation outcome '{continuation.Selection}'.");
                     }
                 }
             }
@@ -663,7 +663,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             var openAttempt = currentParentState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
                 ?? throw new InvalidOperationException($"VF-ACT-009: Running structural activity invocation '{currentParentState.InvocationId}' has no open committed attempt.");
             var completionTransition = completionCheckpointPreparation?.Transition
-                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!);
+                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.Selection!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
                 currentParentState.InvocationId,
@@ -756,7 +756,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 workItem,
                 payload,
                 currentParentState,
-                [completionProjection.Completion.OutcomeKey],
+                completionProjection.Completion.Selection,
                 completedAt,
                 completedChildState.Status == ActivityExecutionStatus.Completed &&
                 completedChildState.Completion is { } childCompletion &&

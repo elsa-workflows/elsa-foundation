@@ -173,7 +173,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         })),
         ["completion result"] = new("ActivityExecutionState.Completion.Result", $"Activity execution '{ActivityExecutionId}' completion result", value => ActivityChanges(ActivityState() with
         {
-            Completion = new ActivityCompletion(ActivityExecutionId, "attempt-1", value, "Done", OccurredAt, "contract")
+            Completion = new ActivityCompletion(ActivityExecutionId, "attempt-1", value, Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"), OccurredAt, "contract")
         })),
         ["private state"] = new("ActivityExecutionState.PrivateState.Value", $"Activity execution '{ActivityExecutionId}' private state", value => ActivityChanges(ActivityState() with
         {

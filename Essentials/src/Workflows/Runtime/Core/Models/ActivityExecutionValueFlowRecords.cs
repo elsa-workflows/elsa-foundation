@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -29,7 +30,15 @@ public sealed record ActivityInvocationContractIdentity
 public static class ActivityExecutionValueFlowDocumentVersions
 {
     public const int Legacy = 1;
-    public const int Current = 2;
+
+    /// <summary>
+    /// The completion record carries one outcome key (<c>outcomeKey</c>), as written by the contributor preview. It is
+    /// read as a named selection of that key and stored as <see cref="Current"/> on the next write (spec 1208 FR-025).
+    /// </summary>
+    public const int SingleOutcomeKey = 2;
+
+    /// <summary>The completion record carries an outcome selection (spec 1208, ADR 0045 §6).</summary>
+    public const int Current = 3;
 }
 
 /// <summary>
@@ -211,22 +220,45 @@ public sealed record ActivityPrivateState
 }
 
 /// <summary>
-/// One atomic successful activity result and authored control outcome.
+/// One atomic successful activity result and the outcome selection it took (unspecified, named or explicitly empty).
 /// </summary>
 public sealed record ActivityCompletion
 {
-    [JsonConstructor]
     public ActivityCompletion(
         string invocationId,
         string attemptId,
         ValueEnvelope result,
-        string outcomeKey,
+        OutcomeSelection selection,
         DateTimeOffset completedAt,
         string contractFingerprint)
+        : this(invocationId, attemptId, result, selection, completedAt, contractFingerprint, legacyOutcomeKey: null)
+    {
+    }
+
+    /// <summary>
+    /// Reads a stored completion. A record of value-flow document version
+    /// <see cref="ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey"/>, as the contributor preview wrote it,
+    /// carries one <c>outcomeKey</c> and no selection; it reads as a named selection of exactly that key. No unrecorded
+    /// unspecified or empty history is invented (spec 1208 FR-025, Q11), and a record carrying both is refused. The
+    /// BPMN upgrade-recovery captures of spec 1017 are the fixed legacy fixtures that prove this reader.
+    /// </summary>
+    [JsonConstructor]
+    private ActivityCompletion(
+        string invocationId,
+        string attemptId,
+        ValueEnvelope result,
+        OutcomeSelection? selection,
+        DateTimeOffset completedAt,
+        string contractFingerprint,
+        string? legacyOutcomeKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(attemptId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outcomeKey);
+        if (selection is not null && legacyOutcomeKey is not null)
+            throw new ArgumentException("An activity completion carries either an outcome selection or a legacy outcome key, not both.", nameof(legacyOutcomeKey));
+        selection ??= legacyOutcomeKey is not null
+            ? OutcomeSelection.Named(legacyOutcomeKey)
+            : throw new ArgumentNullException(nameof(selection));
         ArgumentException.ThrowIfNullOrWhiteSpace(contractFingerprint);
         ArgumentNullException.ThrowIfNull(result);
 
@@ -236,7 +268,7 @@ public sealed record ActivityCompletion
         InvocationId = invocationId;
         AttemptId = attemptId;
         Result = result;
-        OutcomeKey = outcomeKey;
+        Selection = selection;
         CompletedAt = completedAt;
         ContractFingerprint = contractFingerprint;
     }
@@ -245,7 +277,18 @@ public sealed record ActivityCompletion
     public string AttemptId { get; }
     public ValueEnvelope Result { get; }
     public ValueTypeDescriptor ResultType => Result.Type;
-    public string OutcomeKey { get; }
+    public OutcomeSelection Selection { get; }
+
+    /// <summary>Read-only bridge for the legacy reader: never written, so a stored record carries only the selection.</summary>
+    [JsonPropertyName("outcomeKey")]
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    private string? LegacyOutcomeKey => null;
+
+    /// <summary>The outcome names a routing parent follows: <c>[Done]</c>, the selected names, or none.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> OutcomeNames => Selection.ResolveNames();
+
     public DateTimeOffset CompletedAt { get; }
     public string ContractFingerprint { get; }
 }

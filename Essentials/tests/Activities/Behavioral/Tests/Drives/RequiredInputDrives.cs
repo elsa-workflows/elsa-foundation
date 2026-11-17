@@ -1,6 +1,4 @@
 using Elsa.Activities.Behavioral.Infrastructure;
-using Elsa.Activities.Graph.Runtime;
-using Elsa.Activities.Graph.Runtime.Activities;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives;
@@ -49,8 +47,9 @@ public sealed class RequiredInputDrive : IActivityDrive
         (typeof(TimerActivity), SchedulingHarnessForRequiredInput),
         (typeof(CronActivity), SchedulingHarnessForRequiredInput),
         (typeof(HttpEndpoint), HttpHarness),
-        (typeof(SendHttpRequest), HttpHarness),
-        (typeof(Complete), () => Harness(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services)))
+        (typeof(SendHttpRequest), HttpHarness)
+        // Complete has no required input since spec 1208 (outcome or outcomes); a Complete naming neither faults with
+        // Complete.OutcomeRequiredFaultCode, which GraphBoundaryCompleteTests covers.
     ];
 
     public async Task DriveAsync(ActivityDriveRecorder recorder)

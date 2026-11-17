@@ -42,9 +42,9 @@ internal static class PortableJavaScript
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>();
-        return await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+        return (await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
             source,
             JsonSerializer.SerializeToElement(new { }),
-            CancellationToken.None));
+            CancellationToken.None))).Value;
     }
 }

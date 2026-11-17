@@ -82,7 +82,7 @@ internal static partial class OptedCalledSnapshotReader
             Require(childRoot.ProducedControl is not null && childRoot.ProducedControlSourceCommitId is null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(childRoot.ProducedControl, Json), JsonSerializer.SerializeToElement(control.Batch, Json)), "Actual root and carried control disagree.");
             var inbox = call.ChildControlInbox ?? throw new InvalidDataException("Actual completed caller has no control inbox.");
             Require(inbox.IsTerminalConsumed && inbox.NextOrdinal == 1 && inbox.Pending.Count == 0 && inbox.HasAccepted(control) && inbox.Target.MatchesAddress(control), "The exact caller did not atomically consume terminal zero.");
-            Require(call.Status == ActivityExecutionStatus.Completed && call.Completion?.OutcomeKey == "Faulted" && call.Fault is null &&
+            Require(call.Status == ActivityExecutionStatus.Completed && call.Completion?.OutcomeNames is ["Faulted"] && call.Fault is null &&
                 !string.IsNullOrWhiteSpace(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "The actual dispatch leaf lost its truthful ordinary completion receipt.");
             var source = sources.Single(entry => entry.OutboxItemId == control.SourceOutboxItemId);
             Require(source.OutboxItemId == RuntimePostCommitOutboxIdentity.CreateLogicalValue(control.SourceCommitId, control.SourceIntentId) &&

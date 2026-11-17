@@ -112,7 +112,7 @@ public sealed class EditorialInterchangeTests
         Assert.Equal(ReviewDecisionReceiptStatus.Accepted, (await host.DecideAsync(command, Reviewer)).Status);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         var review = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
-        Assert.Equal("Approved", review.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, review.Completion!.OutcomeNames);
         Assert.Equal(4, host.Model.Calls.Count);
     }
 

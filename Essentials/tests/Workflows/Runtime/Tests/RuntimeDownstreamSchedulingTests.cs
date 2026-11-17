@@ -212,8 +212,9 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
 
+    // Spec 1208 FR-024: a root that completes with an explicitly empty selection completes the workflow.
     [Fact]
-    public async Task CompleteActivityHandler_KeepsEmptyOutcomeContinuationNonTerminal()
+    public async Task CompleteActivityHandler_CompletesWorkflowOnEmptyOutcomeContinuation()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
@@ -228,7 +229,7 @@ public sealed class RuntimeDownstreamSchedulingTests
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
 

@@ -140,9 +140,9 @@ public sealed class FlowchartExecutionEngine(
             return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
+        // Every taken connection is an arrival at its target, also when two selected outcomes lead to the same node:
+        // by default the target's implicit join runs it once after both arrivals (ADR 0045 §6, Q4).
         var outboundConnections = graph.SelectOutboundConnections(completionContext.CompletedChildExecutableNodeId, completionContext.OutcomeNames);
-        if (outboundConnections.Select(connection => connection.Target.NodeId).Distinct(StringComparer.Ordinal).Count() != outboundConnections.Count)
-            throw new FlowchartExecutionException($"Flowchart completion for child executable node '{completionContext.CompletedChildExecutableNodeId}' contains duplicate connection targets.");
 
         if (outboundConnections.Count == 0)
         {
@@ -163,6 +163,12 @@ public sealed class FlowchartExecutionEngine(
 
         var scheduledTargets = new HashSet<string>(StringComparer.Ordinal);
         var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
+        // A join answers per source node, so the first of two taken connections to one target would otherwise fire
+        // it alone and strand the second arrival, leaving the Flowchart running. Every arrival but the last one this
+        // completion makes at a target waits there; the last one decides and the firing consumes them all.
+        var lastConnectionByTarget = new Dictionary<string, FlowchartConnection>(StringComparer.Ordinal);
+        foreach (var connection in outboundConnections)
+            lastConnectionByTarget[connection.Target.NodeId] = connection;
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
@@ -182,6 +188,14 @@ public sealed class FlowchartExecutionEngine(
                 targetIterationKey);
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
+
+            // An earlier arrival from this same completion waits for the last one without a join-wait diagnostic: it is
+            // not waiting on another source, and the last arrival records the wait if there is one.
+            if (!ReferenceEquals(lastConnectionByTarget[connection.Target.NodeId], connection))
+            {
+                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
+                continue;
+            }
 
             if (joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {

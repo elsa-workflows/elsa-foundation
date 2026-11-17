@@ -89,7 +89,7 @@ public sealed class CompensationScopeDecisionTests
         var resolved = await DecidedAsync(Journey, waiting.State, ResolveAbsent, "incident-cancel-1", "actexec-cancel-1", "cancel-delivery");
 
         Assert.True(resolved.Continuation.IsComplete);
-        Assert.Equal(CompensationScope.CompensatedOutcome, resolved.Continuation.OutcomeName);
+        Assert.Equal(new[] { CompensationScope.CompensatedOutcome }, resolved.Continuation.OutcomeNames);
         Assert.Equal(CompensationScopePhase.Compensated, StateOf(resolved).Phase);
     }
 
@@ -148,7 +148,7 @@ public sealed class CompensationScopeDecisionTests
         var resolved = await DecidedAsync(Journey, waiting.State, ResolveAccepted, "incident-confirm-order", "actexec-confirm-order", "confirm-order");
 
         Assert.True(resolved.Continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, resolved.Continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, resolved.Continuation.OutcomeNames);
         var handOver = Assert.Single(resolved.Context.GetAncestorNotificationRequests());
         var payload = handOver.Payload!.Value;
         var steps = payload.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("step").GetString()).ToArray();

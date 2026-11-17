@@ -129,7 +129,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
 
     /// <summary>
     /// Routes the half of a completion the outcomes did <b>not</b> take: every outbound connection that is not
-    /// in <paramref name="takenConnectionIds"/> emits a dead arrival, and deadness carries forward through any
+    /// in <paramref name="takenConnectionIds"/>, and whose target no taken connection reached, emits a dead arrival, and deadness carries forward through any
     /// node whose every inbound has now answered dead. A no-op under a join policy that derives deadness
     /// instead of representing it, which is what keeps the two semantics on one engine.
     /// </summary>
@@ -146,8 +146,19 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         if (!JoinPolicy.PropagatesDeadPaths)
             return state;
 
-        var untaken = graph.GetOutboundConnections(sourceNodeId)
-            .Where(connection => !takenConnectionIds.Contains(graph.GetConnectionId(connection)));
+        var outbound = graph.GetOutboundConnections(sourceNodeId);
+
+        // A target this completion reached over a taken connection has had its answer from this source: it is live.
+        // A dead arrival over a second, untaken connection to it would contradict that answer and — once the target
+        // has fired and consumed the live one — read as "every inbound dead" and carry deadness through a node that
+        // is running, letting a join further down fire early and again later (FR-022).
+        var reachedTargets = outbound
+            .Where(connection => takenConnectionIds.Contains(graph.GetConnectionId(connection)))
+            .Select(connection => connection.Target.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
+        var untaken = outbound
+            .Where(connection => !takenConnectionIds.Contains(graph.GetConnectionId(connection)))
+            .Where(connection => !reachedTargets.Contains(connection.Target.NodeId));
 
         foreach (var connection in untaken)
             state = EmitDeadArrival(context, state, graph, connection, executionScopeId, iterationKey, producingActivityExecutionId);

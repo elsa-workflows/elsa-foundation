@@ -146,7 +146,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             completionResult: null,
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow,
             changedActivityOwner,
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -184,7 +184,7 @@ public sealed class WorkflowIntrinsicExecutor(
             runtimeView,
             cancellationToken);
 
-        string outcome;
+        OutcomeSelection selection;
         ValueEnvelope result;
         if (intrinsicKind == WorkflowIntrinsicKind.Control)
         {
@@ -196,7 +196,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 throw new InvalidOperationException($"Control intrinsic '{node.ExecutableNodeId}' requires a non-blank literal outcome key.");
             }
 
-            outcome = outcomeValue.GetString()!;
+            selection = OutcomeSelection.Named(outcomeValue.GetString()!);
             var unitType = new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit");
             result = ValueEnvelope.Inline(
                 unitType,
@@ -208,7 +208,7 @@ public sealed class WorkflowIntrinsicExecutor(
             // A withheld value (its policy requires encryption) stays the result as its marker, holding no value, as Set
             // keeps one in a variable. The runtime's activity-result readers, an input binding and an expression
             // parameter, refuse it with VF-ACT-010.
-            outcome = "Done";
+            selection = OutcomeSelection.Unspecified;
             result = materialized;
         }
 
@@ -220,7 +220,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             result,
-            [outcome],
+            selection,
             changedWorkflow: null,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -269,7 +269,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             UnitResult(),
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -312,7 +312,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             WorkflowIntrinsicKind.SetOutput,
             UnitResult(),
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow: null,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -352,7 +352,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             WorkflowIntrinsicKind.Finish,
             UnitResult(),
-            [outcome],
+            OutcomeSelection.Named(outcome),
             changedWorkflow,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -369,7 +369,7 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState intrinsicState,
         WorkflowIntrinsicKind intrinsicKind,
         ValueEnvelope? completionResult,
-        IReadOnlyCollection<string> outcomeNames,
+        OutcomeSelection selection,
         WorkflowExecutionState? changedWorkflow,
         ActivityExecutionState? changedActivityOwner,
         IReadOnlyDictionary<string, string>? metadataAdditions,
@@ -378,6 +378,7 @@ public sealed class WorkflowIntrinsicExecutor(
         bool terminatesWorkflow = false)
     {
         var occurredAt = timeProvider.GetUtcNow();
+        var outcomeNames = selection.ResolveNames();
         var completedMetadata = intrinsicState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         completedMetadata[RuntimeMetadataKeys.StartReason] = startPayload.Reason;
         completedMetadata[RuntimeMetadataKeys.StartSchedulerWorkItemId] = startWorkItem.WorkItemId;
@@ -387,7 +388,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 intrinsicState.InvocationId,
                 $"intrinsic:{intrinsicState.InvocationId}",
                 completionResult,
-                outcomeNames.Single(),
+                selection,
                 occurredAt,
                 $"intrinsic:{intrinsicKind}:1.0.0");
         var completedState = RuntimeContainerScopeService.CloseOwnedFrames(intrinsicState with

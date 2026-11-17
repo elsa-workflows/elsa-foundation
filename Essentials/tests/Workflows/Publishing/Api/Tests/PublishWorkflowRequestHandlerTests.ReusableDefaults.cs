@@ -269,7 +269,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         ActivityNode earlier = new("earlier", producer.Id, [], []), later = new("later", producer.Id, [], []);
         var root = flowchart
             ? FlowchartNode("flowchart", [later, consumer, earlier],
-                [new(new("earlier", "Done"), new("consumer", null)), new(new("consumer", "done"), new("later", null))], "earlier")
+                [new(new("earlier", "Done"), new("consumer", null)), new(new("consumer", "Done"), new("later", null))], "earlier")
             : SequenceNode("sequence", [earlier, consumer, later]);
         var switchVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(SwitchActivity));
         if (nativeSwitchCaseProperty is not null)

@@ -84,11 +84,15 @@ export type WorkflowNodeSummaryFormatter = (activity: ActivityNode, catalogItem:
 export interface WorkflowPortDescriptor {
   name: string;
   displayName: string;
+  /** The node no longer declares this port; it is kept only so its connections stay visible for repair (FR-013). */
+  missing?: boolean;
 }
 
 export interface WorkflowEdgeData extends Record<string, unknown> {
   vertices?: XYPosition[];
   executionPulse?: string;
+  /** The connection's source port is not in its source node's outcome set (FR-013). */
+  missingPort?: boolean;
 }
 
 export interface WorkflowRuntimeNodeOverlay {
@@ -685,9 +689,41 @@ export function buildCanvas(
     );
   });
 
+  return scope.slot.mode === "flowchart"
+    ? flagMissingPortEdges(nodes, flowchartEdges(scope.owner))
+    : { nodes, edges: buildEdges(scope.slot, nodes) };
+}
+
+/**
+ * Keeps connections whose source port the node no longer declares visible and flagged, so the author can repair
+ * them (FR-013). The node gets a `missing` placeholder port for each such connection, or the canvas could not draw it.
+ */
+export function flagMissingPortEdges(nodes: Node<WorkflowNodeData>[], edges: Edge<WorkflowEdgeData>[]) {
+  const missingByNode = new Map<string, Set<string>>();
+  const nodesById = new Map(nodes.map(node => [node.id, node]));
+  const flagged = edges.map(edge => {
+    const node = nodesById.get(edge.source);
+    if (!node || node.data.suppressFlowPorts) return edge;
+    const port = edge.sourceHandle ?? "Done";
+    if (node.data.sourcePorts.some(item => item.name === port)) return edge;
+    const ports = missingByNode.get(node.id) ?? new Set<string>();
+    ports.add(port);
+    missingByNode.set(node.id, ports);
+    return {
+      ...edge,
+      sourceHandle: port,
+      className: [edge.className, "wf-edge-missing-port"].filter(Boolean).join(" "),
+      data: { ...edge.data, missingPort: true }
+    };
+  });
   return {
-    nodes,
-    edges: scope.slot.mode === "flowchart" ? flowchartEdges(scope.owner) : buildEdges(scope.slot, nodes)
+    nodes: nodes.map(node => {
+      const missing = missingByNode.get(node.id);
+      return missing
+        ? { ...node, data: { ...node.data, sourcePorts: [...node.data.sourcePorts, ...[...missing].map(name => ({ name, displayName: name, missing: true }))] } }
+        : node;
+    }),
+    edges: flagged
   };
 }
 
@@ -1197,34 +1233,55 @@ function isFlowSwitch(activity: ActivityNode, catalogItem?: ActivityCatalogItem)
   return key.endsWith(".FlowSwitch") || key === "FlowSwitch" || name === "FlowSwitch";
 }
 
+function readOutcomesFacet(catalog?: ActivityCatalogItem) {
+  const facet = catalog?.designFacets?.find(item => isRecord(item) && item.kind === "elsa.outcomes");
+  return isRecord(facet) && isRecord(facet.payload) ? facet.payload : null;
+}
+
+type LiteralInput = { kind: "literal"; value: unknown } | { kind: "expression" } | { kind: "absent" };
+
+/** Reads a node's authored input only when it is a literal (or a literal catalog default), as the compiler does. */
+function readLiteralInput(activity: ActivityNode, catalog: ActivityCatalogItem | undefined, key: string): LiteralInput {
+  const descriptor = catalog?.inputs.find(item => isRecord(item) && (item.referenceKey === key || item.name === key));
+  const referenceKey = isRecord(descriptor) && typeof descriptor.referenceKey === "string" ? descriptor.referenceKey : key;
+  const wrapped = activity[referenceKey];
+  if (isRecord(wrapped) && isRecord(wrapped.expression)) {
+    return ["Literal", "Object"].includes(String(wrapped.expression.type)) ? { kind: "literal", value: wrapped.expression.value } : { kind: "expression" };
+  }
+  if (wrapped !== undefined) return { kind: "literal", value: wrapped };
+  const wire = activity.inputs.find(item => isRecord(item) && item.referenceKey === referenceKey);
+  if (isRecord(wire) && isRecord(wire.value)) {
+    return ["Literal", "Object"].includes(String(wire.value.expressionType)) ? { kind: "literal", value: wire.value.value } : { kind: "expression" };
+  }
+  if (isRecord(descriptor) && (!descriptor.defaultSyntax || ["Literal", "Object"].includes(String(descriptor.defaultSyntax)))) {
+    return descriptor.defaultValue === undefined ? { kind: "absent" } : { kind: "literal", value: descriptor.defaultValue };
+  }
+  return { kind: "absent" };
+}
+
 /** Mirrors the compiler's literal collection outcome rule, preserving opaque keys and outcome casing. */
 function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalogItem): WorkflowPortDescriptor[] | null {
-  const facet = catalog?.designFacets?.find(item => isRecord(item) && item.kind === "elsa.outcomes");
-  if (!isRecord(facet) || !isRecord(facet.payload) || !isRecord(facet.payload.dynamicOutcomes)) return null;
-  const rule = facet.payload.dynamicOutcomes;
+  const payload = readOutcomesFacet(catalog);
+  if (!payload || !isRecord(payload.dynamicOutcomes)) return null;
+  const rule = payload.dynamicOutcomes;
   if (rule.kind !== "valuePerItem" || typeof rule.source !== "string") return null;
-  const descriptor = catalog?.inputs.find(item => isRecord(item) && (item.referenceKey === rule.source || item.name === rule.source));
-  const referenceKey = isRecord(descriptor) && typeof descriptor.referenceKey === "string" ? descriptor.referenceKey : rule.source;
-  const wrapped = activity[referenceKey];
-  let value: unknown;
-  if (isRecord(wrapped) && isRecord(wrapped.expression)) {
-    if (!["Literal", "Object"].includes(String(wrapped.expression.type))) return null;
-    value = wrapped.expression.value;
-  } else if (wrapped !== undefined) value = wrapped;
-  else {
-    const wire = activity.inputs.find(item => isRecord(item) && item.referenceKey === referenceKey);
-    if (isRecord(wire) && isRecord(wire.value)) {
-      if (!["Literal", "Object"].includes(String(wire.value.expressionType))) return null;
-      value = wire.value.value;
-    } else if (isRecord(descriptor) && (!descriptor.defaultSyntax || ["Literal", "Object"].includes(String(descriptor.defaultSyntax)))) value = descriptor.defaultValue;
-  }
+  const input = readLiteralInput(activity, catalog, rule.source);
+  if (input.kind !== "literal") return null;
+  let value = input.value;
   if (typeof value === "string") { try { value = JSON.parse(value); } catch { return null; } }
   if (!Array.isArray(value)) return null;
   const ports = value.filter(item => typeof item === "string" || typeof item === "number").map(String).filter(name => name.trim().length > 0);
   if (!ports.length) return null;
-  const fixed = readFlowPorts([facet.payload]);
-  return uniquePorts([...fixed, ...ports.map(name => ({ name, displayName: name })),
-    ...(typeof rule.unmatched === "string" && rule.unmatched ? [{ name: rule.unmatched, displayName: rule.unmatched }] : [])]);
+  // Older catalogs lack `selectsOnEveryCompletion`: keep their shape (static ports + items + "Unmatched" by default).
+  const legacy = typeof rule.selectsOnEveryCompletion !== "boolean";
+  const selectsOnEveryCompletion = rule.selectsOnEveryCompletion !== false;
+  const unmatched = typeof rule.unmatched === "string" ? rule.unmatched : legacy ? "Unmatched" : "";
+  const fixed = readFlowPorts([payload]);
+  const statics = legacy ? fixed
+    : selectsOnEveryCompletion ? fixed.filter(port => port.name !== "Done")
+      : [{ name: "Done", displayName: "Done" }, ...fixed];
+  return uniquePorts([...statics, ...ports.map(name => ({ name, displayName: name })),
+    ...(unmatched ? [{ name: unmatched, displayName: unmatched }] : [])]);
 }
 
 function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {
