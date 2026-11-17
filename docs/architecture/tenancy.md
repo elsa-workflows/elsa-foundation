@@ -103,8 +103,8 @@ whatever the database administrator chose. The grammar alone does not make `Q` i
 contract and expand letter sequences. The independent reviewer's runs on SQL Server 2022 and MySQL 8.4, recorded in
 [a comment on PR #4732](https://github.com/elsa-workflows/elsa-foundation/pull/4732#issuecomment-6956951060),
 found grammar-valid ids that compare equal: `ccs_x` = `cscs_x` under SQL Server's `Hungarian_CI_AS` and
-`Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`, and `ssz_x` = `szsz_x` under `Hungarian_100_CI_AS` and
-`utf8mb4_hu_0900_ai_ci`. The same runs found `-` and `_` never ignored and never equal to each other in every collation
+`Hungarian_100_CI_AS` and MySQL's `utf8mb4_hu_0900_ai_ci`, and `ssz_x` = `szsz_x` under `Hungarian_CI_AS` (run 1,
+which returned 1, equal) and under `Hungarian_100_CI_AS` and `utf8mb4_hu_0900_ai_ci` (run 3). The same runs found `-` and `_` never ignored and never equal to each other in every collation
 tested.
 
 So every column that holds a tenant id, an actor id or a tenant-qualified name gets one fixed collation with no locale

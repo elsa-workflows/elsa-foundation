@@ -62,6 +62,9 @@ inbox and state in memory and produces new state, sends, timers, subscriptions, 
 commits them atomically at the turn's end and only there. Everything that crosses an instance boundary is a message; no
 instance reads another's state. The inbox alone says what is owed
 ([sketch, the execution model contract](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-execution-model-contract)).
+A turn runs with its instance's tenant, which it reads as `ITurn.Instance.Tenant` and cannot change: `Send`, `Start`
+and `Publish` take no tenant, and everything a turn produces carries the instance's tenant
+([tenancy](../architecture/tenancy.md#where-the-tenant-comes-from)).
 
 ### 3. Four logical seams
 
@@ -71,6 +74,15 @@ query). A storage provider implements all four as one unit. A send is recorded a
 may be delivered later. The prototype's `IKernelStore` and `IActorRuntime` still combine them; the split is part of
 the first product slice's design
 ([round 5 H paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md)).
+
+**Tenant identity** (the owner's tenancy decisions of 17 November; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
+from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
+caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
+event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
+the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
+1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
+name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
+database's default collation is.
 
 ### 4. Deployment profiles
 
@@ -139,12 +151,15 @@ Each answer is a Proposed page with the owner's decisions of 17 November at its 
 | Question | Page | Decisions in short |
 |---|---|---|
 | 1. Migrating running instances | [migrating-running-instances](../architecture/migrating-running-instances.md) | State versions per model and activity; release 1 migrates running and suspended instances at a turn boundary for the simple cases; a refused instance stays running |
-| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope |
+| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope; every delete names tenant, creation and terminal mark and is checked at the owner, with no force path |
 | 3. Fairness and backpressure | [fairness-and-backpressure](../architecture/fairness-and-backpressure.md) | Admission at the edge; no running-instance quotas; backlog on the fence row; only load-shedding commands bypass `InboxFull` |
 | 4. Large fan-out | [large-fan-out](../architecture/large-fan-out.md) | Release 1 caps a parallel ForEach at 1,000 items, degree 16 by default and 64 at most; a combiner tree after release 1; a parked child keeps its parent waiting |
 | 5. Job workers | [job-workers](../architecture/job-workers.md) | One job contract; standalone Elsa.Jobs and the remote worker protocol in 1.x |
-| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps what a retry needs |
+| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps each row by kept reason and full delivery handle; every resolution (recover, discard, terminate, delete, and a finite `Parked` window's expiry as an automatic discard) is a bounded drain that sends a waiting parent one final notice |
 | 7. Write volume | [write-volume](../architecture/write-volume.md) | Snapshot plus journal stays; values by reference in the same database, accepted by a PostgreSQL run |
+
+The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), with the owner's six decisions of
+17 November (section 3).
 
 ## Non-goals for release 1
 
@@ -219,7 +234,7 @@ until then the listed ADRs keep governing the current core.
 | [0075](0075-oracle-is-not-a-supported-ef-core-engine.md) Oracle not supported | Keep | It fixes the four relational engines the owned commit SQL covers |
 | [0076](0076-persistence-tooling-runs-inside-the-host-closure.md) persistence tooling in the host closure | Keep | The kernel's EF schema and migrations use the same tooling; the owned commit SQL needs no tooling of its own |
 | [0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) serialization alias registry | Keep | The kernel treats state and payloads as opaque; the native model serializes its state, messages and job arguments under 0035, with state versions added on top |
-| 0097 multi-tenancy (PR #4156, open) | Check when it lands | Its scope must fit the kernel's tenant column and tenant checks on sends |
+| 0097 multi-tenancy (PR #4156, open) | Amend, for kernel-generated keys | Owner, 17 November ([tenancy](../architecture/tenancy.md#decisions-owner-17-november-2026-by-card) decision 4): caller-chosen names are tenant-qualified as 0097 (a) requires, while generated ids, journal positions and value rows stay unique store-wide with a checked tenant column. Release 1 uses 0097's shared-store v1 baseline only. The tenant-id grammar (decision 5) constrains 0097's tenant catalog. 0097's author carries both into it; its own open questions stay with it |
 | 0091 JSON data integrity (PR #3408), 0092 variable lifecycle (PR #4316), both open | Check when they land | Layer 3 value semantics; each must commit with the turn and keep to opaque state |
 
 The remaining ADRs on main (0002, 0003, 0021–0026, 0034, 0036, 0037, 0044, 0050, 0051, 0066–0068, 0070, 0071, 0081–0083,
@@ -234,8 +249,8 @@ already superseded.
 | A sealed snapshot of the target cohort before dispatch | Replaced: a plan actor selects from the instance-list read model with a cursor and adds one `Migrate` per instance ([migration](../architecture/migrating-running-instances.md)) |
 | One atomic job per target through the single-writer boundary | Replaced: the `Migrate` command runs alone in the instance's turn and lands in one fenced commit |
 | Wire envelopes (kind, schema version, payload) with registered handlers | Replaced for migration by a command kind (`IActorType.IsCommand`); open for other alteration kinds |
-| Tenant-scoped idempotent submission | Replaced: operator messages are outside adds keyed by the operation id with a `keep_until` ([observability](../architecture/observability.md#recover)) |
-| Permission and execution-authority scope, provenance | Replaced: separate operator permissions, audited with principal, reason and outcome; the kernel's tenant check on sends |
+| Tenant-scoped idempotent submission | Replaced: operator messages are outside adds in the operator's bound scope, keyed by the tenant-qualified operation id `Q(t, operation)` with a `keep_until` ([observability](../architecture/observability.md#recover)) |
+| Permission and execution-authority scope, provenance | Replaced: separate operator permissions per tenant, audited with principal, reason and outcome; the owner's tenant check on load and consumption, so another tenant's instance answers not found ([tenancy](../architecture/tenancy.md#every-operation)) |
 | Durable per-target results | Replaced: outcome messages feed the plan-outcomes read model |
 | Cooperative cancellation | Partly: "close plan" ends a plan with pending instances; cancelling work in flight is open |
 | Redaction of deferred payloads from reads | Open |

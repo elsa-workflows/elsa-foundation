@@ -132,13 +132,29 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | Simple cases | The defined simple-case boundary is release 1's scope. | Migration 3 |
 | ADR 0049 | Widened: release 1 migrates running and suspended instances at a turn boundary; ADR 0049 is superseded. | Migration 4 |
 | Source definitions | Kept while any instance, ticket or history refers to them. | Migration 5 |
-| Addressing fallback | Id-only until creation headers are persisted; the reused-caller-key risk is documented. | Migration, release 1's fallback |
+| Addressing fallback | Id-only only for rows without a creation, until creation headers are persisted; dispatch is creation-qualified wherever the provider and row allow, fallback outcomes are shown to the operator, and the reused-caller-key risk is documented. The fallback never extends to deletion. | [Migration](migrating-running-instances.md#plans-and-bulk-migration), the id-only fallback |
 | Standalone Jobs | 1.x, with the remote worker protocol; workflow background jobs ship in release 1; the first-use lookup card is settled in the 1.x spike. | [Job workers](job-workers.md#decisions-owner-1617-november-2026) 1 |
 | Heartbeats | In memory over the runtime's transport, with a durable fallback. | Job workers 2 |
 | Gateway keys | `{worker}/{request id}` with a `keep_until`. | Job workers 3 |
 | Standalone effect key | `{job origin}/job/-/0`. | Job workers 4 |
 | Recovery | In place (same id, next revision), plus intervention: faults the model can hold stay Running with a blocking incident. | [Observability](observability.md#decisions-owner-1617-november-2026) 1 |
 | Park | Extended: consumed deliveries and arrivals kept as done rows under the `Parked` window, marked by a per-row kept reason in `KeptBy` (non-null only while its Park is unresolved) and named by a delivery handle of the full message key, journalled at every level; the restore clears `Done`, and every resolution is a bounded drain under a durable cursor. Every resolution sends a waiting parent exactly one final notice: discard (Faulted), expiry (Faulted, an automatic discard), terminate (Cancelled) and delete. | Observability 2 |
+
+## The gate 2 fix round (17 November)
+
+Taken while answering the [gate 2 architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272).
+Owner decisions are by card; the coordinator's design choice is marked as such.
+
+| Date | Rule | Source |
+|---|---|---|
+| 17 Nov | Every delete is qualified: it names tenant, creation and terminal mark, and the owner checks them before deleting. The runtime API resolves an id to the current run through the read model; there is no `Force` path without creation or mark (B1). | Owner card; [data lifecycle](data-lifecycle.md#decisions-owner-1617-november-2026) decision 9 |
+| 17 Nov | Identities are tenant-qualified names, `Q(t, n)`, plus a checked `tenant` column; composite `(tenant, id)` keys are rejected (M2). | Owner card; [tenancy](tenancy.md#decisions-owner-17-november-2026-by-card) decision 1 |
+| 17 Nov | Release 1 runs the shared store only, ADR 0097's v1 baseline; a kernel per tenant store comes later, with its cost measured first. | Owner card; tenancy decision 2 |
+| 17 Nov | A tenant id is at most 64 UTF-16 units. | Owner card; tenancy decision 3 |
+| 17 Nov | The kernel amends ADR 0097 (a): caller-chosen names are tenant-qualified; generated ids, journal positions and value rows stay unique store-wide with a checked tenant column. | Owner card; tenancy decision 4 |
+| 17 Nov | A canonical tenant-id grammar (lowercase ASCII letters, digits and `-`), enforced where the bound scope is created. | Owner card; tenancy decision 5 |
+| 17 Nov | Every column that holds a tenant-qualified name has one pinned, non-locale, case-insensitive collation (`Latin1_General_100_CI_AS_SC_UTF8` on SQL Server, `utf8mb4_0900_ai_ci` on MySQL), used in every expression over it. | Owner card; tenancy decision 6 |
+| 17 Nov | A finite `Parked` window's expiry is an automatic discard, run as a drain of the instance itself; after it, recover is refused, and the parent gets its final Faulted notice (M1). | Coordinator design choice, not an owner card; [observability](observability.md#what-park-keeps) |
 
 ## Process
 

@@ -49,7 +49,7 @@ gate 5.
 | K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits, under the HTTP error and timeout contract below. Its tests are separate from the durable send obligations, because an HTTP response is never recorded |
 | K9 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
 | K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
-| K11 | **Operations** | Trace context and metrics as the observability page lists; admission and the ingress threshold; retention and delete; simple migration with plans, dispatched by creation wherever creation headers exist, with id-only fallback outcomes marked in the plan-outcomes read model and shown to the operator; parked-work inspect, retry and discard; values by reference |
+| K11 | **Operations** | Trace context and metrics as the observability page lists, including the `elsa.kernel.drain.held` gauge that case M3-13 reads; admission and the ingress threshold; retention and delete; simple migration with plans, dispatched by creation wherever creation headers exist, with id-only fallback outcomes marked in the plan-outcomes read model and shown to the operator; parked-work inspect, retry and discard; values by reference |
 | K12 | **Qualification** | See "Release 1 qualification" below |
 | K13 | **Default switch** (gate 4) | **Release acceptance:** K1 to K12 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
 | K14 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
@@ -62,15 +62,22 @@ Each changes kernel behaviour, so each needs two independent reviews when built.
 |---|---|
 | A `backlog` column on the fence row, written by commit and beat | [Fairness](../architecture/fairness-and-backpressure.md) 2 |
 | The send cap checked when a turn's outcome is sealed | Fairness 3 |
-| Park's `KeptBy` column, the restore that clears `Done`, and Park journalled at every history level | [Observability](../architecture/observability.md) 2 |
-| Recover and discard as control kinds, with the recovery ticket generation for jobs | Observability 1 |
+| Park keeps by reason and by full identity: `KeptBy` holds the row's kept reason (`Consumed` or `Arrived`); the delivery handle `(Id, Scope, Match)` names a kept row, encoded and decoded in layer 2 only; Park journals at every history level | [Observability](../architecture/observability.md#what-park-keeps) 2, B2 |
+| The restore transition that clears `Done` on a restored row and resets its poison counters; the sweep's predicate excludes kept rows, with an index on `(Target, Seq)` partial on `KeptBy IS NOT NULL` where the engine supports it (MySQL takes the full index) | [Observability](../architecture/observability.md#recover), M1 |
+| `ParkRecord.Resolution`: its cursor on `(Seq, Id, Scope, Match)`, the recorded model end, and the handle of the previous page's last restored row that the progress gate reads; rows above a recover drain's cursor are withheld | [Observability](../architecture/observability.md#resolving-a-park-a-bounded-drain), M3 |
+| Every resolution (recover, discard, the window's expiry as an automatic discard, terminate, and delete of a parked instance) runs as a bounded drain under that cursor, with one final notice to a waiting parent; the control kinds `kernel.drain` and `kernel.park-expiry` pass withholding, are never suspects and are exempt from the poison check; the consume rule keeps no arrival once a resolution opens, and the interruption rules resume keeping; the recovery ticket generation for jobs | Observability 1 and 2, M1, M3 |
+| A paged read of an instance's kept rows after a cursor, and point lookups by full key, read through `IInboxInspection.KeptAsync` (case M3-12 at K9 and K11) | Observability |
 | The `trace` column on messages and its propagation at every send | Observability |
 | Lifecycle entries at every history level (State and Minimal write more), as one rule with Park's journalling | [Data lifecycle](../architecture/data-lifecycle.md) 1 |
 | Payload-free done markers, with Park's kept deliveries excepted, after their readers are checked | Data lifecycle 7 |
 | The journal envelope and codec headers on every payload | Data lifecycle 6 and format item 2 |
 | Value rows in the same fenced batch, removed by the instance's delete | [Write volume](../architecture/write-volume.md) 1 |
 | The command-kind seam (`IActorType.IsCommand`) for `Migrate` | [Migration](../architecture/migrating-running-instances.md) |
-| Persisted creation headers on every provider, replacing the id-only fallback | Migration |
+| Persisted creation headers on every provider: a creation is unique per tenant and id across deletes, with the retirement marker keeping the creation high-water mark for every id kind (caller keys included) and never compacted in release 1. Creation gates deletion and replaces migration's id-only fallback | [Data lifecycle](../architecture/data-lifecycle.md), B1; Migration |
+| The terminal mark, a column pair (revision and time of the run's last terminal transition), persisted on every provider | Data lifecycle, B1 |
+| The qualified delete: every delete names tenant, creation and terminal mark with a reason, and the owner checks tenant, creation, mark, the policy in force for Retention, and `ProtectsDeletion` before deleting; an ambiguous selection is refused; there is no `Force` (data lifecycle decision 9). `kernel.terminate` with `ThenDelete` | Data lifecycle, B1 |
+| The tenant contract: a `tenant` column on every tenant-keyed record, checked by the owner on load and on consumption; `Q(t, n)` at every ingress and in the keyed-request hash; tenant-qualified correlation keys; read-model indexes led by tenant; the tenant-id grammar checked where the `BoundScope` is created | [Tenancy](../architecture/tenancy.md#release-1), M2 |
+| The collation pin on SQL Server and MySQL: every column that holds a tenant id, an actor id or a tenant-qualified name gets the pinned collation in the schema and the migrations, and every expression that compares with, joins to, partitions by or hashes a pinned column, and every kernel routine's string parameters and variables, uses it. The three known prototype sites are not carried over: `EfStore.LoadActorsAsync`'s alias lookup and the SQL Server `EventInsert` CHECKSUM stripe (both `DATABASE_DEFAULT`), and MySQL's `kernel_insert_event` (`wire` without `COLLATE`) | Tenancy decision 6, M2 |
 | A turn budget per pass (`PassTurnBudget`) | [Fairness](../architecture/fairness-and-backpressure.md#fair-scheduling-within-a-pass), release 1 |
 | Deficit round robin by tenant within a pass, with the tenant column on the instance row | Fairness, release 1 |
 | The age hint that `RunAsync` reports to layer 1 (a change to the seam between layers 1 and 2) | Fairness, release 1 |
@@ -166,8 +173,11 @@ owner's node row is live. Record the floor this produces.
 ## Gate 2 review: counterexamples and answers
 
 The [independent architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)
-raised four Minors and plan recommendations that this plan and ADR 0099 answer. B1, B2 and M1 to M3 are answered on
-their own pages.
+raised four Minors and plan recommendations that this plan and ADR 0099 answer. B1 is answered on
+[data lifecycle](../architecture/data-lifecycle.md), B2, M1 and M3 on
+[observability](../architecture/observability.md#counterexamples-and-answers), and M2 on
+[tenancy](../architecture/tenancy.md#counterexample-and-answer); their cases are listed under "Acceptance cases from
+the pages" below.
 
 | Finding | Counterexample | Answer |
 |---|---|---|
@@ -198,6 +208,25 @@ their own pages.
 | With an old-version owner holding partitions, the migration that raises a family version refuses while its node row is live | K12 |
 | The k-row fence locks in ascending id on every engine; two overlapping range commits on SQL Server, PostgreSQL and MySQL complete with no deadlock | K1 (prototype), K4 (providers) |
 | MongoDB on a three-member replica set: primary loss and an uncertain commit, before production support | After release 1 (1.1) |
+
+### Acceptance cases from the pages
+
+Each page defines its cases; this table places every case id under each milestone the page gives it, without
+repeating the case. A case tagged K3 and K4 runs first on the in-memory store and the simulation, then on every
+provider.
+
+| Milestone | Cases |
+|---|---|
+| K2 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T1 |
+| K3 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD1, RD2, RD3, RD4, RD4b, RD5, RD6, RD7, RD7b, RD8c; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP1, MP2; [Observability](../architecture/observability.md#acceptance-cases): B2-1, B2-2, B2-3, B2-4, B2-5, B2-6, M1-1, M1-2, M1-3, M1-4, M1-5, M3-1, M3-2, M3-4, M3-5, M3-6, M3-9, M3-10, M3-11, M3-13; [Tenancy](../architecture/tenancy.md#acceptance-cases): T2, T3, T4, T7, T11, T13, T16, T17 |
+| K4 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD1, RD2, RD5, RD6, RD7, RD7b; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP2, MP4; [Observability](../architecture/observability.md#acceptance-cases): B2-1, B2-2, B2-3, B2-4, M1-1, M1-2, M3-2, M3-7, M3-8, M3-9; [Tenancy](../architecture/tenancy.md#acceptance-cases): T2, T3, T4, T15, T16, T17 |
+| K5 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T12 |
+| K6 | [Observability](../architecture/observability.md#acceptance-cases): M3-6, M3-10, R-1; [Tenancy](../architecture/tenancy.md#acceptance-cases): T5, T7 |
+| K7 | [Observability](../architecture/observability.md#acceptance-cases): M3-13, R-1 |
+| K8 | [Tenancy](../architecture/tenancy.md#acceptance-cases): T8 |
+| K9 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD10; [Observability](../architecture/observability.md#acceptance-cases): M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T6 |
+| K11 | [Data lifecycle](../architecture/data-lifecycle.md#acceptance-cases): RD3, RD4, RD4b, RD8, RD8b, RD8c, RD9; [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP1, MP3; [Observability](../architecture/observability.md#acceptance-cases): B2-5, M1-3, M3-12, R-2; [Tenancy](../architecture/tenancy.md#acceptance-cases): T9, T10, T11, T12 |
+| K12 | [Migration](../architecture/migrating-running-instances.md#acceptance-cases): MP4; [Observability](../architecture/observability.md#acceptance-cases): M3-1, M3-3, M3-5, M3-11, M3-13; [Tenancy](../architecture/tenancy.md#acceptance-cases): T14 |
 
 ## The switch
 
