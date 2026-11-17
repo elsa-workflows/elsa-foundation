@@ -170,7 +170,13 @@ enum Disposition { Granted, Empty, Accepted, Duplicate, Stale, Refused, Unknown 
 
 Every answer distinguishes granted, empty, accepted, duplicate, stale, refused and unknown. A worker whose request ends
 in a broken connection resends the same request id; it never invents a new attempt id. The gateway turns a request id
-into the message id `{worker}/{request id}` (decision 3).
+into the message id `{worker}/{request id}` (decision 3). `{worker}` is the worker's authenticated principal, which
+stays the same across reconnects; the gateway takes it from authentication for every request (Activate, Renew,
+Complete, Fail), never from the connection or the request body, so the request records need no `Worker` field. A
+resent Activate within its `keep_until` meets the duplicate id and is answered `Unknown` with no grants: the grants
+of the lost answer are not replayed. They expire by their attempt lease, and the jobs are granted again, as in
+Zeebe, so such jobs wait at most one attempt lease. A resent Renew, Complete or Fail gets its recorded disposition
+through a read-only `job.status` message.
 
 ## The effect key the worker receives
 
