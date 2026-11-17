@@ -65,10 +65,12 @@ instance reads another's state. The inbox alone says what is owed
 A turn runs with its instance's tenant, which it reads as `ITurn.Instance.Tenant` and cannot change: `Send`, `Start`
 and `Publish` take no tenant, and everything a turn produces carries the instance's tenant
 ([tenancy](../architecture/tenancy.md#where-the-tenant-comes-from)).
-Recovery in place adds three proposed obligations to the contract: each model implements `RestoreWaits`, which
-returns the waits its committed state holds, each timer as a `TimerSpec` (the id `Send` returned, its kind, payload
-and absolute due), and arms a timer it may restore with `SendOptions.DueAt`, an absolute time on `ITurn.Now`'s clock
-that the kernel writes unchanged ([observability](../architecture/observability.md#recover)).
+Recovery in place adds three proposed obligations to the contract, a coordinator design choice of the gate 2 fix
+round, not an owner decision ([register](../architecture/decisions.md#the-gate-2-fix-round-17-november)): each model
+implements `RestoreWaits`, which returns the waits its committed state holds, each timer as a `TimerSpec` (the id
+`Send` returned, its kind, payload and absolute due), and arms a timer it may restore with `SendOptions.DueAt`, an
+absolute time on `ITurn.Now`'s clock that the kernel writes unchanged
+([observability](../architecture/observability.md#recover)).
 
 ### 3. Four logical seams
 
