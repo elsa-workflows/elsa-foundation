@@ -73,6 +73,7 @@ Each structure declares how its children relate in time; the warning has no list
 
 The analysis sees only declared writes. It does not see a script's `setVariable`, a C# activity writing through its
 execution context, or writes inside sub-workflows and graph activities. No warning does not mean no write conflict.
+A BPMN process with link events declares nothing, so its writes are reported as undeclared.
 A `Break` that ends a Flowchart cancels the other paths' running activities, so they commit nothing afterwards.
 
 Seeing the actual run order is not available yet: per-variable write history and the winning write

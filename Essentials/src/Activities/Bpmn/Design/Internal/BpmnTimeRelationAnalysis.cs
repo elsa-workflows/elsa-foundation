@@ -433,6 +433,10 @@ internal sealed class BpmnTimeRelationAnalysis
             foreach (var child in new[] { element.ChildNodeId, element.ListenerNodeId })
                 if (!string.IsNullOrWhiteSpace(child) && !elementOfChild.TryAdd(child, element.ElementId))
                     return null;
+            // Link events connect a throw to a catch without a sequence flow; the graph does not model them, so the
+            // process declares nothing rather than claim an order it cannot see.
+            if (element.EventDefinitions.Any(definition => string.Equals(definition?.Type, "link", StringComparison.OrdinalIgnoreCase)))
+                return null;
         }
 
         var analysis = new BpmnTimeRelationAnalysis(elements, elementOfChild);
@@ -483,7 +487,45 @@ internal sealed class BpmnTimeRelationAnalysis
                 analysis._nonWaitingJoins.Add(node);
         }
 
+        // A waiting join pairs only arrivals of one loop iteration: a token that went round a loop after a fork (a retry
+        // on one branch) arrives in a later iteration than its sibling, so each runs the join on its own.
+        foreach (var join in analysis._inbound.Where(entry => entry.Value.Count >= 2 && !analysis._nonWaitingJoins.Contains(entry.Key))
+                     .Select(entry => entry.Key).ToList())
+            if (analysis.ALoopSeparatesArrivals(join))
+                analysis._nonWaitingJoins.Add(join);
+
         return analysis;
+    }
+
+    // Whether a fork reaches the join both through a cycle that avoids the join and along a path that avoids that cycle.
+    private bool ALoopSeparatesArrivals(string join)
+    {
+        var loopNodes = _inbound.Keys
+            .Where(node => !StringComparer.Ordinal.Equals(node, join) && ReachesAvoiding(node, node, join) && ReachesAvoiding(node, join, join))
+            .ToList();
+        if (loopNodes.Count == 0)
+            return false;
+        return _outgoing.Where(entry => !StringComparer.Ordinal.Equals(entry.Key, join) && BranchGroups(entry.Value).Count >= 2)
+            .Any(fork => loopNodes.Any(node =>
+                (StringComparer.Ordinal.Equals(fork.Key, node) || ReachesAvoiding(fork.Key, node, join)) &&
+                ReachesAvoiding(fork.Key, join, node)));
+    }
+
+    // Whether target is reachable from source in at least one step without entering avoid (target itself may be avoid).
+    private bool ReachesAvoiding(string source, string target, string avoid)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>([source]);
+        while (queue.TryDequeue(out var node))
+            foreach (var next in SuccessorsOf(node))
+            {
+                if (StringComparer.Ordinal.Equals(next, target))
+                    return true;
+                if (!StringComparer.Ordinal.Equals(next, avoid) && visited.Add(next))
+                    queue.Enqueue(next);
+            }
+
+        return false;
     }
 
     private sealed record Edge(string Target, string? Choice);

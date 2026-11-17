@@ -324,6 +324,62 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
         Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "join", "join"));
     }
 
+    // A retry loop on one branch of a parallel split sends its token to the inclusive join in a later iteration than the
+    // other branch's: the join fires once per token, so what follows it runs twice at once.
+    [Fact]
+    public void An_inclusive_join_after_a_retry_loop_on_one_branch_fires_per_token()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("fork", BpmnElementTypes.ParallelGateway), Task("a", "left"),
+                Task("y", "retry"), Element("gw", BpmnElementTypes.ExclusiveGateway), Element("w", BpmnElementTypes.InclusiveGateway),
+                Task("b", "after"), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "fork"), Flow("fork", "a"), Flow("a", "w"), Flow("fork", "y"), Flow("y", "gw"), Flow("gw", "y"), Flow("gw", "w"),
+                Flow("w", "b"), Flow("b", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unordered, _handler.RelateChildren(process, "after", "after"));
+    }
+
+    // A parallel split and its waiting join inside a loop body stay one sequential pass.
+    [Theory]
+    [InlineData(BpmnElementTypes.InclusiveGateway)]
+    [InlineData(BpmnElementTypes.ParallelGateway)]
+    public void A_split_and_waiting_join_inside_a_loop_body_stay_ordered(string waitingJoin)
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Element("m", BpmnElementTypes.ExclusiveGateway), Task("h", "head"),
+                Element("p", BpmnElementTypes.ParallelGateway), Task("l", "left"), Task("r", "right"), Element("w", waitingJoin),
+                Task("t", "after"), Element("x", BpmnElementTypes.ExclusiveGateway), Element("end", BpmnElementTypes.EndEvent)
+            ],
+            [
+                Flow("start", "m"), Flow("m", "h"), Flow("h", "p"), Flow("p", "l"), Flow("p", "r"), Flow("l", "w"), Flow("r", "w"),
+                Flow("w", "t"), Flow("t", "x"), Flow("x", "m"), Flow("x", "end")
+            ]);
+
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "after", "after"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, _handler.RelateChildren(process, "left", "after"));
+    }
+
+    // Link events connect without sequence flows, which the analysis does not model: the process declares nothing.
+    [Fact]
+    public void A_process_with_link_events_declares_nothing()
+    {
+        var process = Process(
+            [
+                Element("start", BpmnElementTypes.StartEvent), Task("x", "left"),
+                new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition("link")]),
+                new BpmnElement("catch", BpmnElementTypes.IntermediateCatchEvent, eventDefinitions: [new BpmnEventDefinition("link")]),
+                Task("b", "after")
+            ],
+            [Flow("start", "x"), Flow("x", "throw"), Flow("catch", "b")]);
+
+        Assert.Equal(ActivityChildTimeRelation.Unspecified, _handler.RelateChildren(process, "left", "after"));
+    }
+
     // A non-interrupting boundary that leads back into its host runs the host again while it is still active.
     [Fact]
     public void A_non_interrupting_boundary_leading_back_into_its_host_overlaps_the_host()

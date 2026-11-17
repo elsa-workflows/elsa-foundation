@@ -105,6 +105,9 @@ together. Then every write in its subtree is an unordered write, even a single n
   does not
   weigh exclusive choices here, so an arrival that is free only on another choice can still give a (conservative)
   warning.
+  A BPMN waiting join pairs only arrivals of one loop iteration, so it counts as non-waiting when a fork reaches it
+  through a cycle that avoids it and along a path that avoids that cycle (a retry loop on one branch). A process with
+  link events declares nothing: the graph has no edge from a link throw to its catch.
 - A node on a branch that a fork on a cycle sends off the cycle (Flowchart: any node with several distinct
   successors, whatever their ports, D-2a as amended; BPMN: any split that is not exclusive). Each pass starts another
   run of the branch, which also overlaps the next pass of the cycle. This includes a Flowchart loop that repeats
