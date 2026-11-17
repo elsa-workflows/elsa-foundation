@@ -171,6 +171,8 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   frames are read-only to intrinsics.)
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
   second does not see the first.
+- A closed-scope variable row carries no protection policy of its own, so its write record takes the protection of the
+  captured value.
 - A record of a closed-scope row write has no frame revision; its `CommitOrder` is the version the write produced.
 - The committer remembers, per lease, the stamps of activities still in flight; an entry goes when the activity's
   terminal commit is persisted or the lease ends.

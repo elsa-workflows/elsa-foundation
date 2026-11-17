@@ -160,6 +160,9 @@ public static class RuntimeDiagnosticsSettingsResolver
         {
             if (effectiveOverrides.ContainsKey(subject))
                 continue;
+            // Spec 1221 FR-025: a host cap limits write-history values; it never turns them on without their own setting.
+            if (StringComparer.Ordinal.Equals(subject, RuntimeDiagnosticsSubjects.VariableWrites))
+                continue;
 
             var subjectMaximum = Min(configuredMaximum, hostPolicy.MaximumLevel);
             var effectiveSubjectLevel = Cap(requested.DefaultLevel, subjectMaximum, permissions, limitationReasons, RuntimeDiagnosticsSubjectDisplayName(subject));

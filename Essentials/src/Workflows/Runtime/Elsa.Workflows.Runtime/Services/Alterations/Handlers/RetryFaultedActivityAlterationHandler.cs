@@ -245,10 +245,13 @@ public sealed class RetryFaultedActivityAlterationHandler(
             return WorkflowAlterationPreflightResult.Rejected("RootVariableFrameUnavailable", "The target workflow has no writable root variable frame.");
         foreach (var write in recorded.VariableWrites)
         {
+            // A withheld marker carries the producing output's policy, not the variable's, so only an ordinary value's
+            // protection is compared with the declaration.
             if (!frame.Values.TryGetValue(write.VariableKey, out var declared) || !SameType(declared.Type, write.Value.Type) ||
-                declared.Policy.IsSensitive != write.Value.Policy.IsSensitive ||
-                declared.Policy.RequiresEncryption != write.Value.Policy.RequiresEncryption ||
-                declared.Policy.Lifecycle != write.Value.Policy.Lifecycle)
+                write.Value.Presence != ValuePresence.Withheld &&
+                (declared.Policy.IsSensitive != write.Value.Policy.IsSensitive ||
+                 declared.Policy.RequiresEncryption != write.Value.Policy.RequiresEncryption ||
+                 declared.Policy.Lifecycle != write.Value.Policy.Lifecycle))
                 return WorkflowAlterationPreflightResult.Rejected(
                     "RecordedCompletionScopeChanged",
                     $"Workflow variable '{write.VariableKey}' is no longer declared with the type and protection the recorded completion wrote it with.");
