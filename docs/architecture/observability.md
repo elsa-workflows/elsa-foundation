@@ -406,7 +406,8 @@ Park decision.
     | A discard, expiry, terminate or delete drain is open | The same failed late input |
     | No resolution is open and the Park is unresolved | A re-park, which continues the Park |
     | The row has ended and has no unresolved Park (after a completed discard or expiry, a recovered instance that later ended, one that never parked) | A failed late input, the built behaviour; it never opens a Park or keeps rows |
-  - **A delete after the end takes the drain over,** as it does for discard, expiry and terminate (below). Without
+  - **A delete after the end takes the drain over** when its selection names the mark the end wrote, as it does for
+    discard, expiry and terminate ([Delete during a drain](#delete-during-a-drain)). Without
     that, the trace is: the model finishes, rows above the cursor still carry `KeptBy`, a delete removes the ended row,
     the next `kernel.drain` finds no target and is dropped, and the remaining rows keep `KeptBy` for good, since the
     sweep skips them; a later creation under the same id could then meet them. With the takeover, the drain runs on
@@ -425,12 +426,16 @@ Park decision.
     terminate's operation as in progress. The built
     terminate sends a notice only when the child is running (`WorkflowInstance.cs`, the terminate path); this one sends
     none at its open, so the parent hears once.
-- **Delete during a drain.** During a recover drain whose model still runs, the built delete refuses a running
-  instance, so the delete is consumed with no change and the refusal recorded, as for any delete of a running instance;
-  terminate first, then delete. During a discard, expiry or terminate drain, or a recover drain whose model has ended,
-  the delete takes the drain over from its cursor. Its Complete first ends the instance where the drain had not yet done so (for a taken-over terminate:
-  Cancelled, with its terminal mark), then runs the built delete, as the data lifecycle page's terminate-then-delete
-  does, and sends the one parent notice that drain owed.
+  - **The row's terminal mark depends on where the terminate came from.** A terminate of a parked instance with no resolution open leaves the
+    Park's mark on the row, since its Open writes no mark. A terminate that interrupts a running recover finds no mark,
+    since the recover's Open cleared it. In both cases Complete writes the Cancelled mark, and from then on the row
+    carries that mark.
+  - **`ThenDelete` is part of the terminate.** Its Open records `ThenDelete` in the terminate's Resolution, and its
+    Complete does the deletion as the last step of the same commit ([Delete during a drain](#delete-during-a-drain)).
+  - **A further terminate while a terminate drain is open** changes nothing and is refused as "resolution open". Its
+    `ThenDelete`, if any, is not added to the open drain.
+- **Delete during a drain.** A delete takes a drain over only when its qualified checks pass against the row's
+  current terminal mark ([Delete during a drain](#delete-during-a-drain), below).
 - **What counts toward `B`.** A page reads and writes metadata only: each row's full key (`Id`, `Scope`, `Match`),
   `Seq`, kind, sender, `KeptBy` and payload size. Restoring and clearing set flags by full key and never carry the
   payload. `B` counts the encoded metadata, so a row's payload size plays no part in its page. A row's metadata is
@@ -484,6 +489,112 @@ Park decision.
 - **When it is complete.** The open's reply says the resolution started; the operation's outcome (complete, with
   restored, cleared and refused counts, or interrupted) appears in the parked-work read model by operation id, and a
   synchronous API call can wait for it through a reply address until its deadline.
+
+#### Delete during a drain
+
+This is proposed. A delete is the data lifecycle page's [qualified delete](data-lifecycle.md#proposed-the-qualified-delete)
+in every state of the row, a drain included. Its checks run in the actor's command turn against the row as it is then,
+its current terminal mark included. When they pass while a drain is open, the delete takes the drain over. The
+takeover never lets a delete name a mark the row does not carry, so decision 9A holds: every delete is qualified, and
+none has a force form. A delete compares the row's terminal mark only. `ParkRecord`'s Park identity outlives the row's
+mark during a recover, and a delete never reads it.
+
+| Open drain | Row status | The row's terminal mark | A separate delete |
+|---|---|---|---|
+| Recover, model running | Running | None: the recover's Open cleared it | Refused as "transition": no selection can name a mark the row lacks |
+| Recover, model ended | The end's status | The mark the end wrote | Naming that mark, reason Operator: takes over |
+| Discard or expiry | Faulted | The Park's mark | Naming the Park's mark, reason Operator: takes over |
+| Terminate of a parked instance | Faulted, "terminating" | The Park's mark | Naming the Park's mark, reason Operator: takes over |
+| Terminate that interrupted a running recover | Running, "terminating" | None until Complete writes the Cancelled mark | Refused as "transition"; after Complete, a delete naming the Cancelled mark is an ordinary delete of an ended row |
+| Delete, a taken-over drain, or a terminate with `ThenDelete` | As in the rows above | As in the rows above | Checks 1 to 3 as in the rows above; a delete that passes them changes nothing and is refused as "in progress", with the operation that will delete named in its outcome |
+
+**Where "in progress" sits.** It is tested after checks 1 to 3 and before check 4, so a delete from another tenant, for
+another creation or naming another mark gets the reason of the check it fails (tenant, run or transition) and learns
+nothing of the drain. Two consequences follow. A terminate with `ThenDelete` that interrupted a running recover leaves
+the row with no mark, so a separate delete during it fails check 3 as "transition", the same answer as during any
+terminate of that origin (DT-5). And "in progress" comes before check 5, so a separate delete during a drain that
+already ends in a delete is refused as "in progress" even while `ProtectsDeletion` protects the row; during a drain
+that does not end in a delete, the same delete is refused at check 5 as "protected" (DT-6).
+
+A Retention delete that passes check 3 while a drain is open is refused as "in progress" when a delete already owns
+the drain, and otherwise at check 4 as "not eligible", since the Park stays unresolved. In the rows with no mark it
+fails check 3 as "transition". The retention worker selects the run again after Complete, under the mark Complete
+leaves.
+
+- **The takeover.** The delete's command turn records its operation and selection in the open
+  `ParkRecord.Resolution`. The kind, the cursor, the generation and the `kernel.drain` in flight stay as they are, so
+  the drain runs on from its cursor and no page is repeated or skipped.
+- **Complete of a drain that ends in a delete** (the delete of a parked instance, a taken-over drain, or a terminate
+  with `ThenDelete`) does three things in one commit:
+  1. the kind's own end, where the drain has not yet ended the instance: the disposition, Faulted and the terminal
+     mark for discard and expiry; Cancelled and the terminal mark for terminate. A recover whose model ended has
+     nothing left to end. The delete of a parked instance has no end of its own while the delete goes ahead; when
+     step 3 finds the row protected, it ends as a discard would (below);
+  2. the one parent notice the drain owed: Faulted for discard, expiry and the delete of a parked instance, Cancelled
+     for terminate, and none after a model end, whose own turn sent it;
+  3. `ProtectsDeletion` once more, at Complete's time, since it reads the state and the owner's clock
+     (`WorkflowInstance.cs`). An unprotected row gets the built delete, whose single journal row is the deletion
+     marker. A protected row stays, ended under the mark of step 1, which is journalled as any end, and the delete's
+     outcome is "protected".
+
+  **A protected Complete of a parked instance's delete.** Protection can begin between the delete's command turn and
+  its Complete. By then the drain has cleared every kept row, so the Complete resolves the Park as a discard would:
+  the row stays Faulted with a new terminal mark, the parent gets the one Faulted notice the drain owed, the journal
+  records the delete refused as protected and the Park discarded, and the row's `Faulted` retention window starts from
+  the new mark. This is a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)); it
+  fills a gap in decision 9A's protection rule, which never deletes a protected row.
+
+  The deletion marker carries the drain's counts and the outcome of each operation the drain served, so the
+  parked-work read model keeps them by operation id after it removes the view: the taken-over operation as complete
+  (for a terminate, Cancelled and then deleted by the named delete), and the delete as deleted.
+- **`ThenDelete` follows its own contract.** The deletion is the terminate operation's own last step, so it names no
+  terminal mark and waits for none ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). On a parked
+  row, or during a recover whose model runs, the terminate is a drain, and its Complete runs steps 1 to 3. A parked
+  row has not ended for this purpose, since its Park is unresolved. During a recover drain whose model has ended, the
+  run has ended, so the command takes the qualified-delete path of an ended run (checks 1, 2 and 5) and takes the drain
+  over.
+
+> **Third review: counterexample and answer** ([third gate 2 review, R3-M5](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6960856712)).
+> The trace: A parks at mark r1. A recover opens and clears the row's mark, while `ParkRecord` keeps r1. A terminate
+> interrupts the still-running model: its Open stops the model's turns, and the status stays Running. Its Complete
+> will write the Cancelled mark r2. In between, a separate operator delete naming r1 fails the mark check, a delete with
+> no mark is ambiguous, and no selector can name r2 yet, while M3-6 required every delete during a terminate drain to
+> take it over. `ThenDelete` is a different command.
+>
+> The answer, step by step:
+> 1. A takeover needs the delete's checks to pass against the row's current mark. In this interval the row has none,
+>    so the delete naming r1 is refused as "transition" and changes nothing. M3-6 now asks for exactly that.
+> 2. The terminate drain runs on, clears every kept row and completes: Cancelled, mark r2, one Cancelled notice to the
+>    parent.
+> 3. A new delete selected under r2 passes the mark check. Operator needs no policy; Retention waits for the
+>    `Cancelled` window from r2's time; a run that `ProtectsDeletion` protects is refused as "protected".
+> 4. A terminate of A while it is parked, with no recover between, leaves r1 on the row. A delete naming r1 passes and
+>    takes the drain over; its Complete ends A Cancelled under r2, sends the one Cancelled notice and deletes.
+> 5. An operator who wants the run gone without waiting sends the terminate with `ThenDelete`, whose deletion is that
+>    operation's own last step and needs no mark.
+> 6. Comparing the delete with `ParkRecord`'s r1 when the row has no mark would accept step 1's delete, which was
+>    selected before the recover ran. DT-2's mutation is that comparison.
+
+**Worked example: a recovered child is terminated, its parent hears once, and it is deleted.** Parent P waits on
+child A.
+
+1. A parks: Faulted, with Park mark r1 on the row and in `ParkRecord`; 1,200 rows are kept over time. An operator reads
+   r1 from `ParkedItem` and sends delete D1 (Operator, r1), which is delayed.
+2. A `resume` recover R opens: the row's mark is cleared, `ParkRecord` keeps r1, and A runs. Page 1 reads 500 rows,
+   restores the `Arrived` ones and clears the rest, and the model takes some of the restored rows.
+3. A terminate T of A is accepted. Its Open clears R's Resolution and opens its own, stops the model's turns, removes
+   the waits, cancels the jobs and terminates A's children. A shows Running, "terminating", with no mark.
+4. D1 arrives. The row has no mark, so check 3 fails: D1 is refused as "transition", nothing changes, and
+   `elsa.kernel.delete.refused` counts it.
+5. T's pages clear the 700 rows still kept, and the page that finds none is its Complete. Complete records Cancelled
+   with mark r2, resolves the Park and sends P one Cancelled notice. The restored rows A had not consumed meet the rule
+   for a finished instance and are dropped.
+6. P consumes the notice once; the instance list shows A Cancelled under r2.
+7. An operator sends delete D2 (Operator, r2). Every check passes and `ProtectsDeletion` does not protect A, so A is
+   deleted, with the deletion marker as the commit's journal row. P receives nothing more.
+
+Had T reached A while it was parked, without R, D1 would have named the row's mark at step 4 and taken the drain over,
+and T's Complete would have deleted A after the same single Cancelled notice.
 
 ### Recover
 
@@ -588,10 +699,24 @@ store conformance suite need it:
 id `Q(t, operation)`, with a `keep_until`, so a retried command gets a duplicate-key answer and no second effect, and
 the same operation id in another tenant is a different message. An operator acts only within its bound scope: another
 tenant's instance answers not found, as a missing one does. Partition release, drain and handover are host
-administration and touch no tenant rows; cross-tenant support uses ADR 0097's support context
+administration under host-admin permissions. The administrator's own writes go to `partition` and `node` rows and read
+no tenant payload. The ownership change they cause then runs the ownership protocol's bookkeeping on tenant message
+rows, as the [tenancy page's host-administration row](tenancy.md#every-operation) states: a take by another node after
+an expired lease adds one attempt to each row on trial at the old epoch, a take after a release or by the same node
+adds none (`InMemoryStore.TakeAsync`), and the new owner marks what it polls `Seen` and puts suspects on trial. After that, the new owner's ordinary commits carry each tenant's work in its own
+tenant. None of these steps changes a row's tenant, ids or payload. T12 checks this in release 1, and T12b with the
+forced handover after it. Cross-tenant support uses ADR 0097's support context
 ([tenancy](tenancy.md#every-operation)). Inspecting metadata,
 reading payloads, recovering, discarding and handing over are separate permissions, and each action is audited with
 its principal, reason and outcome.
+
+> **Third review: counterexample and answer** ([third gate 2 review, R3-m2](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6960856712)).
+> The trace: this paragraph said that release, drain and handover touch no tenant rows, while the tenancy page, T12 and
+> the built take let ownership bookkeeping change `Seen`, `Trial` and `Attempts` on tenant message rows after a
+> crash and a cross-node take. The answer: the paragraph now separates the administrator's own writes (`partition`
+> and `node` rows only), the protocol bookkeeping those writes lead to, and the new owner's later tenant-scoped
+> commits, and it points to the tenancy page's row as the rule. T12 stays a release 1 case at K5 and K11, and T12b
+> stays with the forced handover after release 1.
 
 ## Read models: how layer 3 stays off partitions
 
@@ -674,6 +799,7 @@ record ParkedDetail(ParkedItem Item, IReadOnlyList<string> ConsumedHandles, Reso
 - The Park identity checks, the bound controls, the retained dispositions and the metadata-only pages (cases P-1 to
   P-5 and S-1 to S-4), and the private controls' issuer, outstanding key and selected terminate (cases P-1b and P-8
   to P-11).
+- The delete takeover under the row's current terminal mark and `ThenDelete` on a drain (cases DT-1 to DT-6).
 
 ## Counterexamples and answers
 
@@ -851,11 +977,11 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
 | M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is not yet taken up (done, or seen at the current epoch) or the instance is suspended, and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
-| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once; the re-park keeps the Park mark and the retained dispositions and reverts `Selected` rows to `Consumed`. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain is refused with no change; a delete during a discard, expiry or terminate drain takes the drain over; at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
+| M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once; the re-park keeps the Park mark and the retained dispositions and reverts `Selected` rows to `Consumed`. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain whose model runs is refused with no change; a delete whose checks pass against the row's current terminal mark during a discard, expiry or terminate drain takes the drain over (DT-1), and a terminate that interrupted a running recover leaves no mark to name until its Complete (DT-2); at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept. The prototype's MongoDB store sorts by `(seq, _id)` (`MongoStore.cs`), so the tuple cursor is a provider contract implemented and qualified here | K4 |
 | M3-9 | A drain page crashes the process, before and after its commit. The next owner re-runs the page from the committed cursor; each row is restored or cleared once; the drain message is never put on trial or parked | K3, K4 |
-| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
+| M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete naming the end's mark after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`; one naming the Park's mark is refused as naming an earlier transition. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
 | M3-11 | The deadlock trace: during a recover drain, arrivals withheld above the cursor push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused | K9, K11 |
 | M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with due depth at most one page plus the held rows, as `elsa.kernel.drain.held` reports; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate by one point lookup and treats a row seen at a lost owner's epoch as not taken up until its own re-poll marks it; a gate row consumed and swept counts as taken up | K3, K7, K12 |
@@ -878,6 +1004,12 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | S-3 | A `retry` selection of `P` handles lands; one of `P` + 1 handles, or above 256 KiB, is refused with no change; retry-all lands for any number of `Consumed` rows; an interruption reverts every `Selected` row; a handle that is neither a kept `Consumed` row nor a suppressed timer is refused before Open; a selection that names a `Suppressed` timer re-arms it once and leaves the marking's count unchanged, with no reset, both with the sweep run before the retry and after it, each giving one armed timer and one firing; a second retry after an interruption, naming the now `Rearmed` timer, re-arms nothing; a timer that is `Suppressed` and still kept `Consumed` (a re-park came before the page that would clear it), named by a retry, is re-armed once by the revive, which also clears its `KeptBy`, fires once, is never marked `Selected`, and is skipped by the later pages | K3, K4, K11 |
 | S-4 | MongoDB: a page next to a kept row of 5 MiB stays within the document, message and transaction-lifetime limits | K4 |
 | R-2 | Inspect, retry, resume and discard through the operator API on the parked-work read model, by handle | K9, K11 |
+| DT-1 | **A delete takes over the terminate drain of a parked child.** Preconditions: parent P waits on child A, parked at mark r1 with more than `2P` kept rows; a terminate T of A opens the terminate drain, once as P's tree terminate and once as an operator's naming A's `ParkSelection`. Interleaving: an operator delete D naming A's tenant, creation and r1 arrives after T's Open, once before the first page and once between pages, with an ownership takeover between D's commit and the next page; a Retention delete naming r1 arrives once before D and once after D's takeover; a second operator delete arrives after D's takeover; during the drain, a delete from another tenant with A's id and one naming another creation of A's key arrive, before and after D. Outcome: D takes the drain over, which continues from its cursor with no row repeated or skipped; Complete ends A Cancelled under a new mark r2, sends P exactly one Cancelled notice and deletes A in the same commit, whose only journal row is the deletion marker; no row keeps `KeptBy`; T's outcome is complete (Cancelled, then deleted by D) and D's is deleted; the Retention delete before D is refused as not eligible and after D as in progress, the second operator delete as in progress, the other tenant's as tenant and the other creation's as run, never as in progress, each with no change. Protection: with `ProtectsDeletion` true when D arrives, D is refused as protected and T completes alone; with a test model whose protection starts between D's takeover and Complete, A ends Cancelled under r2 and is kept, and D's outcome is protected. Mutations: the takeover's Complete skips `ProtectsDeletion` (the protected run is deleted); the taken-over Complete also sends the Faulted notice of a parked delete (P receives two) | K3, K4, K11 |
+| DT-2 | **No separate delete qualifies while a terminate that interrupted a running recover drains.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows; an operator delete D1 naming r1 is prepared while A is parked; a `resume` recover R opens (the row's mark cleared, A Running), its first page restores rows, and the model still runs; a terminate T is accepted and opens its drain, interrupting R. Interleaving: D1 arrives after T's Open before its first page, between its pages, and after an ownership takeover between pages; a delete naming creation 0 arrives in the same window. Outcome: D1 is refused as "transition" and the creation-0 delete as ambiguous, each with no change and counted by reason; T's drain runs on and its Complete writes the Cancelled mark r2, leaves no row with `KeptBy` and sends P exactly one Cancelled notice; R's outcome is interrupted and T's is complete. After Complete: a new delete naming r1 is refused as "transition"; an operator delete D2 naming r2 deletes A, and P receives no further notice; in a second run with `ProtectsDeletion` true, D2 is refused as protected and A stays under r2; a Retention delete under r2 is refused before the `Cancelled` window has elapsed and deletes A after it. Mutation `DeleteAcceptsParkRecordMark`: when the row has no mark, check 3 compares the selection with `ParkRecord`'s Park identity; D1 then takes the drain over and deletes A, and the case fails | K3, K4, K11 |
+| DT-3 | **`ThenDelete` on both origins.** Preconditions: A parked at r1 as in DT-1, and separately a running recover of A as in DT-2. Interleaving: an operator's terminate with `ThenDelete`, accepted under the terminate's checks, opens the terminate drain; in the parked origin a separate operator delete naming r1 arrives mid-drain; an ownership takeover comes between pages; each runs once with `ProtectsDeletion` false and once true. Outcome: `ThenDelete` is recorded at Open; the separate delete is refused as in progress with no change; Complete ends A Cancelled under r2, sends P exactly one Cancelled notice and, unprotected, deletes A in the same commit, whose only journal row is the deletion marker; protected, A is kept under r2 and the answer reaches the API request's reply address; no row keeps `KeptBy` in either case. A `ThenDelete` reaching a recover drain whose model has ended takes the drain over through checks 1, 2 and 5, and P receives only the end's notice. Mutation `ThenDeleteAtOpen`: the terminate deletes the row in its Open, as RD8's proposed one-turn path does for a running instance; the next `kernel.drain` finds no target, kept rows keep `KeptBy`, and the case fails | K3, K4, K11 |
+| DT-4 | **Protection begins before a parked instance's delete completes.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is false when the delete D (Operator, r1) arrives and turns true before the drain's Complete. Interleaving: D opens the delete drain; an ownership takeover comes between pages; protection turns true after the last page and before Complete. Outcome: no row keeps `KeptBy`; Complete leaves A Faulted under a new mark r2, sends P exactly one Faulted notice, and journals D refused as protected with the Park discarded; D's outcome is protected; A's `Faulted` retention window runs from r2, and a Retention delete under r2 after it is refused as protected while protection holds. Mutations: the protected Complete deletes A anyway; the protected Complete leaves A with no mark, so no later delete can name it | K3, K4, K11 |
+| DT-5 | **The refusal order when a `ThenDelete` terminate interrupted a running recover.** Preconditions: P waits on A, parked at r1 with more than `2P` kept rows; a `resume` recover R opens, so the row has no mark, and the model still runs; an operator's terminate with `ThenDelete` is accepted and opens its drain, interrupting R. Interleaving: between pages, an Operator delete naming r1, a Retention delete naming r1, a delete from another tenant with A's id and one naming another creation arrive, with an ownership takeover between pages. Outcome: the r1 deletes are refused as "transition" (check 3 fails before "in progress" or check 4 is reached), the other tenant's as tenant and the other creation's as run, each with no change; Complete ends A Cancelled under r2, sends P exactly one Cancelled notice and deletes A, with no row keeping `KeptBy`; the terminate's outcome is deleted. Mutation: "in progress" tested before check 3; the r1 deletes then answer "in progress", and the case fails | K3, K4, K11 |
+| DT-6 | **Protection against a separate delete during a drain.** Preconditions: A parked at r1 with more than `2P` kept rows, under a test model whose `ProtectsDeletion` is true throughout. Interleaving: in one run an operator's terminate without `ThenDelete` opens the terminate drain; in a second, a terminate with `ThenDelete`; in each, an Operator delete naming r1 arrives between pages. Outcome: in the first run the delete is refused at check 5 as "protected", and Complete ends A Cancelled under r2 and keeps it; in the second it is refused as "in progress", and Complete ends A Cancelled under r2 and keeps it, with the terminate's answer protected on the API request's reply address; in both, P receives exactly one Cancelled notice and no row keeps `KeptBy`. Mutations: check 5 tested before "in progress" (the second run answers "protected"); a separate delete during a protected terminate drain takes it over and deletes A | K3, K4, K11 |
 
 ## Decisions (owner, 16–17 November 2026)
 
