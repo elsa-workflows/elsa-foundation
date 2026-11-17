@@ -497,7 +497,10 @@ internal static class StructuralCallbackEvaluation
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
         // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
-        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record => record with { CommitSequence = null } == refusal.Record with { CommitSequence = null }) != true)
+        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record =>
+                record.Outcome == refusal.Record.Outcome && record.ScopeId == refusal.Record.ScopeId &&
+                record.VariableKey == refusal.Record.VariableKey && record.NewVersion == refusal.Record.NewVersion &&
+                record.OccurredAt == refusal.Record.OccurredAt && record.Writer.InvocationId == refusal.Record.Writer.InvocationId) != true)
             latestFaultedParentState = latestFaultedParentState.WithVariableWrites([refusal.Record]);
         // Every arm that records a thrown exception records through here, so this is where a value resolved for the
         // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
