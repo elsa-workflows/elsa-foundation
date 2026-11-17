@@ -115,7 +115,9 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
     case "omitted":
       return {
         label: "Not captured",
-        detail: value.isOperational ? "No value was kept." : "Not captured by the diagnostics settings (Variable writes is off unless given its own level).",
+        detail: value.isOperational
+          ? "No value was kept."
+          : "No value evidence is available: Variable writes is off unless given its own diagnostics level, or the capture failed or was removed.",
         tone: "muted"
       };
     default:

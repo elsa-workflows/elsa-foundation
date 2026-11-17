@@ -1,4 +1,5 @@
 import { AlertTriangle, History, RefreshCw } from "lucide-react";
+import { StatusChip } from "@elsa-workflows/studio-ui";
 import type {
   ActivityExecutionInspection,
   ActivityExecutionInspectionValueSnapshot,
@@ -7,6 +8,7 @@ import type {
   VariableWriteRecordView
 } from "../workflowTypes";
 import {
+  acceptedOverrideOutcome,
   countLostUpdates,
   describeVariableWrite,
   inputRefreshReason,
@@ -30,7 +32,7 @@ type LabelOf = (executableNodeId: string) => string | undefined;
 
 /**
  * The lost-update count as a diagnostic badge. Reusable: pass `onSelect` to make it open a view (spec 1229 opens the
- * write history filtered to lost updates); without it the badge only reports.
+ * write history filtered to lost updates); without it the badge only reports, as the shared warning status chip.
  */
 export function LostUpdateBadge({ count, onSelect, label }: { count: number; onSelect?: () => void; label?: string }) {
   if (count <= 0) return null;
@@ -38,14 +40,16 @@ export function LostUpdateBadge({ count, onSelect, label }: { count: number; onS
   const content = <><AlertTriangle size={12} aria-hidden="true" /> {text}</>;
   return onSelect
     ? <button type="button" className="wf-lost-update-badge" onClick={onSelect}>{content}</button>
-    : <span className="wf-lost-update-badge" role="status">{content}</span>;
+    : <span className="wf-lost-update-status"><StatusChip tone="warning">{content}</StatusChip></span>;
 }
 
 /** A value state, linked to its captured value evidence when the record names one. */
-export function VariableValueState({ label, value, evidence }: {
+export function VariableValueState({ label, value, evidence, note }: {
   label: string;
   value: VariableLifecycleValueState | null | undefined;
   evidence?: ActivityExecutionInspectionValueSnapshot;
+  /** Replaces the state's generic explanation when the record says more about where the value is. */
+  note?: string;
 }) {
   const presentation = presentValueState(value);
   return (
@@ -54,7 +58,7 @@ export function VariableValueState({ label, value, evidence }: {
       <dd>
         <span className="wf-variable-value-state-label">{presentation.label}</span>
         {value?.digest ? <code className="wf-variable-value-digest" title="Value digest">{shortDigest(value.digest)}</code> : null}
-        {evidence ? <RuntimeValueEvidenceContent snapshot={evidence} /> : <small>{presentation.detail}</small>}
+        {evidence ? <RuntimeValueEvidenceContent snapshot={evidence} /> : <small>{note ?? presentation.detail}</small>}
       </dd>
     </div>
   );
@@ -84,7 +88,16 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
         <div><dt>Writer</dt><dd>{writerLabel(record.writer, labelOf)}</dd></div>
         <div><dt>{record.outcome === lostUpdateFaultOutcome ? "Changed by" : "Overwritten writer"}</dt><dd>{writerLabel(record.overwrittenWriter, labelOf)}</dd></div>
         <div><dt>When</dt><dd>{formatDate(record.occurredAt)}{record.commitSequence != null ? ` · commit ${record.commitSequence}` : ""}</dd></div>
-        {record.writtenValue ? <VariableValueState label="Written value" value={record.writtenValue} evidence={evidenceOf(record.writtenValue)} /> : null}
+        {record.writtenValue ? (
+          <VariableValueState
+            label="Written value"
+            value={record.writtenValue}
+            evidence={evidenceOf(record.writtenValue)}
+            note={record.outcome === acceptedOverrideOutcome
+              ? "The value the accepted completion recorded; an accepted completion captures no separate value evidence."
+              : undefined}
+          />
+        ) : null}
         {record.overwrittenValue ? <VariableValueState label="Overwritten value" value={record.overwrittenValue} evidence={evidenceOf(record.overwrittenValue)} /> : null}
         {record.rejectedValue ? <VariableValueState label="Refused value" value={record.rejectedValue} evidence={evidenceOf(record.rejectedValue)} /> : null}
       </dl>
@@ -118,8 +131,8 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
       </header>
       {refusedByLostUpdate ? (
         <p className="wf-variable-write-hint" role="note">
-          This step faulted with {variableLostUpdateSubStatus}: a variable it read changed before its write could commit,
-          so the write was refused instead of overwriting the newer value.
+          This step faulted with {variableLostUpdateSubStatus}: a variable it read and writes changed before its write
+          could commit, so the write was refused instead of overwriting the newer value.
         </p>
       ) : null}
       {records.length > 0 ? (

@@ -151,6 +151,30 @@ public sealed class ActivityExecutionVariableLifecycleInspectionTests
     }
 
     [Fact]
+    public async Task An_accepted_override_keeps_the_state_of_the_value_it_overwrote()
+    {
+        await SaveAsync(State() with
+        {
+            VariableWrites =
+            [
+                new VariableWriteRecord("scope-1", "count", new VariableWriter(VariableWriteSource.AcceptedCompletion, "node-1", "inv-2"),
+                    VariableCommitOutcome.AcceptedOverride, baseVersion: null, currentVersion: 1, newVersion: 2, commitOrder: 5, Now,
+                    overwrittenWriter: new VariableWriter(VariableWriteSource.Capture, "node-a", "inv-a"),
+                    overwrittenValue: Inline(Sentinel))
+            ]
+        });
+
+        var view = await ViewAsync();
+        var write = Assert.Single(view.VariableWrites!);
+
+        Assert.Equal("AcceptedOverride", write.Outcome);
+        Assert.Equal(VariableLifecycleValueStateView.Captured, write.OverwrittenValue!.State);
+        Assert.True(write.OverwrittenValue.IsOperational);
+        Assert.Null(write.RejectedValue);
+        Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(view), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task An_execution_with_no_lifecycle_records_carries_none()
     {
         await SaveAsync(State());

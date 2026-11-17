@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -182,7 +183,7 @@ describe("run view", () => {
     flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [lostUpdateWarning()] })} labelOf={labelOf} />));
 
     const text = container.textContent!;
-    expect(container.querySelector(".wf-lost-update-badge")!.textContent).toContain("1 lost update");
+    expect(container.querySelector(".wf-lost-update-status .studio-status-chip[data-tone=warning]")!.textContent).toContain("1 lost update");
     expect(text).toContain("Lost update");
     expect(text).toContain("built on v0, current v1 → v2");
     expect(text).toContain("without seeing the value Add bonus wrote");
@@ -207,6 +208,22 @@ describe("run view", () => {
     expect(text).toContain("outcome Done and would write count");
   });
 
+  it("shows an accepted override with the value it overwrote and where its written value came from", () => {
+    const accepted: VariableWriteRecordView = {
+      ...lostUpdateWarning(), outcome: "AcceptedOverride", baseVersion: null,
+      writer: { source: "AcceptedCompletion", executableNodeId: "node-b", invocationId: "inv-b2" },
+      writtenValue: { state: "omitted" }, overwrittenValue: { state: "captured", isOperational: true }
+    };
+    flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [accepted] })} labelOf={labelOf} />));
+
+    const text = container.textContent!;
+    expect(text).toContain("Accepted override");
+    expect(text).toContain("Overwritten valueKept for recovery");
+    expect(text).toContain("The value the accepted completion recorded");
+    expect(text).not.toContain("Variable writes is off");
+    expect(container.querySelector(".wf-lost-update-status")).toBeNull();
+  });
+
   it("renders nothing for a step whose writes all applied", () => {
     flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [{ ...lostUpdateWarning(), outcome: "Current" }] })} />));
     expect(container.innerHTML).toBe("");
@@ -227,7 +244,7 @@ describe("run view", () => {
     flushSync(() => root.render(<><LostUpdateBadge count={0} /><LostUpdateBadge count={3} onSelect={onSelect} /></>));
 
     const badge = container.querySelector<HTMLButtonElement>("button.wf-lost-update-badge")!;
-    expect(container.querySelectorAll(".wf-lost-update-badge")).toHaveLength(1);
+    expect(container.querySelectorAll(".wf-lost-update-badge, .wf-lost-update-status")).toHaveLength(1);
     expect(badge.textContent).toContain("3 lost updates");
     badge.click();
     expect(onSelect).toHaveBeenCalledTimes(1);
@@ -273,9 +290,9 @@ describe("designer node settings", () => {
 describe("incident operator actions", () => {
   const journals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable", reset: () => undefined, generation: 0 };
 
-  function incident(): IncidentStateSummary {
+  function incident(activityExecutionId = "ae-11"): IncidentStateSummary {
     return {
-      incidentId: "inc-5", workflowExecutionId: "wf-42", activityExecutionId: "ae-11",
+      incidentId: activityExecutionId === "ae-11" ? "inc-5" : `inc-${activityExecutionId}`, workflowExecutionId: "wf-42", activityExecutionId,
       severity: "Error", status: "Blocking", isBlocking: true,
       failureType: "VariableLostUpdate", message: "Lost update on count", createdAt: "2026-11-18T10:00:00Z", metadata: {},
       resolutionOutcome: { actionKind: "WaitForIntervention", metadata: {} }
@@ -284,16 +301,18 @@ describe("incident operator actions", () => {
 
   function activities(): ActivityExecutionStateSummary[] {
     const common = { workflowExecutionId: "wf-42", activityTypeVersion: "1.0.0", scheduledAt: "2026-11-18T10:00:00Z", metadata: {} };
+    const faulted = (id: string, node: string): ActivityExecutionStateSummary => ({ ...common, activityExecutionId: id, executableNodeId: node, authoredActivityId: node,
+      activityType: "Increment", status: "Faulted", subStatus: "VariableLostUpdate", parentActivityExecutionId: "ae-parent", provenance: { parentActivityExecutionId: "ae-parent" } });
     return [
       { ...common, activityExecutionId: "ae-parent", executableNodeId: "flow", authoredActivityId: "flow", activityType: "Flowchart", status: "Running" },
-      { ...common, activityExecutionId: "ae-11", executableNodeId: "node-b", authoredActivityId: "node-b", activityType: "Increment", status: "Faulted",
-        subStatus: "VariableLostUpdate", parentActivityExecutionId: "ae-parent", provenance: { parentActivityExecutionId: "ae-parent" } }
+      faulted("ae-11", "node-b"),
+      faulted("ae-12", "node-c")
     ];
   }
 
-  function backend(recorded: RecordedCompletionView | null) {
+  function backend(recorded: RecordedCompletionView | null, gate?: Promise<void>) {
     const submits: unknown[] = [];
-    const getJson = vi.fn(async (url: string) => {
+    const getJson = vi.fn(async (url: string, options?: { signal?: AbortSignal }) => {
       if (url.endsWith("capabilities")) return {
         capabilities: [{
           id: "elsa.api.runtime", contractVersion: "1",
@@ -306,7 +325,13 @@ describe("incident operator actions", () => {
           ]
         }]
       };
-      if (url.includes("/activity-executions/ae-11")) return { activityExecutionId: "ae-11", workflowExecutionId: "wf-42", recordedCompletion: recorded };
+      const read = url.match(/\/activity-executions\/(ae-\d+)/)?.[1];
+      if (read) {
+        await (gate ?? new Promise(resolve => setTimeout(resolve, 0)));
+        // As a real fetch does, a read whose signal is aborted before it answers rejects.
+        if (options?.signal?.aborted) throw new DOMException("The read was aborted.", "AbortError");
+        return { activityExecutionId: read, workflowExecutionId: "wf-42", recordedCompletion: read === "ae-11" ? recorded : null };
+      }
       return { planId: "plan-1", status: "Completed" };
     });
     const requestResponse = vi.fn(async (_url: string, init: RequestInit) => {
@@ -316,10 +341,10 @@ describe("incident operator actions", () => {
     return { context: { baseUrl: `test://accept-${Math.random()}`, http: { getJson, requestResponse } } as unknown as StudioEndpointContext, submits, getJson };
   }
 
-  function Harness({ context, sink }: { context: StudioEndpointContext; sink: { api?: OperatorActionsApi } }) {
+  function Harness({ context, sink, second = false }: { context: StudioEndpointContext; sink: { api?: OperatorActionsApi }; second?: boolean }) {
     const details: WorkflowInstanceDetails = {
       instance: { workflowExecutionId: "wf-42", status: "Running" } as WorkflowInstanceDetails["instance"],
-      activities: activities(), incidents: [incident()], permissions: { canManage: true, canInspectValues: false }
+      activities: activities(), incidents: second ? [incident(), incident("ae-12")] : [incident()], permissions: { canManage: true, canInspectValues: false }
     };
     const api = useOperatorActions({
       context, workflowExecutionId: "wf-42", details, root: null, activities: activities(), journals,
@@ -357,6 +382,30 @@ describe("incident operator actions", () => {
       target: { executionIds: ["wf-42"] },
       alterations: [{ kind: "AcceptRecordedCompletion", schemaVersion: 1, payload: { sourceActivityExecutionId: "ae-11" } }]
     }]);
+  });
+
+  it("reads a faulted step again when another incident arrives while its first read is in flight", async () => {
+    let release!: () => void;
+    const fake = backend(recordedCompletion(), new Promise<void>(resolve => { release = resolve; }));
+    const sink: { api?: OperatorActionsApi } = {};
+    const reads = (id: string) => fake.getJson.mock.calls.filter(([url]) => String(url).includes(`/activity-executions/${id}`)).length;
+    flushSync(() => root.render(<StrictMode><Harness context={fake.context} sink={sink} /></StrictMode>));
+    await settle();
+    flushSync(() => root.render(<StrictMode><Harness context={fake.context} sink={sink} /></StrictMode>));
+    await settle();
+    expect(reads("ae-11")).toBeGreaterThan(0);
+
+    // A refresh brings a second waiting incident: the candidates change and the first read of ae-11 is cancelled.
+    const before = reads("ae-11");
+    flushSync(() => root.render(<StrictMode><Harness context={fake.context} sink={sink} second /></StrictMode>));
+    await settle();
+    release();
+    await settle();
+    flushSync(() => root.render(<StrictMode><Harness context={fake.context} sink={sink} second /></StrictMode>));
+    await settle();
+
+    expect(reads("ae-11")).toBeGreaterThan(before);
+    expect(buttons()).toEqual(["Retry", "Accept recorded completion"]);
   });
 
   it("offers only Retry when the faulted step has no recorded completion", async () => {

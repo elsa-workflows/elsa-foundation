@@ -39,8 +39,8 @@ export function VariableLifecycleNodeSettings({ node, readOnly = false, onChange
         </select>
         <small id={`${id}-mode-help`} className="wf-muted">
           {mode === "Fault"
-            ? "If a variable this step read changed before its write commits, the write is refused and the step faults (VariableLostUpdate). An operator can then retry, re-execute, or accept the recorded completion."
-            : "If a variable this step read changed before its write commits, the write still applies and the run records a lost-update warning with the value it replaced. An activity type that declares Fault stays Fault."}
+            ? "If a variable this step reads and writes changed before its write commits, the write is refused and the step faults (VariableLostUpdate). An operator can then retry, re-execute, or accept the recorded completion."
+            : "If a variable this step reads and writes changed before its write commits, the write still applies and the run records a lost-update warning with the value it replaced. A variable it only reads never causes one. An activity type that declares Fault stays Fault."}
         </small>
       </label>
       <div className="wf-node-lifecycle-checkbox">
@@ -56,7 +56,7 @@ export function VariableLifecycleNodeSettings({ node, readOnly = false, onChange
           <span>Run on the inputs read at start</span>
           <small id={`${id}-refresh-help`} className="wf-muted">
             {background
-              ? "Turns off the background input refresh: when a variable the inputs read changed before the worker picks up the step, it runs on the inputs read at start instead of evaluating them again."
+              ? "Turns off the background input refresh: when a variable the inputs read changed before the worker picks up the step, it runs on the inputs read at start instead of evaluating them again. A write to that variable then meets the lost-update mode: a warning by default, a fault under Fault."
               : "Applies to background placement only; this step runs inline."}
           </small>
         </label>

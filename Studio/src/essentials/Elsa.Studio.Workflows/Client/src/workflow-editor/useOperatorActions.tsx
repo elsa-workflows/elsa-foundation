@@ -347,23 +347,33 @@ function useRecordedCompletions(
     if (!candidateKey) return;
     const controller = new AbortController();
     const marker = requested.current;
+    // Reads this run started and has not finished: a cleanup (a change of candidates, or StrictMode's remount) forgets
+    // them before aborting, so the next run reads them again instead of skipping them as already requested.
+    const inFlight = new Set<string>();
     for (const id of candidateKey.split(candidateSeparator)) {
       if (marker.ids.has(id)) continue;
       marker.ids.add(id);
+      inFlight.add(id);
       getActivityExecutionInspection(context, workflowExecutionId, id, controller.signal).then(
         inspection => {
-          if (requested.current !== marker) return;
+          inFlight.delete(id);
+          if (controller.signal.aborted || requested.current !== marker) return;
           setState(current => {
             const base = current.context === context && current.run === workflowExecutionId ? current.byActivity : new Map();
             return { context, run: workflowExecutionId, byActivity: new Map(base).set(id, inspection.recordedCompletion ?? null) };
           });
         },
         () => {
-          // Not offered when the read fails or is cancelled; the next change of candidates reads it again.
-          if (requested.current === marker) marker.ids.delete(id);
+          inFlight.delete(id);
+          // Not offered when the read fails; the next change of candidates reads it again. A cancelled read was
+          // already forgotten by the cleanup, and may have been requested again since.
+          if (!controller.signal.aborted && requested.current === marker) marker.ids.delete(id);
         });
     }
-    return () => controller.abort();
+    return () => {
+      for (const id of inFlight) marker.ids.delete(id);
+      controller.abort();
+    };
   }, [candidateKey, context, workflowExecutionId]);
   const current = state.context === context && state.run === workflowExecutionId ? state.byActivity : new Map<string, RecordedCompletionView | null>();
   return (activityExecutionId: string | undefined) => (activityExecutionId ? current.get(activityExecutionId) ?? null : null);

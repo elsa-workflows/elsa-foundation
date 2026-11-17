@@ -80,7 +80,8 @@ public sealed record VariableWriteRecordView(
 {
     public static VariableWriteRecordView From(VariableWriteRecord record, IReadOnlyCollection<ActivityExecutionInspectionValueSnapshotView> evidence)
     {
-        var isLostUpdate = record.Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.LostUpdateFault;
+        // A lost-update warning and an accepted override both keep the value they replaced, so it can be restored.
+        var keepsOverwrittenValue = record.Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.AcceptedOverride;
         return new(
             record.ScopeId,
             record.FrameId,
@@ -95,7 +96,7 @@ public sealed record VariableWriteRecordView(
             record.OccurredAt,
             VariableWriterView.From(record.OverwrittenWriter),
             record.Outcome == VariableCommitOutcome.LostUpdateFault ? null : VariableLifecycleValueStateView.FromEvidence(WrittenEvidence(record, evidence), record.Digest),
-            isLostUpdate && record.OverwrittenValue is not null ? VariableLifecycleValueStateView.FromEnvelope(record.OverwrittenValue, isOperational: true) : null,
+            keepsOverwrittenValue && record.OverwrittenValue is not null ? VariableLifecycleValueStateView.FromEnvelope(record.OverwrittenValue, isOperational: true) : null,
             record.Outcome == VariableCommitOutcome.LostUpdateFault ? VariableLifecycleValueStateView.FromEnvelope(record.RejectedValue, isOperational: true) : null);
     }
 
