@@ -124,9 +124,10 @@ internal sealed class BackgroundActivityCoordinator(
         CancellationToken cancellationToken)
     {
         var snapshot = state.InputSnapshot!;
-        // A retry keeps its committed inputs (FR-014, ADR 0092 decision 8): a successor in a retry lineage carries the
-        // source's snapshot on purpose and is not refreshed. A re-execution read its inputs at its own Start.
-        if (state.Attempt is not null)
+        // A retry keeps its committed inputs (FR-014, ADR 0092 decision 8): a retry successor that carries its source's
+        // snapshot on purpose is not refreshed. Every row that read its inputs at its own Start (a first attempt, a retry
+        // boundary's next attempt, a re-execution) is refreshed as usual.
+        if (state.Metadata.ContainsKey(RuntimeMetadataKeys.InputSnapshotCarriedFrom))
             return state;
         if (snapshot.InputReadSet is not { Entries.Count: > 0 } readSet ||
             (node.Metadata.TryGetValue(RuntimeMetadataKeys.BackgroundInputRefresh, out var refresh) &&

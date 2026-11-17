@@ -373,6 +373,12 @@ public static class RuntimeMetadataKeys
     public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
     /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>
     public const string RetryOfActivityExecutionId = "runtime.retryOfActivityExecutionId";
+    /// <summary>
+    /// On a retry successor that runs on the input snapshot it carried over from its source (spec 1221 FR-014): the
+    /// source's activity execution id. A background admission does not refresh such a snapshot. Absent on every row that
+    /// read its inputs at its own Start.
+    /// </summary>
+    public const string InputSnapshotCarriedFrom = "runtime.inputSnapshotCarriedFrom";
     /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
     /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>

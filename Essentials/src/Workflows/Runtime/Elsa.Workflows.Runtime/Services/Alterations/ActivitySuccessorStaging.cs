@@ -53,6 +53,15 @@ internal static class ActivitySuccessorStaging
         if (kind is SuccessorKind.Retry or SuccessorKind.Accept)
         {
             var lineage = source.Attempt ?? source.Provenance.Attempt;
+            // A retry that runs on the source's committed snapshot says so, so admission keeps those inputs (FR-014). A
+            // retry without one is scheduled and reads its inputs at its own Start, like any other step.
+            if (kind == SuccessorKind.Retry && successor.Status == ActivityExecutionStatus.Running && successor.InputSnapshot is not null)
+            {
+                var carried = successor.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+                carried[RuntimeMetadataKeys.InputSnapshotCarriedFrom] = source.Execution.ActivityExecutionId;
+                successor = successor with { Metadata = carried };
+            }
+
             return successor with
             {
                 Attempt = new ActivityExecutionAttemptLineage(
@@ -202,7 +211,8 @@ internal static class ActivitySuccessorStaging
         RuntimeMetadataKeys.CausalActivityExecutionId,
         RuntimeMetadataKeys.CausalExecutableNodeId,
         RuntimeMetadataKeys.CausationKind,
-        RuntimeMetadataKeys.BackgroundActivityWorkId
+        RuntimeMetadataKeys.BackgroundActivityWorkId,
+        RuntimeMetadataKeys.InputSnapshotCarriedFrom
     ];
 
     /// <summary>The successor's scheduling command metadata, rebuilt from its durable scheduling provenance.</summary>

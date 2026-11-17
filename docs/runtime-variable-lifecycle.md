@@ -177,6 +177,8 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
 - The committer remembers, per lease, the stamps of activities still in flight; an entry goes when the activity's
   terminal commit is persisted or the lease ends.
 - An alteration replay is matched on the job's terminal evidence, which does not compare the outcome's write records.
+- A commit that may have been stored but whose commit call failed, resubmitted in the same lease after other commits,
+  is numbered again; a byte-identical resubmission then no longer matches the stored copy.
 - A commit resubmitted byte for byte under a later lease is numbered again, so it no longer matches the stored copy.
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to

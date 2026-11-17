@@ -10649,3 +10649,4 @@ Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.FrameId.init -> void
 static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.IsRecorded(Elsa.Workflows.Runtime.Core.Models.VariableCommitDecision! decision) -> bool
 Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Superseded = 7 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
 const Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.PendingCommitSequence = -1 -> long
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.InputSnapshotCarriedFrom = "runtime.inputSnapshotCarriedFrom" -> string!
