@@ -1,5 +1,5 @@
 Review4.Blockers results
-commit d829283923b2a1c446ac7ca52be876bc462664ad (tree 186cf25e17e2085fdabeb30014655b59568615ee, prototype tree c07f595ad6dc01c92093b79ad4e90682f9d9149e)
+commit 71cb2274dfb532133950355e66894883b4761524 (tree 4e6e678041aa564dd55d4cdbb7af42cca24ccd90, prototype tree 2a9d4ddd3a4a6ead8bc563586cc1a39430ece076)
 branch base (merge-base with origin/main) 4b129bcb2b144b7c5db271b1578cd16a2e4d1e89; main has no prototypes/kernel-model change since
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review4.Block
     dotnet build experiments/Review4.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll --all, twice
-    -> exit 0 both times, byte-identical output (SHA-256 1efcda00f391eb83a9ec658ed923b6a955af9ed3dbf46b5bdc4c07c5446b6f34), below
+    -> exit 0 both times, byte-identical output (SHA-256 11573132f742a3a6cef72decb75c9a669b461c5c0c37ef5779224f551df90c69), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-base, reviewed)
@@ -57,7 +57,7 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-control-reset, reviewed)
   exit 0 (fr1-control-reset, repaired)
   exit 1 (fr1-control-reset, negative)
-  exit 1 (fr1-control-reset, boundary-holds-noncohort-suspect)
+  exit 1 (fr1-control-reset, boundary-holds-cohort-nonsuspect)
   exit 1 (fr1-trial-takeover-open-poll-limit, reviewed)
   exit 0 (fr1-trial-takeover-open-poll-limit, repaired)
   exit 0 (fr1-trial-takeover-open-poll-limit, negative)
@@ -923,162 +923,163 @@ invariant: the final released cohort reaches the model before a later-delivered 
   marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  A is shelved: the open drain withholds it, so it is passed over with its target skipped and the flush marks it seen at epoch 2
   recovery boundary at C: rows past it are cut
   deliver C (order: [C])
   C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2000]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2000]
   recovery boundary at C2000: rows past it are cut
   deliver C2000 (order: [C2000])
   C2000: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2001
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2001]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2001]
   recovery boundary at C2001: rows past it are cut
   deliver C2001 (order: [C2001])
   C2001: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2002
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2002]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2002]
   recovery boundary at C2002: rows past it are cut
   deliver C2002 (order: [C2002])
   C2002: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2003
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2003]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2003]
   recovery boundary at C2003: rows past it are cut
   deliver C2003 (order: [C2003])
   C2003: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2004
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2004]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2004]
   recovery boundary at C2004: rows past it are cut
   deliver C2004 (order: [C2004])
   C2004: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2005
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2005]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2005]
   recovery boundary at C2005: rows past it are cut
   deliver C2005 (order: [C2005])
   C2005: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2006
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2006]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2006]
   recovery boundary at C2006: rows past it are cut
   deliver C2006 (order: [C2006])
   C2006: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2007
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2007]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2007]
   recovery boundary at C2007: rows past it are cut
   deliver C2007 (order: [C2007])
   C2007: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2008
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2008]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2008]
   recovery boundary at C2008: rows past it are cut
   deliver C2008 (order: [C2008])
   C2008: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2009
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2009]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2009]
   recovery boundary at C2009: rows past it are cut
   deliver C2009 (order: [C2009])
   C2009: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2010
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2010]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2010]
   recovery boundary at C2010: rows past it are cut
   deliver C2010 (order: [C2010])
   C2010: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2011
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2011]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2011]
   recovery boundary at C2011: rows past it are cut
   deliver C2011 (order: [C2011])
   C2011: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2012
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2012]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2012]
   recovery boundary at C2012: rows past it are cut
   deliver C2012 (order: [C2012])
   C2012: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2013
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2013]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2013]
   recovery boundary at C2013: rows past it are cut
   deliver C2013 (order: [C2013])
   C2013: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2014
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2014]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2014]
   recovery boundary at C2014: rows past it are cut
   deliver C2014 (order: [C2014])
   C2014: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2015
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2015]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2015]
   recovery boundary at C2015: rows past it are cut
   deliver C2015 (order: [C2015])
   C2015: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2016
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2016]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2016]
   recovery boundary at C2016: rows past it are cut
   deliver C2016 (order: [C2016])
   C2016: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2017
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2017]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2017]
   recovery boundary at C2017: rows past it are cut
   deliver C2017 (order: [C2017])
   C2017: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2018
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2018]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2018]
   recovery boundary at C2018: rows past it are cut
   deliver C2018 (order: [C2018])
   C2018: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2019
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2019]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2019]
   recovery boundary at C2019: rows past it are cut
   deliver C2019 (order: [C2019])
   C2019: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2020
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2020]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2020]
   recovery boundary at C2020: rows past it are cut
   deliver C2020 (order: [C2020])
   C2020: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2021
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2021]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2021]
   recovery boundary at C2021: rows past it are cut
   deliver C2021 (order: [C2021])
   C2021: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2022
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2022]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2022]
   recovery boundary at C2022: rows past it are cut
   deliver C2022 (order: [C2022])
   C2022: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2023
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2023]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2023]
   recovery boundary at C2023: rows past it are cut
   deliver C2023 (order: [C2023])
   C2023: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2024
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2024]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2024]
   recovery boundary at C2024: rows past it are cut
   deliver C2024 (order: [C2024])
   C2024: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2025
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2025]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2025]
   recovery boundary at C2025: rows past it are cut
   deliver C2025 (order: [C2025])
   C2025: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2026
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2026]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2026]
   recovery boundary at C2026: rows past it are cut
   deliver C2026 (order: [C2026])
   C2026: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2027
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2027]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2027]
   recovery boundary at C2027: rows past it are cut
   deliver C2027 (order: [C2027])
   C2027: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2028
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2028]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2028]
   recovery boundary at C2028: rows past it are cut
   deliver C2028 (order: [C2028])
   C2028: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2029
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2029]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2029]
   recovery boundary at C2029: rows past it are cut
   deliver C2029 (order: [C2029])
   C2029: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2030
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2030]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2030]
   recovery boundary at C2030: rows past it are cut
   deliver C2030 (order: [C2030])
   C2030: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2031
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2031]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2031]
   recovery boundary at C2031: rows past it are cut
   deliver C2031 (order: [C2031])
   C2031: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2032
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2032]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2032]
   recovery boundary at C2032: rows past it are cut
   deliver C2032 (order: [C2032])
   C2032: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2033
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2033]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2033]
   recovery boundary at C2033: rows past it are cut
   deliver C2033 (order: [C2033])
   C2033: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2034
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2034]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2034]
   recovery boundary at C2034: rows past it are cut
   deliver C2034 (order: [C2034])
   C2034: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2035
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2035]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2035]
   recovery boundary at C2035: rows past it are cut
   deliver C2035 (order: [C2035])
   C2035: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2036
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2036]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2036]
   recovery boundary at C2036: rows past it are cut
   deliver C2036 (order: [C2036])
   C2036: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2037
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2037]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2037]
   recovery boundary at C2037: rows past it are cut
   deliver C2037 (order: [C2037])
   C2037: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2038
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2038]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2038]
   recovery boundary at C2038: rows past it are cut
   deliver C2038 (order: [C2038])
   C2038: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2039
@@ -1221,162 +1222,163 @@ invariant: the final released cohort reaches the model before a later-delivered 
   marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  A is shelved: the open drain withholds it, so it is passed over with its target skipped and the flush marks it seen at epoch 2
   recovery boundary at C: rows past it are cut
   deliver C (order: [C])
   C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2000]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2000]
   recovery boundary at C2000: rows past it are cut
   deliver C2000 (order: [C2000])
   C2000: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2001
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2001]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2001]
   recovery boundary at C2001: rows past it are cut
   deliver C2001 (order: [C2001])
   C2001: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2002
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2002]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2002]
   recovery boundary at C2002: rows past it are cut
   deliver C2002 (order: [C2002])
   C2002: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2003
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2003]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2003]
   recovery boundary at C2003: rows past it are cut
   deliver C2003 (order: [C2003])
   C2003: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2004
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2004]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2004]
   recovery boundary at C2004: rows past it are cut
   deliver C2004 (order: [C2004])
   C2004: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2005
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2005]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2005]
   recovery boundary at C2005: rows past it are cut
   deliver C2005 (order: [C2005])
   C2005: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2006
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2006]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2006]
   recovery boundary at C2006: rows past it are cut
   deliver C2006 (order: [C2006])
   C2006: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2007
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2007]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2007]
   recovery boundary at C2007: rows past it are cut
   deliver C2007 (order: [C2007])
   C2007: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2008
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2008]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2008]
   recovery boundary at C2008: rows past it are cut
   deliver C2008 (order: [C2008])
   C2008: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2009
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2009]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2009]
   recovery boundary at C2009: rows past it are cut
   deliver C2009 (order: [C2009])
   C2009: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2010
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2010]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2010]
   recovery boundary at C2010: rows past it are cut
   deliver C2010 (order: [C2010])
   C2010: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2011
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2011]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2011]
   recovery boundary at C2011: rows past it are cut
   deliver C2011 (order: [C2011])
   C2011: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2012
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2012]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2012]
   recovery boundary at C2012: rows past it are cut
   deliver C2012 (order: [C2012])
   C2012: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2013
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2013]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2013]
   recovery boundary at C2013: rows past it are cut
   deliver C2013 (order: [C2013])
   C2013: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2014
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2014]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2014]
   recovery boundary at C2014: rows past it are cut
   deliver C2014 (order: [C2014])
   C2014: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2015
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2015]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2015]
   recovery boundary at C2015: rows past it are cut
   deliver C2015 (order: [C2015])
   C2015: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2016
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2016]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2016]
   recovery boundary at C2016: rows past it are cut
   deliver C2016 (order: [C2016])
   C2016: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2017
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2017]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2017]
   recovery boundary at C2017: rows past it are cut
   deliver C2017 (order: [C2017])
   C2017: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2018
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2018]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2018]
   recovery boundary at C2018: rows past it are cut
   deliver C2018 (order: [C2018])
   C2018: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2019
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2019]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2019]
   recovery boundary at C2019: rows past it are cut
   deliver C2019 (order: [C2019])
   C2019: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2020
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2020]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2020]
   recovery boundary at C2020: rows past it are cut
   deliver C2020 (order: [C2020])
   C2020: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2021
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2021]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2021]
   recovery boundary at C2021: rows past it are cut
   deliver C2021 (order: [C2021])
   C2021: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2022
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2022]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2022]
   recovery boundary at C2022: rows past it are cut
   deliver C2022 (order: [C2022])
   C2022: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2023
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2023]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2023]
   recovery boundary at C2023: rows past it are cut
   deliver C2023 (order: [C2023])
   C2023: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2024
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2024]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2024]
   recovery boundary at C2024: rows past it are cut
   deliver C2024 (order: [C2024])
   C2024: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2025
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2025]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2025]
   recovery boundary at C2025: rows past it are cut
   deliver C2025 (order: [C2025])
   C2025: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2026
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2026]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2026]
   recovery boundary at C2026: rows past it are cut
   deliver C2026 (order: [C2026])
   C2026: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2027
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2027]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2027]
   recovery boundary at C2027: rows past it are cut
   deliver C2027 (order: [C2027])
   C2027: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2028
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2028]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2028]
   recovery boundary at C2028: rows past it are cut
   deliver C2028 (order: [C2028])
   C2028: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2029
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2029]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2029]
   recovery boundary at C2029: rows past it are cut
   deliver C2029 (order: [C2029])
   C2029: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2030
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2030]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2030]
   recovery boundary at C2030: rows past it are cut
   deliver C2030 (order: [C2030])
   C2030: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2031
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2031]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2031]
   recovery boundary at C2031: rows past it are cut
   deliver C2031 (order: [C2031])
   C2031: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2032
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2032]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2032]
   recovery boundary at C2032: rows past it are cut
   deliver C2032 (order: [C2032])
   C2032: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2033
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2033]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2033]
   recovery boundary at C2033: rows past it are cut
   deliver C2033 (order: [C2033])
   C2033: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2034
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2034]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2034]
   recovery boundary at C2034: rows past it are cut
   deliver C2034 (order: [C2034])
   C2034: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2035
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2035]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2035]
   recovery boundary at C2035: rows past it are cut
   deliver C2035 (order: [C2035])
   C2035: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2036
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2036]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2036]
   recovery boundary at C2036: rows past it are cut
   deliver C2036 (order: [C2036])
   C2036: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2037
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2037]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2037]
   recovery boundary at C2037: rows past it are cut
   deliver C2037 (order: [C2037])
   C2037: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2038
-  poll at epoch 2 (limit 500): [A (suspect), already in memory, R (suspect), already in memory, C2038]
+  poll at epoch 2 (limit 500): [R (suspect), already in memory, C2038]
   recovery boundary at C2038: rows past it are cut
   deliver C2038 (order: [C2038])
   C2038: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2039
@@ -1981,7 +1983,7 @@ invariant: a control polled while the cohort mark is set waits until the check f
   real prototype calls: NativeModel.TurnAsync x1
 RESULT FR-1/control-reset rules=negative: FAIL
 
-== FR-1/control-reset | rules=boundary-holds-noncohort-suspect ==
+== FR-1/control-reset | rules=boundary-holds-cohort-nonsuspect ==
 invariant: a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate
   model turn start (start): sent [R, T2]
   start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
@@ -2007,7 +2009,7 @@ invariant: a control polled while the cohort mark is set waits until the check f
     FAIL instance ended: Running (expected Cancelled)
     FAIL undone rows remaining: 2 (expected 0)
   real prototype calls: NativeModel.TurnAsync x1
-RESULT FR-1/control-reset rules=boundary-holds-noncohort-suspect: FAIL
+RESULT FR-1/control-reset rules=boundary-holds-cohort-nonsuspect: FAIL
 
 == FR-1/trial-takeover-open-poll-limit | rules=reviewed ==
 invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
@@ -2021,10 +2023,16 @@ invariant: the final released cohort reaches the model before a later-delivered 
   crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   the new owner's PollLimit is 1: one row per poll, in seq order
   poll at epoch 2 (limit 1): [A (suspect)]
-  poll at epoch 2 (limit 1): [A (suspect), already in memory]
+  A is shelved: the open drain withholds it, so it is passed over with its target skipped and the flush marks it seen at epoch 2
+  poll at epoch 2 (limit 1): [C]
+  recovery boundary at C: rows past it are cut
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2): the page waits, sending C2000
+  poll at epoch 2 (limit 1): [R (suspect)]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
   stalled: no row can move, and work is still pending
   model inputs: []
-  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C pending
+  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C consumed (drain turn); C2000 pending
   instance: status Running, resolution open, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
@@ -2161,10 +2169,52 @@ invariant: the final released cohort reaches the model before a later-delivered 
   crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   the new owner's PollLimit is 1: one row per poll, in seq order
   poll at epoch 2 (limit 1): [A (suspect)]
-  poll at epoch 2 (limit 1): [A (suspect), already in memory]
-  stalled: no row can move, and work is still pending
+  A is shelved: the open drain withholds it, so it is passed over with its target skipped and the flush marks it seen at epoch 2
+  poll at epoch 2 (limit 1): [C]
+  recovery boundary at C: rows past it are cut
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2): the page waits, sending C2000
+  poll at epoch 2 (limit 1): [R (suspect)]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  poll at epoch 2 (limit 1): [R (suspect), already in memory]
+  stalled: the step bound was reached with work still pending
   model inputs: []
-  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C pending
+  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C consumed (drain turn); C2000 pending
   instance: status Running, resolution open, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
@@ -3826,7 +3876,7 @@ fr1-control-crash              boundary-holds-cohort actual FAIL  expected FAIL 
 fr1-control-reset              reviewed            actual FAIL  expected FAIL  as expected
 fr1-control-reset              repaired            actual PASS  expected PASS  as expected
 fr1-control-reset              negative            actual FAIL  expected FAIL  as expected
-fr1-control-reset              boundary-holds-noncohort-suspect actual FAIL  expected FAIL  as expected
+fr1-control-reset              boundary-holds-cohort-nonsuspect actual FAIL  expected FAIL  as expected
 fr1-trial-takeover-open-poll-limit reviewed            actual FAIL  expected FAIL  as expected
 fr1-trial-takeover-open-poll-limit repaired            actual PASS  expected PASS  as expected
 fr1-trial-takeover-open-poll-limit negative            actual PASS  expected PASS  as expected
