@@ -68,7 +68,7 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 7: Publish-time write analysis (all stories)
 
-- [x] T035 Feed may-write sets into `ValueFlow/ConcurrentWrite` (spec 266's warning, PR #4669); a marked free-name activity touches every visible variable (FR-028). *Done for C# step writers (writable references, the marker) in workflow draft validation; script may-write sets join with Phase 5. Not in reusable (graph) activity bodies: `GraphActivityProvider` still calls the capture-only overload and does not run `StepVariableWriteValidation`, so a body's step writers are not counted and its reference bindings are not checked at publish (a session write to a body variable faults the step, as closed-scope writes are not supported yet). Recorded as a follow-up in the PR.*
+- [x] T035 Feed may-write sets into `ValueFlow/ConcurrentWrite` (spec 266's warning, PR #4669); a marked free-name activity touches every visible variable (FR-028). *Done for C# step writers (writable references, the marker) in workflow draft validation; script may-write sets join with Phase 5. Not in reusable (graph) activity bodies: `GraphActivityProvider` still calls the capture-only overload and does not run `StepVariableWriteValidation`, so a body's step writers are not counted and its reference bindings are not checked at publish (a session write to a body variable faults the step, as closed-scope writes are not supported yet). Follow-up: #4805.*
 - [x] T036 Warn when a node's may-write set and one of its own captures name the same variable (FR-029).
 - [x] T037 [P] **(test-first)** Concurrent-write and overlap diagnostics, including the marked-activity case. *`StepVariableWriteValidationTests` (Design tests).*
 
