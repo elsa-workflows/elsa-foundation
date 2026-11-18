@@ -174,7 +174,7 @@ end paths' close (`InvocationInbox.cs` 74–76) is reached through `InvocationLi
   receipt. The 23 is the receipt's gross growth before the close clears its pending input: Status +6, Outcome +7,
   Clock +10. Frames count 0, because the lexical-scope close only removes fields.
 - **The gross figures.** They were measured with `AdmissionFlaw.KeepPayload`, the model's flaw that keeps pending
-  inputs. Under the built behaviour every receipt shape shrinks the state.
+  inputs. Under the built behaviour every receipt shape has a negative net growth.
 - **SQL Server.** Its UTF-16 doubles each figure (derived, unmeasured).
 
 ## PI-1 (R6-B2): bind deliveries to a publication incarnation
