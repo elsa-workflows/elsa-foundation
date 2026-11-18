@@ -102,7 +102,7 @@ internal static class WorkerSetChecks
         var store = new InMemoryStore(2, () => time);
         var worker = new Worker("a", [0, 1], store, new WorkflowInstance([new Ticker(TimeSpan.FromSeconds(1))]), new() { Monotonic = () => time, Partitions = 2 });
         await new DurableHost([worker]).ActivateAsync(0);
-        var e0 = worker.EpochOf(0);
+        var e1 = worker.EpochOf(1);
         foreach (var t in new[] { InstanceRef.In(0, "t"), InstanceRef.In(1, "u") })
         {
             worker.Post(new($"arm-{t.Partition}", t, "arm", Start: Ticker.Spec with { Ephemeral = true }), fresh: true);
@@ -110,11 +110,13 @@ internal static class WorkerSetChecks
         }
         await worker.FlushAsync();
         var unwritten = worker.Unwritten.Order(StringComparer.Ordinal).ToList();
-        store.Partitions[1].LeaseUntil = 0;
-        await store.TakeAsync(1, "b", Defaults.Lease);
-        await worker.DisposeAsync();            // writes 0/t and 1/u first: the fence of 1 is stale
-        check(unwritten.SequenceEqual(["0/t", "1/u"]) && !worker.Owns && store.Partitions[0].Epoch == e0 && !store.Instances.ContainsKey("0/t"),
-            $"a stand-down that meets a refused flush takes nothing back: unwritten [{string.Join(", ", unwritten)}], owns {worker.Owns}, partition 0 at epoch {store.Partitions[0].Epoch}");
+        store.Partitions[0].LeaseUntil = 0;
+        await store.TakeAsync(0, "b", Defaults.Lease);
+        await worker.DisposeAsync();            // writes 0/t and 1/u first: the fence of 0 is stale
+        check(unwritten.SequenceEqual(["0/t", "1/u"]) && !worker.Owns && store.Partitions[1].Epoch == e1 && !store.Instances.ContainsKey("1/u"),
+            $"a stand-down that meets a refused flush takes nothing back: unwritten [{string.Join(", ", unwritten)}], owns {worker.Owns}, partition 1 at epoch {store.Partitions[1].Epoch}");
+        check(store.Partitions[1].Owner is null && store.Partitions[0].Owner == "b",
+            $"and it gives up the partition still leased to it: partition 1 owner {store.Partitions[1].Owner ?? "none"}, partition 0 owner {store.Partitions[0].Owner}");
     }
 
     /// <summary>The partitions the store shows live under this worker's node at an epoch the worker does not hold.</summary>

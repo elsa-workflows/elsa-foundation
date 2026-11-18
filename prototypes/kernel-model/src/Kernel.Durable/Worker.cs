@@ -564,7 +564,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             while (generation == _generation && _queue.Count > 0 && LeaseUsable())
                 await FlushAsync(cancellationToken);
-            if (generation != _generation || !Owns) return;
+            if (generation != _generation || !Owns)
+            {
+                // The drain's own flush was refused or lost, and that reset this worker without a retake. Over several
+                // partitions the ones still leased to it are given up at the captured epochs. The store's epoch guard
+                // makes this a no-op for a partition that moved or was taken again since, and nothing here resets.
+                if (held.Count > 1)
+                    try { await _store.ReleaseAsync(held, cancellationToken); }
+                    catch (Exception) { /* then the leases run out instead */ }
+                return;
+            }
         }
         lock (_turnSync)
         {
