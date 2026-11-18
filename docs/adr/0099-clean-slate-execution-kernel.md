@@ -91,8 +91,8 @@ the owner checks on load and consumption. Release 1 runs only the shared store: 
 1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
 name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
 database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
-insert-or-read before routing, so equivalent spellings reach one actor; an operation id is compared exactly and stored
-as a digest (fourth review R4-M6, a coordinator design choice).
+insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
+stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
 
 ### 4. Deployment profiles
 
