@@ -30,6 +30,20 @@ export function countLostUpdates(records: readonly Pick<VariableWriteRecordView,
   return (records ?? []).filter(isLostUpdate).length;
 }
 
+/**
+ * The badge text: a warning overwrote a newer value, a refusal kept it, so they are named apart, for example
+ * "1 lost update", "2 refused writes" or "1 lost update · 1 refused write".
+ */
+export function lostUpdateBadgeLabel(records: readonly Pick<VariableWriteRecordView, "outcome">[] | null | undefined) {
+  const warnings = (records ?? []).filter(record => record.outcome === lostUpdateWarningOutcome).length;
+  const refusals = (records ?? []).filter(record => record.outcome === lostUpdateFaultOutcome).length;
+  const parts = [
+    warnings > 0 ? (warnings === 1 ? "1 lost update" : `${warnings} lost updates`) : null,
+    refusals > 0 ? (refusals === 1 ? "1 refused write" : `${refusals} refused writes`) : null
+  ].filter((part): part is string => part !== null);
+  return parts.join(" · ");
+}
+
 export function outcomeLabel(outcome: string) {
   switch (outcome) {
     case lostUpdateWarningOutcome:
@@ -122,8 +136,8 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
       return value.isOperational
         ? { label: "Not kept", detail: "No value was kept.", tone: "muted" }
         : {
-          label: "No value evidence",
-          detail: "Not captured (Variable writes is off unless given its own diagnostics level), not captured because the capture failed, or removed by retention.",
+          label: "Not available",
+          detail: "Variable writes capture was off, the capture failed, or retention removed it.",
           tone: "muted"
         };
     default:

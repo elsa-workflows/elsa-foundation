@@ -126,7 +126,7 @@
   margin-top: 12px;
 }
 
-.wf-node-lifecycle-settings label {
+.wf-node-lifecycle-field {
   display: grid;
   gap: 4px;
 }

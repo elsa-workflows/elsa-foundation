@@ -12,6 +12,7 @@ import {
 import {
   countLostUpdates,
   inputRefreshReason,
+  lostUpdateBadgeLabel,
   isBackgroundPlacement,
   presentValueState,
   readDisableBackgroundInputRefresh,
@@ -122,6 +123,8 @@ describe("variable lifecycle model", () => {
     const accepted = { ...lostUpdateWarning(), outcome: "AcceptedOverride" };
 
     expect(countLostUpdates([lostUpdateWarning(), refusal(), applied, accepted])).toBe(2);
+    expect(lostUpdateBadgeLabel([lostUpdateWarning(), refusal(), applied])).toBe("1 lost update · 1 refused write");
+    expect(lostUpdateBadgeLabel([refusal(), refusal()])).toBe("2 refused writes");
     expect(variableWriteDiagnostics({ variableWrites: [applied, lostUpdateWarning(), accepted] }).map(record => record.outcome))
       .toEqual(["LostUpdateWarning", "AcceptedOverride"]);
     expect(variableWriteDiagnostics(null)).toEqual([]);
@@ -139,8 +142,8 @@ describe("variable lifecycle model", () => {
     expect(presentValueState({ state: "captured", isOperational: true }).label).toBe("Kept for recovery");
     expect(presentValueState({ state: "captured", isOperational: true }).detail).toContain("Studio cannot show it yet");
     expect(presentValueState({ state: "captured", evidenceId: "ev-1" }).label).toBe("Captured");
-    expect(presentValueState({ state: "omitted" }).label).toBe("No value evidence");
-    expect(presentValueState({ state: "omitted" }).detail).toContain("removed by retention");
+    expect(presentValueState({ state: "omitted" }).label).toBe("Not available");
+    expect(presentValueState({ state: "omitted" }).detail).toContain("retention removed it");
     expect(presentValueState({ state: "omitted", isOperational: true }).label).toBe("Not kept");
     expect(presentValueState({ state: "redacted" }).label).toBe("Redacted");
     expect(presentValueState({ state: "expired" }).label).toBe("Expired");
@@ -178,6 +181,9 @@ describe("Accept recorded completion", () => {
     expect(operatorRefusalMessage("NoRecordedCompletion")).toContain("no recorded completion");
     expect(operatorRefusalMessage("RecordedCompletionContractChanged")).toContain("contract changed");
     expect(operatorRefusalMessage("RecordedCompletionScopeChanged")).toContain("no longer declared");
+    expect(operatorRefusalMessage("RootVariableFrameUnavailable")).toContain("no workflow variables it can write");
+    for (const code of ["NoRecordedCompletion", "RecordedCompletionContractChanged", "RecordedCompletionScopeChanged", "RootVariableFrameUnavailable"])
+      expect(operatorRefusalMessage(code)).not.toContain("Re-execute");
   });
 });
 
@@ -206,6 +212,8 @@ describe("run view", () => {
 
     const text = container.textContent!;
     expect(text).toContain("Write refused");
+    expect(container.querySelector(".wf-lost-update-status")!.textContent).toContain("1 refused write");
+    expect(container.querySelector(".wf-lost-update-status")!.textContent).not.toContain("lost update");
     expect(text).toContain("faulted with VariableLostUpdate");
     expect(text).toContain('Changed by"Add bonus"');
     expect(text).toContain("Read version 0 · was version 1 · not written");
@@ -269,6 +277,13 @@ describe("designer node settings", () => {
 
     const select = container.querySelector("select")!;
     expect(select.value).toBe("Default");
+    // Each label holds its name only; the help is a description, not part of the name.
+    const selectLabel = container.querySelector(`label[for="${select.id}"]`)!;
+    expect(selectLabel.textContent).toBe("Lost-update mode");
+    expect(selectLabel.contains(select)).toBe(false);
+    expect(document.getElementById(select.getAttribute("aria-describedby")!)!.textContent).toContain("reads and writes");
+    const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    expect(container.querySelector(`label[for="${checkbox.id}"]`)!.textContent).toBe("Run on the inputs read at start");
     flushSync(() => {
       select.value = "Fault";
       select.dispatchEvent(new Event("change", { bubbles: true }));

@@ -38,7 +38,13 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   const definitions: string[] = [];
   // Registered before the first interaction: the spec's afterEach runs it even when this journey times out.
   registerCleanup(async () => {
-    for (const id of definitions) await api(`/design/workflows/definitions/${id}`, "DELETE", undefined, cleanupRequestTimeout);
+    // Each deletion runs even when another fails; the failures are reported together.
+    const failures: unknown[] = [];
+    for (const id of definitions) {
+      try { await api(`/design/workflows/definitions/${id}`, "DELETE", undefined, cleanupRequestTimeout); }
+      catch (error) { failures.push(error); }
+    }
+    if (failures.length) throw new AggregateError(failures, "Could not delete every seeded variable-lifecycle definition");
   });
 
   const literal = (referenceKey: string, value: unknown) => ({ referenceKey, value: { expressionType: "Literal", value } });

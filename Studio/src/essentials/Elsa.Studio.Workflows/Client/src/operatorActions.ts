@@ -417,10 +417,11 @@ export function operatorRefusalMessage(code: string | null | undefined): string 
     case "NoRecordedCompletion":
       return `This step has no recorded completion to accept: only a step whose body succeeded and whose commit a lost update refused has one.${nothingChanged}`;
     case "RecordedCompletionContractChanged":
-      return `The activity contract changed since the completion was recorded, so it cannot be accepted. Use Retry or Re-execute.${nothingChanged}`;
+      return `The activity contract changed since the completion was recorded, so it cannot be accepted. Run the step again with Retry instead.${nothingChanged}`;
     case "RecordedCompletionScopeChanged":
+      return `A variable the recorded completion writes is no longer declared as it was, so it cannot be accepted. Run the step again with Retry instead.${nothingChanged}`;
     case "RootVariableFrameUnavailable":
-      return `A variable the recorded completion writes is no longer declared as it was, so it cannot be accepted. Use Retry or Re-execute.${nothingChanged}`;
+      return `The run has no workflow variables it can write right now, so the recorded completion cannot be accepted.${nothingChanged}`;
     case "InvalidDecideInterventionPayload":
     case "InvalidRetryFaultedActivityPayload":
       return `Check the reason: 1 to 500 characters, no control characters.${nothingChanged}`;

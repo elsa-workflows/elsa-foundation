@@ -13,6 +13,7 @@ import {
   describeInputRefreshReason,
   describeVariableWrite,
   lostUpdateFaultOutcome,
+  lostUpdateBadgeLabel,
   lostUpdateWarningOutcome,
   outcomeLabel,
   presentValueState,
@@ -130,7 +131,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
     <section className="wf-instance-section wf-variable-writes" aria-label="Variable write diagnostics">
       <header className="wf-runtime-evidence-heading">
         <h4><History size={14} aria-hidden="true" /> Variable writes</h4>
-        <LostUpdateBadge count={countLostUpdates(records)} />
+        <LostUpdateBadge count={countLostUpdates(records)} label={lostUpdateBadgeLabel(records)} />
       </header>
       {refusedByLostUpdate ? (
         <p className="wf-variable-write-hint" role="note">
@@ -156,7 +157,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
           {recorded.variableWrites.length > 0 ? (
             <dl className="wf-variable-write-facts">
               {recorded.variableWrites.map(write => (
-                <VariableValueState key={write.variableKey} label={`Recorded ${write.variableKey}`} value={write.value} />
+                <VariableValueState key={write.variableKey} label={`"${write.variableKey}" (recorded)`} value={write.value} />
               ))}
             </dl>
           ) : null}
