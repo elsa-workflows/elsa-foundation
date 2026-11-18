@@ -22,8 +22,8 @@ Spec: [spec.md](spec.md). Branch base: `initiative/3052-elsa3-to-elsa4-conversio
 ## R-2 Fit with the agreed ADRs
 
 - **ADR 0092** (merged): decision 5 keeps D-8 (last commit wins) for every write and adds the run-time lost-update
-  warning for a stale base. Decision 6 asks that spec 266's publish-time warning points to the `Fault` opt-in. The
-  warning text names it (P-6). This plan touches no run-time path; read sets, the commit rule and
+  warning for a stale base. Decision 6, as amended, asks that spec 266's publish-time warning gives structural
+  remedies only and does not point authors to `Fault`. This plan touches no run-time path; read sets, the commit rule and
   `LogicalInvocationId` belong to S-10 (#4316).
 - **ADR 0045 §6, amendment of 2026-11-16** (S-3, #4658): every activity may select several declared outcomes and no
   multi-outcome flag exists. D-2a of the spec makes paths that leave different ports exclusive "unless the node's

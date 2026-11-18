@@ -1,6 +1,7 @@
 # Variable Reads And Writes Share One Versioned Lifecycle
 
-Status: accepted (2026-11-12); decision 8 amended 2026-11-16 (`InvocationId` is the logical invocation identity).
+Status: accepted (2026-11-12); decision 8 amended 2026-11-16 (`InvocationId` is the logical invocation identity);
+decision 6 amended 2026-11-18 (the per-node `Fault` setting is an engineer's capability, not an author-facing control).
 It follows from analysis A-2. It completes the stale read-modify-write proposal of ADR 0090 §7,
 rather than replacing it.
 
@@ -233,7 +234,8 @@ first, with a comparison of two stored digests only on a mismatch, avoids both t
   was overwritten and the one that wrote on the stale base, and it keeps the overwritten value so that it can be
   restored.
 - **Opt-in: `Fault`.** A node or an activity type may opt in to `Fault` for strict read-modify-write: an activity type
-  may declare it, and the workflow author may set it per node. Only these nodes use the exact check (decision 5). On a
+  may declare it, and an engineer may set it per node through the design API. The workflow designer does not offer it
+  to authors: it is an advanced runtime concept, explained to authors when they need it. Only these nodes use the exact check (decision 5). On a
   lost update the step faults with a diagnostic that names the variable, the base version, the current version and
   the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict records are
   retained under decisions 7 and 13.
@@ -243,14 +245,16 @@ first, with a comparison of two stored digests only on a mismatch, avoids both t
 activities. If that proof fails, inline steps meet stale bases through Elsa's own hop structure, the plain two-branch
 `count + 1` of Context item 1 gives 1 in ordinary inline workflows, and this default is reopened.
 
-**Design-time pointer.** The publish-time warning for unordered writers (spec 266, ADR 0048 as amended) points the
-author to the `Fault` opt-in for a step whose read-modify-write must be strict.
+**Design-time guidance.** The publish-time warning for unordered writers (spec 266, ADR 0048 as amended) offers the
+author structural remedies only: order the branches, capture into separate variables, or combine them with one write
+after the join. It does not direct the author to the `Fault` mode.
 
 *Why.* Elsa runs what the engineer builds and gives guardrails and diagnostics, not restrictions: the simplest path is
 the default, and advanced options stay possible. When branches run unordered, how they interfere is the workflow
 author's design; the engine's job by default is to make an overwrite visible and repairable, which the warning and
-the kept value do. Where a read-modify-write must never lose an update, the author opts in, and the step stops before
-the wrong value spreads.
+the kept value do. Where a read-modify-write must never lose an update, an engineer opts the activity type or node
+in, and the step stops before the wrong value spreads. Keeping the setting out of the designer keeps every author's
+view simple while the capability stays available to the few who need it.
 
 ### 7. A fault goes through the existing incident path
 
@@ -344,7 +348,7 @@ outdated values. A refresh follows this contract:
   its own sequence number, and idempotency keys derive from the evaluation. Input evaluation may call registered
   functions with external effects (D-5), so those effects repeat, deliberately: idempotency belongs to the designer
   (D-2).
-- **Opt-out.** A node can turn refresh off. Its stale base is then handled at commit, as any other (decisions 5 and 6).
+- **Opt-out.** A node can turn refresh off, through the design API like the `Fault` setting (decision 6). Its stale base is then handled at commit, as any other (decisions 5 and 6).
 - **Recording.** The refreshed snapshot supersedes the first and links to it with the reason, for example
   "`count` v3 → v4". Both stay in the history, so inspection never shows values the body did not see, and the
   snapshot the body receives is immutable from then on (ADR 0045 §3). This follows the precedent of ADR 0045's
@@ -445,8 +449,8 @@ A merge policy is not part of this decision.
   C# activity bodies as a general capability for native and imported workflows, rather than an Elsa 3 compatibility
   mode. This lifecycle holds for bindings and captures independently
   of which direct-access capabilities are enabled. Background-session capability requirements stay with ADR 0093.
-- **Spec 266 (S-5).** Its publish-time warning covers all unordered writes, captures included, and points the author
-  to the `Fault` opt-in (decision 6). At run time, D-8's last-commit-wins holds for every write; a stale base adds the
+- **Spec 266 (S-5).** Its publish-time warning covers all unordered writes, captures included, and offers the author
+  structural remedies only (decision 6). At run time, D-8's last-commit-wins holds for every write; a stale base adds the
   lost-update warning.
 - **The two-branch `count + 1`.** With inline steps gap-free (decision 10), two parallel inline branches give 2. Where
   two unordered branches still read a stale base, for example background steps or a suspension between read and
@@ -479,7 +483,7 @@ A merge policy is not part of this decision.
   which can be restored. The default uses the version check only and also warns on 0 → 1 → 0.
 - `Fault` opted in per activity type and per node: 0 → 1 → 0 applies without a fault and is recorded; a real lost
   update faults.
-- Spec 266's publish-time warning for unordered writers points to the `Fault` opt-in.
+- Spec 266's publish-time warning for unordered writers offers structural remedies and does not point to `Fault`.
 - The rule is identical for inline and background steps, captures and session writes, frames and rows.
 - A retry keeps the `InvocationId` and snapshot; a re-execution and a reschedule materialize fresh inputs with a new
   id; crash redelivery and resume keep the snapshot. A successor that now goes through Start again does not activate
@@ -506,6 +510,10 @@ A merge policy is not part of this decision.
 - Cost measured against a large payload.
 
 ## Alternatives considered
+
+- **Show the per-node `Fault` setting and the refresh opt-out as designer controls.** Rejected. Every author would see
+  an advanced runtime concept on every node, for a case few workflows need, and the warning would send authors to a
+  setting whose meaning they cannot judge. Engineers who need it set it through the design API.
 
 **Background steps get no variable access (the starting point of the A-2 analysis).** Removes session reads from
 background steps, but leaves the input-plus-capture lost update, inline and in the background, and the retry problem.

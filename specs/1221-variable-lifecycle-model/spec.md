@@ -104,7 +104,7 @@ durable write-history data model that S-6 reads, including the overwritten value
 **Out of scope** (named so the boundary is explicit): the inspection surfaces of S-6 (#3290–#3292); background
 *eligibility* criteria (ADR 0093 → S-11); a merge policy (ADR 0092 decision 14: not part of this decision); real
 `Merge`/`Reduce` semantics (they still overwrite like `Set`); general transactional script/C# writes (A-3, #3425); and
-the publish-time warning itself (spec 266, S-5), apart from its pointer to the `Fault` opt-in.
+the publish-time warning itself (spec 266, S-5); FR-012a only says what it must not tell authors.
 
 **Scope moved (2026-11-17, coordinator decision).** So that this spec is not blocked by work it does not own:
 
@@ -116,8 +116,9 @@ the publish-time warning itself (spec 266, S-5), apart from its pointer to the `
   the base held by a suspended step; S-7 reuses them.
 - **Studio presentation is follow-up work in this repository**, not part of this PR. Studio lives here under `Studio/`
   (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
-  showing the lost-update warning, accepted completions, background input refreshes, the node settings and the
-  `variableWrites` diagnostics setting (FR-011, #4735). In this spec the warning *is* its write-history entry (FR-024);
+  showing the lost-update warning, accepted completions, background input refreshes and the `variableWrites`
+  diagnostics setting (FR-011, #4735). The node settings (FR-012, FR-019) are not offered to workflow authors in the
+  designer: they stay a design-API capability for engineers (ADR 0092 decision 6). In this spec the warning *is* its write-history entry (FR-024);
   the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*

@@ -44,7 +44,8 @@ public sealed record ActivityNode(
     public ActivityExecutionPlacement ExecutionPlacement { get; init; }
 
     /// <summary>
-    /// The author's per-node lost-update setting (spec 1221 FR-012): <see cref="Primitives.Models.LostUpdateMode.Fault"/>
+    /// The per-node lost-update setting (spec 1221 FR-012), set by engineers through the design API; the workflow designer
+    /// does not offer it to authors (ADR 0092 decision 6): <see cref="Primitives.Models.LostUpdateMode.Fault"/>
     /// opts this node in to strict read-modify-write. The default is omitted to preserve existing authored JSON. A node
     /// whose activity type declares <c>Fault</c> stays <c>Fault</c>.
     /// </summary>
