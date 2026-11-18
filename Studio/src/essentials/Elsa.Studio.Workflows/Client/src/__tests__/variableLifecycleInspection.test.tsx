@@ -173,7 +173,7 @@ describe("variable lifecycle views", () => {
     expect(compared).toContain("still running");
     expect(compared).toContain("count");
     expect(compared).toContain("differs");
-    expect(refused).toContain("they run different versions");
+    expect(refused).toContain("they do not run the same workflow version");
   });
 
   it("says a comparison is unknown when a value kept no digest", () => {

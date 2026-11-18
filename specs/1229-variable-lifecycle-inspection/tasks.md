@@ -103,8 +103,8 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
   Studio/tests/acceptance/variableLifecycleJourney.ts, run by CI on every Studio PR with retained screenshots; captures
   listed in `tools/ux-acceptance/run.py`): a real lost-update warning and a Fault refusal on Workbench + Studio with
   disposable stores (steps 1–2); the run badge and the lost-update count (step 3); the write history filtered to lost
-  updates, naming the concurrent overwrite and the current value (step 4); the commit journal (step 6); the comparison
-  refused for different versions. Covered by tests instead: the `overwrites=true` filter and `concurrentOverwriteTotal`
+  updates, naming the concurrent overwrite and the current value (step 4); the commit journal in commit order, a write in the commit that completed its step (step 6);
+  the comparison refused for runs of another workflow. Covered by tests instead: the `overwrites=true` filter and `concurrentOverwriteTotal`
   (step 5, `VariableLifecycleInspectionServiceTests.Filters_on_overwrites_return_the_total...`); a comparison of two runs
   of one version with a divergence (step 7, `...Two_runs_that_committed_in_a_different_order...`); redaction (step 8,
   `...Without_the_sensitive_value_permission...`); sequential runs, joins and loops with no overwrite (step 9,

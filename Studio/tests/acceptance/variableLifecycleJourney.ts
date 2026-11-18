@@ -167,19 +167,28 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   await expect(history).not.toContainText("Applied");
   await capture(page, info, "write-history-lost-updates");
 
-  // The journal lists the run's commits in order, with the write in the commit that applied it.
+  // The journal lists the run's commits in order; a write is in the commit that completed its step.
   const lifecycle = inspector().getByRole("region", { name: "Variable lifecycle", exact: true });
   await lifecycle.getByRole("tab", { name: "Journal", exact: true }).click();
   const journal = lifecycle.getByRole("list", { name: "Commit journal" });
   await expect(journal).toContainText("write", { timeout: 30_000 });
-  await expect(journal).toContainText("completed");
+  const commits = journal.locator(":scope > li");
+  // A write and the completion that applied it share one commit.
+  await expect(commits.filter({ hasText: "write" }).filter({ hasText: "completed" }).first()).toBeVisible();
+  // Commit numbers ("Commit token.ordinal") grow down the list.
+  const numbers = (await commits.locator("header strong").allTextContents())
+    .map(text => /Commit (\d+)(?:\.(\d+))?/.exec(text))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map(match => match[2] === undefined ? [0, Number(match[1])] : [Number(match[1]), Number(match[2])]);
+  expect(numbers.length).toBeGreaterThan(1);
+  expect(numbers.every((current, index) => index === 0 || current[0] > numbers[index - 1][0] || current[0] === numbers[index - 1][0] && current[1] > numbers[index - 1][1])).toBe(true);
   await capture(page, info, "commit-journal");
 
-  // Two runs of different versions are not compared.
+  // Runs of a different workflow (or version) are not compared.
   await lifecycle.getByRole("tab", { name: "Compare", exact: true }).click();
   await lifecycle.getByLabel("Other instance").fill(refusal.runId);
   await lifecycle.getByRole("button", { name: "Compare", exact: true }).click();
-  await expect(lifecycle.getByRole("status")).toContainText("they run different versions", { timeout: 30_000 });
+  await expect(lifecycle.getByRole("status")).toContainText("they do not run the same workflow version", { timeout: 30_000 });
   await capture(page, info, "compare-refused");
 
   // The write history's values are opt-in.

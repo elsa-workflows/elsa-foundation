@@ -176,7 +176,7 @@ export function InstanceComparisonSummary({ comparison }: { comparison: Instance
   if (!comparison.comparable) {
     return (
       <div className="wf-variable-comparison" role="status">
-        These instances cannot be compared{comparison.refusalReason === "differentExecutable" ? ": they run different versions." : "."}
+        These instances cannot be compared{comparison.refusalReason === "differentExecutable" ? ": they do not run the same workflow version." : "."}
       </div>
     );
   }
