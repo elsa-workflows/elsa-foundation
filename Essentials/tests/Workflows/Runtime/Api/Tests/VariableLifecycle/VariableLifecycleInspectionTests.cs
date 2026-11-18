@@ -59,6 +59,19 @@ public sealed class VariableLifecycleInspectionTests
     }
 
     [Fact]
+    public void A_write_that_changed_nothing_and_was_no_lost_update_is_not_listed()
+    {
+        var model = Build(Row("a", "node-a", stamps: [Scheduled(1)], writes:
+        [
+            Write("a", "node-a", 2, 1, 1, VariableCommitOutcome.ReturnedValue, baseVersion: 0),
+            Write("a", "node-a", 3, 1, 2)
+        ]));
+
+        var entry = Assert.Single(model.Entries);
+        Assert.Equal(2, entry.Record.NewVersion);
+    }
+
+    [Fact]
     public void Loop_iterations_are_separate_variable_instances()
     {
         var model = Build(
@@ -330,6 +343,23 @@ public sealed class VariableLifecycleInspectionTests
         Assert.Equal(2, journal[1].Transitions.Count);
         Assert.Contains(journal[4].Transitions, transition => transition.Stamp.Kind == ActivityLifecycleTransitionKind.Resumed);
         Assert.Same(Entry(model, "b"), Assert.Single(journal[3].Writes));
+    }
+
+    [Fact]
+    public void The_journal_keeps_faulted_cancelled_and_superseded_transitions_in_their_commits()
+    {
+        var model = Build(
+            Row("f", "node-f", stamps: [Scheduled(1), Faulted(2)], status: ActivityExecutionStatus.Faulted),
+            Row("c", "node-c", stamps: [Scheduled(1), (ActivityLifecycleTransitionKind.Cancelled, 3)], status: ActivityExecutionStatus.Cancelled),
+            Row("s", "node-s", stamps: [Scheduled(1), Faulted(2), (ActivityLifecycleTransitionKind.Superseded, 4)], status: ActivityExecutionStatus.Faulted));
+
+        var journal = model.BuildJournal();
+
+        Assert.Equal([1L, 2L, 3L, 4L], journal.Select(commit => commit.CommitSequence!.Value));
+        Assert.Equal(3, journal[0].Transitions.Count);
+        Assert.Equal([ActivityLifecycleTransitionKind.Faulted, ActivityLifecycleTransitionKind.Faulted], journal[1].Transitions.Select(t => t.Stamp.Kind));
+        Assert.Equal(ActivityLifecycleTransitionKind.Cancelled, Assert.Single(journal[2].Transitions).Stamp.Kind);
+        Assert.Equal(ActivityLifecycleTransitionKind.Superseded, Assert.Single(journal[3].Transitions).Stamp.Kind);
     }
 
     [Fact]

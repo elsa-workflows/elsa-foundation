@@ -62,6 +62,8 @@ export interface VariableWriteEntry {
   refusedValue?: VariableValueStateView | null;
   resolvesEntryId?: string | null;
   occurredAt: string;
+  /** For a lost update (applied, refused or accepted): the writer of the version it met. */
+  otherWriter?: VariableWriterView | null;
 }
 
 export interface VariableWriteHistoryPage {
@@ -121,6 +123,8 @@ export interface VariableComparison {
   writtenDigestsDiffer: boolean;
   leftWriteCount: number;
   rightWriteCount: number;
+  /** A write kept no digest (a hidden value or an older record): equality is not known. */
+  digestUnknown?: boolean;
 }
 
 export interface InstanceComparison {
@@ -226,9 +230,21 @@ export async function compareInstances(context: StudioEndpointContext, workflowE
   try {
     return await get<InstanceComparison>(context, path, signal);
   } catch (error) {
-    // A refused pair answers 409 with the comparison view and its reason (StudioHttpError.payload).
+    // A refused pair answers a 409 problem whose code is the reason (StudioHttpError.payload).
     const failure = error as { status?: number; payload?: unknown };
-    if (failure?.status === 409 && isComparison(failure.payload)) return failure.payload;
+    const code = failure?.payload && typeof failure.payload === "object" ? (failure.payload as { code?: unknown }).code : undefined;
+    if (failure?.status === 409 && typeof code === "string") {
+      return {
+        leftWorkflowExecutionId: workflowExecutionId,
+        rightWorkflowExecutionId: otherWorkflowExecutionId,
+        executable: "",
+        comparable: false,
+        refusalReason: code,
+        firstDivergence: null,
+        variables: [],
+        partial: false
+      } satisfies InstanceComparison;
+    }
     throw error;
   }
 }
@@ -265,8 +281,4 @@ function requirePage<T extends { items: unknown[] }>(response: T, name: string) 
     throw new Error(`Runtime returned an invalid ${name} page.`);
   }
   return response;
-}
-
-function isComparison(value: unknown): value is InstanceComparison {
-  return !!value && typeof value === "object" && "comparable" in value && "variables" in value;
 }

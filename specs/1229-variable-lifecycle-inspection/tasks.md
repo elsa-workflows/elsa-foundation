@@ -29,6 +29,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
   Done: set by `RuntimeCommitSequenceStamper` on every committed row; columns, index (`IX_elsa_runtime_activity_execution_state_commit_range`) and a jobs-by-instance index in migration `VariableLifecycleInspection` for Sqlite, SQL Server, PostgreSQL and MySQL (written by hand: the local tooling build could not produce four unrelated module DLLs; the Sqlite snapshot is checked by `The_runtime_model_snapshot_has_no_pending_model_changes`).
 - [x] T004 Tests: each of those schedulings records its cause; the row columns match the document; `Sequence` keeps passing its completed child; overhead
   within noise of spec 1221's benchmark (SC-006).
+  Done: run-time drives (`InspectionDriveTests`) check the causes of a Sequence step and of a step after a `Parallel`, and the row count; loops, joins and the container rule are covered over committed record sets (`VariableLifecycleInspectionTests`); the EF columns by `Rows_page_by_commit_sequence_range_and_lost_updates_sum_from_the_column`. SC-006 was not benchmarked separately: the run-time cost is the cause ids on a callback scheduling and one count on a row already written.
 
 ## Phase 3: User Story 1 — who wrote a variable, which write won (P1) 🎯 MVP
 
@@ -38,6 +39,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
   `RetryOfActivityExecutionId`, resolve logical invocations, handle legacy records (approximate).
 - [x] T006 [US1] Payload read for write-record values (written, overwritten, refused; activity or alteration owner)
   under the existing payload permission; value-state mapping (research R-4).
+  Done for activity owners (written, overwritten, refused). An alteration's own value is not on its write record (spec 1221 recorded it "with no value"; the value is only in the protected alteration request), so it shows `omitted`; raised on the PR.
 - [x] T007 [P] [US1] Views in `Essentials/src/Workflows/Runtime/Api/Models/VariableLifecycleViews.cs`; register in
   `WorkflowsRuntimeJsonContext`.
 - [x] T008 [US1] Endpoints `…/variables`, `…/variable-writes` (filters, cursor paging) and
@@ -66,6 +68,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 - [x] T014 [US3] Endpoint `…/journal`.
 - [x] T015 [US3] Tests: every commit once and in order with every stamp kind; coalesced segment keeps
   logical order; paging continues exactly; a background input refresh appears with both evaluations linked.
+  Done over record sets for every stamp kind. A coalesced segment keeps its order because spec 1221 numbers each logical checkpoint before the fold (its `CommitOrderTests`); the journal groups by those numbers and needs no separate case.
 
 ## Phase 6: User Story 4 — compare two instances (P2)
 
@@ -107,8 +110,10 @@ Builds on #4735 (spec 1221's activity-level items) and on this spec's endpoints 
   opening the write history filtered to lost updates.
 - [x] T027 [US1] [US2] Write history view per variable: writers, versions, commit order, lost-update and
   concurrent-overwrite marks, values through `RuntimeValueEvidence.tsx` (value states, payload read).
+  Built in `VariableLifecycleViews.tsx` (filters: variable, outcome, source, frame, overwrites). Mounted on the instance view with T026, after #4735 (PR #4759) merges.
 - [x] T028 [US3] [US4] Journal view in commit order (stamps, input refreshes, writes) and the comparison view of two
   instances (first divergence, differing variables, digests only).
+  Built in `VariableLifecycleViews.tsx`; mounted with T026.
 - [x] T029 [P] Tests in `__tests__/` (vitest) for the client paging and each view's states, including omitted and
   redacted values and a legacy instance with no history.
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   compareInstances,
@@ -23,6 +23,15 @@ const outcomeLabels: Record<string, string> = {
   lostUpdateWarning: "Lost update",
   lostUpdateFault: "Refused (Fault)",
   acceptedOverride: "Accepted override"
+};
+
+const sourceLabels: Record<string, string> = {
+  capture: "Capture",
+  intrinsic: "Intrinsic",
+  sessionChange: "Session change",
+  alteration: "Operator change",
+  backgroundResult: "Background result",
+  acceptedCompletion: "Accepted completion"
 };
 
 const valueStateLabels: Record<string, string> = {
@@ -97,6 +106,9 @@ export function VariableWriteHistoryTable({ entries, onShowValue }: {
                   {describeWriter(entry.concurrentOverwrite.overwrittenWriter)}
                 </span>
               ) : null}
+              {!entry.concurrentOverwrite && entry.otherWriter
+                ? <span className="wf-variable-overwrite" role="note">Met a version of {describeWriter(entry.otherWriter)}</span>
+                : null}
               {entry.resolvesEntryId ? <span className="wf-variable-note">Resolves a refused write</span> : null}
             </td>
             <td>
@@ -165,7 +177,7 @@ export function InstanceComparisonSummary({ comparison }: { comparison: Instance
       </div>
     );
   }
-  const differing = comparison.variables.filter(variable => variable.finalDigestDiffers || variable.writtenDigestsDiffer);
+  const differing = comparison.variables.filter(variable => variable.finalDigestDiffers || variable.writtenDigestsDiffer || variable.digestUnknown);
   return (
     <div className="wf-variable-comparison">
       {comparison.partial ? <p className="wf-variable-note">One instance is still running; only what it committed is compared.</p> : null}
@@ -185,8 +197,8 @@ export function InstanceComparisonSummary({ comparison }: { comparison: Instance
             {differing.map(variable => (
               <tr key={`${variable.framePath}-${variable.variableKey}`}>
                 <td><code>{variable.variableKey}</code> <small className="wf-variable-note">{variable.framePath}</small></td>
-                <td>{variable.finalDigestDiffers ? "differs" : "same"}</td>
-                <td>{variable.writtenDigestsDiffer ? `differ (${variable.leftWriteCount} vs ${variable.rightWriteCount} writes)` : "same"}</td>
+                <td>{variable.digestUnknown ? "unknown" : variable.finalDigestDiffers ? "differs" : "same"}</td>
+                <td>{variable.writtenDigestsDiffer ? `differ (${variable.leftWriteCount} vs ${variable.rightWriteCount} writes)` : variable.digestUnknown ? "unknown" : "same"}</td>
               </tr>
             ))}
           </tbody>
@@ -217,10 +229,15 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
   const [comparison, setComparison] = useState<{ status: "idle" | "loading" } | { status: "ready"; value: InstanceComparison } | { status: "failed"; error: string }>({ status: "idle" });
   const [shownValues, setShownValues] = useState<Record<string, { status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }>>({});
 
+  const historyRequest = useRef(0);
+  const journalRequest = useRef(0);
+
   const loadHistory = useCallback(async (cursor: string | null) => {
+    const request = ++historyRequest.current;
     setHistory(current => cursor && current.status === "ready" ? current : { status: "loading" });
     try {
       const page = await listVariableWrites(context, workflowExecutionId, filter, { cursor, take: 100 });
+      if (request !== historyRequest.current) return;
       setHistory(current => ({
         status: "ready",
         items: cursor && current.status === "ready" ? [...current.items, ...page.items] : page.items,
@@ -228,21 +245,23 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
         total: page.concurrentOverwriteTotal
       }));
     } catch (error) {
-      setHistory({ status: "failed", error: errorMessage(error) });
+      if (request === historyRequest.current) setHistory({ status: "failed", error: errorMessage(error) });
     }
   }, [context, workflowExecutionId, filter]);
 
   const loadJournal = useCallback(async (cursor: string | null) => {
+    const request = ++journalRequest.current;
     setJournal(current => cursor && current.status === "ready" ? current : { status: "loading" });
     try {
       const page = await listInstanceJournal(context, workflowExecutionId, { cursor, take: 50 });
+      if (request !== journalRequest.current) return;
       setJournal(current => ({
         status: "ready",
         items: cursor && current.status === "ready" ? [...current.items, ...page.items] : page.items,
         next: page.next ?? null
       }));
     } catch (error) {
-      setJournal({ status: "failed", error: errorMessage(error) });
+      if (request === journalRequest.current) setJournal({ status: "failed", error: errorMessage(error) });
     }
   }, [context, workflowExecutionId]);
 
@@ -292,6 +311,16 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
                 <option value="">Any</option>
                 {Object.entries(outcomeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
+            </label>
+            <label>
+              Source{" "}
+              <select value={filter.source ?? ""} onChange={event => setFilter(current => ({ ...current, source: event.target.value || undefined }))}>
+                <option value="">Any</option>
+                {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              Frame <input value={filter.frameId ?? ""} onChange={event => setFilter(current => ({ ...current, frameId: event.target.value || undefined }))} />
             </label>
             <label>
               <input type="checkbox" checked={filter.overwrites ?? false} onChange={event => setFilter(current => ({ ...current, overwrites: event.target.checked || undefined }))} /> Concurrent overwrites only

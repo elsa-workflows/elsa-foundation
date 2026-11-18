@@ -57,7 +57,8 @@ internal sealed class VariableLifecycleInspectionService(
                 last?.CommitSequence,
                 current is not null
                     ? WrittenValueState(current, snapshots, canInspectSensitive)
-                    : new VariableValueStateView(ValueStates.Omitted, version.Digest, null, false),
+                    // A hidden value keeps no digest here, as in the write history.
+                    : new VariableValueStateView(ValueStates.Omitted, frame.Frame.Values[key].Policy.HidesValue() ? null : version.Digest, null, false),
                 model.HistoryRecorded));
         }
 
@@ -79,7 +80,7 @@ internal sealed class VariableLifecycleInspectionService(
         var hasMore = page.Count > take;
         if (hasMore)
             page.RemoveAt(page.Count - 1);
-        var views = await ToViewsAsync(query.WorkflowExecutionId, page, loaded.CanInspectSensitive, cancellationToken);
+        var views = await ToViewsAsync(query.WorkflowExecutionId, loaded.Model, page, loaded.CanInspectSensitive, cancellationToken);
         return new VariableWriteHistoryPageView(
             views,
             hasMore ? VariableLifecyclePageCursor.Of(page[^1].CommitSequence, page[^1].PositionInCommit).Encode() : null,
@@ -125,15 +126,15 @@ internal sealed class VariableLifecycleInspectionService(
         {
             if (!StringComparer.Ordinal.Equals(left.Model.SignatureOf(leftJournal[index]), right.Model.SignatureOf(rightJournal[index])))
                 divergence = new InstanceDivergenceView(index,
-                    StructureOnly(left.Model, leftJournal[index]),
-                    StructureOnly(right.Model, rightJournal[index]));
+                    await ComparisonViewAsync(left, leftJournal[index], cancellationToken),
+                    await ComparisonViewAsync(right, rightJournal[index], cancellationToken));
         }
 
         // A run still going compares what it has committed; a finished one with more commits diverges where it goes on.
         if (divergence is null && !partial && leftJournal.Count != rightJournal.Count)
             divergence = new InstanceDivergenceView(shared,
-                shared < leftJournal.Count ? StructureOnly(left.Model, leftJournal[shared]) : null,
-                shared < rightJournal.Count ? StructureOnly(right.Model, rightJournal[shared]) : null);
+                await ComparisonViewAsync(left, shared < leftJournal.Count ? leftJournal[shared] : null, cancellationToken),
+                await ComparisonViewAsync(right, shared < rightJournal.Count ? rightJournal[shared] : null, cancellationToken));
 
         var leftVariables = DigestsByVariable(left.Model);
         var rightVariables = DigestsByVariable(right.Model);
@@ -143,13 +144,15 @@ internal sealed class VariableLifecycleInspectionService(
             {
                 var l = leftVariables.GetValueOrDefault(key) ?? VariableDigests.Empty(key);
                 var r = rightVariables.GetValueOrDefault(key) ?? VariableDigests.Empty(key);
+                var unknown = l.Unknown || r.Unknown;
                 return new VariableComparisonView(
                     l.FramePath ?? r.FramePath!,
                     l.VariableKey ?? r.VariableKey!,
-                    !StringComparer.Ordinal.Equals(l.Final, r.Final),
-                    !l.Written.SequenceEqual(r.Written, StringComparer.Ordinal),
+                    !unknown && !StringComparer.Ordinal.Equals(l.Final, r.Final),
+                    !unknown && !l.Written.SequenceEqual(r.Written, StringComparer.Ordinal) || l.Written.Count != r.Written.Count,
                     l.Written.Count,
-                    r.Written.Count);
+                    r.Written.Count,
+                    unknown);
             })
             .ToArray();
         return new InstanceComparisonResult(InstanceComparisonOutcome.Compared, new InstanceComparisonView(
@@ -242,7 +245,9 @@ internal sealed class VariableLifecycleInspectionService(
             return null;
         var canInspectSensitive = await authorization.CanInspectSensitiveValuesAsync(workflow, cancellationToken);
 
-        // Rows by their commit-sequence range, then the rows without one (older rows, commits outside a lease).
+        // The rows without a commit-sequence range first (older rows, commits outside a lease), then the numbered rows:
+        // a row numbered between the two reads is then read by the second, and kept once.
+        var unnumbered = await activityExecutions.ListWithoutCommitSequenceAsync(workflowExecutionId, cancellationToken);
         var rows = new List<ActivityExecutionState>();
         ActivityExecutionStateCommitSequenceKey? after = null;
         while (true)
@@ -255,7 +260,8 @@ internal sealed class VariableLifecycleInspectionService(
             after = new ActivityExecutionStateCommitSequenceKey(batch[^1].FirstCommitSequence!.Value, batch[^1].Execution.ActivityExecutionId);
         }
 
-        rows.AddRange(await activityExecutions.ListWithoutCommitSequenceAsync(workflowExecutionId, cancellationToken));
+        var numbered = rows.Select(row => row.Execution.ActivityExecutionId).ToHashSet(StringComparer.Ordinal);
+        rows.AddRange(unnumbered.Where(row => !numbered.Contains(row.Execution.ActivityExecutionId)));
         var jobs = await alterations.ListVariableWriteJobsAsync(workflowExecutionId, cancellationToken);
         var frames = await FramesAsync(workflow, rows, cancellationToken);
         var currentVersions = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -301,15 +307,17 @@ internal sealed class VariableLifecycleInspectionService(
 
     private async Task<IReadOnlyList<VariableWriteEntryView>> ToViewsAsync(
         string workflowExecutionId,
+        VariableLifecycleInspection model,
         IReadOnlyList<VariableWriteEntry> entries,
         bool canInspectSensitive,
         CancellationToken cancellationToken)
     {
         var snapshots = await SnapshotsForAsync(workflowExecutionId, entries, cancellationToken);
-        return entries.Select(entry => ToView(entry, snapshots, canInspectSensitive)).ToArray();
+        return entries.Select(entry => ToView(model, entry, snapshots, canInspectSensitive)).ToArray();
     }
 
     private static VariableWriteEntryView ToView(
+        VariableLifecycleInspection model,
         VariableWriteEntry entry,
         IReadOnlyDictionary<string, ActivityExecutionInspectionProjection?> snapshots,
         bool canInspectSensitive)
@@ -335,15 +343,34 @@ internal sealed class VariableLifecycleInspectionService(
             entry.IsApplied,
             entry.IsCurrentValue,
             entry.Overwrote is { } overwritten
-                ? new VariableOverwriteView(overwritten.EntryId, WriterOf(overwritten), overwritten.CommitSequence, record.IsLostUpdate || record.Outcome == VariableCommitOutcome.AcceptedOverride)
+                ? new VariableOverwriteView(overwritten.EntryId, WriterOf(overwritten), overwritten.CommitSequence, IsLostUpdateKind(record))
                 : null,
             refused ?? WrittenValueState(entry, snapshots, canInspectSensitive),
-            record.IsLostUpdate || record.Outcome == VariableCommitOutcome.AcceptedOverride
+            IsLostUpdateKind(record)
                 ? EnvelopeState(entry, record.OverwrittenValue, PayloadValues.Overwritten, canInspectSensitive)
                 : null,
             refused,
             entry.ResolvesEntry?.EntryId,
-            record.OccurredAt);
+            record.OccurredAt,
+            record.OverwrittenWriter is { } other ? OtherWriterOf(model, other) : null);
+    }
+
+    // An applied lost update, a refused one, and an accepted override all name the writer whose version they met.
+    private static bool IsLostUpdateKind(VariableWriteRecord record) =>
+        record.IsLostUpdate || record.Outcome == VariableCommitOutcome.AcceptedOverride;
+
+    // FR-008: the other writer of a lost update, with its branch or path when its row is stored.
+    private static VariableWriterView OtherWriterOf(VariableLifecycleInspection model, VariableWriter writer)
+    {
+        var row = writer.Source != VariableWriteSource.Alteration && writer.InvocationId is { } id ? model.FindRow(id) : null;
+        var view = WriterOf(writer);
+        return row is null ? view : view with
+        {
+            ExecutableNodeId = view.ExecutableNodeId ?? row.Execution.ExecutableNodeId,
+            LogicalInvocationId = row.LogicalInvocationId,
+            BranchId = row.BranchId,
+            ExecutionPathId = row.Provenance.ExecutionPathId
+        };
     }
 
     private async Task<JournalCommitView> JournalViewAsync(
@@ -353,15 +380,35 @@ internal sealed class VariableLifecycleInspectionService(
         bool canInspectSensitive,
         CancellationToken cancellationToken)
     {
-        var structure = StructureOnly(model, commit);
-        return structure with { Writes = await ToViewsAsync(workflowExecutionId, commit.Writes, canInspectSensitive, cancellationToken) };
+        var writes = await ToViewsAsync(workflowExecutionId, model, commit.Writes, canInspectSensitive, cancellationToken);
+        return Structure(model, commit, writes);
     }
 
-    // A journal commit without its writes' value states: what a comparison shows (digests only, FR-012).
-    private static JournalCommitView StructureOnly(VariableLifecycleInspection model, JournalCommit commit)
+    // A comparison shows value states and digests only: no value can be read from it (FR-012).
+    private async Task<JournalCommitView?> ComparisonViewAsync(LoadedInstance instance, JournalCommit? commit, CancellationToken cancellationToken)
     {
+        if (commit is null)
+            return null;
+        var view = await JournalViewAsync(instance.Workflow.WorkflowExecutionId, instance.Model, commit, instance.CanInspectSensitive, cancellationToken);
+        static VariableValueStateView? Strip(VariableValueStateView? value) => value is null ? null : value with { PayloadRef = null };
+        return view with
+        {
+            Writes = view.Writes.Select(write => write with
+            {
+                Value = Strip(write.Value)!,
+                OverwrittenValue = Strip(write.OverwrittenValue),
+                RefusedValue = Strip(write.RefusedValue)
+            }).ToArray()
+        };
+    }
+
+    private static JournalCommitView Structure(VariableLifecycleInspection model, JournalCommit commit, IReadOnlyList<VariableWriteEntryView> writes)
+    {
+        // Stamps carry no time: a transition's time is the row's time for that transition.
         var occurredAt = commit.Writes.Select(write => (DateTimeOffset?)write.Record.OccurredAt)
             .Concat(commit.InputRefreshes.Select(refresh => (DateTimeOffset?)refresh.Refresh.RefreshedAt))
+            .Concat(commit.Transitions.Select(transition => TimeOf(transition.Row, transition.Stamp.Kind)))
+            .Where(time => time is not null)
             .Min();
         return new JournalCommitView(
             commit.CommitSequence,
@@ -381,15 +428,17 @@ internal sealed class VariableLifecycleInspectionService(
                 refresh.Refresh.ReplacedByEvaluation,
                 refresh.Refresh.Reason,
                 refresh.Refresh.Changes.Select(change => change.VariableKey).ToArray())).ToArray(),
-            commit.Writes.Select(write => new VariableWriteEntryView(
-                write.EntryId, write.Record.ScopeId, write.Record.FrameId, write.Record.VariableKey, WriterOf(write),
-                SourceName(write.Record.Writer.Source), OutcomeName(write.Record.Outcome), write.Record.BaseVersion,
-                write.Record.CurrentVersion, write.Record.NewVersion, write.CommitSequence, write.Record.CommitOrder,
-                write.OrderApproximate, write.IsApplied, write.IsCurrentValue,
-                write.Overwrote is { } overwritten ? new VariableOverwriteView(overwritten.EntryId, WriterOf(overwritten), overwritten.CommitSequence, write.Record.IsLostUpdate) : null,
-                new VariableValueStateView(ValueStates.Omitted, write.Record.Digest, null, false),
-                null, null, write.ResolvesEntry?.EntryId, write.Record.OccurredAt)).ToArray());
+            writes);
     }
+
+    private static DateTimeOffset? TimeOf(ActivityExecutionState row, ActivityLifecycleTransitionKind kind) => kind switch
+    {
+        ActivityLifecycleTransitionKind.Scheduled => row.ScheduledAt,
+        ActivityLifecycleTransitionKind.Started => row.StartedAt,
+        ActivityLifecycleTransitionKind.Completed or ActivityLifecycleTransitionKind.Faulted or ActivityLifecycleTransitionKind.Cancelled => row.CompletedAt,
+        ActivityLifecycleTransitionKind.Superseded => row.SupersededAt,
+        _ => null
+    };
 
     private async Task<IReadOnlyDictionary<string, ActivityExecutionInspectionProjection?>> SnapshotsForAsync(
         string workflowExecutionId,
@@ -412,9 +461,13 @@ internal sealed class VariableLifecycleInspectionService(
         if (entry.Row is null || !entry.IsApplied)
             return new VariableValueStateView(ValueStates.Omitted, digest, null, false);
         var snapshot = FindWrittenSnapshot(projections.GetValueOrDefault(entry.Row.Execution.ActivityExecutionId), entry.Record);
-        if (snapshot is null || ActivityExecutionInspectionDisclosure.WithheldKind(snapshot) is not null ||
+        if (snapshot is null || snapshot.Failure is not null ||
             snapshot.CaptureMode is not (RuntimePayloadCaptureMode.Payload or RuntimePayloadCaptureMode.DiagnosticSnapshot))
             return new VariableValueStateView(ValueStates.Omitted, digest, null, false);
+        // A withheld value (a secret reference) is never shown or released, whoever asks.
+        if (ActivityExecutionInspectionDisclosure.WithheldKind(snapshot) is not null)
+            return new VariableValueStateView(ValueStates.Redacted, digest, null, false);
+        // Captured, then removed: the payload is gone.
         if (snapshot.Payload is null)
             return new VariableValueStateView(ValueStates.Expired, digest, null, false);
         if (!canInspectSensitive)
@@ -429,7 +482,7 @@ internal sealed class VariableLifecycleInspectionService(
             return new VariableValueStateView(ValueStates.Omitted, null, null, true);
         if (InlineValue(envelope) is null)
             return new VariableValueStateView(ValueStates.Omitted, null, null, true);
-        if (!canInspectSensitive || envelope.Policy.HidesValue())
+        if (!canInspectSensitive)
             return new VariableValueStateView(ValueStates.Redacted, null, null, true);
         return new VariableValueStateView(ValueStates.Captured, null, PayloadRef(entry, which), true);
     }
@@ -490,6 +543,8 @@ internal sealed class VariableLifecycleInspectionService(
                 result[key] = digests = new VariableDigests(framePath, entry.Record.VariableKey);
             digests.Written.Add(entry.Record.Digest ?? string.Empty);
             digests.Final = entry.Record.Digest ?? string.Empty;
+            // A write whose value keeps no digest (a hidden value, an older record) cannot be compared.
+            digests.Unknown |= entry.Record.Digest is null;
         }
 
         return result;
@@ -521,6 +576,7 @@ internal sealed class VariableLifecycleInspectionService(
         public string? VariableKey { get; } = variableKey;
         public List<string> Written { get; } = [];
         public string? Final { get; set; }
+        public bool Unknown { get; set; }
 
         public static VariableDigests Empty(string key) => new(key.Split('\u001f')[0], key.Split('\u001f')[^1]);
     }

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Elsa.Activities.Testing;
-using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -8,9 +7,8 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Runtime.Tests.VariableLifecycle;
 
 /// <summary>
-/// Spec 1229 T004, T009, T012: real runs. The runtime records the scheduling causes and each row's lost-update count,
-/// and the read model built from what the run committed marks the lost update of a parallel stale-base run and nothing
-/// for a sequential one.
+/// Spec 1229 T004: real runs commit what the inspection read model needs. The runtime records the scheduling causes and
+/// each row's lost-update count; the read model over such records is tested in Elsa.Workflows.Runtime.Api.Tests.
 /// </summary>
 public sealed class InspectionDriveTests
 {
@@ -23,15 +21,17 @@ public sealed class InspectionDriveTests
 
         // Left writes 0 + 1; right, on the stale base 0, writes 0 + 2 over it: an applied lost update.
         var run = await harness.RunAsync(VariableLifecycleTestGraph.ParallelIncrements(typeof(DoublingIncrementActivity)));
-        var model = VariableLifecycleInspection.Build(run.ActivityStates.ToArray(), []);
 
-        var lost = Assert.Single(model.Entries, entry => entry.Record.Outcome == VariableCommitOutcome.LostUpdateWarning);
-        Assert.Equal("node-right", lost.Row!.Execution.ExecutableNodeId);
-        Assert.Equal("node-left", lost.Overwrote?.Row?.Execution.ExecutableNodeId);
-        Assert.Equal(1, run.State("node-right").LostUpdateWarningCount);
+        var right = run.State("node-right");
+        var lost = Assert.Single(right.VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.LostUpdateWarning, lost.Outcome);
+        Assert.NotEqual(lost.CurrentVersion, lost.NewVersion);
+        Assert.Equal("node-left", lost.OverwrittenWriter!.ExecutableNodeId);
+        Assert.Equal(1, right.LostUpdateWarningCount);
         Assert.Null(run.State("node-left").LostUpdateWarningCount);
-        Assert.Equal(1, model.Entries.Count(entry => entry.Overwrote is not null));
-        Assert.True(lost.IsCurrentValue);
+        // Both branches were scheduled by the Parallel, so nothing orders one branch after the other.
+        Assert.Equal(run.State("node-parallel").Execution.ActivityExecutionId, right.Provenance.SchedulingActivityExecutionId);
+        Assert.DoesNotContain(run.State("node-left").Execution.ActivityExecutionId, right.Provenance.CausedBy ?? []);
     }
 
     [Fact]
@@ -40,11 +40,10 @@ public sealed class InspectionDriveTests
         await using var harness = VariableLifecycleTestGraph.NewStaleBaseHarness("actexec-parallel", "actexec-left", "actexec-right");
 
         var run = await harness.RunAsync(VariableLifecycleTestGraph.ParallelIncrements(typeof(IncrementActivity)));
-        var model = VariableLifecycleInspection.Build(run.ActivityStates.ToArray(), []);
 
-        var lost = Assert.Single(model.Entries, entry => entry.Record.Outcome == VariableCommitOutcome.LostUpdateWarning);
-        Assert.False(lost.IsApplied);
-        Assert.Null(lost.Overwrote);
+        var lost = Assert.Single(run.State("node-right").VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.LostUpdateWarning, lost.Outcome);
+        Assert.Equal(lost.CurrentVersion, lost.NewVersion);
         Assert.Equal(1, run.State("node-right").LostUpdateWarningCount);
     }
 
@@ -59,15 +58,16 @@ public sealed class InspectionDriveTests
             VariableLifecycleTestGraph.CountDeclaration());
 
         var run = await harness.RunAsync(executable);
-        var model = VariableLifecycleInspection.Build(run.ActivityStates.ToArray(), []);
 
         run.AssertWorkflowCompleted();
         Assert.Equal(2, VariableLifecycleTestGraph.ReadCount(run));
         var first = run.State("node-a");
-        Assert.Contains(first.Execution.ActivityExecutionId, run.State("node-b").Provenance.CausedBy ?? []);
-        Assert.Equal(2, model.Entries.Count(entry => entry.IsApplied));
-        Assert.All(model.Entries, entry => Assert.Null(entry.Overwrote));
-        Assert.Single(model.Entries, entry => entry.IsCurrentValue && entry.Row!.Execution.ExecutableNodeId == "node-b");
+        var second = run.State("node-b");
+        Assert.Contains(first.Execution.ActivityExecutionId, second.Provenance.CausedBy ?? []);
+        // The cause completed before the next was scheduled: its write happens before the next one's.
+        Assert.True(first.Transitions!.Last(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Completed).CommitSequence
+                    <= second.Transitions!.First().CommitSequence);
+        Assert.Null(run.State("node-sequence").Provenance.CausedBy);
     }
 
     [Fact]
@@ -83,17 +83,14 @@ public sealed class InspectionDriveTests
             VariableLifecycleTestGraph.CountDeclaration());
 
         var run = await harness.RunAsync(executable);
-        var model = VariableLifecycleInspection.Build(run.ActivityStates.ToArray(), []);
 
         run.AssertWorkflowCompleted();
-        Assert.Contains(run.State("node-parallel").Execution.ActivityExecutionId, run.State("node-after").Provenance.CausedBy ?? []);
-        var after = Assert.Single(model.Entries, entry => entry.Row!.Execution.ExecutableNodeId == "node-after");
-        Assert.Null(after.Overwrote);
-        Assert.True(after.IsCurrentValue);
-        // The journal lists every commit once, in order.
-        var journal = model.BuildJournal();
-        Assert.Equal(journal.Select(commit => commit.CommitSequence), journal.Select(commit => commit.CommitSequence).Order());
-        Assert.Equal(journal.Count, journal.Select(commit => commit.CommitSequence).Distinct().Count());
+        var parallel = run.State("node-parallel");
+        Assert.Contains(parallel.Execution.ActivityExecutionId, run.State("node-after").Provenance.CausedBy ?? []);
+        // The Parallel completed after both branches, so the later write is ordered after both of them.
+        var parallelEnd = parallel.Transitions!.Last(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Completed).CommitSequence;
+        foreach (var branch in new[] { "node-left", "node-right" })
+            Assert.True(run.State(branch).Transitions!.Last().CommitSequence <= parallelEnd);
     }
 
     private static WorkflowExecutionHarness NewSequenceHarness(bool staleBase = false)

@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
-using Microsoft.AspNetCore.Http;
 using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Instances.VariableLifecycle;
@@ -58,23 +57,25 @@ public sealed class GetJournalEndpoint(IVariableLifecycleInspectionService inspe
 }
 
 /// <summary>
-/// US4: compares two instances of one executable version by run-time path and digest. Any other pair is refused with
-/// 409 and reason <c>differentExecutable</c>; either side missing or hidden is 404.
+/// US4: compares two instances of one executable version by run-time path and digest. Any other pair is refused with a
+/// 409 problem whose code is <c>differentExecutable</c>; either side missing or hidden is 404.
 /// </summary>
 [Get("runtime/workflows/instances/{workflowExecutionId}/compare/{otherWorkflowExecutionId}")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("comparing workflow instances")]
-public sealed class CompareEndpoint(IVariableLifecycleInspectionService inspection) : ApiEndpointWithResult<CompareWorkflowInstances, InstanceComparisonView>
+public sealed class CompareEndpoint(IVariableLifecycleInspectionService inspection) : ApiEndpoint<CompareWorkflowInstances, InstanceComparisonView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "CompareWorkflowInstances";
 
-    public override async Task<EndpointResult<InstanceComparisonView>> HandleAsync(CompareWorkflowInstances request, CancellationToken cancellationToken)
+    public override async Task<InstanceComparisonView> HandleAsync(CompareWorkflowInstances request, CancellationToken cancellationToken)
     {
         var result = await inspection.CompareAsync(request.WorkflowExecutionId, request.OtherWorkflowExecutionId, cancellationToken);
         return result.Outcome switch
         {
-            InstanceComparisonOutcome.Compared => EndpointResult.Status(StatusCodes.Status200OK, result.View!),
-            InstanceComparisonOutcome.DifferentExecutable => EndpointResult.Status(StatusCodes.Status409Conflict, result.View!),
+            InstanceComparisonOutcome.Compared => result.View!,
+            InstanceComparisonOutcome.DifferentExecutable => throw new InstanceComparisonRefusedSignal(
+                result.View?.RefusalReason ?? "differentExecutable",
+                "The two instances run different executable versions; only instances of one version can be compared."),
             _ => throw new ActivityExecutionMissingSignal()
         };
     }

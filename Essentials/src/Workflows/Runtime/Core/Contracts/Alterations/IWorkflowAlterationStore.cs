@@ -35,9 +35,11 @@ public interface IWorkflowAlterationStore
     /// <summary>
     /// Spec 1229 FR-005: the terminal jobs that changed variables of one workflow execution (their outcomes carry
     /// variable write records), so inspection can merge operator changes into the variable history. Bounded by the
-    /// number of alterations applied to the instance.
+    /// number of alterations applied to the instance. A store that keeps jobs should implement it: the default lists
+    /// none, so operator changes are then missing from the history.
     /// </summary>
-    ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyList<WorkflowAlterationJobState>>([]);
 
     ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default);
     /// <summary>Claims the next leaseable job belonging to one sealed plan.</summary>

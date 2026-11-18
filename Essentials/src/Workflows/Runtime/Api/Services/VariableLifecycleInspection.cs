@@ -65,7 +65,8 @@ internal sealed class VariableLifecycleInspection
         {
             var writes = row.VariableWrites ?? [];
             for (var index = 0; index < writes.Count; index++)
-                entries.Add(new VariableWriteEntry(VariableWriteEntryId.ForActivity(row.Execution.ActivityExecutionId, index), writes[index], row, null));
+                if (IsListed(writes[index]))
+                    entries.Add(new VariableWriteEntry(VariableWriteEntryId.ForActivity(row.Execution.ActivityExecutionId, index), writes[index], row, null));
         }
 
         foreach (var job in alterationJobs)
@@ -73,7 +74,8 @@ internal sealed class VariableLifecycleInspection
         {
             var writes = outcome.VariableWrites ?? [];
             for (var index = 0; index < writes.Count; index++)
-                entries.Add(new VariableWriteEntry(VariableWriteEntryId.ForAlteration(job.JobId, outcome.Ordinal, index), writes[index], null, job.JobId));
+                if (IsListed(writes[index]))
+                    entries.Add(new VariableWriteEntry(VariableWriteEntryId.ForAlteration(job.JobId, outcome.Ordinal, index), writes[index], null, job.JobId));
         }
 
         // Order: records without a commit sequence first (approximate, by frame revision and time), then by commit
@@ -99,6 +101,10 @@ internal sealed class VariableLifecycleInspection
         model.MarkConcurrentOverwrites();
         return model;
     }
+
+    // FR-004: a write that changed nothing is not listed, unless it was judged a lost update (R-8).
+    private static bool IsListed(VariableWriteRecord record) =>
+        record.NewVersion != record.CurrentVersion || record.IsLostUpdate || record.Outcome == VariableCommitOutcome.AcceptedOverride;
 
     private void MarkCurrentValues(IReadOnlyDictionary<string, long>? currentVersions)
     {

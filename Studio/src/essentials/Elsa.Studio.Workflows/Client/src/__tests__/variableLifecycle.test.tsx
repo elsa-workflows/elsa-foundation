@@ -9,7 +9,6 @@ import {
   listVariableWrites,
   readAllPages,
   supportsVariableLifecycleInspection,
-  type InstanceComparison,
   type JournalCommit,
   type VariableWriteEntry
 } from "../api/variableLifecycle";
@@ -55,16 +54,21 @@ describe("variable lifecycle client", () => {
   });
 
   it("returns the refusal of a pair of different versions instead of failing", async () => {
-    const refusal: InstanceComparison = {
-      leftWorkflowExecutionId: "a", rightWorkflowExecutionId: "b", executable: "x", comparable: false,
-      refusalReason: "differentExecutable", firstDivergence: null, variables: [], partial: false
-    };
     const runtime = context(async url => {
       if (url === "/capabilities") return capabilities;
-      throw Object.assign(new Error("Conflict"), { status: 409, payload: refusal });
+      throw Object.assign(new Error("Conflict"), { status: 409, payload: { status: 409, code: "differentExecutable", detail: "different versions" } });
     });
 
-    await expect(compareInstances(runtime, "a", "b")).resolves.toEqual(refusal);
+    await expect(compareInstances(runtime, "a", "b")).resolves.toMatchObject({ comparable: false, refusalReason: "differentExecutable" });
+  });
+
+  it("rethrows a failure that is not a refused comparison", async () => {
+    const runtime = context(async url => {
+      if (url === "/capabilities") return capabilities;
+      throw Object.assign(new Error("Not found"), { status: 404, payload: null });
+    });
+
+    await expect(compareInstances(runtime, "a", "missing")).rejects.toThrow("Not found");
   });
 
   it("knows an older host without the relations does not support the reads", async () => {
@@ -117,6 +121,14 @@ describe("variable lifecycle views", () => {
     expect(markup).toContain("not applied");
   });
 
+  it("names the writer a refused lost update met", () => {
+    const markup = renderToStaticMarkup(<VariableWriteHistoryTable entries={[
+      entry({ entryId: "refused", outcome: "lostUpdateFault", isApplied: false, otherWriter: { source: "capture", executableNodeId: "node-left", branchId: "left" } })
+    ]} />);
+
+    expect(markup).toContain("Met a version of node-left · branch left");
+  });
+
   it("says when an instance has no recorded history", () => {
     expect(renderToStaticMarkup(<VariableWriteHistoryTable entries={[]} />)).toContain("No variable writes recorded.");
     expect(renderToStaticMarkup(<InstanceJournalList commits={[]} />)).toContain("No commits recorded.");
@@ -152,6 +164,16 @@ describe("variable lifecycle views", () => {
     expect(compared).toContain("count");
     expect(compared).toContain("differs");
     expect(refused).toContain("they run different versions");
+  });
+
+  it("says a comparison is unknown when a value kept no digest", () => {
+    const markup = renderToStaticMarkup(<InstanceComparisonSummary comparison={{
+      leftWorkflowExecutionId: "a", rightWorkflowExecutionId: "b", executable: "x", comparable: true, partial: false, firstDivergence: null,
+      variables: [{ framePath: "scope:root", variableKey: "secret", finalDigestDiffers: false, writtenDigestsDiffer: false, leftWriteCount: 1, rightWriteCount: 1, digestUnknown: true }]
+    }} />);
+
+    expect(markup).toContain("unknown");
+    expect(markup).toContain("secret");
   });
 });
 

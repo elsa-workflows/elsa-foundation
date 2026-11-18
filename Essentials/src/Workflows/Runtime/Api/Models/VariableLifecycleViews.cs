@@ -40,7 +40,10 @@ public sealed record VariableOverwriteView(
     long? OverwrittenCommitSequence,
     bool IsLostUpdate);
 
-/// <summary>One write-history entry: a spec 1221 write record of an activity execution or an alteration.</summary>
+/// <summary>
+/// One write-history entry: a spec 1221 write record of an activity execution or an alteration. A lost update (applied,
+/// refused or accepted) names <see cref="OtherWriter"/>, the writer of the version it met.
+/// </summary>
 public sealed record VariableWriteEntryView(
     string EntryId,
     string ScopeId,
@@ -62,7 +65,8 @@ public sealed record VariableWriteEntryView(
     VariableValueStateView? OverwrittenValue,
     VariableValueStateView? RefusedValue,
     string? ResolvesEntryId,
-    DateTimeOffset OccurredAt);
+    DateTimeOffset OccurredAt,
+    VariableWriterView? OtherWriter = null);
 
 /// <summary>A page of the write history; <see cref="ConcurrentOverwriteTotal"/> is set when the history is filtered on overwrites.</summary>
 public sealed record VariableWriteHistoryPageView(
@@ -121,7 +125,8 @@ public sealed record VariableComparisonView(
     bool FinalDigestDiffers,
     bool WrittenDigestsDiffer,
     int LeftWriteCount,
-    int RightWriteCount);
+    int RightWriteCount,
+    bool DigestUnknown = false);
 
 /// <summary>The first commit where the matched transitions of two instances differ.</summary>
 public sealed record InstanceDivergenceView(

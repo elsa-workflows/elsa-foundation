@@ -206,8 +206,9 @@ activity-execution inspection; values follow the sensitive-value rules.
 - **Cost.** The run time pays only for the scheduling causes and the per-row count. Each read loads the instance's rows
   once; spec 1229's measurement (T022) is in its tasks and on its PR.
 
-Studio shows these reads on the instance view: the lost-update badge opens the filtered history, and the history,
-journal and comparison views use the routes above (spec 1229 FR-017).
+Studio has a client for these routes and the history, journal and comparison views
+(`VariableLifecycleViews.tsx`). Placing them on the instance view, with the lost-update badge that opens the filtered
+history, follows the activity-level Studio work of spec 1221 (#4735).
 
 ## What is not covered yet
 
@@ -237,3 +238,10 @@ journal and comparison views use the routes above (spec 1229 FR-017).
 - A BPMN joining gateway records no scheduling causes yet (Flowchart joins do), so a write after it can be marked as a
   concurrent overwrite of a branch that arrived at the gateway before it.
 - A commit made outside an execution lease is not numbered, so what it records reads as order unknown.
+- The concurrent-overwrite walk labels an edge with the commit that created the scheduled row, which comes after the
+  scheduler's decision. A scheduler that writes a variable between scheduling a child and that child's row being
+  created is read as ordered before the child, so the child's later overwrite of that write is not marked.
+- An operator's `ModifyVariable` value is not on its write record (only in the protected alteration request), so the
+  history shows it as not captured.
+- Rows committed before the inspection columns existed count no lost updates in the instance details; their records
+  are still read.

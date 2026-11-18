@@ -93,6 +93,96 @@ public sealed class VariableLifecycleInspectionServiceTests
     }
 
     [Fact]
+    public async Task A_lost_update_names_the_writer_it_met_with_its_branch_also_when_refused()
+    {
+        await _workflows.SaveAsync(Workflow());
+        await _activities.SaveAsync(Row("l", "node-left", branchId: "left", stamps: [Scheduled(2), Completed(3)], writes: [Write("l", "node-left", 3, 0, 1)]));
+        var refused = Write("r", "node-right", 4, 1, 1, VariableCommitOutcome.LostUpdateFault, baseVersion: 0);
+        refused = new VariableWriteRecord(refused.ScopeId, refused.VariableKey, refused.Writer, refused.Outcome, refused.BaseVersion, refused.CurrentVersion,
+            refused.NewVersion, refused.CommitOrder, refused.OccurredAt, new VariableWriter(VariableWriteSource.Capture, "node-left", "l"))
+        {
+            CommitSequence = 4,
+            FrameId = RootFrame
+        };
+        await _activities.SaveAsync(Row("r", "node-right", stamps: [Scheduled(2), Faulted(4)], status: ActivityExecutionStatus.Faulted, writes: [refused]));
+
+        var page = (await Service(sensitive: true, resolve: true).ListWritesAsync(new VariableWriteHistoryQuery(WorkflowExecutionId, Outcome: "lostUpdateFault"), default))!;
+
+        var entry = Assert.Single(page.Items);
+        Assert.Null(entry.ConcurrentOverwrite);
+        Assert.Equal("node-left", entry.OtherWriter!.ExecutableNodeId);
+        Assert.Equal("left", entry.OtherWriter.BranchId);
+    }
+
+    [Fact]
+    public async Task A_failed_capture_is_omitted_and_a_withheld_value_is_redacted()
+    {
+        await _workflows.SaveAsync(Workflow());
+        var failed = Write("a", "node-a", 2, 0, 1, key: "failed");
+        var withheld = Write("a", "node-a", 3, 0, 1, key: "secret");
+        await _activities.SaveAsync(Row("a", "node-a", stamps: [Scheduled(1), Completed(3)], writes: [failed, withheld]));
+        var failure = Projection("a", failed, JsonSerializer.SerializeToElement(1));
+        var failedSnapshot = failure.ValueSnapshots.Single() with { Payload = null, Failure = new RuntimeInputEvaluationFailure("capture", "failed") };
+        var withheldSnapshot = Projection("a", withheld, JsonSerializer.SerializeToElement(Sentinel)).ValueSnapshots.Single() with
+        {
+            Metadata = new Dictionary<string, string> { [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.WithheldKind] = "SecretReference" }
+        };
+        await _inspections.SaveAsync(failure with { ActivityExecutionId = "a", ValueSnapshots = [failedSnapshot, withheldSnapshot] });
+
+        var page = (await Service(sensitive: true, resolve: true).ListWritesAsync(new VariableWriteHistoryQuery(WorkflowExecutionId), default))!;
+
+        Assert.Equal("omitted", page.Items.Single(item => item.VariableKey == "failed").Value.State);
+        Assert.Equal("redacted", page.Items.Single(item => item.VariableKey == "secret").Value.State);
+        Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(page), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_sensitive_overwritten_value_is_resolvable_for_a_caller_who_may_see_it_and_redacted_otherwise()
+    {
+        await _workflows.SaveAsync(Workflow());
+        var hidden = ValueEnvelope.Inline(Int32, JsonSerializer.SerializeToElement(1), new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true));
+        await _activities.SaveAsync(Row("l", "node-left", stamps: [Scheduled(2), Completed(3)], writes: [Write("l", "node-left", 3, 0, 1)]));
+        await _activities.SaveAsync(Row("r", "node-right", stamps: [Scheduled(2), Completed(4)], writes: [Write("r", "node-right", 4, 1, 2, VariableCommitOutcome.LostUpdateWarning, baseVersion: 0, overwritten: hidden)]));
+
+        var allowed = (await Service(sensitive: true, resolve: true).ListWritesAsync(new VariableWriteHistoryQuery(WorkflowExecutionId, Outcome: "lostUpdateWarning"), default))!.Items.Single();
+        var denied = (await Service(sensitive: false, resolve: false).ListWritesAsync(new VariableWriteHistoryQuery(WorkflowExecutionId, Outcome: "lostUpdateWarning"), default))!.Items.Single();
+
+        Assert.Equal("captured", allowed.OverwrittenValue!.State);
+        Assert.NotNull(allowed.OverwrittenValue.PayloadRef);
+        Assert.Equal("redacted", denied.OverwrittenValue!.State);
+        Assert.Null(denied.OverwrittenValue.PayloadRef);
+    }
+
+    [Fact]
+    public async Task Root_container_and_iteration_variables_are_listed_with_their_scope_version_and_last_writer()
+    {
+        var root = new VariableFrameState(RootFrame, RootScope, WorkflowExecutionId, null, VariableFrameKind.Root,
+            new Dictionary<string, ValueEnvelope> { ["count"] = Inline(2) }, versions: new Dictionary<string, VariableVersion> { ["count"] = new(2, "sha256:count-2") });
+        await _workflows.SaveAsync(Workflow() with { RootVariableFrame = root });
+        var container = new VariableFrameState("frame-container", "scope-container", "c", RootFrame, VariableFrameKind.Container,
+            new Dictionary<string, ValueEnvelope> { ["local"] = Inline(5) }, versions: new Dictionary<string, VariableVersion> { ["local"] = new(1, "sha256:local-1") });
+        var iteration = new VariableFrameState("frame-iteration", "scope-loop", "i1", "frame-container", VariableFrameKind.Iteration,
+            new Dictionary<string, ValueEnvelope> { ["item"] = Inline(7) });
+        await _activities.SaveAsync(Row("c", "node-container", stamps: [Scheduled(1)], status: ActivityExecutionStatus.Running) with { VariableFrame = container });
+        await _activities.SaveAsync(Row("i1", "node-body", parent: "c", stamps: [Scheduled(2)], status: ActivityExecutionStatus.Running) with { IterationVariableFrame = iteration });
+        await _activities.SaveAsync(Row("w", "node-w", parent: "c", stamps: [Scheduled(2), Completed(4)], writes:
+        [
+            Write("w", "node-w", 3, 1, 2),
+            Write("w", "node-w", 4, 0, 1, key: "local", frame: "frame-container") with { }
+        ]));
+
+        var variables = (await Service(sensitive: true, resolve: true).ListVariablesAsync(WorkflowExecutionId, default))!;
+
+        var count = variables.Single(variable => variable.VariableKey == "count");
+        Assert.Equal(("root", 2L, "node-w", 3L), (count.FrameKind, count.Version, count.LastWriter!.ExecutableNodeId, count.LastCommitSequence!.Value));
+        var local = variables.Single(variable => variable.VariableKey == "local");
+        Assert.Equal(("container", "scope-container", 1L), (local.FrameKind, local.ScopeId, local.Version));
+        var item = variables.Single(variable => variable.VariableKey == "item");
+        Assert.Equal(("iteration", 0L), (item.FrameKind, item.Version));
+        Assert.All(variables, variable => Assert.True(variable.HistoryRecorded));
+    }
+
+    [Fact]
     public async Task The_payload_route_refuses_without_the_payload_permission_and_never_releases_the_value()
     {
         await SeedLostUpdateAsync(captureWrittenValue: true);
