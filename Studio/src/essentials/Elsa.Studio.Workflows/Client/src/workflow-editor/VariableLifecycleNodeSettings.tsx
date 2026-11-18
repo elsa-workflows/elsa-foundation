@@ -23,8 +23,8 @@ export function VariableLifecycleNodeSettings({ node, readOnly = false, onChange
   const background = isBackgroundPlacement(node);
   const refreshDisabled = readDisableBackgroundInputRefresh(node);
   return (
-    <section className="wf-node-lifecycle-settings" aria-label="Variable writes">
-      <h4>Variable writes</h4>
+    <section className="wf-node-lifecycle-settings" aria-labelledby={`${id}-heading`}>
+      <h4 id={`${id}-heading`}>Variable writes</h4>
       <div className="wf-node-lifecycle-field">
         <label htmlFor={`${id}-mode`}>Lost-update mode</label>
         <select

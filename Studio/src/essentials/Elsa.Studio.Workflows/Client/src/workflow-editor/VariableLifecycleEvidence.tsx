@@ -47,19 +47,21 @@ export function LostUpdateBadge({ count, onSelect, label }: { count: number; onS
 }
 
 /** A value state, linked to its captured value evidence when the record names one. */
-export function VariableValueState({ label, value, evidence, note }: {
+export function VariableValueState({ label, value, evidence, note, stateLabel }: {
   label: string;
   value: VariableLifecycleValueState | null | undefined;
   evidence?: ActivityExecutionInspectionValueSnapshot;
   /** Replaces the state's generic explanation when the record says more about where the value is. */
   note?: string;
+  /** Replaces the state's generic name, for a value kept for a purpose of its own (a recorded completion's write). */
+  stateLabel?: string;
 }) {
   const presentation = presentValueState(value);
   return (
     <div className="wf-variable-value-state" data-tone={presentation.tone}>
       <dt>{label}</dt>
       <dd>
-        <span className="wf-variable-value-state-label">{presentation.label}</span>
+        <span className="wf-variable-value-state-label">{stateLabel ?? presentation.label}</span>
         {/* The fingerprint identifies a captured value without showing it; beside a missing value it means nothing. */}
         {value?.digest && value.state === "captured"
           ? <small className="wf-variable-value-digest" title="Identifies the value without showing it">Fingerprint <code>{shortDigest(value.digest)}</code></small>
@@ -68,6 +70,12 @@ export function VariableValueState({ label, value, evidence, note }: {
       </dd>
     </div>
   );
+}
+
+// Only a step's own output capture and Set Variable keep a value snapshot of what they wrote; an operator alteration
+// and an accepted completion keep none (docs/runtime-variable-lifecycle.md, "What is not covered yet").
+function keepsValueEvidence(writer: VariableWriteRecordView["overwrittenWriter"]) {
+  return !!writer?.executableNodeId && (writer.source === "Capture" || writer.source === "Intrinsic");
 }
 
 function shortDigest(digest: string) {
@@ -111,7 +119,7 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
         <p className="wf-variable-write-hint">
           To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. Studio cannot
           show the kept value yet
-          {record.overwrittenWriter?.executableNodeId
+          {keepsValueEvidence(record.overwrittenWriter)
             ? `; in runs captured with the Variable writes diagnostics level on, the step that wrote it (${writerLabel(record.overwrittenWriter, labelOf)}) shows the value it wrote.`
             : "."}
         </p>
@@ -144,7 +152,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
       </header>
       {refusedByLostUpdate ? (
         <p className="wf-variable-write-hint" role="note">
-          This step faulted with {variableLostUpdateSubStatus}: a variable it read and writes changed before its write
+          This step faulted with {variableLostUpdateSubStatus}: a variable it reads and writes changed before its write
           could commit, so the write was refused instead of overwriting the newer value.
           {superseded ? " An operator action has since replaced this step with a new execution." : null}
         </p>
@@ -169,7 +177,14 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
           {recorded.variableWrites.length > 0 ? (
             <dl className="wf-variable-write-facts">
               {recorded.variableWrites.map(write => (
-                <VariableValueState key={write.variableKey} label={`"${write.variableKey}" (recorded)`} value={write.value} />
+                <VariableValueState
+                  key={write.variableKey}
+                  label={`"${write.variableKey}" (recorded)`}
+                  value={write.value}
+                  {...(write.value.state === "captured"
+                    ? { stateLabel: "Kept with the completion", note: "Kept so that accepting the completion can write it; Studio cannot show it yet." }
+                    : {})}
+                />
               ))}
             </dl>
           ) : null}

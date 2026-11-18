@@ -222,6 +222,8 @@ describe("run view", () => {
     expect(text).not.toContain("Written value");
     expect(text).toContain("Recorded completion kept");
     expect(text).toContain('outcome Done and would write "count"');
+    expect(text).toContain('"count" (recorded)Kept with the completion');
+    expect(text).toContain("Kept so that accepting the completion can write it");
   });
 
   it("shows an accepted override with the value it overwrote and where its written value came from", () => {
@@ -251,12 +253,14 @@ describe("run view", () => {
     expect(text).not.toContain("Open incident details");
   });
 
-  it("does not point to a step when an operator alteration wrote the overwritten value", () => {
-    const overAlteration: VariableWriteRecordView = { ...lostUpdateWarning(), overwrittenWriter: { source: "Alteration" } };
+  it.each([
+    ["an operator alteration", { source: "Alteration" }],
+    ["an accepted completion", { source: "AcceptedCompletion", executableNodeId: "node-a" }]
+  ])("does not point to a step's value when %s wrote the overwritten value", (_case, overwrittenWriter) => {
+    const overAlteration: VariableWriteRecordView = { ...lostUpdateWarning(), overwrittenWriter };
     flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [overAlteration] })} labelOf={labelOf} />));
 
     const text = container.textContent!;
-    expect(text).toContain("Overwritten writeran operator alteration");
     expect(text).toContain("Studio cannot show the kept value yet.");
     expect(text).not.toContain("the step that wrote it");
   });
