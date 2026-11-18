@@ -6,9 +6,13 @@ namespace Kernel.Review5;
 /// <c>ReviewedKind</c>: the kept row also persists the changed kind, JobFinished under the ticket's own key;
 /// <c>Repaired</c>: a fenced conversion consumes the ticket and inserts a result row under a reserved-scope identity;
 /// <c>Negative</c>: the conversion with that identity removed, an ordinary-scope result row;
-/// <c>GenerationBlind</c>: the repaired set with the generation check removed from the authentication and the Open.
+/// <c>GenerationBlind</c>: the repaired set with the generation check removed from the authentication and the Open;
+/// <c>ReviewedKeepsRegistry</c>: a third reading of the reviewed design, in which the parked consumption keeps J's key, so
+/// the kept ticket is restored and re-entered. The repaired set also keeps the registry entry of an undone current-generation
+/// ticket that a parked instance consumes, and recover restarts it from its JobSpec under the next generation (the
+/// coordinator's decision of 18 November); in <c>crash-before</c> the negative removes that rule.
 /// </summary>
-enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind }
+enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind, ReviewedKeepsRegistry }
 
 /// <summary>
 /// JR-1: an in-process job J completes while its instance S is parked; Park, takeover, recover. The model is the real
@@ -29,6 +33,7 @@ sealed class Jr1(string variant, JrRules rules)
 
     public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running", "obsolete"];
     private bool Converts => rules is JrRules.Repaired or JrRules.Negative or JrRules.GenerationBlind;
+    private bool KeepsUndoneTicket => rules is JrRules.Repaired or JrRules.GenerationBlind || rules == JrRules.Negative && variant != "crash-before";
 
     private long _now = 100;
     private InMemoryStore _store = null!;
@@ -146,12 +151,6 @@ sealed class Jr1(string variant, JrRules rules)
         // 6. The owner polls the restored rows and acts on them.
         await AfterRecover();
         Finish(allowed: crashBefore ? 2 : 1);
-        if (crashBefore && rules == JrRules.Repaired && _resultTurns == 0)
-            _report.Stop("the brief's 'before the conversion commits: at-least-once, so a crash re-runs the job' does not hold for a parked instance: the new " +
-                "owner does not enter the ticket of a parked row (Worker.cs 1169-1177), dispatch hands it to the parked instance as late input, the built " +
-                "RemainingJobs drops J's key from the registry when that consumption takes the durable ticket (WorkflowInstance.cs 78-90, 135-144), and the " +
-                "recover Open then clears a kept job row whose key the registry no longer holds (observability.md 1336-1343). J never runs again and its " +
-                "result never reaches the model. Recommendation in the README.");
         return _report;
     }
 
@@ -173,7 +172,11 @@ sealed class Jr1(string variant, JrRules rules)
     /// <summary>A kept or restored job row's key and generation: a ticket is of the current ticket's generation; a result row's is in its id.</summary>
     private (string Key, long Generation) JobOf(Message m)
     {
-        if (m.Kind == Kinds.Job) return (m.Read<JobTicketPayload>().Key, Generation);
+        if (m.Kind == Kinds.Job)
+        {
+            var g = m.Id.LastIndexOf("@g", StringComparison.Ordinal);
+            return (m.Read<JobTicketPayload>().Key, g >= 0 ? long.Parse(m.Id[(g + 2)..], System.Globalization.CultureInfo.InvariantCulture) : Generation);
+        }
         var key = m.Read<JobFinished>().Key;
         var at = m.Id.LastIndexOf("!result!g", StringComparison.Ordinal);
         return (key, at >= 0 && m.InboxScope == ResultScope ? long.Parse(m.Id[(at + 9)..], System.Globalization.CultureInfo.InvariantCulture) : Generation);
@@ -225,7 +228,10 @@ sealed class Jr1(string variant, JrRules rules)
         // RemainingJobs (WorkflowInstance.cs 135-144, called at 82): a consumed durable ticket, or this worker's completion, whose
         // full key is J's ticket key takes J's key out of the row's registry.
         var (key, _) = JobOf(m);
-        var drops = (m.Kind == Kinds.Job && m.InboxScope > 0 || _authenticInMemory.Contains(m.InboxKey)) && m.InboxKey == Real.Ticket(Self.Id, key, 1) && _registry.ContainsKey(key);
+        var undoneTicket = m.Kind == Kinds.Job && m.InboxScope > 0;
+        var drops = (undoneTicket || _authenticInMemory.Contains(m.InboxKey)) && m.InboxKey == Real.Ticket(Self.Id, key, 1) && _registry.ContainsKey(key)
+            && rules != JrRules.ReviewedKeepsRegistry && !(undoneTicket && KeepsUndoneTicket);
+        if (undoneTicket && KeepsUndoneTicket) _report.Line($"the repaired rule keeps {key} in the registry: the consumed ticket is undone and of the current generation");
         var next = drops ? _row with { Revision = _row.Revision + 1, Jobs = null } : null;
         await Commit(new TurnCommit(Self.Id, next, next is null ? null : _row.Revision, [], [m.InboxKey], [], [], [], null));
         if (next is not null) { _row = next; _registry.Remove(key); }
@@ -276,6 +282,17 @@ sealed class Jr1(string variant, JrRules rules)
                 if (current is null || generation != current && rules != JrRules.GenerationBlind)
                 {
                     _report.Line($"recover: the page clears {key.Id} ({row.Message.Kind}): {(current is null ? $"the registry no longer holds {job}" : $"generation g{generation} is not the registry's g{current}")}");
+                    continue;
+                }
+                if (row.Message.Kind == Kinds.Job && KeepsUndoneTicket)
+                {
+                    // R4-M3: the restart writes a new ticket from the JobSpec recorded at arm, under the next generation, as a
+                    // create-only insert; the old row is cleared, never restored.
+                    var restarted = new Message(FormattableString.Invariant($"{_ticket.Id}@g{current + 1}"), Self, Kinds.Job,
+                        Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
+                    await Commit(new TurnCommit(Self.Id, null, null, [], [], [restarted], [], [], null));
+                    _registry[job] = current!.Value + 1;
+                    _report.Line($"recover: the page clears {key.Id} and restarts {job} from its JobSpec under g{current + 1} ({restarted.Id})");
                     continue;
                 }
             }

@@ -6,9 +6,11 @@ namespace Kernel.Review5;
 /// (<c>replay-atomic</c>, <c>replay-consumed</c>). Mutations of the repaired set: <c>MatchAtNow</c> runs the catch-up
 /// through the real <c>KeptMatchesAsync</c> at the step's clock; <c>P0AtPageCommit</c> recomputes the entitlement point at
 /// each later page's commit; <c>NoHorizon</c> takes P0 = RegisteredAt, ignoring the sweep horizon H;
-/// <c>MeetWaitsWhileSuspended</c> holds a suspended instance's meet ticket until resume.
+/// <c>MeetWaitsWhileSuspended</c> holds a suspended instance's meet ticket until resume; <c>SplitNoRowHold</c> takes both the
+/// atomic match step and the delivery-row hold away; <c>MatchAtAcceptance</c> lets the match step read the subscriptions
+/// committed at the event's acceptance in place of those committed at its own commit. In <c>replay-consumed</c> the negative removes the delivery-row hold.
 /// </summary>
-enum EvRules { Reviewed, Repaired, Negative, MatchAtNow, P0AtPageCommit, NoHorizon, MeetWaitsWhileSuspended }
+enum EvRules { Reviewed, Repaired, Negative, MatchAtNow, P0AtPageCommit, NoHorizon, MeetWaitsWhileSuspended, SplitNoRowHold, MatchAtAcceptance }
 
 /// <summary>
 /// EV-1: event eligibility across a recovery Open, on the real in-memory publisher path. The publisher's side is
@@ -20,11 +22,12 @@ enum EvRules { Reviewed, Repaired, Negative, MatchAtNow, P0AtPageCommit, NoHoriz
 /// the harness beside the real rows:
 /// 1. the match step is the processing of a publish ticket whose one commit consumes the ticket and inserts the deliveries;
 ///    a non-keeping wait receives exactly the events whose match step reads its committed subscription row;
-/// 2. a keeping wait's entitlement point P0 = max(RegisteredAt, H), with H the sweep's durable monotone horizon (the
-///    greatest KeepUntil deleted), read at the restore and recorded on the meet ticket; the catch-up is owed the events of
-///    its keys with KeepUntil >= P0;
+/// 2. a keeping wait's entitlement point P0 = max(RegisteredAt, H + 1 ms), with H the sweep's durable monotone horizon
+///    (the greatest KeepUntil deleted), read at the restore and recorded on the meet ticket; the catch-up is owed the events
+///    of its keys with KeepUntil >= P0, so no swept event, and no unswept one already expired at H;
 /// 3. the sweep deletes E only when KeepUntil &lt; now, advances H to E.KeepUntil, and never while an outstanding publish
-///    ticket names E or an outstanding meet ticket covers E's key with P0 &lt;= E.KeepUntil; meet and publish tickets pass suspension.
+///    ticket names E or an outstanding meet ticket covers E's key with P0 &lt;= E.KeepUntil; it keeps an event's Done delivery
+///    rows while the event row exists; meet and publish tickets pass suspension.
 /// </summary>
 sealed class Ev1(string variant, EvRules rules)
 {
@@ -37,7 +40,9 @@ sealed class Ev1(string variant, EvRules rules)
 
     private bool Repairedish => rules is not EvRules.Reviewed;
     /// <summary>The repaired match step: one commit consumes the ticket and inserts the deliveries. Off under reviewed and the replay negatives.</summary>
-    private bool AtomicMatch => Repairedish && !(rules == EvRules.Negative && variant is "replay-atomic" or "replay-consumed");
+    private bool AtomicMatch => Repairedish && rules != EvRules.SplitNoRowHold && !(rules == EvRules.Negative && variant == "replay-atomic");
+    /// <summary>The repaired sweep keeps an event's Done delivery rows while the event row exists (coordinator's decision, option (a)).</summary>
+    private bool RowHold => Repairedish && rules != EvRules.SplitNoRowHold && !(rules == EvRules.Negative && variant == "replay-consumed");
     private bool MeetCoverage => Repairedish && !(rules == EvRules.Negative && variant is "b" or "b-paged");
     private bool PublishCoverage => Repairedish && !(rules == EvRules.Negative && variant == "replay");
     private bool CatchUpByP0 => Repairedish && rules != EvRules.MatchAtNow;
@@ -50,6 +55,8 @@ sealed class Ev1(string variant, EvRules rules)
         public Lease Lease = null!;
         public long Horizon = long.MinValue;           // H: the greatest KeepUntil the sweep deleted
         public readonly HashSet<string> Suspended = new(StringComparer.Ordinal);
+        public readonly Dictionary<(string Key, string Id), HashSet<(string, string, string)>> AtAcceptance = [];
+        public readonly List<(EventRow Event, Message Ticket)> Deferred = [];
         public readonly Dictionary<string, long> Revisions = new(StringComparer.Ordinal);
         public readonly Dictionary<string, int> Inserted = new(StringComparer.Ordinal);   // deliveries ever inserted, per target
         public readonly Dictionary<(string Key, string Instance, string Wait), long> RegisteredAt = [];
@@ -105,14 +112,22 @@ sealed class Ev1(string variant, EvRules rules)
             w.Now = 10;
             var (e, ticket) = await PublishTurn(w, "order:1", "\"payload\"", keep: 0);
             await Persist(w, e);
-            if (order.StartsWith("publisher paused", StringComparison.Ordinal)) { w.Now = 20; await Restore(w, wait, keep: false); w.Now = 21; await MatchStep(w, e, ticket); }
+            if (order.StartsWith("publisher paused", StringComparison.Ordinal))
+            {
+                w.Now = 20; await Restore(w, wait, keep: false); w.Now = 21; await MatchStep(w, e, ticket);
+                // "Once": S consumes its delivery, the sweep runs, and a stale dispatch processes the same ticket again.
+                await ConsumeDeliveries(w, s);
+                w.Now = 30; await Sweep(w);
+                try { await Persist(w, e); await MatchStep(w, e, ticket); }
+                catch (StoreException refused) { _report.Line($"  second processing of the ticket at 30: the count-checked commit refuses it ({refused.Message})"); }
+            }
             else { await MatchStep(w, e, ticket); w.Now = order.Contains("30 s") ? 30_020 : 20; await Restore(w, wait, keep: false); }
             outcomes.Add(Delivered(w, s));
             _report.Line($"{order}: deliveries to S {outcomes[^1]}");
         }
         var expected = Repairedish ? "0,1,0" : "0,0,0";
         _report.Line(Repairedish
-            ? "oracle (repaired): the wait gets E exactly when E's match step reads its committed row: 0, 1 (once), 0"
+            ? "oracle (repaired): the wait gets E exactly when E's match step reads its committed row, and once: 0, 1, 0"
             : "oracle (reviewed, observability.md 1187-1189): a wait that did not ask for kept events misses the events published while it was parked: 0, 0, 0");
         _report.Expect("deliveries in the three orders", string.Join(",", outcomes), expected);
     }
@@ -189,20 +204,21 @@ sealed class Ev1(string variant, EvRules rules)
         await Persist(w, e1); await MatchStep(w, e1, ticket);
         w.Now = 101; await Sweep(w);
         _report.Line($"sweep at 101: E1 (KeepUntil {e1.KeepUntil}) is {(w.Store.EventRows.ContainsKey((e1.Key, e1.Id)) ? "kept" : "deleted")}; H = {(w.Horizon == long.MinValue ? "none" : w.Horizon.ToString())}");
+        w.Now = 98;
+        _report.Line("the database clock steps back to 98");
+        var (e2, ticket2) = await PublishTurn(w, "order:4", "\"payload-2\"", keep: 1);
+        await Persist(w, e2); await MatchStep(w, e2, ticket2);
+        _report.Line($"E2 is published at 98 with KeepUntil {e2.KeepUntil}, before the wait registers; it is live");
         w.Now = 99;
-        _report.Line("the database clock steps back to 99");
         var meet = await Restore(w, wait, keep: true);
         var p0 = meet!.Read<MeetPage>().P0;
         await Drain(w, meet);
-        var entitled = Repairedish ? e1.KeepUntil >= p0 : e1.KeepUntil >= w.RegisteredAt[(wait.Key, wait.Instance, wait.Wait)];
-        _report.Line($"keeping wait registered at 99: {(Repairedish ? $"P0 = max(RegisteredAt 99, H) = {p0}; entitlement KeepUntil >= P0: {e1.KeepUntil} >= {p0} is {entitled}" : $"reviewed entitlement: within the keep window, KeepUntil {e1.KeepUntil} >= registration 99 is {entitled}")}");
-        _report.Expect("deliveries to S", Delivered(w, s), 0);
+        var delivered = w.Store.Messages.Values.Where(m => m.Message.Kind == Kinds.Event && m.Message.Target.Id == s.Id).Select(m => m.Message.Payload).ToList();
+        _report.Line($"keeping wait registered at 99{(Repairedish ? $", P0 = {p0}" : "")}: the catch-up delivers [{string.Join(", ", delivered)}]");
+        // The repaired rule: P0 = max(99, H + 1) = 101 excludes the swept E1 and, as a cost of the step-back, the live E2 (KeepUntil 99).
+        _report.Expect("deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101)", Delivered(w, s), 0);
         _report.Expect("E1 re-created", w.Store.EventRows.ContainsKey((e1.Key, e1.Id)), false);
-        _report.Expect("the wait is entitled to the swept E1 (a claim no delivery can meet)", entitled, false);
-        if (rules == EvRules.Repaired && entitled)
-            _report.Stop($"the stated rule and its stated outcome disagree: with H the greatest KeepUntil deleted (100), P0 = max(99, 100) = 100, and the entitlement " +
-                $"KeepUntil >= P0 holds for the swept E1 ({e1.KeepUntil} >= {p0}), so the wait is entitled to an event that no longer exists. Recommendation in the README: " +
-                "H one past the greatest KeepUntil deleted (or entitlement KeepUntil > H).");
+        _report.Expect("the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0)", e1.KeepUntil < (Repairedish ? p0 : w.RegisteredAt[(wait.Key, wait.Instance, wait.Wait)]), true);
     }
 
     /// <summary>
@@ -212,17 +228,29 @@ sealed class Ev1(string variant, EvRules rules)
     /// </summary>
     private async Task Suspended()
     {
-        var (w, s, events, meet) = await KeptSetup([(1, 99)], suspended: true);
-        if (rules == EvRules.MeetWaitsWhileSuspended) _report.Line("  the meet ticket waits while S is suspended (mutation)");
-        else await Drain(w, meet);
+        var w = await NewWorld();
+        var s = new InstanceRef("0/subject");
+        var wait = new SubscriptionRow("order:2", s.Id, "w-order", Creation: 1);
+        w.Now = 1;
+        var (e, ticket) = await PublishTurn(w, "order:2", "\"payload\"", keep: 99);
+        await Persist(w, e);
+        w.Suspended.Add(Publisher.Id);
+        _report.Line("the publisher is suspended after its publish turn committed, with its publish ticket outstanding");
+        await MatchStep(w, e, ticket);
+        w.Suspended.Add(s.Id);
+        w.Now = 99;
+        var meet = await Restore(w, wait, keep: true);
+        _report.Line("S is suspended; its keeping wait is restored at 99 (P0 99) for E, kept through 100");
+        meet = await Drain(w, meet);
         w.Now = 102; await Sweep(w);
-        var swept = !w.Store.EventRows.ContainsKey((events[0].Key, events[0].Id));
-        _report.Line($"at 102, with S still suspended, E is {(swept ? "swept" : "kept")}");
-        w.Now = 20_000; w.Suspended.Remove(s.Id);
-        _report.Line("S resumes at 20,000");
-        if (rules == EvRules.MeetWaitsWhileSuspended) await Drain(w, meet);
+        var swept = !w.Store.EventRows.ContainsKey((e.Key, e.Id));
+        _report.Line($"at 102, with S and the publisher still suspended, E is {(swept ? "swept" : "kept")}");
+        w.Now = 20_000; w.Suspended.Clear();
+        _report.Line("S and the publisher resume at 20,000");
+        foreach (var (de, dt) in w.Deferred.ToList()) { w.Deferred.Clear(); await MatchStep(w, de, dt); }
+        await Drain(w, meet);
         _report.Expect("deliveries to S", Delivered(w, s), 1);
-        _report.Expect("E swept at 102 while S is still suspended (the hold is bounded by the catch-up)", swept, true);
+        _report.Expect("E swept at 102 while both are suspended (the tickets' holds end with their steps)", swept, true);
     }
 
     /// <summary>
@@ -262,11 +290,6 @@ sealed class Ev1(string variant, EvRules rules)
         _report.Expect("E kept by the sweep while its publish ticket was outstanding", kept, true);
         _report.Expect("deliveries to S1 (non-keeping, registered before E)", Delivered(w, s1), 1);
         _report.Expect("deliveries to S2 (keeping, registered within the window)", Delivered(w, s2), 1);
-        if (consumed && rules == EvRules.Repaired && Delivered(w, s2) > 1)
-            _report.Stop("the repaired match step keeps W1 to one delivery, but W2 is owed E twice over: by its catch-up (KeepUntil >= P0) and by the " +
-                "replayed match step, which reads W2's committed row ('plus everything matched after registration'). S2 consumed the catch-up's delivery, " +
-                "and the sweep deleted its Done row once E's KeepUntil passed (InMemoryStore.cs 353); the outstanding publish ticket holds E itself, not that " +
-                "row, so the replay finds no duplicate and inserts it again. Recommendation in the README.");
     }
 
     /// <summary>
@@ -359,6 +382,7 @@ sealed class Ev1(string variant, EvRules rules)
         var e = new EventRow(key, id, payload, w.Now + keep);
         var ticket = new Message(id, Publisher, Kinds.Publish, Json.Write(e), Publisher.Id, TargetCreation: 1, SenderCreation: 1).AsIssued();
         await Commit(w, new TurnCommit(Publisher.Id, null, null, [], [], [ticket], [], [], null));
+        w.AtAcceptance[(e.Key, e.Id)] = w.Store.Subscriptions.Select(r => (r.Key, r.Instance, r.Wait)).ToHashSet();
         return (e, ticket);
     }
 
@@ -373,7 +397,10 @@ sealed class Ev1(string variant, EvRules rules)
     /// </summary>
     private async Task MatchStep(World w, EventRow e, Message ticket, bool dies = false)
     {
+        if (WaitsWhileSuspended(ticket.Target.Id, w)) { w.Deferred.Add((e, ticket)); _report.Line($"  match step at {w.Now}: the publish ticket waits while the publisher is suspended (mutation)"); return; }
         var matches = await Real.PublishedMatchesAsync(w.Store, e);
+        if (rules == EvRules.MatchAtAcceptance && w.AtAcceptance.TryGetValue((e.Key, e.Id), out var then))
+            matches = matches.Where(m => then.Contains((m.Wait.Key, m.Wait.Instance, m.Wait.Wait))).ToList();
         if (AtomicMatch)
         {
             var deliveries = new List<Message>();
@@ -403,7 +430,7 @@ sealed class Ev1(string variant, EvRules rules)
     /// </summary>
     private async Task<Message?> Restore(World w, SubscriptionRow wait, bool keep)
     {
-        var p0 = rules == EvRules.NoHorizon ? w.Now : Math.Max(w.Now, w.Horizon);
+        var p0 = rules == EvRules.NoHorizon ? w.Now : Math.Max(w.Now, w.Horizon == long.MinValue ? long.MinValue : w.Horizon + 1);
         Message? meet = keep
             ? new Message($"{Real.Origin(wait.Instance, wait.Creation)}#{Revision(w, wait.Instance)}.0000", new InstanceRef(wait.Instance), Kinds.Meet,
                 Json.Write(new MeetPage([wait], null, p0)), wait.Instance, TargetCreation: wait.Creation, SenderCreation: wait.Creation).AsIssued()
@@ -414,10 +441,20 @@ sealed class Ev1(string variant, EvRules rules)
         return meet;
     }
 
-    private async Task Drain(World w, Message? meet)
+    /// <summary>Runs meet steps until none is left, or until one waits (only under <c>MeetWaitsWhileSuspended</c>); returns the waiting ticket.</summary>
+    private async Task<Message?> Drain(World w, Message? meet)
     {
-        while (meet is not null) meet = await MeetStep(w, meet);
+        while (meet is not null)
+        {
+            var page = meet.Read<MeetPage>();
+            if (WaitsWhileSuspended(page.Waits[0].Instance, w)) { _report.Line($"  meet step at {w.Now}: the ticket waits while {page.Waits[0].Instance} is suspended (mutation)"); return meet; }
+            meet = await MeetStep(w, meet);
+        }
+        return null;
     }
+
+    /// <summary>Meet and publish tickets pass suspension (built: Worker.cs 640–645, 1315–1339); the mutation makes them wait.</summary>
+    private bool WaitsWhileSuspended(string instance, World w) => rules == EvRules.MeetWaitsWhileSuspended && w.Suspended.Contains(instance);
 
     /// <summary>
     /// One meet step (Worker.cs 1326–1329, paged as proposed): read at most P_page matches of the ticket's waits after its
@@ -444,7 +481,7 @@ sealed class Ev1(string variant, EvRules rules)
         foreach (var match in ordered)
             if ((await Real.AddEventAsync(w.Store, match)).Added) w.Inserted[match.Wait.Instance] = w.Inserted.GetValueOrDefault(match.Wait.Instance) + 1;
         var instance = new InstanceRef(page.Waits[0].Instance);
-        var nextP0 = rules == EvRules.P0AtPageCommit ? Math.Max(w.Now, w.Horizon) : page.P0;
+        var nextP0 = rules == EvRules.P0AtPageCommit ? Math.Max(w.Now, w.Horizon == long.MinValue ? long.MinValue : w.Horizon + 1) : page.P0;
         Message? next = ordered.Count == PageLimit
             ? new Message($"{Real.Origin(instance.Id, 1)}#{Revision(w, instance.Id)}.0000", instance, Kinds.Meet,
                 Json.Write(page with { AfterEvent = ordered[^1].Event.Id, P0 = nextP0 }), instance.Id, TargetCreation: 1, SenderCreation: 1).AsIssued()
@@ -457,7 +494,7 @@ sealed class Ev1(string variant, EvRules rules)
     /// <summary>
     /// The sweep. Reviewed: the real SweepAsync. Repaired: the same two deletions (InMemoryStore.cs 353–356), except that an
     /// event is kept while an outstanding publish ticket names it or an outstanding meet ticket covers its key with
-    /// P0 &lt;= KeepUntil; each deleted event advances H.
+    /// P0 &lt;= KeepUntil; each deleted event advances H; and a Done delivery row stays while its event row exists.
     /// </summary>
     private async Task Sweep(World w)
     {
@@ -466,10 +503,14 @@ sealed class Ev1(string variant, EvRules rules)
         var named = outstanding.Where(m => m.Kind == Kinds.Publish).Select(m => m.Read<EventRow>()).Select(e => (e.Key, e.Id)).ToHashSet();
         var covered = outstanding.Where(m => m.Kind == Kinds.Meet).Select(m => m.Read<MeetPage>())
             .SelectMany(p => p.Waits.Select(s => (s.Key, p.P0))).ToList();
-        var messages = w.Store.Messages.Values.Where(m => m.Done && m.Message.KeepUntil < w.Now).Select(m => m.Message.InboxKey).ToList();
         var events = w.Store.EventRows.Values.Where(e => e.KeepUntil < w.Now
             && !(PublishCoverage && named.Contains((e.Key, e.Id)))
             && !(MeetCoverage && covered.Any(c => c.Key == e.Key && c.P0 <= e.KeepUntil))).ToList();
+        var surviving = w.Store.EventRows.Keys.Except(events.Select(e => (e.Key, e.Id))).ToHashSet();
+        // The delivery-row hold: a Done event delivery stays while its event row exists (an indexed Events.Match read).
+        var messages = w.Store.Messages.Values.Where(m => m.Done && m.Message.KeepUntil < w.Now
+            && !(RowHold && m.Message.Kind == Kinds.Event && m.Message.EventMatch is { } match && EventMatch.Decode(match) is var em && surviving.Contains((em.Key, em.Event))))
+            .Select(m => m.Message.InboxKey).ToList();
         messages.ForEach(id => w.Store.Messages.Remove(id));
         foreach (var e in events) { w.Store.EventRows.Remove((e.Key, e.Id)); w.Horizon = Math.Max(w.Horizon, e.KeepUntil); }
         _report.Line($"  sweep at {w.Now}: {events.Count} event(s) and {messages.Count} done row(s) deleted; H {(w.Horizon == long.MinValue ? "none" : w.Horizon.ToString())}");

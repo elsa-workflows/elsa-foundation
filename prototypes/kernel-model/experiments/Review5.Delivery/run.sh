@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Gate 2, fifth review: EV-1 (R5-M2), FR-2 (R5-M3), JR-1 (R5-M4) and PO-1 (R5-M6) under every rule set.
 # Run from anywhere; it works in prototypes/kernel-model. Each run prints its report and its exit code
-# (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule). The script exits with
+# (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule; no run stops at this commit). The script exits with
 # --all's result: 0 only when every run matches the expected matrix.
 # Setup failures stop the script; a case that fails its assertions or stops does not.
 set -u
@@ -15,6 +15,8 @@ run() { dotnet "$BIN" --case "$1" --rules "$2"; echo "exit $? ($1, $2)"; echo; }
 # Every case and rule set (the README maps each run to its page case). A failing or stopped case does not stop the script.
 run ev1-a                       reviewed                    # expected FAIL
 run ev1-a                       repaired                    # expected PASS
+run ev1-a                       match-at-acceptance         # expected FAIL
+run ev1-a                       split-no-row-hold           # expected FAIL
 run ev1-a-after                 reviewed                    # expected PASS
 run ev1-a-after                 repaired                    # expected PASS
 run ev1-b                       reviewed                    # expected FAIL
@@ -26,7 +28,7 @@ run ev1-b-paged                 repaired                    # expected PASS
 run ev1-b-paged                 negative                    # expected FAIL
 run ev1-b-paged                 p0-at-page-commit           # expected FAIL
 run ev1-b-stepback              reviewed                    # expected FAIL
-run ev1-b-stepback              repaired                    # expected STOPPED
+run ev1-b-stepback              repaired                    # expected PASS
 run ev1-b-stepback              no-horizon                  # expected FAIL
 run ev1-b-suspended             reviewed                    # expected PASS
 run ev1-b-suspended             repaired                    # expected PASS
@@ -34,12 +36,13 @@ run ev1-b-suspended             meet-waits-while-suspended  # expected FAIL
 run ev1-replay                  reviewed                    # expected FAIL
 run ev1-replay                  repaired                    # expected PASS
 run ev1-replay                  negative                    # expected FAIL
+run ev1-replay-consumed         reviewed                    # expected FAIL
+run ev1-replay-consumed         repaired                    # expected PASS
+run ev1-replay-consumed         negative                    # expected FAIL
 run ev1-replay-atomic           reviewed                    # expected FAIL
 run ev1-replay-atomic           repaired                    # expected PASS
-run ev1-replay-atomic           negative                    # expected FAIL
-run ev1-replay-consumed         reviewed                    # expected FAIL
-run ev1-replay-consumed         repaired                    # expected STOPPED
-run ev1-replay-consumed         negative                    # expected FAIL
+run ev1-replay-atomic           negative                    # expected PASS
+run ev1-replay-atomic           split-no-row-hold           # expected FAIL
 run fr2-base                    reviewed                    # expected FAIL
 run fr2-base                    repaired                    # expected PASS
 run fr2-base                    negative                    # expected FAIL
@@ -96,8 +99,9 @@ run jr1-obsolete                negative                    # expected FAIL
 run jr1-obsolete                generation-blind            # expected FAIL
 run jr1-crash-before            reviewed                    # expected FAIL
 run jr1-crash-before            reviewed-kind               # expected FAIL
-run jr1-crash-before            repaired                    # expected STOPPED
+run jr1-crash-before            repaired                    # expected PASS
 run jr1-crash-before            negative                    # expected FAIL
+run jr1-crash-after             reviewed-keeps-registry     # expected FAIL
 run jr1-running                 reviewed                    # expected PASS
 run jr1-running                 reviewed-kind               # expected PASS
 run jr1-running                 repaired                    # expected PASS

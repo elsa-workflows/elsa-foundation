@@ -12,7 +12,7 @@ static partial class Program
     public static string Name(EvRules rules) => rules switch
     {
         EvRules.Reviewed => "reviewed", EvRules.Repaired => "repaired", EvRules.Negative => "negative", EvRules.MatchAtNow => "match-at-now",
-        EvRules.P0AtPageCommit => "p0-at-page-commit", EvRules.NoHorizon => "no-horizon", _ => "meet-waits-while-suspended",
+        EvRules.P0AtPageCommit => "p0-at-page-commit", EvRules.NoHorizon => "no-horizon", EvRules.MeetWaitsWhileSuspended => "meet-waits-while-suspended", EvRules.SplitNoRowHold => "split-no-row-hold", _ => "match-at-acceptance",
     };
 
     public static string Name(Fr2Rules rules) => rules switch
@@ -23,7 +23,7 @@ static partial class Program
     };
 
     public static string Name(JrRules rules) => rules switch
-    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", JrRules.Negative => "negative", _ => "generation-blind" };
+    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", JrRules.Negative => "negative", JrRules.GenerationBlind => "generation-blind", _ => "reviewed-keeps-registry" };
 
     public static string Name(PoRules rules) => rules switch { PoRules.Reviewed => "reviewed", PoRules.Repaired => "repaired", _ => "negative" };
 
@@ -33,15 +33,15 @@ static partial class Program
     // Case, rule set, expected result. The page case each run backs is in the README.
     private static readonly (string Case, string Rules, string Expected)[] Matrix =
     [
-        ("ev1-a", "reviewed", "FAIL"), ("ev1-a", "repaired", "PASS"),
+        ("ev1-a", "reviewed", "FAIL"), ("ev1-a", "repaired", "PASS"), ("ev1-a", "match-at-acceptance", "FAIL"), ("ev1-a", "split-no-row-hold", "FAIL"),
         ("ev1-a-after", "reviewed", "PASS"), ("ev1-a-after", "repaired", "PASS"),
         ("ev1-b", "reviewed", "FAIL"), ("ev1-b", "repaired", "PASS"), ("ev1-b", "negative", "FAIL"), ("ev1-b", "match-at-now", "FAIL"),
         ("ev1-b-paged", "reviewed", "FAIL"), ("ev1-b-paged", "repaired", "PASS"), ("ev1-b-paged", "negative", "FAIL"), ("ev1-b-paged", "p0-at-page-commit", "FAIL"),
-        ("ev1-b-stepback", "reviewed", "FAIL"), ("ev1-b-stepback", "repaired", "STOPPED"), ("ev1-b-stepback", "no-horizon", "FAIL"),
+        ("ev1-b-stepback", "reviewed", "FAIL"), ("ev1-b-stepback", "repaired", "PASS"), ("ev1-b-stepback", "no-horizon", "FAIL"),
         ("ev1-b-suspended", "reviewed", "PASS"), ("ev1-b-suspended", "repaired", "PASS"), ("ev1-b-suspended", "meet-waits-while-suspended", "FAIL"),
-        .. from v in new[] { "replay", "replay-atomic" }
+        .. from v in new[] { "replay", "replay-consumed" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"ev1-{v}", r.Item1, r.Item2),
-        ("ev1-replay-consumed", "reviewed", "FAIL"), ("ev1-replay-consumed", "repaired", "STOPPED"), ("ev1-replay-consumed", "negative", "FAIL"),
+        ("ev1-replay-atomic", "reviewed", "FAIL"), ("ev1-replay-atomic", "repaired", "PASS"), ("ev1-replay-atomic", "negative", "PASS"), ("ev1-replay-atomic", "split-no-row-hold", "FAIL"),
         .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover", "bytes", "zero-cut" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr2-{v}", r.Item1, r.Item2),
         .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover", "bytes", "zero-cut" } select ($"fr2-{v}", "seen-gate", "PASS"),
@@ -52,7 +52,8 @@ static partial class Program
         .. from v in new[] { "crash-after", "crash-after-keep", "obsolete" }
            from r in new[] { ("reviewed", "FAIL"), ("reviewed-kind", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"jr1-{v}", r.Item1, r.Item2),
         ("jr1-obsolete", "generation-blind", "FAIL"),
-        ("jr1-crash-before", "reviewed", "FAIL"), ("jr1-crash-before", "reviewed-kind", "FAIL"), ("jr1-crash-before", "repaired", "STOPPED"), ("jr1-crash-before", "negative", "FAIL"),
+        ("jr1-crash-before", "reviewed", "FAIL"), ("jr1-crash-before", "reviewed-kind", "FAIL"), ("jr1-crash-before", "repaired", "PASS"), ("jr1-crash-before", "negative", "FAIL"),
+        ("jr1-crash-after", "reviewed-keeps-registry", "FAIL"),
         .. from r in new[] { "reviewed", "reviewed-kind", "repaired", "negative" } select ("jr1-running", r, "PASS"),
         .. from v in new[] { "cohort", "open" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"po1-{v}", r.Item1, r.Item2),
@@ -101,7 +102,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "p0-at-page-commit" => EvRules.P0AtPageCommit, "no-horizon" => EvRules.NoHorizon, "meet-waits-while-suspended" => EvRules.MeetWaitsWhileSuspended,
+                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "p0-at-page-commit" => EvRules.P0AtPageCommit, "no-horizon" => EvRules.NoHorizon, "meet-waits-while-suspended" => EvRules.MeetWaitsWhileSuspended, "split-no-row-hold" => EvRules.SplitNoRowHold, "match-at-acceptance" => EvRules.MatchAtAcceptance,
                 _ => throw new ArgumentException($"EV-1 has no rule set '{rules}'"),
             };
             return await new Ev1(id[4..], set).RunAsync();
@@ -130,7 +131,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative, "generation-blind" => JrRules.GenerationBlind,
+                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative, "generation-blind" => JrRules.GenerationBlind, "reviewed-keeps-registry" => JrRules.ReviewedKeepsRegistry,
                 _ => throw new ArgumentException($"JR-1 has no rule set '{rules}'"),
             };
             return await new Jr1(id[4..], set).RunAsync();

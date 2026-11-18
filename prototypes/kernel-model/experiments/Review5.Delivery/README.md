@@ -19,9 +19,9 @@ Each case runs one schedule under three rule sets:
 
 Mutations of the repaired set run where they bite. JR-1 has a second reading of the reviewed design, `reviewed-kind`.
 
-A run ends PASS, FAIL or STOPPED. STOPPED means one of two things for that schedule: the stated repaired rules give no
-single expected outcome, or the stated outcome contradicts the stated rule. The run prints its trace and the reason.
-The recommendations are under "Findings for the coordinator".
+A run ends PASS, FAIL or STOPPED. STOPPED would mean the stated repaired rules give no single expected outcome for that
+schedule. No run stops at this commit: the coordinator decided the three that stopped in the first version of this PR
+(see "Decisions applied").
 
 The machinery is copied from [Review4.Blockers](../Review4.Blockers/README.md), which is unchanged so it stays
 reproducible at its recorded commit:
@@ -52,15 +52,15 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 
 | Run | Finding and trace | Expected |
 |---|---|---|
-| `ev1-a` | R5-M2 trace A: E accepted while the wait is absent, three positions of its match step against the restore | reviewed FAIL, repaired PASS |
+| `ev1-a` | R5-M2 trace A: E accepted while the wait is absent, three positions of its match step against the restore, and a second processing of the ticket | reviewed FAIL, repaired PASS, match-at-acceptance FAIL, split-no-row-hold FAIL |
 | `ev1-a-after` | Control, invariant 13: E accepted after the wait committed, its match step at once or 30 s later | PASS under both |
 | `ev1-b` | R5-M2 trace B: keeping wait restored at 99, E kept through 100, catch-up at 99 and at 101 after a sweep | reviewed FAIL, repaired PASS, negative FAIL, match-at-now FAIL |
 | `ev1-b-paged` | SB-2's swept later page: two events, a page of one, sweeps before and between pages | reviewed FAIL, repaired PASS, negative FAIL, p0-at-page-commit FAIL |
-| `ev1-b-stepback` | The clock steps back below a swept event's KeepUntil, then a keeping wait registers | reviewed FAIL, repaired STOPPED, no-horizon FAIL |
-| `ev1-b-suspended` | A suspended instance's meet ticket completes its catch-up, so its hold on E ends | reviewed PASS, repaired PASS, meet-waits-while-suspended FAIL |
+| `ev1-b-stepback` | The clock steps back below a swept event's KeepUntil, a live E2 is published, then a keeping wait registers | reviewed FAIL, repaired PASS, no-horizon FAIL |
+| `ev1-b-suspended` | A suspended publisher's publish ticket and a suspended instance's meet ticket complete their steps, so their holds on E end | reviewed PASS, repaired PASS, meet-waits-while-suspended FAIL |
 | `ev1-replay` | SB-2's replayed publish ticket: no duplicate, E not swept while the ticket is outstanding | reviewed FAIL, repaired PASS, negative FAIL |
-| `ev1-replay-atomic` | The match step's atomicity: a step that died inserted nothing, so the replay after the sweep delivers once | reviewed FAIL, repaired PASS, negative FAIL |
-| `ev1-replay-consumed` | As `ev1-replay`, with both waits' deliveries consumed and their done rows swept before the replay | reviewed FAIL, repaired STOPPED, negative FAIL |
+| `ev1-replay-atomic` | The match step's atomicity: a step that died inserted nothing, so the replay after the sweep delivers once | reviewed FAIL, repaired PASS, negative PASS, split-no-row-hold FAIL |
+| `ev1-replay-consumed` | As `ev1-replay`, with both waits' deliveries consumed before the sweep | reviewed FAIL, repaired PASS, negative FAIL |
 | `fr2-base` | R5-M3: three full pages, the drain's controls winning priority before any model handoff | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS |
 | `fr2-hold` | With a Hold: five restored rows held by the model, one of them page 1's gate row | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS, held-gate-waits FAIL |
 | `fr2-suspend` | A suspension after page 1 and a resume six passes later | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS, pages-while-suspended FAIL |
@@ -70,10 +70,10 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 | `fr2-zero-cut` | A 4 MiB held row lost at a takeover cuts the next page to zero | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS, zero-cut-completes FAIL |
 | `fr2-r4b1-base` | R4-B1's base trace (Review4 `fr1-base`) under the handoff gate | reviewed PASS, repaired PASS, negative PASS, seen-gate-no-precedence FAIL |
 | `fr2-r4b1-held` | R4-B1's held trace (Review4 `fr1-held-crash`): R held at Complete, then a crash takeover | reviewed PASS, repaired PASS, negative FAIL, seen-gate-no-precedence FAIL |
-| `jr1-crash-after` | R5-M4: J completes while S is parked; crash after the conversion commit; takeover; recover | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
+| `jr1-crash-after` | R5-M4: J completes while S is parked; crash after the conversion commit; takeover; recover | reviewed FAIL, reviewed-kind FAIL, reviewed-keeps-registry FAIL, repaired PASS, negative FAIL |
 | `jr1-crash-after-keep` | As above, crash after the parked instance kept the result | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-obsolete` | As `jr1-crash-after-keep`, with a kept result row of J's obsolete generation g0 | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL, generation-blind FAIL |
-| `jr1-crash-before` | Crash before the conversion commit, while S is parked | reviewed FAIL, reviewed-kind FAIL, repaired STOPPED, negative FAIL |
+| `jr1-crash-before` | Crash before the conversion commit, while S is parked: recover restarts J under the next generation | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-running` | Control: J completes while S runs, the built in-memory path | PASS under all four |
 | `po1-cohort` | R5-M6: exhausted J at 900, cohort suspect R at 1100, the mark set after Complete, a cold takeover with no control | reviewed FAIL, repaired PASS, negative FAIL |
 | `po1-open` | As above with the drain still open and its last control pending | reviewed FAIL, repaired PASS, negative FAIL |
@@ -84,14 +84,16 @@ negative restores it. The mutations separate the repaired set's other parts.
 
 ## EV-1 (R5-M2): event eligibility by the match step
 
-**The rule run as `repaired`.** This is the coordinator's statement of 18 November; the ε rule it withdraws is not run.
+**The rule run as `repaired`.** This is the coordinator's statement of 18 November with its two later decisions; the ε
+rule it withdraws is not run.
 
 1. **The match step.** The match step is the processing of a publish ticket. Its one commit consumes the ticket and
    inserts the deliveries. A non-keeping wait receives exactly the events whose match step reads its committed
    subscription row. It never receives an event through a catch-up.
 2. **The keeping entitlement.**
-   - A keeping wait's entitlement point is P0 = max(RegisteredAt, H). H is the sweep's durable, monotone horizon: the
-     greatest KeepUntil deleted.
+   - A keeping wait's entitlement point is P0 = max(RegisteredAt, H + 1 ms). H is the sweep's durable, monotone horizon:
+     the greatest KeepUntil deleted. So the entitlement KeepUntil ≥ P0 excludes every swept event. It also excludes an
+     unswept event whose KeepUntil equals H, which has already expired.
    - P0 is read at the restore and recorded on the meet ticket.
    - The catch-up is owed the events of the wait's keys with KeepUntil ≥ P0. The wait also gets everything matched
      after its registration.
@@ -99,6 +101,8 @@ negative restores it. The mutations separate the repaired set's other parts.
    - It deletes E only once E's KeepUntil has passed, and advances H to that KeepUntil.
    - It never deletes E while an outstanding publish ticket names E.
    - It never deletes E while an outstanding meet ticket covers E's key with P0 ≤ E's KeepUntil.
+   - It keeps an event's done delivery rows while the event row exists (an indexed `Events.Match` read), so a replayed
+     match step meets its duplicates.
    - Meet and publish tickets pass suspension.
 
 **The path.**
@@ -115,7 +119,7 @@ negative restores it. The mutations separate the repaired set's other parts.
   - Reviewed: its read is the real `KeptMatchesAsync` (287–298), at the step's clock.
   - Repaired: it reads the same store rows with KeepUntil ≥ the ticket's P0. The next page's ticket carries P0.
 - **The sweep** is the real `SweepAsync` (348–359) under `reviewed`. Under `repaired` it is that sweep's two deletions
-  (353–356) with rule 3.
+  (353–356) with rule 3; a done row's event is read from the delivery's `EventMatch` (`Store.cs` 212–214, 230–239).
 
 Every commit is the real `CommitAsync`, and every clock value is the one its `Committed.Now` reports.
 
@@ -124,10 +128,14 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
 - `ev1-a`: E is accepted at 10 while S's wait is absent, and S's non-keeping wait is restored at 20.
   - Three orders run: the match step before the restore; the publisher paused before its match step until after the
     restore; the match step at once, then a 30 s pause before the restore.
-  - Every rule set delivers 0, 1 and 0.
+  - In the paused order, S then consumes its delivery, a sweep at 30 deletes E and the done row, and a stale dispatch
+    processes the same ticket again. Repaired: the ticket is gone, so the count-checked `CommitAsync` refuses the second
+    step and nothing lands. Reviewed (the split step) adds the delivery before its commit fails, so S gets E twice.
+  - Repaired delivers 0, 1 and 0; reviewed 0, 2 and 0.
   - The reviewed oracle (observability.md 1187–1189: a wait that did not ask for kept events misses them) expects
     0, 0, 0, so it fails in the second order.
-  - The repaired oracle is the match-step rule. It expects 0, 1 (once), 0.
+  - The repaired oracle is the match-step rule. It expects 0, 1 (once), 0. `match-at-acceptance`, a match step that reads
+    the subscriptions committed at the event's acceptance, gives 0, 0, 0; `split-no-row-hold` gives 0, 2, 0.
 - `ev1-a-after`: the wait commits at 10, E is accepted at 20, and the match step runs at once or 30 s later. Both
   deliver 1.
 - `ev1-b`: E is accepted at 1, kept through 100, and published wholly during Park. A keeping wait is restored at 99.
@@ -137,15 +145,20 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
   - A sweep at 102, with no ticket outstanding, deletes E in every run.
 - `ev1-b-paged`: two events kept through 100. The control runs both pages at 99. The other schedule runs a sweep at
   101, page 1, another sweep, then page 2. Repaired delivers 2 in both.
-- `ev1-b-stepback`: E1 (KeepUntil 100) is swept at 101 with no ticket covering it, so H = 100.
-  - The clock steps back to 99, and a keeping wait registers: P0 = max(99, 100) = 100.
-  - No delivery is possible, and none happens.
-  - The stated entitlement KeepUntil ≥ P0 still holds for the swept E1 (100 ≥ 100). The stated outcome says the wait is
-    not entitled, so the run stops (finding 1).
-- `ev1-b-suspended`: S is suspended when its keeping wait is restored at 99.
-  - The meet ticket passes suspension. This is built behaviour: `Worker.cs` 640–645 and 1315–1339 take meet tickets
-    with no withholding check.
-  - The catch-up completes at 99, and the sweep at 102 deletes E while S is still suspended.
+- `ev1-b-stepback`: E1 (KeepUntil 100) is swept at 101 with no ticket covering it, so H = 100. The clock steps back to
+  98, and E2 is published with KeepUntil 99, before the wait registers. A keeping wait then registers at 99:
+  P0 = max(99, 100 + 1) = 101.
+  - Repaired: the wait is not entitled to the swept E1 (100 < 101), and its catch-up delivers nothing. E2 is live and
+    excluded too (99 < 101), the cost of a clock step-back (see "Notes").
+  - `no-horizon` (P0 = 99) delivers E2 and is entitled to the swept E1. Reviewed (`KeptMatchesAsync` at 99) also
+    delivers E2.
+- `ev1-b-suspended`: the publisher is suspended with its publish ticket for E (kept through 100) outstanding, and S is
+  suspended when its keeping wait is restored at 99.
+  - The match step and the meet step consult the suspension. Under the rule they pass it, as built (`Worker.cs` 640–645
+    and 1315–1339 take meet and publish tickets with no withholding check). Both steps complete, and the sweep at 102
+    deletes E while both instances are still suspended.
+  - `meet-waits-while-suspended` makes both tickets wait. E is still held at 102, and both tickets complete only at the
+    resume (20,000).
 - `ev1-replay`: W1 (non-keeping, registered at 5) and W2 (keeping, restored at 10,020) are owed E (accepted at 10, kept
   through 20,000).
   - Owner 1 dies in E's match step. The repaired commit does not land. The reviewed split has inserted W1's delivery
@@ -156,17 +169,25 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
   - Both waits get one delivery each.
 - `ev1-replay-atomic`: W1 alone. Owner 1 dies in the match step and S1 consumes what it was given; owner 2 takes over,
   sweeps and replays the ticket.
-  - Reviewed and negative (the split step): the sweep deletes S1's consumed done row, and the replay delivers E a second
-    time.
+  - Reviewed (the split step and the built sweep): the sweep deletes S1's consumed done row, and the replay delivers E a
+    second time.
   - Repaired: nothing landed, so the replay delivers once.
-- `ev1-replay-consumed`: stops under `repaired` (finding 2).
+  - `negative` (the split step with the repaired sweep) also delivers once: the delivery-row hold keeps S1's done row
+    while E, held by its outstanding publish ticket, exists, so the replay meets the duplicate. Either rule alone
+    prevents the duplicate here; `split-no-row-hold` removes both and fails.
+- `ev1-replay-consumed`: as `ev1-replay`, with S1 and S2 consuming their deliveries before the sweep. W2 is owed E twice
+  over, by its catch-up and by the replayed match step. Repaired: the delivery-row hold keeps S2's done row, so the
+  replay finds the duplicate and each wait has one delivery. `negative` (the sweep without the hold) deletes the row,
+  and S2 gets E twice.
 
 **Mutations.**
 
 - `match-at-now`: the catch-up reads through the real `KeptMatchesAsync`, which at 101 finds nothing.
 - `p0-at-page-commit`: P0 is recomputed at page 2's commit (101), so the sweep between pages deletes E2.
 - `no-horizon`: P0 = RegisteredAt, which entitles the stepped-back wait to the swept event.
-- `meet-waits-while-suspended`: the meet ticket waits for the resume, so E is still held at 102.
+- `split-no-row-hold`: the split match step and the built deletion of done rows; the replay duplicates.
+- `meet-waits-while-suspended`: the publish and meet tickets wait for the resume, so E is still held at 102.
+- `match-at-acceptance`: the match step reads the subscriptions committed at the event's acceptance.
 
 ## FR-2 (R5-M3): the drain's outstanding-work credit
 
@@ -181,7 +202,13 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
   - With u = 0, the first row always goes.
   - A page cut to zero waits and never completes the drain.
 - **Takeover.** A takeover resets the credit to durable state.
-- **Suspension.** A page waits while the instance is suspended (M3-5, unchanged; finding 4).
+- **Suspension.** A page waits while the instance is suspended (M3-5, unchanged; the coordinator confirmed this and is
+  removing "withheld by a suspension counts as handed off" from the transitions page).
+
+**What bounds what** (accepted by the coordinator): the credit bounds the backlog, and the handoff gate governs
+Complete's entitlement. A gate row that is not handed off is itself one of the u rows, so `P_page` − u already bounds a
+page. The `seen-gate` mutation, the credit with the Seen gate, passes every FR-2 variant: the gate is not the bound.
+The cohort precedence bites in `fr2-r4b1-held`.
 
 `reviewed` and `negative` gate a page on the Seen test (the gate row done, held, or seen at this epoch) and restore
 `P_page` rows.
@@ -235,11 +262,12 @@ loop does, so the share holds by construction and is not asserted.
 
 **Mutations.**
 
-- `seen-gate`: the credit with the Seen gate. It passes every FR-2 variant (finding 3).
+- `seen-gate`: the credit with the Seen gate. It passes every FR-2 variant, which shows the gate is not the bound.
 - `credit-metadata-only`: counts metadata only, so all eleven rows of `fr2-bytes` are restored at once.
 - `p-page-whatever-u`: restores 170 rows with u = 5, so 175 are pending.
 - `zero-cut-completes`: completes the drain at the cut page, with 170 rows still kept.
-- `pages-while-suspended`: lets a page run while S is suspended, with the withheld rows counted as handed off.
+- `pages-while-suspended`: lets a page run while S is suspended, with the withheld rows counted as handed off (the
+  clause the transitions page drops); 510 rows are pending at resume.
 - `held-gate-waits`: counts a held gate row as not handed off, so the drain stalls behind it.
 
 **The R4-B1 traces, re-staged.** These are Review4.Blockers' `fr1-base` and `fr1-held-crash`, copied and run under the
@@ -275,7 +303,8 @@ handoff gate.
 
 - The parked instance consumes late input with no model turn (`WorkflowInstance.cs` 78–90).
 - When that consumption takes J's durable ticket, or this worker's completion under the ticket's key, the built
-  `RemainingJobs` (135–144) drops J's key from the registry.
+  `RemainingJobs` (135–144) drops J's key from the registry. The repaired rule (the coordinator's decision of 18
+  November) keeps the entry of an undone current-generation ticket while the instance is parked.
 - Park keeps the row `Arrived`.
 - The recover Open clears a kept job row whose key the registry no longer holds, or whose generation is not the
   registry's current one (observability.md 1336–1343).
@@ -295,13 +324,22 @@ handoff gate.
   - Park keeps it, and recover restores it.
   - One model turn resumes `c` with `alpha|c9_0/subject_1/c/-/0`, the arm-time input and the original effect key. J
     runs once.
+- `reviewed-keeps-registry` (`jr1-crash-after`): a third reading of the reviewed design. The registry keeps J's key, so
+  the kept ticket is restored and the built `Hold` and `StartJob` enter J a second time after its result had committed.
 - `negative`: the same conversion with an ordinary-scope result row. The real `DiscardedAt` refuses it after the
-  takeover.
+  takeover. In `jr1-crash-before` the negative removes the registry rule instead, and the result is lost.
 - `generation-blind` (`jr1-obsolete`): the Open restores the g0 row, and the model receives `stale`.
 
 **The variants.**
 
-- `jr1-crash-before` stops under `repaired` (finding 5).
+- `jr1-crash-before`: the owner dies after J's body returned and before any commit recorded the result.
+  - The new owner does not enter a parked row's ticket (`Worker.cs` 1169–1177), so the parked instance consumes it as
+    late input.
+  - Repaired: the registry keeps J. Recover clears the kept ticket and restarts J from its JobSpec under g2
+    (`…!2_w6@g2`, R4-M3). J runs a second time, the one re-run the at-least-once allowance permits, and its result
+    `alpha|…` reaches the model once.
+  - Reviewed: the built `RemainingJobs` drops J's key, the Open clears the ticket, and J is never re-run: the result
+    is lost.
 - `jr1-running`: J completes while S runs, and the built path delivers it once under every rule set.
 
 Every run asserts:
@@ -406,52 +444,29 @@ above:
   semantics (K4);
 - real model handoff and holds under load, and the byte credit against real payloads (K6, K12).
 
-## Findings for the coordinator
+## Decisions applied (coordinator, 18 November)
 
-1. **`ev1-b-stepback` (STOPPED): the stated outcome needs a strict horizon.**
-   - H is the greatest KeepUntil deleted (100), so P0 = max(99, 100) = 100. The entitlement KeepUntil ≥ P0 then holds
-     for the swept E1 (100 ≥ 100), so the wait is entitled to an event that no longer exists.
-   - The stated outcome ("not entitled to the swept event") needs one of two changes: H one past the greatest
-     KeepUntil deleted, or the entitlement KeepUntil > H when P0 = H.
-   - Either change also excludes a live event whose KeepUntil equals H, such as one published after the step-back.
-     Please choose.
-2. **`ev1-replay-consumed` (STOPPED): a keeping wait is owed a replayed event twice over.**
-   - The atomic match step keeps W1 to one delivery.
-   - W2 is owed E by its catch-up (KeepUntil ≥ P0), and again by the replayed match step, which reads W2's committed
-     row ("everything matched after registration").
-   - S2 consumed the catch-up's delivery, which stays a done row until E's KeepUntil (`Worker.cs` 1452–1453). The sweep
-     then deletes that row (`InMemoryStore.cs` 353). The outstanding publish ticket holds E itself, not that row.
-   - So the replay finds no duplicate (`AddEventAsync`'s check at 240–241, and the match step's) and inserts E again.
+1. **`ev1-b-stepback`:** P0 = max(RegisteredAt, H + 1 ms). The run passes under `repaired`.
+2. **`ev1-replay-consumed`:** the sweep keeps an event's done delivery rows while the event row exists, and the event row
+   while its publish ticket is outstanding (option (a)). The run passes under `repaired`.
+3. **`jr1-crash-before`:** while the instance is parked, consuming late input keeps the registry entry of an undone
+   current-generation ticket, and recover restarts the job from its JobSpec under the next generation. The run passes
+   under `repaired`. The third reviewed reading runs as `reviewed-keeps-registry`.
+4. **FR-2:** the credit bounds the backlog, and the handoff gate governs Complete's entitlement. `seen-gate` stays as
+   the mutation that shows the gate is not the bound.
+5. **Suspension:** pages wait while the instance is suspended (M3-5).
+6. **JR-1's Worker change:** the built `Delivery.SuppliedCompletion` (`Turns.cs` 109) refuses every durable
+   `job-finished` row, the reserved-scope result row included. Accepting that row is a K3 change row on the transitions
+   page.
 
-   Recommendation, either of:
-   - the sweep also keeps the done delivery rows of an event that an outstanding publish ticket names;
-   - a keeping wait's catch-up excludes events whose match step is still outstanding at registration, since that step
-     will deliver them.
-3. **FR-2: under the final rule, the u-credit alone gives the bound.**
-   - `seen-gate`, the credit with the Seen gate, passes every FR-2 variant. A gate row that is not handed off is itself
-     one of the u rows, so `P_page` − u already bounds the page.
-   - The handoff gate changes when pages run: later, larger pages in place of many small ones. It bounds nothing
-     further in these schedules.
-   - In `fr2-r4b1-base` the handoff gate delivers R before Complete, so the base trace passes even with the cohort
-     precedence removed.
-4. **FR-2's "shelved or withheld by suspension" handoff (interpretation).**
-   - Counting withheld rows as handed off while S is suspended lets pages run during the suspension, with all their rows
-     in the owner's memory (`pages-while-suspended` fails at 510 pending rows).
-   - The repaired runs keep M3-5's rule that a page waits while the instance is suspended, so the clause never decides
-     an outcome. Please confirm.
-5. **`jr1-crash-before` (STOPPED): the at-least-once re-run does not happen for a parked instance.**
-   - The new owner does not enter the ticket of a parked row (`Worker.cs` 1169–1177), so dispatch hands it to the parked
-     instance as late input.
-   - That consumption takes the durable ticket, so the built `RemainingJobs` drops J's key (`WorkflowInstance.cs`
-     78–90, 135–144).
-   - The recover Open then clears the kept ticket, whose key the registry no longer holds (observability.md 1336–1343).
-     J never runs again, and its result never reaches the model.
+## Notes
 
-   Recommendation, either of:
-   - the parked consumption of an undone current-generation ticket keeps its registry entry, so recover restores and
-     re-enters the ticket;
-   - the owner leaves a parked instance's tickets undone until recover.
-6. **JR-1 needs a Worker change.** The built `Delivery.SuppliedCompletion` (`Turns.cs` 109) refuses every durable
-   `job-finished` row, the repaired reserved-scope row included. For reserved-scope rows, the proposed authentication
-   must replace that test: the reserved scope, the derived id, and the registry's current generation. This is a K3
-   change row.
+- **The split match step.** With decision 2, the split match step adds no duplicate in `ev1-replay-atomic` as long as
+  the event row exists: `negative` passes. The atomic step is what the non-keeping rule reads at commit. Only the
+  combined mutation `split-no-row-hold` fails.
+- **An unswept event at H.** An event whose KeepUntil equals H but that the sweep has not deleted is excluded from a
+  later wait's catch-up by P0 = H + 1 ms. It has already expired, so this is the stated, accepted behaviour.
+- **A clock step-back also excludes live events.** After the clock steps back below H, a live event published with
+  KeepUntil ≤ H (`ev1-b-stepback`'s E2, KeepUntil 99, published at 98) is excluded from a keeping wait that registers
+  before it expires. The run asserts this outcome of the stated rule. The cost falls only on a database clock that steps
+  back; a coordinator note may want to state it on the events page.
