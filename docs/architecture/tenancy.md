@@ -177,7 +177,7 @@ tenants opaque ids, which the grammar allows.
 
 | Provider | Limit | Left for the caller's name |
 |---|---|---|
-| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`; `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together |
+| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`; `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together; a turn's generated event id is its actor id plus at most 58 units of prefix and suffix, so a turn's `Publish` leaves 257 for raw key and caller key together (fifth review R5-M1, [observability](observability.md#resolving-a-park-a-bounded-drain)) |
 | MySQL | `Messages.Id` 255 characters (`EfStore.cs`) | 190 for a message id; 185 for an actor id. The composite keys use the provider's default key width, recorded at K4 |
 | PostgreSQL | No column limit; a B-tree index entry is at most about 2,704 bytes | Composite keys stay within that, 65 bytes less for each qualified column |
 | SQLite, MongoDB | None that `Q` reaches | Not limited by `Q` |
