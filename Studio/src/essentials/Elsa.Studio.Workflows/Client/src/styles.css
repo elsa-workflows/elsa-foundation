@@ -5521,6 +5521,38 @@ button.wf-reference-select {
   min-width: 0;
 }
 
+/* A hint in place of an editor (missing editor module, masked value) has no text field to overlay.
+   Its syntax and expand buttons sit beside the text so they never cover a word of it. */
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-expression-editor {
+  flex: 1 1 auto;
+}
+
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-syntax-picker.inline,
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-expression-expand-button {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  height: 32px;
+}
+
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) .wf-syntax-picker-trigger.inline,
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-expression-expand-button {
+  border-color: var(--wf-border);
+  border-radius: var(--wf-radius);
+}
+
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) .wf-syntax-picker-trigger.inline:is(:focus-visible, .open),
+.wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-expression-expand-button:focus-visible {
+  border-color: var(--wf-accent);
+  box-shadow: var(--wf-focus-ring);
+}
+
 /* Scalar controls share a row without overlaying native select arrows or stretching across errors. */
 .wf-expression-field--control {
   display: flex;
