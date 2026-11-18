@@ -1,0 +1,32 @@
+/* Spec 1229 FR-017: variable lifecycle views. Colours come from the workflow token scope (styles.css). */
+.wf-variable-lifecycle { display: grid; gap: 10px; }
+.wf-variable-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--wf-border); }
+.wf-variable-tabs button { border: 0; background: none; padding: 6px 10px; color: var(--wf-muted-text); cursor: pointer; }
+.wf-variable-tabs button[aria-selected="true"] { color: var(--wf-text); border-bottom: 2px solid var(--wf-accent); }
+.wf-variable-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12px; }
+.wf-variable-history { width: 100%; border-collapse: collapse; font-size: 12px; }
+.wf-variable-history th, .wf-variable-history td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--wf-border); vertical-align: top; }
+.wf-variable-history tr[data-current] { background: var(--wf-success-soft); }
+.wf-variable-history tr[data-overwrite] td:first-child { box-shadow: inset 3px 0 0 var(--wf-danger); }
+.wf-variable-note { color: var(--wf-muted-text); }
+.wf-variable-outcome { font-weight: 600; }
+.wf-variable-outcome[data-outcome="lostUpdateWarning"], .wf-variable-outcome[data-outcome="lostUpdateFault"] { color: var(--wf-danger); }
+.wf-variable-current { margin-left: 6px; color: var(--wf-success); }
+.wf-variable-overwrite { display: block; color: var(--wf-danger); }
+.wf-variable-values { display: grid; gap: 2px; }
+.wf-variable-value-state { display: inline-flex; gap: 4px; align-items: center; }
+.wf-variable-value-label { color: var(--wf-muted-text); }
+.wf-variable-value-chip { padding: 0 4px; border: 1px solid var(--wf-border); border-radius: 4px; }
+.wf-variable-value-state[data-state="redacted"] .wf-variable-value-chip,
+.wf-variable-value-state[data-state="expired"] .wf-variable-value-chip { color: var(--wf-muted-text); }
+.wf-variable-digest { color: var(--wf-muted-text); font-size: 11px; }
+.wf-variable-journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12px; }
+.wf-variable-journal > li { border: 1px solid var(--wf-border); border-radius: 6px; padding: 6px 8px; }
+.wf-variable-journal > li[data-approximate] { border-style: dashed; }
+.wf-variable-journal header { display: flex; justify-content: space-between; gap: 8px; }
+.wf-variable-journal ul { margin: 4px 0 0; padding-left: 16px; }
+.wf-variable-transition { font-weight: 600; text-transform: lowercase; }
+.wf-variable-comparison { display: grid; gap: 8px; font-size: 12px; }
+.wf-variable-divergence { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.wf-variable-shown-values { display: grid; gap: 4px; font-size: 12px; }
+.wf-variable-shown-values dt { color: var(--wf-muted-text); }

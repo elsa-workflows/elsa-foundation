@@ -158,6 +158,57 @@ faulted row keeps the refused write, so the conflict stays in the history. A com
 outputs, a workflow dispatch, a published stimulus or a parent or ancestor notification is not recorded, because an alteration cannot replay those
 effects, and accepting it is refused (`NoRecordedCompletion`).
 
+## Inspecting the lifecycle
+
+Spec 1229 (S-6) reads the write history back. Nothing new is stored for it: the read model is derived when read from
+the write records, the lifecycle stamps and the alteration records above. Every route uses the existing permission for
+activity-execution inspection; values follow the sensitive-value rules.
+
+| Route under `runtime/workflows/instances/{id}` | Returns |
+|---|---|
+| `GET …/variables` | each variable instance (frame and key): scope, frame kind, current version, last writer, last commit sequence, value state |
+| `GET …/variable-writes?frameId&scopeId&variableKey&source&outcome&overwrites&cursor&take` | the write history in commit order, paged |
+| `GET …/journal?cursor&take` | the commit-ordered journal: per commit, the activity transitions (with their run-time path), input refreshes and writes |
+| `GET …/compare/{otherId}` | two instances of one executable version compared by run-time path and digest; any other pair is `409` with `differentExecutable` |
+| `GET …/variable-writes/{entryId}/payload?value=written\|overwritten\|refused` | one value, under the payload permission, audited like the value-evidence payload read |
+| `GET …` (instance details) | `lostUpdateWarningCount`: the instance's lost-update warnings, summed from a store column |
+
+- **Order.** Entries are ordered by commit sequence, then by position in the commit (frame revision, time). Records
+  without a commit sequence (older records, commits made outside an execution lease) come first, ordered by frame
+  revision and time, and are marked `orderApproximate`. A page cursor is a commit sequence and a position within the
+  commit, so a page that ends inside a commit continues exactly there.
+- **Applied and current value.** A write is applied when it changed the version; a refused `Fault` write is listed but
+  not applied, and so is a stale-base write of the value already there (it still counts as a lost update). The applied
+  entry whose new version is the variable instance's current version is marked `isCurrentValue`. An accepted override
+  links to the refused write it resolves (`resolvesEntryId`); both stay in the history. `ModifyVariable` changes are
+  listed with source `alteration` in their commit position.
+- **Concurrent overwrites.** An applied write that replaced the previous applied write of the same variable instance is
+  a concurrent overwrite when that write does not happen before the overwriting invocation. *Happens before* is read
+  from scheduling provenance: walking back from the invocation's scheduling over the activity that scheduled it and the
+  *scheduling causes* (`ActivitySchedulingProvenance.CausedBy`: the completed child of a parent callback or a loop's
+  next iteration, the arrivals that satisfied a Flowchart join), and from a completed container to the children that
+  completed before it, a commit of the earlier writer at or after its write must be reached. So sequences, loops,
+  joins and a `Parallel` that completed order their writes; parallel branches and a child a container scheduled before
+  writing do not. Writes of one logical invocation (its retries) never overwrite each other; an alteration write is
+  never marked as an overwrite, and a later write that was not scheduled after it is. An applied lost update is one
+  kind of concurrent overwrite (`isLostUpdate`). The rule covers scripts, C# writes and run-time Flowchart paths alike,
+  because it reads provenance, not structure. Code: `VariableLifecycleInspection`.
+- **Value states.** A value is `captured`, `omitted` (not captured), `redacted` (captured, the caller may not see it) or
+  `expired` (removed after capture); none of them is `null`, and a captured `null` is a value read through the payload
+  route. The written value is the writer's `VariableWrite` value evidence; the overwritten and refused values are
+  operational data on the record (`isOperational`). A digest is shown with the state; the comparison shows digests
+  only.
+- **Lost-update count.** Each activity row keeps the number of its lost-update warnings (`LostUpdateWarningCount`),
+  set when the row is committed; the store keeps it, and the row's commit-sequence range, as indexed columns, so the
+  instance details sum it without reading row documents. No incident is raised: an incident ends a coalescing session.
+- **Run-time path.** An activity execution is matched across instances by the executable node ids from the root down,
+  each with its occurrence under its parent (in order of scheduling), never by row ids.
+- **Cost.** The run time pays only for the scheduling causes and the per-row count. Each read loads the instance's rows
+  once; spec 1229's measurement (T022) is in its tasks and on its PR.
+
+Studio shows these reads on the instance view: the lost-update badge opens the filtered history, and the history,
+journal and comparison views use the routes above (spec 1229 FR-017).
+
 ## What is not covered yet
 
 - Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters and the
@@ -183,5 +234,6 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
   accept.
-- The write history is data; the read API that presents it is spec S-6, and the Studio screens are follow-up work in
-  this repository's `Studio/` (#4734, #4735).
+- A BPMN joining gateway records no scheduling causes yet (Flowchart joins do), so a write after it can be marked as a
+  concurrent overwrite of a branch that arrived at the gateway before it.
+- A commit made outside an execution lease is not numbered, so what it records reads as order unknown.
