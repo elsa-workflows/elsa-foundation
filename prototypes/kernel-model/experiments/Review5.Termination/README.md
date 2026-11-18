@@ -331,8 +331,8 @@ child of a running P, or a child whose row `ProtectsDeletion` protects (a fixtur
   marker. It is refused as a definite error on every attempt, so A keeps running, and so do its children. Under
   `reviewed` a 10,001-child turn exceeds the send cap first and parks.
 - **Which finding each row bears on.** The `P_cascade` + 1 rows' reviewed FAIL is the Validate/RD8 gap: the reviewed
-  `Validate` refuses any one-commit terminate-and-retire of a running row, at any size, and the reviewer reproduced it
-  with no children. Only the 10,001 rows bear on R5-B2. The kept variant's reviewed run passes at `P_cascade` + 1 (one
+  `Validate` refuses any one-commit terminate-and-retire of a running row, at any size; the independent PR review
+  reproduced it with `--p-cascade 1`. Only the 10,001 rows bear on R5-B2. The kept variant's reviewed run passes at `P_cascade` + 1 (one
   commit within the cap) and fails at 10,001 (the cap).
 - **Every ThenDelete run also asserts** that page 1 holds both job entries (jobs first) and consumes both pending
   tickets. Where A retires, it asserts the retiring commit's shape and A's end state; both are labelled structural,
@@ -350,8 +350,12 @@ A finished A that still owns its registry and two jobs (a terminal parent keeps 
   the real store. The pages go on at the marker. All descendants end Cancelled, the obligation clears, and P has its
   one notice and no second.
 - **`reviewed`** follows the reviewed text: a `ThenDelete` reaching a run that has already ended takes the
-  qualified-delete path. That is the built delete of the ended row (`WorkflowInstance.cs` 161–166), which terminates
-  none of its children, so they keep running.
+  qualified-delete path. That is the built delete of the ended row (`WorkflowInstance.cs` 161–166), and the
+  ThenDelete's own terminate ends none of the children.
+  - For a child, the marker keeps the Held obligation as at retirement: parent, parent creation, children and jobs
+    (`data-lifecycle.md` 94–95 at `0a1bb5e0c`). The children keep running until P's terminate discharges it. The run
+    asserts one Held obligation.
+  - For a root, the marker keeps nothing, and the children keep running, as delete semantics give.
 - **`negative`** has no cascade on the ended path, the same plain delete.
 - **An ended row with an empty registry and no jobs** takes the plain qualified delete under every rule set; no run
   covers it separately.

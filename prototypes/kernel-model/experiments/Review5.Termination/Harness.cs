@@ -392,9 +392,15 @@ sealed class Harness
         {
             // The reviewed text: a ThenDelete reaching a run that has already ended takes the qualified-delete path
             // (data lifecycle, "Terminate, then delete"). That is the built delete (WorkflowInstance.cs 161–166), which
-            // terminates none of the children.
+            // terminates none of the children. A child's marker keeps the Held obligation as at retirement
+            // (data-lifecycle.md 94–95 at 0a1bb5e0c), so the subtree lives until the parent's terminate discharges it.
             Line($"  {m.Id} carries ThenDelete and {Name(row.Id)} has ended: the qualified-delete path, the built delete of the ended row");
-            CommitOutcome(owner, row, m, Real.Command(Type, owner.Worker, row, m with { Kind = Kinds.Delete }, seq)!);
+            var held = row.Parent is null ? null : new Obligation
+            {
+                Actor = row.Id, Creation = row.Creation, Parent = row.Parent, ParentCreation = row.ParentCreation, Children = Real.ReadRegistry(row.Children),
+                Jobs = Real.ReadJobs(row.Jobs).Select(k => (k, JobGeneration.GetValueOrDefault((row.Id, k)))).ToList(),
+            };
+            CommitOutcome(owner, row, m, Real.Command(Type, owner.Worker, row, m with { Kind = Kinds.Delete }, seq)!, held);
             return;
         }
         var outcome = Real.Command(Type, owner.Worker, row, m, seq);
@@ -580,10 +586,17 @@ sealed class Harness
 
     private static bool Consumed(TurnCommit turn, Message m) => turn.Consumed.Contains(m.InboxKey) || turn.Done.Contains(m.InboxKey);
 
-    private void CommitOutcome(Owner owner, InstanceRow row, Message m, TurnOutcome outcome)
+    private void CommitOutcome(Owner owner, InstanceRow row, Message m, TurnOutcome outcome, Obligation? heldAtRetirement = null)
     {
         Action? onLanded = null;
         string? note = null;
+        if (outcome.Delete && heldAtRetirement is { Open: true } held)
+            onLanded = () =>
+            {
+                held.MarkerRevision = outcome.Row?.Revision ?? 0;
+                Obligations[row.Id] = held;
+                note = $"  the marker keeps the Held obligation as at retirement: {held}";
+            };
         if (outcome.Delete && Obligations.TryGetValue(row.Id, out var ob) && ob.Open)
             onLanded = () =>
             {

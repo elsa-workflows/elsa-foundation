@@ -172,6 +172,9 @@ sealed class Rt3(string variant, Rules rules)
         _h.Settle();
         ExpectCascade(ids, actor);
         _report.Expect("A (structural: the end state the rule writes)", _h.Status(actor), kind == "kept" ? "Cancelled" : "retired marker");
+        if (ended && !rules.EndedThenDeleteCascades)
+            _report.Expect("Held obligations on A's marker (the reviewed path: the subtree lives until the parent's terminate)",
+                _h.Obligations.Values.Count(o => o.Actor == actor && o.State == "Held" && o.Open), kind == "root" ? 0 : 1);
         if (kind != "root") _report.Expect(ended ? "notices P received from A (its one notice, from its own end)" : "notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, actor), 1);
         _report.Expect("job entries in the first page (jobs first)", _h.FirstPageJobEntries.GetValueOrDefault(actor, -1), 2);
         var first = _h.CascadeCommits.FirstOrDefault(c => c.Actor == actor && c.Page == 1).Consumed ?? [];
