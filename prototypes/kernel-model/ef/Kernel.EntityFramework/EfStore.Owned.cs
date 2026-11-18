@@ -325,6 +325,32 @@ public sealed partial class EfStore
         return new([.. rows.OrderBy(r => r.Id).Select(r => new PartitionFence(r.Id, r.Epoch, r.Position))], rows.Count > 0 ? rows.Min(r => r.Now) : 0);
     }
 
+    /// <summary>
+    /// A take after a reset, only if this node still holds the row at <paramref name="epoch"/>: one conditional UPDATE on
+    /// owner and epoch that bumps the epoch, renews the lease and keeps the position. No death: no attempt is counted.
+    /// </summary>
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{2}"}""";
+        var mine = """ "Id" = {0} AND "Owner" = {1} AND "Epoch" = {3}""";
+        const string columns = """ "Id", "Owner", "Epoch", "Position", """;
+        await using var db = create();
+        List<SetRow> rows;
+        if (Engine is MySqlEngine)
+        {
+            // No RETURNING: the update and, when it matched, the read of what it wrote, under its row lock (as MySqlEngine's take).
+            await using var transaction = await Engine.BeginTakeAsync(db, cancellationToken);
+            if (await db.Database.ExecuteSqlRawAsync(Q($"{update} WHERE{mine}"), [partition, node, (long)lease.TotalMilliseconds, epoch], cancellationToken) != 1) return null;
+            rows = await db.Database.SqlQueryRaw<SetRow>(Q($"""SELECT{columns}{Now} AS "Now", "Died" FROM "Partitions" WHERE "Id" = {"{0}"}"""), partition).ToListAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        else rows = await db.Database.SqlQueryRaw<SetRow>(Engine is SqlServerEngine
+                ? $"""{update} OUTPUT inserted."Id", inserted."Owner", inserted."Epoch", inserted."Position", {Now} AS "Now", inserted."Died" WHERE{mine}"""
+                : $"""{update} WHERE{mine} RETURNING{columns}{Now} AS "Now", "Died" """,
+            partition, node, (long)lease.TotalMilliseconds, epoch).ToListAsync(cancellationToken);
+        return rows is [var row] ? new Lease(row.Epoch, row.Position, row.Now) : null;
+    }
+
     /// <summary>A release of a set: one statement frees each row still at its epoch; the kept rows are not written.</summary>
     public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
     {
