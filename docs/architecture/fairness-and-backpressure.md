@@ -49,7 +49,9 @@ in the sections below is **proposed and unverified** unless it cites a run.
    inbox. [Large fan-out](large-fan-out.md) covers that case.
 3. **Outside publishes.** One publish takes one admission, and then adds one message per matching wait, into whichever
    virtual partitions those waits live in, whatever their depth. Admission does not cover that fan-out; the number of
-   matching waits bounds it.
+   matching waits bounds it. Proposed (fifth review R5-M2): the publish is first one kernel-issued publish ticket in
+   the virtual partition its digest places ([observability](observability.md#recover)), which the partition
+   high-water rule covers like a keyed command.
 4. **The poll window.** A virtual partition's due rows are read in `seq` order. A message behind 10,000 rows of another
    tenant waits for 20 polls of 500.
 5. **The node loop.** Passes run one after another. A scope with 5,000 ready instances holds the loop for 5,000 turns.
@@ -187,7 +189,7 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 |---|---|
 | API or HTTP caller | A refusal before any row is written: `InboxFull` or `NodeBusy` (HTTP 503), or `RateLimited` (HTTP 429), each with `Retry-After`. A retry, keyed or not, is safe. |
 | Ingress adapter (broker, webhook, schedule source) | The same refusal. A broker adapter stops acknowledging and pauses consumption, so the broker keeps the backlog; a schedule source fires late. |
-| Outside publisher | Admission against its tenant's rate. The publish's fan-out into waiting instances is never refused: the waits are committed. |
+| Outside publisher | Admission against its tenant's rate, and (proposed, fifth review R5-M2) `InboxFull` when its publish ticket's virtual partition is above the high-water mark, before any row is written. The publish's fan-out into waiting instances is never refused: the waits are committed. |
 | A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn, the [parallel ForEach cap](large-fan-out.md), and credits. The kernel checks the cap when it seals the turn's outcome, so a model cannot catch it; a turn above it fails, and the kernel parks the instance as for any turn that throws. The target's lag shows in the depth metric. |
 | A timer, job result or child completion | Nothing: it is owed and lands. |
 
