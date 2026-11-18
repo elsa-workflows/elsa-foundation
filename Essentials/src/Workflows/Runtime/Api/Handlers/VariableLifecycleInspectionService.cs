@@ -363,7 +363,7 @@ internal sealed class VariableLifecycleInspectionService(
         record.IsLostUpdate || record.Outcome == VariableCommitOutcome.AcceptedOverride;
 
     // FR-008: the other writer of a lost update, with its branch or path when its row is stored.
-    private static VariableWriterView OtherWriterOf(VariableLifecycleInspection model, VariableWriter writer)
+    private static VariableLifecycleWriterView OtherWriterOf(VariableLifecycleInspection model, VariableWriter writer)
     {
         var row = writer.Source != VariableWriteSource.Alteration && writer.InvocationId is { } id ? model.FindRow(id) : null;
         var view = WriterOf(writer);
@@ -514,7 +514,7 @@ internal sealed class VariableLifecycleInspectionService(
             StringComparer.Ordinal.Equals(snapshot.Phase, record.ScopeId) &&
             snapshot.Sequence == record.NewVersion);
 
-    private static VariableWriterView WriterOf(VariableWriteEntry entry) => new(
+    private static VariableLifecycleWriterView WriterOf(VariableWriteEntry entry) => new(
         SourceName(entry.Record.Writer.Source),
         entry.Record.Writer.ExecutableNodeId ?? entry.Row?.Execution.ExecutableNodeId,
         entry.Row?.Execution.ActivityExecutionId,
@@ -524,7 +524,7 @@ internal sealed class VariableLifecycleInspectionService(
         entry.Row?.Provenance.ExecutionPathId,
         entry.AlterationJobId);
 
-    private static VariableWriterView WriterOf(VariableWriter writer) => new(
+    private static VariableLifecycleWriterView WriterOf(VariableWriter writer) => new(
         SourceName(writer.Source),
         writer.ExecutableNodeId,
         writer.Source == VariableWriteSource.Alteration ? null : writer.InvocationId,

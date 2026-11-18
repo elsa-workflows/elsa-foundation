@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Api.Models;
 // The views are public contracts of the runtime API; members are added, never renamed.
 
 /// <summary>Who made a variable write: the activity execution (node, logical invocation, attempt) or the alteration.</summary>
-public sealed record VariableWriterView(
+public sealed record VariableLifecycleWriterView(
     string Source,
     string? ExecutableNodeId,
     string? ActivityExecutionId,
@@ -36,7 +36,7 @@ public sealed record VariableValuePayloadRefView(
 /// <summary>The earlier applied write a concurrent overwrite replaced (spec 1229 Q3).</summary>
 public sealed record VariableOverwriteView(
     string OverwrittenEntryId,
-    VariableWriterView OverwrittenWriter,
+    VariableLifecycleWriterView OverwrittenWriter,
     long? OverwrittenCommitSequence,
     bool IsLostUpdate);
 
@@ -49,7 +49,7 @@ public sealed record VariableWriteEntryView(
     string ScopeId,
     string? FrameId,
     string VariableKey,
-    VariableWriterView Writer,
+    VariableLifecycleWriterView Writer,
     string Source,
     string Outcome,
     long? BaseVersion,
@@ -66,7 +66,7 @@ public sealed record VariableWriteEntryView(
     VariableValueStateView? RefusedValue,
     string? ResolvesEntryId,
     DateTimeOffset OccurredAt,
-    VariableWriterView? OtherWriter = null);
+    VariableLifecycleWriterView? OtherWriter = null);
 
 /// <summary>A page of the write history; <see cref="ConcurrentOverwriteTotal"/> is set when the history is filtered on overwrites.</summary>
 public sealed record VariableWriteHistoryPageView(
@@ -81,7 +81,7 @@ public sealed record VariableSummaryView(
     string VariableKey,
     string FrameKind,
     long Version,
-    VariableWriterView? LastWriter,
+    VariableLifecycleWriterView? LastWriter,
     long? LastCommitSequence,
     VariableValueStateView Value,
     bool HistoryRecorded);
