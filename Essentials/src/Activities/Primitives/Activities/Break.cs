@@ -36,6 +36,8 @@ namespace Elsa.Activities.Primitives.Activities;
 // ReplaySafe: the body takes no inputs, performs no I/O, and returns a constant transition, so
 // re-running it on segment replay is indistinguishable from running it once. It was the first shipped leaf marked
 // (docs/reports/execution-model-comparison-2026-08.md); #2581 marked the other replay-safe primitives.
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a constant transition, no external effect.
+[BackgroundExecutionSafe]
 [ActivityOutcome(ActivityOutcomes.Break)]
 [SelectsOutcomeOnEveryCompletion]
 [Activity(Icon = "LogOut")]

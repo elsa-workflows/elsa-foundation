@@ -5,6 +5,7 @@
 - Default Inline placement preserves old JSON/hash behavior. Explicit Background is authored on ActivityNode and compiled onto ExecutableNode.
 - A separate `[BackgroundExecutionSafe]` declaration pins `SupportsBackgroundExecution=true` into ActivityContract and its fingerprint. Default false preserves historical contract bytes/fingerprints.
 - Publishing validates the capability, leaf shape and supported result/value policies. Runtime repeats validation from the pinned artifact and activated runtime type. An invalid configuration faults with a stable diagnostic; it never silently falls back to Inline.
+- Eligibility is now defined by ADR 0093 (criteria C1–C10) and decided in one component; see spec 1230's [contract](../../1230-background-eligibility/contracts/background-eligibility.md). It supersedes the eligibility rules in this section.
 
 ## Durable store
 

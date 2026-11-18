@@ -145,17 +145,18 @@ public sealed class BackgroundActivityWorker(
 
             SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(request.CoordinatorWorkItem, request.Executable, executable.Identity);
             var node = SchedulerWorkHandlerHelpers.ResolveExecutableNode(request.CoordinatorWorkItem, executable, request.ExecutableNodeId, "BackgroundActivity");
-            BackgroundActivityEligibility.Validate(node);
-            if (node.ActivityContract!.SchemaFingerprint != request.ContractFingerprint ||
+            // A worker without the pinned activity type is a deployment gap (BG-ACT-002), reported before eligibility.
+            var types = services.GetRequiredService<IWellKnownTypeRegistry>();
+            if (!types.TryGetTypeOrDefault(node.ActivityContract!.Activation.Capability, out var pinnedActivityType) ||
+                !typeof(IActivity).IsAssignableFrom(pinnedActivityType))
+                throw new InvalidOperationException("BG-ACT-002: The pinned background activity type is unavailable.");
+            BackgroundActivityEligibility.EnsureEligible(node, types);
+            if (node.ActivityContract.SchemaFingerprint != request.ContractFingerprint ||
                 request.InputSnapshot.ContractFingerprint != request.ContractFingerprint ||
                 request.InputSnapshot.InvocationId != request.InvocationId)
                 throw new InvalidOperationException("BG-ACT-002: Background input, invocation or activity contract pin does not match.");
             var codec = services.GetRequiredService<BackgroundActivityCompletionCodec>();
             codec.ResolveResultType(node.ActivityContract);
-            var types = services.GetRequiredService<IWellKnownTypeRegistry>();
-            if (!types.TryGetTypeOrDefault(node.ActivityContract.Activation.Capability, out var pinnedActivityType) ||
-                !typeof(IActivity).IsAssignableFrom(pinnedActivityType))
-                throw new InvalidOperationException("BG-ACT-002: The pinned background activity type is unavailable.");
             if (node.ActivityContract.DescriptorKind == typeof(ClrActivityDescriptor).FullName)
             {
                 var descriptor = services.GetRequiredService<IPayloadSerializer>()
@@ -172,15 +173,17 @@ public sealed class BackgroundActivityWorker(
                     WorkflowExecutionId: request.WorkflowExecutionId,
                     ActivityExecutionId: request.ActivityExecutionId,
                     node.ActivityContract, request.InputSnapshot, request.Attempt, Descriptor: node.Descriptor), cancellationToken);
-            BackgroundActivityEligibility.Validate(activation.Activity);
+            BackgroundActivityEligibility.EnsureEligible(node, activation.Activity);
             if (activation.Activity.GetType() != pinnedActivityType)
                 throw new InvalidOperationException("BG-ACT-002: Activation returned a different type than the pinned background activity.");
             var transition = await activation.Activity.ExecuteAsync(new ActivityExecutionContext(
                 request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken,
                 triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey));
-            if (dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null ||
-                publish?.TakePublishStimuli(request.WorkflowExecutionId, request.ActivityExecutionId).Count > 0)
-                throw new InvalidOperationException("VF-BG-001: Background activity bodies cannot stage coordinator-owned effects.");
+            // C6 is a fact about the body, so the component sees it only after the body ran.
+            var stagedCoordinatorEffects =
+                dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null |
+                publish?.TakePublishStimuli(request.WorkflowExecutionId, request.ActivityExecutionId).Count > 0;
+            BackgroundActivityEligibility.EnsureEligible(node, activation.Activity, stagedCoordinatorEffects);
             result = transition switch
             {
                 IActivityCompletionTransition completion => new BackgroundActivityWorkTerminalResult(
