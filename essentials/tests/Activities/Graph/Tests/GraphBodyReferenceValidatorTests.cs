@@ -26,7 +26,7 @@ public sealed partial class GraphActivityProviderTests
             BodyArgument("c", "Variable", new { referenceKey = "running-total", declaringScopeId = "workflow" }),
             BodyArgument("d", "Variable", new { referenceKey = "running-total", declaringScopeId = "activity-graph" }),
             BodyArgument("f", "Variable", new { referenceKey = "running-total", declaringScopeId = (string?)null }),
-            BodyArgument("e", "JavaScript", new
+            BodyArgument("e", "TestExpression", new
             {
                 source = "args.amount + args.total",
                 parameters = new Dictionary<string, object>
@@ -48,9 +48,9 @@ public sealed partial class GraphActivityProviderTests
     // The string form of a variable reference, read as the compiler reads it.
     [InlineData("Variable", "\"unknown\"", GraphBodyReferenceCodes.VariableUnknown)]
     [InlineData("ActivityResult", """{"producerNodeId":"ghost","projectionKey":"result","producerScopeId":"graph-root"}""", GraphBodyReferenceCodes.ProducerUnknown)]
-    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"WorkflowRequest","memberKey":"unknown"}}}""", GraphBodyReferenceCodes.InputUnknown)]
-    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"ActivityResult","producerNodeId":"ghost","projectionKey":"result"}}}""", GraphBodyReferenceCodes.ProducerUnknown)]
-    [InlineData("JavaScript", """{"source":"args.x","parameters":{"x":{"kind":"Variable","declaringScopeNodeId":"workflow","variableKey":"unknown"}}}""", GraphBodyReferenceCodes.VariableUnknown)]
+    [InlineData("TestExpression", """{"source":"args.x","parameters":{"x":{"kind":"WorkflowRequest","memberKey":"unknown"}}}""", GraphBodyReferenceCodes.InputUnknown)]
+    [InlineData("TestExpression", """{"source":"args.x","parameters":{"x":{"kind":"ActivityResult","producerNodeId":"ghost","projectionKey":"result"}}}""", GraphBodyReferenceCodes.ProducerUnknown)]
+    [InlineData("TestExpression", """{"source":"args.x","parameters":{"x":{"kind":"Variable","declaringScopeNodeId":"workflow","variableKey":"unknown"}}}""", GraphBodyReferenceCodes.VariableUnknown)]
     public async Task A_body_reference_to_something_the_activity_does_not_hold_is_refused(string syntax, string value, string code)
     {
         var diagnostics = await ValidateBodyAsync(BodyArgument("value", syntax, JsonDocument.Parse(value).RootElement.Clone()));
