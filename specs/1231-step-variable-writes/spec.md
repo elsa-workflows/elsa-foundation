@@ -452,9 +452,16 @@ and run the converted scripts.
   variable (shown by its stored name, flagged); variables visible but none fits (type-aware empty note); no visible
   variables; scope analysis loading, failed (retry) or unavailable (binding preserved, nothing flagged); read-only panel
   and read-only input. Narrow layout: the row reuses the panel's existing property-row layout; no new layout.
-- **Coverage:** `variableReferenceInputUi.test.tsx` covers each state above, keyboard-reachable select with label and
-  description, and the panel integration (bulk literal writes leave reference inputs alone). Composed-host proof
-  (`tools/ux-acceptance`) is pending: CI's Studio UX run on the PR supplies it before the PR is marked ready.
+- **Coverage:** `variableReferenceInputUi.test.tsx` covers each state above (including scope analysis failed and
+  unavailable, and no visible variables), the select's label and description, two may-write variables of one name in
+  different scopes, and the panel integration (bulk literal writes leave reference inputs alone). Not covered: the
+  "authoring context unavailable" fallback, which the properties panel never renders because it always provides the
+  context.
+- **Exclusion: composed-host proof.** No shipped activity exposes a variable-reference input or the free-name marker yet,
+  so no composed journey can reach this surface and a green `tools/ux-acceptance` run is not evidence for it. The first
+  production consumer is spec 1231 Phase 5 (`RunJavaScript`, an engine script activity shown as "May write any visible
+  variable"); a feature-specific journey lands with it. Until then FR-036's UX acceptance is incomplete, recorded here and
+  in the PR.
 
 ### Key Entities
 

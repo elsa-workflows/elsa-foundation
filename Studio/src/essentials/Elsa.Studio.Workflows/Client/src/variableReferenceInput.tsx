@@ -39,24 +39,31 @@ export function readMayWriteSet(
   scopeReady = true,
   workflowState?: WorkflowDefinitionState
 ): string[] {
-  const names: string[] = [];
+  const entries: { key: string; name: string; scope: string; flag: string }[] = [];
   for (const input of descriptor.inputs) {
     if (input.variableAccess !== "ReadWrite") continue;
     const bound = readBoundVariable(activity, input);
     if (!bound) continue;
     const key = selectedOptionKey(bound);
+    if (entries.some(entry => entry.key === key)) continue;
     const visible = visibleVariables.find(variable => optionKey(variable.referenceKey, variable.scopeId) === key);
     // A binding to a variable that was deleted or moved out of scope keeps its stored name, flagged; publish refuses it.
-    // Until the scope analysis is ready nothing is known to be out of scope, so the stored name shows unflagged.
+    // Until the scope analysis is ready nothing is known to be out of scope, so the stored name shows unflagged. A visible
+    // variable whose type no longer fits the input is refused by publish too, so it is flagged.
     const stored = readStoredVariableName(activity, input) ?? bound.referenceKey;
-    // A visible variable whose type no longer fits the input is refused by publish, so it is flagged too.
     const fits = !visible || compatibleVariables([visible], workflowState, input).length === 1;
-    const name = visible
-      ? fits ? visible.name : `${visible.name} (type does not fit)`
-      : scopeReady ? `${stored} (not visible from this scope)` : stored;
-    if (!names.includes(name)) names.push(name);
+    const flag = visible
+      ? fits ? "" : " (type does not fit)"
+      : scopeReady ? " (not visible from this scope)" : "";
+    const isWorkflow = !bound.declaringScopeId || bound.declaringScopeId === "workflow";
+    entries.push({ key, name: visible ? visible.name : stored, scope: isWorkflow ? "workflow" : "container", flag });
   }
-  return names;
+  // Two variables of one name in different scopes (a container shadowing a workflow variable) are told apart by scope,
+  // as the picker does.
+  return entries.map(entry => {
+    const shared = entries.filter(other => other.name === entry.name).length > 1;
+    return `${entry.name}${shared ? ` · ${entry.scope}` : ""}${entry.flag}`;
+  });
 }
 
 /** The declared name a Variable binding stored with its reference, if any. */

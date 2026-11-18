@@ -273,6 +273,48 @@ describe("variable-reference inputs", () => {
     expect(picker.getAttribute("aria-describedby")?.split(" ")).toContain(note.id);
   });
 
+  it("tells two may-write variables of one name apart by scope", () => {
+    const descriptor = { inputs: [referenceInput("Outer", "ReadWrite"), referenceInput("Inner", "ReadWrite")] };
+    const container = renderPanel(descriptor, {
+      activity: node({ Outer: bound("count-key", "workflow"), Inner: bound("inner-count-key", "sequence-1") }),
+      variables: [
+        { referenceKey: "count-key", name: "count", scopeId: "workflow", isWorkflowScope: true },
+        { referenceKey: "inner-count-key", name: "count", scopeId: "sequence-1", isWorkflowScope: false }
+      ]
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: count · workflow, count · container");
+  });
+
+  it.each([
+    ["error", "Variable scope information could not be loaded. The current target is preserved."],
+    ["unavailable", "Variable scope information is unavailable. The current target is preserved."]
+  ] as const)("keeps the binding and flags nothing when the scope analysis is %s", (scopeStatus, message) => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({
+          Target: { typeName: "Int32", expression: { type: "Variable", value: { referenceKey: "counter-key", declaringScopeId: "workflow", name: "Counter" } } }
+        }),
+        variables: [],
+        scopeStatus
+      }
+    );
+
+    const picker = container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!;
+    expect(picker.disabled).toBe(true);
+    expect(picker.selectedOptions[0].textContent).toBe("Counter");
+    expect(container.querySelector(".wf-variable-picker")?.textContent).toContain(message);
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Counter");
+  });
+
+  it("says no variables are visible when none is declared in scope", () => {
+    const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] }, { variables: [] });
+
+    expect(container.querySelector(".wf-variable-picker .wf-variable-picker-note")?.textContent)
+      .toBe("No variables are visible here. Declare one on the workflow or a container scope.");
+  });
+
   it("does not call a binding out of scope in the picker while the scope analysis is loading", () => {
     const container = renderPanel(
       { inputs: [referenceInput("Target", "ReadWrite")] },
