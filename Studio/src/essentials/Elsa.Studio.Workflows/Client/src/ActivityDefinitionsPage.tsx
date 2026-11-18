@@ -118,6 +118,7 @@ export function ActivityDefinitionsPage({
     pendingRedactionsRef.current += 1;
     void redactActivityDefinitionManagementCache(queryClient).then(() => Promise.all([
       queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections }),
+      queryClient.invalidateQueries({ queryKey: activityDesignKeys.authoringCapabilities }),
       // A mounted draft has a separate cache key: refresh its redacted definition identity too.
       queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources })
     ])).finally(() => {
@@ -376,7 +377,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
-            <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
+            <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
             <StudioField label={<><span>Rows per page</span></>}><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></StudioField>
           </div>
         </details>

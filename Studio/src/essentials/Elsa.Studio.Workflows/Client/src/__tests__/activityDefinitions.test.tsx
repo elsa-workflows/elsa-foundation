@@ -24,6 +24,37 @@ afterEach(async () => {
 });
 
 describe("Activity Definitions experience", () => {
+  it.each(["authentication", "backend"] as const)("refreshes providers after a %s change and retains an unavailable selected key", async scope => {
+    let changedScope = false;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true);
+      if (url === "/design/activities/authoring-capabilities") {
+        const value = authoringCapabilities();
+        return changedScope ? { ...value, providers: [{ ...value.providers[0], providerKey: "new-provider", displayName: "New provider" }] } : value;
+      }
+      return page([]);
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Visual graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => url.includes("providerKey=visual-graph"))).toBe(true));
+    changedScope = true;
+    getJson.mockClear();
+    if (scope === "authentication") window.dispatchEvent(new Event(authSessionStartedEvent));
+    else rendered.setBaseUrl(`${rendered.baseUrl}-changed`);
+    await waitForText(rendered.container, "New provider");
+    const select = controlByLabel<HTMLSelectElement>(rendered.container, "Provider key");
+    expect(select.value).toBe("visual-graph");
+    expect(select.selectedOptions[0].textContent).toBe("visual-graph");
+    expect([...select.options].map(option => option.value)).toEqual(["", "visual-graph", "new-provider"]);
+    await waitFor(() => expect(getJson.mock.calls.some(([url]) => url.includes("providerKey=visual-graph"))).toBe(true));
+    await rendered.unmount();
+    const restored = renderPage(getJson, undefined, undefined, undefined, [], undefined, undefined, { preserveHistoryState: true });
+    await waitForText(restored.container, "New provider");
+    expect(controlByLabel<HTMLSelectElement>(restored.container, "Provider key").value).toBe("visual-graph");
+    await restored.unmount();
+  });
+
   it("keeps import and broad upgrade tools collapsed until requested", async () => {
     const navigateToStudioPath = vi.fn();
     const getJson = vi.fn(async (url: string) => {
