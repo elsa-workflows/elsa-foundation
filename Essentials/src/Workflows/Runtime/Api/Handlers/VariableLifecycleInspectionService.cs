@@ -346,7 +346,8 @@ internal sealed class VariableLifecycleInspectionService(
                 ? new VariableOverwriteView(overwritten.EntryId, WriterOf(overwritten), overwritten.CommitSequence, IsLostUpdateKind(record))
                 : null,
             refused ?? WrittenValueState(entry, snapshots, canInspectSensitive),
-            IsLostUpdateKind(record)
+            // A refused Fault write overwrote nothing; its value is the refused one.
+            record.Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.AcceptedOverride
                 ? EnvelopeState(entry, record.OverwrittenValue, PayloadValues.Overwritten, canInspectSensitive)
                 : null,
             refused,

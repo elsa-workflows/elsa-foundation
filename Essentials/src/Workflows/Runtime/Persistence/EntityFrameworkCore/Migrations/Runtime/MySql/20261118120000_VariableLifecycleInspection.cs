@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_activity_execution_state_commit_range",
                 table: "elsa_runtime_activity_execution_state",
-                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "LastCommitSequence" });
+                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "FirstCommitSequence", "LastCommitSequence" });
         }
 
         /// <inheritdoc />

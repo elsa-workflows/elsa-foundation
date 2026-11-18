@@ -53,6 +53,7 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 - [x] T010 [US2] Happens-before walk and concurrent-overwrite marking in the read model (research R-3), bounded by the
   replaced write's commit sequence; `concurrentOverwriteTotal` on the filtered history.
+  Decision applied: an alteration write is never itself marked as a concurrent overwrite (an operator acts on the state they inspected); a later write not scheduled after it is (spec Edge Cases). Raised on the PR for confirmation.
 - [x] T011 [US2] Instance details: `LostUpdateWarningCount` summed over the instance's rows
   (`Api/Handlers/WorkflowInstanceDetailsService.cs`, `WorkflowInstanceDetailsView`).
 - [x] T012 [US2] Tests: two branches `count + 1` → one lost update naming both writers and branches and the overwritten

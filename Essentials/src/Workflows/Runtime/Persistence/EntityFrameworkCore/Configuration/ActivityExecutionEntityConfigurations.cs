@@ -34,7 +34,7 @@ public sealed class ActivityExecutionStateEntityConfiguration : IEntityTypeConfi
         builder.Property(row => row.FirstCommitSequence).IsRequired(false);
         builder.Property(row => row.LastCommitSequence).IsRequired(false);
         builder.Property(row => row.LostUpdateWarningCount).IsRequired(false);
-        builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.LastCommitSequence })
+        builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.FirstCommitSequence, row.LastCommitSequence })
             .HasDatabaseName("IX_elsa_runtime_activity_execution_state_commit_range");
     }
 

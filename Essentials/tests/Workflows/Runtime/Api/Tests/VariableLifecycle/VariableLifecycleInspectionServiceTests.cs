@@ -250,6 +250,32 @@ public sealed class VariableLifecycleInspectionServiceTests
     }
 
     [Fact]
+    public async Task Journal_pages_continue_at_the_next_commit_and_list_applied_writes_only()
+    {
+        await _workflows.SaveAsync(Workflow());
+        await _activities.SaveAsync(Row("a", "node-a", stamps: [Scheduled(1), Completed(2)], writes: [Write("a", "node-a", 2, 0, 1)]));
+        await _activities.SaveAsync(Row("b", "node-b", stamps: [Scheduled(3), Faulted(4)], status: ActivityExecutionStatus.Faulted,
+            writes: [Write("b", "node-b", 4, 1, 1, VariableCommitOutcome.LostUpdateFault, baseVersion: 0)]));
+        await _activities.SaveAsync(Row("c", "node-c", stamps: [Scheduled(5), Completed(6)], writes: [Write("c", "node-c", 6, 1, 2)]));
+        var service = Service(sensitive: true, resolve: true);
+
+        var pages = new List<JournalCommitView>();
+        string? cursor = null;
+        do
+        {
+            var page = (await service.ListJournalAsync(WorkflowExecutionId, cursor, 2, default))!;
+            Assert.True(page.Items.Count <= 2);
+            pages.AddRange(page.Items);
+            cursor = page.Next;
+        } while (cursor is not null);
+
+        Assert.Equal([1L, 2L, 3L, 4L, 5L, 6L], pages.Select(commit => commit.CommitSequence!.Value));
+        Assert.Empty(pages.Single(commit => commit.CommitSequence == 4).Writes);
+        Assert.Single(pages.Single(commit => commit.CommitSequence == 6).Writes);
+        Assert.All(pages, commit => Assert.NotNull(commit.OccurredAt));
+    }
+
+    [Fact]
     public async Task A_legacy_instance_lists_its_variables_at_version_0_with_no_history_recorded()
     {
         var frame = new VariableFrameState(RootFrame, RootScope, WorkflowExecutionId, null, VariableFrameKind.Root,

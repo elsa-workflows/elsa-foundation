@@ -161,7 +161,7 @@ internal sealed class VariableLifecycleInspection
         // Without commit sequences the order is approximate, so nothing is claimed.
         if (replaced.CommitSequence is not { } replacedCommit || writer.CommitSequence is null)
             return false;
-        return !HappensBefore(replaced, replacedCommit, writer.Row);
+        return !HappensBefore(replaced, replacedCommit, writer.Row, writer.CommitSequence.Value);
     }
 
     /// <summary>
@@ -171,12 +171,17 @@ internal sealed class VariableLifecycleInspection
     /// <paramref name="replaced"/> at or after <paramref name="commit"/> is reached. The walk is bounded by
     /// <paramref name="commit"/>: an edge committed before it cannot carry the write.
     /// </summary>
-    internal bool HappensBefore(VariableWriteEntry replaced, long commit, ActivityExecutionState writerRow)
+    internal bool HappensBefore(VariableWriteEntry replaced, long commit, ActivityExecutionState writerRow, long writeCommit)
     {
         var reached = new Dictionary<string, long>(StringComparer.Ordinal);
         var pending = new Stack<(string RowId, long Bound)>();
         if (ScheduledCommitOf(writerRow) is not { } start)
             return false;
+        // A container writes after the children that ended before its write: those ends come before it.
+        if (_children.TryGetValue(writerRow.Execution.ActivityExecutionId, out var ownChildren))
+            foreach (var child in ownChildren)
+                if (EndCommitOf(child) is { } childEnded && childEnded <= writeCommit)
+                    pending.Push((child.Execution.ActivityExecutionId, childEnded));
         // An alteration happens before an invocation an operator scheduled at or after it (a re-execution).
         if (replaced.Row is null && IsAlterationScheduled(writerRow) && start >= commit)
             return true;
@@ -325,7 +330,8 @@ internal sealed class VariableLifecycleInspection
             }
         }
 
-        foreach (var entry in Entries)
+        // FR-010: a commit lists the writes it applied; refused and equal-value lost updates stay in the write history.
+        foreach (var entry in Entries.Where(entry => entry.IsApplied))
             CommitFor(entry.CommitSequence).Writes.Add(entry);
 
         var result = new List<JournalCommit>(commits.Count + 1);

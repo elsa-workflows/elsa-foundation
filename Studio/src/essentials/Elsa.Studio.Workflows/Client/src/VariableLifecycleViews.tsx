@@ -231,6 +231,17 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
 
   const historyRequest = useRef(0);
   const journalRequest = useRef(0);
+  const compareRequest = useRef(0);
+  const instance = useRef(workflowExecutionId);
+  instance.current = workflowExecutionId;
+
+  // Another instance starts from nothing: results of the previous one are dropped, and its pending answers ignored.
+  useEffect(() => {
+    setComparison({ status: "idle" });
+    setShownValues({});
+    setOtherId("");
+    compareRequest.current++;
+  }, [workflowExecutionId]);
 
   const loadHistory = useCallback(async (cursor: string | null) => {
     const request = ++historyRequest.current;
@@ -274,19 +285,23 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
     setShownValues(current => ({ ...current, [key]: { status: "loading" } }));
     try {
       const read = await getVariableWritePayload(context, workflowExecutionId, value.payloadRef);
+      if (instance.current !== workflowExecutionId) return;
       setShownValues(current => ({ ...current, [key]: { status: "ready", payload: read.payload, captureMode: read.captureMode } }));
     } catch (error) {
+      if (instance.current !== workflowExecutionId) return;
       setShownValues(current => ({ ...current, [key]: { status: "failed", error: errorMessage(error) } }));
     }
   }, [context, workflowExecutionId]);
 
   const compare = useCallback(async () => {
     if (!otherId.trim()) return;
+    const request = ++compareRequest.current;
     setComparison({ status: "loading" });
     try {
-      setComparison({ status: "ready", value: await compareInstances(context, workflowExecutionId, otherId.trim()) });
+      const value = await compareInstances(context, workflowExecutionId, otherId.trim());
+      if (request === compareRequest.current) setComparison({ status: "ready", value });
     } catch (error) {
-      setComparison({ status: "failed", error: errorMessage(error) });
+      if (request === compareRequest.current) setComparison({ status: "failed", error: errorMessage(error) });
     }
   }, [context, workflowExecutionId, otherId]);
 

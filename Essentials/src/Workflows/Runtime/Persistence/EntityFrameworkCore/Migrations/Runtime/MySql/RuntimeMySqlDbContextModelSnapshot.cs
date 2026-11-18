@@ -361,7 +361,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "LastCommitSequence")
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstCommitSequence", "LastCommitSequence")
                         .HasDatabaseName("IX_elsa_runtime_activity_execution_state_commit_range");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash")

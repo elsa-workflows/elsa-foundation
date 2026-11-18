@@ -160,15 +160,17 @@ effects, and accepting it is refused (`NoRecordedCompletion`).
 
 ## Inspecting the lifecycle
 
-Spec 1229 (S-6) reads the write history back. Nothing new is stored for it: the read model is derived when read from
-the write records, the lifecycle stamps and the alteration records above. Every route uses the existing permission for
+Spec 1229 (S-6) reads the write history back. No projection or history table is added: the read model is derived
+when read from the write records, the lifecycle stamps and the alteration records above, plus two things this spec
+stores: the scheduling causes on provenance (`CausedBy`) and, per activity row, its lost-update count and
+commit-sequence range as store columns. Every route uses the existing permission for
 activity-execution inspection; values follow the sensitive-value rules.
 
 | Route under `runtime/workflows/instances/{id}` | Returns |
 |---|---|
 | `GET …/variables` | each variable instance (frame and key): scope, frame kind, current version, last writer, last commit sequence, value state |
 | `GET …/variable-writes?frameId&scopeId&variableKey&source&outcome&overwrites&cursor&take` | the write history in commit order, paged |
-| `GET …/journal?cursor&take` | the commit-ordered journal: per commit, the activity transitions (with their run-time path), input refreshes and writes |
+| `GET …/journal?cursor&take` | the commit-ordered journal: per commit, the activity transitions (with their run-time path), input refreshes and applied writes |
 | `GET …/compare/{otherId}` | two instances of one executable version compared by run-time path and digest; any other pair is `409` with `differentExecutable` |
 | `GET …/variable-writes/{entryId}/payload?value=written\|overwritten\|refused` | one value, under the payload permission, audited like the value-evidence payload read |
 | `GET …` (instance details) | `lostUpdateWarningCount`: the instance's lost-update warnings, summed from a store column |
@@ -199,8 +201,8 @@ activity-execution inspection; values follow the sensitive-value rules.
   operational data on the record (`isOperational`). A digest is shown with the state; the comparison shows digests
   only.
 - **Lost-update count.** Each activity row keeps the number of its lost-update warnings (`LostUpdateWarningCount`),
-  set when the row is committed; the store keeps it, and the row's commit-sequence range, as indexed columns, so the
-  instance details sum it without reading row documents. No incident is raised: an incident ends a coalescing session.
+  set when the row is committed; the store keeps it and the row's commit-sequence range as columns (the range indexed
+  with the instance), so the instance details sum it without reading row documents. No incident is raised: an incident ends a coalescing session.
 - **Run-time path.** An activity execution is matched across instances by the executable node ids from the root down,
   each with its occurrence under its parent (in order of scheduling), never by row ids.
 - **Cost.** The run time pays only for the scheduling causes and the per-row count. Each read loads the instance's rows

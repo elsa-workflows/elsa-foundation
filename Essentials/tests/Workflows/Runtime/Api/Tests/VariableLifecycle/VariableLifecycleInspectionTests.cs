@@ -179,6 +179,19 @@ public sealed class VariableLifecycleInspectionTests
     }
 
     [Fact]
+    public void A_container_write_after_its_child_ended_is_ordered_after_the_child_write()
+    {
+        var model = Build(
+            Row("c", "node-container", stamps: [Scheduled(1), Started(2), Completed(8)], writes: [Write("c", "node-container", 8, 1, 2)]),
+            Row("d", "node-child", parent: "c", stamps: [Scheduled(3), Completed(5)], writes: [Write("d", "node-child", 5, 0, 1)]),
+            Row("e", "node-late", parent: "c", stamps: [Scheduled(3), Completed(9)], writes: [Write("e", "node-late", 9, 2, 3)]));
+
+        Assert.Null(Entry(model, "c").Overwrote);
+        // A child still running when the container wrote is not ordered after that write.
+        Assert.Same(Entry(model, "c"), Entry(model, "e").Overwrote);
+    }
+
+    [Fact]
     public void A_write_on_suspension_and_again_on_completion_does_not_overwrite_itself()
     {
         var model = Build(Row("a", "node-a", stamps: [Scheduled(1), Suspended(2), Resumed(4), Completed(5)], writes:
