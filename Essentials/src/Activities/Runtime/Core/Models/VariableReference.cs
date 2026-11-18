@@ -114,6 +114,27 @@ public sealed record ActivityInputVariableReference(
 /// <summary>Recognises the variable-reference input types, by CLR type or, for a reflection-only scan, by name.</summary>
 public static class VariableReferenceTypes
 {
+    /// <summary>
+    /// Whether an activity type may read and write any visible variable by name (spec 1231 FR-025, FR-026): it is marked
+    /// <c>[AccessesUndeclaredVariables]</c> (inherited), or it is an engine script activity
+    /// (<see cref="Contracts.IStepVariableSessionConsumer"/>), whose session resolves names itself. Either one is pinned as
+    /// <see cref="ActivityContract.AccessesUndeclaredVariables"/>, so publication, the concurrent-write rule and
+    /// background eligibility see it. Compares by name, so it also works for a type loaded for reflection only.
+    /// </summary>
+    public static bool AccessesUndeclaredVariables(Type activityType)
+    {
+        ArgumentNullException.ThrowIfNull(activityType);
+        var marker = typeof(Attributes.AccessesUndeclaredVariablesAttribute).FullName;
+        var consumer = typeof(Contracts.IStepVariableSessionConsumer).FullName;
+        for (var current = activityType; current is not null; current = current.BaseType)
+        {
+            if (current.GetCustomAttributesData().Any(attribute => attribute.AttributeType.FullName == marker))
+                return true;
+        }
+
+        return activityType.GetInterfaces().Any(contract => contract.FullName == consumer);
+    }
+
     /// <summary>The portable type of a variable-reference input's pinned binding: the reference, never a value.</summary>
     public const string Alias = "Elsa.VariableReference";
 

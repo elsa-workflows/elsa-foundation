@@ -66,6 +66,7 @@ public sealed record StepVariableTarget(string ScopeId, string VariableKey, stri
 /// <summary>
 /// An engine-owned activity whose body reads and writes variables by names it resolves itself (<c>RunJavaScript</c>,
 /// through <see cref="IStepVariableSession"/>): its session loads the visible frame chain even though no input binds a
-/// variable.
+/// variable. Implementing it counts as <c>[AccessesUndeclaredVariables]</c> wherever that is pinned (the contract, the
+/// descriptor, the may-write set and background eligibility), so the engine surface is never a way around them.
 /// </summary>
 public interface IStepVariableSessionConsumer;

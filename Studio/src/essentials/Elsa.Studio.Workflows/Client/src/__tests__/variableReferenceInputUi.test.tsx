@@ -64,6 +64,7 @@ function renderPanel(
     onChange?(activity: ActivityNode): void;
     variables?: VisibleVariableView[];
     readOnly?: boolean;
+    scopeStatus?: "ready" | "loading" | "error" | "unavailable";
     editors?: StudioActivityPropertyEditorContribution[];
     workflowState?: WorkflowDefinitionState;
   } = {}
@@ -83,7 +84,7 @@ function renderPanel(
       expressionDescriptorStatus="ready"
       descriptorStatus="ready"
       visibleVariables={options.variables ?? visibleVariables}
-      scopeStatus="ready"
+      scopeStatus={options.scopeStatus ?? "ready"}
       onChange={options.onChange ?? (() => undefined)}
     />
   ));
@@ -285,6 +286,21 @@ describe("may-write set", () => {
     );
 
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Gone (not visible from this scope)");
+  });
+
+  it("does not flag a bound variable as out of scope while the scope analysis is loading", () => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({
+          Target: { typeName: "Int32", expression: { type: "Variable", value: { referenceKey: "counter-key", declaringScopeId: "workflow", name: "Counter" } } }
+        }),
+        variables: [],
+        scopeStatus: "loading"
+      }
+    );
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Counter");
   });
 
   it("disables the select for an input that is itself read-only", () => {

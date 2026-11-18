@@ -642,7 +642,7 @@ public sealed class ExecutableNodeCompiler(
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
-            accessesUndeclaredVariables: activityType.IsDefined(typeof(AccessesUndeclaredVariablesAttribute), inherit: true));
+            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType));
     }
 
     /// <summary>

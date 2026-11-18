@@ -395,6 +395,24 @@ public sealed class EngineSurfaceCastActivity : Activity
     }
 }
 
+/// <summary>A marked base type; its subclass inherits the marker.</summary>
+[AccessesUndeclaredVariables]
+public abstract class MarkedBaseActivity : Activity
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+}
+
+/// <summary>Inherits <c>[AccessesUndeclaredVariables]</c>.</summary>
+public sealed class InheritedMarkerActivity : MarkedBaseActivity;
+
+/// <summary>An engine script activity: it resolves variable names itself through the engine surface.</summary>
+public sealed class EngineConsumerActivity : Activity, Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+}
+
 /// <summary>The stimulus the resumable session leaves wait for.</summary>
 public static class StepVariableResume
 {

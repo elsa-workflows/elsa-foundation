@@ -43,7 +43,8 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly Dictionary<(string ScopeId, string Key), StepVariableWriteIntent> _intents = new();
     private readonly List<(string ScopeId, string Key)> _intentOrder = [];
     private readonly Dictionary<(string ScopeId, string Key), object?> _transient = new();
-    private readonly Dictionary<(string ScopeId, string Key), IReadOnlyList<string>> _droppedMembers = new();
+    // The stored value a typed (narrower) read deserialized from; compared with the value written back, at Set.
+    private readonly Dictionary<(string ScopeId, string Key), JsonElement> _typedReads = new();
 
     /// <param name="frames">
     /// The step's visible frame chain; null for an activity that can bind nothing (no variable-reference input, no
@@ -232,15 +233,10 @@ internal sealed class StepVariableSession : IStepVariableSession
                 $"Variable '{variable.Name}' cannot be read as '{typeof(T).FullName}' on node '{_node.ExecutableNodeId}'.", exception));
         }
 
-        // A read as a narrower type drops members of the stored value; a write of it back declares that loss (ADR 0046 V6).
+        // A read as a narrower type may drop members of the stored value; a write of it back declares that loss (ADR 0046
+        // V6). The comparison runs only when the value is written back, so a read serializes nothing.
         if (inline.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-        {
-            var dropped = DroppedMembers.Find(inline, JsonSerializer.SerializeToElement(value, ActivityValueJson.Options));
-            if (dropped.Count > 0)
-                _droppedMembers[variable.Address] = dropped;
-            else
-                _droppedMembers.Remove(variable.Address);
-        }
+            _typedReads[variable.Address] = inline;
 
         return value;
     }
@@ -301,7 +297,10 @@ internal sealed class StepVariableSession : IStepVariableSession
                 $"The value written to variable '{variable.Name}' on node '{_node.ExecutableNodeId}' cannot be serialized.", exception));
         }
 
-        Stage(variable, json, StepVariableWriteKind.WholeAssignment, _droppedMembers.GetValueOrDefault(variable.Address));
+        var dropped = json is { } written && _typedReads.TryGetValue(variable.Address, out var stored)
+            ? DroppedMembers.Find(stored, written)
+            : null;
+        Stage(variable, json, StepVariableWriteKind.WholeAssignment, dropped);
     }
 
     // FR-027: a step that can suspend (a stateful or checkpoint-participating activity) cannot hold a live instance across

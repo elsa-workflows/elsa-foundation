@@ -33,7 +33,8 @@ export function readBoundVariable(activity: ActivityNode, input: StudioActivityI
 export function readMayWriteSet(
   activity: ActivityNode,
   descriptor: StudioActivityDescriptor,
-  visibleVariables: VisibleVariableView[]
+  visibleVariables: VisibleVariableView[],
+  scopeReady = true
 ): string[] {
   const names: string[] = [];
   for (const input of descriptor.inputs) {
@@ -43,9 +44,9 @@ export function readMayWriteSet(
     const key = selectedOptionKey(bound);
     const visible = visibleVariables.find(variable => optionKey(variable.referenceKey, variable.scopeId) === key);
     // A binding to a variable that was deleted or moved out of scope keeps its stored name, flagged; publish refuses it.
-    const name = visible
-      ? visible.name
-      : `${readStoredVariableName(activity, input) ?? bound.referenceKey} (not visible from this scope)`;
+    // Until the scope analysis is ready nothing is known to be out of scope, so the stored name shows unflagged.
+    const stored = readStoredVariableName(activity, input) ?? bound.referenceKey;
+    const name = visible ? visible.name : scopeReady ? `${stored} (not visible from this scope)` : stored;
     if (!names.includes(name)) names.push(name);
   }
   return names;
@@ -143,16 +144,18 @@ export function VariableReferenceInputRow({
 export function VariableWritesSummary({
   activity,
   descriptor,
-  visibleVariables
+  visibleVariables,
+  scopeReady = true
 }: {
   activity: ActivityNode;
   descriptor: StudioActivityDescriptor;
   visibleVariables: VisibleVariableView[];
+  scopeReady?: boolean;
 }) {
   if (descriptor.accessesUndeclaredVariables === true) {
     return <p className="wf-variable-writes" role="note">May write any visible variable</p>;
   }
-  const names = readMayWriteSet(activity, descriptor, visibleVariables);
+  const names = readMayWriteSet(activity, descriptor, visibleVariables, scopeReady);
   if (names.length === 0) return null;
   return <p className="wf-variable-writes" role="note">May write: {names.join(", ")}</p>;
 }

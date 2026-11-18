@@ -2450,6 +2450,20 @@ public sealed class WorkflowExecutableCompilerTests
     [AccessesUndeclaredVariables]
     private sealed class MarkedVariableWriterProbe : IActivityResult<ActivityUnit>;
 
+    // An engine script activity resolves names itself, so it is pinned exactly as the marker is.
+    [Fact]
+    public async Task An_engine_consumer_activity_is_pinned_as_writing_every_visible_variable()
+    {
+        var compiler = VariableReferenceCompiler(typeof(EngineConsumerProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    private sealed class EngineConsumerProbe : IActivityResult<ActivityUnit>, Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer;
+
     [Theory]
     [InlineData(typeof(ChildControlProbe), true)]
     [InlineData(typeof(ChildFaultHandlingProbe), false)]

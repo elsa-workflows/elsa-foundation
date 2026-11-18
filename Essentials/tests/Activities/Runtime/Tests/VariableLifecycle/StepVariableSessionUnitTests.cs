@@ -128,6 +128,35 @@ public sealed class StepVariableSessionUnitTests
         Assert.NotNull(session.PendingFault);
     }
 
+    // FR-025, FR-026: the marker (also inherited) and the engine-consumer interface are one pinned fact, so the engine
+    // surface is never a way around publication, the concurrent-write rule or background eligibility.
+    [Theory]
+    [InlineData(typeof(FreeNameSetActivity), true)]
+    [InlineData(typeof(InheritedMarkerActivity), true)]
+    [InlineData(typeof(EngineConsumerActivity), true)]
+    [InlineData(typeof(SessionIncrementActivity), false)]
+    public void The_marker_and_the_engine_consumer_interface_are_pinned_as_one_fact(Type activityType, bool expected)
+    {
+        Assert.Equal(expected, VariableReferenceTypes.AccessesUndeclaredVariables(activityType));
+        Assert.Equal(expected, ClrActivityContractTestBuilder.BuildContract(activityType).AccessesUndeclaredVariables);
+    }
+
+    [Fact]
+    public void A_typed_read_records_dropped_members_only_when_the_value_is_written_back()
+    {
+        var order = ValueEnvelope.Inline(StepVariableTestGraph.AnyType,
+            JsonSerializer.SerializeToElement(new { total = 1, status = "open" }), ValueProtectionPolicy.InstanceInline);
+        var session = Session(Root((StepVariableTestGraph.OrderKey, order)),
+            bound: new() { [("workflow", StepVariableTestGraph.OrderKey)] = true });
+        var reference = new VariableReference<OrderTotal>("order", "workflow", StepVariableTestGraph.OrderKey);
+
+        var read = session.Get(reference);
+        Assert.Empty(session.Intents);
+        session.Set(reference, read);
+
+        Assert.Equal(["$.status"], Assert.Single(session.Intents).DroppedMembers);
+    }
+
     private static VariableReference<int> Count() => new("count", "workflow", CountKey);
 
     private static ValueEnvelope Int(int value) =>

@@ -784,7 +784,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // A refused write into a closed scope's variable row refuses the completion the same way (T003). Its
             // completion produced durable rows, so it is not recorded for acceptance.
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, state.WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -797,7 +797,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // refused completion for an operator to accept (spec 1221 FR-017).
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
                 invokePayload,
-                state.WithVariableWrites(captureCommit.Records) with
+                WithSessionReads(state, stepSession).WithVariableWrites(captureCommit.Records) with
                 {
                     // A completion whose step also wrote variables in its session is not recorded: accepting it would replay
                     // its captures without those writes.

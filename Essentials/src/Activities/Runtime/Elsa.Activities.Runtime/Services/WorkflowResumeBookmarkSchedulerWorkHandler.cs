@@ -644,7 +644,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (captureProjection.LostUpdateFault is { } rowLostUpdate)
         {
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
-                executionState.WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                WithSessionReads(executionState, stepSession).WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -672,7 +672,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (captureCommit.LostUpdateFault is { } lostUpdate)
         {
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
-                executionState.WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
+                WithSessionReads(executionState, stepSession).WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
