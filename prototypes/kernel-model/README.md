@@ -40,6 +40,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
 | `experiments/Astra4.Sizes` | The fourth gate 2 review's size and identity probe: the real event-match encoding, placement hash and Native background arm, measured beside the proposed compact forms; see its [README](experiments/Astra4.Sizes/README.md) |
 | `experiments/Review4.Blockers` | Gate 2, fourth review: FR-1 (R4-B1, release cohort precedence) and RT-1 (R4-B2, the retirement obligation) on the real Native model and creation protocol, each under the reviewed, repaired and negative rules; [its README](experiments/Review4.Blockers/README.md) |
+| `experiments/Review5.Delivery` | Gate 2, fifth review: EV-1 (R5-M2, event eligibility by stored stamps), FR-2 (R5-M3, the drain's handoff credit), JR-1 (R5-M4, a fenced job result across Park) and PO-1 (R5-M6, precedence in the poison comparison) on the real in-memory store and Native model, each under the reviewed, repaired and negative rules; [its README](experiments/Review5.Delivery/README.md) |
 
 ## Build
 
