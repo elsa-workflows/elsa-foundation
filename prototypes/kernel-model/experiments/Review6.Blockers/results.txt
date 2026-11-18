@@ -1,5 +1,5 @@
 Review6.Blockers results
-commit f9e6ba93b370f974f3361e9f3973bb5d1dfbbf5e (tree a7cb31151a6a4bdeef87eb4dcb559bcd2586449e, prototype tree 4888e8f54bbdeee6ae842e84e48a8de373a66712)
+commit 7ba9d302fc62cb1d9d16ebdd8aabd042f29324e2 (tree 5698e6294975b0171dcba5cfbc5fa1c0f53505e4, prototype tree 8315d6ebd92ecb5e85874bacd03b85d73482703f)
 branch base (merge-base with origin/main) d49aad9cdae8bc40647494d7dc842c1d704c0467
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -7,9 +7,9 @@ commands, from prototypes/kernel-model, after removing experiments/Review6.Block
   experiments/Review6.Blockers/run.sh -> exit 0, which runs:
     dotnet restore experiments/Review6.Blockers --locked-mode          -> exit 0
     dotnet build experiments/Review6.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
-    each case and rule set, then --all                                -> exit codes below; 34/34 runs as expected
+    each case and rule set, then --all                                -> exit codes below; 34/34 runs as expected (failed assertion ids compared)
   dotnet experiments/Review6.Blockers/bin/Release/net10.0/Kernel.Review6.Blockers.dll --all, twice
-    -> exit 0 and 0, byte-identical output (SHA-256 0590b7c2403c6abec64e977c73b9c6c0d877c79fb863959971b45f877a703683), below
+    -> exit 0 and 0, byte-identical output (SHA-256 e64329e459b419b5b08b9a3d0d696dc2021fcfeb4eea36a8ea1b16d4cefa13d5), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 0 (nt1-growth, reviewed)
@@ -65,9 +65,9 @@ invariant: Native's TerminalGrowth(state) bound covers the real TerminateMetadat
     the witness's structure: 3,500 open empty inboxes and frames: growth +24500 bytes; bound 24500
     in SQL Server's UTF-16 each figure doubles (derived, unmeasured)
   assertions:
-    PASS the closing cost of one open empty inbox, measured: 7 (expected 7)
-    PASS every measured growth, net and gross, is within the bound: True
-    PASS the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
+    PASS [closing-cost] the closing cost of one open empty inbox, measured: 7 (expected 7)
+    PASS [within-bound] every measured growth, net and gross, is within the bound: True
+    PASS [witness-bound] the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
   real prototype calls: InvocationLifetime.Terminate x2, NativeModel.TerminateMetadata x18
 RESULT NT-1/growth rules=reviewed: PASS
 
@@ -88,9 +88,9 @@ invariant: Native's TerminalGrowth(state) bound covers the real TerminateMetadat
     the witness's structure: 3,500 open empty inboxes and frames: growth +24500 bytes; bound 24500
     in SQL Server's UTF-16 each figure doubles (derived, unmeasured)
   assertions:
-    PASS the closing cost of one open empty inbox, measured: 7 (expected 7)
-    PASS every measured growth, net and gross, is within the bound: True
-    PASS the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
+    PASS [closing-cost] the closing cost of one open empty inbox, measured: 7 (expected 7)
+    PASS [within-bound] every measured growth, net and gross, is within the bound: True
+    PASS [witness-bound] the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
   real prototype calls: InvocationLifetime.Terminate x2, NativeModel.TerminateMetadata x18
 RESULT NT-1/growth rules=repaired: PASS
 
@@ -111,9 +111,9 @@ invariant: Native's TerminalGrowth(state) bound covers the real TerminateMetadat
     the witness's structure: 3,500 open empty inboxes and frames: growth +24500 bytes; bound 24500
     in SQL Server's UTF-16 each figure doubles (derived, unmeasured)
   assertions:
-    PASS the closing cost of one open empty inbox, measured: 7 (expected 7)
-    PASS every measured growth, net and gross, is within the bound: True
-    PASS the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
+    PASS [closing-cost] the closing cost of one open empty inbox, measured: 7 (expected 7)
+    PASS [within-bound] every measured growth, net and gross, is within the bound: True
+    PASS [witness-bound] the witness structure's growth equals its bound (3,500 x 7): 24500 (expected 24500)
   real prototype calls: InvocationLifetime.Terminate x2, NativeModel.TerminateMetadata x18
 RESULT NT-1/growth rules=negative: PASS
 
@@ -134,14 +134,14 @@ invariant: Native's TerminalGrowth(state) bound covers the real TerminateMetadat
     the witness's structure: 3,500 open empty inboxes and frames: growth +24500 bytes; bound 21000
     in SQL Server's UTF-16 each figure doubles (derived, unmeasured)
   assertions:
-    PASS the closing cost of one open empty inbox, measured: 7 (expected 7)
-    FAIL every measured growth, net and gross, is within the bound: False
-    FAIL the witness structure's growth equals its bound (3,500 x 6): 24500 (expected 21000)
+    PASS [closing-cost] the closing cost of one open empty inbox, measured: 7 (expected 7)
+    FAIL [within-bound] every measured growth, net and gross, is within the bound: False
+    FAIL [witness-bound] the witness structure's growth equals its bound (3,500 x 6): 24500 (expected 21000)
   real prototype calls: InvocationLifetime.Terminate x2, NativeModel.TerminateMetadata x18
 RESULT NT-1/growth rules=growth-undercount: FAIL
 
 == NT-1/witness | rules=reviewed ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,436,864 bytes (the reviewer's witness size, cap - header - one child - 4,096); 3,500 open inboxes, 30,528 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,436,864 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,453,632 <= 16,457,728 (margin 4,096); the row's other fields 366 bytes, inside the header
@@ -157,14 +157,15 @@ invariant: every state P commits leaves room for its own terminate, so the endin
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   P ends Faulted; its state 16,436,864 bytes
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,478,132 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,478,132 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/witness rules=reviewed: FAIL
 
 == NT-1/witness | rules=repaired ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,436,864 bytes (the reviewer's witness size, cap - header - one child - 4,096); 3,500 open inboxes, 30,528 variables
   P's growth turn (writes the grown state): envelope check (proposed, with TerminalGrowth): state 16,436,864 + TerminalGrowth 24,500 + registries 384 + header 16,384 = 16,478,132 > 16,457,728 (margin -20,404); the row's other fields 366 bytes, inside the header
@@ -180,14 +181,15 @@ invariant: every state P commits leaves room for its own terminate, so the endin
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   P ends Faulted; its state 140 bytes
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,908 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,908 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 0 before, 0 kept, 0 closed
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2, WorkflowInstance.Park x1
 RESULT NT-1/witness rules=repaired: PASS
 
 == NT-1/witness | rules=negative ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,436,864 bytes (the reviewer's witness size, cap - header - one child - 4,096); 3,500 open inboxes, 30,528 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,436,864 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,453,632 <= 16,457,728 (margin 4,096); the row's other fields 366 bytes, inside the header
@@ -203,14 +205,15 @@ invariant: every state P commits leaves room for its own terminate, so the endin
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   P ends Faulted; its state 16,436,864 bytes
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,478,132 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,478,132 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/witness rules=negative: FAIL
 
 == NT-1/at-bound | rules=reviewed ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (the largest state this rule set's check admits, cap - header - one child - 0 reserved); 3,500 open inboxes, 30,536 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -225,15 +228,16 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: []
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,482,228 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
-    FAIL P ended Cancelled with its forensic state, every invocation inbox closed: Faulted, 3500 open
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,482,228 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled: Faulted
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/at-bound rules=reviewed: FAIL
 
 == NT-1/at-bound | rules=repaired ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,416,460 bytes (the largest state this rule set's check admits, cap - header - one child - 24,500 reserved); 3,500 open inboxes, 30,488 variables
   P's growth turn (writes the grown state): envelope check (proposed, with TerminalGrowth): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -247,15 +251,17 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
-    PASS P ended Cancelled with its forensic state, every invocation inbox closed: Cancelled, 0 open
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
+    PASS [at-cap] the growth commit and the ending commit both landed with a modeled total of exactly 16,457,728: [P's growth turn (writes the grown state): 16,457,728, P's ending commit: 16,457,728]
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2
 RESULT NT-1/at-bound rules=repaired: PASS
 
 == NT-1/at-bound | rules=negative ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (the largest state this rule set's check admits, cap - header - one child - 0 reserved); 3,500 open inboxes, 30,536 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -270,15 +276,16 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: []
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,482,228 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
-    FAIL P ended Cancelled with its forensic state, every invocation inbox closed: Faulted, 3500 open
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,482,228 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled: Faulted
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/at-bound rules=negative: FAIL
 
 == NT-1/at-bound | rules=growth-undercount ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,419,960 bytes (the largest state this rule set's check admits, cap - header - one child - 21,000 reserved); 3,500 open inboxes, 30,495 variables
   P's growth turn (writes the grown state): envelope check (proposed, with TerminalGrowth): state 16,419,960 + TerminalGrowth 21,000 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -293,22 +300,23 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: []
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,461,228 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
-    FAIL P ended Cancelled with its forensic state, every invocation inbox closed: Faulted, 3500 open
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,461,228 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled: Faulted
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/at-bound rules=growth-undercount: FAIL
 
 == NT-1/thendelete-protected | rules=reviewed ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (the largest state this rule set's check admits, cap - header - one child - 0 reserved); 3,500 open inboxes, 30,535 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
     landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]
     TerminateMetadata grew P's state by 24,475 bytes (16,440,960 -> 16,465,435)
-    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept: the commit is the live row's write
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
   P's ending commit: envelope check (proposed, reviewed form): state 16,465,435 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,482,203 > 16,457,728 (margin -24,475); the row's other fields 366 bytes, inside the header
     refused before the store as a definite error (over the envelope); the turn fails and parks (WorkflowInstance.Park)
     Park: P Running -> Faulted, state kept (16,440,960 bytes), registry kept, sends [child-finished c3_1/p_1#3.end to 0/q]; envelope state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -317,22 +325,23 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: []
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,482,203 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
-    FAIL P ended Cancelled and kept with its forensic state, every invocation inbox closed: Faulted, 3500 open
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,482,203 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled and kept: Faulted
   real prototype calls: ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.ProtectsDeletion x1, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/thendelete-protected rules=reviewed: FAIL
 
 == NT-1/thendelete-protected | rules=repaired ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,416,437 bytes (the largest state this rule set's check admits, cap - header - one child - 24,523 reserved); 3,500 open inboxes, 30,488 variables
   P's growth turn (writes the grown state): envelope check (proposed, with TerminalGrowth): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
     landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]
     TerminateMetadata grew P's state by 24,475 bytes (16,416,437 -> 16,440,912)
-    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept: the commit is the live row's write
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
   P's ending commit: envelope check (proposed, with TerminalGrowth): state 16,440,912 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,680 <= 16,457,728 (margin 48); the row's other fields 366 bytes, inside the header
     landed
   deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
@@ -340,22 +349,23 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,457,680 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
-    PASS P ended Cancelled and kept with its forensic state, every invocation inbox closed: Cancelled, 0 open
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,457,680 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled and kept: Cancelled
   real prototype calls: ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.ProtectsDeletion x1, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2
 RESULT NT-1/thendelete-protected rules=repaired: PASS
 
 == NT-1/thendelete-protected | rules=negative ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (the largest state this rule set's check admits, cap - header - one child - 0 reserved); 3,500 open inboxes, 30,535 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
     landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]
     TerminateMetadata grew P's state by 24,475 bytes (16,440,960 -> 16,465,435)
-    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept: the commit is the live row's write
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
   P's ending commit: envelope check (proposed, reviewed form): state 16,465,435 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,482,203 > 16,457,728 (margin -24,475); the row's other fields 366 bytes, inside the header
     refused before the store as a definite error (over the envelope); the turn fails and parks (WorkflowInstance.Park)
     Park: P Running -> Faulted, state kept (16,440,960 bytes), registry kept, sends [child-finished c3_1/p_1#3.end to 0/q]; envelope state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -364,15 +374,16 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: []
     P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
   assertions:
-    FAIL every state P committed leaves room for its own terminate: 16,482,203 <= 16,457,728: False
-    FAIL the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
-    PASS notices from P to Q: 1 (expected 1)
-    FAIL P ended Cancelled and kept with its forensic state, every invocation inbox closed: Faulted, 3500 open
+    FAIL [room-for-terminate] every state P committed leaves room for its own terminate: 16,482,203 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled and kept: Faulted
   real prototype calls: ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x4, NativeModel.ProtectsDeletion x1, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x1, WorkflowInstance.Park x1
 RESULT NT-1/thendelete-protected rules=negative: FAIL
 
 == NT-1/no-inboxes | rules=reviewed ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (a Native state with no invocation inbox, padded to the reviewed bound); 0 open inboxes, 1 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -386,15 +397,16 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
-    PASS P ended Cancelled with its forensic state, every invocation inbox closed: Cancelled, 0 open
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 0 before, 0 kept, 0 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2
 RESULT NT-1/no-inboxes rules=reviewed: PASS
 
 == NT-1/no-inboxes | rules=repaired ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (a Native state with no invocation inbox, padded to the reviewed bound); 0 open inboxes, 1 variables
   P's growth turn (writes the grown state): envelope check (proposed, with TerminalGrowth): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -408,15 +420,16 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
-    PASS P ended Cancelled with its forensic state, every invocation inbox closed: Cancelled, 0 open
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 0 before, 0 kept, 0 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2
 RESULT NT-1/no-inboxes rules=repaired: PASS
 
 == NT-1/no-inboxes | rules=negative ==
-invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P
+invariant: every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   the grown state: 16,440,960 bytes (a Native state with no invocation inbox, padded to the reviewed bound); 0 open inboxes, 1 variables
   P's growth turn (writes the grown state): envelope check (proposed, reviewed form): state 16,440,960 + TerminalGrowth 0 + registries 384 + header 16,384 = 16,457,728 <= 16,457,728 (margin 0); the row's other fields 366 bytes, inside the header
@@ -430,10 +443,11 @@ invariant: every state P commits leaves room for its own terminate, so the endin
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
-    PASS every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
-    PASS the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
-    PASS notices from P to Q: 1 (expected 1)
-    PASS P ended Cancelled with its forensic state, every invocation inbox closed: Cancelled, 0 open
+    PASS [room-for-terminate] every state P committed leaves room for its own terminate: 16,457,728 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 0 before, 0 kept, 0 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
   real prototype calls: ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.TakeAsync x4, NativeModel.TerminateMetadata x3, WorkflowInstance.Command x2
 RESULT NT-1/no-inboxes rules=negative: PASS
 
@@ -452,8 +466,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/gap rules=reviewed: PASS
 
@@ -472,8 +486,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:e080cf4c1958b5d498036… Match a955d545b371d35633ad9f5f…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/gap rules=repaired: PASS
 
@@ -492,8 +506,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/gap rules=negative: PASS
 
@@ -510,8 +524,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery evq:5:evt-1:c3_1/i_1:w Match {"Key":"order-7","Event"…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x1, Events.PublishAsync x2, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/gap rules=built-key: PASS
 
@@ -531,9 +545,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: nothing pending
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [old-done-retired] the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/event-first rules=reviewed: FAIL
 
@@ -553,9 +567,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:e080cf4c1958b5d498036… Match a955d545b371d35633ad9f5f…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 0 (expected 0)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [old-done-retired] the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 0 (expected 0)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/event-first rules=repaired: PASS
 
@@ -575,9 +589,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: nothing pending
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [old-done-retired] the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/event-first rules=negative: FAIL
 
@@ -595,9 +609,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery evq:5:evt-1:c3_1/i_1:w Match {"Key":"order-7","Event"…: refused, the full key exists
   t=2200: W's turn: nothing pending
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [old-done-retired] the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x1, Events.PublishAsync x2, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.SubscribeAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/event-first rules=built-key: FAIL
 
@@ -617,9 +631,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:e080cf4c1958b5d498036… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [old-done-retired] the first publication's Done deliveries left after the message-sweep batch (its own event row is gone): 1 (expected 0)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/event-first rules=match-without-incarnation: FAIL
 
@@ -638,8 +652,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":1}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/slow-consumer rules=reviewed: FAIL
 
@@ -658,8 +672,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:e080cf4c1958b5d498036… Match a955d545b371d35633ad9f5f…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":1}, {"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/slow-consumer rules=repaired: PASS
 
@@ -678,8 +692,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":1}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/slow-consumer rules=negative: FAIL
 
@@ -696,8 +710,8 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery evq:5:evt-1:c3_1/i_1:w Match {"Key":"order-7","Event"…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":1}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [payloads] payloads W received, in order: [{"n":1}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x1, Events.PublishAsync x2, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x1, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/slow-consumer rules=built-key: FAIL
 
@@ -718,9 +732,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1) (expected Duplicate, (order-7, evt-1))
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [duplicate] the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1) (expected Duplicate, (order-7, evt-1))
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/duplicate rules=reviewed: PASS
 
@@ -741,9 +755,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:e080cf4c1958b5d498036… Match a955d545b371d35633ad9f5f…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1, incarnation 00000000000000000000000000000002) (expected Duplicate, (order-7, evt-1, incarnation 00000000000000000000000000000002))
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [duplicate] the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1, incarnation 00000000000000000000000000000002) (expected Duplicate, (order-7, evt-1, incarnation 00000000000000000000000000000002))
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/duplicate rules=repaired: PASS
 
@@ -764,9 +778,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:74ad7bb3c3bad1382a64c… Match 59d42304213e26d349e38824…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    PASS the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1) (expected Duplicate, (order-7, evt-1))
-    PASS payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    PASS [duplicate] the retry is answered as a duplicate of the second publication: Duplicate, names (order-7, evt-1) (expected Duplicate, (order-7, evt-1))
+    PASS [payloads] payloads W received, in order: [{"n":1} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/duplicate rules=negative: PASS
 
@@ -787,9 +801,9 @@ invariant: W, continuously subscribed, receives each accepted publication of (K,
     catch-up: event payload {"n":2} to w: delivery ev:75f512bfa370462b870cc… Match 2d75ec78654b9470d3b4df5b…: refused, the full key exists
   t=2200: W's turn: consumes [{"n":2}, {"n":2}]: landed, the rows are kept Done
   assertions:
-    PASS the second admission's receipt: New (expected New)
-    FAIL the retry is answered as a duplicate of the second publication: New, names (order-7, evt-1, incarnation 00000000000000000000000000000003) (expected Duplicate, (order-7, evt-1, incarnation 00000000000000000000000000000002))
-    FAIL payloads W received, in order: [{"n":1} ; {"n":2} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
+    PASS [second-new] the second admission's receipt: New (expected New)
+    FAIL [duplicate] the retry is answered as a duplicate of the second publication: New, names (order-7, evt-1, incarnation 00000000000000000000000000000003) (expected Duplicate, (order-7, evt-1, incarnation 00000000000000000000000000000002))
+    FAIL [payloads] payloads W received, in order: [{"n":1} ; {"n":2} ; {"n":2}] (expected [{"n":1} ; {"n":2}])
   real prototype calls: EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x2, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x3, InMemoryStore.SubscribeAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x4
 RESULT PI-1/duplicate rules=fresh-incarnation-on-duplicate: FAIL
 
@@ -797,17 +811,17 @@ RESULT PI-1/duplicate rules=fresh-incarnation-on-duplicate: FAIL
 nt1-growth                 reviewed                         actual PASS  expected PASS  as expected
 nt1-growth                 repaired                         actual PASS  expected PASS  as expected
 nt1-growth                 negative                         actual PASS  expected PASS  as expected
-nt1-growth                 growth-undercount                actual FAIL  expected FAIL  as expected
-nt1-witness                reviewed                         actual FAIL  expected FAIL  as expected
+nt1-growth                 growth-undercount                actual FAIL within-bound,witness-bound  expected FAIL within-bound,witness-bound  as expected
+nt1-witness                reviewed                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed  as expected
 nt1-witness                repaired                         actual PASS  expected PASS  as expected
-nt1-witness                negative                         actual FAIL  expected FAIL  as expected
-nt1-at-bound               reviewed                         actual FAIL  expected FAIL  as expected
+nt1-witness                negative                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed  as expected
+nt1-at-bound               reviewed                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
 nt1-at-bound               repaired                         actual PASS  expected PASS  as expected
-nt1-at-bound               negative                         actual FAIL  expected FAIL  as expected
-nt1-at-bound               growth-undercount                actual FAIL  expected FAIL  as expected
-nt1-thendelete-protected   reviewed                         actual FAIL  expected FAIL  as expected
+nt1-at-bound               negative                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt1-at-bound               growth-undercount                actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt1-thendelete-protected   reviewed                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
 nt1-thendelete-protected   repaired                         actual PASS  expected PASS  as expected
-nt1-thendelete-protected   negative                         actual FAIL  expected FAIL  as expected
+nt1-thendelete-protected   negative                         actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
 nt1-no-inboxes             reviewed                         actual PASS  expected PASS  as expected
 nt1-no-inboxes             repaired                         actual PASS  expected PASS  as expected
 nt1-no-inboxes             negative                         actual PASS  expected PASS  as expected
@@ -815,17 +829,17 @@ pi1-gap                    reviewed                         actual PASS  expecte
 pi1-gap                    repaired                         actual PASS  expected PASS  as expected
 pi1-gap                    negative                         actual PASS  expected PASS  as expected
 pi1-gap                    built-key                        actual PASS  expected PASS  as expected
-pi1-event-first            reviewed                         actual FAIL  expected FAIL  as expected
+pi1-event-first            reviewed                         actual FAIL old-done-retired,payloads  expected FAIL old-done-retired,payloads  as expected
 pi1-event-first            repaired                         actual PASS  expected PASS  as expected
-pi1-event-first            negative                         actual FAIL  expected FAIL  as expected
-pi1-event-first            built-key                        actual FAIL  expected FAIL  as expected
-pi1-event-first            match-without-incarnation        actual FAIL  expected FAIL  as expected
-pi1-slow-consumer          reviewed                         actual FAIL  expected FAIL  as expected
+pi1-event-first            negative                         actual FAIL old-done-retired,payloads  expected FAIL old-done-retired,payloads  as expected
+pi1-event-first            built-key                        actual FAIL old-done-retired,payloads  expected FAIL old-done-retired,payloads  as expected
+pi1-event-first            match-without-incarnation        actual FAIL old-done-retired  expected FAIL old-done-retired  as expected
+pi1-slow-consumer          reviewed                         actual FAIL payloads  expected FAIL payloads  as expected
 pi1-slow-consumer          repaired                         actual PASS  expected PASS  as expected
-pi1-slow-consumer          negative                         actual FAIL  expected FAIL  as expected
-pi1-slow-consumer          built-key                        actual FAIL  expected FAIL  as expected
+pi1-slow-consumer          negative                         actual FAIL payloads  expected FAIL payloads  as expected
+pi1-slow-consumer          built-key                        actual FAIL payloads  expected FAIL payloads  as expected
 pi1-duplicate              reviewed                         actual PASS  expected PASS  as expected
 pi1-duplicate              repaired                         actual PASS  expected PASS  as expected
 pi1-duplicate              negative                         actual PASS  expected PASS  as expected
-pi1-duplicate              fresh-incarnation-on-duplicate   actual FAIL  expected FAIL  as expected
+pi1-duplicate              fresh-incarnation-on-duplicate   actual FAIL duplicate,payloads  expected FAIL duplicate,payloads  as expected
 34/34 runs as expected
