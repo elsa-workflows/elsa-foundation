@@ -1,7 +1,9 @@
 # Job workers outside the process
 
-> **Proposed.** The kernel design awaits owner approval; this page answers design-now question 5 and does not
-> authorize product implementation. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 5. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
 > jobs are built to it.
 
 [Design-now question 5](../reports/clean-slate-kernel/design-sketch-draft-5.md#to-answer-in-the-design-proposal-before-the-fable-review-owner-decision-12-november)

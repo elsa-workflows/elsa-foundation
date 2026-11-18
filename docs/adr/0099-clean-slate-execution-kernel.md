@@ -1,14 +1,20 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-17
 ---
 
 # Clean-slate execution kernel: actor runtime, durable actors, execution models
 
-Status: proposed (17 November 2026). Program [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229),
-gate 2. The decisions below are the owner's, listed with dates and sources in the
-[kernel decision register](../architecture/decisions.md). Design approval follows the independent architecture review;
-until then this ADR authorizes no product code. Detail lives in the [architecture references](../architecture/README.md)
+Status: accepted with conditions (18 November 2026); proposed on 17 November 2026. Program
+[#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229), gate 2. Gate 2 granted design approval at the
+reviewed revision `addffea7c850063d1ebe710b07866ff1640a93cb`, on the eighth independent architecture review's verdict,
+APPROVE WITH CONDITIONS, with 0 Blockers, 0 Majors and 3 Minors
+([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The approval covers
+the design. Product work starts at K1 and lands milestone by milestone under the
+[program plan](../program-goals/clean-slate-kernel.md#milestones); the implementation evidence is owed at K1 to K12,
+and the review's conditions stay open in the plan's [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions)
+until their evidence lands. The decisions below are the owner's, listed with dates and sources in the
+[kernel decision register](../architecture/decisions.md). Detail lives in the [architecture references](../architecture/README.md)
 and the [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md); this record does not repeat it.
 
 ## Context
