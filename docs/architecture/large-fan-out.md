@@ -148,8 +148,10 @@ partition with new owners, and checks that the reloaded checkpoint matches (meas
 terminate to the children it started that have not finished, and the terminate recurses. With credits, only
 outstanding children exist; sub-ranges past the cursor were never started and need nothing. A cancel of a
 100,000-item fan-out therefore sends at most C terminates per live combiner. An instance outside the pattern can
-still hold any number of children that it started over many turns, one per turn being enough, so its terminate does
-not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
+still hold many children that it started over many turns, one per turn being enough, up to the marker-space bound
+on its registries: 384 × children + 12,416 × jobs ≤ 16,441,344 bytes, so at most 42,816 children with no jobs
+(derived, measured at K4; [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). A child start or a job
+arm past that bound fails its turn, and the instance parks. Its terminate does not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
 the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
 children end in 11 commits; the send cap binds every turn unchanged, and each page is a kernel commit of at most
 `P_cascade` entries and one `kernel.cascade` (proposed, fifth review R5-B2;
