@@ -51,23 +51,23 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
         {
             var scopes = visibility.GetVisibleScopes(node.NodeId);
             var scriptInput = scriptInputKeyOf is null ? null : await scriptInputKeyOf(node, cancellationToken);
-            // A structure-owned input (a Switch case condition) is read like any input but lives in the node's structure,
-            // where an edit by input key cannot reach it: its reads of the variable are flagged instead.
+            // A structure input is read like any other input. One the node holds under its own key (a Switch's Value) is
+            // edited in place like any input; one that lives only in the node's structure (a Switch case condition)
+            // cannot be reached by an edit by input key, so a read it makes of the renamed variable is flagged instead.
             var structureInputs = structures.ProjectInputs(node);
-            foreach (var structureInput in structureInputs.Inputs.Where(input => input.State is not null))
-            {
-                var ownedState = structureInput.State! with { ReferenceKey = structureInput.ReferenceKey };
-                if (ReadScript(ownedState, scriptInput: null) is { } owned &&
-                    resolver.Analyze(owned.Language, owned.Source) is { ReadsVariables: true } ownedAnalysis &&
-                    ResolvesTo(scopes, oldName, scopeId, referenceKey) &&
-                    (ownedAnalysis.LiteralNames.Contains(oldName, StringComparer.Ordinal) || ownedAnalysis.HasComputedRead))
-                    flags.Add(new(node.NodeId, structureInput.ReferenceKey, ScriptVariableRenameFlagReason.StructureInput,
-                        $"The structure input '{structureInput.ReferenceKey}' reads '{oldName}'; change it to '{newName}' by hand."));
-            }
+            var candidates = node.Inputs
+                .Where(input => !structureInputs.ConsumedInputKeys.Contains(input.ReferenceKey, StringComparer.Ordinal))
+                .Select(input => (Input: input, Editable: true, ScriptInput: scriptInput))
+                .Concat(structureInputs.Inputs
+                    .Where(owned => owned.State is not null)
+                    .Select(owned => (
+                        Input: owned.State! with { ReferenceKey = owned.ReferenceKey },
+                        Editable: node.Inputs.Any(input => StringComparer.Ordinal.Equals(input.ReferenceKey, owned.ReferenceKey)),
+                        ScriptInput: (string?)null)));
 
-            foreach (var input in node.Inputs.Where(input => !structureInputs.ConsumedInputKeys.Contains(input.ReferenceKey, StringComparer.Ordinal)))
+            foreach (var (input, editable, inputScriptKey) in candidates)
             {
-                if (ReadScript(input, scriptInput) is not { } script ||
+                if (ReadScript(input, inputScriptKey) is not { } script ||
                     resolver.Analyze(script.Language, script.Source, script.IsBody) is not { } analysis ||
                     !analysis.ReadsVariables)
                     continue;
@@ -80,6 +80,9 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
                     if (NearerDeclarationOf(scopes, newName, scopeId, referenceKey))
                         flags.Add(new(node.NodeId, input.ReferenceKey, ScriptVariableRenameFlagReason.Retargeted,
                             $"The script reads '{oldName}', but a nearer scope declares '{newName}', so the renamed read would read that variable instead; rename one of them by hand."));
+                    else if (!editable)
+                        flags.Add(new(node.NodeId, input.ReferenceKey, ScriptVariableRenameFlagReason.StructureInput,
+                            $"The structure input '{input.ReferenceKey}' reads '{oldName}'; change it to '{newName}' by hand."));
                     else if (tokens.Length == 0)
                         flags.Add(new(node.NodeId, input.ReferenceKey, ScriptVariableRenameFlagReason.NoSourcePositions,
                             $"The script reads '{oldName}', but its language gives no positions to edit; change it to '{newName}' by hand."));

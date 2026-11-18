@@ -34,6 +34,7 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
         new JavaScriptFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         var scope = _provider.CreateScope();
@@ -79,6 +80,33 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
         Assert.Equal([ScriptVariableReadValidator.UnresolvedReadType, ScriptVariableReadValidator.BodyReadType], findings.Select(finding => finding.Type));
         Assert.All(findings, finding => Assert.Equal("s/inputs/script", finding.Path));
         Assert.StartsWith(ScriptVariableReadDiagnostics.BodyReadNotYetServed, findings[1].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_switch_case_condition_and_its_value_are_each_checked_once()
+    {
+        // The case condition lives in the Switch structure; Value is consumed by the structure in match-value mode and
+        // must be checked there, not a second time among the node's own inputs.
+        var switchNode = new ActivityNode("sw", "av-write", [Js("variables.missingValue") with { ReferenceKey = "Value" }], [],
+            new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind, Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new Elsa.Activities.Switch.Models.SwitchAuthoredStructure(
+                [
+                    new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Big")
+                    {
+                        CaseId = "big",
+                        Condition = new ArgumentState("condition", new ArgumentValue("variables.missingCondition > 1", "JavaScript"), null, null, null, null)
+                    },
+                    new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Small")
+                ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+        var findings = await ValidateAsync(switchNode);
+
+        Assert.Equal(2, findings.Count);
+        Assert.All(findings, finding => Assert.Equal(ScriptVariableReadValidator.UnresolvedReadType, finding.Type));
+        var condition = Assert.Single(findings, finding => finding.Message.Contains("'missingCondition'", StringComparison.Ordinal));
+        Assert.Equal($"sw/structure/{Elsa.Activities.Switch.Activities.Switch.ConditionInputKey("big")}", condition.Path);
+        var value = Assert.Single(findings, finding => finding.Message.Contains("'missingValue'", StringComparison.Ordinal));
+        Assert.Equal("sw/structure/Value", value.Path);
     }
 
     [Fact]

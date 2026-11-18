@@ -125,22 +125,48 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     public async Task A_switch_case_condition_that_reads_the_variable_is_flagged()
     {
         // The condition lives in the Switch structure, which an edit by input key cannot reach (FR-022).
-        var switchNode = new ActivityNode("switch", "av-switch", [], [],
+        var plan = await PlanAsync(State(Switch("variables.order.total > 10")), "order-key", "purchase");
+
+        Assert.Empty(plan.Edits);
+        Assert.Equal(ScriptVariableRenameFlagReason.StructureInput, Assert.Single(plan.Flags).Reason);
+    }
+
+    [Fact]
+    public async Task A_switch_value_the_node_holds_is_edited_in_place()
+    {
+        // In match-value mode the structure consumes Value, but it is the node's own input, so the edit reaches it.
+        var plan = await PlanAsync(State(Switch(condition: null, value: "variables.order.total")), "order-key", "purchase");
+
+        var edit = Assert.Single(plan.Edits);
+        Assert.Equal("Value", edit.InputKey);
+        Assert.Equal("variables.purchase.total", edit.NewSource);
+        Assert.Empty(plan.Flags);
+    }
+
+    [Fact]
+    public async Task A_switch_case_condition_the_rename_would_capture_is_flagged()
+    {
+        // The condition reads the workflow's purchase; renaming the container's order to purchase would capture it.
+        var inner = new VariableDefinition("inner-order", "order", new TypeReference("Any"), null, null);
+        var state = State(Container(inner, Switch("variables.purchase > 1")), new VariableDefinition("purchase-key", "purchase", new TypeReference("Any"), null, null));
+
+        var plan = await _planner.PlanAsync(state, "container", "inner-order", "purchase");
+
+        Assert.Empty(plan.Edits);
+        Assert.Equal(ScriptVariableRenameFlagReason.Captured, Assert.Single(plan.Flags).Reason);
+    }
+
+    private static ActivityNode Switch(string? condition, string? value = null) =>
+        new("switch", "av-switch", value is null ? [] : [Js(value) with { ReferenceKey = "Value" }], [],
             new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind, Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new Elsa.Activities.Switch.Models.SwitchAuthoredStructure(
                 [
                     new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Big")
                     {
                         CaseId = "big",
-                        Condition = new ArgumentState("condition", new ArgumentValue("variables.order.total > 10", "JavaScript"), null, null, null, null)
+                        Condition = condition is null ? null : new ArgumentState("condition", new ArgumentValue(condition, "JavaScript"), null, null, null, null)
                     }
                 ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
-
-        var plan = await PlanAsync(State(switchNode), "order-key", "purchase");
-
-        Assert.Empty(plan.Edits);
-        Assert.Equal(ScriptVariableRenameFlagReason.StructureInput, Assert.Single(plan.Flags).Reason);
-    }
 
     [Fact]
     public async Task A_script_body_is_planned_when_its_input_is_named()
