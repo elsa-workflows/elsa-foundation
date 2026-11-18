@@ -218,7 +218,7 @@ Taken while answering the [sixth gate 2 architecture review](https://github.com/
 
 ## The gate 2 seventh-review round (18 November)
 
-Taken while answering the [seventh gate 2 architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6987785355) under the owner's rubric of 18 November. The first row is the owner's decision; every other rule below keeps the owner's cards and is the coordinator's design choice. The executable evidence is the harness `experiments/Review7.Blockers` (#4803), which runs NT-2 and MX-1, executed in this repair; every other case is proposed, qualified at its milestone.
+Taken while answering the [seventh gate 2 architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6987785355) under the owner's rubric of 18 November. The first row is the owner's decision; every other rule below keeps the owner's cards and is the coordinator's design choice. The executable evidence is the harness `experiments/Review7.Blockers` (#4803), which runs NT-2 (TG-1 run (c) and TG-2's third run: `nt2-handles`, `nt2-at-bound`, `nt2-thendelete-protected`, `nt2-no-handles`) and MX-1 runs (a) to (d) (`mx1-ticket-first`, `mx1-distinct`, `mx1-outside-first`, `mx1-owner-change`), executed in this repair; every other case and run is proposed, qualified at its milestone.
 
 | Date | Rule | Source |
 |---|---|---|
