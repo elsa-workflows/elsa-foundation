@@ -115,6 +115,78 @@ public sealed class BackgroundEligibilityTests
         AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9, Subject<VariableReaderLeaf>(),
             "variables reach a background step only through its inputs and output captures");
 
+    // Spec 1231 T032 (FR-030, SC-005): each new C9 signal is refused with exactly VF-BG-001 (C9), at publication and in the
+    // run-time re-check (admission and the worker both call CheckRunTime): (a) the free-name marker, (b) a writable
+    // VariableReference<T> input, (c) a ReadOnlyVariableReference<T> input (Q2). An engine script activity counts as (a).
+    public static TheoryData<string, string> VariableSignals => new()
+    {
+        { "publication", "marker" }, { "run time", "marker" },
+        { "publication", "writable" }, { "run time", "writable" },
+        { "publication", "read-only" }, { "run time", "read-only" },
+        { "publication", "engine" }, { "run time", "engine" }
+    };
+
+    [Theory]
+    [MemberData(nameof(VariableSignals))]
+    public void C9_refuses_each_step_variable_signal(string entryPoint, string signal)
+    {
+        var (subject, reason) = VariableSignalSubject(signal);
+
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9, subject, reason);
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9, subject, "variables reach a background step only through its inputs and output captures");
+        Assert.True(subject.TouchesVariables);
+        Assert.True(BackgroundEligibility.AccessesVariablesByName(subject.ActivityType!));
+    }
+
+    // T033 (FR-031): a template placement in a shell without the runtime type defers the CLR-type checks, yet the signals
+    // the pinned contract shows are still refused there; a type-only signal waits for admission and the worker.
+    [Theory]
+    [InlineData("marker")]
+    [InlineData("writable")]
+    [InlineData("read-only")]
+    public void A_placement_without_the_runtime_type_refuses_the_contract_visible_signals(string signal)
+    {
+        var (subject, reason) = VariableSignalSubject(signal);
+        var deferred = subject with { ActivityType = null, TypeCheckedAtRunTime = true };
+
+        AssertRefused("publication", BackgroundEligibilityCriterion.C9, deferred, reason);
+    }
+
+    [Fact]
+    public void A_placement_without_the_runtime_type_leaves_a_type_only_signal_to_the_worker()
+    {
+        // IRuntimeScopedVariableReader is a CLR fact the contract does not carry.
+        var deferred = Subject<VariableReaderLeaf>() with { ActivityType = null, TypeCheckedAtRunTime = true };
+
+        Assert.False(deferred.TouchesVariables);
+        Assert.Null(BackgroundEligibility.CheckPublication(deferred));
+        AssertRefused("run time", BackgroundEligibilityCriterion.C9, deferred with { ActivityType = typeof(VariableReaderLeaf) }, "reads variables by name");
+    }
+
+    [Fact]
+    public void A_type_signal_the_contract_does_not_show_is_refused_from_the_type()
+    {
+        // A contract built before the reference facts existed: the CLR type still carries the reference input.
+        AssertRefused("run time", BackgroundEligibilityCriterion.C9, Subject<WritableReferenceLeaf>(), "input 'Balance' is a VariableReference");
+    }
+
+    private static (BackgroundEligibilitySubject Subject, string Reason) VariableSignalSubject(string signal) => signal switch
+    {
+        "marker" => (Subject<MarkedLeaf>(Contract<MarkedLeaf>(accessesUndeclaredVariables: true)), "[AccessesUndeclaredVariables]"),
+        "engine" => (Subject<EngineScriptLeaf>(Contract<EngineScriptLeaf>(accessesUndeclaredVariables: true)), "an engine script activity"),
+        "writable" => (Subject<WritableReferenceLeaf>(Contract<WritableReferenceLeaf>(inputs: [ReferenceInput("Balance", ActivityVariableAccess.ReadWrite)])),
+            "input 'Balance' is a VariableReference"),
+        _ => (Subject<ReadOnlyReferenceLeaf>(Contract<ReadOnlyReferenceLeaf>(inputs: [ReferenceInput("Currency", ActivityVariableAccess.Read)])),
+            "input 'Currency' is a ReadOnlyVariableReference")
+    };
+
+    private static ActivityInputContract ReferenceInput(string key, ActivityVariableAccess access) =>
+        new(key, key, new ValueTypeDescriptor(VariableReferenceTypes.Alias), isRequired: true, isNullable: false, hasDefault: false,
+            defaultValue: null, ActivityValuePolicy.Default)
+        {
+            VariableReference = new ActivityInputVariableReference(access, new ValueTypeDescriptor("Decimal"))
+        };
+
     [Theory]
     [MemberData(nameof(EntryPoints))]
     public void C10_refuses_inputs_that_cannot_travel_to_a_worker(string entryPoint)
@@ -243,13 +315,14 @@ public sealed class BackgroundEligibilityTests
     private static ActivityContract Contract<TActivity>(
         IEnumerable<ActivityInputContract>? inputs = null,
         ActivityResultContract? result = null,
-        bool supportsBackgroundExecution = true)
+        bool supportsBackgroundExecution = true,
+        bool accessesUndeclaredVariables = false)
     {
         var alias = typeof(TActivity).Name;
         return new ActivityContract(
             alias, "1.0.0", "clr", JsonSerializer.SerializeToElement(new { typeAlias = alias }),
             inputs ?? [], result ?? Result("Int32"), ["Done"],
-            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution);
+            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution, accessesUndeclaredVariables);
     }
 
     private static ActivityResultContract Result(string alias, ActivityValuePolicy? policy = null, ActivityResultProjectionContract? projection = null) =>
@@ -284,6 +357,41 @@ public sealed class BackgroundEligibilityTests
     {
         protected override ValueTask<ActivityTransition<Stream>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete<Stream>(Stream.Null));
+    }
+
+    [BackgroundExecutionSafe]
+    [AccessesUndeclaredVariables]
+    private sealed class MarkedLeaf : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class EngineScriptLeaf : Activity<int>, IStepVariableSessionConsumer
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class WritableReferenceLeaf : Activity<int>
+    {
+        [ActivityInput]
+        public VariableReference<decimal> Balance { get; set; } = default!;
+
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class ReadOnlyReferenceLeaf : Activity<int>
+    {
+        [ActivityInput]
+        public ReadOnlyVariableReference<string> Currency { get; set; } = default!;
+
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
     }
 
     [BackgroundExecutionSafe]

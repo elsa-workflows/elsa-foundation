@@ -71,8 +71,9 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
 
     /// <summary>
     /// Commits an invocation's workflow-variable captures under the commit rule (spec 1221 FR-005, FR-009): each capture
-    /// is judged against the base the invocation's input read set holds for that variable (none → a blind write), in the
-    /// node's lost-update mode. Returns the checkpoint state change, one write-history record per capture, and the
+    /// is judged against the base the invocation holds for that variable (its own advanced base, else its input read set's;
+    /// none → a blind write), in the node's lost-update mode. <paramref name="workflowState"/> is the state a step's session
+    /// writes produced in the same commit, when there were any. Returns the checkpoint state change, one write-history record per capture, and the
     /// <c>Fault</c> lost update that refuses the completion, if any. When a capture faults, no capture applies.
     /// </summary>
     public static async ValueTask<RuntimeWorkflowVariableCaptureCommit> CommitCapturesAsync(
@@ -84,7 +85,8 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
         IReadOnlyDictionary<string, string> metadata,
         VariableWriteSource source,
         DateTimeOffset occurredAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkflowExecutionState? workflowState = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -95,7 +97,8 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
         if (writes.Count == 0)
             return RuntimeWorkflowVariableCaptureCommit.None;
 
-        var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
+        // A step's session writes applied first (spec 1231 FR-013): its captures then apply on that state, so the capture wins.
+        workflowState ??= await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException(
                 $"Output capture on executable node '{executableNode.ExecutableNodeId}' targets a workflow variable, but workflow execution '{workflowExecutionId}' has no durable state.");
         var writer = new VariableWriter(source, executableNode.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
@@ -103,7 +106,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             workflowState,
             executableNode.ExecutableNodeId,
             writes,
-            invocation.InputSnapshot?.InputReadSet,
+            invocation,
             LostUpdateModes.Of(executableNode),
             writer,
             occurredAt);
@@ -125,13 +128,13 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
         WorkflowExecutionState workflowState,
         string executableNodeId,
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes) =>
-        Apply(workflowState, executableNodeId, writes, readSet: null, LostUpdateMode.Default, writer: null, DateTimeOffset.MinValue).State!;
+        Apply(workflowState, executableNodeId, writes, invocation: null, LostUpdateMode.Default, writer: null, DateTimeOffset.MinValue).State!;
 
     private static RuntimeWorkflowVariableCaptureCommit Apply(
         WorkflowExecutionState workflowState,
         string executableNodeId,
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
-        VariableInputReadSet? readSet,
+        ActivityExecutionState? invocation,
         LostUpdateMode mode,
         VariableWriter? writer,
         DateTimeOffset occurredAt)
@@ -181,7 +184,8 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
 
         foreach (var (variableKey, envelope) in resolved.Select(item => (item.VariableKey, item.Value)))
         {
-            var write = frame.Commit(variableKey, envelope, frame.Revision, readSet?.BaseFor(frame.ScopeId, variableKey), mode, writer);
+            // The base is the invocation's own advanced base when its own write moved it (spec 1231 FR-010), else its input read.
+            var write = frame.Commit(variableKey, envelope, frame.Revision, InvocationVariableBases.For(invocation, frame.ScopeId, variableKey), mode, writer);
             if (writer is not null && VariableWriteRecord.IsRecorded(write.Decision))
             {
                 var record = VariableWriteRecord.From(frame, write, variableKey, writer, occurredAt);

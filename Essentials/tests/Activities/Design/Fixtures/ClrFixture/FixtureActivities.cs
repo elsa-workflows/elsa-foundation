@@ -320,6 +320,30 @@ public sealed class SensitivityFixtureActivity : Activity<SecretFixtureResult>
         ValueTask.FromResult(ActivityTransition.Complete(new SecretFixtureResult(string.Empty)));
 }
 
+/// <summary>Spec 1231: a read-write and a read-only variable-reference input next to an ordinary one.</summary>
+public sealed class VariableReferenceFixtureActivity : FixtureActivity
+{
+    [ActivityInput]
+    public VariableReference<decimal> Balance { get; set; } = default!;
+
+    [ActivityInput]
+    public ReadOnlyVariableReference<string> Currency { get; set; } = default!;
+
+    [ActivityInput]
+    public string? Label { get; set; }
+}
+
+/// <summary>Spec 1231: an activity type opted in to free-name variable access.</summary>
+[AccessesUndeclaredVariables]
+public sealed class FreeNameFixtureActivity : FixtureActivity;
+
+/// <summary>Spec 1231: the marker on an abstract base (kept out of scans) is inherited by its subclass.</summary>
+[AccessesUndeclaredVariables]
+public abstract class FreeNameFixtureBase : FixtureActivity;
+
+/// <summary>Spec 1231: inherits the free-name marker from its base.</summary>
+public sealed class InheritedFreeNameFixtureActivity : FreeNameFixtureBase;
+
 // The four credential declarations below could never be bound to a secret reference, so the scanner refuses each. They
 // are abstract, which keeps them out of every scan of this assembly; a test builds each one's catalog model directly.
 

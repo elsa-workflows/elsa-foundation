@@ -7018,6 +7018,18 @@ fieldset.wf-container-variables {
   color: var(--wf-muted-fg, #6b7280);
 }
 
+/* Variable-reference inputs and a node's may-write set (spec 1231 FR-036). */
+.wf-variable-access {
+  font-size: 11px;
+  color: var(--wf-muted-text);
+}
+
+.wf-variable-writes {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--wf-muted-text);
+}
+
 .wf-variable-picker-error {
   display: flex;
   align-items: center;

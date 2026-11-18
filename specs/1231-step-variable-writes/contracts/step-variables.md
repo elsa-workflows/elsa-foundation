@@ -22,10 +22,10 @@ Illustrative; the exact activity base-class signature follows the activity model
 [AccessesUndeclaredVariables] // optional: enables the string overloads
 public class MyActivity : Activity<MyResult>
 {
-    public VariableReference<decimal> Balance { get; set; } = default!;      // read and write
-    public ReadOnlyVariableReference<string> Currency { get; set; } = default!; // read only
+    [ActivityInput] public VariableReference<decimal> Balance { get; set; } = default!;      // read and write
+    [ActivityInput] public ReadOnlyVariableReference<string> Currency { get; set; } = default!; // read only
 
-    protected override ValueTask<MyResult> ExecuteAsync(IActivityExecutionContext context)
+    protected override ValueTask<ActivityTransition<MyResult>> ExecuteAsync(ActivityExecutionContext context)
     {
         var balance = context.Variables.Get(Balance);   // a copy; recorded as a session read
         context.Variables.Set(Balance, balance + 5);     // an intent, committed with the step

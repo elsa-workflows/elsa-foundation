@@ -614,7 +614,15 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   isCredential?: boolean | null;
   /** Activity-declared: the required connection type. Absent on older backends. */
   connectionType?: string | null;
+  /**
+   * Set when the input is a variable reference (spec 1231 FR-022): `Read` for a `ReadOnlyVariableReference<T>`,
+   * `ReadWrite` for a `VariableReference<T>`. `typeName` is then the value type, and the input binds only a declared
+   * variable with the `Variable` syntax. Absent for ordinary inputs and on older backends.
+   */
+  variableAccess?: StudioVariableAccess | null;
 }
+
+export type StudioVariableAccess = "Read" | "ReadWrite" | (string & {});
 
 export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {
   const value = input.uiSpecifications?.optionsProvider;
@@ -672,6 +680,8 @@ export interface StudioActivityDescriptor {
   isBrowsable?: boolean;
   isStart?: boolean;
   isTerminal?: boolean;
+  /** The activity type is marked `[AccessesUndeclaredVariables]` (spec 1231 FR-026): it may write any visible variable. */
+  accessesUndeclaredVariables?: boolean;
 }
 
 export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";

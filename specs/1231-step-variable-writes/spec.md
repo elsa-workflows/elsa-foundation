@@ -439,6 +439,30 @@ and run the converted scripts.
   declared variable in scope, show a node's may-write set in its properties, and mark an activity that carries
   `[AccessesUndeclaredVariables]`, from the authoring descriptor, in `Studio/`.
 
+**Studio UX acceptance record (FR-036, per `docs/contributing/studio-ux-acceptance.md`).**
+
+- **User goal:** a workflow author selects a node whose activity has a `VariableReference<T>` or
+  `ReadOnlyVariableReference<T>` input, binds it to a declared variable in scope that fits the value type, and sees in the
+  properties panel which variables the node may write; for an `[AccessesUndeclaredVariables]` activity, that it may write
+  any visible variable.
+- **Reference:** the existing variable target picker (`variableTargetPicker.tsx`, used by output captures and intrinsics)
+  and the Variable expression editor (`variableReferenceContribution.tsx`) in the same properties panel.
+- **Observable states:** unbound; bound to a fitting variable; bound with another syntax (recovery note); bound to a
+  variable whose type no longer fits (recovery note, flagged in the may-write list); bound to a deleted or out-of-scope
+  variable (shown by its stored name, flagged); variables visible but none fits (type-aware empty note); no visible
+  variables; scope analysis loading, failed (retry) or unavailable (binding preserved, nothing flagged); read-only panel
+  and read-only input. Narrow layout: the row reuses the panel's existing property-row layout; no new layout.
+- **Coverage:** `variableReferenceInputUi.test.tsx` covers each state above (including scope analysis failed and
+  unavailable, and no visible variables), the select's label and description, two may-write variables of one name in
+  different scopes, and the panel integration (bulk literal writes leave reference inputs alone). Not covered: the
+  "authoring context unavailable" fallback, which the properties panel never renders because it always provides the
+  context.
+- **Exclusion: composed-host proof.** No shipped activity exposes a variable-reference input or the free-name marker yet,
+  so no composed journey can reach this surface and a green `tools/ux-acceptance` run is not evidence for it. The first
+  production consumer is spec 1231 Phase 5 (`RunJavaScript`, an engine script activity shown as "May write any visible
+  variable"); a feature-specific journey lands with it. Until then FR-036's UX acceptance is incomplete, recorded here and
+  in the PR.
+
 ### Key Entities
 
 - **Variable session**: per step; holds the step's session reads, its pending intents and the read-your-writes view.
