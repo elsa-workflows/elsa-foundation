@@ -155,11 +155,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// own fence row, epoch and position. A batch over several of them needs <see cref="IKernelStore.OwnedSetsAvailable"/>.
     /// </summary>
     public Worker(string node, IReadOnlyCollection<int> partitions, IKernelStore store, IActorType type, WorkerOptions? options = null)
+        : this(node, partitions, store, type, options, nodeSet: false) { }
+
+    /// <summary>
+    /// The one worker of a node (D1): it starts with no partition, and its host (<see cref="DurableHost.ForNode"/>) adds
+    /// and removes them while it runs (<see cref="GainAsync"/>, <see cref="LoseAsync"/>). It needs owned sets.
+    /// </summary>
+    internal static Worker ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null) =>
+        store.OwnedSetsAvailable ? new(node, [], store, type, options, nodeSet: true)
+            : throw new NotSupportedException("This store fences one partition per commit: a node runs one worker per partition on it.");
+
+    private Worker(string node, IReadOnlyCollection<int> partitions, IKernelStore store, IActorType type, WorkerOptions? options, bool nodeSet)
     {
         Node = node;
         Assigned = [.. partitions.Distinct().Order()];
-        if (Assigned.Count == 0) throw new ArgumentException("A worker serves at least one partition.", nameof(partitions));
-        Partition = Assigned[0];
+        if (Assigned.Count == 0 && !nodeSet) throw new ArgumentException("A worker serves at least one partition.", nameof(partitions));
+        Partition = nodeSet ? -1 : Assigned[0];
         _store = store;
         _lifecycle = options?.Lifecycle ?? (store as InMemoryStore)?.Lifecycle;
         _type = type;
@@ -173,7 +184,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private bool Blocked => _gate.Blocks(this);
 
     public string Node { get; }
-    /// <summary>The lowest partition of <see cref="Assigned"/>: the scope layer 1 activates.</summary>
+    /// <summary>The lowest partition of <see cref="Assigned"/>: the scope layer 1 activates. A node's worker has none (-1).</summary>
     public int Partition { get; }
     /// <summary>The virtual partitions this worker takes, in ascending id.</summary>
     public IReadOnlyList<int> Assigned { get; }
@@ -187,7 +198,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public long PositionOf(int partition) { lock (_turnSync) return _held.TryGetValue(partition, out var held) ? held.Position : 0; }
     /// <summary>The partitions held now, in ascending id, each at its epoch and the position this worker believes: a detached copy.</summary>
     public IReadOnlyList<PartitionFence> Fences { get { lock (_turnSync) return [.. _held.Select(h => new PartitionFence(h.Key, h.Value.Epoch, h.Value.Position))]; } }
-    private bool Holds(int partition) { lock (_turnSync) return _held.ContainsKey(partition); }
+    public bool Holds(int partition) { lock (_turnSync) return _held.ContainsKey(partition); }
     /// <summary>
     /// The child id issuer of the partition an instance is in, at the epoch this worker holds it: the parent's commit is
     /// fenced at that (partition, epoch), so only this issuer's ids are ever published under it.
@@ -577,16 +588,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lock (_turnSync)
             {
                 if (generation != _generation) return;
-                foreach (var (_, slot) in _slots.Where(s => s.Value.Unwritten && (!s.Value.Busy || s.Value.Driving)).ToList())
-                {
-                    // A suspended turn may be mutating its live object. Fence its eventual result and write only the
-                    // previous sealed row; its taken volatile inputs are still in _items and Promote writes them too.
-                    if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
-                    slot.Busy = true;
-                    var unit = Bound(_type.Write(slot.Row!, null, slot.Pending), slot);
-                    Promote(unit);
-                    _queue.Add(unit);
-                }
+                WriteUnwritten(_ => true);
             }
             while (generation == _generation && _queue.Count > 0 && LeaseUsable())
                 await FlushAsync(cancellationToken);
@@ -612,6 +614,138 @@ public sealed class Worker : IScopeActivation, ITurnServices
             else await _store.ReleaseAsync(held, cancellationToken);
         }
         catch (Exception) { /* then the lease runs out instead */ }
+    }
+
+    /// <summary>Decision 4: queue a write of every instance held in memory only, of the partitions handed over.</summary>
+    private void WriteUnwritten(Func<string, bool> handedOver)
+    {
+        foreach (var (_, slot) in _slots.Where(s => handedOver(s.Key) && s.Value.Unwritten && (!s.Value.Busy || s.Value.Driving)).ToList())
+        {
+            // A suspended turn may be mutating its live object. Fence its eventual result and write only the
+            // previous sealed row; its taken volatile inputs are still in _items and Promote writes them too.
+            if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
+            slot.Busy = true;
+            var unit = Bound(_type.Write(slot.Row!, null, slot.Pending), slot);
+            Promote(unit);
+            _queue.Add(unit);
+        }
+    }
+
+    // ---- the node's owned set (D1) -------------------------------------------------------------------------------
+
+    /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
+    internal bool PassWanted => _woken || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+
+    /// <summary>
+    /// Add one partition to the set while running, between passes: take its fence row alone, at a new epoch, and keep
+    /// every other partition with its epoch, position and memory. The next pass polls the set with it. False when the
+    /// take is refused, or when the set changed while it was in flight (a reset): the host asks again at its next round.
+    /// </summary>
+    internal async Task<bool> GainAsync(int partition, CancellationToken cancellationToken = default)
+    {
+        if (Holds(partition)) return true;
+        if (_taking || _releasing || _retaking) return false;
+        if (!Owns)
+        {
+            await TakeAsync([partition], cancellationToken);     // from empty memory, as a take always is
+            return Holds(partition);
+        }
+        var (started, generation) = (_options.Monotonic(), _generation);
+        Lease? lease = null;
+        _taking = true;
+        try { lease = await _store.TakeAsync(partition, Node, _options.Lease, cancellationToken); }
+        catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
+        finally { _taking = false; }
+        if (lease is null) return false;
+        lock (_turnSync)
+            if (generation == _generation && Owns && !_releasing && !_retaking)
+            {
+                _held[partition] = new(lease.Epoch, lease.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
+                _mine.Add((partition, lease.Epoch));
+                Observe(lease.Now);
+                Renewed();
+                _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
+                _woken = true;
+                return true;
+            }
+        try { await _store.ReleaseAsync(partition, lease.Epoch, cancellationToken); }      // the set changed meanwhile: give it back
+        catch (Exception) { /* then the lease runs out instead */ }
+        return false;
+    }
+
+    /// <summary>
+    /// Hand part of the set over, cooperatively, between passes. What those partitions hold in memory only is written
+    /// first, as a stand-down does (decision 4). Then, if nothing of theirs is in flight, their memory goes, their fence
+    /// rows are released at their epochs and nothing else changes: the partitions kept keep their epochs, positions and
+    /// memory. If something of theirs is still in flight (a turn, a running job, a trial), the worker resets, releases
+    /// them, and takes the rest back at new epochs, as after a refused fence. Handing over every partition is a stand-down.
+    /// </summary>
+    internal async Task LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    {
+        bool HandedOver(string id) => StoreBatchRules.AddressPartition(id) is { } p && partitions.Contains(p);
+        if (_releasing || _retaking || !partitions.Any(Holds)) return;
+        if (Fences.All(f => partitions.Contains(f.Partition)))
+        {
+            await ReleaseAsync(cancellationToken);
+            return;
+        }
+        ReceiveJobPublications(cancellationToken);
+        if (!_flushing && !Has(Flaw.ForgetShortWaits))
+            lock (_turnSync) WriteUnwritten(HandedOver);
+        while (_queue.Count > 0 && !_flushing && LeaseUsable()) await FlushAsync(cancellationToken);   // a refusal resets and retakes
+        List<PartitionFence> leaving, kept = [];
+        lock (_turnSync)
+        {
+            var held = Fences;
+            leaving = [.. held.Where(f => partitions.Contains(f.Partition))];
+            if (leaving.Count == 0) return;
+            if (leaving.Count < held.Count && Quiet(HandedOver)) Drop(HandedOver, leaving);
+            else
+            {
+                kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
+                Reset();
+                if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+            }
+        }
+        try
+        {
+            if (leaving.Count == 1) await _store.ReleaseAsync(leaving[0].Partition, leaving[0].Epoch, cancellationToken);
+            else await _store.ReleaseAsync(leaving, cancellationToken);
+        }
+        catch (Exception) { /* then the leases run out instead */ }
+        if (kept.Count > 0) await RetakeAsync(kept, cancellationToken);
+    }
+
+    // Nothing of the partitions handed over is in flight: no read, commit or turn, no running job, no trial. A job result
+    // published for a ticket that goes is dropped with it (ReceiveJobPublications checks the ticket), as at a reset.
+    private bool Quiet(Func<string, bool> handedOver) =>
+        !_flushing && !_polling && !_loading && !_meeting && _queue.Count == 0
+        && !_slots.Any(s => handedOver(s.Key) && (s.Value.Busy || s.Value.Unwritten || s.Value.PendingReferences > 0))
+        && !_items.Values.Any(i => handedOver(i.Message.Target.Id) && (i.Taken || i.JobDriver is { IsCompleted: false }))
+        && !TrialItems.Any(i => handedOver(i.Message.Target.Id));
+
+    // The memory of the partitions handed over goes, as Reset drops all of it: their callers are told, their messages
+    // and instances forgotten. Under _turnSync.
+    private void Drop(Func<string, bool> handedOver, List<PartitionFence> leaving)
+    {
+        var items = _items.Values.Where(i => handedOver(i.Message.Target.Id)).ToList();
+        var slots = _slots.Where(s => handedOver(s.Key)).ToList();
+        foreach (var to in slots.SelectMany(s => s.Value.Replies).Concat(items.Where(i => !i.Message.SuppliedCreator || _slots.TryGetValue(Canonical(i.Message.Target.Id), out var slot) && slot.CurrentRow is not null).Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
+            Send(to, "lost", null, null, error: "lost");
+        foreach (var item in items)
+        {
+            Forget(item);
+            _behind.Remove(item.Message.InboxKey);
+            _cancelling.Remove(item.Message.InboxKey);
+        }
+        foreach (var (id, _) in slots) RemoveSlot(id);
+        foreach (var alias in _aliases.Where(a => handedOver(a.Value)).Select(a => a.Key).ToList()) _aliases.Remove(alias);
+        foreach (var fence in leaving)
+        {
+            _held.Remove(fence.Partition);
+            _issuers.Remove(fence.Partition);
+        }
+        Renewed();
     }
 
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>

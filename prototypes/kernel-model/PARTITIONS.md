@@ -260,6 +260,37 @@ A new epoch fixes both, with less mechanism. Its cost is one take and one re-pol
 one-partition Worker pays today. The model still lists `ResetAll` as a caught mutation, so its W4 cost check flags
 exactly what the Worker now does by design. Slice 7 aligns the model's reset and W4 with the Worker.
 
+### K1 slice 5a: the per-node owned set (D1)
+
+`DurableHost.ForNode` is the host of one node: one worker serves every scope the node activates, as one owned set.
+Layer 1 still activates one scope per virtual partition.
+- **Activation** adds the partition to the set: a take of that one fence row at a new epoch (`Worker.GainAsync`). The
+  other partitions keep their epochs, positions and memory. The next pass polls the set with it, and nothing is handed
+  over in memory until a short poll has read its inbox (F1). The set may be scattered.
+- **Giving a scope up** removes the partition (`Worker.LoseAsync`). What it holds in memory only is written first, as at
+  a stand-down (decision 4). If nothing of the partition is in flight (no read, commit or turn, running job or trial),
+  its memory goes and its fence row is released at its epoch, and nothing else changes. Otherwise the worker resets,
+  releases it and takes the rest back at new epochs, as after a refused fence: safe, at the cost of the rest's memory.
+  Giving up the last partition is a stand-down.
+- **One at a time.** The node's passes, activations and give-ups run one at a time, so the set changes only between
+  passes, and so between flushes. One pass serves every scope: a scope that another scope's pass served since its own
+  last call, with no wake or job result since, gets that pass's answer, so the node runs one pass per round however many
+  scopes it holds.
+- **A store without owned sets** (`commit=ef`) gets a worker per scope from the same host, as before.
+
+The fixed host (a worker per scope, given up front) stays for the models and the simulation, whose worlds are slice 7's.
+The built-in runtime's conformance suite runs on the per-node host; the Orleans adapter keeps a worker per scope until
+slice 6.
+
+The follow-ups that slice 2a recorded for this slice:
+- **A retake that finds a take in flight drops a pending stand-down.** It cannot arise under the per-node host: a retake
+  runs inside a pass or a give-up, and a take inside an activation, and the host runs those one at a time. It remains in
+  the fixed host, where it costs liveness only (the leases run out).
+- **A set take that got only part of its set serves what it got and never takes the rest.** The per-node host takes one
+  partition per activation, so a partition the take did not get is declined and layer 1 asks again at its next round.
+  The fixed host's set take is unchanged.
+- **`commit=ef` stays one partition per worker:** `ForNode` falls back to a worker per scope on such a store.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds

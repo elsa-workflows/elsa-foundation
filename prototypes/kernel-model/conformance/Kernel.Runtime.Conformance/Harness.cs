@@ -7,14 +7,16 @@ namespace Kernel.Runtime.Conformance;
 public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double FaultRate = 0, bool BrokenFence = false);
 
 /// <summary>
-/// One cluster of one runtime over one fresh store, with layer 2 built by the suite: every node gets a worker for every
-/// partition, on its own <see cref="NodeStore"/> over a store that records every commit that landed, behind a
+/// One cluster of one runtime over one fresh store, with layer 2 built by the suite: every node gets one worker for its
+/// owned set (or a worker for every partition, <see cref="IRuntimeProvider.OneWorkerPerNode"/>), on its own <see cref="NodeStore"/> over a store that records every commit that landed, behind a
 /// <see cref="Watcher"/>. The suite reads the end state through the store, as the store suite does.
 /// </summary>
 public sealed class Harness : IAsyncDisposable
 {
     private readonly ProvidedStore _provided;
     private readonly ConcurrentDictionary<string, NodeStore> _stores = new();
+    private readonly ConcurrentDictionary<string, DurableHost> _hosts = new();
+    private bool _oneWorkerPerNode;
     private readonly List<IRuntimeNode> _nodes = [];
     private readonly HashSet<string> _gone = [];
     private IRuntimeCluster _cluster = null!;
@@ -31,7 +33,7 @@ public sealed class Harness : IAsyncDisposable
     public static async Task<Harness> CreateAsync(IRuntimeProvider runtime, IStoreProvider store, HarnessSetup setup)
     {
         var provided = await store.CreateAsync(setup.Partitions, new StoreSetup(BrokenFence: setup.BrokenFence));
-        var harness = new Harness(provided, setup);
+        var harness = new Harness(provided, setup) { _oneWorkerPerNode = runtime.OneWorkerPerNode };
         try { harness._cluster = await runtime.CreateAsync(new RuntimeEnvironment(setup.Partitions, setup.Timing, harness.Node)); }
         catch
         {
@@ -72,6 +74,12 @@ public sealed class Harness : IAsyncDisposable
     /// <summary>The node's way to the store, which a case can stall.</summary>
     public NodeStore StoreOf(string node) => _stores[node];
 
+    /// <summary>The node's layer 2 host, unwatched: the owned-set cases call it as a runtime would.</summary>
+    public DurableHost HostOf(string node) => _hosts[node];
+
+    /// <summary>The node's one worker (K1 D1), or null when the runtime gets a worker per scope.</summary>
+    public Worker? WorkerOf(string node) => _hosts[node].NodeWorker;
+
     /// <summary>Held commits that the fence refused, on every node so far.</summary>
     public int HeldRefused => _stores.Values.Sum(s => s.HeldRefused);
 
@@ -85,10 +93,13 @@ public sealed class Harness : IAsyncDisposable
             OnTurn = (_, _, _) => Interlocked.Increment(ref _turns),
             JobScheduler = TaskScheduler.Default,      // a job's body off the runtime's scheduler, whatever the runtime
         };
-        // No trial gate shared by the node's workers: a runtime may run the passes of a node's scopes at the same time,
-        // and the gate is not safe for that (FINDINGS, "The runtime conformance suite and the Orleans adapter", R6).
-        var workers = Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options));
-        return new NodeServices(Watcher.Wrap(name, new DurableHost(workers)), store);
+        // One worker per node: its trial gate is the node's. A worker per scope gets no shared gate: a runtime may run the
+        // passes of a node's scopes at the same time, and the gate is not safe for that (FINDINGS, "The runtime
+        // conformance suite and the Orleans adapter", R6).
+        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options)
+            : new DurableHost(Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options)));
+        _hosts[name] = host;
+        return new NodeServices(Watcher.Wrap(name, host), store);
     }
 
     public async Task<IRuntimeNode> StartAsync(int side = 0)

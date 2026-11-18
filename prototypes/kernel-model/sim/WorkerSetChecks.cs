@@ -73,6 +73,45 @@ internal static class WorkerSetChecks
         await ChildIds(check);
         await StandDownDuringRetake(check);
         await StandDownMeetsRefusedFlush(check);
+        await NodeSet(check);
+    }
+
+    // Slice 5 (D1): the node's one worker gains and loses partitions while it runs, through its host. A gain takes that
+    // row alone. A quiet loss releases that row only: the rest keep their epochs, positions and memory. A loss with a job
+    // still running in the partition resets, releases it, and takes the rest back at new epochs.
+    private static async Task NodeSet(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(4, () => time);
+        var job = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Runner((_, _) => new ValueTask<object?>(job.Task))]),
+            new() { Monotonic = () => time, Partitions = 4 });
+        var worker = host.NodeWorker!;
+        var scopes = new IScopeActivation?[4];
+        foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
+        var (x, y, r) = (InstanceRef.In(0, "x"), InstanceRef.In(2, "y"), InstanceRef.In(3, "r"));
+        await store.AddAsync(Add(x, "one"));
+        await store.AddAsync(Add(y, "two"));
+        await scopes[0]!.WokenAsync(null);
+        for (var i = 0; i < 10 && !(store.Instances.ContainsKey(x.Id) && store.Instances.ContainsKey(y.Id)); i++) await scopes[0]!.RunAsync();
+        var before = worker.Fences;
+        check(string.Join(" ", before.Select(f => f.Partition)) == "0 2 3" && before.Select(f => f.Epoch).All(e => e > 0) && store.Instances.ContainsKey(y.Id),
+            $"one worker serves the scattered set {{0, 2, 3}}: [{string.Join(", ", before)}]");
+        scopes[1] = await host.ActivateAsync(1);
+        check(scopes[1] is { Active: true } && worker.Fences.Where(f => f.Partition != 1).SequenceEqual(before), $"a gain takes that row alone: [{string.Join(", ", worker.Fences)}]");
+        await scopes[2]!.DisposeAsync();
+        var memory = worker.Instances.Select(i => i.Id).ToList();
+        check(store.Partitions[2].Owner is null && !scopes[2]!.Active && worker.Fences.Where(f => f.Partition != 1).SequenceEqual(before.Where(f => f.Partition != 2))
+              && memory.Contains(x.Id) && !memory.Contains(y.Id), $"a quiet loss releases that row only and keeps the rest: [{string.Join(", ", worker.Fences)}], memory [{string.Join(" ", memory)}]");
+        await store.AddAsync(new Message("go", r, "go", Json.Write("work"), Start: Runner.Spec));
+        await scopes[0]!.WokenAsync(null);
+        for (var i = 0; i < 10 && worker.JobCompletion(r.Id, "work") is null; i++) await scopes[0]!.RunAsync();
+        var held = worker.Fences;
+        await scopes[3]!.DisposeAsync();
+        var expected = held.Where(f => f.Partition != 3).Select(f => f with { Epoch = f.Epoch + 1 });
+        check(worker.JobCompletion(r.Id, "work") is null && store.Partitions[3].Owner is null && worker.Fences.SequenceEqual(expected) && Unserved(store, worker, time) == "",
+            $"a loss with a job running resets and takes the rest back at new epochs: held [{string.Join(", ", held)}], now [{string.Join(", ", worker.Fences)}]{Unserved(store, worker, time)}");
+        job.SetResult(null);
     }
 
     // A stand-down while a retake is in flight: the retake installs nothing, gives up what it took, and gives up what it
