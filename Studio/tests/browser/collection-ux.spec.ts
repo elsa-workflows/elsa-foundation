@@ -18,7 +18,7 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("radio", { name: /^Diagnostic snapshots/ })).toBeChecked();
     await expect(page.getByText("New capture events use")).toHaveCount(0);
     const labels = page.locator(".runtime-diagnostics-applied");
-    await expect(labels).toHaveCount(8);
+    await expect(labels).toHaveCount(9);
     for (const label of await labels.all()) {
       expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
       expect(await label.evaluate(element => getComputedStyle(element).textOverflow)).not.toBe("ellipsis");
