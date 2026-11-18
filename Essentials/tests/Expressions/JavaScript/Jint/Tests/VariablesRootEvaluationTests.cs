@@ -133,6 +133,38 @@ public sealed class VariablesRootEvaluationTests
     }
 
     [Fact]
+    public async Task The_engines_own_probes_are_not_recorded_as_reads()
+    {
+        // JSON.stringify asks the root for toJSON, string conversion for toString and valueOf: no script read those.
+        var reader = new Reader { ["a"] = Json(1) };
+
+        var result = await EvaluateAsync("JSON.stringify(variables) + String(Object.keys(variables))", reader: reader);
+
+        Assert.Equal("{\"a\":1}a", result.GetString());
+        Assert.Equal(["a"], reader.Reads);
+    }
+
+    [Fact]
+    public async Task Liquid_iterates_the_variables_root_through_the_lookup()
+    {
+        await using var provider = BuildProvider();
+        var evaluator = provider.GetRequiredService<IPortableExpressionEvaluator>();
+        var reader = new Reader { ["region"] = Json("eu") };
+        var definition = new ExpressionDefinition(
+            "Liquid",
+            "{% for v in variables %}{{ v[0] }}={{ v[1] }};{% endfor %}",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+
+        var result = await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, new Dictionary<string, JsonElement>(), reader, CancellationToken.None));
+
+        Assert.Equal("region=eu;", result.GetString());
+        Assert.Equal(["region"], reader.Reads);
+    }
+
+    [Fact]
     public async Task A_refused_read_throws_and_the_host_keeps_the_refusal()
     {
         // FR-017a: the script may catch the error; the host's record is what faults the step.

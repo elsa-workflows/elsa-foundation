@@ -110,6 +110,18 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_read_that_a_nearer_declaration_of_the_new_name_would_capture_is_flagged_not_edited()
+    {
+        // Workflow 'order' renamed to 'local', which the enclosing container already declares.
+        var local = new VariableDefinition("local-key", "local", new TypeReference("Any"), null, null);
+
+        var plan = await PlanAsync(State(Container(local, Node("a", Js("variables.order")))), "order-key", "local");
+
+        Assert.Empty(plan.Edits);
+        Assert.Equal(ScriptVariableRenameFlagReason.Retargeted, Assert.Single(plan.Flags).Reason);
+    }
+
+    [Fact]
     public async Task A_script_body_is_planned_when_its_input_is_named()
     {
         var node = Node("script", new ArgumentState("script", new ArgumentValue("return variables.order.total;", "Literal"), null, null, null, null));

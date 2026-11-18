@@ -162,8 +162,11 @@ internal static class IsolatedJintEngine
         JsValue root = target;
         if (reader is not null)
         {
-            // A name that is not a candidate is still looked up, so the missing read is recorded with its warning.
-            var miss = new ClrFunction(engine, "miss", (_, arguments) => Read(arguments.At(0).AsString()));
+            // A name that is not a candidate is still looked up, so the missing read is recorded with its warning. The
+            // engine's own probes (JSON.stringify asks for toJSON, string conversion for toString and valueOf, await for
+            // then) are not reads a script made, so they read undefined unrecorded.
+            var miss = new ClrFunction(engine, "miss", (_, arguments) =>
+                arguments.At(0).AsString() is var name && EngineProbes.Contains(name) ? JsValue.Undefined : Read(name));
             var factory = engine.Evaluate(
                 "(function (target, miss) {" +
                 " var has = Function.prototype.call.bind(Object.prototype.hasOwnProperty); var get = Reflect.get;" +
@@ -180,6 +183,11 @@ internal static class IsolatedJintEngine
                 : JsValue.Undefined);
         engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
     }
+
+    private static readonly HashSet<string> EngineProbes = new(StringComparer.Ordinal)
+    {
+        "toJSON", "toString", "valueOf", "toLocaleString", "then", "constructor"
+    };
 
     private static void DisableAmbientCapabilities(Engine engine)
     {

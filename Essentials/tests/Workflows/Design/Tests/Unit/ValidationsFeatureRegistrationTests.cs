@@ -42,6 +42,19 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Feature_registers_the_script_variable_read_services()
+    {
+        // Spec 1222: the draft check, the resolver publish pins with, and the rename planner.
+        using var provider = BuildProvider(_ => { });
+        using var scope = provider.CreateScope();
+
+        Assert.Contains(typeof(ScriptVariableReadValidator), scope.ServiceProvider.GetServices<IDraftValidator>().Select(v => v.GetType()));
+        Assert.NotNull(scope.ServiceProvider.GetService<Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver>());
+        Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>(
+            scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner>());
+    }
+
     // Kept beside the composition test: uniqueness, exactly one DraftValidating handler.
     [Fact]
     public void Feature_registers_exactly_one_DraftValidating_handler()

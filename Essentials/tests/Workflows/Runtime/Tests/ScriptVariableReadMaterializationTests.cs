@@ -62,6 +62,19 @@ public sealed class ScriptVariableReadMaterializationTests
     }
 
     [Fact]
+    public async Task An_external_value_that_cannot_be_read_blocks_only_a_script_that_reads_it()
+    {
+        var store = new CountingPayloadStore { Fails = true };
+
+        var value = await EvaluateAsync(new Script(request => request.VariableReader!.Read("order").Value), computed: true, store: store);
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            EvaluateAsync(new Script(request => { _ = request.VariableReader!.Read("large"); return JsonSerializer.SerializeToElement(1); }), computed: true, store: store).AsTask());
+
+        Assert.Equal(7, value.GetProperty("total").GetInt32());
+        Assert.Contains("variable 'large'", exception.InnerException!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_pinned_read_of_an_unset_variable_reads_null()
     {
         // FR-006.
@@ -260,6 +273,7 @@ public sealed class ScriptVariableReadMaterializationTests
     private sealed class CountingPayloadStore : IExternalPayloadStore
     {
         public int Reads { get; private set; }
+        public bool Fails { get; init; }
 
         public ValueTask<DurableValueExternalReference> WriteAsync(ExternalPayloadWriteRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -267,6 +281,8 @@ public sealed class ScriptVariableReadMaterializationTests
         public ValueTask<JsonElement> ReadAsync(DurableValueExternalReference reference, CancellationToken cancellationToken = default)
         {
             Reads++;
+            if (Fails)
+                throw new InvalidOperationException("The payload store is unavailable.");
             return ValueTask.FromResult(JsonSerializer.SerializeToElement(new { size = "large" }));
         }
     }

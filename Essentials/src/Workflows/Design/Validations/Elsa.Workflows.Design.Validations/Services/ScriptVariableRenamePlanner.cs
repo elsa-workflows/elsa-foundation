@@ -63,7 +63,10 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
                 if (readsRenamed && analysis.LiteralNames.Contains(oldName, StringComparer.Ordinal))
                 {
                     var tokens = analysis.LiteralReads.Where(read => StringComparer.Ordinal.Equals(read.Name, oldName)).ToArray();
-                    if (tokens.Length == 0)
+                    if (NearerDeclarationOf(scopes, newName, scopeId, referenceKey))
+                        flags.Add(new(node.NodeId, input.ReferenceKey, ScriptVariableRenameFlagReason.Retargeted,
+                            $"The script reads '{oldName}', but a nearer scope declares '{newName}', so the renamed read would read that variable instead; rename one of them by hand."));
+                    else if (tokens.Length == 0)
                         flags.Add(new(node.NodeId, input.ReferenceKey, ScriptVariableRenameFlagReason.NoSourcePositions,
                             $"The script reads '{oldName}', but its language gives no positions to edit; change it to '{newName}' by hand."));
                     else if (tokens.Any(token => token.IsMemberName) && !IsIdentifier(newName))
@@ -100,6 +103,21 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
         {
             if (scope.Variables.FirstOrDefault(variable => StringComparer.Ordinal.Equals(variable.Name, name)) is { } variable)
                 return StringComparer.Ordinal.Equals(scope.ScopeId, scopeId) && StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey);
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether, from the node, a scope nearer than the renamed variable's declares <paramref name="newName"/>.</summary>
+    private static bool NearerDeclarationOf(IReadOnlyList<VisibleVariableScope> scopes, string newName, string scopeId, string referenceKey)
+    {
+        foreach (var scope in scopes)
+        {
+            if (StringComparer.Ordinal.Equals(scope.ScopeId, scopeId) &&
+                scope.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey)))
+                return false;
+            if (scope.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.Name, newName)))
+                return true;
         }
 
         return false;

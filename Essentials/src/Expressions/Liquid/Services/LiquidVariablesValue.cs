@@ -28,6 +28,17 @@ internal sealed class LiquidVariablesValue(
     public override ValueTask<FluidValue> GetIndexAsync(FluidValue index, TemplateContext context) =>
         ValueTask.FromResult(Read(index.ToStringValue(), context));
 
+    /// <summary>
+    /// <c>{% for v in variables %}</c> enumerates every name the template can read, as <c>[name, value]</c> pairs like a
+    /// Liquid hash; each value is read through the same recorded lookup (FR-008).
+    /// </summary>
+    public override IEnumerable<FluidValue> Enumerate(TemplateContext context)
+    {
+        var names = pinned.Keys.Concat(reader?.CandidateNames ?? []).Distinct(StringComparer.Ordinal).ToArray();
+        foreach (var name in names)
+            yield return new ArrayValue([new StringValue(name), Read(name, context)]);
+    }
+
     private FluidValue Read(string name, TemplateContext context)
     {
         if (_values.TryGetValue(name, out var known))

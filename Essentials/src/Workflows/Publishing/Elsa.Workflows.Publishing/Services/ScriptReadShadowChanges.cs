@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// scope or key, for example because a container now declares a variable of that name. A warning, not a refusal; the
 /// published version keeps its own pins and is unchanged (FR-025).
 /// </summary>
-public static class ScriptReadShadowChanges
+internal static class ScriptReadShadowChanges
 {
     public static IReadOnlyList<string> Find(WorkflowExecutable? published, WorkflowExecutable candidate)
     {

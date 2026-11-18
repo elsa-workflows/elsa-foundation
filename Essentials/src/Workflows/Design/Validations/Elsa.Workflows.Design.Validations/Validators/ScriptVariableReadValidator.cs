@@ -19,6 +19,8 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <item><c>VF-READ-004</c> (warning): a script reads variables by a computed or opaque name; the message lists the
 /// variables it could read, nearest scope first (FR-009). Each actual read is looked up, checked and recorded at run
 /// time.</item>
+/// <item><c>VF-READ-006</c> (warning): a script activity's body reads workflow variables, which it cannot do until its
+/// variable session lands (spec 1222 FR-033).</item>
 /// </list>
 /// Input expressions and the script of a script activity (the <c>elsa.outcomes</c> facet's <c>scriptInput</c>) are
 /// checked. Without a read resolver (no expression language that reads variables by name) nothing is checked.
@@ -32,6 +34,7 @@ public sealed class ScriptVariableReadValidator(
 {
     public const string UnresolvedReadType = "Scripts/UnresolvedVariableRead";
     public const string ComputedReadType = "Scripts/ComputedVariableRead";
+    public const string BodyReadType = "Scripts/BodyVariableRead";
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -50,7 +53,8 @@ public sealed class ScriptVariableReadValidator(
             {
                 var path = $"{node.NodeId}/inputs/{input.ReferenceKey}";
                 ScriptVariableReadPlan? plan;
-                if (scriptInput is not null && StringComparer.Ordinal.Equals(input.ReferenceKey, scriptInput))
+                var isBody = scriptInput is not null && StringComparer.Ordinal.Equals(input.ReferenceKey, scriptInput);
+                if (isBody)
                     plan = LiteralText(input) is { Length: > 0 } script ? readResolver.Resolve("JavaScript", script, scopes, scriptBody: true) : null;
                 else if (input.Value?.ExpressionType is { } language && readResolver.Supports(language) && TryGetSource(input.Value.Value, out var source))
                     plan = readResolver.Resolve(language, source, scopes);
@@ -66,6 +70,16 @@ public sealed class ScriptVariableReadValidator(
                         $"{ScriptVariableReadDiagnostics.UnresolvedLiteralRead}: The script of input '{input.ReferenceKey}' on activity '{node.NodeId}' reads variable '{name}', " +
                         "but no variable with that name is visible from the activity. Declare it on the workflow or an enclosing container, or correct the name. " +
                         "A loop index is visible only inside the loop's body, and ForEach declares currentIndex only while ExposeIndex is not the literal false."));
+                }
+
+                if (isBody && (plan.Pinned.Count > 0 || plan.Unresolved.Count > 0 || plan.NeedsFallback))
+                {
+                    // Spec 1222 FR-033: the body reads variables through its variable session, which is not built yet.
+                    errors.Add(new ValidationError(path, BodyReadType,
+                        $"{ScriptVariableReadDiagnostics.BodyReadNotYetServed}: The script of activity '{node.NodeId}' reads workflow variables, but a script activity's body " +
+                        "cannot read them yet and fails when it runs. Pass the values in through the activity's arguments for now.")
+                    { Severity = ValidationSeverities.Warning });
+                    continue;
                 }
 
                 if (plan.Candidates is { } candidates)

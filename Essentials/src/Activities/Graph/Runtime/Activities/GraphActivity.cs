@@ -359,9 +359,9 @@ public sealed class GraphActivity(
                 if (!variableNames.Add(variable.Name))
                     throw new InvalidOperationException($"Graph variable name '{variable.Name}' is declared more than once and cannot be exposed through variables.");
 
+                // Spec 1222 FR-006: a declared variable with no value reads null, never undefined.
                 var captured = await scope.ReadVariableAsync(variable.ReferenceKey, cancellationToken);
-                if (captured.Exists)
-                    ambientVariables.Add(variable.Name, ToJsonElement(captured.Value));
+                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement<object?>(null));
             }
 
             if (expression.Value.ValueKind != JsonValueKind.String)

@@ -73,9 +73,12 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
     {
         var script = new ArgumentState("script", new ArgumentValue("return variables.nope;", "Literal"), null, null, null, null);
 
-        var error = Assert.Single(await ValidateAsync(new ActivityNode("s", ScriptVersionId, [script], [])));
+        var findings = await ValidateAsync(new ActivityNode("s", ScriptVersionId, [script], []));
 
-        Assert.Equal("s/inputs/script", error.Path);
+        // The unresolvable name is an error; the body's read itself warns that the body cannot read variables yet.
+        Assert.Equal([ScriptVariableReadValidator.UnresolvedReadType, ScriptVariableReadValidator.BodyReadType], findings.Select(finding => finding.Type));
+        Assert.All(findings, finding => Assert.Equal("s/inputs/script", finding.Path));
+        Assert.StartsWith(ScriptVariableReadDiagnostics.BodyReadNotYetServed, findings[1].Message, StringComparison.Ordinal);
     }
 
     [Fact]

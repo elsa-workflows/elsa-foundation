@@ -58,7 +58,17 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
             else if (envelope.InlineValue.HasValue)
                 values[variable.Name] = envelope.InlineValue.Value.Clone();
             else if (envelope.ExternalReference is not null && externalPayloadStore is not null)
-                values[variable.Name] = await externalPayloadStore.ReadAsync(envelope.ExternalReference, cancellationToken);
+            {
+                // A payload that cannot be read fails only a script that reads that variable; an unread candidate
+                // never blocks the step.
+                try
+                {
+                    values[variable.Name] = await externalPayloadStore.ReadAsync(envelope.ExternalReference, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                }
+            }
         }
 
         return new RuntimeVariableReadFallback(visibleVariables, values);
@@ -147,7 +157,7 @@ internal enum RuntimeVariableReadRefusalKind
     /// <summary>The variable is transient, so its value cannot enter the input snapshot (ADR 0089 R3, FR-017).</summary>
     Transient,
 
-    /// <summary>The value is stored externally and no payload reader is available.</summary>
+    /// <summary>The value is stored externally and could not be read (no payload reader, or the read failed).</summary>
     Unreadable
 }
 
@@ -163,7 +173,7 @@ internal sealed record RuntimeVariableReadRefusal(RuntimeVisibleVariable Variabl
             RuntimeVariableReadRefusalKind.Transient =>
                 $"A script{where} read variable '{Variable.Name}' by a computed name, but the variable is transient: its value cannot enter the step's input snapshot (ADR 0089 R3).",
             _ =>
-                $"A script{where} read variable '{Variable.Name}' by a computed name, but its value is stored externally and no payload reader is available."
+                $"A script{where} read variable '{Variable.Name}' by a computed name, but its externally stored value could not be read."
         };
     }
 }

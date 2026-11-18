@@ -11,11 +11,12 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// first over the scopes visible to the node (loop iteration values innermost, then containers, then the workflow), and
 /// reports a script with a computed or opaque read conservatively. It never rewrites the source.
 /// </summary>
+/// <remarks>A later analyzer registration for a language replaces an earlier one.</remarks>
 public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAnalyzer> analyzers)
 {
     private readonly IReadOnlyDictionary<string, IScriptVariableReadAnalyzer> _analyzers = analyzers
         .GroupBy(analyzer => analyzer.Language, StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether a script in <paramref name="language"/> can read variables by name.</summary>
     public bool Supports(string? language) => language is not null && _analyzers.ContainsKey(language);

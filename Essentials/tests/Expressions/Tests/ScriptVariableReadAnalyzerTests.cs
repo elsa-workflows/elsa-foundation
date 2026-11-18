@@ -75,6 +75,28 @@ public sealed class ScriptVariableReadAnalyzerTests
         Assert.False(analysis.HasComputedRead);
     }
 
+    [Theory]
+    [InlineData("[{ x: 1 }].map(function (variables) { return variables.x; })[0]")]
+    [InlineData("[{ x: 1 }].map(variables => variables.x)[0]")]
+    [InlineData("(() => { const { variables } = { variables: { x: 1 } }; return variables.x + getVariable('y'); })()")]
+    [InlineData("(() => { function getVariable(n) { return n; } return getVariable('x'); })()")]
+    public void A_script_that_declares_the_root_pins_nothing_and_reads_through_the_lookup(string source)
+    {
+        // Its variables.x reads its own local, so it must not be refused at publish as an unknown workflow variable.
+        var analysis = _javaScript.Analyze(source)!;
+
+        Assert.Empty(analysis.LiteralNames);
+        Assert.True(analysis.HasComputedRead);
+    }
+
+    [Theory]
+    [InlineData("globalThis.variables.order")]
+    [InlineData("this.getVariable('order')")]
+    public void The_root_reached_through_another_object_is_an_opaque_read(string source)
+    {
+        Assert.True(_javaScript.Analyze(source)!.HasComputedRead);
+    }
+
     [Fact]
     public void Literal_and_computed_reads_are_reported_together()
     {

@@ -64,9 +64,14 @@ with portable expression evaluation.
   or `getVariable` used as a value or declared by the script).
 - **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by
   `JavaScriptFeature`. One analyzer per language; the Liquid feature registers its own.
-- **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Core`, used by the publish compiler to pin
-  literal reads and set the fallback marker, and by `ScriptVariableReadValidator` for the draft diagnostics.
-- **Override when:** a host uses another JavaScript parser or dialect. Register one analyzer per language.
+- **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Validations`, used by the publish compiler to
+  pin literal reads and set the fallback marker, by `ScriptVariableReadValidator` for the draft diagnostics and by the
+  rename planner.
+- **Override when:** a host uses another JavaScript parser or dialect. Register its analyzer after `JavaScriptFeature`:
+  the resolver keeps the last registration per language, so a later one replaces the default.
+- **Host functions:** a host function that reads workflow variables is declared with
+  `JavaScriptHostFunctionDeclaration(name, ReadsVariables: true)` (`Elsa.Expressions.JavaScript.Core`), registered in the
+  service collection; the analyzer then treats a call to it as an opaque read, so publish sets the fallback marker.
 
 ## Cross-references
 
