@@ -23,7 +23,7 @@ dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x lockorder postgres|sqlserver|mysql "<connection with Database=...>" fence=batch|checked [unordered=1]
 ```
 
-## Results (`lockorder.log`)
+## Results (`lockorder.txt`)
 
 Local Docker on arm64 (OrbStack): `postgres:17`; `mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04` (amd64,
 emulated; the `2022-latest` image failed its setup step under emulation, OS error 31); `mysql:8.4`. Both sessions were
