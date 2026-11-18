@@ -149,7 +149,8 @@ internal sealed class VariableLifecycleInspectionService(
                     l.FramePath ?? r.FramePath!,
                     l.VariableKey ?? r.VariableKey!,
                     !unknown && !StringComparer.Ordinal.Equals(l.Final, r.Final),
-                    !unknown && !l.Written.SequenceEqual(r.Written, StringComparer.Ordinal) || l.Written.Count != r.Written.Count,
+                    // A different number of writes is a known difference even when a digest is missing.
+                    l.Written.Count != r.Written.Count || (!unknown && !l.Written.SequenceEqual(r.Written, StringComparer.Ordinal)),
                     l.Written.Count,
                     r.Written.Count,
                     unknown);
@@ -163,8 +164,9 @@ internal sealed class VariableLifecycleInspectionService(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         var which = value ?? PayloadValues.Written;
-        if (which is not (PayloadValues.Written or PayloadValues.Overwritten or PayloadValues.Refused) ||
-            VariableWriteEntryId.Decode(entryId) is not { } owner)
+        if (which is not (PayloadValues.Written or PayloadValues.Overwritten or PayloadValues.Refused))
+            throw new ArgumentException("The value must be 'written', 'overwritten' or 'refused'.", nameof(value));
+        if (VariableWriteEntryId.Decode(entryId) is not { } owner)
             return VariableWritePayloadResult.NotFound;
         var workflow = await workflowExecutions.FindAsync(workflowExecutionId, cancellationToken);
         if (workflow is null || !await authorization.CanInspectStructureAsync(workflow, cancellationToken))
@@ -289,13 +291,13 @@ internal sealed class VariableLifecycleInspectionService(
                 frames[container.FrameId] = (container, container.Kind == VariableFrameKind.Root ? "root" : "container");
         }
 
-        var boundaries = rows.Where(RuntimeClosedScope.IsClosedBoundary).ToArray();
+        var boundaries = rows.Where(VariableLifecycleInspection.IsClosedBoundary).ToArray();
         if (boundaries.Length > 0)
         {
             var values = await durableValues.ListAllDurableValueStatesAsync(workflow.WorkflowExecutionId, cancellationToken);
             foreach (var boundary in boundaries)
             {
-                var frame = RuntimeClosedScope.CreateFrame(boundary, values);
+                var frame = ClosedScopeVariableRows.ReadFrame(boundary, values);
                 frames[frame.FrameId] = (frame, "closedScope");
             }
         }

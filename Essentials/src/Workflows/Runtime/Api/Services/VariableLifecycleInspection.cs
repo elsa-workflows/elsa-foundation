@@ -4,6 +4,7 @@ using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
 
@@ -234,6 +235,11 @@ internal sealed class VariableLifecycleInspection
         row.Metadata.ContainsKey(RuntimeMetadataKeys.RetryOfActivityExecutionId) ||
         row.Provenance.SchedulingCause?.Contains("alteration", StringComparison.OrdinalIgnoreCase) == true;
 
+    /// <summary>A closed scope (a graph activity compiled as one) keeps its variables as rows, read through its own frame.</summary>
+    public static bool IsClosedBoundary(ActivityExecutionState row) =>
+        row.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionScope, out var scope) &&
+        StringComparer.Ordinal.Equals(scope, RuntimeMetadataKeys.ActivityExecutionScopeClosed);
+
     /// <summary>The commit that scheduled the row: its Scheduled stamp, else its first stamp, else its range start.</summary>
     public static long? ScheduledCommitOf(ActivityExecutionState row) =>
         row.Transitions?.FirstOrDefault(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Scheduled)?.CommitSequence
@@ -302,7 +308,8 @@ internal sealed class VariableLifecycleInspection
                     _framePaths.TryAdd(container, RunTimePathOf(row));
                 if (row.IterationVariableFrame?.FrameId is { } iteration)
                     _framePaths.TryAdd(iteration, $"{RunTimePathOf(row)}#iteration");
-                _framePaths.TryAdd(Elsa.Workflows.Runtime.Services.Values.RuntimeClosedScope.FrameId(row.Execution.ActivityExecutionId), $"{RunTimePathOf(row)}#scope");
+                if (IsClosedBoundary(row))
+                    _framePaths.TryAdd(ClosedScopeVariableRows.ReadFrame(row, []).FrameId, $"{RunTimePathOf(row)}#scope");
             }
         }
 
