@@ -1,14 +1,15 @@
 Review4.Blockers results
-commit 71d54b16d5deaf7a55f7dcb0dc16300ce506c50e (tree 38ae44c22e763cced1820d534f7d19d20df34fa8, prototype tree 3df0bc09b03400acc37953e71348fad8424607ef), based on origin/main 007c65b85e02c789047c9c0fd2508580781091ee
+commit feeb37b227a01b70f98b87a984f30ae0e54e846c (tree 95d7a1c2abcf500269773f30368289f487ed0c43, prototype tree 49a55fed1957401d3352b6893726e2961906a021)
+branch base (merge-base with origin/main) 4b129bcb2b144b7c5db271b1578cd16a2e4d1e89; main has no prototypes/kernel-model change since
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
 commands, from prototypes/kernel-model, after removing experiments/Review4.Blockers/bin and obj:
-  experiments/Review4.Blockers/run.sh, which runs:
+  experiments/Review4.Blockers/run.sh -> exit 0, which runs:
     dotnet restore experiments/Review4.Blockers --locked-mode          -> exit 0
     dotnet build experiments/Review4.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll --all, twice
-    -> exit 0 both times, byte-identical output (SHA-256 12dc9591f2be996fc2b58d426c4b598bff9fd375be7b4a424a1c64a61824b48f), below
+    -> exit 0 both times, byte-identical output (SHA-256 25ecaa516c65dc71582df427d3a2d4e71f5737fc37a524b0c0f6bb0261a6d916), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-base, reviewed)
@@ -22,9 +23,27 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-takeover-after-complete, negative)
   exit 1 (fr1-takeover-before-complete, memory-precedence)
   exit 1 (fr1-takeover-after-complete, memory-precedence)
+  exit 1 (fr1-trial-takeover, reviewed)
+  exit 0 (fr1-trial-takeover, repaired)
+  exit 1 (fr1-trial-takeover, negative)
+  exit 1 (fr1-trial-takeover, trial-plain-seq)
+  exit 0 (fr1-trial-takeover, no-cohort-mark)
+  exit 1 (fr1-poll-limit, reviewed)
+  exit 0 (fr1-poll-limit, repaired)
+  exit 1 (fr1-poll-limit, negative)
+  exit 1 (fr1-poll-limit, trial-plain-seq)
+  exit 1 (fr1-poll-limit, no-cohort-mark)
+  exit 1 (fr1-trial-takeover-open, reviewed)
+  exit 0 (fr1-trial-takeover-open, repaired)
+  exit 0 (fr1-trial-takeover-open, negative)
+  exit 1 (fr1-trial-takeover-open, trial-plain-seq)
+  exit 0 (fr1-trial-takeover-open, no-cohort-mark)
   exit 0 (fr1-model-end, reviewed)
   exit 0 (fr1-model-end, repaired)
   exit 0 (fr1-model-end, negative)
+  exit 0 (fr1-model-end-recall, reviewed)
+  exit 0 (fr1-model-end-recall, repaired)
+  exit 0 (fr1-model-end-recall, negative)
   exit 0 (fr1-held, reviewed)
   exit 0 (fr1-held, repaired)
   exit 0 (fr1-held, negative)
@@ -46,6 +65,7 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 0 (rt1-successor, repaired)
   exit 0 (rt1-successor, negative)
   exit 1 (rt1-successor, successor-inherits)
+  exit 1 (rt1-successor, root-retains)
   exit 1 (rt1-successor-unreachable, reviewed)
   exit 0 (rt1-successor-unreachable, repaired)
   exit 1 (rt1-successor-unreachable, negative)
@@ -65,20 +85,21 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -92,22 +113,24 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
-  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
-  deliver R (order: [R, A])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver R (order: [R])
   model turn R (native.timer): c:f2:F
+  cohort read finds no cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
   rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS F completions (records c:f2:F): 1 (expected 1)
-    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     PASS R's fate: consumed by a model turn (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x3
@@ -121,20 +144,21 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -148,21 +172,23 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
-  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  retake by the same process after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, C, R]
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -176,23 +202,26 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
-  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  retake by the same process after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, C, R]
   deliver C (order: [C, R])
-  C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
-  deliver R (order: [R, A])
+  C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver R (order: [R])
   model turn R (native.timer): c:f2:F
+  cohort read finds no cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
   rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS F completions (records c:f2:F): 1 (expected 1)
-    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     PASS R's fate: consumed by a model turn (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x3
@@ -206,21 +235,23 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
-  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  retake by the same process after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, C, R]
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -234,21 +265,23 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
-  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, R]
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -262,23 +295,26 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
-  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
-  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
-  deliver R (order: [R, A])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, R]
+  deliver R (order: [R])
   model turn R (native.timer): c:f2:F
+  cohort read finds no cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
   rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS F completions (records c:f2:F): 1 (expected 1)
-    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     PASS R's fate: consumed by a model turn (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x3
@@ -292,21 +328,23 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
-  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, R]
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -320,21 +358,23 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
-  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  retake by the same process after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, C, R]
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
@@ -348,103 +388,905 @@ invariant: the final released cohort reaches the model before a later-delivered 
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
-  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A, R]
   deliver A (order: [A, R])
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     FAIL F completions (records c:f2:F): 0 (expected 1)
-    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
     PASS F2 still waiting when A reached the model: True (expected True)
     PASS F2 completions: 0 (expected 0)
     PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
     FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
 RESULT FR-1/takeover-after-complete rules=memory-precedence: FAIL
 
-== FR-1/model-end | rules=reviewed ==
-invariant: an earlier cohort row that ends the model leaves R with no model turn, and the drain still completes with no KeptBy left
+== FR-1/trial-takeover | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
   model turn start (start): sent [R, T2]
   start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
   park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/trial-takeover rules=reviewed: FAIL
+
+== FR-1/trial-takeover | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  cohort read finds no cohort row: the mark is cleared
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/trial-takeover rules=repaired: PASS
+
+== FR-1/trial-takeover | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/trial-takeover rules=negative: FAIL
+
+== FR-1/trial-takeover | rules=trial-plain-seq ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  cohort read finds no cohort row: the mark is cleared
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/trial-takeover rules=trial-plain-seq: FAIL
+
+== FR-1/trial-takeover | rules=no-cohort-mark ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/trial-takeover rules=no-cohort-mark: PASS
+
+== FR-1/poll-limit | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [A (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/poll-limit rules=reviewed: FAIL
+
+== FR-1/poll-limit | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [A (suspect)]
+  cohort read (mark set): loads [R (suspect)]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  cohort read finds no cohort row: the mark is cleared
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/poll-limit rules=repaired: PASS
+
+== FR-1/poll-limit | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [A (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/poll-limit rules=negative: FAIL
+
+== FR-1/poll-limit | rules=trial-plain-seq ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [A (suspect)]
+  cohort read (mark set): loads [R (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  cohort read finds no cohort row: the mark is cleared
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/poll-limit rules=trial-plain-seq: FAIL
+
+== FR-1/poll-limit | rules=no-cohort-mark ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [A (suspect)]
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/poll-limit rules=no-cohort-mark: FAIL
+
+== FR-1/trial-takeover-open | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
+  poll at epoch 2 (limit 500): [C2000]
+  deliver C2000 (order: [C2000])
+  C2000: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2001
+  poll at epoch 2 (limit 500): [C2001]
+  deliver C2001 (order: [C2001])
+  C2001: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2002
+  poll at epoch 2 (limit 500): [C2002]
+  deliver C2002 (order: [C2002])
+  C2002: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2003
+  poll at epoch 2 (limit 500): [C2003]
+  deliver C2003 (order: [C2003])
+  C2003: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2004
+  poll at epoch 2 (limit 500): [C2004]
+  deliver C2004 (order: [C2004])
+  C2004: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2005
+  poll at epoch 2 (limit 500): [C2005]
+  deliver C2005 (order: [C2005])
+  C2005: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2006
+  poll at epoch 2 (limit 500): [C2006]
+  deliver C2006 (order: [C2006])
+  C2006: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2007
+  poll at epoch 2 (limit 500): [C2007]
+  deliver C2007 (order: [C2007])
+  C2007: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2008
+  poll at epoch 2 (limit 500): [C2008]
+  deliver C2008 (order: [C2008])
+  C2008: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2009
+  poll at epoch 2 (limit 500): [C2009]
+  deliver C2009 (order: [C2009])
+  C2009: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2010
+  poll at epoch 2 (limit 500): [C2010]
+  deliver C2010 (order: [C2010])
+  C2010: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2011
+  poll at epoch 2 (limit 500): [C2011]
+  deliver C2011 (order: [C2011])
+  C2011: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2012
+  poll at epoch 2 (limit 500): [C2012]
+  deliver C2012 (order: [C2012])
+  C2012: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2013
+  poll at epoch 2 (limit 500): [C2013]
+  deliver C2013 (order: [C2013])
+  C2013: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2014
+  poll at epoch 2 (limit 500): [C2014]
+  deliver C2014 (order: [C2014])
+  C2014: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2015
+  poll at epoch 2 (limit 500): [C2015]
+  deliver C2015 (order: [C2015])
+  C2015: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2016
+  poll at epoch 2 (limit 500): [C2016]
+  deliver C2016 (order: [C2016])
+  C2016: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2017
+  poll at epoch 2 (limit 500): [C2017]
+  deliver C2017 (order: [C2017])
+  C2017: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2018
+  poll at epoch 2 (limit 500): [C2018]
+  deliver C2018 (order: [C2018])
+  C2018: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2019
+  poll at epoch 2 (limit 500): [C2019]
+  deliver C2019 (order: [C2019])
+  C2019: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2020
+  poll at epoch 2 (limit 500): [C2020]
+  deliver C2020 (order: [C2020])
+  C2020: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2021
+  poll at epoch 2 (limit 500): [C2021]
+  deliver C2021 (order: [C2021])
+  C2021: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2022
+  poll at epoch 2 (limit 500): [C2022]
+  deliver C2022 (order: [C2022])
+  C2022: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2023
+  poll at epoch 2 (limit 500): [C2023]
+  deliver C2023 (order: [C2023])
+  C2023: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2024
+  poll at epoch 2 (limit 500): [C2024]
+  deliver C2024 (order: [C2024])
+  C2024: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2025
+  poll at epoch 2 (limit 500): [C2025]
+  deliver C2025 (order: [C2025])
+  C2025: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2026
+  poll at epoch 2 (limit 500): [C2026]
+  deliver C2026 (order: [C2026])
+  C2026: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2027
+  poll at epoch 2 (limit 500): [C2027]
+  deliver C2027 (order: [C2027])
+  C2027: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2028
+  poll at epoch 2 (limit 500): [C2028]
+  deliver C2028 (order: [C2028])
+  C2028: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2029
+  poll at epoch 2 (limit 500): [C2029]
+  deliver C2029 (order: [C2029])
+  C2029: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2030
+  poll at epoch 2 (limit 500): [C2030]
+  deliver C2030 (order: [C2030])
+  C2030: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2031
+  poll at epoch 2 (limit 500): [C2031]
+  deliver C2031 (order: [C2031])
+  C2031: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2032
+  poll at epoch 2 (limit 500): [C2032]
+  deliver C2032 (order: [C2032])
+  C2032: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2033
+  poll at epoch 2 (limit 500): [C2033]
+  deliver C2033 (order: [C2033])
+  C2033: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2034
+  poll at epoch 2 (limit 500): [C2034]
+  deliver C2034 (order: [C2034])
+  C2034: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2035
+  poll at epoch 2 (limit 500): [C2035]
+  deliver C2035 (order: [C2035])
+  C2035: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2036
+  poll at epoch 2 (limit 500): [C2036]
+  deliver C2036 (order: [C2036])
+  C2036: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2037
+  poll at epoch 2 (limit 500): [C2037]
+  deliver C2037 (order: [C2037])
+  C2037: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2038
+  poll at epoch 2 (limit 500): [C2038]
+  deliver C2038 (order: [C2038])
+  C2038: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2039
+  stalled: the step bound was reached with the drain still waiting
+  model inputs: []
+  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C consumed (drain turn); C2000 consumed (drain turn); C2001 consumed (drain turn); C2002 consumed (drain turn); C2003 consumed (drain turn); C2004 consumed (drain turn); C2005 consumed (drain turn); C2006 consumed (drain turn); C2007 consumed (drain turn); C2008 consumed (drain turn); C2009 consumed (drain turn); C2010 consumed (drain turn); C2011 consumed (drain turn); C2012 consumed (drain turn); C2013 consumed (drain turn); C2014 consumed (drain turn); C2015 consumed (drain turn); C2016 consumed (drain turn); C2017 consumed (drain turn); C2018 consumed (drain turn); C2019 consumed (drain turn); C2020 consumed (drain turn); C2021 consumed (drain turn); C2022 consumed (drain turn); C2023 consumed (drain turn); C2024 consumed (drain turn); C2025 consumed (drain turn); C2026 consumed (drain turn); C2027 consumed (drain turn); C2028 consumed (drain turn); C2029 consumed (drain turn); C2030 consumed (drain turn); C2031 consumed (drain turn); C2032 consumed (drain turn); C2033 consumed (drain turn); C2034 consumed (drain turn); C2035 consumed (drain turn); C2036 consumed (drain turn); C2037 consumed (drain turn); C2038 consumed (drain turn); C2039 pending
+  instance: status Running, resolution open, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL F2 still waiting when A reached the model: False (expected True)
+    PASS F2 completions: 0 (expected 0)
+    FAIL instance ended: Running (expected Cancelled)
+    FAIL drain completed: False (expected True)
+    FAIL R's fate: released (expected consumed by a model turn)
+    FAIL undone rows remaining: 4 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x1
+RESULT FR-1/trial-takeover-open rules=reviewed: FAIL
+
+== FR-1/trial-takeover-open | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
+  poll at epoch 2 (limit 500): [C2000]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  deliver C2000 (order: [C2000])
+  C2000: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); C2000 consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/trial-takeover-open rules=repaired: PASS
+
+== FR-1/trial-takeover-open | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
+  poll at epoch 2 (limit 500): [C2000]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  deliver C2000 (order: [C2000])
+  C2000: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); C2000 consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/trial-takeover-open rules=negative: PASS
+
+== FR-1/trial-takeover-open | rules=trial-plain-seq ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
+  poll at epoch 2 (limit 500): [C2000]
+  deliver C2000 (order: [C2000])
+  C2000: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2001
+  poll at epoch 2 (limit 500): [C2001]
+  deliver C2001 (order: [C2001])
+  C2001: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2002
+  poll at epoch 2 (limit 500): [C2002]
+  deliver C2002 (order: [C2002])
+  C2002: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2003
+  poll at epoch 2 (limit 500): [C2003]
+  deliver C2003 (order: [C2003])
+  C2003: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2004
+  poll at epoch 2 (limit 500): [C2004]
+  deliver C2004 (order: [C2004])
+  C2004: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2005
+  poll at epoch 2 (limit 500): [C2005]
+  deliver C2005 (order: [C2005])
+  C2005: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2006
+  poll at epoch 2 (limit 500): [C2006]
+  deliver C2006 (order: [C2006])
+  C2006: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2007
+  poll at epoch 2 (limit 500): [C2007]
+  deliver C2007 (order: [C2007])
+  C2007: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2008
+  poll at epoch 2 (limit 500): [C2008]
+  deliver C2008 (order: [C2008])
+  C2008: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2009
+  poll at epoch 2 (limit 500): [C2009]
+  deliver C2009 (order: [C2009])
+  C2009: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2010
+  poll at epoch 2 (limit 500): [C2010]
+  deliver C2010 (order: [C2010])
+  C2010: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2011
+  poll at epoch 2 (limit 500): [C2011]
+  deliver C2011 (order: [C2011])
+  C2011: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2012
+  poll at epoch 2 (limit 500): [C2012]
+  deliver C2012 (order: [C2012])
+  C2012: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2013
+  poll at epoch 2 (limit 500): [C2013]
+  deliver C2013 (order: [C2013])
+  C2013: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2014
+  poll at epoch 2 (limit 500): [C2014]
+  deliver C2014 (order: [C2014])
+  C2014: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2015
+  poll at epoch 2 (limit 500): [C2015]
+  deliver C2015 (order: [C2015])
+  C2015: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2016
+  poll at epoch 2 (limit 500): [C2016]
+  deliver C2016 (order: [C2016])
+  C2016: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2017
+  poll at epoch 2 (limit 500): [C2017]
+  deliver C2017 (order: [C2017])
+  C2017: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2018
+  poll at epoch 2 (limit 500): [C2018]
+  deliver C2018 (order: [C2018])
+  C2018: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2019
+  poll at epoch 2 (limit 500): [C2019]
+  deliver C2019 (order: [C2019])
+  C2019: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2020
+  poll at epoch 2 (limit 500): [C2020]
+  deliver C2020 (order: [C2020])
+  C2020: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2021
+  poll at epoch 2 (limit 500): [C2021]
+  deliver C2021 (order: [C2021])
+  C2021: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2022
+  poll at epoch 2 (limit 500): [C2022]
+  deliver C2022 (order: [C2022])
+  C2022: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2023
+  poll at epoch 2 (limit 500): [C2023]
+  deliver C2023 (order: [C2023])
+  C2023: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2024
+  poll at epoch 2 (limit 500): [C2024]
+  deliver C2024 (order: [C2024])
+  C2024: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2025
+  poll at epoch 2 (limit 500): [C2025]
+  deliver C2025 (order: [C2025])
+  C2025: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2026
+  poll at epoch 2 (limit 500): [C2026]
+  deliver C2026 (order: [C2026])
+  C2026: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2027
+  poll at epoch 2 (limit 500): [C2027]
+  deliver C2027 (order: [C2027])
+  C2027: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2028
+  poll at epoch 2 (limit 500): [C2028]
+  deliver C2028 (order: [C2028])
+  C2028: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2029
+  poll at epoch 2 (limit 500): [C2029]
+  deliver C2029 (order: [C2029])
+  C2029: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2030
+  poll at epoch 2 (limit 500): [C2030]
+  deliver C2030 (order: [C2030])
+  C2030: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2031
+  poll at epoch 2 (limit 500): [C2031]
+  deliver C2031 (order: [C2031])
+  C2031: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2032
+  poll at epoch 2 (limit 500): [C2032]
+  deliver C2032 (order: [C2032])
+  C2032: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2033
+  poll at epoch 2 (limit 500): [C2033]
+  deliver C2033 (order: [C2033])
+  C2033: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2034
+  poll at epoch 2 (limit 500): [C2034]
+  deliver C2034 (order: [C2034])
+  C2034: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2035
+  poll at epoch 2 (limit 500): [C2035]
+  deliver C2035 (order: [C2035])
+  C2035: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2036
+  poll at epoch 2 (limit 500): [C2036]
+  deliver C2036 (order: [C2036])
+  C2036: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2037
+  poll at epoch 2 (limit 500): [C2037]
+  deliver C2037 (order: [C2037])
+  C2037: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2038
+  poll at epoch 2 (limit 500): [C2038]
+  deliver C2038 (order: [C2038])
+  C2038: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2039
+  stalled: the step bound was reached with the drain still waiting
+  model inputs: []
+  rows: R released; T2 pending; C0 consumed (drain turn); A pending; C consumed (drain turn); C2000 consumed (drain turn); C2001 consumed (drain turn); C2002 consumed (drain turn); C2003 consumed (drain turn); C2004 consumed (drain turn); C2005 consumed (drain turn); C2006 consumed (drain turn); C2007 consumed (drain turn); C2008 consumed (drain turn); C2009 consumed (drain turn); C2010 consumed (drain turn); C2011 consumed (drain turn); C2012 consumed (drain turn); C2013 consumed (drain turn); C2014 consumed (drain turn); C2015 consumed (drain turn); C2016 consumed (drain turn); C2017 consumed (drain turn); C2018 consumed (drain turn); C2019 consumed (drain turn); C2020 consumed (drain turn); C2021 consumed (drain turn); C2022 consumed (drain turn); C2023 consumed (drain turn); C2024 consumed (drain turn); C2025 consumed (drain turn); C2026 consumed (drain turn); C2027 consumed (drain turn); C2028 consumed (drain turn); C2029 consumed (drain turn); C2030 consumed (drain turn); C2031 consumed (drain turn); C2032 consumed (drain turn); C2033 consumed (drain turn); C2034 consumed (drain turn); C2035 consumed (drain turn); C2036 consumed (drain turn); C2037 consumed (drain turn); C2038 consumed (drain turn); C2039 pending
+  instance: status Running, resolution open, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after the start: [] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL F2 still waiting when A reached the model: False (expected True)
+    PASS F2 completions: 0 (expected 0)
+    FAIL instance ended: Running (expected Cancelled)
+    FAIL drain completed: False (expected True)
+    FAIL R's fate: released (expected consumed by a model turn)
+    FAIL undone rows remaining: 4 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x1
+RESULT FR-1/trial-takeover-open rules=trial-plain-seq: FAIL
+
+== FR-1/trial-takeover-open | rules=no-cohort-mark ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  crash takeover by another process after R and A were marked seen, before Complete and before any model turn received R: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  poll at epoch 2 (limit 500): [A (suspect), C, R (suspect)]
+  deliver C (order: [C])
+  C: gate row R not taken up (seen 1, epoch 2, an untried suspect): the page waits, sending C2000
+  poll at epoch 2 (limit 500): [C2000]
+  trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R (native.timer): c:f2:F
+  deliver C2000 (order: [C2000])
+  C2000: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); C2000 consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/trial-takeover-open rules=no-cohort-mark: PASS
+
+== FR-1/model-end | rules=reviewed ==
+invariant: an earlier cohort row that ends the model leaves R to the finished-instance rule (dropped), and the drain completes with no KeptBy left
+  model turn start (start): no records
+  start: real Native turn subscribed Event 'go'; R = native.resume go at seq 1100, a row the model never recalls
+  park: R(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
   park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, Q, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, Q, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver Q (order: [Q, R])
-  model turn Q (native.cancel): end Cancelled; recalled [R, T2]
+  model turn Q (native.cancel): end Cancelled
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
   model inputs: [Q]
-  rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  rows: R dropped (finished instance, Cancelled); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS model inputs: Q (expected Q)
     PASS instance ended: Cancelled (expected Cancelled)
     PASS drain completed: True (expected True)
-    PASS R reached a model turn: False (expected False)
+    PASS R's fate: dropped (finished instance, Cancelled) (expected dropped (finished instance, Cancelled))
     PASS rows still kept: 0 (expected 0)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
 RESULT FR-1/model-end rules=reviewed: PASS
 
 == FR-1/model-end | rules=repaired ==
-invariant: an earlier cohort row that ends the model leaves R with no model turn, and the drain still completes with no KeptBy left
-  model turn start (start): sent [R, T2]
-  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
-  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+invariant: an earlier cohort row that ends the model leaves R to the finished-instance rule (dropped), and the drain completes with no KeptBy left
+  model turn start (start): no records
+  start: real Native turn subscribed Event 'go'; R = native.resume go at seq 1100, a row the model never recalls
+  park: R(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
   park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, Q, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, Q, R])
-  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
   deliver Q (order: [Q, R])
-  model turn Q (native.cancel): end Cancelled; recalled [R, T2]
+  model turn Q (native.cancel): end Cancelled
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  cohort read finds no cohort row: the mark is cleared
   model inputs: [Q]
-  rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  rows: R dropped (finished instance, Cancelled); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS model inputs: Q (expected Q)
     PASS instance ended: Cancelled (expected Cancelled)
     PASS drain completed: True (expected True)
-    PASS R reached a model turn: False (expected False)
+    PASS R's fate: dropped (finished instance, Cancelled) (expected dropped (finished instance, Cancelled))
     PASS rows still kept: 0 (expected 0)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
 RESULT FR-1/model-end rules=repaired: PASS
 
 == FR-1/model-end | rules=negative ==
-invariant: an earlier cohort row that ends the model leaves R with no model turn, and the drain still completes with no KeptBy left
+invariant: an earlier cohort row that ends the model leaves R to the finished-instance rule (dropped), and the drain completes with no KeptBy left
+  model turn start (start): no records
+  start: real Native turn subscribed Event 'go'; R = native.resume go at seq 1100, a row the model never recalls
+  park: R(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
+  park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, Q, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver Q (order: [Q, R])
+  model turn Q (native.cancel): end Cancelled
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: [Q]
+  rows: R dropped (finished instance, Cancelled); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: Q (expected Q)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: dropped (finished instance, Cancelled) (expected dropped (finished instance, Cancelled))
+    PASS rows still kept: 0 (expected 0)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/model-end rules=negative: PASS
+
+== FR-1/model-end-recall | rules=reviewed ==
+invariant: control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left
   model turn start (start): sent [R, T2]
   start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
   park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
   park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, Q, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, Q, R])
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver Q (order: [Q, R])
   model turn Q (native.cancel): end Cancelled; recalled [R, T2]
   model inputs: [Q]
   rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
-  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
   assertions:
     PASS model inputs: Q (expected Q)
     PASS instance ended: Cancelled (expected Cancelled)
     PASS drain completed: True (expected True)
-    PASS R reached a model turn: False (expected False)
+    PASS R's fate: recalled by Q's turn (never reached the model) (expected recalled by Q's turn (never reached the model))
     PASS rows still kept: 0 (expected 0)
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x2
-RESULT FR-1/model-end rules=negative: PASS
+RESULT FR-1/model-end-recall rules=reviewed: PASS
+
+== FR-1/model-end-recall | rules=repaired ==
+invariant: control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, Q, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver Q (order: [Q, R])
+  model turn Q (native.cancel): end Cancelled; recalled [R, T2]
+  cohort read finds no cohort row: the mark is cleared
+  model inputs: [Q]
+  rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: Q (expected Q)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: recalled by Q's turn (never reached the model) (expected recalled by Q's turn (never reached the model))
+    PASS rows still kept: 0 (expected 0)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/model-end-recall rules=repaired: PASS
+
+== FR-1/model-end-recall | rules=negative ==
+invariant: control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  park: Q(seq 1000, native.cancel, released -, seen 0, done True, kept Arrived), an earlier kept row that ends the model
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [Q, R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); Q(seq 1000, native.cancel, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, Q, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver Q (order: [Q, R])
+  model turn Q (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [Q]
+  rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: Q (expected Q)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS R's fate: recalled by Q's turn (never reached the model) (expected recalled by Q's turn (never reached the model))
+    PASS rows still kept: 0 (expected 0)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/model-end-recall rules=negative: PASS
 
 == FR-1/held | rules=reviewed ==
 invariant: a row the model holds never blocks delivery; the held cohort row still receives the input it waits for
@@ -454,7 +1296,7 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.resume, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, S])
   C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver A (order: [A, S])
@@ -463,7 +1305,7 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   model turn S (native.composite-signal): c:f1:H; end Finished
   model inputs: [A, S]
   rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  instance: status Finished, resolution cleared, ResolutionGeneration 1, cohort mark none
   S held by the model when A was delivered: no
   assertions:
     PASS A reached a model turn: True (expected True)
@@ -482,18 +1324,19 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.resume, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, S])
-  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
-  deliver S (order: [S, A])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver S (order: [S])
   model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
   deliver A (order: [A])
   model turn A+S (native.resume): c:f2:go; signal-deferred:signal-1:f1; held [S]; sent [K2001]
   deliver K2001 (order: [K2001])
   model turn S+K2001 (native.continue): c:f1:H; end Finished
+  cohort read finds no cohort row: the mark is cleared
   model inputs: [S, A, K2001]
   rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); K2001 consumed by a model turn
-  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  instance: status Finished, resolution cleared, ResolutionGeneration 1, cohort mark none
   S held by the model when A was delivered: yes
   assertions:
     PASS A reached a model turn: True (expected True)
@@ -513,7 +1356,7 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.resume, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, S])
   C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
   deliver A (order: [A, S])
@@ -522,7 +1365,7 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   model turn S (native.composite-signal): c:f1:H; end Finished
   model inputs: [A, S]
   rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
-  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  instance: status Finished, resolution cleared, ResolutionGeneration 1, cohort mark none
   S held by the model when A was delivered: no
   assertions:
     PASS A reached a model turn: True (expected True)
@@ -541,14 +1384,14 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
   arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
   C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
-  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  marks at epoch 1: S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.resume, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
   deliver C (order: [C, S])
-  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
-  deliver S (order: [S, A])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver S (order: [S])
   model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
   model inputs: [S]
   rows: S released; C0 consumed (drain turn); A pending; C consumed (drain turn)
-  instance: status Running, resolution cleared, ResolutionGeneration 1
+  instance: status Running, resolution cleared, ResolutionGeneration 1, cohort mark (1,1)
   S held by the model when A was delivered: A never delivered
   assertions:
     FAIL A reached a model turn: False (expected True)
@@ -589,7 +1432,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x5, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
 RESULT RT-1/a rules=reviewed: FAIL
 
 == RT-1/a | rules=repaired ==
@@ -606,6 +1450,7 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
   deliver c14_g1/child/0.1.1_1#9.0000 (terminate from g1/child/0.1.1) to g2/child/1.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#4.0000], cancels []
@@ -630,7 +1475,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
     PASS RM-1: the obligation recorded at A's Complete: parent 0/p/2, children [g2/child/1.1.1/1], jobs [j] (expected parent 0/p/2, children [g2/child/1.1.1/1], jobs [j])
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x11, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/a rules=repaired: PASS
 
 == RT-1/a | rules=negative ==
@@ -647,6 +1493,7 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
   deliver c14_g1/child/0.1.1_1!1_j (kernel.job) to g1/child/0.1.1: refused, RetiredCreation
   end: P [Cancelled, creation 2, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent g1/child/0.1.1/1, children [{"Id":"g3/child/2.1.1","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent g2/child/1.1.1/1, children null, jobs null]
@@ -665,7 +1512,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
     PASS RM-1: the obligation recorded at A's Complete: parent 0/p/2, children [], jobs [j] (expected parent 0/p/2, children [], jobs [j])
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x5, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
 RESULT RT-1/a rules=negative: FAIL
 
 == RT-1/a-g-deleted | rules=reviewed ==
@@ -698,7 +1546,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x2, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
+    FAIL G2's notice refused at G's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x2, CreationProtocol.TargetError x5, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
 RESULT RT-1/a-g-deleted rules=reviewed: FAIL
 
 == RT-1/a-g-deleted | rules=repaired ==
@@ -716,10 +1565,12 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
   deliver c14_g1/child/0.1.1_1#9.0000 (kernel.terminate) to g2/child/1.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#5.0000], cancels []
     marker written at revision 5, every other field unchanged; obligation parent g1/child/0.1.1/1, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g2/child/1.1.1_1#5.0000 (terminate from g2/child/1.1.1) to g3/child/2.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [], cancels []
   deliver c14_g3/child/2.1.1_1#3.end (child-finished) to g2/child/1.1.1: refused, RetiredCreation
@@ -740,7 +1591,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
     PASS RM-1: the obligation recorded at A's Complete: parent 0/p/2, children [g2/child/1.1.1/1], jobs [j] (expected parent 0/p/2, children [g2/child/1.1.1/1], jobs [j])
-  real prototype calls: ChildRegistry.Read x5, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x2, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x2
+    PASS G2's notice refused at G's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x5, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x2, CreationProtocol.TargetError x9, CreationProtocol.Validate x2, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x2
 RESULT RT-1/a-g-deleted rules=repaired: PASS
 
 == RT-1/a-g-deleted | rules=negative ==
@@ -758,6 +1610,7 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
   deliver c14_g1/child/0.1.1_1!1_j (kernel.job) to g1/child/0.1.1: refused, RetiredCreation
   end: P [Cancelled, creation 2, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [retired marker, creation 1, revision 4, parent null, children null, jobs null]; G2 [Running, creation 1, revision 2, parent g2/child/1.1.1/1, children null, jobs null]
@@ -776,7 +1629,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
     PASS RM-1: the obligation recorded at A's Complete: parent 0/p/2, children [], jobs [j] (expected parent 0/p/2, children [], jobs [j])
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x2, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x3, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
+    FAIL G2's notice refused at G's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x2, CreationProtocol.TargetError x5, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x3, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
 RESULT RT-1/a-g-deleted rules=negative: FAIL
 
 == RT-1/b | rules=reviewed ==
@@ -815,7 +1669,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal during the open drain: resolution open (with cascade) (expected resolution open (with cascade))
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x11, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/b rules=reviewed: PASS
 
 == RT-1/b | rules=repaired ==
@@ -854,7 +1709,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal during the open drain: resolution open (with cascade) (expected resolution open (with cascade))
-  real prototype calls: ChildRegistry.Read x7, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x7, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x11, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/b rules=repaired: PASS
 
 == RT-1/b | rules=negative ==
@@ -893,7 +1749,8 @@ invariant: invariant 17: after P's tree terminate no instance of P's tree runs, 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal during the open drain: resolution open (with cascade) (expected resolution open (with cascade))
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x11, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/b rules=negative: PASS
 
 == RT-1/nonparent | rules=reviewed ==
@@ -937,8 +1794,9 @@ invariant: only the recorded parent discharges the obligation: other terminates 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
     FAIL cascades from A's marker, all from T: False (expected True)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x9, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
 RESULT RT-1/nonparent rules=reviewed: FAIL
 
 == RT-1/nonparent | rules=repaired ==
@@ -968,6 +1826,7 @@ invariant: only the recorded parent discharges the obligation: other terminates 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#9.0000 (terminate from g1/child/0.1.1) to g2/child/1.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#4.0000], cancels []
   deliver c14_g2/child/1.1.1_1#4.0000 (terminate from g2/child/1.1.1) to g3/child/2.1.1: accepted; built terminate, Running -> Cancelled
@@ -994,8 +1853,9 @@ invariant: only the recorded parent discharges the obligation: other terminates 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
     PASS cascades from A's marker, all from T: True (expected True)
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x12, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x15, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/nonparent rules=repaired: PASS
 
 == RT-1/nonparent | rules=negative ==
@@ -1025,6 +1885,7 @@ invariant: only the recorded parent discharges the obligation: other terminates 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1!1_j (kernel.job) to g1/child/0.1.1: refused, RetiredCreation
   end: P [Cancelled, creation 2, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent g1/child/0.1.1/1, children [{"Id":"g3/child/2.1.1","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent g2/child/1.1.1/1, children null, jobs null]
   jobs: live [], cancelled [c14_g1/child/0.1.1_1!1_j]
@@ -1045,8 +1906,9 @@ invariant: only the recorded parent discharges the obligation: other terminates 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
     PASS cascades from A's marker, all from T: True (expected True)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x9, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
 RESULT RT-1/nonparent rules=negative: FAIL
 
 == RT-1/nonparent | rules=cascade-any ==
@@ -1065,6 +1927,7 @@ invariant: only the recorded parent discharges the obligation: other terminates 
   deliver c3_4/x_1#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#9.0000 (terminate from g1/child/0.1.1) to g2/child/1.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#4.0000], cancels []
   deliver c14_g2/child/1.1.1_1#4.0000 (terminate from g2/child/1.1.1) to g3/child/2.1.1: accepted; built terminate, Running -> Cancelled
@@ -1098,8 +1961,9 @@ invariant: only the recorded parent discharges the obligation: other terminates 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
     FAIL cascades from A's marker, all from T: False (expected True)
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x12, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x15, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/nonparent rules=cascade-any: FAIL
 
 == RT-1/successor | rules=reviewed ==
@@ -1127,7 +1991,7 @@ invariant: a keyed root's marker keeps nothing, and its successor inherits no re
     PASS terminates sent to H: 0 (expected 0)
     PASS H ran to its own end (delete detaches, as built): Finished (expected Finished)
     PASS H's notice to R's creation, at B: WrongCreation (expected WrongCreation)
-  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
+  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x6, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
 RESULT RT-1/successor rules=reviewed: PASS
 
 == RT-1/successor | rules=repaired ==
@@ -1155,7 +2019,7 @@ invariant: a keyed root's marker keeps nothing, and its successor inherits no re
     PASS terminates sent to H: 0 (expected 0)
     PASS H ran to its own end (delete detaches, as built): Finished (expected Finished)
     PASS H's notice to R's creation, at B: WrongCreation (expected WrongCreation)
-  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
+  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x6, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
 RESULT RT-1/successor rules=repaired: PASS
 
 == RT-1/successor | rules=negative ==
@@ -1183,7 +2047,7 @@ invariant: a keyed root's marker keeps nothing, and its successor inherits no re
     PASS terminates sent to H: 0 (expected 0)
     PASS H ran to its own end (delete detaches, as built): Finished (expected Finished)
     PASS H's notice to R's creation, at B: WrongCreation (expected WrongCreation)
-  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
+  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x6, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
 RESULT RT-1/successor rules=negative: PASS
 
 == RT-1/successor | rules=successor-inherits ==
@@ -1212,8 +2076,20 @@ invariant: a keyed root's marker keeps nothing, and its successor inherits no re
     FAIL terminates sent to H: 1 (expected 0)
     PASS H ran to its own end (delete detaches, as built): Finished (expected Finished)
     PASS H's notice to R's creation, at B: WrongCreation (expected WrongCreation)
-  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x5, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
+  real prototype calls: ChildRegistry.Read x4, ChildRegistry.Write x2, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x2, WorkflowInstance.Finished x2
 RESULT RT-1/successor rules=successor-inherits: FAIL
+
+== RT-1/successor | rules=root-retains ==
+invariant: a keyed root's marker keeps nothing, and its successor inherits no registry: the successor's terminate reaches only its own children
+  setup: R = keyed root 5/t1:invoice [Finished, creation 1, revision 6, parent null/0, children [{"Id":"g6/child/5.1.1","Creation":1}], jobs null], with no parent (a keyed start carries none, KeyAdmission.cs 31-32); its live child H [Running, creation 1, revision 2, parent 5/t1:invoice/1, children null, jobs null]
+  R's built delete (an ended root, no drain): retirement marker [retired marker, creation 1, revision 7, parent null, children null, jobs null]; obligation parent /0, children [g6/child/5.1.1/1], jobs []
+  start of creation 2 at 5/t1:invoice: CreationProtocol.StartError -> accepted; result ObligationOutstanding
+  B is not created, so the run stops here
+  assertions:
+    FAIL RM-1: R's marker obligation (a root records no parent): parent /0, children [g6/child/5.1.1/1], jobs [] (expected none)
+    FAIL B's start for creation 2: ObligationOutstanding (expected accepted)
+  real prototype calls: ChildRegistry.Read x1, ChildRegistry.Write x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, DurableKeyJson.ReadKeys x1
+RESULT RT-1/successor rules=root-retains: FAIL
 
 == RT-1/successor-unreachable | rules=reviewed ==
 invariant: a start addressed to the retired generated child id is consumed with no change, so no creation 2 appears and P's terminate still discharges the obligation
@@ -1239,6 +2115,7 @@ invariant: a start addressed to the retired generated child id is consumed with 
   assertions:
     PASS outside add discarded by the real classification: True (expected True)
     PASS application send from X discarded by the real classification: True (expected True)
+    PASS the creator-scope control is no supplied creator: False (expected False)
     PASS marker unchanged after the supplied starts: True (expected True)
     PASS obligation unchanged after the supplied starts: none (expected none)
     PASS P: Cancelled (expected Cancelled)
@@ -1251,7 +2128,8 @@ invariant: a start addressed to the retired generated child id is consumed with 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x4, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, Message.SuppliedCreator x3, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x5, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, Message.SuppliedCreator x3, WorkflowInstance.Finished x1
 RESULT RT-1/successor-unreachable rules=reviewed: FAIL
 
 == RT-1/successor-unreachable | rules=repaired ==
@@ -1272,6 +2150,7 @@ invariant: a start addressed to the retired generated child id is consumed with 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#9.0000 (terminate from g1/child/0.1.1) to g2/child/1.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#4.0000], cancels []
   deliver c14_g2/child/1.1.1_1#4.0000 (terminate from g2/child/1.1.1) to g3/child/2.1.1: accepted; built terminate, Running -> Cancelled
@@ -1286,6 +2165,7 @@ invariant: a start addressed to the retired generated child id is consumed with 
   assertions:
     PASS outside add discarded by the real classification: True (expected True)
     PASS application send from X discarded by the real classification: True (expected True)
+    PASS the creator-scope control is no supplied creator: False (expected False)
     PASS marker unchanged after the supplied starts: True (expected True)
     PASS obligation unchanged after the supplied starts: parent 0/p/2, children [g2/child/1.1.1/1], jobs [j] (expected parent 0/p/2, children [g2/child/1.1.1/1], jobs [j])
     PASS P: Cancelled (expected Cancelled)
@@ -1298,7 +2178,8 @@ invariant: a start addressed to the retired generated child id is consumed with 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x8, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, Message.SuppliedCreator x3, WorkflowInstance.Finished x3
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x11, CreationProtocol.Validate x1, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, Message.SuppliedCreator x3, WorkflowInstance.Finished x3
 RESULT RT-1/successor-unreachable rules=repaired: PASS
 
 == RT-1/successor-unreachable | rules=negative ==
@@ -1319,6 +2200,7 @@ invariant: a start addressed to the retired generated child id is consumed with 
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1!1_j (kernel.job) to g1/child/0.1.1: refused, RetiredCreation
   end: P [Cancelled, creation 2, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent g1/child/0.1.1/1, children [{"Id":"g3/child/2.1.1","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent g2/child/1.1.1/1, children null, jobs null]
   jobs: live [], cancelled [c14_g1/child/0.1.1_1!1_j]
@@ -1327,6 +2209,7 @@ invariant: a start addressed to the retired generated child id is consumed with 
   assertions:
     PASS outside add discarded by the real classification: True (expected True)
     PASS application send from X discarded by the real classification: True (expected True)
+    PASS the creator-scope control is no supplied creator: False (expected False)
     PASS marker unchanged after the supplied starts: True (expected True)
     PASS obligation unchanged after the supplied starts: parent 0/p/2, children [], jobs [j] (expected parent 0/p/2, children [], jobs [j])
     PASS P: Cancelled (expected Cancelled)
@@ -1339,7 +2222,8 @@ invariant: a start addressed to the retired generated child id is consumed with 
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x4, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, Message.SuppliedCreator x3, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x5, CreationProtocol.Validate x1, Delivery.DiscardedAt x2, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, Message.SuppliedCreator x3, WorkflowInstance.Finished x1
 RESULT RT-1/successor-unreachable rules=negative: FAIL
 
 == RT-1/successor-gap | rules=reviewed ==
@@ -1373,7 +2257,8 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
     FAIL creation 2 at A's id: True (expected False)
     FAIL J's late result at A's id: WrongCreation (expected RetiredCreation)
     FAIL T's refusal (CreationProtocol.TargetError): WrongCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x5, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
 RESULT RT-1/successor-gap rules=reviewed: FAIL
 
 == RT-1/successor-gap | rules=repaired ==
@@ -1392,6 +2277,7 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [g2/child/1.1.1/1 as c14_g1/child/0.1.1_1#9.0000], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1#9.0000 (terminate from g1/child/0.1.1) to g2/child/1.1.1: accepted; built terminate, Running -> Cancelled
       its commit sends terminate to [g3/child/2.1.1/1 as c14_g2/child/1.1.1_1#4.0000], cancels []
   deliver c14_g2/child/1.1.1_1#4.0000 (terminate from g2/child/1.1.1) to g3/child/2.1.1: accepted; built terminate, Running -> Cancelled
@@ -1416,8 +2302,9 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    PASS G's notice refused at A's marker: RetiredCreation (expected RetiredCreation)
     PASS successor start: ObligationOutstanding (expected ObligationOutstanding)
-  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x8, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x11, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x3
 RESULT RT-1/successor-gap rules=repaired: PASS
 
 == RT-1/successor-gap | rules=negative ==
@@ -1436,6 +2323,7 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
   deliver c3_0/p_2#5.0000 (kernel.terminate) to g1/child/0.1.1: refused, RetiredCreation
     the refusing commit at the marker sends terminate to [], cancels [c14_g1/child/0.1.1_1!1_j]
     marker written at revision 9, every other field unchanged; obligation parent 0/p/2, children [], jobs []
+    built CreationProtocol.Validate on that marker write: refused: invalid lifecycle retirement (the release widens it for the obligation write)
   deliver c14_g1/child/0.1.1_1!1_j (kernel.job) to g1/child/0.1.1: refused, RetiredCreation
   end: P [Cancelled, creation 2, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent g1/child/0.1.1/1, children [{"Id":"g3/child/2.1.1","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent g2/child/1.1.1/1, children null, jobs null]
   jobs: live [], cancelled [c14_g1/child/0.1.1_1!1_j]
@@ -1454,8 +2342,9 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
     PASS creation 2 at A's id: False (expected False)
     PASS J's late result at A's id: RetiredCreation (expected RetiredCreation)
     PASS T's refusal (CreationProtocol.TargetError): RetiredCreation (expected RetiredCreation)
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
     PASS successor start: ObligationOutstanding (expected ObligationOutstanding)
-  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x5, CreationProtocol.Validate x1, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x6, WorkflowInstance.Finished x1
 RESULT RT-1/successor-gap rules=negative: FAIL
 
 == RT-1/successor-gap | rules=successor-admitted ==
@@ -1489,7 +2378,8 @@ invariant: no successor replaces a marker that still holds an obligation (Obliga
     FAIL creation 2 at A's id: True (expected False)
     FAIL J's late result at A's id: WrongCreation (expected RetiredCreation)
     FAIL T's refusal (CreationProtocol.TargetError): WrongCreation (expected RetiredCreation)
-  real prototype calls: ChildRegistry.Read x3, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x4, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
+    FAIL G's notice refused at A's marker:  (expected RetiredCreation)
+  real prototype calls: ChildRegistry.Read x3, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x5, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x5, WorkflowInstance.Finished x1
 RESULT RT-1/successor-gap rules=successor-admitted: FAIL
 
 == summary ==
@@ -1504,9 +2394,27 @@ fr1-takeover-after-complete    repaired            actual PASS  expected PASS  a
 fr1-takeover-after-complete    negative            actual FAIL  expected FAIL  as expected
 fr1-takeover-before-complete   memory-precedence   actual FAIL  expected FAIL  as expected
 fr1-takeover-after-complete    memory-precedence   actual FAIL  expected FAIL  as expected
+fr1-trial-takeover             reviewed            actual FAIL  expected FAIL  as expected
+fr1-trial-takeover             repaired            actual PASS  expected PASS  as expected
+fr1-trial-takeover             negative            actual FAIL  expected FAIL  as expected
+fr1-trial-takeover             trial-plain-seq     actual FAIL  expected FAIL  as expected
+fr1-trial-takeover             no-cohort-mark      actual PASS  expected PASS  as expected
+fr1-poll-limit                 reviewed            actual FAIL  expected FAIL  as expected
+fr1-poll-limit                 repaired            actual PASS  expected PASS  as expected
+fr1-poll-limit                 negative            actual FAIL  expected FAIL  as expected
+fr1-poll-limit                 trial-plain-seq     actual FAIL  expected FAIL  as expected
+fr1-poll-limit                 no-cohort-mark      actual FAIL  expected FAIL  as expected
+fr1-trial-takeover-open        reviewed            actual FAIL  expected FAIL  as expected
+fr1-trial-takeover-open        repaired            actual PASS  expected PASS  as expected
+fr1-trial-takeover-open        negative            actual PASS  expected PASS  as expected
+fr1-trial-takeover-open        trial-plain-seq     actual FAIL  expected FAIL  as expected
+fr1-trial-takeover-open        no-cohort-mark      actual PASS  expected PASS  as expected
 fr1-model-end                  reviewed            actual PASS  expected PASS  as expected
 fr1-model-end                  repaired            actual PASS  expected PASS  as expected
 fr1-model-end                  negative            actual PASS  expected PASS  as expected
+fr1-model-end-recall           reviewed            actual PASS  expected PASS  as expected
+fr1-model-end-recall           repaired            actual PASS  expected PASS  as expected
+fr1-model-end-recall           negative            actual PASS  expected PASS  as expected
 fr1-held                       reviewed            actual PASS  expected PASS  as expected
 fr1-held                       repaired            actual PASS  expected PASS  as expected
 fr1-held                       negative            actual PASS  expected PASS  as expected
@@ -1528,6 +2436,7 @@ rt1-successor                  reviewed            actual PASS  expected PASS  a
 rt1-successor                  repaired            actual PASS  expected PASS  as expected
 rt1-successor                  negative            actual PASS  expected PASS  as expected
 rt1-successor                  successor-inherits  actual FAIL  expected FAIL  as expected
+rt1-successor                  root-retains        actual FAIL  expected FAIL  as expected
 rt1-successor-unreachable      reviewed            actual FAIL  expected FAIL  as expected
 rt1-successor-unreachable      repaired            actual PASS  expected PASS  as expected
 rt1-successor-unreachable      negative            actual FAIL  expected FAIL  as expected
@@ -1535,4 +2444,4 @@ rt1-successor-gap              reviewed            actual FAIL  expected FAIL  a
 rt1-successor-gap              repaired            actual PASS  expected PASS  as expected
 rt1-successor-gap              negative            actual FAIL  expected FAIL  as expected
 rt1-successor-gap              successor-admitted  actual FAIL  expected FAIL  as expected
-42/42 runs as expected
+61/61 runs as expected
