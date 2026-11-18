@@ -374,7 +374,8 @@ internal sealed class VariableWriteEntry(string entryId, VariableWriteRecord rec
 
     public string? AlterationJobId { get; } = alterationJobId;
     public long? CommitSequence => Record.CommitSequence is >= 0 and var sequence ? sequence : null;
-    public bool OrderApproximate => CommitSequence is null;
+    // A record without a commit sequence is ordered approximately; one without a frame is keyed by scope (data model).
+    public bool OrderApproximate => CommitSequence is null || Record.FrameId is null;
     public string InstanceKey { get; } = InstanceKeyOf(record.FrameId, record.ScopeId, record.VariableKey);
 
     /// <summary>The writer's logical invocation (ADR 0092 decision 8); an alteration is its own.</summary>

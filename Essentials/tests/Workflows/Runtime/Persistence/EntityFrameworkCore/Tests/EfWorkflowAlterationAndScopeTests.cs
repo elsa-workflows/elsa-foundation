@@ -497,6 +497,41 @@ public sealed class EfWorkflowAlterationAndScopeTests
     }
 
     [Fact]
+    public async Task Jobs_with_variable_writes_are_listed_per_execution_in_EF_and_in_memory()
+    {
+        // Spec 1229 FR-005: an instance's ModifyVariable writes are found from the instance, not from the plan.
+        await using var db = await Database.CreateAsync(); await using var fixture = db.Open("tenant-a");
+        Assert.Equal(1, await ListedAsync(fixture.Store, "execution-1"));
+        Assert.Equal(1, await ListedAsync(new Elsa.Workflows.Runtime.Services.Alterations.InMemoryWorkflowAlterationStore(), "execution-1"));
+    }
+
+    private async Task<int> ListedAsync(IWorkflowAlterationStore store, string execution)
+    {
+        var plan = Plan();
+        await store.AdmitAsync(plan);
+        await store.CaptureAsync(plan.PlanId, 0, [new WorkflowAlterationCapturedTarget(execution, "tenant-a"), new WorkflowAlterationCapturedTarget("execution-2", "tenant-a")], null);
+        await store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var record = new VariableWriteRecord("scope", "count", new VariableWriter(VariableWriteSource.Alteration, null, "alteration:job"),
+            VariableCommitOutcome.Blind, null, 1, 2, 2, plan.CreatedAt) { CommitSequence = 7, FrameId = "frame" };
+        for (var claimed = 0; claimed < 2; claimed++)
+        {
+            var job = await store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1));
+            Assert.NotNull(job);
+            var outcome = new WorkflowAlterationOutcome(0, "ModifyVariable", 1, WorkflowAlterationOutcomeStatus.Succeeded, "ok", null, plan.CreatedAt);
+            // Only the target instance's job changed a variable.
+            if (job!.WorkflowExecutionId == execution)
+                outcome = outcome with { VariableWrites = [record] };
+            await store.ApplyTerminalJobChangeAsync(new WorkflowAlterationJobTerminalChange(job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [outcome],
+                WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3)));
+        }
+
+        var listed = await store.ListVariableWriteJobsAsync(execution);
+        Assert.Empty(await store.ListVariableWriteJobsAsync("execution-2"));
+        Assert.All(listed, job => Assert.Equal(7, job.Outcomes.Single().VariableWrites!.Single().CommitSequence));
+        return listed.Count;
+    }
+
+    [Fact]
     public async Task Scope_lifecycle_admission_and_isolation_are_durable()
     {
         await using var db = await Database.CreateAsync(); await using var fixture = db.Open("tenant-a"); var scope = new WorkflowTestScope("scope", DateTimeOffset.UtcNow.AddHours(1), "tenant-a", new WorkflowExecutionPartition("partition")); var created = await fixture.ScopeStore.CreateAsync(scope, DateTimeOffset.UtcNow); await fixture.ScopeStore.AssertOpenAsync(scope, DateTimeOffset.UtcNow); var closing = await fixture.ScopeStore.CloseAsync(new WorkflowTestScopeCloseRequest(scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, created.CreatedAt.AddMinutes(1))); Assert.Equal(WorkflowTestScopeCloseDisposition.Accepted, closing.Disposition); var completed = await fixture.ScopeStore.CompleteAsync(scope.ScopeId, created.CreatedAt.AddMinutes(2)); Assert.Equal(WorkflowTestScopeState.Closed, completed.State);

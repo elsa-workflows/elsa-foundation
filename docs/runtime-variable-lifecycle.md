@@ -198,8 +198,8 @@ activity-execution inspection; values follow the sensitive-value rules.
 - **Value states.** A value is `captured`, `omitted` (not captured), `redacted` (captured, the caller may not see it) or
   `expired` (removed after capture); none of them is `null`, and a captured `null` is a value read through the payload
   route. The written value is the writer's `VariableWrite` value evidence; the overwritten and refused values are
-  operational data on the record (`isOperational`). A digest is shown with the state; the comparison shows digests
-  only.
+  operational data on the record (`isOperational`). A written value's digest is shown with its state (none for a hidden
+  value); the comparison shows digests only.
 - **Lost-update count.** Each activity row keeps the number of its lost-update warnings (`LostUpdateWarningCount`),
   set when the row is committed; the store keeps it and the row's commit-sequence range as columns (the range indexed
   with the instance), so the instance details sum it without reading row documents. No incident is raised: an incident ends a coalescing session.
