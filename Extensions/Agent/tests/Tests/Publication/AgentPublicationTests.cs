@@ -58,7 +58,7 @@ public sealed partial class AgentPublicationTests
         types.RegisterType(typeof(string), "String");
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
-            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers));
+            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placement = await placer.PlaceAsync(new(publication, template, source,
             new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, originKey)]), publication.ActivityTypeKey,
             new Dictionary<string, RuntimeInputBinding>
@@ -85,7 +85,7 @@ public sealed partial class AgentPublicationTests
         types.RegisterType(typeof(string), "String");
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
-            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers));
+            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placement = await placer.PlaceAsync(new(publication, template, source,
             new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, originKey)]), publication.ActivityTypeKey, bindings, outputCaptures));
         return (placement, template.StorageDriverRequirements, publication.DefinitionVersionId);
@@ -105,8 +105,10 @@ public sealed partial class AgentPublicationTests
         Assert.NotNull(source);
         var types = fixture.Services.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
+        // As AgentTypesStartupTask does on a runtime host, so placement checks the model turn's CLR type too (spec 1230 T023).
+        types.RegisterType(typeof(Elsa.Agent.Activities.AgentModelTurn), AgentRuntimeIds.TurnCapability);
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
-            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers));
+            new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placed = await placer.PlaceAsync(new(publication, template, source,
             new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-v1")]), publication.ActivityTypeKey,
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
