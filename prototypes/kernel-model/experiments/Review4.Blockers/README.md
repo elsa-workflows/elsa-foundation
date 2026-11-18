@@ -10,8 +10,8 @@ stranding a live subtree. Each case runs one schedule under three rule sets:
 
 Mutations of the repaired set run where they bite:
 
-- FR-1: `memory-precedence`, `held-blocks`, `trial-plain-seq`, `no-cohort-mark`, `one-row-read-counts-held` and
-  `mark-ignores-controls`;
+- FR-1: `memory-precedence`, `held-blocks`, `trial-plain-seq`, `skip-target`, `no-shelf`, `no-cohort-mark`,
+  `one-row-read-counts-held`, `mark-ignores-controls` and `controls-wait-on-ticket`;
 - RT-1: `cascade-any`, `successor-admitted`, `successor-inherits` and `root-retains`.
 
 ## Run
@@ -37,11 +37,12 @@ experiments/Review4.Blockers/run.sh                  # every run one by one, the
 | `fr1-base` | E-7, as stated | reviewed FAIL, repaired PASS, negative FAIL |
 | `fr1-takeover-before-complete` | E-7, takeover after R's mark and before the model handoff (a retake by the same process) | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
 | `fr1-takeover-after-complete` | E-7, the precedence after Complete survives a takeover (a retake by the same process) | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
-| `fr1-trial-takeover` | E-7 on the built recovery path: a crash takeover after Complete, with A and R as suspects | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, no-cohort-mark PASS |
-| `fr1-poll-limit` | E-7 on the built recovery path: as `fr1-trial-takeover`, with a poll limit of 1 | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, no-cohort-mark FAIL |
-| `fr1-trial-takeover-open` | The rule that a withheld suspect never shelves the cohort: a crash takeover before Complete | reviewed FAIL, repaired PASS, negative PASS, trial-plain-seq FAIL, no-cohort-mark PASS |
-| `fr1-held-poll-limit` | G1 of the #4780 confirmation review: R1 held, R2 beyond a bounded poll | reviewed FAIL, repaired PASS, negative FAIL, one-row-read-counts-held FAIL |
-| `fr1-control-after-complete` | G2 of the #4780 confirmation review: a control polled while the cohort mark is set | reviewed FAIL, repaired PASS, negative FAIL, mark-ignores-controls FAIL |
+| `fr1-trial-takeover` | E-7 on the built recovery path: a crash takeover after Complete, with A and R as suspects | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, skip-target PASS, no-cohort-mark PASS |
+| `fr1-poll-limit` | E-7 on the built recovery path, and the page's shelving rule: as `fr1-trial-takeover`, with a poll limit of 1 | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, skip-target PASS, no-cohort-mark FAIL, no-shelf FAIL |
+| `fr1-trial-takeover-open` | The rule that a withheld suspect skips only itself, never its target: a crash takeover before Complete | reviewed FAIL, repaired PASS, negative PASS, trial-plain-seq PASS, skip-target FAIL, no-cohort-mark PASS |
+| `fr1-held-poll-limit` | E-8 run 2: R1 held, R2 beyond a bounded poll | reviewed FAIL, repaired PASS, negative FAIL, one-row-read-counts-held FAIL |
+| `fr1-control-after-complete` | E-7's control run: a control polled while the cohort mark is set | reviewed FAIL, repaired PASS, negative FAIL, mark-ignores-controls FAIL |
+| `fr1-ticket-control`, `fr1-ticket-control-parent`, `fr1-ticket-control-suspend` | E-11: an operator terminate, a parent's tree terminate, and a suspend then a resume, with a hanging restored ticket | PASS under all three, controls-wait-on-ticket FAIL |
 | `fr1-model-end` | E-7, model-end variant: R dropped under the finished-instance rule | PASS under all three |
 | `fr1-model-end-recall` | Control for E-7's model-end variant: the ending turn recalls R | PASS under all three |
 | `fr1-held` | E-8, after Complete; the evidence is the repaired run and `held-blocks` | PASS under all three, held-blocks FAIL |
@@ -73,17 +74,30 @@ model then gets one input per turn, in the order the rule set gives:
 | repaired | open drain: controls, then the cohort, then the rest. After Complete: the non-held cohort rows first, and nothing else of the instance while one remains; a control waits behind them | no non-cohort suspect ahead of a cohort row or grouped with one; a withheld suspect skips only itself | R's real timer turn completes F once, with F2 still waiting; then A cancels |
 | negative | controls first while the drain is open, then tuple order | seq order; a withheld suspect skips only itself | as reviewed, except in `fr1-trial-takeover-open` |
 | memory-precedence | repaired, with the cohort kept in the owner's memory only | as repaired | in both retake runs the new owner offers A first |
-| trial-plain-seq | repaired | built NextTrial | in the trial runs A is tried first (or the open drain stalls) |
+| trial-plain-seq | repaired | cohort-first trials off: plain seq order | after Complete, A is tried first |
+| skip-target | repaired | a withheld suspect skips its whole target, as built | before Complete, the withheld A keeps R from its trial and the drain stalls |
+| no-shelf | repaired | a suspect the cohort rule passes over is not shelved | with a poll limit of 1, every poll returns A again, R is never polled, and the run stalls |
 | no-cohort-mark | repaired, with no durable cohort mark: the owner knows only the cohort rows it has polled | as repaired, over polled rows | with a poll limit of 1 the owner holds A alone and tries it |
 | one-row-read-counts-held | repaired, with a cohort read of one row that counts held keys | as repaired | the read returns the held R1, so the mark waits for nothing and A is offered before R2 |
 | mark-ignores-controls | repaired, except that a control polled while the mark is set runs ahead of the cohort read | as repaired | the parent's terminate overtakes R, and R is dropped |
+| controls-wait-on-ticket | repaired, with job tickets counted as cohort rows | as repaired | the controls wait on the hanging ticket J until the step bound |
 
 Under `repaired`, the cohort is the set of rows whose `ReleasedBy` is the creation's latest generation and that are
-not Done. Complete sets a durable cohort mark (creation, generation) on the instance row whenever such a row may
-remain. While the mark is set and the owner holds no non-held cohort row, it reads the instance's cohort rows, skipping
-the keys the model holds. A read that finds none clears the mark. While a non-held cohort row remains, no other row of
-the instance is offered, control kinds included. Held cohort rows are skipped by the mark's rule, as they are by the
-poll. When the model ends, held rows are handed back with the ending input, or meet the finished-instance rule.
+not Done; a job ticket never is one (`Kind NOT IN (:ticketKinds)`). Complete sets a durable cohort mark (creation,
+generation) on the instance row whenever such a row may remain. While the mark is set and the owner holds no non-held
+cohort row, it runs the mark's read: a one-row existence check for a cohort row, skipping the keys the model holds and
+ticket kinds. The check loads nothing; the row reaches memory through the ordinary poll. A check that finds none clears
+the mark. While a non-held cohort row remains, no other row of the instance is offered, control kinds included, and no
+non-cohort suspect is tried. A suspect the cohort rule passes over is shelved: the flush marks it seen at this epoch,
+neither on trial nor cleared to run, so later polls move past it. Held cohort rows are skipped by the mark's rule, as
+they are by the poll. When the model ends, held rows are handed back with the ending input, or meet the
+finished-instance rule.
+
+The poll is the built one. The store returns due, not-Done rows with `Seen < epoch` in seq order, up to the poll limit
+(InMemoryStore.cs 219–221). The owner ignores a row already in memory. An untried, unshelved suspect keeps its old
+`Seen`, so it comes back in every poll and fills a place there. That is why the built flush shelves a suspect of a
+withheld instance (Worker.cs 691–699, F12). The repaired rule extends that shelving to the suspect the cohort rule
+passes over (proposed).
 
 The variants:
 
@@ -92,27 +106,39 @@ The variants:
 - `trial-takeover`: another process takes over after Complete. A and R carry the lost owner's Seen, so both are
   suspects. The trial path mirrors NextTrial (Worker.cs 734–760, with TrialGroup 1 from line 35) line by line for one
   instance: seq order, the recovery boundary at the earliest pending control (796–820), a target skipped behind a
-  suspect it cannot be given, and one suspect per group.
+  suspect it cannot be given, and one suspect per group. The built "cannot be given" test is the instance-level
+  `Withheld(slot)` with its exemptions (Worker.cs 756). Feeding the drain's per-row withholding into that test is
+  proposed.
 - `poll-limit`: as `trial-takeover`, but the new owner's PollLimit (Worker.cs 14, used at 516) is 1. Its first poll
-  returns A alone. Under `repaired`, the cohort mark makes it read R before it tries anything.
+  returns A alone.
+  - Under `repaired`, the mark's check finds R, so the cohort rule passes A over and shelves it. The next poll moves
+    past A to R. R is tried and completes F, the check clears the mark, and then A is tried.
+  - Under `no-shelf`, A keeps its old `Seen` and every poll returns it again. R is never polled, and the run stalls.
 - `trial-takeover-open`: another process takes over before Complete. A, a withheld suspect, sorts first.
-  - Under the built rule, A skips the target, so R is never tried, the gate never sees R, and the drain stalls until
-    the step bound.
-  - Under `repaired` and `negative`, A skips only itself. R is tried during the drain, and then C completes.
-  - This case backs the no-shelving rule, so the precedence plays no part and `negative` passes.
-- `held-poll-limit` (G1): the workflow is `Parallel(H, Event X)`, with H a `HeldGate` over `Event go`. The final page
+  - Under the built rule (`reviewed`, `skip-target`), A skips the target, so R is never tried, the gate never sees R,
+    and the drain stalls until the step bound.
+  - Under `repaired`, `negative` and `trial-plain-seq`, A skips only itself. R is tried during the drain, and then C
+    completes.
+  - This case backs the skip-target rule. The precedence plays no part, so `negative` passes.
+- `held-poll-limit` (E-8 run 2): the workflow is `Parallel(H, Event X)`, with H a `HeldGate` over `Event go`. The final page
   restores R1, a composite signal to H at seq 1000, and R2, a `native.resume x` at seq 1100. The same process retakes
   the partition after Complete, with the cohort mark set and PollLimit 2. Four arrivals for another instance sit at
   seq 1001–1004, so the first poll returns A and R1, and R2 only comes two polls later. R1 reaches the model, which
   holds it through Native's real hold path.
-  - Under `repaired`, the next cohort read skips the held R1 and loads R2. R2's real turn completes X, with R1 handed
-    back, and then A cancels.
-  - Under `one-row-read-counts-held`, the read returns the held R1, A is offered, and R2 is dropped.
-- `control-after-complete` (G2): after Complete, with the mark set, the parent's tree terminate K (`kernel.terminate`,
+  - Under `repaired`, the mark's check skips the held R1 and finds R2, so A waits. The poll reaches R2, R2's real turn
+    completes X with R1 handed back, and then A cancels.
+  - Under `one-row-read-counts-held`, the check returns the held R1, A is offered, and R2 is dropped.
+- `control-after-complete` (E-7's control run): after Complete, with the mark set, the parent's tree terminate K (`kernel.terminate`,
   seq 1000) arrives. The same process retakes with PollLimit 1, so the first poll returns K and not R.
-  - Under `repaired`, K waits. The cohort read loads R, R's real timer turn completes F, the next read clears the
-    mark, and then K's built terminate ends the instance.
+  - Under `repaired`, K waits: the mark's check finds R. The next poll returns R, R's real timer turn completes F, the
+    next check clears the mark, and then K's built terminate ends the instance.
   - Under `mark-ignores-controls`, K runs first and R is dropped.
+- `ticket-control`, `ticket-control-parent`, `ticket-control-suspend` (E-11): a retry selects job ticket J, the final
+  page restores it, J's driver enters the job and it hangs, and Complete sets the mark. Then a control arrives: an
+  operator terminate, a parent's tree terminate, or a suspend followed by a resume. Under `repaired`, the mark's check
+  skips ticket kinds, finds no cohort row and clears the mark. Each control applies at once, and a terminate cancels
+  J. Under `controls-wait-on-ticket`, J counts as a cohort row, which is never offered to a turn, so the controls wait
+  until the step bound. The suspend, resume and terminate are the actor type's built controls, mirrored.
 - `model-end`: an earlier kept `native.cancel` Q is released with R, and there is no late arrival. R here is a
   `native.resume go`, which the model never recalls. Q's real cancel turn ends the model, and R is dropped under the
   built finished-instance rule.
@@ -230,17 +256,21 @@ changed.
 `TurnInput` that only the Worker builds, and `NextTrial` reads the Worker's private state):
 
 - the Worker's recovery path, for one instance:
-  - the store poll and its limit (InMemoryStore.PollAsync; Worker.cs 14, 516–537);
-  - the flush's marks (1397);
+  - the store poll and its limit (InMemoryStore.cs 219–221; Worker.cs 14, 516–537);
+  - the flush's marks (1397) and the `Shelf` marking of a withheld instance's suspects (691–699);
   - the suspect test (577–578);
   - NextTrial (734–760);
   - the recovery boundary (796–820);
-- the built terminate of a live row (`WorkflowInstance.cs` 179–203), in RT-1 and for K in FR-1;
+- the built terminate of a live row (`WorkflowInstance.cs` 179–203), in RT-1 and for the FR-1 terminates;
+- the built suspend and resume (`WorkflowInstance.cs`, `Control`);
 - the child-notice path (`WorkflowInstance.cs` 36–61);
 - the Worker's consumption of a discarded supplied creator (`Worker.cs` 1030–1037).
 
-The parent binding at a live child is the proposed rule of #4756. The drain's per-row withholding is fed into
-NextTrial's "cannot be given" test, which the built Worker applies to a suspended instance.
+The parent binding at a live child is the proposed rule of #4756. Two steps of the mirrored recovery path are proposed:
+
+- feeding the drain's per-row withholding into NextTrial's "cannot be given" test, which as built is the
+  instance-level `Withheld(slot)` with its exemptions (Worker.cs 756);
+- shelving the suspect the cohort rule passes over.
 
 **Left for implementation qualification:**
 
@@ -253,4 +283,10 @@ NextTrial's "cannot be given" test, which the built Worker applies to a suspende
 - E-8 with the drain still open;
 - a later Park turning undone cohort rows Stale;
 - DT-7's delete that took over a discard;
-- RM-1's size bound and its refusal of any other write to a marker.
+- RM-1's size bound and its refusal of any other write to a marker;
+- RM-1's list validation: a foreign child or ticket in a marker's retained lists refused, and `Validate`'s
+  foreign-ticket mutation;
+- RM-1's runs with no children and with one job.
+
+The built `Validate` refusal of the marker's next-revision write is printed in each cascade report, as a note on
+existing behaviour, and not asserted.

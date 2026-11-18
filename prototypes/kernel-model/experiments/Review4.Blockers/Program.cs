@@ -11,7 +11,8 @@ static partial class Program
     public static string Name(FrRules rules) => rules switch
     { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", FrRules.HeldBlocks => "held-blocks", FrRules.MemoryPrecedence => "memory-precedence",
       FrRules.TrialPlainSeq => "trial-plain-seq", FrRules.NoCohortMark => "no-cohort-mark",
-      FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", _ => "mark-ignores-controls" };
+      FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", FrRules.MarkIgnoresControls => "mark-ignores-controls",
+      FrRules.SkipTarget => "skip-target", FrRules.NoShelf => "no-shelf", _ => "controls-wait-on-ticket" };
 
     public static string Name(RtRules rules) => rules switch
     {
@@ -27,15 +28,18 @@ static partial class Program
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr1-{v}", r.Item1, r.Item2),
         ("fr1-takeover-before-complete", "memory-precedence", "FAIL"), ("fr1-takeover-after-complete", "memory-precedence", "FAIL"),
         ("fr1-trial-takeover", "reviewed", "FAIL"), ("fr1-trial-takeover", "repaired", "PASS"), ("fr1-trial-takeover", "negative", "FAIL"),
-        ("fr1-trial-takeover", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover", "no-cohort-mark", "PASS"),
+        ("fr1-trial-takeover", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover", "skip-target", "PASS"), ("fr1-trial-takeover", "no-cohort-mark", "PASS"),
         ("fr1-poll-limit", "reviewed", "FAIL"), ("fr1-poll-limit", "repaired", "PASS"), ("fr1-poll-limit", "negative", "FAIL"),
-        ("fr1-poll-limit", "trial-plain-seq", "FAIL"), ("fr1-poll-limit", "no-cohort-mark", "FAIL"),
+        ("fr1-poll-limit", "trial-plain-seq", "FAIL"), ("fr1-poll-limit", "skip-target", "PASS"), ("fr1-poll-limit", "no-cohort-mark", "FAIL"),
+        ("fr1-poll-limit", "no-shelf", "FAIL"),
         ("fr1-trial-takeover-open", "reviewed", "FAIL"), ("fr1-trial-takeover-open", "repaired", "PASS"), ("fr1-trial-takeover-open", "negative", "PASS"),
-        ("fr1-trial-takeover-open", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover-open", "no-cohort-mark", "PASS"),
+        ("fr1-trial-takeover-open", "trial-plain-seq", "PASS"), ("fr1-trial-takeover-open", "skip-target", "FAIL"), ("fr1-trial-takeover-open", "no-cohort-mark", "PASS"),
         ("fr1-held-poll-limit", "reviewed", "FAIL"), ("fr1-held-poll-limit", "repaired", "PASS"), ("fr1-held-poll-limit", "negative", "FAIL"),
         ("fr1-held-poll-limit", "one-row-read-counts-held", "FAIL"),
         ("fr1-control-after-complete", "reviewed", "FAIL"), ("fr1-control-after-complete", "repaired", "PASS"), ("fr1-control-after-complete", "negative", "FAIL"),
         ("fr1-control-after-complete", "mark-ignores-controls", "FAIL"),
+        .. from v in new[] { "ticket-control", "ticket-control-parent", "ticket-control-suspend" }
+           from r in new[] { ("reviewed", "PASS"), ("repaired", "PASS"), ("negative", "PASS"), ("controls-wait-on-ticket", "FAIL") } select ($"fr1-{v}", r.Item1, r.Item2),
         ("fr1-model-end", "reviewed", "PASS"), ("fr1-model-end", "repaired", "PASS"), ("fr1-model-end", "negative", "PASS"),
         ("fr1-model-end-recall", "reviewed", "PASS"), ("fr1-model-end-recall", "repaired", "PASS"), ("fr1-model-end-recall", "negative", "PASS"),
         ("fr1-held", "reviewed", "PASS"), ("fr1-held", "repaired", "PASS"), ("fr1-held", "negative", "PASS"), ("fr1-held", "held-blocks", "FAIL"),
@@ -80,7 +84,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -91,7 +95,8 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls,
+                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls, "skip-target" => FrRules.SkipTarget, "no-shelf" => FrRules.NoShelf,
+                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();
