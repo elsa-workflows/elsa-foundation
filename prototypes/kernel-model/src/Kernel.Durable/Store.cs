@@ -213,7 +213,7 @@ public interface IKernelStore : IMembership
 
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
-    /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is 0 when nothing was taken.
+    /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (the default adapter returns 0).
     /// The default takes one at a time, k round trips: if one of them fails, the partitions before it are taken already,
     /// so a failure is an unknown outcome and the caller treats the whole set as it treats a failed take.
     /// </summary>
