@@ -1782,7 +1782,6 @@ Elsa.Activities.Design.Core.Models.InputDefinition.Category.get -> string?
 Elsa.Activities.Design.Core.Models.InputDefinition.Category.init -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.ConnectionType.get -> string?
 Elsa.Activities.Design.Core.Models.InputDefinition.ConnectionType.init -> void
-Elsa.Activities.Design.Core.Models.InputDefinition.Deconstruct(out string! ReferenceKey, out string! Name, out Elsa.Primitives.Models.TypeReference! Type, out string? StorageDriverType, out string! DisplayName, out string? Category, out bool IsNullable, out bool? IsBrowsable, out bool? IsSerializable, out string? Description, out float Order, out string? UiHint, out System.Text.Json.JsonElement? PropertyInfo, out System.Text.Json.JsonElement? UISpecifications, out bool IsRequired, out System.Text.Json.JsonElement? DefaultValue, out string? DefaultSyntax, out bool? IsSensitive, out bool? IsCredential, out string? Tier, out string? ConnectionType) -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.DefaultSyntax.get -> string?
 Elsa.Activities.Design.Core.Models.InputDefinition.DefaultSyntax.init -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.DefaultValue.get -> System.Text.Json.JsonElement?
@@ -1792,7 +1791,6 @@ Elsa.Activities.Design.Core.Models.InputDefinition.Description.init -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.DisplayName.get -> string!
 Elsa.Activities.Design.Core.Models.InputDefinition.DisplayName.init -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.Equals(Elsa.Activities.Design.Core.Models.InputDefinition? other) -> bool
-Elsa.Activities.Design.Core.Models.InputDefinition.InputDefinition(string! ReferenceKey, string! Name, Elsa.Primitives.Models.TypeReference! Type, string? StorageDriverType, string! DisplayName, string? Category, bool IsNullable, bool? IsBrowsable = null, bool? IsSerializable = null, string? Description = null, float Order = 0, string? UiHint = null, System.Text.Json.JsonElement? PropertyInfo = null, System.Text.Json.JsonElement? UISpecifications = null, bool IsRequired = false, System.Text.Json.JsonElement? DefaultValue = null, string? DefaultSyntax = null, bool? IsSensitive = null, bool? IsCredential = null, string? Tier = null, string? ConnectionType = null) -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.IsBrowsable.get -> bool?
 Elsa.Activities.Design.Core.Models.InputDefinition.IsBrowsable.init -> void
 Elsa.Activities.Design.Core.Models.InputDefinition.IsCredential.get -> bool?
@@ -2606,3 +2604,17 @@ virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.<Clone>$() -> E
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.EqualityContract.get -> System.Type!
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.Equals(Elsa.Activities.Design.Core.Models.ActivityArgumentState? other) -> bool
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Activities.Design.Core.Models.InputDefinition.Deconstruct(out string! ReferenceKey, out string! Name, out Elsa.Primitives.Models.TypeReference! Type, out string? StorageDriverType, out string! DisplayName, out string? Category, out bool IsNullable, out bool? IsBrowsable, out bool? IsSerializable, out string? Description, out float Order, out string? UiHint, out System.Text.Json.JsonElement? PropertyInfo, out System.Text.Json.JsonElement? UISpecifications, out bool IsRequired, out System.Text.Json.JsonElement? DefaultValue, out string? DefaultSyntax, out bool? IsSensitive, out bool? IsCredential, out string? Tier, out string? ConnectionType, out string? VariableAccess) -> void
+Elsa.Activities.Design.Core.Models.InputDefinition.InputDefinition(string! ReferenceKey, string! Name, Elsa.Primitives.Models.TypeReference! Type, string? StorageDriverType, string! DisplayName, string? Category, bool IsNullable, bool? IsBrowsable = null, bool? IsSerializable = null, string? Description = null, float Order = 0, string? UiHint = null, System.Text.Json.JsonElement? PropertyInfo = null, System.Text.Json.JsonElement? UISpecifications = null, bool IsRequired = false, System.Text.Json.JsonElement? DefaultValue = null, string? DefaultSyntax = null, bool? IsSensitive = null, bool? IsCredential = null, string? Tier = null, string? ConnectionType = null, string? VariableAccess = null) -> void
+Elsa.Activities.Design.Core.Models.InputDefinition.VariableAccess.get -> string?
+Elsa.Activities.Design.Core.Models.InputDefinition.VariableAccess.init -> void
+Elsa.Activities.Design.Core.Models.InputVariableAccess
+Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet
+const Elsa.Activities.Design.Core.Models.InputVariableAccess.ExpressionType = "Variable" -> string!
+const Elsa.Activities.Design.Core.Models.InputVariableAccess.Read = "Read" -> string!
+const Elsa.Activities.Design.Core.Models.InputVariableAccess.ReadWrite = "ReadWrite" -> string!
+const Elsa.Activities.Design.Core.Models.InputVariableAccess.UiHint = "variable-picker" -> string!
+const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.AccessesUndeclaredVariablesMember = "accessesUndeclaredVariables" -> string!
+const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.Kind = "elsa.variable-access" -> string!
+const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.SchemaVersion = "1" -> string!
+static Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.AccessesUndeclaredVariables(System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDesignFacet!>? facets) -> bool

@@ -35,6 +35,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly IWorkflowExecutableInputValidator? _validator;
     private readonly bool _allowsFreeNames;
     private readonly LostUpdateMode _mode;
+    private readonly bool _suspends;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
     private readonly List<VariableSessionRead> _readOrder = [];
     private readonly Dictionary<(string ScopeId, string Key), StepVariableWriteIntent> _intents = new();
@@ -52,7 +53,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         ActivityExecutionState invocation,
         ExecutableNode node,
         IWorkflowExecutableInputValidator? validator,
-        string? attemptId = null)
+        string? attemptId = null,
+        bool suspends = false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -66,6 +68,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         _validator = validator;
         _allowsFreeNames = node.ActivityContract?.AccessesUndeclaredVariables == true;
         _mode = LostUpdateModes.Of(node);
+        _suspends = suspends;
         AttemptId = attemptId
                     ?? invocation.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId
                     ?? invocation.Attempts?.LastOrDefault()?.AttemptId
@@ -162,6 +165,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     {
         if (variable.IsTransient)
         {
+            EnsureTransientAllowed(variable);
             if (_transient.TryGetValue(variable.Address, out var replaced))
                 return (T)replaced!;
             var live = variable.Committed.TransientResource;
@@ -240,6 +244,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     {
         if (variable.IsTransient)
         {
+            EnsureTransientAllowed(variable);
             // A transient variable holds a live instance: Set replaces it in memory for this step only; nothing is committed
             // or recorded (FR-027).
             _transient[variable.Address] = value;
@@ -258,6 +263,15 @@ internal sealed class StepVariableSession : IStepVariableSession
         }
 
         Stage(variable, json, StepVariableWriteKind.WholeAssignment, _droppedMembers.GetValueOrDefault(variable.Address));
+    }
+
+    // FR-027: a step that can suspend (a stateful or checkpoint-participating activity) cannot hold a live instance across
+    // the suspension, so it may not touch a transient variable at all.
+    private void EnsureTransientAllowed(ResolvedVariable variable)
+    {
+        if (_suspends)
+            throw Fault(new InvalidOperationException(
+                $"Variable '{variable.Name}' is transient, and node '{_node.ExecutableNodeId}' runs an activity that can suspend: a live instance cannot cross a suspension."));
     }
 
     private void Stage(ResolvedVariable variable, JsonElement? json, StepVariableWriteKind kind, IReadOnlyList<string>? droppedMembers)

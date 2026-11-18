@@ -45,6 +45,7 @@ internal static class StepVariableSessions
                 cancellationToken,
                 durableValues)
             : null;
-        return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId);
+        var suspends = activity is IStatefulActivity || activity is IRuntimeActivityCheckpointParticipant;
+        return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends);
     }
 }

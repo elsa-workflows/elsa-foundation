@@ -169,7 +169,12 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh),
+            metadata: StepVariableWriteMetadata.Pin(
+                CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh),
+                projectedInputs.Definitions,
+                inputBindings,
+                activityContract,
+                workflowVariables),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
@@ -548,6 +553,26 @@ public sealed class ExecutableNodeCompiler(
         var inputs = inputDefinitions.Select(input =>
         {
             inputStates.TryGetValue(input.ReferenceKey, out var state);
+            // Spec 1231 FR-022: a variable-reference input pins the variable it names, never a value; its value type and
+            // direction are its reference facts.
+            if (RuntimeInputBindingCompiler.IsVariableReferenceInput(input))
+            {
+                return new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    input.ReferenceKey,
+                    input.Name,
+                    new ValueTypeDescriptor(VariableReferenceTypes.Alias),
+                    isRequired: true,
+                    isNullable: false,
+                    hasDefault: false,
+                    defaultValue: null,
+                    ActivityValuePolicy.Default)
+                {
+                    VariableReference = new ActivityInputVariableReference(
+                        StringComparer.Ordinal.Equals(input.VariableAccess, InputVariableAccess.ReadWrite) ? ActivityVariableAccess.ReadWrite : ActivityVariableAccess.Read,
+                        new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind))
+                };
+            }
+
             return new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
                 input.ReferenceKey,
                 input.Name,
@@ -616,7 +641,8 @@ public sealed class ExecutableNodeCompiler(
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
+            accessesUndeclaredVariables: activityType.IsDefined(typeof(AccessesUndeclaredVariablesAttribute), inherit: true));
     }
 
     /// <summary>

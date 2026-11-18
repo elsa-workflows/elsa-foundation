@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -15,16 +16,24 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
     IActivityDataSelectionAnalyzer sourceAnalyzer,
-    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer) : IDraftValidator
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer,
+    IActivityDefinitionLookup? activityCatalog) : IDraftValidator
 {
+    /// <summary>Without the activity catalog, step writes (spec 1231) are neither checked nor counted.</summary>
+    public ValueFlowValidator(
+        IActivityStructureService activityStructureService,
+        IActivityDataSelectionAnalyzer sourceAnalyzer,
+        IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer)
+        : this(activityStructureService, sourceAnalyzer, writeOrderAnalyzer, null) { }
+
     /// <summary>Preserves the two-argument shape; the default write-order analyzer applies.</summary>
     public ValueFlowValidator(IActivityStructureService activityStructureService, IActivityDataSelectionAnalyzer sourceAnalyzer)
-        : this(activityStructureService, sourceAnalyzer, null) { }
+        : this(activityStructureService, sourceAnalyzer, null, null) { }
 
     private readonly IUnorderedVariableWriteAnalyzer _writeOrderAnalyzer = writeOrderAnalyzer ?? new UnorderedVariableWriteAnalyzer();
 
     /// <summary>Preserves the legacy call shape; validation fails closed until shared authority is supplied.</summary>
-    public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!, null) { }
+    public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!, null, null) { }
 
     private const string ParallelStructureKind = "elsa.parallel.structure";
 
@@ -40,7 +49,18 @@ public sealed class ValueFlowValidator(
 
         var graph = ValueFlowGraph.Create(draft.State.RootActivity, activityStructureService);
         var errors = new List<ValidationError>();
-        ValidateUnorderedWrites(draft.State.RootActivity, errors, cancellationToken);
+        // Spec 1231: variable-reference bindings are checked and step writers join the concurrent-write rule.
+        var stepWrites = StepVariableWriteFacts.None;
+        if (activityCatalog is not null)
+        {
+            var (facts, stepErrors) = await StepVariableWriteValidation.AnalyzeAsync(
+                draft.State.RootActivity, [.. draft.State.Variables], activityStructureService, activityCatalog, cancellationToken);
+            stepWrites = facts;
+            foreach (var error in stepErrors)
+                AddOnce(errors, error);
+        }
+
+        ValidateUnorderedWrites(draft.State.RootActivity, stepWrites, errors, cancellationToken);
         var analysis = await sourceAnalyzer.AnalyzeAsync(new ActivityDataSelectionDocument(
             "WorkflowDefinition", draft.Id, $"{draft.Id}/{draft.LastModifiedAt:O}", draft.State.RootActivity,
             [.. draft.State.Inputs], [.. draft.State.Variables], [.. draft.State.Outputs]), cancellationToken: cancellationToken);
@@ -51,9 +71,9 @@ public sealed class ValueFlowValidator(
 
     // Spec 266: declared writes to one variable whose order the definition does not fix are a warning, never a
     // refusal. The ordering knowledge comes only from the structures' declarations.
-    private void ValidateUnorderedWrites(ActivityNode root, ICollection<ValidationError> errors, CancellationToken cancellationToken)
+    private void ValidateUnorderedWrites(ActivityNode root, StepVariableWriteFacts stepWrites, ICollection<ValidationError> errors, CancellationToken cancellationToken)
     {
-        var result = _writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: true, cancellationToken);
+        var result = _writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: true, stepWrites, cancellationToken);
         foreach (var finding in result.UnorderedWrites)
         {
             AddOnce(errors, new ValidationError(

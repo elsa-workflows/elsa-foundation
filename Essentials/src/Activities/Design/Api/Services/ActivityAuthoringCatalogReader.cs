@@ -114,7 +114,8 @@ public sealed class ActivityAuthoringCatalogReader(
         {
             DesignFacets = version.DesignFacets.Select(facet => new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, facet.Payload.Clone())).ToArray(),
             PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone(),
-            RuntimeActivityType = runtimeActivityType
+            RuntimeActivityType = runtimeActivityType,
+            AccessesUndeclaredVariables = VariableAccessDesignFacet.AccessesUndeclaredVariables(version.DesignFacets)
         };
     }
 
@@ -138,7 +139,8 @@ public sealed class ActivityAuthoringCatalogReader(
             IsSensitive: input.IsSensitive == true || input.IsCredential == true,
             IsCredential: input.IsCredential == true,
             Tier: ActivityInputTiers.NormalizeOrNull(input.Tier),
-            ConnectionType: string.IsNullOrWhiteSpace(input.ConnectionType) ? null : input.ConnectionType);
+            ConnectionType: string.IsNullOrWhiteSpace(input.ConnectionType) ? null : input.ConnectionType,
+            VariableAccess: string.IsNullOrWhiteSpace(input.VariableAccess) ? null : input.VariableAccess);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(
