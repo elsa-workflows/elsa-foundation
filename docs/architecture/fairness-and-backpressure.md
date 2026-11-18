@@ -139,7 +139,7 @@ the previous page's last restored row is not yet handed off to the model and whi
 page restores at most `P_page` less the restored rows not yet handed off (fifth review R5-M3). A poll's `Seen` mark
 alone no longer counts. The drain admits a page only while the restored rows the current owner has not handed off
 number fewer than `P_page` and their bytes stay under `B_credit` = 4 MiB (proposed), and with none pending a page
-always restores its first row. So at all times, across any number of takeovers, the drain's restored rows not `Done`, other than restored tickets running as jobs, are at most `P_page`
+always restores its first row. So at all times, across any number of takeovers, the drain's restored rows not `Done`, other than ticket kinds (job, meet and publish), which are kernel work, are at most `P_page`
 plus the rows its model holds or has held and not since consumed, and their bytes at most `B_credit` plus those held
 rows' bytes plus one row larger than `B_credit` restored alone ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
