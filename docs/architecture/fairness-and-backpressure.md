@@ -133,8 +133,8 @@ them. The store never refuses an insert for depth:
 their growth is storage, which ends when the Park is resolved. Recovery restores them page by page. A page waits while
 the previous page's last restored row is not yet handed off to the model and while the instance is suspended, and a
 page restores at most `P_page` less the restored rows not yet handed off (fifth review R5-M3). A poll's `Seen` mark
-alone no longer counts, so a drain's restored rows not yet handed off are at most one page at all times, plus the
-rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
+alone no longer counts, so a drain's restored rows not yet handed off are at most one page, and `B_credit` = 4 MiB
+(proposed) of stored bytes with their payloads or one larger row alone, at all times, plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
 would hold it above the high water mark for good.
 
