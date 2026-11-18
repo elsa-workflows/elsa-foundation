@@ -151,7 +151,8 @@ outstanding children exist; sub-ranges past the cursor were never started and ne
 still hold any number of children that it started over many turns, one per turn being enough, so its terminate does
 not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
 the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
-children end in 11 commits and no commit meets the send cap (proposed, fifth review R5-B2;
+children end in 11 commits; the send cap binds every turn unchanged, and each page is a kernel commit of at most
+`P_cascade` entries and one `kernel.cascade` (proposed, fifth review R5-B2;
 [observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
 idempotent"). Each job cancel in a cascade is idempotent: a ticket already consumed or `Done` is never counted as
 consumed, so one settled ticket cannot roll back the children's terminates (fifth review R5-B1). A child deleted while the terminate was
@@ -188,7 +189,8 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   marker, which release 1 never compacts, and it is harmless, since `ObligationOutstanding` for that `Held`
   obligation only blocks a successor that no producer can create ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)).
   The one valid case it refuses is a successor start at a keyed root's id while that root's own cascade is still
-  `Discharging`, a retryable refusal bounded by ⌈n / `P_cascade`⌉ pages (fifth review R5-B2).
+  `Discharging`, a retryable refusal bounded by ⌈n / `P_cascade`⌉ pages that key admission answers before writing a
+  receipt (fifth review R5-B2).
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
   faults only when the faults pass a threshold, as Native `Parallel` faults when its threshold can no longer be met
   (built). The root's result carries the count and the sample.

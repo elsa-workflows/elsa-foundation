@@ -233,6 +233,21 @@ under the pin could merge them. So a keyed request resolves its actor id before 
   a command is accepted as a new request. The wire id is `key/` and the SHA-256 over the canonical encoding of the
   binding's actor id and the operation's code units, so every equivalent spelling of the key, with the same
   operation, produces one message id.
+- **A start while the predecessor's cascade still pages** (proposed, fifth review R5-B2). A keyed root deleted while
+  its own terminate's cascade is `Discharging` keeps that obligation on its retirement marker until the last page
+  ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
+  idempotent"). Admission decides a start against it, in the admission transaction: after reading the binding it
+  reads the marker of the binding's actor id, and while the marker's cascade is `Discharging` it answers
+  `in-progress` with reason `ObligationOutstanding`, a retryable refusal (HTTP 503 with `Retry-After` at the API),
+  and writes no receipt and no message. A retry with the same operation finds no receipt and is decided again, as a
+  retry with a new operation is; both are refused while the cascade pages and admitted after its last page, at
+  most ⌈n / `P_cascade`⌉ page turns after the delete. Deciding it here keeps an acknowledged start from being lost:
+  admission otherwise answers `accepted` and writes its receipt before the start is routed (`KeyAdmission.cs`
+  76–81), the start it writes carries no reply address (71–72), so a refusal at the worker would reach nobody, and a
+  same-operation retry would get the stored `accepted` receipt (54–56). The read is the same kind of check
+  admission already makes when it tests whether the bound instance is retired (`KeyAdmission.cs` 57–58 and 62). The
+  worker's `ObligationOutstanding` refusal of a successor creation stays as a defence in depth below ingress. Cost:
+  one more point read, only on a start whose binding exists, measured at K4.
 - **Case-sensitive providers.** PostgreSQL, SQLite and MongoDB compare these columns in binary, so two spellings are two
   keys with two bindings, as their own equality says.
 - **Cost.** One store read per keyed request, and an insert on its first use: a coordinator design choice, measured at

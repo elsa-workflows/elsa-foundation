@@ -191,7 +191,7 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 | Ingress adapter (broker, webhook, schedule source) | The same refusal. A broker adapter stops acknowledging and pauses consumption, so the broker keeps the backlog; a schedule source fires late. |
 | Outside publisher | Admission against its tenant's rate. The publish's fan-out into waiting instances is never refused: the waits are committed. |
 | A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn, the [parallel ForEach cap](large-fan-out.md), and credits. The kernel checks the cap when it seals the turn's outcome, so a model cannot catch it; a turn above it fails, and the kernel parks the instance as for any turn that throws. The target's lag shows in the depth metric. |
-| A termination cascade | Nothing: its terminates and cancels are owed and land, as every internal send does. It is kernel work, never a model turn. A terminate's cascade to the children and jobs of a large registry is paged: each commit sends at most `P_cascade` = 1,000 entries (proposed), under a durable cursor, so every page is bounded and the cap never meets it, while model turns keep the cap as decided ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and idempotent", fifth review R5-B2). |
+| A termination cascade | Nothing: its terminates and cancels are owed and land, as every internal send does. A cascade page is a kernel commit, never a turn. A terminate's cascade to the children and jobs of a large registry is paged: each commit carries at most `P_cascade` = 1,000 entries (proposed) and one `kernel.cascade`, under a durable cursor, so every page is bounded, while every turn, model and actor-type alike, keeps the cap as decided ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and idempotent", fifth review R5-B2). |
 | A timer, job result or child completion | Nothing: it is owed and lands. |
 
 ## Fair scheduling within a pass
@@ -280,8 +280,9 @@ The sketch's release 1 scope names "admission control with bounded inboxes". Pro
 
 Defaults (rates, high and low water, budget, sample interval, send cap) are set by the release 1 cost runs. Proposed
 starting points, all unmeasured: `PassTurnBudget` 500 (equal to `MaxBatch`), high water 10,000 and low water 8,000 due
-rows per virtual partition, a 5 s sample interval, 10,000 sends per turn. The send cap applies to model turns; kernel
-cascade pages are bounded kernel work of at most `P_cascade` = 1,000 entries each (proposed, fifth review R5-B2).
+rows per virtual partition, a 5 s sample interval, 10,000 sends per turn. The send cap applies to every turn
+unchanged, model and actor-type turns alike; a cascade page is a kernel commit of at most `P_cascade` = 1,000 entries
+and one `kernel.cascade` (proposed, fifth review R5-B2).
 
 **Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
 an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.
