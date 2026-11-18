@@ -42,7 +42,8 @@ changes, they are rechecked.
 - **Lost-update handling (decision 6, reviewer Q3).** Default: the write applies, the last commit wins (D-8), and a
   lost-update **warning** is raised as an instance diagnostic in Studio and an entry in the write history, naming the
   variable, the base and current versions and both writers, and keeping the overwritten value so it can be restored.
-  Opt-in: `Fault`, declared by an activity type or set by the workflow author per node, for strict read-modify-write.
+  Opt-in: `Fault`, declared by an activity type or set per node by an engineer through the design API, for strict
+  read-modify-write. The workflow designer does not offer it to authors (ADR 0092 decision 6).
   This replaces the earlier draft's `Fault` default with a `LastWins` override.
 - **Tracking (decision 5).** Light tracking by default: the base version and the current version decide alone, and a
   value that moved and came back (`0 → 1 → 0`) also warns. The exact check (stored digests compared on a version
@@ -63,7 +64,7 @@ changes, they are rechecked.
   in the background (eligibility → S-11). This spec builds the background-admission **refresh** (D-9) that applies once an
   activity is admitted; it does not decide eligibility.
 - **Spec 266** ([#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286), S-5) keeps its publish-time
-  warning for unordered writes, captures included, and that warning points the author to the `Fault` opt-in (FR-012a).
+  warning for unordered writes, captures included; that warning gives authors structural remedies only (FR-012a).
   At run time D-8's last-commit-wins holds for every write, blind or on a stale base; a stale base adds the lost-update
   warning.
 - **Spec S-6** (#3290–#3292) builds the inspection surfaces over the write history this spec records.
@@ -75,7 +76,7 @@ text; @j03y-nxxbz is the author/coordinator and records agreement in a PR commen
 ## Rule and boundary
 
 **Rule**: a write is judged against the read it was built on. Nothing a writer relied on is overwritten without a
-record: by default the overwrite is visible and repairable; where an author opts in to `Fault`, it is stopped.
+record: by default the overwrite is visible and repairable; where a node is set to `Fault`, it is stopped.
 
 **Terms** (from ADR 0092):
 - *Version*: a per-variable counter; each applied write that changes the value increments it. A value *digest* over
@@ -103,7 +104,7 @@ durable write-history data model that S-6 reads, including the overwritten value
 **Out of scope** (named so the boundary is explicit): the inspection surfaces of S-6 (#3290–#3292); background
 *eligibility* criteria (ADR 0093 → S-11); a merge policy (ADR 0092 decision 14: not part of this decision); real
 `Merge`/`Reduce` semantics (they still overwrite like `Set`); general transactional script/C# writes (A-3, #3425); and
-the publish-time warning itself (spec 266, S-5), apart from its pointer to the `Fault` opt-in.
+the publish-time warning itself (spec 266, S-5); FR-012a only says what it must not tell authors.
 
 **Scope moved (2026-11-17, coordinator decision).** So that this spec is not blocked by work it does not own:
 
@@ -115,9 +116,10 @@ the publish-time warning itself (spec 266, S-5), apart from its pointer to the `
   the base held by a suspended step; S-7 reuses them.
 - **Studio presentation is follow-up work in this repository**, not part of this PR. Studio lives here under `Studio/`
   (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
-  showing the lost-update warning, accepted completions, background input refreshes, the node settings and the
-  `variableWrites` diagnostics setting (FR-011, #4735). In this spec the warning *is* its write-history entry (FR-024);
-  the API that exposes that history is S-6 (spec 1229).
+  showing the lost-update warning, accepted completions, background input refreshes and the `variableWrites`
+  diagnostics setting (FR-011, #4735). The node settings (FR-012, FR-019) are not offered to workflow authors in the
+  designer: they stay a design-API capability for engineers (ADR 0092 decision 6). In this spec the warning *is* its
+  write-history entry (FR-024); the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -186,10 +188,11 @@ kept; a third that accepts a recorded completion without re-running the body.
 
 ---
 
-### User Story 3 — An author opts in to strict read-modify-write (Priority: P2)
+### User Story 3 — An engineer opts in to strict read-modify-write (Priority: P2)
 
-An author of a counter or a balance knows that an update must never be lost. They opt in to `Fault` on the node, or
-the activity type declares it, and a real lost update stops the step before the wrong value spreads.
+An engineer building a counter or a balance knows that an update must never be lost. They set `Fault` on the node
+through the design API, or the activity type declares it, and a real lost update stops the step before the wrong value
+spreads. The workflow designer does not show the setting to authors (ADR 0092 decision 6).
 
 **Why this priority**: the default keeps unordered designs running with a visible record; the opt-in keeps a strict
 mode available where it has real value. It depends on US1's commit machinery.
@@ -208,7 +211,7 @@ keep the default warning.
 3. **Given** a lost-update fault, **When** it is raised, **Then** it goes through the ordinary incident path and the
    workflow's incident strategy decides what happens; the incident records the rejected completion.
 4. **Given** a workflow with unordered writers to the same variable, **When** it is published, **Then** spec 266's
-   warning points the author to the `Fault` opt-in for a step whose read-modify-write must be strict.
+   warning offers structural remedies only and does not direct the author to the `Fault` mode (FR-012a).
 
 ---
 
@@ -380,13 +383,15 @@ expired values from `null`.
   instance diagnostic shown in Studio and an entry in the write history (FR-024), not only a log line. It MUST name the
   variable, the base version, the current version and both writers (the one whose value was overwritten and the one
   that wrote on the stale base), and MUST keep the overwritten value so that it can be restored (FR-026).
-- **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity type
-  declares it, and the workflow author may set it per node. Only `Fault` nodes record digests in their read sets and use
-  the exact check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable,
-  the base version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply
-  (D-3). No other modes exist in this baseline, and no merge policy.
-- **FR-012a**: Spec 266's publish-time warning for unordered writers MUST point the author to the `Fault` opt-in for a
-  step whose read-modify-write must be strict.
+- **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity
+  type declares it, and an engineer may set it per node through the design API (the workflow designer does not offer it
+  to workflow authors; ADR 0092 decision 6). Only `Fault` nodes record digests in their read sets and use the exact
+  check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable, the base
+  version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply (D-3). No
+  other modes exist in this baseline, and no merge policy.
+- **FR-012a**: Spec 266's publish-time warning for unordered writers MUST NOT direct workflow authors to the `Fault`
+  mode; it offers structural remedies only (order the branches, capture into separate variables, or combine them with
+  one write after the join).
 - **FR-013**: A lost-update fault MUST go through the existing incident path and strategy; no new recovery mechanism is
   introduced. The incident MUST record the rejected completion under the existing protection rules.
 - **FR-013a**: The default of FR-011 is conditional on FR-021 being proven for `External` and `ReplaySafe` activities
@@ -416,8 +421,9 @@ expired values from `null`.
 - **FR-018**: Before a background step is admitted, the coordinator MUST compare its input read set with current
   versions and, for any variable that changed since Start, refresh the inputs as a new **evaluation** of the same
   invocation (same `InvocationId`, its own sequence number, idempotency keys derived from the evaluation).
-- **FR-019**: A node MUST be able to turn refresh off; its stale base is then handled at commit under the commit rule
-  and the node's mode (a warning by default, a fault under `Fault`).
+- **FR-019**: A node MUST be able to turn refresh off, set per node by an engineer through the design API like FR-012
+  (the workflow designer does not offer it to workflow authors); its stale base is then handled at commit under the
+  commit rule and the node's mode (a warning by default, a fault under `Fault`).
 - **FR-020**: A refresh MUST supersede the first snapshot, link to it with the reason, keep both in the history, and the
   snapshot the worker receives MUST be immutable thereafter. Refresh MUST cover only the Start-to-admission gap.
 

@@ -344,12 +344,13 @@ public sealed class ExecutableNodeCompiler(
             [TriggerNodeMetadata.ExecutionTypeKey] = executionType
         };
 
-        // Spec 1221 FR-012: strict read-modify-write is an opt-in, by the activity type's declaration or the author's
-        // per-node setting. Either one opts the node in; the default mode is pinned by the key's absence.
+        // Spec 1221 FR-012: strict read-modify-write is an opt-in, by the activity type's declaration or the node's
+        // setting (set through the design API). Either one opts the node in; the default mode is pinned by the key's
+        // absence.
         if (nodeLostUpdateMode == LostUpdateMode.Fault ||
             clrActivityType?.GetCustomAttribute<ActivityLostUpdateModeAttribute>(inherit: true)?.Mode == LostUpdateMode.Fault)
             metadata[RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault;
-        // Spec 1221 FR-019: the author's opt-out of the background admission refresh; refresh on is pinned by absence.
+        // Spec 1221 FR-019: the node's opt-out of the background admission refresh; refresh on is pinned by absence.
         if (disableBackgroundInputRefresh)
             metadata[RuntimeMetadataKeys.BackgroundInputRefresh] = RuntimeMetadataKeys.BackgroundInputRefreshOff;
 

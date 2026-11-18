@@ -1,5 +1,6 @@
 import {
   AlterationRequestError,
+  acceptRecordedCompletionPlan,
   alterationJobFailureCode,
   decideInterventionPlan,
   retryFaultedActivityPlan,
@@ -17,12 +18,12 @@ import {
   type CompensationRowRuntime,
   type CompensationScopeRuntime
 } from "./compensationRuntime";
-import type { WorkflowInstanceDetails, WorkflowInstancePermissions } from "./workflowTypes";
+import type { RecordedCompletionView, WorkflowInstanceDetails, WorkflowInstancePermissions } from "./workflowTypes";
 
 // Spec 260 contracts/studio-interaction.md: what each operator action says before it is confirmed, how its reason is
 // checked, how Studio follows the plan it submits, and how refusals and HTTP errors read.
 
-export type OperatorActionKind = "retry" | "resolve" | "abandon" | "decide";
+export type OperatorActionKind = "retry" | "resolve" | "abandon" | "decide" | "accept";
 
 export interface OperatorActionOutcomeChoice {
   decision: string;
@@ -53,7 +54,7 @@ export interface OperatorActionModel {
   incidentId: string;
   /** The scope occurrence the action is about, so Studio refreshes its journal while applying. */
   scopeActivityExecutionId?: string;
-  /** Retry: the faulted activity to run again. */
+  /** Retry and Accept recorded completion: the faulted activity. */
   sourceActivityExecutionId?: string;
   /** Abandon or another offered decision: the fixed decision code. */
   decision?: string;
@@ -94,6 +95,10 @@ export function operatorActionPlan(model: OperatorActionModel, form: { reason: s
   if (model.kind === "retry") {
     if (!model.sourceActivityExecutionId) throw new Error("A retry needs the faulted activity to run again.");
     return retryFaultedActivityPlan(model.workflowExecutionId, model.sourceActivityExecutionId, form.reason);
+  }
+  if (model.kind === "accept") {
+    if (!model.sourceActivityExecutionId) throw new Error("Accept recorded completion needs the faulted activity.");
+    return acceptRecordedCompletionPlan(model.workflowExecutionId, model.sourceActivityExecutionId, form.reason);
   }
   const decision = model.kind === "resolve" ? form.decision : model.decision;
   if (!decision) throw new Error("Choose an outcome.");
@@ -325,6 +330,47 @@ export function incidentActionModel(
   };
 }
 
+/** What Accept recorded completion does, against Retry and Re-execute (spec 1221 FR-014, FR-017). */
+export const acceptRecordedCompletionExplanation =
+  "Accept recorded completion: completes the step with the result it already produced, without running its body again. Retry runs the same invocation again on its committed inputs, so after a refused write the body runs again and its write is refused again while the variable stays changed; Re-execute runs a new invocation on fresh inputs. Both run the body again.";
+
+/**
+ * Accept recorded completion for a faulted activity whose commit a `Fault` lost update refused (spec 1221 FR-017):
+ * offered only when the activity has a recorded completion.
+ */
+export function acceptRecordedCompletionActionModel(
+  incident: { incidentId: string; workflowExecutionId: string; activityExecutionId?: string },
+  activityLabel: string,
+  recorded: RecordedCompletionView,
+  requesterActivityExecutionId?: string
+): OperatorActionModel {
+  const outcomes = recorded.outcomeNames.length > 0 ? recorded.outcomeNames.join(", ") : "no outgoing path";
+  const writes = recorded.variableWrites.map(write => write.variableKey);
+  return {
+    kind: "accept",
+    title: `Accept the recorded completion of ${quote(activityLabel)}?`,
+    confirmLabel: "Accept recorded completion",
+    tone: "default",
+    target: [
+      `Activity ${quote(activityLabel)}`,
+      `${recorded.attemptOrdinal ? `attempt ${recorded.attemptOrdinal} · ` : ""}incident ${incident.incidentId} · run ${incident.workflowExecutionId}`
+    ],
+    effect: [
+      `Completes ${quote(activityLabel)} with the completion it recorded before its commit was refused (outcome: ${outcomes}). Its body does not run again.`,
+      writes.length > 0
+        ? `Writes ${writes.map(quote).join(", ")} as an override of the current value; the write history keeps the value each write overwrote, so it can be restored with the runtime API's ModifyVariable alteration.`
+        : "The recorded completion writes no variable.",
+      "Retry would run the same invocation again on its committed inputs, and Re-execute a new invocation on fresh inputs; both run the body again."
+    ],
+    reasonRequired: false,
+    workflowExecutionId: incident.workflowExecutionId,
+    incidentId: incident.incidentId,
+    ...(requesterActivityExecutionId ? { scopeActivityExecutionId: requesterActivityExecutionId } : {}),
+    sourceActivityExecutionId: incident.activityExecutionId,
+    submittedLabel: "Accept submitted"
+  };
+}
+
 function requireActions(row: CompensationRowRuntime) {
   if (!row.actions) throw new Error(`${row.step} does not wait for an operator.`);
   return row.actions;
@@ -368,6 +414,14 @@ export function operatorRefusalMessage(code: string | null | undefined): string 
       return `The run has ended; it cannot be changed.${nothingChanged}`;
     case "TargetNotFound":
       return `This run is unavailable for operator actions.${nothingChanged}`;
+    case "NoRecordedCompletion":
+      return `This step has no recorded completion to accept: only a step whose body succeeded and whose commit a lost update refused has one.${nothingChanged}`;
+    case "RecordedCompletionContractChanged":
+      return `The activity contract changed since the completion was recorded, so it cannot be accepted.${nothingChanged}`;
+    case "RecordedCompletionScopeChanged":
+      return `A variable the recorded completion writes is no longer declared as it was, so it cannot be accepted.${nothingChanged}`;
+    case "RootVariableFrameUnavailable":
+      return `The run has no workflow variables it can write right now, so the recorded completion cannot be accepted.${nothingChanged}`;
     case "InvalidDecideInterventionPayload":
     case "InvalidRetryFaultedActivityPayload":
       return `Check the reason: 1 to 500 characters, no control characters.${nothingChanged}`;

@@ -242,9 +242,11 @@ variable from them report the warning without any change to the validator.
   compilation.
 - **FR-002**: There MUST be one finding per variable, keeping the `ValueFlow/ConcurrentWrite` type and today's path.
   It MUST name every node that writes that variable without a defined order, the variable and its scope, state that
-  the last successfully committed plain write wins, and say how to make the result deterministic, keeping the
-  separate stale read-modify-write policy in view (FR-014). Every affected variable MUST be reported in the same
-  validation or compilation pass.
+  the last successfully committed plain write wins, and say how to make the result deterministic with structural
+  remedies only: order the branches, capture into separate variables, or combine them with one write after the join.
+  The separate stale read-modify-write policy is documented (FR-014); the warning does not direct authors to its strict
+  mode (spec 1221 FR-012a, ADR 0092 decision 6). Every affected variable MUST be reported in the same validation or
+  compilation pass.
 - **FR-003**: Writes whose order is defined, or of which only one can run, MUST NOT be reported: consecutive steps, a
   Flowchart path, If arms, Switch cases, loop iterations, and BPMN exclusive gateway branches. Flowchart paths that
   leave one node are not exclusive, whatever their ports: every activity may select several outcomes in one

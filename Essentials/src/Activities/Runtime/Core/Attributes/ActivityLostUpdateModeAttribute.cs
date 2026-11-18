@@ -7,8 +7,8 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 /// Absence is <see cref="LostUpdateMode.Default"/>: a lost update applies, the last write wins, and a lost-update warning
 /// records both writers and the overwritten value. Apply <c>[ActivityLostUpdateMode(LostUpdateMode.Fault)]</c> to an
 /// activity whose read-modify-write must be strict, such as a counter or a balance: a real lost update then faults the
-/// step through the incident path. The publish compiler pins the declared mode in the executable node; an author can
-/// also opt a single node in.
+/// step through the incident path. The publish compiler pins the declared mode in the executable node; an engineer can
+/// also opt a single node in through the design API.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityLostUpdateModeAttribute(LostUpdateMode mode) : Attribute

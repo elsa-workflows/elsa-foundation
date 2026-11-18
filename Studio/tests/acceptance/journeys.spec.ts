@@ -9,6 +9,7 @@ import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { variableRenameJourney } from "./variableRenameJourney";
+import { variableLifecycleJourney } from "./variableLifecycleJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -540,4 +541,8 @@ test("compact runtime Inputs retain exact captured values and accessible technic
 
 test("variable rename updates script reads and lists the rest", async ({ page }, info) => {
   await variableRenameJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("variable lifecycle warnings and refusals", async ({ page }, info) => {
+  await variableLifecycleJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
