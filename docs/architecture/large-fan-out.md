@@ -162,9 +162,19 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   refuses only job and event tickets today; the proposed reserved kinds leave `kernel.terminate` open). The send path
   stamps the sender and its creation from the committing actor, so
   a child accepts a terminate whose stamped sender and creation equal its recorded parent's, including when the child
-  is parked ([observability](observability.md#every-park-operation-names-its-park)), and a child deleted before the
-  terminate arrived refuses it at its retirement marker and still cascades under the same binding (fourth review
-  R4-B2). Proposed, not built.
+  is parked ([observability](observability.md#every-park-operation-names-its-park)). While a discard, expiry,
+  terminate or delete drain is open on the child, the terminate is refused as "resolution open", and the refusing
+  commit still cascades to the child's children and jobs when the terminate has authority over it (the same section).
+  A child deleted before the terminate arrived refuses it at its retirement marker and still cascades under the same
+  binding (fourth review R4-B2). Proposed, not built.
+- **Deleted and ended children leave the tree.** Existing behaviour: when a parent consumes a child's final notice,
+  it drops the child from its registry (`WorkflowInstance.cs` 48–50), and a combiner drops it from `Outstanding`. A
+  deleted child's final notice is such a notice, so a FailFast or tree terminate that the parent sends after
+  consuming it never reaches that child or its live descendants, which have left the parent's tree, as the
+  descendants of any ended child have. Invariant 17 holds over the tree the registries define. The deleted child's
+  retirement marker then keeps an obligation no parent-bound terminate will discharge; it stays bounded on the
+  marker, which release 1 never compacts, and it is harmless, since `ObligationOutstanding` only blocks a successor
+  that no producer can create ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)).
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
   faults only when the faults pass a threshold, as Native `Parallel` faults when its threshold can no longer be met
   (built). The root's result carries the count and the sample.
