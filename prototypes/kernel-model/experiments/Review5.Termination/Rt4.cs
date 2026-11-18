@@ -70,12 +70,13 @@ sealed class Rt4(string variant, Rules rules)
                     Sender: Q, TargetCreation: 1, SenderCreation: 1)), m => true, "(c) a composed kernel.terminate from X's commit names Q, H's parent, as Sender, marked"),
             };
             _h.Settle();
-            _h.Line($"end: X revision {_h.Store.Instances[X].Revision}; H {_h.Status(H)}; HK {_h.Status(HK)}; marks on X's sends {_h.Sent.Count(m => m.Sender == X && _h.Marks.Contains(m.InboxKey))}");
+            _h.Line($"end: X revision {_h.Store.Instances[X].Revision}; H {_h.Status(H)}; HK {_h.Status(HK)}; marks on the attempts' sends {_h.Sent.Count(m => _h.ModelSends.Contains(m.InboxKey) && _h.Marks.Contains(m.InboxKey))}");
             _report.ExpectSequence("the three commits landed", [.. results.Select(r => r.Landed.ToString())], ["False", "False", "False"]);
             _report.Expect("(c) is refused by the sender rule", results[2].Error?.Contains("names Sender Q/1, not the committing X/1", StringComparison.Ordinal) == true, true);
             _report.Expect("X's row revision", _h.Store.Instances[X].Revision, revision);
-            _report.Expect("messages from X's commits stored", _h.Sent.Count(m => m.Sender == X), 0);
-            _report.Expect("stored messages carrying a mark no kernel composition set (structural check of the mark rule)", _h.Sent.Count(m => m.Sender == X && _h.Marks.Contains(m.InboxKey)), 0);
+            // Provenance: the inbox keys the three attempts composed, whatever Sender they name, sent to H.
+            _report.Expect("messages from the three attempts stored", _h.Sent.Count(m => _h.ModelSends.Contains(m.InboxKey) && m.Target.Id == H), 0);
+            _report.Expect("stored messages carrying a mark no kernel composition set (structural check of the mark rule)", _h.Sent.Count(m => _h.ModelSends.Contains(m.InboxKey) && _h.Marks.Contains(m.InboxKey)), 0);
             _report.Expect("H", _h.Status(H), "Running");
             _report.Expect("HK", _h.Status(HK), "Running");
             _h.CommonChecks();

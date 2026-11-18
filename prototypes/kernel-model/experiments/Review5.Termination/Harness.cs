@@ -96,7 +96,8 @@ sealed class Harness
     public readonly Dictionary<string, int> FirstPageJobEntries = new(StringComparer.Ordinal);
     public readonly List<string> StartRefusals = [], Births = [];
     public readonly List<string> ThenDeleteShapes = [];
-    public readonly List<(string Actor, int Page, InboxKey? Control)> LostPages = [];   // pages whose commit a crash kept from the store
+    public readonly List<(string Actor, int Page, InboxKey? Control)> LostPages = [];
+    public readonly HashSet<InboxKey> ModelSends = [];   // every send a model turn attempted, landed or not (provenance)   // pages whose commit a crash kept from the store
     public readonly List<string> ExpectedGhost = [];   // I9 entries a schedule provokes on purpose (a redelivered, consumed row)
     public Action<string>? AfterDelete;               // (actor) -> a scheduled step after a delete landed
     public string? ForeignActor;                      // R5-m3's foreign-derivation mutation names this origin
@@ -264,6 +265,7 @@ sealed class Harness
         var unit = turn.Seal(turn.Outcome(InstanceStatus.Running), row with { Revision = turn.Revision }, null, null);
         var commit = ToTurnCommit(unit, []);
         var marks = mark is null ? [] : commit.Sent.Where(mark).Select(m => m.InboxKey).ToList();
+        ModelSends.UnionWith(commit.Sent.Select(m => m.InboxKey));
         var result = Commit(owner.Partition, [commit], null, what, marks: marks, kernel: false);
         Line($"{what}: sends [{string.Join(", ", commit.Sent.Select(m => $"{m.Kind} {m.Id} to {Name(m.Target.Id)} from {Name(m.Sender ?? "null")}/{m.SenderCreation}{(marks.Contains(m.InboxKey) ? ", marked" : "")}"))}]; {(result.Landed ? "landed" : "not landed")}");
         return result;

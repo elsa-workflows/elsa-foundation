@@ -427,7 +427,8 @@ RT-4 runs assert:
 - the terminates sent to H and HK, and whether they carry the mark;
 - H's refusal reason;
 - the notices to Q and P;
-- in the forgery case, which commits landed, X's revision and the stored marks;
+- in the forgery case, which commits landed and why, X's revision, and the stored messages and marks among the inbox
+  keys the three attempts composed (by provenance, so (c)'s forged `Sender` cannot hide it);
 - that no obligation stays open.
 
 ## What this proves, and what it does not
