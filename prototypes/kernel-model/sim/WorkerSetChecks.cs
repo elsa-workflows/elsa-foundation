@@ -262,11 +262,13 @@ internal static class WorkerSetChecks
         check(moved is not null && !worker.Trial.Any() && worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual([(0, e0 + 1)]) && store.Messages["n"].Attempts == 0,
             $"the reset retakes partition 0 at a new epoch and drops 1 with its trial: held [{string.Join(", ", worker.Fences)}], on trial [{string.Join(", ", worker.Trial)}]");
         await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
+        check(!worker.Trial.Any() && store.Messages["n"].Trial == 0,
+            $"what this process marked in 0 at its earlier epoch is no suspect after the retake: on trial [{string.Join(", ", worker.Trial)}], trial mark {store.Messages["n"].Trial}");
         var ready = worker.Ready.ToList();
         foreach (var id in ready) worker.RunTurn(id);
         await worker.FlushAsync();
         check(ready.SequenceEqual([x.Id]) && !worker.Trial.Any() && store.Instances.GetValueOrDefault(x.Id)?.Revision == 1 && !store.Messages.ContainsKey("n"),
-            $"the trial in the dropped partition gates nothing retaken, and what this process marked in 0 at its earlier epoch is no suspect: ready [{string.Join(", ", ready)}]");
+            $"the trial in the dropped partition gates nothing retaken: ready [{string.Join(", ", ready)}]");
     }
 
     // A child id names the (partition, epoch) of its parent's fenced commit. Each held partition has its own issuer, and

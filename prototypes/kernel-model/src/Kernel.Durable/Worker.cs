@@ -1976,9 +1976,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
 /// <summary>
 /// One per process. At most one of its workers has a trial in flight, and then the others start nothing. A death kills
-/// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too
-/// (<see cref="Flaw.TrialPerPartition"/> is the mutation). A reset releases the gate, so a trial in a partition the
-/// worker dropped gates nothing it took back.
+/// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too.
+/// Within a worker, the trial filters of <c>ReadyForTurns</c> and <c>RunTurn</c> enforce that, and no mutation covers
+/// it yet; <see cref="Flaw.TrialPerPartition"/> gives each worker its own gate, which is per partition only while a
+/// worker owns one. A reset releases the gate, so a trial in a partition the worker dropped gates nothing it took back.
 /// </summary>
 public sealed class TrialGate
 {
