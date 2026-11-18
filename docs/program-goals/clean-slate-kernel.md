@@ -61,17 +61,19 @@ gate 5.
 Gate 2 granted design approval at `addffea7c850063d1ebe710b07866ff1640a93cb` ([eighth review verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)) with the conditions below. They do not block K1.
 Each holds at its milestones, and its evidence is linked here when it lands. This table is the one authoritative
 list; the pages, the register and the rows of "Store and kernel changes" link here. C1 to C5 and the handle
-follow-up are worded as in the verdict's "Conditions and milestone ownership" table.
+follow-up are worded as in the verdict's "Conditions and milestone ownership" table; the
+[seventh review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6987785355) is the source of the detailed wording, and the cases column names the page cases that carry
+each condition.
 
-| Id | Condition | Milestones | Status | Evidence owed | Evidence |
-|---|---|---|---|---|---|
-| C1 | Complete terminal checkpoint | K3, K4, K6 | Open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings and an upgrade or fallback for a near-limit row. | |
-| C2 | Receipt and coverage transactions | K3, K4, K11 | Open | Race provider-equal requests and registrations, return an existing receipt even when a candidate partition is full, preserve `CatchUpId` across takeover, and return "gone" for an old incarnation. At K4 test reserved-prefix equality under the real SQL Server and MySQL pins, including fullwidth and leading-ignorable cases (row RP). | |
-| C3 | Work and provider budgets | K4, K12 | Open | Measure Open's 9,728-byte keeping charge, the 4 MiB step budget, singleton progress, bytes read and written, tenant fairness, and MongoDB sweep progress across 340 covered keys followed by eligible work. | |
-| C4 | Worker and operator transitions | K3, K4, K6, K11 | Open | Exercise CJ-1/2, TT-1, WJ-1 and KP-1 through the actual Worker, stores and operator path. Observe durable discards, generations under Hold, physical job-entry withholding and eventual delivery of a publication suffix. | |
-| C5 | Fixtures and provider boundaries | K3, K4, K6 | Open | Derive attainable sizes from the actual producer and provider, check real parent-bound child ownership, distinguish byte-cut, empty and insert-only steps, and exercise the corrected cross-key digest oracle. | |
-| HA | Handle-accumulation follow-up | K6 | Open | Document what an operator can do when repeated growth parks a parent. Test pending and already-consumed handles separately and decide whether Native should prune stale ones. Preserve the terminal projection either way ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)). | |
-| RP | The reserved event-id prefix under the real collations | K4 | Open | The outside publish's `InvalidEventId` refusal compares under the pinned collation on SQL Server and MySQL, and refuses a caller event id led by a fullwidth `～` (U+FF5E) and one led by a character the collation ignores (case MX-1, run (e)). | |
+| Id | Condition | Milestones | Cases | Status | Evidence owed | Evidence |
+|---|---|---|---|---|---|---|
+| C1 | Complete terminal checkpoint | K3, K4, K6 | TG-1, TG-2, PC-5 | Open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings and an upgrade or fallback for a near-limit row. A provider-encoding fixture may also distinguish PC-5's former registries-as-stored mutation at K4. | |
+| C2 | Receipt and coverage transactions | K3, K4, K11 | EI-1 runs (c) and (g), CC-1, MX-1 run (e), SB-5 | Open | Race provider-equal requests and registrations, return an existing receipt even when a candidate partition is full, preserve `CatchUpId` across takeover, and return "gone" for an old incarnation (see RP). | |
+| C3 | Work and provider budgets | K4, K12 | OA-1, BA-1, MW-1 | Open | Measure Open's 9,728-byte keeping charge, the 4 MiB step budget, singleton progress, bytes read and written (so a byte-limited step never first reads 170 maximum-sized payloads), tenant fairness, and MongoDB sweep progress across 340 covered keys followed by eligible work (coverage removed, then the cursor wraps). | |
+| C4 | Worker and operator transitions | K3, K4, K6, K11 | CJ-1, CJ-2, TT-1, WJ-1, KP-1 | Open | Exercise CJ-1/2, TT-1, WJ-1 and KP-1 through the actual Worker, stores and operator path. Observe durable discards, generations under Hold, physical job-entry withholding and eventual delivery of a publication suffix. | |
+| C5 | Fixtures and provider boundaries | K3, K4, K6 | EM-1, EM-2, EM-3, EM-4, TR-5, PC-4, SB-7 | Open | Derive attainable sizes from the actual producer and provider, check real parent-bound child ownership, distinguish byte-cut, empty and insert-only steps, and exercise the corrected cross-key digest oracle. | |
+| HA | Handle-accumulation follow-up | K6 | NT-2 (TG-1 run (c), TG-2's third run), and the K6 follow-up | Open | Document what an operator can do when repeated growth parks a parent. Test pending and already-consumed handles separately and decide whether Native should prune stale ones. Preserve the terminal projection either way ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)). | |
+| RP | The reserved event-id prefix under the real collations | K4 | MX-1 run (e) | Open | The outside publish's `InvalidEventId` refusal compares under the pinned collation on SQL Server and MySQL, and refuses a caller event id led by a fullwidth `～` (U+FF5E) and one led by a character the collation ignores. | |
 
 ### Store and kernel changes the answer pages flag
 

@@ -10,7 +10,7 @@ Status: accepted with conditions (18 November 2026); proposed on 17 November 202
 reviewed revision `addffea7c850063d1ebe710b07866ff1640a93cb`, on the eighth independent architecture review's verdict,
 APPROVE WITH CONDITIONS, with 0 Blockers, 0 Majors and 3 Minors
 ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The approval covers
-the design. Product work starts at K1 and lands milestone by milestone under the
+the design. Implementation starts at K1, the prototype Worker refactor, before product wiring. Product slices follow from K2, behind a host switch, with the old core the default until gate 4. The work lands milestone by milestone under the
 [program plan](../program-goals/clean-slate-kernel.md#milestones); the implementation evidence is owed at K1 to K12,
 and the review's conditions stay open in the plan's [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions)
 until their evidence lands. The decisions below are the owner's, listed with dates and sources in the
@@ -162,7 +162,7 @@ inspect, retry and discard; values by reference
 
 ### 11. The seven design-now answers
 
-Each answer is a Proposed page with the owner's decisions of 17 November at its end:
+Each answer is an Approved design page with the owner's decisions of 17 November at its end:
 
 | Question | Page | Decisions in short |
 |---|---|---|
