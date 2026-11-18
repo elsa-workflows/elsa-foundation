@@ -613,17 +613,18 @@ Park decision.
   | A name an application or model supplies: an actor id (instance id or caller key), an ordinary wire id, an operation id, a job key, a wait id, a subscription key, an event id | `N` = 1,024 bytes each, before qualification |
   | `Kind` | 256 bytes |
   | `Id` of an issued message or a ticket (qualified origin, key, creation, generation and ordinal) | At most 2`N` + 160, from bounded parts |
-  | `Match` (qualified subscription key, event id, qualified instance, wait, creation) | At most 4`N` + 192, from bounded parts |
+  | `Id` of an event delivery | 67 bytes: `ev:` and a 64-digit digest ("The event match is a fixed digest", below) |
+  | `Match` | 64 bytes: a digest (below) |
   | `Sender` (a qualified actor id, or an address the instance received) | At most `N` + 160 |
   | `Scope`, `Seq`, `KeptBy`, `ReleasedBy`, payload size | Fixed width, 64 bytes together |
 
-  The variable fields come to at most 7`N` + 768 = 7,936 bytes. `M` is set by the widest provider encoding: SQL
-  Server's UTF-16 at most doubles a length, to 15,872, and the reversible binary path of PostgreSQL and SQLite for
+  The variable fields come to at most 3`N` + 640 = 3,712 bytes. `M` is set by the widest provider encoding: SQL
+  Server's UTF-16 at most doubles a length, to 7,424, and the reversible binary path of PostgreSQL and SQLite for
   names with NUL or unpaired units ([storage model](storage-model.md#inbox-identity-and-public-names)) stores UTF-16
-  bytes as base64, at most 8/3 of a length, 21,163. Admission confines that path to issued ids, whose chosen parts
-  (a job key, a custom id) may hold such units (below), so 21,163, taken over every variable field, over-estimates,
+  bytes as base64, at most 8/3 of a length, 9,899. Admission confines that path to issued ids, whose chosen parts
+  (a job key, a custom id) may hold such units (below), so 9,899, taken over every variable field, over-estimates,
   and `M` stays a safe bound. With the fixed 64 bytes and an allowance for the provider's own framing (BSON names
-  and type bytes, row headers), `M` = 24 KiB. The limits are checked where a row is first
+  and type bytes, row headers), `M` = 24 KiB, kept at its earlier value, so `P_page` is unchanged. The limits are checked where a row is first
   written, at every ingress class, before any write:
   - **An outside add** (a command, a start, a publish, an operator message): the entry point refuses it with a
     validation error, and no row exists.
@@ -681,6 +682,44 @@ Park decision.
   envelope bound and its headroom", below). A page never reads a payload, so values by reference play no part in the
   page bound; the plan's byte bound under Recover does rely on them, since a model passes a large timer value by
   reference ("The plan's byte bound", below).
+  - **The event match is a fixed digest (proposed, fourth review R4-M1).** An event delivery's full key is its `Id`,
+    its negative scope and its `Match`. Both variable parts are SHA-256 digests over one canonical encoding, so
+    neither grows with the names it covers:
+    - **The canonical encoding,** version 1: a domain byte (`M` for a match, `D` for a delivery id) and a version byte,
+      then each part in a fixed order. A string is a 4-byte big-endian count of its UTF-16 code units followed by the
+      units, big-endian (the exact units `KeyRequest.WireId` already hashes, `KeyAdmission.cs` 14–15); a creation is 8
+      bytes, big-endian. The length prefixes make the encoding injective, and the domain byte keeps a match and an id
+      apart.
+    - **`Match`** is the lowercase hex of SHA-256 over `(Q(t, key), event id)` as the event row stores them: the
+      published event's identity.
+    - **The delivery `Id`** is `ev:` and the lowercase hex of SHA-256 over `(event id, instance, creation, wait)`, the
+      event id as the event row stores it and the rest as the subscription row stores them: the wait the event was
+      delivered to. A start subscription's delivery uses an empty instance and creation 0.
+    - **Together they name the whole tuple.** Two waits on one key differ in `Id`, and one wait under two keys differs
+      in `Match`, so B2-3's two matches of one `Id` stay two handles. Collisions are cryptographically negligible, as
+      for the dispositions' digests.
+    - **The inputs are the persisted spellings.** The publisher and the catch-up path compute both digests from the
+      stored event and subscription rows they selected by provider equality
+      ([storage model](storage-model.md#inbox-identity-and-public-names)), never from a caller's spelling, so both
+      sides of a match write the same row and the store keeps one.
+    - **Stored size.** `Match` is 64 ASCII bytes and the `Id` 67 on every provider (128 and 134 bytes in SQL Server's
+      UTF-16), within every provider's key widths. Neither holds a NUL or an unpaired unit, so no escape path applies.
+    - **The components travel in the payload.** The delivery's payload carries the subscription key, event id and wait
+      beside the event's own payload, and `Events.Delivered` reads them from there (today it parses the `Id` or decodes
+      `Match`, `Store.cs` 257–278). Their widest encoding is reserved as `C` = 40 KiB (proposed): today's key codec
+      writes the widest three in 18,573 bytes (executed in this repair, below), which SQL Server's UTF-16 doubles to 37,146.
+    - **Accepted or refused at the source.** Subscribe, `Publish` and an outside publish keep their per-name limits
+      (`N` for the subscription key, the wait and the event id, with the unit refusals above). A publish whose payload
+      is above 16 MiB less `M`, `F` and `C` is refused there: an outside publish by the entry point, with no event row,
+      and a turn's `Publish` by throwing as a model fault. So every derived delivery, at publish or at catch-up, fits
+      its row cap and its page, and no accepted subscription or publish meets a size refusal at the derived insert.
+    - **Today's encoding** (existing prototype behaviour): `Match` is `EventMatch.Encode`, the JSON of four names and
+      the creation through `DurableKeyJson` (`Store.cs` 230–239), and the delivery id is
+      `evq:{length}:{event id}:{origin}:{wait}` (`Store.cs` 247–250). Executed in this repair, the size probe
+      ([experiments/Astra4.Sizes](../../prototypes/kernel-model/experiments/Astra4.Sizes/README.md)) measured the real
+      encoder: four names of 1,024 bytes of U+0001, or of `<`, give a `Match` of 24,787 bytes, above `M`, because the
+      JSON escape writes each such byte as six, and a delivery id of 3,179 bytes, above 2`N` + 160. The review's
+      800-byte wait gave 4,868 bytes with the probe's short names (4,877 with the review's). Cases EM-1 to EM-3.
 - **The selection is bounded.** An explicit `retry` selection names at most `P` handles and at most 256 KiB of
   encoded handles (proposed); a larger one is refused with no change, and the operator uses retry-all, which is one
   flag. Open marks the selected kept rows `Selected` and re-arms the selected suppressed timers (see "Checks" below), so
@@ -848,8 +887,9 @@ and T's Complete would have deleted A after the same single Cancelled notice.
 calls one new model hook.
 
 - **The contract gains a hook,** beside `UpgradeState`: `RestorePlan RestoreWaits(object state, ParkRecord park)`. It
-  returns the subscriptions, timers and jobs the model's committed state still waits on, each job by the model's own
-  key, and each timer as a full spec, `TimerSpec(string Id, string Kind, object? Payload, long Due)`: the id
+  returns the subscriptions, timers and jobs the model's committed state still waits on: each subscription with its
+  key, wait and keep flag, each job as a full spec, `JobSpec(string Key, object? Arguments, string EffectKey)` ("The
+  job spec", below), and each timer as a full spec, `TimerSpec(string Id, string Kind, object? Payload, long Due)`: the id
   `ITurn.Send` returned, the kind and typed payload the model sent, and the absolute due time the row was written
   with. Native, Flowchart and StateMachine each implement it.
   - **One read of the due time.** Today `DurableTurn.Send` computes `Due` from its own read of the clock plus the
@@ -865,19 +905,46 @@ calls one new model hook.
     (NativeModel.cs, `WaitEntry` and `Register`), so it gains `long Due`: the arm reads `turn.Now` once, adds the
     timer's milliseconds, sends with that value as `DueAt` and stores the same value. Its plan returns `TimerSpec(entry.Key, NativeKinds.Timer, new TimerFired(wait), entry.Due)`
     for each timer entry that still has a key, with the `TimerFired(wait)` payload its timer handler reads. Native's
-    state version steps from 13 to 14; release 1 starts with no stored state (the switch basis), so no older entry
-    needs a due.
-  - **The plan bound.** A plan names at most `W_max` = 4,096 timers and jobs (proposed). A model refuses to establish
-    a wait past it (Native faults the activity that would arm it, TR-4), and the kernel checks it at Open: a larger
+    state version steps from 13 to 14, one step for both new `WaitEntry` fields (`Due` here, `Job` in the next
+    bullet), neither of which is built; release 1 starts with no stored state (the switch basis), so no older entry
+    needs a due or a job spec.
+  - **The job spec (proposed, fourth review R4-M3).** A restart must run the invocation the model started, and the
+    only durable home of its arguments today is the ticket the restart replaces. At arm, the model records an
+    immutable `JobSpec` in its wait record, as it records a timer's spec: its job key, the arguments it passes to
+    `StartJob` (for a workflow activity: the activity's type, the inputs captured at arm, the frame and the iteration
+    path) and the effect key it computed for that invocation (a standalone job's is `{job origin}/job/-/0`, [job
+    workers](job-workers.md#the-effect-key-the-worker-receives)). Native's `WaitEntry` gains `Job`, the
+    `BackgroundArgs` its background arm passes to `StartJob`, and its plan returns `JobSpec(entry.Key, entry.Job,
+    entry.Job.EffectKey)` for each job entry. Today `WaitEntry` holds frame, kind, key and creation only
+    (`NativeModel.cs` 129), the arm evaluates the bindings and passes the inputs, path and effect key only to the
+    ticket (`NativeModel.cs` 347–355), and the job's driver reads them back from the ticket's arguments
+    (`NativeModel.cs` 185–195), as `Turns.cs` 394–402 writes them (existing prototype behaviour). Executed in this repair, the size probe ran
+    this arm on the real Native model: the `WaitEntry` was `{"Frame":"f4","Kind":"job","Key":"w6","Creation":0}`,
+    the ticket's arguments held `Service = alpha`, the iteration path and the effect key, and after a sibling set the
+    bound variable to `beta`, the state held no `alpha`. So a restart rebuilt by evaluating the bindings again would
+    send `beta`, a different invocation, and a payload-free marker or a swept row leaves nothing to copy
+    (`ExecuteJobAsync` throws `ArgumentNullException` on a ticket with no arguments). The spec counts toward the plan's
+    byte bound and toward the instance envelope at admission ("The plan's byte bound", below), and the restart writes
+    its ticket from the spec alone ("A restarted job", below).
+  - **The plan bound.** A plan names at most `W_max` = 4,096 waits, subscriptions, timers and jobs together
+    (proposed; fourth review R4-M2 adds the subscriptions). A model refuses to establish a wait past it (Native faults
+    the activity that would arm it or subscribe it, TR-4, SB-1), and the kernel checks it at Open: a larger
     plan refuses the recover with reason "plan" and changes nothing, and discard stays available.
-  - **The plan's byte bound.** `W_max` caps the entries but not their bytes, and an Open writes every re-arm and
-    restart in one commit. So a plan's re-armable bytes are bounded too: the encoded `Payload` of every timer, as
-    `Send` encodes it, plus the encoded payload of every job ticket a restart would write, plus 5,406 bytes per wait
+  - **The plan's byte bound.** `W_max` caps the entries but not their bytes, and an Open writes every re-arm,
+    restart and restored subscription in one commit. So a plan's restorable bytes are bounded too: the encoded `Payload` of every timer, as
+    `Send` encodes it, plus the encoded payload of every job ticket a restart would write (its `JobSpec`'s arguments
+    and effect key), plus 5,406 bytes per timer or job
     for the fields every re-armed or restarted row stores, at their admission limits: `Id` 2`N` + 160, `Sender` `N` +
     160, `Target` `N` + 70 (a qualified actor id), `Kind` 256, the fixed fields 64, `TargetCreation`, `SenderCreation`
     and `Due` 24, and the trace 576 (a 55-byte `traceparent` and a `tracestate` of at most 512 bytes, rounded up).
-    They come to at most `B_plan` = 24 MiB (proposed). At `W_max` waits the allowance alone is 21.1 MiB, so a full
-    plan of small timers (Native's `TimerFired(wait)`) still fits. The number keeps one Open inside MongoDB's limits:
+    Each subscription counts 6,542 bytes, its restore envelope at the admission limits: the `Subscriptions` row's
+    key `Q(t, key)` (`N` + 65), instance (`N` + 70) and wait (`N`), counted twice because MongoDB's composite `_id`
+    repeats them beside the top-level fields, plus 128 bytes for the tenant, partition, creation and keep flag. When
+    any restored subscription asked for kept events, the one meet ticket the Open writes ("Subscriptions", below)
+    counts `M` + `F` + `C`, its cursor being three names at most. A model counts the same terms when it subscribes as when it arms.
+    They come to at most `B_plan` = 24 MiB (proposed). At `W_max` timers and jobs the allowance alone is 21.1 MiB, so
+    a full plan of small timers (Native's `TimerFired(wait)`) still fits; the subscription allowance lets a plan hold
+    at most 3,846 subscriptions (⌊`B_plan` / 6,542⌋) and no other wait. The number keeps one Open inside MongoDB's limits:
     the instance envelope with its `ParkRecord` (at most 16 MiB), at most `B_plan` of envelopes stored as UTF-8 in
     BSON, and the selection's 256 KiB of handles come to about 42 MiB with framing, inside the 48 MiB message limit,
     and each envelope fits its own 16 MiB document.
@@ -889,7 +956,9 @@ calls one new model hook.
     provider's own statement limit, whichever is lower, which keeps a commit's shape independent of server settings.
     The split changes only statement boundaries: every statement still runs inside the commit's single fenced
     transaction, so the commit lands whole or not at all. A single row above the budget goes in a statement of its
-    own. The largest row is 16 MiB under the row cap ("The envelope bound and its headroom", below), so MySQL's
+    own. So every statement has one of two ceilings: a statement of several rows is at most the budget, and a
+    statement above it holds one admitted row and the provider's framing, within the provider's own limit (TR-5 run 4,
+    after the fourth review's R4-m2). The largest row is 16 MiB under the row cap ("The envelope bound and its headroom", below), so MySQL's
     `max_allowed_packet` must be at least 17 MiB, the cap plus framing; the kernel reads it at startup and refuses to
     start below that floor, and MySQL 8.0's default of 64 MiB passes. **Measured at K4:** the Open at `B_plan` on
     every provider, its encoded size, duration and transaction behaviour, MySQL at its default `max_allowed_packet`
@@ -899,8 +968,9 @@ calls one new model hook.
     The owned commit binds payloads and every other value as parameters, so SQLite's SQL-length limit applies to the
     statement text only, and each bound value falls under `SQLITE_MAX_LENGTH` (1,000,000,000 bytes by default), far
     above the 16 MiB row cap.
-  - **Enforced at arm and at Open.** A model enforces the bound when it arms a wait, as it enforces `W_max`: a wait
-    that would take its plan past `B_plan` faults the activity that would arm it, a model fault (TR-4), and a large
+  - **Enforced at arm and at Open.** A model enforces the bound when it arms a wait or subscribes, as it enforces
+    `W_max`: a wait that would take its plan past `B_plan` faults the activity that would arm or subscribe it, a model
+    fault (TR-4, SB-1), and a large
     value goes by reference under the values rule ([write volume](write-volume.md#decisions-owner-1617-november-2026),
     decision 1a), so the envelope carries only the reference. A value row is removed with its instance (that
     decision), so a value referenced only from a pending timer's payload lives until the instance is deleted, and a
@@ -918,17 +988,41 @@ calls one new model hook.
     restored by the drain as every `Arrived` row is;
   - a `Rearmed` timer whose row a later re-park consumed is kept `Consumed`, and its handle is marked `Selected` like
     any other `Consumed` handle;
+  - a handle that names a kept job ticket or job result of an obsolete generation (not the registry's current
+    generation for its key, or a key the registry no longer holds) refuses the whole command before Open: restoring
+    it would hand the owner an invocation the model no longer waits for ("Obsolete job generations", below);
   - any other handle that names a row this Park keeps with reason `Consumed` goes to the `Selected` marking and its
     count check;
   - a handle that is none of these (an `Arrived` row with no disposition, an unknown handle, another instance's, a
     timer whose disposition has retired, below) refuses the whole command before Open.
 
-  A refusal changes nothing and is recorded. **Retry-all** restores every `Consumed` row and re-arms, once each, every
+  A refusal changes nothing and is recorded. **Retry-all** restores every `Consumed` row, except a job row of an
+  obsolete generation, which its page clears, and re-arms, once each, every
   plan timer retained as `Suppressed`, before or after the sweep, recording `Rearmed`; a timer already `Rearmed` is
   not re-armed again, so retry-all writes at most one re-arm per plan timer.
 - **Subscriptions** were removed by Park and are restored from the plan in the open commit. A wait that asked for kept
   events receives the events published while it was parked, within their keep window; a wait that did not misses them,
   as the owner decided.
+  - **The restore counts them (proposed, fourth review R4-M2).** Each restored subscription is one of the plan's
+    `W_max` waits and counts its 6,542 bytes toward `B_plan` ("The plan's byte bound", above), so the Open's
+    subscription writes are bounded with its re-arms and restarts, and a plan over either bound is refused with reason
+    "plan".
+  - **Kept-event catch-up runs after the Open, on the ordinary event path, in pages.** The Open reads no event. Each
+    restored subscription row records its keep flag (`Subscriptions.Keep`, proposed), and when any of them asked for
+    kept events the Open writes one meet ticket to the instance (`Kinds.Meet`) that names them by reference: the
+    instance's creation and a cursor before the first match, in place of a list of rows. After the Open lands, the
+    owner's meet path takes the ticket as it takes a meet ticket today (existing prototype behaviour: the turn's commit
+    writes a meet ticket listing its kept subscriptions, `Turns.cs` 483–488, and `Worker.MeetAsync` reads the kept
+    matches and adds each delivery after the commit, `Worker.cs` 1314–1339). Each step reads at most `P_page` kept
+    matches of the instance's `Keep` subscriptions, in `(subscription key, wait, event id)` order after the cursor,
+    adds each delivery by its digest identity (a delivery already present is a duplicate), and commits the next meet
+    ticket with the advanced cursor in the commit that consumes the current one. A step whose commit outcome is
+    unknown is taken again from the committed cursor, and a delivery it adds a second time is a duplicate.
+  - **Concurrent publishes.** Each side looks after its own commit: a publisher inserts its event and then reads the
+    subscriptions, and the restore inserts its subscriptions in the Open and then reads the events, so every event
+    kept in its window reaches each restored `Keep` wait through at least one side, and the shared digest identity
+    collapses the second. A delivery the catch-up adds during a recover drain carries no `ReleasedBy`, so it is
+    withheld until Complete like any arrival during the drain.
 - **Timers and jobs are decided by point lookups that cannot go stale.** For each timer and job ticket in the plan,
   layer 2 maps the model's id to the full key of the instance's own send and looks that row up. Only the instance's own
   turns change its kept rows (the sweep skips them), and its turns are serial under the partition fence, so what the
@@ -1038,10 +1132,32 @@ calls one new model hook.
   the model's own timer id, so `Recall` by that id still works; a new timer generation mapped back, as tickets have,
   was rejected because `Recall` and the timer's id would then need the same mapping.
 
+  **A restarted job** is written from its `JobSpec` alone (proposed, fourth review R4-M3), whichever branch the lookup
+  chose: the old ticket kept `Consumed`, a payload-free done marker, or no row after the sweep. The new ticket's
+  payload is `JobTicket(model, key, arguments)` with the spec's arguments, its effect key is the spec's, and nothing is
+  copied from the old row, so the restart runs the invocation the model started, with the inputs captured at arm,
+  whatever the bound variables now hold. The restart is a retry of that invocation, so it keeps its effect key, as a
+  retry by a job actor does ([job workers](job-workers.md#the-effect-key-the-worker-receives)); its attempt id is new,
+  since it derives from the new ticket id and the take's epoch ([job workers](job-workers.md#release-1)).
+
   A restarted job's ticket id derives from instance, key, creation and the next `JobGeneration` (`Worker.TicketId`
   takes the first three today), so it collides with neither the old ticket nor its kept row, nor with a ticket of an
   earlier Park. The kernel maps the generation back to the model's key through the registry. A result of an older
   generation matches no live ticket and is dropped.
+
+  **Obsolete job generations are cleared, never restored** (proposed, fourth review R4-M3). A job's physical entry
+  checks the target's status, its creation and withholding, and no generation (`Worker.StartJob`, `Worker.cs`
+  1166–1203). Once entered, the activity runs, and its result is published under the ticket's id after only the
+  owner's own take generation and the active creation are checked (`Worker.cs` 1247–1252), so a filter on the job's
+  generation can act on the result only after the side effect. Restoring an old ticket would therefore run a second
+  invocation (existing prototype behaviour for the entry; the generation is proposed). So every Open decides, before
+  any page, that a kept job ticket or job result whose generation is not the registry's current one for its key, or
+  whose key the registry no longer holds, is cleared: each page that reaches such a row clears it by its full key, in
+  every mode, retry-all included, and never restores it, and a selection that names it is refused ("Checks",
+  above). Layer 2 reads the generation from its own ticket id and the registry from the instance row, so the page
+  still reads no payload. "Cleared" keeps the lookup table's meaning, decided at Open and carried out by the page that
+  reaches the row: dispositions keep only the current generation, so the Open has no key by which to find an older
+  one in its own commit.
 - **Side effects** of a retried turn may repeat, with the same effect keys.
 
 **Discard** `{operation, park}` makes the same Park checks and opens a discard drain. The instance stays
@@ -1082,7 +1198,15 @@ store conformance suite need it:
 - the input bounds: metadata-only pages of at most `P_page` rows, the `Selected` reason and the selection's maximum;
 - the owned commit's statements split by encoded bytes as well as rows, at most 4 MiB or the provider's own limit,
   and MySQL's `max_allowed_packet` floor checked at startup;
-- the admission limits on every projected metadata field, checked at every ingress class before any write.
+- the admission limits on every projected metadata field, checked at every ingress class before any write;
+- the event match and the event delivery id as fixed SHA-256 digests over the canonical encoding (64 and 67 bytes),
+  computed from the persisted spellings, with the components in the delivery's payload and the publish payload
+  limit that reserves `C` for them (fourth review R4-M1);
+- subscriptions among the plan's `W_max` waits and in `B_plan` at 6,542 bytes each, `Subscriptions.Keep`, and the
+  restore's meet ticket by reference, whose catch-up adds at most `P_page` deliveries per step after the Open (fourth
+  review R4-M2);
+- the `JobSpec` plan entries, from which every restart writes its ticket, and the rule that clears a kept job row of
+  an obsolete generation and never restores it (fourth review R4-M3).
 
 **Every operator message** is an outside add in the operator's bound scope. Its id is the tenant-qualified operation
 id `Q(t, operation)`, with a `keep_until`, so a retried command gets a duplicate-key answer and no second effect, and
@@ -1501,6 +1625,87 @@ SQLite. Revised: the control-scope text says so; P-12 runs on SQLite with a NUL 
 other combinations run as a below-admission defence fixture, labelled as one; S-5 applies the base64 path only to
 the issued ids that can take it, and `M` stays a safe over-estimate.
 
+## Fourth review: counterexamples and answers
+
+The [fourth gate 2 review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6967291576)
+found that two derived sizes and one restart source were not bounded by the third round's rules, and that two case
+oracles did not match their rules. Each trace is restated, then followed through the revised text. The rules are
+proposed. The sizes and the Native behaviour quoted below were executed in this repair by the size probe in
+[experiments/Astra4.Sizes](../../prototypes/kernel-model/experiments/Astra4.Sizes/README.md), which drives the
+unchanged prototype code; no proposed transition was executed.
+
+**R4-M1: the event match outgrew the metadata bound.**
+
+1. Trace: a model subscribes a wait of 800 bytes of U+0001 under a short key, actor and event, which admission
+   accepts. An outside publish is accepted. The derived delivery's `Match` is the JSON of four names and the
+   creation, whose escape writes each U+0001 as six bytes, so it is 4,877 bytes (4,868 with the probe's names),
+   above the claimed 4`N` + 192 = 4,288. At four names of 1,024 bytes the probe measured a `Match` of 24,787 bytes,
+   above `M` itself, and a delivery id of 3,179 bytes with three variable parts. Refusing the derived row defeats an
+   accepted match, and admitting it breaks the page bound.
+2. Revised: `Match` is the 64-byte hex SHA-256 over the canonical encoding of the stored event's `(Q(t, key), event
+   id)`, and the delivery id is `ev:` and the 64-byte hex SHA-256 over `(event id, instance, creation, wait)` ("The
+   event match is a fixed digest" above). Both sizes are fixed, whatever the names, and the page's variable fields
+   come to at most 3,712 bytes, well inside `M`.
+3. The names keep their limits where they enter: `Subscribe`, `Publish` and an outside publish refuse a name above
+   `N` and a payload above 16 MiB less `M`, `F` and `C`, before any write. The components travel in the delivery's
+   payload, within that reserve, so every derived delivery, at publish or at catch-up, is admitted, and no refusal
+   happens after the source accepted. Both sides compute the digests from the persisted rows, so a publish and a
+   catch-up write one row. Cases EM-1 to EM-3 qualify the real route at K3 and K4.
+
+**R4-M2: subscription restoration escaped both Open limits.**
+
+1. Trace: a model acquires subscriptions over many turns and arms no timer or job. Park removes the subscriptions,
+   and recover restores all of them in its one commit. `W_max` and `B_plan` counted timers and jobs only, so a plan
+   of zero counted waits could write, for 65,536 short waits under a 900-byte MongoDB actor id, over 56 MiB of
+   subscription writes, and the kept-event catch-up added unbounded work beside them.
+2. Revised: a subscription is one of the plan's `W_max` waits, and its restore envelope counts 6,542 bytes toward
+   `B_plan`, MongoDB's repeated `_id` fields included ("The plan's byte bound" above). The model enforces both
+   bounds at `Subscribe`, as at arm, and the Open refuses an over-bound plan with reason "plan". The trace's model
+   faults at its 3,847th subscription, by bytes, before it reaches `W_max`, and with the check skipped its recover is
+   refused with no change.
+3. The Open reads no event. It writes the subscriptions and, when any asked for kept events, one meet ticket by
+   reference; the catch-up runs after the commit on the ordinary meet path, at most `P_page` deliveries per step
+   under a committed cursor ("Subscriptions" above). A publish racing the restore reaches each wait through one side
+   or both, and the digest identity collapses the second. Cases SB-1 to SB-3; TR-5's timer and job runs stay as they
+   were.
+
+**R4-M3: a job restart had no durable invocation recipe.**
+
+1. Trace: Native evaluates a background activity's bindings at arm and passes the inputs, iteration path and effect
+   key only to the ticket; `WaitEntry` keeps frame, kind and key. The probe ran this on the real model: the arm sent
+   `Service = alpha` and the effect key `c9_0/subject_1/c/-/0`, a sibling then set the bound variable to `beta`, and
+   the state held no `alpha`. The lookup restarts a planned job when its ticket is kept `Consumed`, ordinary done or
+   absent. A payload-free marker or a swept row leaves nothing to copy (`ExecuteJobAsync` throws
+   `ArgumentNullException` on a ticket with no arguments, executed in this repair), and evaluating the bindings again would send
+   `beta`.
+2. Revised: the model records an immutable `JobSpec` at arm, Native's `WaitEntry` gains it under state version 14,
+   and every restart writes its ticket from the spec under the next `JobGeneration`, keeping the invocation's effect
+   key ("The job spec" and "A restarted job" above). Run from the arm-time arguments, the probe's real background
+   activity received `alpha` and the original effect key.
+3. The second trace: an interruption leaves the old `Consumed` g0 beside the restarted g1, and the next command is
+   retry-all. The physical entry has no generation check (`Worker.cs` 1166–1203), so a restored g0 would be polled,
+   classified as a ticket (`Worker.cs` 654–659) and entered, and the generation filter on results would act only
+   after the second invocation (`Worker.cs` 1247–1252). Revised: the Open decides that a kept job row of an obsolete
+   generation is cleared; retry-all's page clears g0 and never restores it, and a selection naming g0 is refused.
+   g1 runs once. Cases JS-1 to JS-3.
+
+**R4-m1: S-5 asked for a page no legal page can reach.**
+
+1. Trace: with `M` = 24,576 a page of `P_page` = 170 rows is at most 170 × `M` = 4,177,920 bytes, and `B` − 1 is
+   4,194,303, 16,383 bytes more, so rows summing to `B` − 1 cannot both meet the row bound and fit one page.
+2. Revised: S-5 takes the largest attainable page, 170 rows each at the largest admitted encoded size, at most
+   4,177,920 bytes, and a 171st such row on a second page of one. S-6 keeps the over-limit refusals.
+
+**R4-m2: TR-5's statement oracle contradicted the singleton exception.**
+
+1. Trace: the commit rule gives a row above the 4 MiB budget a statement of its own, while TR-5 required every
+   captured statement to be at most 4 MiB, and its 16 MiB row was a kept row whose payload no Open statement carries.
+2. Revised: TR-5 run 4 asserts two ceilings, every multi-row statement at most 4 MiB (or the provider's lower limit),
+   and every statement above 4 MiB a singleton of one admitted row plus the measured protocol framing, within the
+   provider's own limit; its large rows are the instance envelope the Open updates and a re-armed timer at the
+   message row's cap, both transmitted by the Open. The kept 16 MiB row stays as a control that no statement
+   carries.
+
 ## Acceptance cases
 
 Milestones are those of the [program plan](../program-goals/clean-slate-kernel.md#milestones). K3 holds each case on
@@ -1566,13 +1771,13 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | E-4 | MongoDB: A is an outside add whose `clocks` value is behind the partition clock, and in a second run a send from another partition whose clock is behind. Each A gets a `seq` below the cursor, is withheld until Complete, and the suffix is delivered first. Mutation: eligibility by cursor comparison | K4 |
 | E-5 | Relational providers that generate `seq` (PostgreSQL, SQL Server, MySQL): while the instance is parked, a transaction draws A's `seq`, then the kept rows that will end page 1 are allocated and committed, and A's transaction commits only after page 1's commit, so A becomes visible with a `seq` below the cursor. A is withheld until Complete, and the suffix is delivered first. SQLite, which assigns `seq` explicitly under one writer, runs as a control. Mutation: eligibility by cursor comparison; A is delivered after page 1 and, as a model-ending input, the suffix is cleared undelivered | K4 |
 | E-6 | Interrupted release and generations. (a) Sender S has kept rows R1, R2 and K in `seq` order; page 1 of generation g restores R1 and R2, and K stays kept; a re-park interrupts before R2 is polled; an operator recover arrives, on MongoDB as an outside add whose outside-add clock gives it a `seq` below R2's (injected at K3), and opens generation g + 1 while R2 is pending with the stale marker. The pages restore R2 before K; each is delivered once, in `seq` order. A model-end variant, where K ends the model, delivers R2 before K and drops nothing kept. Mutation: no `Stale` arm (a stale-released row waits for Complete); K overtakes R2, and in the model-end variant R2 is never delivered. (b) After a recover completes and the same creation parks again, a row the first Park's drain released carries a lower generation than every Open of the second Park. Mutation: reset the generation when a Park resolves; the old marker matches the second Park's drain and the row reaches the model ahead of its sender's kept rows. (c) A terminate interrupting a recover drain delivers no released row to the model. (d) The model ends during the second drain before its pages reach R2: later pages skip the `Stale` arm, R2 meets the finished-instance rule at Complete, and the drain completes. Mutation: a page after the end clears a `Stale` row by the kept-row predicate; the count check fails and the owner resets without end. | K3, K4 |
-| S-5 | The metadata bound. Rows with every projected field at its limit, in each provider's widest encoding (SQL Server: single-byte characters, doubled by UTF-16; PostgreSQL and SQLite: the base64 path for the fields that can take it, the issued ids built from a job key or a custom id holding NUL or unpaired units, and three-byte characters in every other field, which admission keeps free of unpaired units, and of NUL on PostgreSQL; MySQL and MongoDB: three-byte characters), and a small payload are admitted and kept: a page of `P_page` such rows is at most `B` and takes them all; `P_page` + 1 rows give a page of `P_page` and a page of one; rows summing to `B` − 1 take one page; the largest accepted row is the first row of a page and is taken. Run under resume, discard, expiry, terminate and delete, with a takeover at a page boundary: every page's encoded metadata is at most `B` and every drain completes. At K4 each provider's encoded size of the limit row is measured and is at most `M`. Mutation: drop the `Kind` limit; a row with a 4 MiB + 1 byte kind is kept, and its singleton page exceeds `B` | K3, K4 |
+| S-5 | The metadata bound. Rows with every projected field at its limit, in each provider's widest encoding (SQL Server: single-byte characters, doubled by UTF-16; PostgreSQL and SQLite: the base64 path for the fields that can take it, the issued ids built from a job key or a custom id holding NUL or unpaired units, and three-byte characters in every other field, which admission keeps free of unpaired units, and of NUL on PostgreSQL; MySQL and MongoDB: three-byte characters), and a small payload are admitted and kept: a page of `P_page` = 170 such rows, the largest attainable admitted page (each row at its provider's largest admitted encoded size, so at most 170 × `M` = 4,177,920 bytes; `B` − 1 = 4,194,303 bytes is 16,383 more, and no legal page reaches it), is at most `B` and is taken whole, and a 171st such row is taken by a second page of one (the fourth review's R4-m1); the largest accepted row is the first row of a page and is taken. Run under resume, discard, expiry, terminate and delete, with a takeover at a page boundary: every page's encoded metadata is at most `B` and every drain completes. At K4 each provider's encoded size of the limit row is measured and is at most `M`. Mutation: drop the `Kind` limit; a row with a 4 MiB + 1 byte kind is kept, and its singleton page exceeds `B` | K3, K4 |
 | S-6 | Admission at each ingress class: an outside add, each turn send (`Send`, `SendFromReceivedAddress`, `Start`, `StartJob`, `Subscribe`, `Publish`) and an actor type's composed `Add`. A field at its limit is accepted; one byte over is refused before any write, as is a row whose encoded metadata would be `B` − 1, `B` or `B` + 1 bytes (a long kind, small payload): no row exists and no Park keeps it; the turn-send case fails the turn as a model fault, and the composed case is a definite error. On SQLite, the probe's 5,242,882-byte key is refused at admission; SQL Server's `LargestInboxId` (1,342 bytes, measured in WTF-8) is refused on every provider, and the `UnicodeKeys` fixtures (the joint review's J-3) run under same-id addressing: the 4,096-unit random key is refused at key admission (above `N`), `"high\uD800"` and `"low\uDFFF"` are refused on every provider and `"nul\0x"` on PostgreSQL, each with no binding, no instance row and no message, and the 4,096-unit operation is refused (above `N`); `"plain"`, `"replacement\uFFFD"`, `"astral🌐"` and, off PostgreSQL, `"nul\0x"` are accepted with their short NUL and unpaired-unit operations, each creation of an accepted key gets the actor id `{vp}/Q(t, key)`, and a second creation after the first is deleted gets the same id under a higher creation; a start whose caller key holds an unpaired unit, or on PostgreSQL a NUL, is refused at the start with no row, so no later send of that instance is refused; a turn send, a composed send and an outside add whose `Target` holds an unpaired unit, or on PostgreSQL a NUL, are refused before any write (the turn send throws as a model fault), so no commit fails with 22021 and no message is redirected; a job-queue name with such a unit, or a NUL on PostgreSQL, is refused where it is configured or admitted; on PostgreSQL a key whose index entry would pass the B-tree limit is refused at admission and never reaches the engine. The whole-row cap (the joint review's C-14): a start through each outside ingress whose `Payload` and `Start.Input` together are one byte over 16 MiB less `M` and `F` is refused at admission before any write, and at the cap it is admitted. On PostgreSQL a NUL in `Kind`, `Sender`, an ordinary `Id` or `Match` is refused at admission. On every provider an unpaired UTF-16 unit in `Kind`, `Sender`, an ordinary `Id` or `Match` is refused at admission, while an issued id holding one is accepted through its reversible encoding and stored and read back unchanged. A job key admitted at the largest form SQL Server's 450-unit limit allows, counting the widest generation suffix, is restarted by a recover, and the recover's Open lands. Mutation: admit names in their first form; the restart's ticket passes the limit and the Open fails as a definite error on every attempt. Mutation: exempt keyed starts from the name limits, as the prototype's generated run ids did; the wide key is admitted, its actor id `{vp}/Q(t, key)` exceeds `N` and SQL Server's 450 units, and on SQL Server the instance insert fails at the store, which the case asserts never happens. Mutation: a fresh actor id per creation of a key; the second creation's id differs, and the same-id assertion fails. Mutation: remove the check at one ingress class; the over-limit row lands, a Park keeps it, and S-5's page assertion fails | K3, K4 |
 | TR-1 | The R3-B1 trace with Native: frame F waits on T, a second frame F2 on its own timer; the Park consumes T; a resume suppresses T and a page clears it to a payload-free marker; X re-parks; a retry names T. Three runs: before the sweep (revive the payload-free marker), after it (insert), and the control, a retry before the clearing page (still-kept row). A takeover between Open and Complete, and between Complete and the firing. In every run the re-armed row's kind, payload, `Due` (the original absolute deadline), full key, `Sender` and creations equal the row the model first sent (`seq` aside), T fires once, Native's handler deserializes `TimerFired(w)` and resumes F exactly once, and F2 is untouched. Mutation: the present branch updates the marker's flags only; the first run delivers no payload and F never resumes. Mutation: `Due` = now + delay; the deadline assertion fails | K3, K4, K6, K7 |
 | TR-2 | The plan contract: for Native, Flowchart and StateMachine, over waiting states with timers armed at different times, each `TimerSpec` equals the timer row the model sent (kind, payload bytes, `Due`), under a test clock that advances at every read. Mutation: the arm sends with `Delay` and records `turn.Now` plus the delay from a second read; the spec's due differs from the row's | K6, K7 |
 | TR-3 | A plan whose timer id has another instance's or another creation's origin is a definite error: the recover re-parks and no row is written. A plan above `W_max` refuses the recover with reason "plan" and no change; a discard then lands. Mutation: map the id without the origin check; another instance's row is revived | K3 |
 | TR-4 | The model-side plan bound: a Native workflow that would arm its `W_max` + 1st timer or job faults that activity, and the instance's plan stays at `W_max`; a later Park recovers. The same for bytes: a timer whose payload would take the plan's counted bytes past `B_plan` faults its activity, and the same value passed by reference arms and is restored. Mutation: no model-side refusal; after a later Park the recover is refused with reason "plan", for the count and for the bytes alike | K6 |
-| TR-5 | **An Open at the plan bound** (the joint review's N8). Preconditions: a test model whose plan names `W_max` waits. Run 1: every wait is a timer retained `Suppressed` by an earlier resume that a re-park interrupted, half still kept and half swept, and a retry-all opens, so the Open re-arms `W_max` timers, each a full envelope whose payload is the largest a reference model's timer sends (Native's `TimerFired(wait)`). Run 2: a `resume` whose plan is half timers with no disposition and absent rows (re-armed by insert) and half jobs whose tickets the Park kept `Consumed` (restarted by create-only insert). Interleaving: each Open's commit once with a takeover right after it and once with an unknown outcome retaken. Outcome: each Open is one commit that writes every re-arm, restart and disposition, or none; the retaken commit lands once; after Complete each timer fires once and resumes its wait once, and each restarted job runs once; on every provider the commit stays within the owned commit's per-statement row limit and the provider's transaction and message limits (MongoDB: 16 MiB a document, 48 MiB a message, the transaction lifetime). Measured at K4 and K12: the Open's encoded size and duration on each provider, and at K12 the turn share of the partition's other instances while it commits. Run 3, the byte bound (CodeRabbit's review of #4756): a test model whose plan's timers carry non-reference payloads summing, with the per-wait allowance, to exactly `B_plan`, retained `Suppressed` and re-armed by a retry-all; in a second variant the sum is `B_plan` + 1 byte, with the model-side check skipped so the plan reaches Open. At the bound the Open commits on every provider, inside MongoDB's 16 MiB document and 48 MiB message limits, and each timer fires once; at `B_plan` + 1 the recover is refused with reason "plan", nothing changes and a discard then lands. Run 4, statement size (the joint review's C-8 and C-11): run 3's plan at `B_plan` on MySQL with `max_allowed_packet` at 64 MiB (8.0's default) and at the 17 MiB floor, and on SQL Server, PostgreSQL and SQLite, beside an instance envelope at the row cap (16 MiB with its `ParkRecord`) and a kept message row at the 16 MiB cap (`Payload` and `Start.Input` together at 16 MiB less `M` and `F`). The Open commits on each; no statement it sends exceeds 4 MiB or the provider's own limit, which the fixture asserts from the statements it captures; each 16 MiB row goes in a statement of its own; all of the Open's statements run in its one fenced transaction, and a crash between two of them lands none; a MySQL server whose `max_allowed_packet` is 17 MiB less one byte refuses at startup. Mutation: split statements by row count only; at the 17 MiB floor the MySQL Open's statement exceeds `max_allowed_packet` and the commit fails on every attempt. Negative control: a plan of `W_max` + 1 waits is refused with reason "plan" (TR-3). Mutation: no byte bound at Open; with payloads totalling 40 MiB the MongoDB Open exceeds the message limit, fails as a definite error on every attempt and re-parks the instance, so it never recovers. Mutation: split run 1's Open over two commits, the re-arms first and the dispositions second; a crash between them leaves pending re-armed timers still retained `Suppressed`, the next retry-all's delete matches no done row, and that Open answers "not landed" on every attempt, so the drain never opens | K4, K12 |
+| TR-5 | **An Open at the plan bound** (the joint review's N8). Preconditions: a test model whose plan names `W_max` waits. Run 1: every wait is a timer retained `Suppressed` by an earlier resume that a re-park interrupted, half still kept and half swept, and a retry-all opens, so the Open re-arms `W_max` timers, each a full envelope whose payload is the largest a reference model's timer sends (Native's `TimerFired(wait)`). Run 2: a `resume` whose plan is half timers with no disposition and absent rows (re-armed by insert) and half jobs whose tickets the Park kept `Consumed` (restarted by create-only insert). Interleaving: each Open's commit once with a takeover right after it and once with an unknown outcome retaken. Outcome: each Open is one commit that writes every re-arm, restart and disposition, or none; the retaken commit lands once; after Complete each timer fires once and resumes its wait once, and each restarted job runs once; on every provider the commit stays within the owned commit's per-statement row limit and the provider's transaction and message limits (MongoDB: 16 MiB a document, 48 MiB a message, the transaction lifetime). Measured at K4 and K12: the Open's encoded size and duration on each provider, and at K12 the turn share of the partition's other instances while it commits. Run 3, the byte bound (CodeRabbit's review of #4756): a test model whose plan's timers carry non-reference payloads summing, with the per-wait allowance, to exactly `B_plan`, retained `Suppressed` and re-armed by a retry-all; in a second variant the sum is `B_plan` + 1 byte, with the model-side check skipped so the plan reaches Open. At the bound the Open commits on every provider, inside MongoDB's 16 MiB document and 48 MiB message limits, and each timer fires once; at `B_plan` + 1 the recover is refused with reason "plan", nothing changes and a discard then lands. Run 4, statement size (the joint review's C-8 and C-11): a plan at `B_plan`, as in run 3, on MySQL with `max_allowed_packet` at 64 MiB (8.0's default) and at the 17 MiB floor, and on SQL Server, PostgreSQL and SQLite, with two rows the Open genuinely transmits (the fourth review's R4-m2): the instance envelope at the row cap (16 MiB with its `ParkRecord`), which the Open's own update writes, and a re-armed timer whose payload is at the message row's cap (16 MiB less `M` and `F`), which the Open inserts, with the plan's other timers carrying the rest, so that its counted bytes are exactly `B_plan` (the test model's state holds the large payload in its `TimerSpec`, so the instance envelope at the cap includes it). A kept message row at the same cap stays beside them as a control: a page never reads its payload, so no statement carries it. The Open commits on each. From the statements it captures, the fixture asserts two ceilings: every statement that carries more than one row is at most 4 MiB, or the provider's own limit where that is lower; and every statement above 4 MiB carries exactly one admitted row, at most the 16 MiB cap, and is at most that row plus the provider's protocol framing as measured in the run, within the provider's own limit (MySQL's `max_allowed_packet`, SQL Server's batch size, PostgreSQL's protocol message limit, SQLite's `SQLITE_MAX_LENGTH` for the bound value). The two transmitted rows each go in such a singleton statement, and the kept control row in none; all of the Open's statements run in its one fenced transaction, and a crash between two of them lands none; a MySQL server whose `max_allowed_packet` is 17 MiB less one byte refuses at startup. Mutation: split statements by row count only; at the 17 MiB floor the MySQL Open's statement exceeds `max_allowed_packet` and the commit fails on every attempt. Negative control: a plan of `W_max` + 1 waits is refused with reason "plan" (TR-3). Mutation: no byte bound at Open; with payloads totalling 40 MiB the MongoDB Open exceeds the message limit, fails as a definite error on every attempt and re-parks the instance, so it never recovers. Mutation: split run 1's Open over two commits, the re-arms first and the dispositions second; a crash between them leaves pending re-armed timers still retained `Suppressed`, the next retry-all's delete matches no done row, and that Open answers "not landed" on every attempt, so the drain never opens | K4, K12 |
 | S-7 | The R3-M1 trace: retry R1 re-arms suppressed T; X interrupts before Complete; retry R2 names T and a `Consumed` Y. Runs: T still pending; T fired while parked and kept `Arrived`; T consumed by a re-park and kept `Consumed`. A takeover between R2's Open and Complete. R2 is accepted; T counts "already re-armed" (or, in the third run, is marked `Selected`); Y is delivered once; one armed T row exists; T fires once, and the model resumes T's frame once. Mutation: the earlier validator (a handle neither `Suppressed` nor kept `Consumed` refuses the command); R2 is refused and Y is never delivered. Mutation: re-arm a `Rearmed` timer again; in the pending run the delete matches no done row, so the Open answers "not landed" and never commits, and in the `Arrived` run the delete and insert drop its `KeptBy`, so no page releases it and T is delivered after Complete in place of during the drain | K3, K4, K6, K11 |
 | S-8 | Retry-all with suppressed timers: a resume suppresses T1 (still kept when a re-park interrupts) and T2 (cleared, then swept). A retry-all re-arms T1 (present: delete and insert) and T2 (absent: insert), once each, records `Rearmed` and restores every `Consumed` row; after another interruption a second retry-all re-arms nothing. Each timer fires once and resumes its frame once. Mutation: retry-all skips `Suppressed` timers; neither fires | K3, K4, K6 |
 | S-9 | The gate never waits for a row only Complete releases: the previous page's last restored row is a `Rearmed` T kept `Arrived`, which is released and delivered, and the drain completes; a timer the Open re-armed, due at once, and an unreleased arrival polled and seen at the current epoch are never the gate row, and the drain completes before either is delivered. Mutation: withhold every `Rearmed` timer while a Resolution is open; the first run never completes | K3, K6 |
@@ -1580,6 +1785,15 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | D-2 | Job generations: (a) a job restarted at a first Open as `Restarted(g)` finishes during the drain, the model starts a new job under the same key, which takes a higher generation, and a re-park follows; the next Open decides the new job by its own ticket and prunes the old disposition. (b) Cross-Park: Park 1 restarts job J and resolves; Park 2 restarts J again while Park 1's done ticket is still within its window; the restart's create-only insert lands under a new generation, and the instance does not re-park. Mutation for (a): key the disposition by the job key with no generation check; the new job is decided by the old ticket's row. Mutation for (b): reset the counter when a Park resolves; the insert collides with Park 1's done ticket and re-parks the instance on every retry | K3, K6 |
 | D-3 | Headroom under the row cap, on every provider (MySQL with `max_allowed_packet` at the 17 MiB floor): an instance whose envelope, measured without `ParkRecord`, is at 16 MiB less 312 KiB, with `W_max` timers, parks, and a recover Open commits a `ParkRecord` at its maximum, so the envelope is 16 MiB; a commit one byte over the reserve is refused as a definite error; a start whose `Payload` and `Start.Input` together are 16 MiB less `M` and `F`, in the provider's stored encoding, is admitted, and one whose two together are one byte over is refused at admission with no row, on SQL Server counted in UTF-16. Mutation: cap `Payload` alone; a start with a 15 MiB `Payload` and a 15 MiB `Input` is admitted as a row of about 30 MiB, which MongoDB refuses at the store and MySQL at the 17 MiB floor refuses on every attempt. Mutation: apply the reserve on MongoDB only; on MySQL the instance parks one byte under the packet limit and every recover Open fails. Measured: the encoded `ParkRecord` at `W_max` on each provider | K4, K12 |
 | D-4 | A restart survives an interruption: a resume restarts job J at Open 1 (`Restarted(g)`); a re-park comes while the job is in flight; a resume at Open 2 finds the generation-`g` ticket pending and leaves it, so the job is not restarted again and its result is delivered once. Mutation: the disposition loses `g` (only a digest of the ticket key is kept); Open 2 falls back to the original ticket, kept `Consumed`, and restarts the job a second time | K3, K6 |
+| EM-1 | **A real event route at the name limits** (the fourth review's R4-M1). Preconditions: a tenant id of 64 characters; an instance whose caller key, a subscription key, a wait and an event id are each 1,024 bytes of U+0001, the widest JSON escape, and in a second set each 1,024 bytes of `<`. Interleaving, each in its own run: (a) the model subscribes, then an outside publish lands; (b) the publish lands with a keep window, then the model subscribes with keep, so the catch-up adds the delivery; (c) the publisher and the registrar race, with an ownership takeover between the publish's insert and its match read; each run once more with the instance parked, the delivery kept and then restored by a recover drain. Outcome: each run stores exactly one delivery row, with a 64-byte `Match` and a 67-byte `Id`; `Events.Delivered` returns the event id and the wait from the payload; the model resumes the wait once; the row's encoded metadata is at most `M` and its page within `B`; no store write is refused. Mutation: today's `EventMatch.Encode` and `evq:` id; the derived row's `Match` is 24,787 bytes and its `Id` 3,179 (measured by the size probe), so the composed-row check refuses it, or the key width does on SQL Server and MySQL, after the publish was accepted, and the wait never receives the event | K3, K4 |
+| EM-2 | **Refusal at the source boundary** (R4-M1). An outside publish and a turn's `Publish` whose payload is one byte above 16 MiB less `M`, `F` and `C`, counted in the provider's stored encoding (UTF-16 on SQL Server), are refused before any write: the outside publish by a validation error with no event row, the turn's by a model fault. At exactly that size each is accepted, and its delivery, built at publish and, in a second run, at catch-up, is admitted with its components, delivered once and within the 16 MiB row cap. A subscription key, wait or event id of `N` + 1 bytes is refused at `Subscribe`, at `Publish` and at an outside publish, and one of `N` bytes is accepted. Mutation: no `C` reserve; the at-limit publish is accepted, its delivery is refused at the composed-row check, and an accepted publish never reaches its wait | K3, K4 |
+| EM-3 | **One delivery from both sides, under equivalent spellings** (R4-M1). Preconditions: on SQL Server and MySQL under the pinned collation, a subscription on `Q(t, Order-7)` and a publish on `Q(t, order-7)`, equal under the pin, raced against the restore's catch-up; on PostgreSQL, SQLite and MongoDB the same spellings as a control; at K3 the in-memory store's equality hook folds case (as for KB-1). Outcome: where the pin folds case, the publish matches the stored subscription, both sides compute the digests from the persisted event and subscription rows, and exactly one delivery exists; on the control providers the spellings are two keys and nothing matches. Two waits of one instance on one key get two deliveries with one `Match` and two ids, and one wait subscribed under two keys gets two deliveries with one id and two `Match` values (B2-3). Mutation: compute the digests from the caller's spelling; the publish side and the catch-up side write two deliveries for one event and wait, and the wait runs twice | K3, K4 |
+| SB-1 | **A subscription-heavy model** (the fourth review's R4-M2). Preconditions: a Native workflow whose `Event` activities subscribe distinct short waits; in a second workflow they are mixed with `Delay` timers. Interleaving: it subscribes past the bounds over many turns, then parks. Outcome: with subscriptions only, the 3,847th subscription faults the activity that would subscribe it, by bytes, whatever the length of its names, since each counts its fixed 6,542 bytes; in the mixed workflow, with 1,000 subscriptions and the rest timers, the `W_max` + 1st wait faults its activity by count; each plan stays within both bounds, and a later recover restores every subscription once in its Open. With the model-side check skipped, a plan of 3,847 subscriptions and a mixed plan of `W_max` + 1 waits each refuse the recover with reason "plan" and no change, and a discard then lands. Mutation: count timers and jobs only; 65,536 subscriptions reach the Open, which writes all of them in one commit, and the assertion on the Open's counted work (at most `W_max` waits and `B_plan` bytes) fails | K3, K6 |
+| SB-2 | **Catch-up after the Open** (R4-M2). Preconditions: a parked instance whose plan restores subscriptions, some with keep and some without, on keys with more than 2 × `P_page` kept events published while parked. Interleaving: a recover opens; publishes on the same keys land before the Open, between the Open and the first meet step, and between meet steps; an ownership takeover comes between two meet steps; a meet step's commit has an unknown outcome and is retaken; in a second run the Open fails with a definite error, the instance re-parks, and a retried recover opens. Outcome: the Open reads no event and writes the subscriptions and one meet ticket; every meet step adds at most `P_page` deliveries; each kept event reaches each `Keep` wait exactly once, and no wait without keep receives an event published before the Open; each event published after the Open reaches every restored wait once; deliveries added during the drain are withheld until Complete; the failed Open leaves no subscription, meet ticket or delivery, and the retried one behaves as the first run. Mutation: catch-up inside the Open; the Open reads every kept event of every key, and its work assertion fails at the first key with more than `P_page` events. Mutation: commit the next cursor before the page's deliveries are added; a crash between the two loses those matches, and a kept event is never delivered | K3, K4 |
+| SB-3 | **Maximum Open work with subscriptions** (R4-M2). Preconditions: a plan whose counted bytes are exactly `B_plan`, once all subscriptions at the name limits (3,846) and once mixed with timers and jobs at `W_max` waits. Interleaving: as TR-5 run 1, with a takeover right after the Open's commit and an unknown outcome retaken. Outcome: each Open is one commit, within TR-5 run 4's statement ceilings and MongoDB's 16 MiB document and 48 MiB message limits, and on MongoDB the encoded size of each subscription write, `_id` included, is at most its counted 6,542 bytes. Measured at K4 and K12: the Open's encoded size and duration on each provider; at K12, the turn share of the partition's other instances during the Open and the catch-up steps. Mutation: count each subscription's names once; on MongoDB the measured writes exceed the counted bytes, and the assertion fails | K4, K12 |
+| JS-1 | **A restart runs the invocation the model started** (the fourth review's R4-M3). Preconditions: a Native workflow sets `svc` to `alpha`, then arms a background test activity whose input binds `svc` and which returns its input and `ActivityContext.EffectKey`, while a sibling in the same turn sets `svc` to `beta` (the size probe's workflow); the job's ticket then reaches `MaxAttempts`, so a Park keeps it `Consumed`. Interleaving: a `resume` restarts the job, with a takeover between the Open and the job's entry. Three runs of the restart's source: the old ticket kept `Consumed`, the traced branch; and, through a below-admission fixture labelled as one, since no traced schedule leaves a waited-for job's ticket ordinary done or absent, a payload-free done marker and an absent row, which the lookup table sends to the same restart. Outcome: in every run the new ticket's arguments equal the `JobSpec` recorded at arm, under the next `JobGeneration`; the real background activity runs once and receives `alpha` and the original effect key; its result resumes the frame once; nothing is read from the old row. Mutation: rebuild the arguments by evaluating the bindings at the restart; the activity receives `beta`. Mutation: copy the arguments from the old row; the marker run fails with `ArgumentNullException` in `ExecuteJobAsync` and the absent run has nothing to copy (both failure modes measured on the real model by the size probe) | K3, K6 |
+| JS-2 | **Retry-all with an obsolete generation beside the current one** (R4-M3). Preconditions: J's ticket g0 is kept `Consumed` by the Park; a `resume` restarts J as g1 (`Restarted(g1)`); a re-park interrupts before the page that would clear g0, so g0 stays kept `Consumed` beside the pending g1. Interleaving: a retry-all opens, with a takeover between its pages; in a second run an explicit `retry` names g0's handle. Outcome: retry-all's page clears g0 and never restores it; g0 is never polled undone and never entered (the fixture counts entries and driver executions per ticket id: g0 zero, g1 one); the activity runs once and its result is applied once; the explicit retry is refused before Open with no change. Mutation: restore every `Consumed` row whatever its generation; g0 is restored and released, the poll classifies it as a ticket (`Worker.cs` 654–659), `Worker.StartJob` enters it with no generation check (`Worker.cs` 1166–1203), the activity runs beside g1's run, and the entry count fails, although the late result is dropped | K3, K4, K6 |
+| JS-3 | **The spec's bytes** (R4-M3). A Native background arm whose captured inputs would take the plan's counted bytes past `B_plan` faults that activity at arm; the same input passed by reference arms, and a restart reads the referenced value. With the model-side check skipped, a plan whose job specs' encoded arguments sum, with the allowances, to exactly `B_plan` commits its Open, and one byte over refuses the recover with reason "plan" and no change. The instance envelope that holds the specs stays under the row cap with the `ParkRecord` reserve (D-3). Mutation: leave the spec out of the count; the over-bound plan reaches the Open, and TR-5's ceiling assertions fail | K3, K6 |
 
 ## Decisions (owner, 16–17 November 2026)
 
