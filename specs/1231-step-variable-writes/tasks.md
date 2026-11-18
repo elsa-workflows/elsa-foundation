@@ -12,39 +12,39 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 ## Phase 1: Setup
 
 - [ ] T001 Merge the initiative branch into the implementing branch and confirm S-10's types (`VariableReadSetEntry`, `VariableCommitRule`, `LostUpdateMode`, `VariableWriteSource.SessionChange`) and S-11's `BackgroundEligibility` are present; record the heads in the PR body.
-- [ ] T002 [P] Add the public API entries to `PublicAPI.Unshipped.txt` of the touched packages as types are added (tracked per phase).
+- [x] T002 [P] Add the public API entries to `PublicAPI.Unshipped.txt` of the touched packages as types are added (tracked per phase).
 
 ## Phase 2: Foundational — the session and the commit path (blocks every story)
 
-- [ ] T003 Add `IStepVariables` and `IActivityExecutionContext.Variables` in `Essentials/src/Activities/Runtime/Core/Contracts/` (FR-002, FR-023).
-- [ ] T004 Implement `StepVariableSession` and `WriteIntent` (data-model.md) in `Essentials/src/Workflows/Runtime/Core/Models/`: committed read at the moment of the read over the visible frame chain shared with `RuntimeContainerScopeService`, read-your-writes view, loop items read-only, `VF-ACT-010` for withheld values (FR-003, FR-004, FR-006); the read by scope and key that S-4's T050 calls (FR-006a); transient and withheld matches fault on the host side, uncatchable by the script (FR-006b).
-- [ ] T005 Record session reads per attempt as `VariableReadSetEntry` with the protection policy (digest only under `Fault`); never carried to a new attempt or across suspension (FR-007; **spec 1221 T015**).
-- [ ] T006 Base selection per research R-3: session read → input read set → blind; oldest in-use on ambiguity (FR-008, FR-009; **spec 1221 T015**, FR-006 session half).
-- [ ] T007 Create the session per step in `WorkflowInvokeActivitySchedulerWorkHandler` and `WorkflowResumeBookmarkSchedulerWorkHandler`; a fresh session on resume and on every new attempt.
-- [ ] T008 Apply intents in the step's checkpoint commit before captures, through S-10's `VariableCommitRule` with the node's lost-update mode and then the C4 no-op check; write records with `SessionChange` (FR-011–FR-013, FR-016); integrate with `RuntimeOutputCaptureProjection` so the capture wins.
-- [ ] T009 Own-write base advance: an applied own write moves the invocation's base for that variable; persist it on the activity execution state; restore on resume (FR-010; **spec 1221 T016** and the resume part of T033).
-- [ ] T010 Fault and cancel discard pending intents; type-check and serialization errors fault before the commit; suspension commits changes so far and drops pending intents (FR-014, FR-015).
+- [x] T003 Add `IStepVariables` and `IActivityExecutionContext.Variables` in `Essentials/src/Activities/Runtime/Core/Contracts/` (FR-002, FR-023). *Done: `IStepVariables` (+ engine-facing `IStepVariableSession`, `IStepVariableSessionConsumer`) in `Activities/Runtime/Core/Contracts/IStepVariables.cs`. The session is on the author-facing `ActivityExecutionContext.Variables` (and the start and resume contexts), not on `IActivityExecutionContext`: ordinary activity bodies receive `ActivityExecutionContext`, and structural evaluations, which use `IActivityExecutionContext`, get no session (Q4).*
+- [x] T004 Implement `StepVariableSession` and `WriteIntent` (data-model.md) in `Essentials/src/Workflows/Runtime/Core/Models/`: committed read at the moment of the read over the visible frame chain shared with `RuntimeContainerScopeService`, read-your-writes view, loop items read-only, `VF-ACT-010` for withheld values (FR-003, FR-004, FR-006); the read by scope and key that S-4's T050 calls (FR-006a); transient and withheld matches fault on the host side, uncatchable by the script (FR-006b). *Done: `StepVariableSession` and `StepVariableWriteIntent` in `Activities/Runtime/Elsa.Activities.Runtime/Services/StepVariables/` (the session needs the runtime's JSON profile and handlers, so it lives beside them). Writes to a closed scope's variables, to variables that require encryption or are stored externally fault the step with a message (follow-ups).*
+- [x] T005 Record session reads per attempt as `VariableReadSetEntry` with the protection policy (digest only under `Fault`); never carried to a new attempt or across suspension (FR-007; **spec 1221 T015**).
+- [x] T006 Base selection per research R-3: session read → input read set → blind; oldest in-use on ambiguity (FR-008, FR-009; **spec 1221 T015**, FR-006 session half).
+- [x] T007 Create the session per step in `WorkflowInvokeActivitySchedulerWorkHandler` and `WorkflowResumeBookmarkSchedulerWorkHandler`; a fresh session on resume and on every new attempt.
+- [x] T008 Apply intents in the step's checkpoint commit before captures, through S-10's `VariableCommitRule` with the node's lost-update mode and then the C4 no-op check; write records with `SessionChange` (FR-011–FR-013, FR-016); integrate with `RuntimeOutputCaptureProjection` so the capture wins.
+- [x] T009 Own-write base advance: an applied own write moves the invocation's base for that variable; persist it on the activity execution state; restore on resume (FR-010; **spec 1221 T016** and the resume part of T033).
+- [x] T010 Fault and cancel discard pending intents; type-check and serialization errors fault before the commit; suspension commits changes so far and drops pending intents (FR-014, FR-015).
 
 **Checkpoint**: a test-only activity can read and write through the session and the commit rule.
 
 ## Phase 3: User Story 3 — lost updates on step writes (P1)
 
-- [ ] T011 [P] [US3] **(test-first)** Two parallel inline branches each increment `count` through the session → `2` (no inline gap).
-- [ ] T012 [P] [US3] **(test-first)** Read `count`, suspend, another branch writes, resume and write → lost update: default warning with both writers and the overwritten value; `[ActivityLostUpdateMode(Fault)]` and the per-node setting → fault, nothing saved.
-- [ ] T013 [P] [US3] **(test-first)** Blind session write is never a lost update; follows D-8.
-- [ ] T014 [P] [US3] **(test-first)** Input read `count = 0`, later session read `count = 10`, capture computed from the input → the capture's base is the input version (older dependency kept).
-- [ ] T015 [P] [US3] **(test-first)** Session write on suspend + capture on completion → no self-conflict; session write + capture in one commit → capture wins (spec 1221 T016 evidence).
-- [ ] T016 [P] [US3] **(test-first)** A retry, a re-execution and a crash redelivery each start a new session and read committed values again; a re-driven burst never applies an intent twice.
+- [x] T011 [P] [US3] **(test-first)** Two parallel inline branches each increment `count` through the session → `2` (no inline gap).
+- [x] T012 [P] [US3] **(test-first)** Read `count`, suspend, another branch writes, resume and write → lost update: default warning with both writers and the overwritten value; `[ActivityLostUpdateMode(Fault)]` and the per-node setting → fault, nothing saved. *The read is the step's input read (its input read set survives the suspension); a session read before the suspension is not carried (ADR 0092 decision 11), also tested.*
+- [x] T013 [P] [US3] **(test-first)** Blind session write is never a lost update; follows D-8.
+- [x] T014 [P] [US3] **(test-first)** Input read `count = 0`, later session read `count = 10`, capture computed from the input → the capture's base is the input version (older dependency kept).
+- [x] T015 [P] [US3] **(test-first)** Session write on suspend + capture on completion → no self-conflict; session write + capture in one commit → capture wins (spec 1221 T016 evidence).
+- [x] T016 [P] [US3] **(test-first)** A retry, a re-execution and a crash redelivery each start a new session and read committed values again; a re-driven burst never applies an intent twice. *`StepVariableRedeliveryTests` (crash before the completion is durable) and `OperatorActionsTests.A_recovered_step_starts_a_new_session_and_reads_committed_values_again` (retry, re-execution).*
 
 ## Phase 4: User Story 2 + 4 — C# references and free names (P1/P2)
 
-- [ ] T017 [US2] Add `VariableReference<T>` and `ReadOnlyVariableReference<T>` (`Essentials/src/Activities/Runtime/Core/Models/VariableReference.cs`) and the contract input kind + direction in `ActivityContract`; binding like a capture target (FR-022).
-- [ ] T018 [US2] `Get`/`Set` on references: copy on read, intent on `Set`, `Set` on read-only throws; `Get<T>` on `Any` defaults to `JsonNode`; dropped-member warning on write-back from a narrower type (FR-017, FR-023).
-- [ ] T019 [US2] Publish validation: unbound, undeclared, writable bound to a read-only target → refused; may-write set = writable bound references (FR-024), in `ExecutableNodeCompiler` / `ValueFlowValidator`.
-- [ ] T020 [US4] Add `AccessesUndeclaredVariablesAttribute`, pin it into the contract and descriptor; free-name `Get`/`Set` only on marked types, else throw; undeclared name faults before commit (FR-025, FR-026).
-- [ ] T021 [US2] Transient references: live instance on `Get`, in-memory `Set`, nothing committed; publish refuses a transient reference on a background-placed or suspending activity; a free-name transient access in such a step faults (FR-027).
-- [ ] T022 [P] [US2] **(test-first)** Acceptance 1–6 of User Story 2.
-- [ ] T023 [P] [US4] **(test-first)** Acceptance 1–5 of User Story 4.
+- [x] T017 [US2] Add `VariableReference<T>` and `ReadOnlyVariableReference<T>` (`Essentials/src/Activities/Runtime/Core/Models/VariableReference.cs`) and the contract input kind + direction in `ActivityContract`; binding like a capture target (FR-022).
+- [x] T018 [US2] `Get`/`Set` on references: copy on read, intent on `Set`, `Set` on read-only throws; `Get<T>` on `Any` defaults to `JsonNode`; dropped-member warning on write-back from a narrower type (FR-017, FR-023).
+- [x] T019 [US2] Publish validation: unbound, undeclared, writable bound to a read-only target → refused; may-write set = writable bound references (FR-024), in `ExecutableNodeCompiler` / `ValueFlowValidator`.
+- [x] T020 [US4] Add `AccessesUndeclaredVariablesAttribute`, pin it into the contract and descriptor; free-name `Get`/`Set` only on marked types, else throw; undeclared name faults before commit (FR-025, FR-026).
+- [x] T021 [US2] Transient references: live instance on `Get`, in-memory `Set`, nothing committed; publish refuses a transient reference on a background-placed or suspending activity; a free-name transient access in such a step faults (FR-027). *Done for run time: a transient reference returns the live instance, `Set` replaces it in memory only, and a step that can suspend faults on any transient access. The publish refusal has no input yet: every authored variable compiles to an `Instance`-lifecycle policy (`ExecutableNodeCompiler.CompileVariableDeclaration`), so no transient declaration can reach it; it lands with the first transient declaration (S-8).*
+- [x] T022 [P] [US2] **(test-first)** Acceptance 1–6 of User Story 2.
+- [x] T023 [P] [US4] **(test-first)** Acceptance 1–5 of User Story 4.
 
 ## Phase 5: User Story 1 — script writes (P1)
 
@@ -62,13 +62,13 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 - [ ] T031 [US5] Add a subject fact `TouchesVariables` built from the pinned contract (marker, reference inputs), checked by C9 even when `TypeCheckedAtRunTime` (FR-031); update `ForPinnedNode` and the template placer's subject.
 - [ ] T032 [P] [US5] **(test-first)** For each signal — (a) marker, (b) writable reference, (c) read-only reference — publication is refused with exactly `VF-BG-001 (C9)` and the run-time re-check (admission and worker) refuses with the same text.
 - [ ] T033 [P] [US5] **(test-first)** Template placement in a design-only shell refuses the contract-visible signals at placement and the type-only ones at admission.
-- [ ] T034 [US5] Update ADR 0093's C9 *Today* note only through an amendment PR if the coordinator chooses Q2's alternative; otherwise nothing (`RunJavaScript` is already refused in the background by S-11).
+- [x] T034 [US5] Update ADR 0093's C9 *Today* note only through an amendment PR if the coordinator chooses Q2's alternative; otherwise nothing (`RunJavaScript` is already refused in the background by S-11). *Nothing to do: Q2 was answered as recommended (2026-11-17), so no amendment.*
 
 ## Phase 7: Publish-time write analysis (all stories)
 
-- [ ] T035 Feed may-write sets into `ValueFlow/ConcurrentWrite` (spec 266's warning, PR #4669); a marked free-name activity touches every visible variable (FR-028).
-- [ ] T036 Warn when a node's may-write set and one of its own captures name the same variable (FR-029).
-- [ ] T037 [P] **(test-first)** Concurrent-write and overlap diagnostics, including the marked-activity case.
+- [x] T035 Feed may-write sets into `ValueFlow/ConcurrentWrite` (spec 266's warning, PR #4669); a marked free-name activity touches every visible variable (FR-028). *Done for C# step writers (writable references, the marker); script may-write sets join with Phase 5.*
+- [x] T036 Warn when a node's may-write set and one of its own captures name the same variable (FR-029).
+- [x] T037 [P] **(test-first)** Concurrent-write and overlap diagnostics, including the marked-activity case. *`StepVariableWriteValidationTests` (Design tests).*
 
 ## Phase 8: User Story 6 — Elsa 3 conversion (P2)
 
@@ -79,7 +79,7 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 9: Polish and evidence
 
-- [ ] T042 Measure write cost for a 1 MiB value and a hot loop; record in research.md R-9 (FR-035, SC-007).
+- [x] T042 Measure write cost for a 1 MiB value and a hot loop; record in research.md R-9 (FR-035, SC-007). *Measured; numbers in research.md R-9.*
 - [ ] T043 [P] Docs: activity authoring (step writes, references, the marker, `[ActivityLostUpdateMode]`), script docs (write forms; copy explicitly with `{...variables.o}`), `EXTENSION_POINTS.md`, Elsa 3 conversion guide, release notes (§E2.6.1 note).
 - [ ] T044 Map every ADR 0090 *Required evidence* item in scope to its test in the PR body (SC-001); list the host-interop items as out of scope (#4103).
 - [ ] T045 Set the spec's `Status: Implemented` in the finishing PR; update spec 1221's tasks.md notes for T015/T016 to point at this PR, and spec 1222 T047/T050 and spec 1228 T026/T028 if they can now proceed.
