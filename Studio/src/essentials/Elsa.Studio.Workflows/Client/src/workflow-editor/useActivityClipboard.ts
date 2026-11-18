@@ -24,6 +24,33 @@ interface ActivityClipboardParams {
   setStatus(value: string): void;
 }
 
+// Studio mounts a fresh editor for each workflow, so the snapshot itself never leaves the resource it was copied
+// from. Only where the last copy came from outlives the editor (in this tab, across navigation and reloads), so a
+// paste elsewhere can say why nothing happened. Cross-resource transfer is deferred to spec tasks T034/T035.
+interface CopyOrigin { resourceKind: ActivityReferenceResourceKind; definitionId: string; count: number }
+const copyOriginKey = "elsa.studio.activityClipboard.copyOrigin";
+let copyOriginInMemory: CopyOrigin | null = null;
+
+function rememberCopyOrigin(origin: CopyOrigin) {
+  copyOriginInMemory = origin;
+  try { sessionStorage.setItem(copyOriginKey, JSON.stringify(origin)); } catch { /* Storage is optional; memory still covers this page. */ }
+}
+
+function readCopyOrigin(): CopyOrigin | null {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(copyOriginKey) ?? "null") as Partial<CopyOrigin> | null;
+    if (stored && typeof stored.definitionId === "string" && typeof stored.resourceKind === "string" && typeof stored.count === "number")
+      return stored as CopyOrigin;
+  } catch { /* Fall back to memory. */ }
+  return copyOriginInMemory;
+}
+
+function refusedPasteStatus(count: number) {
+  return count === 1
+    ? "The copied activity came from another workflow, so it can't be pasted here yet."
+    : "The copied activities came from another workflow, so they can't be pasted here yet.";
+}
+
 export function useActivityClipboard({
   draft,
   frames,
@@ -94,29 +121,36 @@ export function useActivityClipboard({
     const snapshot = snapshotFrom(selectedNodeIds);
     if (!snapshot) return false;
     clipboardRef.current = snapshot;
+    rememberCopyOrigin({ resourceKind, definitionId, count: snapshot.activities.length });
     setStatus(snapshot.activities.length === 1 ? "Copied 1 activity." : `Copied ${snapshot.activities.length} activities.`);
     return true;
-  }, [selectedNodeIds, setStatus, snapshotFrom]);
+  }, [definitionId, resourceKind, selectedNodeIds, setStatus, snapshotFrom]);
 
   const paste = useCallback(() => {
     const snapshot = clipboardRef.current;
-    if (!snapshot || disabled) return false;
+    if (disabled) return false;
+    if (!snapshot) {
+      const origin = readCopyOrigin();
+      if (origin && (origin.definitionId !== definitionId || origin.resourceKind !== resourceKind)) setStatus(refusedPasteStatus(origin.count));
+      return false;
+    }
     return applySnapshot(
       snapshot,
       snapshot.activities.length === 1 ? "Pasted 1 activity." : `Pasted ${snapshot.activities.length} activities.`
     );
-  }, [applySnapshot, disabled]);
+  }, [applySnapshot, definitionId, disabled, resourceKind, setStatus]);
 
   const duplicate = useCallback((nodeIds = selectedNodeIds) => {
     const snapshot = snapshotFrom(nodeIds);
     if (!snapshot) return false;
     clipboardRef.current = snapshot;
+    rememberCopyOrigin({ resourceKind, definitionId, count: snapshot.activities.length });
     return applySnapshot(
       snapshot,
       snapshot.activities.length === 1 ? "Duplicated 1 activity." : `Duplicated ${snapshot.activities.length} activities.`,
       snapshot.activities.at(-1)?.nodeId
     );
-  }, [applySnapshot, selectedNodeIds, snapshotFrom]);
+  }, [applySnapshot, definitionId, resourceKind, selectedNodeIds, snapshotFrom]);
 
   const openContextMenu = useCallback((x: number, y: number, nodeIds: string[]) => {
     if (disabled || nodeIds.length === 0) return;

@@ -337,6 +337,9 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       await s.canvas(); await node("consumer").press("ControlOrMeta+v");
       expect((await s.saved(destination)).state).toEqual(before);
       await expect(page.locator(".wf-sequence-step")).toHaveCount(2);
+      // The refusal is announced in the editor's polite status region (#4694).
+      await expect(page.locator(".wf-editor-save-status[role=status]"))
+        .toHaveText("The copied activity came from another workflow, so it can't be pasted here yet.");
       boundaries.push({ kind: "resource-local", source: created.definition.id, destination: destination.definition.id,
         sameIds: ["producer", "consumer"], clipboardCleared: true, crossResourceTransfer: "future T034/T035 obligation" });
       await capture(page, info, "foreign-resource-clipboard-cleared");

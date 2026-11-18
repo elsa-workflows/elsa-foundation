@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useActivityClipboard } from "../workflow-editor/useActivityClipboard";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { useDraftHistory } from "../workflow-editor/useDraftHistory";
@@ -18,7 +18,7 @@ function initial(definitionId = "definition-a"): WorkflowDraft {
     layout: [], activityPresentation: [], validationErrors: [] };
 }
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, clipboard: ReturnType<typeof useActivityClipboard>;
-let root: Root, container: HTMLDivElement, editCount: number;
+let root: Root, container: HTMLDivElement, editCount: number, status: string;
 let disable: (value: boolean) => void;
 function Probe() {
   const [disabled, setDisabled] = useState(false); disable = setDisabled;
@@ -26,13 +26,13 @@ function Probe() {
   history = useDraftHistory({ draft: doc.state.draft, restoreDraft: snapshot => doc.editDraft(() => snapshot) });
   clipboard = useActivityClipboard({ resourceKind: "workflow", draft: doc.state.draft, frames: doc.state.frames, catalogByVersion: catalog,
     selectedNodeIds: ["producer", "consumer"], disabled, definitionId: doc.state.draft?.definitionId ?? "",
-    editDraft: recipe => { editCount++; doc.editDraft(recipe); }, select: doc.select, setStatus: () => {} });
+    editDraft: recipe => { editCount++; doc.editDraft(recipe); }, select: doc.select, setStatus: value => { status = value; } });
   return null;
 }
 function nodes() { return doc.state.draft!.state.rootActivity!.structure!.payload.activities as ActivityNode[]; }
 function load(draft: WorkflowDraft) { flushSync(() => { history.resetHistory(draft); doc.loadDraft(draft); }); }
 beforeEach(() => {
-  editCount = 0; container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+  editCount = 0; status = ""; sessionStorage.clear(); container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load(initial());
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
@@ -63,6 +63,43 @@ describe("actual resource-local clipboard and history", () => {
     expect(clipboard.paste()).toBe(false);
     expect(doc.state.draft).toEqual(before);
     expect(editCount).toBe(0);
+    expect(status).toBe("The copied activities came from another workflow, so they can't be pasted here yet.");
+  });
+
+  it("explains a refused paste after the editor reopens on another workflow", () => {
+    expect(clipboard.copy()).toBe(true);
+    // Studio keys the editor by definition ID, so opening another workflow mounts a fresh editor.
+    flushSync(() => root.unmount()); root = createRoot(container); flushSync(() => root.render(<Probe />));
+    load(initial("definition-c"));
+    const before = structuredClone(doc.state.draft);
+    expect(clipboard.paste()).toBe(false);
+    expect(doc.state.draft).toEqual(before);
+    expect(editCount).toBe(0);
+    expect(status).toBe("The copied activities came from another workflow, so they can't be pasted here yet.");
+  });
+
+  it("explains a refused paste after a full page load in the same tab", async () => {
+    expect(clipboard.copy()).toBe(true);
+    vi.resetModules();
+    const reloaded = await import("../workflow-editor/useActivityClipboard");
+    let pasteAfterReload: () => boolean = () => true;
+    function ReloadedProbe() {
+      const reloadedDoc = useWorkflowDocument(); doc = reloadedDoc;
+      pasteAfterReload = reloaded.useActivityClipboard({ resourceKind: "workflow", draft: reloadedDoc.state.draft, frames: reloadedDoc.state.frames,
+        catalogByVersion: catalog, selectedNodeIds: [], disabled: false, definitionId: reloadedDoc.state.draft?.definitionId ?? "",
+        editDraft: recipe => { editCount++; reloadedDoc.editDraft(recipe); }, select: reloadedDoc.select, setStatus: value => { status = value; } }).paste;
+      return null;
+    }
+    flushSync(() => root.unmount()); root = createRoot(container); flushSync(() => root.render(<ReloadedProbe />));
+    flushSync(() => doc.loadDraft(initial("definition-d")));
+    expect(pasteAfterReload()).toBe(false);
+    expect(editCount).toBe(0);
+    expect(status).toBe("The copied activities came from another workflow, so they can't be pasted here yet.");
+  });
+
+  it("says nothing on paste when nothing was copied", () => {
+    expect(clipboard.paste()).toBe(false);
+    expect(status).toBe("");
   });
 
   it("preserves but cannot apply the clipboard while the document is read-only", () => {
