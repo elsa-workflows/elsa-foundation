@@ -83,9 +83,8 @@ public sealed class FlowchartExecutionEngine(
         // Flowchart ends — it completes itself with the Break outcome so the nearest enclosing loop
         // (For/ForEach/While/Do) ends early, mirroring the linear/branch composites (Sequence/If/Switch).
         // The breaking path is marked completed and every other in-flight path (e.g. sibling branches of a
-        // parallel fork that has not yet joined) is canceled so no further nodes are scheduled; the late
-        // completions of those canceled children are ignored because the Flowchart's activity execution is
-        // no longer Running by then. Matched by outcome name so the Flowchart takes no dependency on the
+        // parallel fork that has not yet joined) is canceled so no further nodes are scheduled, and their still
+        // running activities are cancelled in the same commit. Matched by outcome name so the Flowchart takes no dependency on the
         // (separate) Break activity module.
         if (completionContext.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
@@ -96,6 +95,9 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = CancelPendingPathsForBreak(state, path, completionContext.CompletedChildExecutableNodeId);
+            // The other paths' running activities end with the Flowchart: without this they kept running and committed
+            // their writes after the Flowchart had completed (spec 266 research R-3).
+            context.RequestLiveChildrenSubtreeCancellation("flowchart-break");
             return ValueTask.FromResult(persister.StageState(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break), state));
         }
 

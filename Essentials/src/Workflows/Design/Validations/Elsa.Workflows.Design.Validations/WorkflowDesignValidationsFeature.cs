@@ -67,6 +67,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<ActivityTreeWalker>();
         services.AddScoped<CatalogVersionResolver>();
         services.TryAddScoped<IActivityDataSelectionAnalyzer, ActivityDataSelectionAnalyzer>();
+        services.TryAddSingleton<IUnorderedVariableWriteAnalyzer, UnorderedVariableWriteAnalyzer>();
         DataSelectionAnalyzerCompositionCheck.Register(services);
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();

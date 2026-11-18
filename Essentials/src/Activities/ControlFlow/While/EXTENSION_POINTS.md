@@ -15,3 +15,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   publishing so the runtime resolves the body without re-reading the design document. `While` is a condition-only loop with no per-iteration item or index and
   is not a container scope, so it declares no container-scoped variables (`SupportsScopedVariables`
   defaults to `false`). Its `AssessChildResult` keeps availability `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: the loop schedules every pass of its body itself, so an earlier pass is never behind a later one.
+- `LoopStructureHandler.RelateChildren` states that passes of the body never overlap, and the loop completes after its body (spec 266).

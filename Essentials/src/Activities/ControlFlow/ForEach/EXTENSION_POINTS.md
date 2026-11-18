@@ -31,3 +31,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `{ referenceKey: "currentItem", declaringScopeId: <ForEach node id> }` resolves to the current pass's
   item (the variable name is the reference key). This consumes the `#259` loop-scope primitive that the
   merged wiring (#296) connected into the execution path.
+- `LoopStructureHandler.RelateChildren` states that passes of the body never overlap, and the loop completes after its body (spec 266).

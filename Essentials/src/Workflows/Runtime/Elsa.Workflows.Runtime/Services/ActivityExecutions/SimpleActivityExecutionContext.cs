@@ -149,6 +149,9 @@ public sealed class SimpleActivityExecutionContext(
             metadata));
     }
 
+    public void RequestLiveChildrenSubtreeCancellation(string reason, IReadOnlyDictionary<string, string>? metadata = null) =>
+        _childSubtreeCancellationRequests.Add(RuntimeChildSubtreeCancellationRequest.ForEveryLiveChild(reason, metadata));
+
     public IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests() =>
         _childSubtreeCancellationRequests.ToArray();
 

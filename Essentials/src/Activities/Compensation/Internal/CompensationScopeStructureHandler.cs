@@ -87,6 +87,34 @@ internal sealed class CompensationScopeStructureHandler : IActivityStructureHand
             : ActivityChildResultAvailability.Unknown)
         { EarlierProducerRunCanReachConsumer = false };
 
+    // Forward steps run one at a time in order. Handlers run only on recovery, after the forward steps have stopped,
+    // one at a time in reverse step order. That is one total order: step 0..n-1, then handler n-1..0.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+    {
+        var steps = CompensationScopeAuthoredStructureReader.Read(activity).Steps.ToArray();
+        var first = Position(steps, firstChildNodeId);
+        var second = Position(steps, secondChildNodeId);
+        if (first < 0 || second < 0)
+            return ActivityChildTimeRelation.Unspecified;
+        return first <= second ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
+    }
+
+    // The scope cancels its live children before it completes (CompensationScope requests their subtree cancellation).
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
+    private static int Position(IReadOnlyList<CompensationScopeAuthoredStep> steps, string childNodeId)
+    {
+        for (var index = 0; index < steps.Count; index++)
+        {
+            if (StringComparer.Ordinal.Equals(steps[index].Activity?.NodeId, childNodeId))
+                return index;
+            if (StringComparer.Ordinal.Equals(steps[index].Compensation?.NodeId, childNodeId))
+                return 2 * steps.Count - 1 - index;
+        }
+
+        return -1;
+    }
+
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authored = CompensationScopeAuthoredStructureReader.Read(activity);

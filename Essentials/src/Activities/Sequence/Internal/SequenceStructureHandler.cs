@@ -51,6 +51,19 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         { EarlierProducerRunCanReachConsumer = false };
     }
 
+    // A Sequence runs its children one at a time, in authored order, each once per run.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+    {
+        var children = ReadAuthoredStructure(activity).Activities.ToArray();
+        var first = Array.FindIndex(children, child => StringComparer.Ordinal.Equals(child.NodeId, firstChildNodeId));
+        var second = Array.FindIndex(children, child => StringComparer.Ordinal.Equals(child.NodeId, secondChildNodeId));
+        if (first < 0 || second < 0)
+            return ActivityChildTimeRelation.Unspecified;
+        return first <= second ? ActivityChildTimeRelation.FirstBeforeSecond : ActivityChildTimeRelation.SecondBeforeFirst;
+    }
+
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);

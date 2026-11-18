@@ -29,3 +29,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   runtime validates lexical ownership and iteration identity, then activates the request as the innermost
   durable frame before input materialization. Iteration frames are read-only; graph-visible Set intrinsics
   may mutate enclosing declared variable frames, but cannot target derived iteration values.
+- `LoopStructureHandler.RelateChildren` states that passes of the body never overlap, and the loop completes after its body (spec 266).

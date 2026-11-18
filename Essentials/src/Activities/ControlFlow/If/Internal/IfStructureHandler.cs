@@ -41,6 +41,14 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
 
+    // If runs exactly one branch, once per run.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId)
+            ? ActivityChildTimeRelation.FirstBeforeSecond
+            : ActivityChildTimeRelation.MutuallyExclusive;
+
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var then = SingleBranch(childProjections, IfActivity.ThenSlotName);

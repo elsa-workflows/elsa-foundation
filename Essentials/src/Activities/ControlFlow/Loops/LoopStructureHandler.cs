@@ -32,6 +32,12 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
 
+    // The body is the only child. Elsa 4 loops run their passes one after another, so passes never overlap.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        ActivityChildTimeRelation.FirstBeforeSecond;
+
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var slot = childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, loop.BodySlotName));

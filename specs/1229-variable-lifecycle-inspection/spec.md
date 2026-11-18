@@ -40,8 +40,10 @@ sequence, each activity execution's commit-sequence range, the alteration write 
 activity value evidence (*Data* in the data model). This spec adds the scheduling causes of an invocation (Q3), a
 per-activity lost-update count and the store columns it queries by (Q2, Q7), and the read side.
 
-**Out of scope.** Studio presentation (pages, diagnostics badges, diff views) belongs in elsa-studio and is specified
-there against the API this spec defines. The physical storage of the write history is spec 1221's choice. Write-time
+**Studio.** The presentation of these views (instance diagnostics badge, write history, journal, comparison) is part of
+this spec and is built in this repository's Studio under `Studio/` (FR-017, Phase 9). Spec 1221's own Studio items
+(lost-update records on an activity, Accept recorded completion, input refreshes, node settings) are #4735; this spec's
+screens build on that work. The physical storage of the write history is spec 1221's choice. Write-time
 behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy is not part of ADR 0092.
 
 ## Terms
@@ -120,7 +122,7 @@ behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy
   row it would not write anyway. Concurrent overwrites are derived, so
   their count comes with the filtered history, not with the details. An incident is not used: an incident in a commit
   ends the coalescing session and would reopen the inline gap. Studio shows the count and links to the history
-  (elsa-studio).
+  (Studio, FR-017).
 - **Q8 — Who may read it?**
   **Decision:** the existing permission for activity execution inspection reads the history, journal, trace and
   comparison metadata. Values follow the existing sensitive-value rules and the payload permission; nothing new is
@@ -336,6 +338,10 @@ state.
   computed when read.
 - **FR-016**: The store MUST be able to filter an instance's activity executions by their commit-sequence range and
   sum their lost-update counts without reading the rows' documents (store columns and an index, every provider).
+- **FR-017**: Studio MUST present these reads in `Studio/`: the instance's lost-update count as a diagnostics badge
+  that opens the filtered write history, the write history with its filters and concurrent-overwrite marks, the
+  commit-ordered journal, and the comparison of two instances. Values appear only through the value states and the
+  payload read of FR-006.
 
 ### Key Entities
 
@@ -371,7 +377,7 @@ state.
   lost-update count, the store columns and the read side.
 - Merging activity rows by commit sequence, using each row's commit-sequence range, is fast enough per page; a
   projection follows only on measurement (Q2).
-- Studio presentation is specified in elsa-studio against this API.
+- Studio presentation is built in `Studio/` against this API (FR-017), next to #4735's activity-level items.
 - The write-history physical storage is spec 1221's (records on the writer's activity execution state); this spec
   depends on it only through the query in Q2.
 - Values depend on spec 1221's value capture (FR-025); until it captures values, they show `omitted`.

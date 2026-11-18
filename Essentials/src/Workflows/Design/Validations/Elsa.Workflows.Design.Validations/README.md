@@ -23,8 +23,9 @@ also compose `EventsFeature`; the shared analyzer requires the canonical inline 
 
 The feature installs one scoped `IActivityDataSelectionAnalyzer` with `TryAddScoped`. Discovery,
 draft diagnostics and headless publication/test-run admission consume the same authority over the
-actual canonical candidate. `ValueFlowValidator` retains separate concurrent-write policy while
-structure handlers own entry/order/join/backedge facts. Providers can contribute their exact closed
+actual canonical candidate. Write order is a separate service: the singleton `IUnorderedVariableWriteAnalyzer`
+(spec 266) reads only the structures' `RelateChildren` and `CompletesAfterItsChildren` declarations, and
+`ValueFlowValidator` reports its findings as warnings that never block promotion. Providers can contribute their exact closed
 body through `IActivityDataSelectionDocumentProjector`; Graph Design ships that cross-domain projection.
 
 Catalog-backed target analysis publishes `InputConstraintsCollecting` inline (Sequential).
@@ -86,7 +87,7 @@ persisted.
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
-| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
+| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity; ConcurrentWrite and DuplicateCaptureTarget are warnings, spec 266) |
 | `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
 | `ScriptOutcomeValidator` | Catalog-backed root + nested (recurses); nodes whose `elsa.outcomes` facet names a `scriptInput` with a literal script | `{NodeId}/inputs/{scriptInput}` · `Scripts/UnknownOutcome` (`VF-AUTH-010`, error), `Scripts/ReturnedOutcomeName` (`VF-AUTH-012`, warning), `Scripts/ReservedName` (error) (see below) |
 

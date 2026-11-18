@@ -108,6 +108,11 @@ to review only what a spec adds to the decisions: a new ADR or an ADR amendment,
 reviewers. A spec that applies an ADR point still open keeps waiting for that point; only the spec review is dropped.
 The rule covers specs, never ADRs, and the board records its date and the coordinator who set it.
 
+**Studio work stays in the initiative.** Studio lives in this repository under `Studio/`. A spec whose behaviour an
+operator or author sees in Studio specifies that presentation itself, as requirements and tasks against `Studio/`, or
+names the issue in this repository, a sub-issue of the initiative, that carries it. A spec never defers Studio work to
+another repository.
+
 **Alternatives.** Every ADR records, in an **Alternatives considered** section, the alternatives its author weighed
 and why each was not chosen, including doing nothing. The section exposes the angles the author used, so a reviewer
 can judge whether every real option was seen — or whether none of them addresses the actual problem. A spec does not
