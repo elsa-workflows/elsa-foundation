@@ -234,10 +234,10 @@ first, with a comparison of two stored digests only on a mismatch, avoids both t
   was overwritten and the one that wrote on the stale base, and it keeps the overwritten value so that it can be
   restored.
 - **Opt-in: `Fault`.** A node or an activity type may opt in to `Fault` for strict read-modify-write: an activity type
-  may declare it, and an engineer may set it per node through the design API. The workflow designer does not offer it
-  to authors: it is an advanced runtime concept, explained to authors when they need it. Only these nodes use the exact check (decision 5). On a
-  lost update the step faults with a diagnostic that names the variable, the base version, the current version and
-  the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict records are
+  may declare it, and an engineer may set it per node through the design API. The workflow designer does not offer it to
+  authors: it is an advanced runtime concept, documented for engineers. Only these nodes use the exact check (decision
+  5). On a lost update the step faults with a diagnostic that names the variable, the base version, the current version
+  and the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict records are
   retained under decisions 7 and 13.
 - No other modes in this baseline. A merge policy is not part of this decision.
 
@@ -348,7 +348,8 @@ outdated values. A refresh follows this contract:
   its own sequence number, and idempotency keys derive from the evaluation. Input evaluation may call registered
   functions with external effects (D-5), so those effects repeat, deliberately: idempotency belongs to the designer
   (D-2).
-- **Opt-out.** A node can turn refresh off, through the design API like the `Fault` setting (decision 6). Its stale base is then handled at commit, as any other (decisions 5 and 6).
+- **Opt-out.** A node can turn refresh off, through the design API like the `Fault` setting (decision 6). Its stale
+  base is then handled at commit, as any other (decisions 5 and 6).
 - **Recording.** The refreshed snapshot supersedes the first and links to it with the reason, for example
   "`count` v3 → v4". Both stay in the history, so inspection never shows values the body did not see, and the
   snapshot the body receives is immutable from then on (ADR 0045 §3). This follows the precedent of ADR 0045's
@@ -450,13 +451,13 @@ A merge policy is not part of this decision.
   mode. This lifecycle holds for bindings and captures independently
   of which direct-access capabilities are enabled. Background-session capability requirements stay with ADR 0093.
 - **Spec 266 (S-5).** Its publish-time warning covers all unordered writes, captures included, and offers the author
-  structural remedies only (decision 6). At run time, D-8's last-commit-wins holds for every write; a stale base adds the
-  lost-update warning.
+  structural remedies only (decision 6). At run time, D-8's last-commit-wins holds for every write; a stale base adds
+  the lost-update warning.
 - **The two-branch `count + 1`.** With inline steps gap-free (decision 10), two parallel inline branches give 2. Where
   two unordered branches still read a stale base, for example background steps or a suspension between read and
   write, each reading `count` and writing `count + 1` gives 1 with a lost-update warning. This is documented
-  behaviour: the documentation says how to sequence the branches or aggregate their results, and when to opt in to
-  `Fault`.
+  behaviour: the documentation says how to sequence the branches or aggregate their results, and tells engineers
+  when to opt in to `Fault`.
 - **Merge and Reduce** still overwrite like Set. Giving them real semantics is separate work.
 - **Cost.** One digest per applied write; a version per variable read, plus the stored digest for nodes that opt in
   to `Fault` (stored values, no hashing); one digest comparison on a version mismatch under `Fault` only; the write
@@ -511,9 +512,9 @@ A merge policy is not part of this decision.
 
 ## Alternatives considered
 
-- **Show the per-node `Fault` setting and the refresh opt-out as designer controls.** Rejected. Every author would see
-  an advanced runtime concept on every node, for a case few workflows need, and the warning would send authors to a
-  setting whose meaning they cannot judge. Engineers who need it set it through the design API.
+**Show the per-node `Fault` setting and the refresh opt-out as designer controls.** Every author would see an
+advanced runtime concept on every node, for a case few workflows need, and the warning would send authors to a setting
+whose meaning they cannot judge. Rejected: engineers who need it set it through the design API.
 
 **Background steps get no variable access (the starting point of the A-2 analysis).** Removes session reads from
 background steps, but leaves the input-plus-capture lost update, inline and in the background, and the retry problem.

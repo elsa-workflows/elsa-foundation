@@ -118,8 +118,8 @@ the publish-time warning itself (spec 266, S-5); FR-012a only says what it must 
   (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
   showing the lost-update warning, accepted completions, background input refreshes and the `variableWrites`
   diagnostics setting (FR-011, #4735). The node settings (FR-012, FR-019) are not offered to workflow authors in the
-  designer: they stay a design-API capability for engineers (ADR 0092 decision 6). In this spec the warning *is* its write-history entry (FR-024);
-  the API that exposes that history is S-6 (spec 1229).
+  designer: they stay a design-API capability for engineers (ADR 0092 decision 6). In this spec the warning *is* its
+  write-history entry (FR-024); the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -421,8 +421,9 @@ expired values from `null`.
 - **FR-018**: Before a background step is admitted, the coordinator MUST compare its input read set with current
   versions and, for any variable that changed since Start, refresh the inputs as a new **evaluation** of the same
   invocation (same `InvocationId`, its own sequence number, idempotency keys derived from the evaluation).
-- **FR-019**: A node MUST be able to turn refresh off; its stale base is then handled at commit under the commit rule
-  and the node's mode (a warning by default, a fault under `Fault`).
+- **FR-019**: A node MUST be able to turn refresh off, set per node by an engineer through the design API like FR-012
+  (Studio does not offer it to workflow authors); its stale base is then handled at commit under the commit rule and
+  the node's mode (a warning by default, a fault under `Fault`).
 - **FR-020**: A refresh MUST supersede the first snapshot, link to it with the reason, keep both in the history, and the
   snapshot the worker receives MUST be immutable thereafter. Refresh MUST cover only the Start-to-admission gap.
 
