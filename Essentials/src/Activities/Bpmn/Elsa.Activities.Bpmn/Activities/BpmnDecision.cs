@@ -17,6 +17,8 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// matches no conditional flow — gateway routing then falls through to the default flow (or faults
 /// deterministically when none is declared), so a misconfigured decision never routes silently.
 /// </remarks>
+// ADR 0093 (spec 1230): meets C1-C10; C7/C8: a constant transition from its input, no external effect.
+[BackgroundExecutionSafe]
 [RefusesSecretBinding(nameof(Outcome), SecretBindingRefusalReason.EchoedToOutput)]
 [ActivityPalette(ContainerModes = ["bpmn"], Description = "BPMN Decision is intended for a gateway in a BPMN Process.")]
 [Activity(Icon = "GitBranch")]

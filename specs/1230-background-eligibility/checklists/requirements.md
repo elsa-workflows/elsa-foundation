@@ -34,5 +34,5 @@
 - This is an engine-internal spec applying ADR 0093. Its readers are architects and activity authors, so it names
   the attribute, the marker interface and the diagnostic code the ADR names; that is the contract, not an
   implementation choice.
-- Open choices are recorded as Q1–Q7 with recommended answers, not as clarification markers, per the initiative's
+- Open choices are recorded as Q1–Q10 with recommended answers, not as clarification markers, per the initiative's
   spec format.
