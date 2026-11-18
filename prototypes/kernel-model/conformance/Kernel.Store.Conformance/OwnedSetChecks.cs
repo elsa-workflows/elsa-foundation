@@ -18,6 +18,7 @@ internal static class OwnedSetChecks
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
+        new("owned sets: a retake at the held epoch bumps it and keeps the position; a released, moved or other node's row is refused and unchanged", Level.Required, Retake, Partitions),
     ];
 
     private static void Require(Context c)
@@ -178,6 +179,9 @@ internal static class OwnedSetChecks
         Context.Equal(0L, (await c.Row(4, "h4"))!.Seen, "handover seen mark of a message to partition 4, outside the flush");
         Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [], seen: ["m4"])).AsTask(), "a flush over 1 and 6 marking a message of 4"),
             "outcome of a flush marking a message outside its fenced set");
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [Make.Turn("1/x", Make.Row("1/x", 3), expected: 2, consumed: ["m4"])])).AsTask(), "a turn in 1 consuming a message of 4"),
+            "outcome of a flush consuming a message outside its fenced set");
+        Context.Equal(2L, (await c.S.LoadAsync(["1/x"])).Single().Revision, "revision of 1/x after the refused consume");
         Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 0)], [], seen: ["n1"])).AsTask(), "a flush whose higher fence alone is stale"),
             "outcome of a flush whose higher fence alone is stale");
         Context.Equal(0L, (await c.Row(1, "n1"))!.Seen, "seen mark written by the refused flush");
@@ -195,6 +199,34 @@ internal static class OwnedSetChecks
         await c.Lands(() => c.S.CommitAsync(Flush(brief.Taken, [])).AsTask(), "a flush over 3 and 5 under a long lease");
         await Task.Delay(PastShort);
         Context.Equal("", string.Join(" ", Ids(await c.S.TakeAsync([3, 5], "b", Context.Long))), "partitions b took after a's flush renewed their leases");
+    }
+
+    private static async Task Retake(Context c)
+    {
+        Require(c);
+        await c.S.AddAsync(Make.M("t1", 1));
+        var a = await c.S.TakeAsync([1, 2, 3, 4], "a", Context.Long);
+        var at = a.Taken.ToDictionary(f => f.Partition);
+        await c.Lands(() => c.S.CommitAsync(Flush([at[1]], [Make.New("1/i")], trial: ["t1"])).AsTask(), "a flush in 1 putting t1 on trial");
+
+        // Held at that epoch: the epoch moves on, the position stays, nothing is counted as a death.
+        var again = await c.S.RetakeAsync(1, "a", at[1].Epoch, Context.Long);
+        Context.Equal(new PartitionFence(1, at[1].Epoch + 1, 1), again?.For(1), "the retake of 1");
+        Context.Equal(0, (await c.Row(1, "t1"))!.Attempts, "attempts of t1 after the retake");
+        Context.Equal("not landed", await c.Refused(() => c.Commit(1, at[1].Epoch, 1, [Make.New("1/j")])), "a commit in 1 at the epoch before the retake");
+
+        // Refused, and the row is as it was: retaken at another epoch, released, taken by another node, asked by another node.
+        Context.That(await c.S.RetakeAsync(1, "a", at[1].Epoch, Context.Long) is null, "a second retake of 1 at the old epoch was granted");
+        await c.Lands(() => c.Commit(again!, 1, [Make.New("1/j")]), "a commit in 1 at the retaken epoch");
+        await c.S.ReleaseAsync([at[2]]);
+        Context.That(await c.S.RetakeAsync(2, "a", at[2].Epoch, Context.Long) is null, "a retake of the released 2 was granted");
+        Context.Equal(at[2].Epoch + 1, (await c.Take(2, "b")).Epoch, "epoch of 2 at b's take after the refused retake");
+        await c.S.ReleaseAsync([at[3]]);
+        var b = await c.Take(3, "b");
+        Context.That(await c.S.RetakeAsync(3, "a", at[3].Epoch, Context.Long) is null, "a retake of 3, taken by b, was granted");
+        await c.Lands(() => c.Commit(b, 3, [Make.New("3/i")]), "b's commit in 3 after a's refused retake");
+        Context.That(await c.S.RetakeAsync(4, "b", at[4].Epoch, Context.Long) is null, "b's retake of a's partition 4 was granted");
+        await c.Lands(() => c.S.CommitAsync(Flush([at[4]], [Make.New("4/i")])).AsTask(), "a's flush in 4 after b's refused retake");
     }
 
     private static async Task LockOrder(Context c)
