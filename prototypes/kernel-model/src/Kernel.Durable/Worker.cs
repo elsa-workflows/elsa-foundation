@@ -436,11 +436,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- ownership ---------------------------------------------------------------------------------------------
 
-    internal async Task TakeAsync(CancellationToken cancellationToken = default)
+    internal Task TakeAsync(CancellationToken cancellationToken = default) => TakeAsync(Assigned, cancellationToken);
+
+    /// <summary>
+    /// Take these partitions, keeping what the take gets: the store decides each row on its own, so a partition that has
+    /// moved is left out and never fails the rest. One partition takes as today.
+    /// </summary>
+    private async Task TakeAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken)
     {
         if (_taking) return;
         _taking = true;
-        if (Assigned.Count > 1 && !_store.OwnedSetsAvailable)
+        if (partitions.Count > 1 && !_store.OwnedSetsAvailable)
         {
             _taking = false;
             throw new NotSupportedException("This store fences one partition per commit; a worker of several partitions needs owned sets.");
@@ -449,8 +455,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         OwnedLease? lease = null;
         try
         {
-            if (Assigned.Count > 1) lease = await _store.TakeAsync(Assigned, Node, _options.Lease, cancellationToken);
-            else if (await _store.TakeAsync(Partition, Node, _options.Lease, cancellationToken) is { } one) lease = new([one.For(Partition)], one.Now);
+            if (partitions.Count > 1) lease = await _store.TakeAsync(partitions, Node, _options.Lease, cancellationToken);
+            else if (await _store.TakeAsync(partitions[0], Node, _options.Lease, cancellationToken) is { } one) lease = new([one.For(partitions[0])], one.Now);
         }
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         finally { _taking = false; }
@@ -1506,10 +1512,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 u.Sent.Where(m => !u.Volatile.Contains(m.InboxKey)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
                 u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)).ToList();
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
-        // One partition held: today's one-partition batch. Several: one owned batch over the partitions it touches.
-        var batch = _held.Count == 1 && _held.First() is var (only, held)
-            ? new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried)
-            : CommitBatch.Owned(Touched(units, marks.Concat(trial), handOver, beat), _options.Lease, handOver, turns, seen, tried);
+        // A store without owned sets gets only today's positional batch, one partition per batch (a worker of several
+        // partitions cannot take on it). With owned sets, one partition held is that same batch, and several are one
+        // owned batch over the partitions it touches.
+        CommitBatch batch;
+        if (!_store.OwnedSetsAvailable || _held.Count == 1)
+        {
+            if (_held.Count != 1) throw new InvalidOperationException("A store without owned sets serves one partition per worker.");
+            var (only, held) = _held.First();
+            batch = new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried);
+        }
+        else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial), handOver, beat), _options.Lease, handOver, turns, seen, tried);
         foreach (var unit in units)
             if (unit.Window is { } window)
                 batch = batch with { Window = batch.Window?.Intersect(window) ?? window };
@@ -1564,7 +1577,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             catch (Exception)
             {
-                if (generation == _generation) Fail(units);     // unknown outcome
+                if (generation != _generation) return Outcome.Lost;
+                // Unknown outcome. Over several partitions, take back each one still mine or free, at a new epoch.
+                var retake = _held.Count > 1 && !Has(Flaw.NoResetAfterFailedCommit) ? _held.Keys.ToList() : null;
+                Fail(units);
+                if (retake is not null) await TakeAsync(retake, cancellationToken);
                 return Outcome.Lost;
             }
             if (generation != _generation) return Outcome.Lost; // reset while the commit was in flight: its result is nobody's
@@ -1637,8 +1654,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// The keeping reset, after a refused fence over a set (coordinator decisions on slice 0): the refusal does not say
     /// which row was stale, so memory goes as in any reset, and one read renews each partition still held at its epoch
     /// and gives its position. Those stay in the set and are polled again with Seen &lt;= epoch; the rest are dropped. No
-    /// take: a take would bump the kept epochs, and is refused for a partition another owner holds. An unknown outcome
-    /// still resets by a take (<see cref="Fail"/>), so the position check is never the only guard.
+    /// take: a take would bump the kept epochs. An unknown outcome resets by a take instead (each partition still mine
+    /// or free, at a new epoch), so the position check is never the only guard.
     /// </summary>
     private async Task KeepAsync(CancellationToken cancellationToken)
     {
@@ -1652,13 +1669,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var generation = _generation;
         var started = _options.Monotonic();
-        OwnedLease kept;
-        try { kept = await _store.RenewAsync(held.Values, _options.Lease, cancellationToken); }
+        RenewedSet kept;
+        try { kept = await _store.RenewAsync(held.Values, Node, _options.Lease, cancellationToken); }
         catch (Exception) { return; }   // nothing kept: the host takes again
         if (generation != _generation || Owns) return;
-        foreach (var fence in kept.Taken)
-            if (held.TryGetValue(fence.Partition, out var mine) && mine.Epoch == fence.Epoch)
-                _held[fence.Partition] = new(fence.Epoch, fence.Position) { Renewed = kept.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds, Again = true };
+        // A release clears the owner and keeps the epoch: a row is kept only if both are still mine.
+        foreach (var row in kept.Rows)
+            if (row.Owner == Node && held.TryGetValue(row.Partition, out var mine) && mine.Epoch == row.Epoch)
+                _held[row.Partition] = new(row.Epoch, row.Position) { Renewed = kept.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds, Again = true };
         if (!Owns) return;
         Observe(kept.Now);
         Renewed();

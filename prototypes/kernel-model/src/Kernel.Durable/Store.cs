@@ -82,6 +82,12 @@ public sealed record PartitionFence(int Partition, long Epoch, long Position);
 /// <summary>A take of a set: what it got, in ascending partition id, each at its own epoch and position.</summary>
 public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
+/// <summary>One fence row as a keeping reset reads it: its owner (null once released), epoch and position.</summary>
+public sealed record FenceRead(int Partition, string? Owner, long Epoch, long Position);
+
+/// <summary>What <see cref="IKernelStore.RenewAsync"/> read: one row per partition asked for, at database time <c>Now</c>.</summary>
+public sealed record RenewedSet(IReadOnlyList<FenceRead> Rows, long Now);
+
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
 /// <summary>
@@ -232,21 +238,22 @@ public interface IKernelStore : IMembership
     }
 
     /// <summary>
-    /// The read of a keeping reset, after a refused fence (which does not say which row was stale): renew, as a beat
-    /// does, each of these rows that is still held at its fence's epoch, and return those rows with the store's
-    /// position. A row that has moved (another epoch, or released) is left out. The default beats one row at a time.
+    /// The read of a keeping reset, after a refused fence (which does not say which row was stale): one read over the
+    /// set that returns each row's owner, epoch and position, and renews, as a beat does, each row that
+    /// <paramref name="node"/> still holds at its fence's epoch. A release clears the owner and keeps the epoch, so the
+    /// caller keeps a row only if both match. The default beats one row at a time and reports a row whose beat does not
+    /// land as of no owner.
     /// </summary>
-    async ValueTask<OwnedLease> RenewAsync(IReadOnlyCollection<PartitionFence> held, TimeSpan lease, CancellationToken cancellationToken = default)
+    async ValueTask<RenewedSet> RenewAsync(IReadOnlyCollection<PartitionFence> held, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        var (kept, now) = (new List<PartitionFence>(), long.MaxValue);
+        var (rows, now) = (new List<FenceRead>(), long.MaxValue);
         foreach (var fence in held.OrderBy(f => f.Partition))
         {
             var beat = await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [], [], []), cancellationToken);
-            if (!beat.Landed) continue;
-            kept.Add(fence);
-            now = Math.Min(now, beat.Now);
+            rows.Add(beat.Landed ? new(fence.Partition, node, fence.Epoch, fence.Position) : new(fence.Partition, null, 0, 0));
+            if (beat.Landed) now = Math.Min(now, beat.Now);
         }
-        return new(kept, kept.Count > 0 ? now : 0);
+        return new(rows, now == long.MaxValue ? 0 : now);
     }
 
     /// <summary>One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most <paramref name="limit"/>.</summary>

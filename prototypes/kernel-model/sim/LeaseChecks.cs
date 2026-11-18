@@ -745,8 +745,9 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
-    public bool DelayNext, DelayTake;
+    public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets;
+    public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -756,8 +757,10 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         CommitCalls++;
+        Batches.Add(batch);
         var result = await inner.CommitAsync(batch, cancellationToken);
         if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await Reply.Task; }
+        if (LoseNext) { LoseNext = false; throw new IOException("the commit executed and its answer was lost"); }
         return result;
     }
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken ct = default)

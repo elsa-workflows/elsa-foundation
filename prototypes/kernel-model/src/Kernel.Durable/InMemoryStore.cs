@@ -254,19 +254,19 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    /// <summary>The keeping reset's read: one transaction over the set; each row still held at its fence's epoch is renewed and returned.</summary>
-    public ValueTask<OwnedLease> RenewAsync(IReadOnlyCollection<PartitionFence> held, TimeSpan lease, CancellationToken cancellationToken = default)
+    /// <summary>The keeping reset's read: one transaction over the set; a row the node still holds at its fence's epoch is renewed.</summary>
+    public ValueTask<RenewedSet> RenewAsync(IReadOnlyCollection<PartitionFence> held, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            var (now, kept) = (clock(), new List<PartitionFence>());
+            var (now, rows) = (clock(), new List<FenceRead>());
             foreach (var fence in held.OrderBy(f => f.Partition))
-                if (Partitions[fence.Partition] is { Owner: not null } row && row.Epoch == fence.Epoch)
-                {
-                    row.LeaseUntil = now + (long)lease.TotalMilliseconds;
-                    kept.Add(new(fence.Partition, row.Epoch, row.Position));
-                }
-            return new(new OwnedLease(kept, now));
+            {
+                var row = Partitions[fence.Partition];
+                if (row.Owner == node && row.Epoch == fence.Epoch) row.LeaseUntil = now + (long)lease.TotalMilliseconds;
+                rows.Add(new(fence.Partition, row.Owner, row.Epoch, row.Position));
+            }
+            return new(new RenewedSet(rows, now));
         }
     }
 
