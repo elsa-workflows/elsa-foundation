@@ -37,13 +37,15 @@ From `prototypes/kernel-model`:
 dotnet restore experiments/Review6.Blockers --locked-mode
 dotnet build experiments/Review6.Blockers -c Release --no-restore
 BIN=experiments/Review6.Blockers/bin/Release/net10.0/Kernel.Review6.Blockers.dll
-dotnet $BIN --list                                      # every case, rule set and expected outcome
-dotnet $BIN --case nt1-witness --rules repaired         # one run: exit 0 when every assertion holds, 1 otherwise
+dotnet $BIN --list                                      # every case, rule set and expected outcome (the failed assertion ids)
+dotnet $BIN --case nt1-witness --rules repaired         # one listed run: exit 0 when every assertion holds, 1 otherwise, 2 for an unlisted pair
 dotnet $BIN --all                                       # every run, then a summary; exit 0 only if all match the expected matrix
 experiments/Review6.Blockers/run.sh                     # every run one by one, then --all; exits with the matrix result (2 if setup fails)
 ```
 
-`run.sh` reads its individual runs from `--list`, so they and `--all` run the same rows.
+`run.sh` reads its individual runs from `--list`, so they and `--all` run the same rows. Each matrix row states the
+ids of the assertions it expects to fail, and `--all` compares each run's actual set of failed ids with that set, so an
+unrelated failure is a mismatch. A `--case`/`--rules` pair that the matrix does not list is refused with a usage error.
 [results.txt](results.txt) holds the output of `--all` and the commit it ran at. The whole matrix takes about four
 seconds.
 
@@ -115,30 +117,38 @@ Before each commit of P the harness computes:
 > state + `TerminalGrowth(state)` + registries at the marker's per-entry sizes + 16,384 ≤ 16,457,728
 
 - **State** is the UTF-8 byte count of the row's `State`.
-- **`TerminalGrowth(state)`** is counted under `repaired` only.
+- **`TerminalGrowth(state)`** is counted under `repaired`, at 7 bytes per open inbox, and under `growth-undercount`, at
+  6. `reviewed` and `negative` count none.
 - **The registries** count 384 bytes per child and 12,416 per job. A terminate's commit counts its list, which is the
   previous row's registries.
 - **The header** is 16,384 bytes. The row's other fields measure 366 bytes, inside it.
 
 A commit above the envelope is refused as a definite error, and the turn fails and parks through the real `Park`, as an
 over-envelope turn does. The `Fault` text counts against `ParkRecord`'s own reserve, so the Park commit is measured
-without it.
+without it. The harness measures and logs the Park row's envelope and does not gate the Park commit on it: that the
+Park write always fits is a proposed rule, qualified at K3. In every run the logged Park envelope fits.
 
 ### The assertions
 
-- **Room for the terminate.** Every state P committed leaves room for its own terminate: the state, its real terminal
+Each assertion has an id, shown in brackets in the output.
+
+- **Room for the terminate** (`room-for-terminate`). Every state P committed leaves room for its own terminate: the state, its real terminal
   growth, the one child and the header stay within 16,457,728. The growth is measured by running the real
   `TerminateMetadata` on a copy of each landed state.
-- **The first child send.** The first counted child terminate is stored by a landed commit, and G ends Cancelled.
-- **One notice.** Q hears exactly one notice from P.
-- **Forensic state.** Except in `nt1-witness`: P ends Cancelled (and kept, for `ThenDelete`) with every invocation inbox
-  closed.
+- **The exact boundary** (`at-cap`, `nt1-at-bound` under `repaired` only). The growth commit and the ending commit both
+  land with a modeled total of exactly 16,457,728.
+- **The first child send** (`child-terminate`). The first counted child terminate is stored by a landed commit, and G
+  ends Cancelled.
+- **One notice** (`one-notice`). Exactly one notice from P to Q is stored. No case delivers it to Q.
+- **Forensic state** (`inboxes-kept-closed`). P's terminal row keeps every inbox id of its pre-terminate row, and each
+  kept inbox is closed. The no-inbox control passes with an empty set.
+- **P's end** (`p-cancelled`, except in `nt1-witness`). P ends Cancelled, and kept for `ThenDelete`.
 
 ### What the runs show
 
 - **`reviewed`.** In `nt1-witness` the growth turn lands (16,453,632 ≤ 16,457,728). `TerminateMetadata` then grows the
   state by 24,500 bytes, to 16,461,364. The ending commit comes to 16,478,132 and is refused. P parks Faulted, keeps
-  its registry and sends Q one Faulted notice. On this one-terminate schedule no terminate to G is stored, and G
+  its registry and stores one Faulted notice to Q. On this one-terminate schedule no terminate to G is stored, and G
   stays Running. Under the built code a second terminate would reach G through the parked row
   (`WorkflowInstance.cs` 63–64), so the robust failure is the room-for-terminate assertion.
 - **`repaired`.** The same growth turn is refused, because the check counts the 24,500 bytes. It parks with P's
@@ -190,7 +200,8 @@ W is I's wait on key K. It is registered once, through the real `SubscribeAsync`
 is 1,000 ms.
 
 1. **The first admission.** At t = 1000, (K, E) is published with payload `{"n":1}`.
-2. **The first delivery.** W's turn consumes the delivery through the real commit, so the row is kept Done.
+2. **The first delivery.** The PI-1 consumer commits the delivery at store level through the real commit, so the row
+   is kept Done. No workflow turn runs.
    `pi1-slow-consumer` leaves it pending.
 3. **The sweep.** At t = 2001 the window has passed:
    - `pi1-gap`, `pi1-duplicate` and `pi1-slow-consumer`: the built `SweepAsync` (`InMemoryStore.cs` 348–359) removes
@@ -201,7 +212,7 @@ is 1,000 ms.
    retries it within the new window with payload `{"n":3}`.
 5. **The catch-up.** A later catch-up page of W runs through the real `KeptMatchesAsync` (287–298), as a keeping
    wait's replay reads it.
-6. **The last delivery.** W's turn consumes whatever is pending.
+6. **The last delivery.** The PI-1 consumer commits whatever is pending at store level. No workflow turn runs.
 
 ### Real calls and harness-held rules
 
@@ -232,12 +243,12 @@ is 1,000 ms.
 
 ### The assertions
 
-- **One delivery per publication.** W receives `[{"n":1}, {"n":2}]`, each accepted publication once with its own
+- **One delivery per publication** (`payloads`). W receives `[{"n":1}, {"n":2}]`, each accepted publication once with its own
   payload.
-- **The second receipt.** The second admission's receipt is New.
-- **The old Done row (`pi1-event-first`).** After the message-sweep batch, the first publication's Done delivery is
+- **The second receipt** (`second-new`). The second admission's receipt is New.
+- **The old Done row** (`old-done-retired`, `pi1-event-first`). After the message-sweep batch, the first publication's Done delivery is
   gone, since its own event row is gone.
-- **The duplicate (`pi1-duplicate`).** The retry is answered as a duplicate naming the second publication's identity
+- **The duplicate** (`duplicate`, `pi1-duplicate`). The retry is answered as a duplicate naming the second publication's identity
   and adds nothing.
 
 ### What the runs show

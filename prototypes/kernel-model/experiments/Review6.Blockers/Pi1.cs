@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace Kernel.Review6;
 
@@ -53,25 +52,25 @@ sealed class Pi1(string variant, Rules rules)
 
         _k.Now = 2_050;
         var second = Publish("""{"n":2}""", "second admission, after the sweep");
-        _r.Expect("the second admission's receipt", second.Status, "New");
+        _r.Expect("second-new", "the second admission's receipt", second.Status, "New");
         _r.Line($"  receipts: first names {first.Identity}, second names {second.Identity}");
         if (variant == "event-first")
         {
             MessageSweep();
             var oldDone = _k.Store.Messages.Values.Count(m => m.Done && m.Message.Kind == Kinds.Event && m.Message.KeepUntil < _k.Now && m.Message.Payload == """{"n":1}""");
-            _r.Expect("the first publication's Done deliveries left after the message-sweep batch (its own event row is gone)", oldDone, 0);
+            _r.Expect("old-done-retired", "the first publication's Done deliveries left after the message-sweep batch (its own event row is gone)", oldDone, 0);
         }
         if (variant == "duplicate")
         {
             _k.Now = 2_100;
             var dup = Publish("""{"n":3}""", "a retry within the second publication's window, another payload");
-            _r.Check(dup.Status == "Duplicate" && dup.Identity == second.Identity,
+            _r.Check("duplicate", dup.Status == "Duplicate" && dup.Identity == second.Identity,
                 $"the retry is answered as a duplicate of the second publication: {dup.Status}, names {dup.Identity} (expected Duplicate, {second.Identity})");
         }
         CatchUp();
         _k.Now = 2_200;
         Consume("W's turn");
-        _r.ExpectSequence("payloads W received, in order", _received, ["""{"n":1}""", """{"n":2}"""]);
+        _r.ExpectSequence("payloads", "payloads W received, in order", _received, ["""{"n":1}""", """{"n":2}"""]);
         return _r;
     }
 
@@ -158,7 +157,7 @@ sealed class Pi1(string variant, Rules rules)
     /// <summary>
     /// The canonical encoding (observability, "The event match is a fixed digest"): a domain byte and a version byte,
     /// then each part, a string as a 4-byte big-endian count of UTF-16 code units and the units big-endian, a creation
-    /// as 8 bytes. Version 2 (proposed, R6-B2) puts the 16-byte incarnation after the event id. The key stands for
+    /// as 8 bytes (<c>DurableKeyJson.CodeUnits</c>, which keeps every unpaired surrogate). Version 2 (proposed, R6-B2) puts the 16-byte incarnation after the event id. The key stands for
     /// Q(t, key): the prototype has no tenant.
     /// </summary>
     private static string Digest(char domain, byte[]? incarnation, string first, params object[] rest)
@@ -169,7 +168,7 @@ sealed class Pi1(string variant, Rules rules)
             var count = new byte[4];
             BinaryPrimitives.WriteInt32BigEndian(count, s.Length);
             bytes.AddRange(count);
-            bytes.AddRange(Encoding.BigEndianUnicode.GetBytes(s));
+            bytes.AddRange(DurableKeyJson.CodeUnits(s));
         }
         if (domain == 'M') { Text(first); Text((string)rest[0]); if (incarnation is not null) bytes.AddRange(incarnation); }
         else

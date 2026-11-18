@@ -38,10 +38,12 @@ sealed class Nt1(string variant, Rules rules)
     private const string Q = "0/q", P = "1/p", G = "g2/child/1.1.1";
     private readonly Report _r = new($"NT-1/{variant}", rules.Name, variant == "growth"
         ? "Native's TerminalGrowth(state) bound covers the real TerminateMetadata and end-path growth of every measured shape"
-        : "every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and Q hears one notice from P");
+        : "every state P commits leaves room for its own terminate, so the ending commit lands, the first counted child terminate is stored, G ends Cancelled and one notice from P to Q is stored");
     private Kernel _k = null!;
     private readonly NativeModel _native = new(new WorkflowRegistry());
     private readonly List<string> _landedStates = [];
+    private readonly List<(string What, long Total)> _landedTotals = [];
+    private InstanceRow? _beforeTerminate;
 
     public Report Run()
     {
@@ -123,9 +125,9 @@ sealed class Nt1(string variant, Rules rules)
             if (name.StartsWith("the witness", StringComparison.Ordinal)) witness = (growth, bound);
         }
         _r.Line("  in SQL Server's UTF-16 each figure doubles (derived, unmeasured)");
-        _r.Expect("the closing cost of one open empty inbox, measured", first, (long)MeasuredPerInbox);
-        _r.Check(allWithin, $"every measured growth, net and gross, is within the bound: {allWithin}");
-        _r.Expect($"the witness structure's growth equals its bound ({Inboxes:N0} x {rules.GrowthPerInbox})", witness.Growth, witness.Bound);
+        _r.Expect("closing-cost", "the closing cost of one open empty inbox, measured", first, (long)MeasuredPerInbox);
+        _r.Check("within-bound", allWithin, $"every measured growth, net and gross, is within the bound: {allWithin}");
+        _r.Expect("witness-bound", $"the witness structure's growth equals its bound ({Inboxes:N0} x {rules.GrowthPerInbox})", witness.Growth, witness.Bound);
     }
 
     // ---- the schedule -----------------------------------------------------------------------------------------------
@@ -239,7 +241,7 @@ sealed class Nt1(string variant, Rules rules)
         {
             var (landed, error) = _k.Commit(row.Id, [commit]);
             _r.Line($"  {(landed ? "landed" : "not landed: " + error)}");
-            if (landed) _landedStates.Add(row.State);
+            if (landed) { _landedStates.Add(row.State); _landedTotals.Add((what, envelope.Total)); }
             return landed;
         }
         _r.Line("  refused before the store as a definite error (over the envelope); the turn fails and parks (WorkflowInstance.Park)");
@@ -272,7 +274,7 @@ sealed class Nt1(string variant, Rules rules)
         var payload = thenDelete ? """{"ThenDelete":true}""" : null;
         var term = new Message("term-1", new InstanceRef(P), Kinds.Terminate, payload, Sender: "operator", TargetCreation: 1);
         var (_, seq) = _k.AddOutside(term);
-        var row = _k.Store.Instances[P];
+        var row = _beforeTerminate = _k.Store.Instances[P];
         var outcome = Real.Command(_k.Type, _k.OwnerOf(P).Worker, row, term, seq)
             ?? throw new InvalidOperationException("a terminate takes the actor type's own turn");
         _r.Line($"deliver {term.Id} (operator's terminate{(thenDelete ? " with ThenDelete" : "")}) to P: the built terminate (WorkflowInstance.cs 179-203); P {row.Status} -> {outcome.Row!.Status}, sends [{string.Join(", ", outcome.Sent.Select(Show))}]");
@@ -284,8 +286,8 @@ sealed class Nt1(string variant, Rules rules)
             var state = Json.Read<NativeState>(outcome.Row.State);
             var clock = Real.ModelTurn(_k.OwnerOf(P).Worker, outcome.Row, [Real.Delivery(term, seq)]).Clock;
             var protects = Real.ProtectsDeletion(_native, state, _k.Now, clock);
-            _r.Line($"  ThenDelete: NativeModel.ProtectsDeletion on the terminated state: {protects}, so P is {(protects ? "terminated and kept: the commit is the live row's write" : "deleted in the same commit")}");
-            if (!protects) throw new InvalidOperationException("the protected ThenDelete fixture is not protected");
+            if (!protects) throw new InvalidOperationException("fixture failure: NativeModel.ProtectsDeletion returned false for the protected ThenDelete fixture, so no commit was attempted");
+            _r.Line("  ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write");
         }
         _ending = Kernel.ToTurnCommit(outcome);
         Checked("P's ending commit", _ending, row, seq, term);
@@ -309,21 +311,31 @@ sealed class Nt1(string variant, Rules rules)
         var worst = _landedStates.Select(s => (Bytes: Bytes(s), Growth: s == "null" ? 0 : Growth(Json.Read<NativeState>(s)))).MaxBy(x => x.Bytes + x.Growth);
         var worstTotal = worst.Bytes + worst.Growth + ChildEntry + Header;
         _r.Line($"the largest landed P state: {worst.Bytes:N0} bytes, its real terminal growth {worst.Growth:N0}: with one child and the header {worstTotal:N0} (cap {Cap:N0})");
-        _r.Check(worstTotal <= Cap, $"every state P committed leaves room for its own terminate: {worstTotal:N0} <= {Cap:N0}: {worstTotal <= Cap}");
+        _r.Check("room-for-terminate", worstTotal <= Cap, $"every state P committed leaves room for its own terminate: {worstTotal:N0} <= {Cap:N0}: {worstTotal <= Cap}");
+        if (variant == "at-bound" && rules.Name == "repaired")
+        {
+            // The inclusive boundary: both commits land with a modeled total of exactly the cap.
+            var atCap = _landedTotals.Where(t => t.What.StartsWith("P's growth turn", StringComparison.Ordinal) || t.What == "P's ending commit").ToList();
+            _r.Check("at-cap", atCap.Count == 2 && atCap.All(t => t.Total == Cap),
+                $"the growth commit and the ending commit both landed with a modeled total of exactly {Cap:N0}: [{string.Join(", ", atCap.Select(t => $"{t.What}: {t.Total:N0}"))}]");
+        }
         var childSends = _k.Sent.Where(s => s.Message.Target.Id == G && s.Message.Kind == Kinds.Terminate && s.Message.Sender == P).ToList();
         _r.Line($"counted terminates to G stored by a landed commit: [{string.Join(", ", childSends.Select(s => $"{s.Message.Id} (seq {s.Seq})"))}]");
         var first = childSends.Count > 0 && _k.Store.Instances[G].Status == InstanceStatus.Cancelled;
-        _r.Check(first, $"the first counted child terminate was stored by a landed commit and G ended Cancelled: {childSends.Count} stored, G {_k.Store.Instances[G].Status}");
+        _r.Check("child-terminate", first, $"the first counted child terminate was stored by a landed commit and G ended Cancelled: {childSends.Count} stored, G {_k.Store.Instances[G].Status}");
         var notices = _k.Sent.Where(s => s.Message.Target.Id == Q && s.Message.Kind == WorkflowKinds.ChildFinished && s.Message.Sender == P).ToList();
-        _r.Expect("notices from P to Q", notices.Count, 1);
+        _r.Expect("one-notice", "notices from P to Q stored", notices.Count, 1);
         _r.Line($"  P's notice: {string.Join(", ", notices.Select(n => n.Message.Payload))}");
         var p = _k.Store.Instances[P];
+        // Forensic state: the terminal row keeps every inbox of the pre-terminate row, and each kept inbox is closed.
+        var before = Json.Read<NativeState>(_beforeTerminate!.State).Inboxes?.Keys.ToHashSet(StringComparer.Ordinal) ?? [];
+        var after = Json.Read<NativeState>(p.State).Inboxes ?? new Dictionary<string, InvocationInbox>(StringComparer.Ordinal);
+        var kept = before.Count(after.ContainsKey);
+        var closed = before.Count(id => after.TryGetValue(id, out var inbox) && inbox.Closed is not null);
+        _r.Check("inboxes-kept-closed", kept == before.Count && closed == before.Count,
+            $"P's terminal row keeps every inbox of its pre-terminate row, each closed: {before.Count:N0} before, {kept:N0} kept, {closed:N0} closed");
         if (variant != "witness")
-        {
-            var state = Json.Read<NativeState>(p.State);
-            var open = state.Inboxes?.Values.Count(i => i.Closed is null) ?? 0;
-            _r.Check(p.Status == InstanceStatus.Cancelled && open == 0, $"P ended Cancelled{(thenDelete ? " and kept" : "")} with its forensic state, every invocation inbox closed: {p.Status}, {open} open");
-        }
+            _r.Check("p-cancelled", p.Status == InstanceStatus.Cancelled, $"P ended Cancelled{(thenDelete ? " and kept" : "")}: {p.Status}");
         else _r.Line($"P ends {p.Status}; its state {Bytes(p.State):N0} bytes");
     }
 }

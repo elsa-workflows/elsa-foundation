@@ -12,64 +12,74 @@ return Program.Main2(args);
 
 static partial class Program
 {
-    // Case, rule set, expected result. The page case each run backs is in the README.
-    private static readonly (string Case, string Rules, string Expected)[] Matrix =
+    // Case, rule set, and the ids of the assertions expected to fail (none: the run passes). --all compares each run's
+    // actual set of failed ids with its expected set, so an unrelated failure is a mismatch. The README maps each run
+    // to its page case.
+    private static readonly string[] NtOutcome = ["room-for-terminate", "child-terminate", "inboxes-kept-closed"];
+    private static readonly string[] NtCancelled = [.. NtOutcome, "p-cancelled"];
+    private static readonly string[] Lost = ["old-done-retired", "payloads"];
+
+    private static readonly (string Case, string Rules, string[] Failed)[] Matrix =
     [
-        .. Three("nt1-growth", "PASS", "PASS", "PASS"), ("nt1-growth", "growth-undercount", "FAIL"),
-        .. Three("nt1-witness", "FAIL", "PASS", "FAIL"),
-        .. Three("nt1-at-bound", "FAIL", "PASS", "FAIL"), ("nt1-at-bound", "growth-undercount", "FAIL"),
-        .. Three("nt1-thendelete-protected", "FAIL", "PASS", "FAIL"),
-        .. Three("nt1-no-inboxes", "PASS", "PASS", "PASS"),
-        .. Three("pi1-gap", "PASS", "PASS", "PASS"), ("pi1-gap", "built-key", "PASS"),
-        .. Three("pi1-event-first", "FAIL", "PASS", "FAIL"), ("pi1-event-first", "built-key", "FAIL"), ("pi1-event-first", "match-without-incarnation", "FAIL"),
-        .. Three("pi1-slow-consumer", "FAIL", "PASS", "FAIL"), ("pi1-slow-consumer", "built-key", "FAIL"),
-        .. Three("pi1-duplicate", "PASS", "PASS", "PASS"), ("pi1-duplicate", "fresh-incarnation-on-duplicate", "FAIL"),
+        .. Three("nt1-growth", [], [], []), ("nt1-growth", "growth-undercount", ["within-bound", "witness-bound"]),
+        .. Three("nt1-witness", NtOutcome, [], NtOutcome),
+        .. Three("nt1-at-bound", NtCancelled, [], NtCancelled), ("nt1-at-bound", "growth-undercount", NtCancelled),
+        .. Three("nt1-thendelete-protected", NtCancelled, [], NtCancelled),
+        .. Three("nt1-no-inboxes", [], [], []),
+        .. Three("pi1-gap", [], [], []), ("pi1-gap", "built-key", []),
+        .. Three("pi1-event-first", Lost, [], Lost), ("pi1-event-first", "built-key", Lost), ("pi1-event-first", "match-without-incarnation", ["old-done-retired"]),
+        .. Three("pi1-slow-consumer", ["payloads"], [], ["payloads"]), ("pi1-slow-consumer", "built-key", ["payloads"]),
+        .. Three("pi1-duplicate", [], [], []), ("pi1-duplicate", "fresh-incarnation-on-duplicate", ["duplicate", "payloads"]),
     ];
 
-    private static IEnumerable<(string, string, string)> Three(string c, string reviewed, string repaired, string negative) =>
+    private static IEnumerable<(string, string, string[])> Three(string c, string[] reviewed, string[] repaired, string[] negative) =>
         [(c, "reviewed", reviewed), (c, "repaired", repaired), (c, "negative", negative)];
+
+    private static string Outcome(IReadOnlyCollection<string> failed) => failed.Count == 0 ? "PASS" : $"FAIL {string.Join(",", failed)}";
 
     public static int Main2(string[] args)
     {
         if (args.SequenceEqual(["--list"]))
         {
-            foreach (var (c, r, e) in Matrix) Console.WriteLine($"{c} --rules {r}  expected {e}");
+            foreach (var (c, r, f) in Matrix) Console.WriteLine($"{c} --rules {r}  expected {Outcome(f)}");
             return 0;
         }
         if (args.SequenceEqual(["--all"]))
         {
             var summary = new List<string>();
             var mismatches = 0;
-            foreach (var (c, r, e) in Matrix)
+            foreach (var (c, r, f) in Matrix)
             {
                 var report = Run(c, r);
                 Console.Write(report.Render());
                 Console.WriteLine();
-                var actual = report.Passed ? "PASS" : "FAIL";
-                var matches = e == actual;
+                var actual = Outcome(report.FailedIds);
+                var expected = Outcome(f);
+                var matches = actual == expected;
                 if (!matches) mismatches++;
-                summary.Add($"{c,-26} {r,-32} actual {actual}  expected {e}  {(matches ? "as expected" : "MISMATCH")}");
+                summary.Add($"{c,-26} {r,-32} actual {actual}  expected {expected}  {(matches ? "as expected" : "MISMATCH")}");
             }
             Console.WriteLine("== summary ==");
             foreach (var line in summary) Console.WriteLine(line);
             Console.WriteLine(mismatches == 0 ? $"{Matrix.Length}/{Matrix.Length} runs as expected" : $"{mismatches} of {Matrix.Length} runs differ from the expected outcome");
             return mismatches == 0 ? 0 : 1;
         }
-        if (args.Length == 4 && args[0] == "--case" && args[2] == "--rules")
+        if (args.Length == 4 && args[0] == "--case" && args[2] == "--rules" && Matrix.Any(m => m.Case == args[1] && m.Rules == args[3]))
         {
             var report = Run(args[1], args[3]);
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|growth-undercount|built-key|match-without-incarnation|fresh-incarnation-on-duplicate> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <set>, a pair that --list shows | --all | --list");
         return 2;
     }
 
     private static Report Run(string id, string rules)
     {
         Real.Reset();
-        var family = id.Length > 4 ? id[..3] : "";
-        var variant = id.Length > 4 ? id[4..] : "";
+        // The id is exactly <family>-<variant>; Main2 admits only pairs listed in the matrix.
+        var family = id.Length > 4 && id[3] == '-' ? id[..3] : "";
+        var variant = family == "" ? "" : id[4..];
         var set = Rules.For(rules, family);
         return family switch
         {
