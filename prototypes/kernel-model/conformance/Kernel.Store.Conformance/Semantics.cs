@@ -8,7 +8,8 @@ namespace Kernel.Store.Conformance;
 /// </summary>
 public enum Level { Required, Reference }
 
-public sealed record Case(string Name, Level Level, Func<Context, Task> Body);
+/// <param name="Partitions">How many partitions the case's fresh store has.</param>
+public sealed record Case(string Name, Level Level, Func<Context, Task> Body, int Partitions = 2);
 
 public sealed record Outcome(Case Case, bool Passed, bool Skipped, string Detail, TimeSpan Took);
 
@@ -154,6 +155,7 @@ public static class Semantics
         IdentityClockChecks.Case,
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
+        .. OwnedSetChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
         new("actor addressing: requested spellings resolve under the provider actor collation in one snapshot", Level.Required, async c =>
         {
@@ -1246,7 +1248,7 @@ public static class Semantics
         {
             var watch = Stopwatch.StartNew();
             Outcome outcome;
-            await using (var provided = await provider.CreateAsync(2, setup ?? new StoreSetup()))
+            await using (var provided = await provider.CreateAsync(@case.Partitions, setup ?? new StoreSetup()))
             {
                 var context = new Context(provided);
                 try

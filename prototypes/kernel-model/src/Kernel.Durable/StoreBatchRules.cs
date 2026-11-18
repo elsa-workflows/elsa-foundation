@@ -1,10 +1,13 @@
+using Kernel.Runtime;
+
 namespace Kernel.Durable;
 
 /// <summary>Reject malformed row mutations before any effect; one row mutation per actor per batch.</summary>
 public static class StoreBatchRules
 {
-    public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false)
+    public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false)
     {
+        if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
         foreach (var turn in batch.Turns)
@@ -29,6 +32,37 @@ public static class StoreBatchRules
             if ((turn.Row is not null || turn.Delete) && !changed.Add(turn.Instance))
                 throw new StoreException(Failure.Definite,"A batch cannot mutate the same actor row twice.");
         }
+    }
+
+    /// <summary>
+    /// An owned-set batch, one fence or several, fences each partition once, names its lowest one positionally, and
+    /// each turn's address embeds one of the fenced partitions. Over several partitions it needs a store that fences k rows.
+    /// </summary>
+    private static void ValidateFences(CommitBatch batch,IReadOnlyList<PartitionFence> fences,bool ownedSets)
+    {
+        var lowest=fences.MinBy(f=>f.Partition);
+        if (lowest is null || fences.Select(f=>f.Partition).Distinct().Count()!=fences.Count ||
+            lowest!=new PartitionFence(batch.Partition,batch.Epoch,batch.Position))
+            throw new StoreException(Failure.Definite,"An owned batch fences each of its partitions once and names the lowest.");
+        var fenced=fences.Select(f=>f.Partition).ToHashSet();
+        foreach (var turn in batch.Turns)
+            if (AddressPartition(turn.Instance) is not { } partition || !fenced.Contains(partition))
+                throw new StoreException(Failure.Definite,$"Turn {turn.Instance} is outside the batch's fenced partitions.");
+        if (fences.Count>1 && !ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
+    }
+
+    /// <summary>An owned set names each partition once: a set poll with a repeated partition is refused (a repeated partition in a release is harmless).</summary>
+    public static void RequireDistinct(IReadOnlyCollection<PartitionFence> owned)
+    {
+        if (owned.Select(f=>f.Partition).Distinct().Count()!=owned.Count)
+            throw new StoreException(Failure.Definite,"An owned set names each of its partitions once.");
+    }
+
+    /// <summary>The partition an actor address embeds, or null when it embeds none.</summary>
+    public static int? AddressPartition(string id)
+    {
+        try { return new InstanceRef(id).Partition; }
+        catch (Exception e) when (e is FormatException or OverflowException or ArgumentOutOfRangeException) { return null; }
     }
 
     public static void ValidateIdentity(InstanceRow row)
