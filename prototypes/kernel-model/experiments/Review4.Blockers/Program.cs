@@ -13,7 +13,7 @@ static partial class Program
       FrRules.TrialPlainSeq => "trial-plain-seq", FrRules.NoCohortMark => "no-cohort-mark",
       FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", FrRules.MarkIgnoresControls => "mark-ignores-controls",
       FrRules.SkipTarget => "skip-target", FrRules.NoShelf => "no-shelf", FrRules.ControlsWaitOnTicket => "controls-wait-on-ticket",
-      FrRules.BoundaryHoldsCohort => "boundary-holds-cohort", _ => "boundary-holds-noncohort-suspect" };
+      FrRules.BoundaryHoldsCohort => "boundary-holds-cohort", _ => "boundary-holds-cohort-nonsuspect" };
 
     public static string Name(RtRules rules) => rules switch
     {
@@ -42,7 +42,7 @@ static partial class Program
         ("fr1-control-crash", "reviewed", "FAIL"), ("fr1-control-crash", "repaired", "PASS"), ("fr1-control-crash", "negative", "FAIL"),
         ("fr1-control-crash", "boundary-holds-cohort", "FAIL"),
         ("fr1-control-reset", "reviewed", "FAIL"), ("fr1-control-reset", "repaired", "PASS"), ("fr1-control-reset", "negative", "FAIL"),
-        ("fr1-control-reset", "boundary-holds-noncohort-suspect", "FAIL"),
+        ("fr1-control-reset", "boundary-holds-cohort-nonsuspect", "FAIL"),
         ("fr1-trial-takeover-open-poll-limit", "reviewed", "FAIL"), ("fr1-trial-takeover-open-poll-limit", "repaired", "PASS"),
         ("fr1-trial-takeover-open-poll-limit", "negative", "PASS"), ("fr1-trial-takeover-open-poll-limit", "no-shelf", "FAIL"),
         ("fr1-trial-takeover-open-poll-limit", "skip-target", "FAIL"),
@@ -92,7 +92,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-noncohort-suspect|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-cohort-nonsuspect|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -104,7 +104,7 @@ static partial class Program
             var set = rules switch
             {
                 "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls, "skip-target" => FrRules.SkipTarget, "no-shelf" => FrRules.NoShelf,
-                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-noncohort-suspect" => FrRules.BoundaryHoldsNoncohortSuspect,
+                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-cohort-nonsuspect" => FrRules.BoundaryHoldsCohortNonsuspect,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();

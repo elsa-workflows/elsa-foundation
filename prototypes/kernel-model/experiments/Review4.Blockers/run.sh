@@ -58,7 +58,7 @@ run fr1-control-crash                  boundary-holds-cohort            # expect
 run fr1-control-reset                  reviewed                         # expected FAIL
 run fr1-control-reset                  repaired                         # expected PASS
 run fr1-control-reset                  negative                         # expected FAIL
-run fr1-control-reset                  boundary-holds-noncohort-suspect # expected FAIL
+run fr1-control-reset                  boundary-holds-cohort-nonsuspect # expected FAIL
 run fr1-trial-takeover-open-poll-limit reviewed                         # expected FAIL
 run fr1-trial-takeover-open-poll-limit repaired                         # expected PASS
 run fr1-trial-takeover-open-poll-limit negative                         # expected PASS

@@ -12,7 +12,7 @@ Mutations of the repaired set run where they bite:
 
 - FR-1: `memory-precedence`, `held-blocks`, `trial-plain-seq`, `skip-target`, `no-shelf`, `no-cohort-mark`,
   `one-row-read-counts-held`, `mark-ignores-controls`, `controls-wait-on-ticket`, `boundary-holds-cohort` and
-  `boundary-holds-noncohort-suspect`;
+  `boundary-holds-cohort-nonsuspect`;
 - RT-1: `cascade-any`, `successor-admitted`, `successor-inherits` and `root-retains`.
 
 ## Run
@@ -45,7 +45,7 @@ experiments/Review4.Blockers/run.sh                  # every run one by one, the
 | `fr1-held-poll-limit` | E-8 run 2: R1 held, R2 beyond a bounded poll | reviewed FAIL, repaired PASS, negative FAIL, one-row-read-counts-held FAIL |
 | `fr1-control-after-complete` | E-7's control run: a control polled while the cohort mark is set | reviewed FAIL, repaired PASS, negative FAIL, mark-ignores-controls FAIL |
 | `fr1-control-crash` | E-7's control run after a crash takeover: R is a suspect behind K's recovery boundary | reviewed FAIL, repaired PASS, negative FAIL, boundary-holds-cohort FAIL |
-| `fr1-control-reset` | E-7's reset run: an unknown commit outcome resets the owner, and R carries RecoveryOrdering behind K's boundary | reviewed FAIL, repaired PASS, negative FAIL, boundary-holds-noncohort-suspect FAIL |
+| `fr1-control-reset` | E-7's reset run: an unknown commit outcome resets the owner, and R carries RecoveryOrdering behind K's boundary | reviewed FAIL, repaired PASS, negative FAIL, boundary-holds-cohort-nonsuspect FAIL |
 | `fr1-ticket-control`, `fr1-ticket-control-parent`, `fr1-ticket-control-suspend` | E-11: an operator terminate, a parent's tree terminate, and a suspend then a resume, with a hanging restored ticket | PASS under all three, controls-wait-on-ticket FAIL |
 | `fr1-model-end` | E-7, model-end variant: R dropped under the finished-instance rule | PASS under all three |
 | `fr1-model-end-recall` | Control for E-7's model-end variant: the ending turn recalls R | PASS under all three |
@@ -86,7 +86,7 @@ model then gets one input per turn, in the order the rule set gives:
 | mark-ignores-controls | repaired, except that a control polled while the mark is set runs ahead of the cohort read | as repaired | the parent's terminate overtakes R, and R is dropped |
 | controls-wait-on-ticket | repaired, with job tickets counted as cohort rows | as repaired | the controls wait on the hanging ticket J until the step bound |
 | boundary-holds-cohort | repaired | cohort suspects stay behind a control's recovery boundary, as built | after a crash, K waits for the cohort and R waits behind K: neither moves |
-| boundary-holds-noncohort-suspect | repaired, except that a cohort row that is no suspect stays behind the recovery cut in ordinary delivery, as built | as repaired | after a reset, K waits for the cohort and R waits behind K: neither moves |
+| boundary-holds-cohort-nonsuspect | repaired, except that a cohort row that is no suspect stays behind the recovery cut in ordinary delivery, as built | as repaired | after a reset, K waits for the cohort and R waits behind K: neither moves |
 
 Under `repaired`, the cohort is the set of rows whose `ReleasedBy` is the creation's latest generation and that are
 not Done; a job ticket never is one (`Kind NOT IN (:ticketKinds)`). Complete sets a durable cohort mark (creation,
@@ -106,7 +106,8 @@ The poll is the built one, run with Horizon 0. The store returns not-Done rows w
 `Due <= now + Horizon`, in seq order, up to the poll limit (InMemoryStore.cs 217–221). The owner ignores a row already in memory. An untried, unshelved suspect keeps its old
 `Seen`, so it comes back in every poll and fills a place there. That is why the built flush shelves a suspect of a
 withheld instance (Worker.cs 691–699, F12). The repaired rule extends that shelving to the suspect the cohort rule
-passes over and to the suspect the open drain withholds (proposed). A polled row that was marked before, by any owner,
+passes over and to the suspect the open drain withholds (proposed). Under the built skip-target rule the drain-withheld
+suspect is shelved too, as F12 shelves a withheld instance's suspect, and its target is skipped. A polled row that was marked before, by any owner,
 carries RecoveryOrdering (Worker.cs 617, 636). While such a row or a suspect is in memory, the earliest pending
 control is a recovery boundary (Worker.cs 796–820), and ordinary delivery offers only the inputs in front of it, then
 the control (Deliverable's InFront and BeforeRecoveryControl, Worker.cs 829–842).
@@ -136,8 +137,10 @@ The variants:
 - `trial-takeover-open-poll-limit`: as `trial-takeover-open`, with the new owner's PollLimit at 1.
   - Under `repaired`, the withheld A is passed over and shelved. The next poll reaches C, which waits for its gate
     row, then R, which is tried, then the retry control, which completes, and then A.
-  - Under `no-shelf` and `skip-target`, every poll returns A again and nothing moves. `reviewed` skips the target
-    as well. `negative` keeps the shelving, so it passes.
+  - Under `no-shelf`, A is never shelved, every poll returns A again, and nothing moves.
+  - Under `skip-target`, A is shelved as the built flush does, but NextTrial skips R behind the withheld A. The poll
+    returns R as already held, and the run stalls until the step bound. `reviewed` does the same.
+  - `negative` keeps the repaired skip rule and the shelving, so it passes.
 - `held-poll-limit` (E-8 run 2): the workflow is `Parallel(H, Event X)`, with H a `HeldGate` over `Event go`. The final page
   restores R1, a composite signal to H at seq 1000, and R2, a `native.resume x` at seq 1100. The same process retakes
   the partition after Complete, with the cohort mark set and PollLimit 2. Four arrivals for another instance sit at
@@ -163,7 +166,7 @@ The variants:
   recovery boundary, which cuts R.
   - Under `repaired`, R is exempt from the cut as a cohort row. It is delivered once and completes F, the check clears
     the mark, and then K applies.
-  - Under `boundary-holds-noncohort-suspect`, the mark withholds K and the cut holds R, so neither moves.
+  - Under `boundary-holds-cohort-nonsuspect`, the mark withholds K and the cut holds R, so neither moves.
   - `control-after-complete` takes the same boundary path, since its retake also leaves R marked from before.
 - `ticket-control`, `ticket-control-parent`, `ticket-control-suspend` (E-11): a retry selects job ticket J, the final
   page restores it, J's driver enters the job and it hangs, and Complete sets the mark. Then a control arrives: an

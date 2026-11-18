@@ -9,13 +9,13 @@ namespace Kernel.Review4;
 /// <c>NoShelf</c> does not shelve (mark seen) a suspect the cohort rule passes over;
 /// <c>ControlsWaitOnTicket</c> counts job tickets as cohort rows, so controls wait on a hanging ticket (E-11);
 /// <c>BoundaryHoldsCohort</c> keeps cohort suspects behind a control's recovery boundary, as built;
-/// <c>BoundaryHoldsNoncohortSuspect</c> keeps a cohort row that is no suspect behind the boundary in ordinary delivery, as built (E-7 reset run);
+/// <c>BoundaryHoldsCohortNonsuspect</c> keeps a cohort row that is no suspect behind the boundary in ordinary delivery, as built (E-7 reset run);
 /// <c>NoCohortMark</c> drops the durable cohort mark, so the owner knows only the cohort rows it has read;
 /// <c>OneRowReadCountsHeld</c> makes the cohort read return one row, held keys included (E-8 run 2);
 /// <c>MarkIgnoresControls</c> lets a control polled while the mark is set run ahead of the cohort read (E-7 control run).
 /// </summary>
 enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence, TrialPlainSeq, NoCohortMark, OneRowReadCountsHeld, MarkIgnoresControls,
-    SkipTarget, NoShelf, ControlsWaitOnTicket, BoundaryHoldsCohort, BoundaryHoldsNoncohortSuspect }
+    SkipTarget, NoShelf, ControlsWaitOnTicket, BoundaryHoldsCohort, BoundaryHoldsCohortNonsuspect }
 
 /// <summary>One inbox row as the proposed drain sees it: full key, seq, kind, release tag, Seen epoch, Done, KeptBy.</summary>
 sealed class InboxRow(string name, Message message, long seq)
@@ -120,7 +120,7 @@ sealed class Fr1(string variant, FrRules rules)
     private bool Shelves => rules != FrRules.NoShelf;
     private bool TicketsCount => rules == FrRules.ControlsWaitOnTicket;
     private bool CohortBeforeBoundary => CohortTrials && rules != FrRules.BoundaryHoldsCohort;
-    private bool CohortOfferedPastBoundary => CohortTrials && rules != FrRules.BoundaryHoldsNoncohortSuspect;
+    private bool CohortOfferedPastBoundary => CohortTrials && rules != FrRules.BoundaryHoldsCohortNonsuspect;
     private static bool IsTicket(string kind) => kind is Kinds.Job or Kinds.Meet or Kinds.Publish;
 
     public async Task<Report> RunAsync()
@@ -564,11 +564,13 @@ sealed class Fr1(string variant, FrRules rules)
             if (skipped) continue;
             if (!Eligible(suspect))
             {
+                // The built flush shelves a withheld instance's suspect (Worker.cs 691–699, F12) under either rule; the
+                // built NextTrial also skips its target, the repaired one does not.
                 if (SkipsTarget) skipped = true;
-                else if (Shelves && suspect.Seen != _epoch)
+                if (Shelves && suspect.Seen != _epoch)
                 {
                     suspect.Seen = _epoch;
-                    _report.Line($"{suspect.Name} is shelved: the open drain withholds it, so it is passed over and the flush marks it seen at epoch {_epoch}");
+                    _report.Line($"{suspect.Name} is shelved: the open drain withholds it, so it is passed over{(SkipsTarget ? " with its target skipped" : "")} and the flush marks it seen at epoch {_epoch}");
                 }
                 continue;
             }
