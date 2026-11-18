@@ -52,7 +52,7 @@ public sealed class SetTenActivity : Activity
 /// Reads <c>count</c> as an input (<c>Seen</c>), reads it again in its session, and returns <c>Seen + 1</c>: a capture
 /// computed from the input, which must keep the input's older version as its base (ADR 0092 decision 4).
 /// </summary>
-public sealed class InputThenSessionReadActivity : Activity<Incremented>
+public sealed class InputThenSessionReadActivity(SessionReadProbe probe) : Activity<Incremented>
 {
     [ActivityInput]
     public int Seen { get; set; }
@@ -60,13 +60,17 @@ public sealed class InputThenSessionReadActivity : Activity<Incremented>
     [ActivityInput]
     public ReadOnlyVariableReference<int> Count { get; set; } = default!;
 
-    public static int LastSessionRead { get; private set; }
-
     protected override ValueTask<ActivityTransition<Incremented>> ExecuteAsync(ActivityExecutionContext context)
     {
-        LastSessionRead = context.Variables.Get(Count);
+        probe.Value = context.Variables.Get(Count);
         return ValueTask.FromResult(ActivityTransition.Complete(new Incremented(Seen + 1), ActivityOutcomes.Done));
     }
+}
+
+/// <summary>What <see cref="InputThenSessionReadActivity"/> read in its session; registered per harness.</summary>
+public sealed class SessionReadProbe
+{
+    public int? Value { get; set; }
 }
 
 /// <summary>Writes 5 to <c>count</c> in its session and returns 7, captured into <c>count</c> in the same commit.</summary>
@@ -264,7 +268,10 @@ public sealed class ContainerWriteActivity : Activity
     }
 }
 
-/// <summary>Suspends without writing; on resume writes <c>Seen + 1</c> (computed from its input read) to <c>count</c>.</summary>
+/// <summary>
+/// Suspends without writing; on resume writes <c>Seen + 10</c> (computed from its input read) to <c>count</c> and 99 to
+/// <c>other</c>: two intents in one commit.
+/// </summary>
 public sealed class ResumeWriteFromInputActivity : StatefulActivity<Incremented, WaitState, WaitTrigger>
 {
     public const string ResumeTargetKey = "resume-write-input";
@@ -275,6 +282,9 @@ public sealed class ResumeWriteFromInputActivity : StatefulActivity<Incremented,
     [ActivityInput]
     public VariableReference<int> Count { get; set; } = default!;
 
+    [ActivityInput]
+    public VariableReference<int> Other { get; set; } = default!;
+
     protected override ValueTask<ActivityTransition<Incremented, WaitState>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(Suspend(
             new WaitState("waiting"),
@@ -282,8 +292,9 @@ public sealed class ResumeWriteFromInputActivity : StatefulActivity<Incremented,
 
     protected override ValueTask<ActivityTransition<Incremented, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context)
     {
-        context.Variables.Set(Count, Seen + 1);
-        return ValueTask.FromResult(Complete(new Incremented(Seen + 1), ActivityOutcomes.Done));
+        context.Variables.Set(Other, 99);
+        context.Variables.Set(Count, Seen + 10);
+        return ValueTask.FromResult(Complete(new Incremented(Seen + 10), ActivityOutcomes.Done));
     }
 }
 
@@ -328,6 +339,47 @@ public sealed class WriteOnSuspendThenCaptureActivity : StatefulActivity<Increme
 
     protected override ValueTask<ActivityTransition<Incremented, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
         ValueTask.FromResult(Complete(new Incremented(6), ActivityOutcomes.Done));
+}
+
+/// <summary>Builds a reference to <c>other</c> itself, which no input binds: the step faults.</summary>
+public sealed class ForgedReferenceActivity : Activity
+{
+    [ActivityInput]
+    public VariableReference<int> Count { get; set; } = default!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        context.Variables.Set(new VariableReference<int>("other", Count.ScopeId, StepVariableTestGraph.OtherKey), 5);
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
+}
+
+/// <summary>Re-wraps its read-only binding as a writable reference: the step faults.</summary>
+public sealed class RewrappedReadOnlyActivity : Activity
+{
+    [ActivityInput]
+    public ReadOnlyVariableReference<int> Count { get; set; } = default!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        context.Variables.Set(new VariableReference<int>(Count.Name, Count.ScopeId, Count.VariableKey), 5);
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
+}
+
+/// <summary>An ordinary activity that casts its session to the engine surface to write by name: the step faults.</summary>
+public sealed class EngineSurfaceCastActivity : Activity
+{
+    [ActivityInput]
+    public VariableReference<int> Count { get; set; } = default!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        var session = (Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession)context.Variables;
+        if (session.TryResolve("other", out var target))
+            session.WriteJson(target, System.Text.Json.Nodes.JsonValue.Create(5));
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
 }
 
 /// <summary>The stimulus the resumable session leaves wait for.</summary>

@@ -552,7 +552,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             // A step that suspends again commits its session changes so far with the suspension (spec 1231 FR-015).
             var suspendedAt = _timeProvider.GetUtcNow();
-            var suspensionWrites = await StepVariableCommit.ApplyAsync(
+            var suspensionWrites = await StepVariableCommit.TryApplyAsync(
                 stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
                 workItem.WorkflowExecutionId, executableNode, replacementSuspendedState, suspendedAt, cancellationToken);
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
@@ -560,6 +560,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
                     executionState.WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
                     VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+                return;
+            }
+
+            if (suspensionWrites.Failure is { } suspensionFailure)
+            {
+                await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                    executionState, suspensionFailure, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
                 return;
             }
 
@@ -601,7 +608,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Spec 1231 FR-011-FR-013: the resumed step's session writes apply first, in this commit, under the commit rule;
         // its own earlier writes advanced its base (FR-010), so a capture of the same variable does not conflict with them.
         var completedAt = _timeProvider.GetUtcNow();
-        var stepWrites = await StepVariableCommit.ApplyAsync(
+        var stepWrites = await StepVariableCommit.TryApplyAsync(
             stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
             workItem.WorkflowExecutionId, executableNode, completedState, completedAt, cancellationToken);
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
@@ -609,6 +616,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
                 executionState.WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        if (stepWrites.Failure is { } stepFailure)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                executionState, stepFailure, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
             return;
         }
 

@@ -43,12 +43,12 @@ public sealed class ClrReconciliationTests
         // outcome-attribute fixtures, the secret binding declaration pair, the sensitivity declaration fixture, the JSON-default fixture
         // and the closed generic subclass (abstract bases, the abstract invalid credential fixtures and the
         // open generic fixtures are excluded).
-        Assert.Equal(23, store.Versions.Count);
+        Assert.Equal(24, store.Versions.Count);
 
         // Re-run: same content + same versions → zero new rows (idempotency, DuplicateHandling.Skip).
         var idsBeforeRerun = store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray();
         await reconciler.Reconcile(CancellationToken.None);
-        Assert.Equal(23, store.Versions.Count);
+        Assert.Equal(24, store.Versions.Count);
         Assert.Equal(idsBeforeRerun, store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray());
     }
 
@@ -60,14 +60,14 @@ public sealed class ClrReconciliationTests
 
         // First pass via the real CLR source persists all twenty-one concrete fixture activities.
         await InMemoryReconcilerHarness.BuildReconciler(store, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
-        Assert.Equal(23, store.Versions.Count);
+        Assert.Equal(24, store.Versions.Count);
 
         // Author bumps the versioned activity to 4.0.0 (new content + new version). The reconciler
         // matches the existing definition by ActivityTypeKey and appends the new version row.
         var bumped = StubSource("4.0.0");
         await InMemoryReconcilerHarness.BuildReconciler(store, bumped).Reconcile(CancellationToken.None);
 
-        Assert.Equal(24, store.Versions.Count);
+        Assert.Equal(25, store.Versions.Count);
         var versioned = store.Definitions.Single(d => d.ActivityTypeKey == typeof(VersionedFixtureActivity).FullName);
         var versionsForVersioned = store.Versions.Where(v => v.DefinitionId == versioned.Id).Select(v => v.Version).OrderBy(v => v).ToList();
         Assert.Equal(new List<string> { "3.0.0", "4.0.0" }, versionsForVersioned);

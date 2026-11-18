@@ -1,10 +1,15 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDescriptor, StudioActivityInputDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDescriptor,
+  StudioActivityInputDescriptor,
+  StudioActivityPropertyEditorContribution,
+  StudioExpressionDescriptor
+} from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { toActivityDescriptor } from "../workflow-editor/useWorkflowEditorData";
-import type { ActivityCatalogItem, ActivityNode, VisibleVariableView } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "../workflowTypes";
 
 // Spec 1231 FR-036: variable-reference inputs bind a declared variable in scope; the panel shows the node's
 // may-write set and the marker for an activity that may write any visible variable.
@@ -54,7 +59,14 @@ function node(overrides: Record<string, unknown> = {}): ActivityNode {
 
 function renderPanel(
   descriptor: Partial<StudioActivityDescriptor>,
-  options: { activity?: ActivityNode; onChange?(activity: ActivityNode): void; variables?: VisibleVariableView[] } = {}
+  options: {
+    activity?: ActivityNode;
+    onChange?(activity: ActivityNode): void;
+    variables?: VisibleVariableView[];
+    readOnly?: boolean;
+    editors?: StudioActivityPropertyEditorContribution[];
+    workflowState?: WorkflowDefinitionState;
+  } = {}
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -63,7 +75,9 @@ function renderPanel(
     <ActivityPropertiesPanel
       activity={options.activity ?? node()}
       descriptor={{ typeName: "Counter", inputs: [], outputs: [], ports: [], ...descriptor }}
-      editors={[]}
+      readOnly={options.readOnly}
+      workflowState={options.workflowState}
+      editors={options.editors ?? []}
       expressionEditors={[]}
       expressionDescriptors={expressionDescriptors}
       expressionDescriptorStatus="ready"
@@ -93,7 +107,7 @@ describe("variable-reference inputs", () => {
     expect(container.querySelector("textarea, input[type='text']")).toBeNull();
   });
 
-  it("writes the Variable binding for the selected variable", () => {
+  it("writes the Variable binding with the container node id and the declared name", () => {
     const onChange = vi.fn();
     const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] }, { onChange });
 
@@ -102,8 +116,140 @@ describe("variable-reference inputs", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0][0].Target).toEqual({
       typeName: "Int32",
-      expression: { type: "Variable", value: { referenceKey: "total-key", declaringScopeId: "sequence-1" } }
+      expression: { type: "Variable", value: { referenceKey: "total-key", declaringScopeId: "sequence-1", name: "Total" } }
     });
+  });
+
+  it("writes declaringScopeId 'workflow' and the name for a workflow-scope variable", () => {
+    const onChange = vi.fn();
+    const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] }, { onChange });
+
+    select(container, "workflow::counter-key");
+
+    expect(onChange.mock.calls[0][0].Target.expression).toEqual({
+      type: "Variable",
+      value: { referenceKey: "counter-key", declaringScopeId: "workflow", name: "Counter" }
+    });
+  });
+
+  it("clears the binding when the empty option is selected", () => {
+    const onChange = vi.fn();
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      { activity: node({ Target: bound("counter-key", "workflow") }), onChange }
+    );
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.value).toBe("workflow::counter-key");
+
+    select(container, "");
+
+    expect(onChange.mock.calls[0][0].Target).toEqual({ typeName: "Int32", expression: { type: "Variable", value: null } });
+  });
+
+  it("disables the select in a read-only panel", () => {
+    const onChange = vi.fn();
+    const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] }, { readOnly: true, onChange });
+
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.disabled).toBe(true);
+    select(container, "workflow::counter-key");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("notes a stored binding of another syntax and replaces it with the picked variable", () => {
+    const onChange = vi.fn();
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      { activity: node({ Target: { typeName: "Int32", expression: { type: "JavaScript", value: "getCounter()" } } }), onChange }
+    );
+
+    expect(container.querySelector('.wf-property-row [role="note"]')?.textContent)
+      .toBe("Bound with JavaScript; this input accepts only a declared variable. Pick one to replace it.");
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.value).toBe("");
+
+    select(container, "workflow::counter-key");
+    expect(onChange.mock.calls[0][0].Target.expression.type).toBe("Variable");
+  });
+
+  it("shows no syntax note for an unbound input or an empty value of another syntax", () => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Source", "Read"), referenceInput("Target", "ReadWrite")] },
+      { activity: node({ Target: { typeName: "Int32", expression: { type: "Literal", value: "" } } }) }
+    );
+
+    expect(container.querySelector('.wf-property-row [role="note"]')).toBeNull();
+  });
+
+  it("describes the select with its direction", () => {
+    const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] });
+
+    const element = container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!;
+    const describedBy = element.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe("reads and writes");
+  });
+
+  it("offers only the variables the scope analysis reports visible, not ones declared in a sibling scope", () => {
+    const declare = (referenceKey: string, name: string) =>
+      ({ referenceKey, name, type: { alias: "Int32", collectionKind: "Single" as const }, storageDriverType: null, default: null });
+    const sequence = (nodeId: string, variables: unknown[], activities: ActivityNode[]): ActivityNode => ({
+      nodeId,
+      activityVersionId: "sequence-v1",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { variables, activities } }
+    });
+    const target = node();
+    const workflowState: WorkflowDefinitionState = {
+      variables: [declare("counter-key", "Counter")],
+      rootActivity: sequence("root", [], [
+        sequence("sequence-1", [declare("total-key", "Total")], [target]),
+        sequence("sibling", [declare("sibling-key", "Sibling")], [])
+      ])
+    };
+
+    // Visibility is the server's scoped-variable analysis for the selected node (useScopedVariableAnalysis);
+    // the panel renders exactly that set, never every declaration in the workflow state.
+    const container = renderPanel({ inputs: [referenceInput("Target", "ReadWrite")] }, { activity: target, workflowState });
+
+    const options = [...container.querySelectorAll(".wf-variable-picker option")].map(option => option.textContent);
+    expect(options).toEqual(["Select a variable…", "Counter · workflow", "Total · container"]);
+    expect(options.some(option => option?.includes("Sibling"))).toBe(false);
+  });
+
+  it("keeps reference inputs out of an editor contribution's bulk literal write and its input values", () => {
+    const onChange = vi.fn();
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    const editors: StudioActivityPropertyEditorContribution[] = [{
+      id: "bulk",
+      supportsValidationReporting: true,
+      readsActivityContext: true,
+      supports: descriptor => descriptor.name === "Amount",
+      component: props => {
+        seen.push(props.context.inputValues);
+        return (
+          <button type="button" aria-label="Write all" onClick={() => props.context.setLiteralInputs?.({ Amount: "5", Target: "oops" })}>
+            write
+          </button>
+        );
+      }
+    }];
+    const existing = bound("counter-key", "workflow");
+    const container = renderPanel(
+      {
+        inputs: [
+          { name: "Amount", displayName: "Amount", referenceKey: "Amount", typeName: "Int32", isWrapped: true },
+          referenceInput("Target", "ReadWrite")
+        ]
+      },
+      { activity: node({ Target: existing }), editors, onChange }
+    );
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.at(-1)).not.toHaveProperty("Target");
+    flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Write all"]')!.click());
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].Amount.expression).toEqual({ type: "Literal", value: "5" });
+    expect(onChange.mock.calls[0][0].Target).toEqual(existing);
   });
 
   it("shows the value type and labels the direction", () => {
@@ -156,5 +302,14 @@ describe("catalog descriptor", () => {
       designFacets: [{ kind: "elsa.variable-access", schemaVersion: "1", payload: { accessesUndeclaredVariables: true } }]
     })).accessesUndeclaredVariables).toBe(true);
     expect(toActivityDescriptor(catalogItem({})).accessesUndeclaredVariables).toBeUndefined();
+  });
+
+  it("renders the marker in the panel for a catalog item that carries only the variable-access facet", () => {
+    const descriptor = toActivityDescriptor(catalogItem({
+      designFacets: [{ kind: "elsa.variable-access", schemaVersion: "1", payload: { accessesUndeclaredVariables: true } }]
+    }));
+    const container = renderPanel(descriptor);
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
   });
 });

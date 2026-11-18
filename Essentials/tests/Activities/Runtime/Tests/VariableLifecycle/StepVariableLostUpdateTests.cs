@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests.VariableLifecycle;
@@ -41,16 +42,18 @@ public sealed class StepVariableLostUpdateTests
         var resumed = await RunAndResumeAsync(harness, typeof(ResumeWriteFromInputActivity), ResumeWriteFromInputActivity.ResumeTargetKey, LostUpdateMode.Default);
 
         // The step read count = 0 as its input (version 0); the other branch wrote 1 meanwhile; the resumed session write of
-        // Seen + 1 is built on version 0: a lost update, last write wins, with a warning naming both writers.
-        var record = Assert.Single(resumed.State("node-left").VariableWrites!);
+        // Seen + 10 is built on version 0: a lost update that applies (last write wins), with a warning naming both writers
+        // and keeping the overwritten 1 so it can be restored.
+        var record = Assert.Single(resumed.State("node-left").VariableWrites!, write => write.VariableKey == VariableLifecycleTestGraph.CountKey);
         Assert.Equal(VariableWriteSource.SessionChange, record.Writer.Source);
         Assert.Equal(VariableCommitOutcome.LostUpdateWarning, record.Outcome);
         Assert.Equal(0, record.BaseVersion);
         Assert.Equal(1, record.CurrentVersion);
+        Assert.Equal(2, record.NewVersion);
         Assert.Equal("node-right", record.OverwrittenWriter!.ExecutableNodeId);
-        // Both wrote 1: the stale write is still a lost update (version check only, S-10), and an equal value writes nothing.
-        Assert.Equal(1, record.NewVersion);
-        Assert.Equal(1, VariableLifecycleTestGraph.ReadCount(resumed));
+        Assert.Equal(1, record.OverwrittenValue!.InlineValue!.Value.GetInt32());
+        Assert.Equal(10, VariableLifecycleTestGraph.ReadCount(resumed));
+        Assert.Equal(99, StepVariableTestGraph.ReadInt(resumed, StepVariableTestGraph.OtherKey));
     }
 
     [Fact]
@@ -63,9 +66,20 @@ public sealed class StepVariableLostUpdateTests
         var left = resumed.State("node-left");
         Assert.Equal(ActivityExecutionStatus.Faulted, left.Status);
         Assert.Equal("VariableLostUpdate", left.SubStatus);
-        Assert.Equal(VariableCommitOutcome.LostUpdateFault, Assert.Single(left.VariableWrites!).Outcome);
-        // The other branch's 1 stays; the refused write saved nothing.
+        var refused = Assert.Single(left.VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.LostUpdateFault, refused.Outcome);
+        Assert.Equal((0L, 1L), (refused.BaseVersion!.Value, refused.CurrentVersion));
+        Assert.Equal("node-right", refused.OverwrittenWriter!.ExecutableNodeId);
+        // The diagnostic names the variable, both versions and both writers (spec 1221 FR-013).
+        var message = new Elsa.Activities.Runtime.Services.VariableLostUpdateException(refused).Message;
+        Assert.Contains("'var-count'", message, StringComparison.Ordinal);
+        Assert.Contains("read version 0", message, StringComparison.Ordinal);
+        Assert.Contains("version 1", message, StringComparison.Ordinal);
+        Assert.Contains("node-right", message, StringComparison.Ordinal);
+        Assert.Contains("node-left", message, StringComparison.Ordinal);
+        // Nothing it staged is saved: neither the refused count nor its other intent (other = 99).
         Assert.Equal(1, VariableLifecycleTestGraph.ReadCount(resumed));
+        Assert.Equal(0, StepVariableTestGraph.ReadInt(resumed, StepVariableTestGraph.OtherKey));
     }
 
     [Fact]
@@ -105,7 +119,15 @@ public sealed class StepVariableLostUpdateTests
     [Fact]
     public async Task A_newer_session_read_does_not_hide_an_older_input_dependency()
     {
-        await using var harness = VariableLifecycleTestGraph.NewStaleBaseHarness(Ids);
+        var probe = new SessionReadProbe();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false });
+                services.AddSingleton(probe);
+            })
+            .Build(Ids);
         var right = StepVariableTestGraph.Leaf("node-right", typeof(InputThenSessionReadActivity), new Dictionary<string, RuntimeInputBinding>
         {
             ["Seen"] = StepVariableTestGraph.ReadCount("Seen"),
@@ -118,7 +140,7 @@ public sealed class StepVariableLostUpdateTests
 
         // The right step read count = 0 as its input and, later, 10 in its session. Its capture (0 + 1) is computed from the
         // input, so its base is the input's version 0, not the session read's 1: a lost update, not a silent overwrite.
-        Assert.Equal(10, InputThenSessionReadActivity.LastSessionRead);
+        Assert.Equal(10, probe.Value);
         var state = run.State("node-right");
         Assert.Equal(1, Assert.Single(state.SessionReads!).Entry.Version);
         var capture = Assert.Single(state.VariableWrites!);
@@ -184,7 +206,10 @@ public sealed class StepVariableLostUpdateTests
             ["Count"] = StepVariableTestGraph.Reference("Count", "count", VariableLifecycleTestGraph.CountKey)
         };
         if (readsInput)
+        {
             bindings["Seen"] = StepVariableTestGraph.ReadCount("Seen");
+            bindings["Other"] = StepVariableTestGraph.Reference("Other", "other", StepVariableTestGraph.OtherKey);
+        }
         var left = StepVariableTestGraph.Leaf("node-left", waitingActivity, bindings, captureInto, mode);
         var right = rightWritesCount
             ? VariableLifecycleTestGraph.Increment("node-right", typeof(IncrementActivity))

@@ -7,7 +7,8 @@ public static class StepVariables
 {
     /// <summary>
     /// The session of a context that is not a step body (spec 1231 FR-002): every call throws. A background worker gets
-    /// this one, since ADR 0093 C9 refuses a background placement of an activity that reads or writes variables.
+    /// this one: ADR 0093 C9 refuses a background placement of an activity that reads or writes variables (spec 1231 T030),
+    /// so a background body has no variables to touch.
     /// </summary>
     public static IStepVariables Unavailable { get; } = new UnavailableStepVariables();
 

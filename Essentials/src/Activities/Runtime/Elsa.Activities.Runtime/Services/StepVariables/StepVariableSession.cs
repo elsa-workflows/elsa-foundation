@@ -36,6 +36,8 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly bool _allowsFreeNames;
     private readonly LostUpdateMode _mode;
     private readonly bool _suspends;
+    private readonly IReadOnlyDictionary<(string ScopeId, string Key), bool> _bound;
+    private readonly bool _engineConsumer;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
     private readonly List<VariableSessionRead> _readOrder = [];
     private readonly Dictionary<(string ScopeId, string Key), StepVariableWriteIntent> _intents = new();
@@ -54,7 +56,9 @@ internal sealed class StepVariableSession : IStepVariableSession
         ExecutableNode node,
         IWorkflowExecutableInputValidator? validator,
         string? attemptId = null,
-        bool suspends = false)
+        bool suspends = false,
+        IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
+        bool engineConsumer = false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -69,6 +73,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         _allowsFreeNames = node.ActivityContract?.AccessesUndeclaredVariables == true;
         _mode = LostUpdateModes.Of(node);
         _suspends = suspends;
+        _bound = boundReferences ?? new Dictionary<(string ScopeId, string Key), bool>();
+        _engineConsumer = engineConsumer;
         AttemptId = attemptId
                     ?? invocation.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId
                     ?? invocation.Attempts?.LastOrDefault()?.AttemptId
@@ -94,19 +100,45 @@ internal sealed class StepVariableSession : IStepVariableSession
     public T Get<T>(VariableReference<T> reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        EnsureBound(reference, write: false);
         return GetTyped<T>(ResolvePinned(reference.ScopeId, reference.VariableKey, reference.Name));
     }
 
     public T Get<T>(ReadOnlyVariableReference<T> reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        EnsureBound(reference, write: false);
         return GetTyped<T>(ResolvePinned(reference.ScopeId, reference.VariableKey, reference.Name));
     }
 
     public void Set<T>(VariableReference<T> reference, T value)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        EnsureBound(reference, write: true);
         SetTyped(ResolvePinned(reference.ScopeId, reference.VariableKey, reference.Name), value);
+    }
+
+    // FR-023, FR-024: a reference reaches only what the workflow author bound to one of this node's inputs, in the
+    // direction the input declares. A reference the activity built itself, or a read-only binding re-wrapped as writable,
+    // would write outside the pinned may-write set; only a type marked [AccessesUndeclaredVariables] may do that (FR-025).
+    private void EnsureBound(IVariableReference reference, bool write)
+    {
+        if (_allowsFreeNames)
+            return;
+        if (!_bound.TryGetValue((reference.ScopeId, reference.VariableKey), out var writable))
+            throw Fault(new InvalidOperationException(
+                $"Variable '{reference.Name}' is not bound to an input of node '{_node.ExecutableNodeId}'; an activity reads and writes only the variables its inputs are bound to."));
+        if (write && !writable)
+            throw Fault(new InvalidOperationException(
+                $"Variable '{reference.Name}' is bound to a read-only input of node '{_node.ExecutableNodeId}'; the activity cannot write it."));
+    }
+
+    // The engine surface resolves names itself, so it is for engine-owned script activities (and marked types) only.
+    private void EnsureEngineSurface()
+    {
+        if (!_engineConsumer && !_allowsFreeNames)
+            throw Fault(new InvalidOperationException(
+                $"Activity type '{_node.ActivityType}' is not an engine script activity; it reads and writes variables only through its bound references."));
     }
 
     [Obsolete("A ReadOnlyVariableReference cannot be written; this call always throws.")]
@@ -127,6 +159,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     public bool TryResolve(string name, out StepVariableTarget target)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        EnsureEngineSurface();
         if (_byName.TryGetValue(name, out var variable))
         {
             target = new StepVariableTarget(variable.Frame.ScopeId, variable.VariableKey, variable.Name);
@@ -140,6 +173,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     public JsonNode? ReadJson(StepVariableTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
+        EnsureEngineSurface();
         var resolved = ResolvePinned(target.ScopeId, target.VariableKey, target.Name);
         if (resolved.IsTransient)
             throw Fault(new InvalidOperationException(
@@ -151,6 +185,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     public void WriteJson(StepVariableTarget target, JsonNode? value)
     {
         ArgumentNullException.ThrowIfNull(target);
+        EnsureEngineSurface();
         var resolved = ResolvePinned(target.ScopeId, target.VariableKey, target.Name);
         if (resolved.IsTransient)
             throw Fault(new InvalidOperationException(

@@ -256,6 +256,17 @@ public sealed class ClrAssemblyScanner(
             ExecutionType: ActivityExecutionType.Action);
     }
 
+    private static bool HasAttributeUpTypeChain(Type type, string attributeFullName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.GetCustomAttributesData().Any(attribute => attribute.AttributeType.FullName == attributeFullName))
+                return true;
+        }
+
+        return false;
+    }
+
     private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(Type type, IReadOnlyCollection<CustomAttributeData> attributes)
     {
         var facets = new List<ActivityDesignFacet>();
@@ -299,7 +310,8 @@ public sealed class ClrAssemblyScanner(
             facets.Add(outcomesFacet);
 
         // Spec 1231 FR-026: the free-name marker is part of the descriptor.
-        if (attributes.Any(attribute => attribute.AttributeType.FullName == typeof(AccessesUndeclaredVariablesAttribute).FullName))
+        // The marker is inherited (as the runtime contract reads it); walk the base types by name for a reflection-only load.
+        if (HasAttributeUpTypeChain(type, typeof(AccessesUndeclaredVariablesAttribute).FullName!))
         {
             facets.Add(new ActivityDesignFacet(
                 VariableAccessDesignFacet.Kind,

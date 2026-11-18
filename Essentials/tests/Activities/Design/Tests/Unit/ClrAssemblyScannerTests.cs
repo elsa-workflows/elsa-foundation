@@ -991,6 +991,8 @@ public sealed class ClrAssemblyScannerTests
 
         Assert.True(VariableAccessDesignFacet.AccessesUndeclaredVariables(
             models.Single(model => model.ActivityTypeKey == typeof(FreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.True(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(InheritedFreeNameFixtureActivity).FullName).DesignFacets));
         Assert.False(VariableAccessDesignFacet.AccessesUndeclaredVariables(
             models.Single(model => model.ActivityTypeKey == typeof(VariableReferenceFixtureActivity).FullName).DesignFacets));
     }

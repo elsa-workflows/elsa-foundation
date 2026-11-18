@@ -56,7 +56,7 @@ internal static class StepVariableWriteValidation
                 continue;
 
             var everyVisible = VariableAccessDesignFacet.AccessesUndeclaredVariables(version.DesignFacets);
-            var targets = new List<StepVariableTarget>();
+            var targets = new List<StepVariableWriteTarget>();
             foreach (var input in version.Inputs.Where(input => !string.IsNullOrWhiteSpace(input.VariableAccess)))
             {
                 var writable = StringComparer.Ordinal.Equals(input.VariableAccess, InputVariableAccess.ReadWrite);
@@ -91,7 +91,7 @@ internal static class StepVariableWriteValidation
                 }
 
                 if (writable && !targets.Any(target => target.ScopeId == scopeId && target.ReferenceKey == reference.ReferenceKey))
-                    targets.Add(new StepVariableTarget(scopeId, reference.ReferenceKey));
+                    targets.Add(new StepVariableWriteTarget(scopeId, reference.ReferenceKey));
             }
 
             if (targets.Count == 0 && !everyVisible)
@@ -105,7 +105,7 @@ internal static class StepVariableWriteValidation
 
     // FR-029: a step that writes a variable in its session and also captures an output into it. Both commit; the capture
     // applies last and wins (ADR 0090 decision 6), which is rarely what the author meant.
-    private static void AddOverlapWarnings(ActivityNode node, IReadOnlyCollection<StepVariableTarget> targets, bool everyVisible, ICollection<ValidationError> errors)
+    private static void AddOverlapWarnings(ActivityNode node, IReadOnlyCollection<StepVariableWriteTarget> targets, bool everyVisible, ICollection<ValidationError> errors)
     {
         foreach (var capture in UnorderedVariableWriteAnalyzer.DeclaredWrites(node, includeIntrinsics: false))
         {

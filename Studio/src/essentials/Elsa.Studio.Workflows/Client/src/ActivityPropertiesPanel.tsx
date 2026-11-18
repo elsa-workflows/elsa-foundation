@@ -254,6 +254,7 @@ export function ActivityPropertiesPanel({
           activity={activity}
           input={input}
           readOnly={readOnly}
+          expressionDescriptors={expressionDescriptors}
           onChange={commitInputChange}
         />
       ) : (

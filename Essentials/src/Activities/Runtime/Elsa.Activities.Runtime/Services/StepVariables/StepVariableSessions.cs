@@ -46,6 +46,27 @@ internal static class StepVariableSessions
                 durableValues)
             : null;
         var suspends = activity is IStatefulActivity || activity is IRuntimeActivityCheckpointParticipant;
-        return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends);
+        return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends,
+            BoundReferences(node, contract), activity is IStepVariableSessionConsumer);
+    }
+
+    // The variables this node's reference inputs are bound to, from their pinned bindings, and whether each is writable.
+    private static IReadOnlyDictionary<(string ScopeId, string Key), bool> BoundReferences(ExecutableNode node, Elsa.Activities.Runtime.Core.Models.ActivityContract contract)
+    {
+        var bound = new Dictionary<(string ScopeId, string Key), bool>();
+        foreach (var input in contract.Inputs.Values)
+        {
+            if (input.VariableReference is not { } reference ||
+                !node.InputBindings.TryGetValue(input.Key, out var binding) ||
+                binding.LiteralValue is not { ValueKind: System.Text.Json.JsonValueKind.Object } literal ||
+                !literal.TryGetProperty("scopeId", out var scope) || !literal.TryGetProperty("variableKey", out var key))
+                continue;
+
+            var address = (scope.GetString()!, key.GetString()!);
+            var writable = reference.Access == Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess.ReadWrite;
+            bound[address] = bound.TryGetValue(address, out var existing) ? existing || writable : writable;
+        }
+
+        return bound;
     }
 }

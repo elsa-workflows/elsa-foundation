@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { StudioActivityDescriptor, StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioActivityInputDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import { formatTypeName, readWrappedInput, withExpression, writeInputValue } from "./activityProperties";
 import { makeVariableReference, readVariableReference } from "./scopedVariables";
 import { optionKey, selectedOptionKey, VariableTargetSelect } from "./variableTargetPicker";
@@ -48,21 +48,39 @@ export function readMayWriteSet(
   return names;
 }
 
+/** The display name of the other syntax a variable-reference input is stored with, or null when it is unbound or a Variable binding. */
+export function readForeignBindingSyntax(
+  activity: ActivityNode,
+  input: StudioActivityInputDescriptor,
+  expressionDescriptors: StudioExpressionDescriptor[] = []
+): string | null {
+  const { expression } = readWrappedInput(activity, input);
+  if (expression.type === variableSyntax) return null;
+  const value = expression.value;
+  if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return null;
+  return expressionDescriptors.find(descriptor => descriptor.type === expression.type)?.displayName || expression.type;
+}
+
 export function VariableReferenceInputRow({
   activity,
   input,
   readOnly,
+  expressionDescriptors = [],
   onChange
 }: {
   activity: ActivityNode;
   input: StudioActivityInputDescriptor;
   readOnly: boolean;
+  expressionDescriptors?: StudioExpressionDescriptor[];
   onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
 }) {
   const labelId = useId();
+  const accessId = useId();
   const authoring = useWorkflowReferenceAuthoring();
   const label = input.displayName || input.name;
   const access = describeVariableAccess(input);
+  // Validation/recovery state: a stored binding of another syntax is kept until the author picks a variable.
+  const foreignSyntax = readForeignBindingSyntax(activity, input, expressionDescriptors);
 
   return (
     <div className="wf-property-row">
@@ -70,20 +88,33 @@ export function VariableReferenceInputRow({
         <label id={labelId}>{label}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
-          <span className="wf-variable-access">{access}</span>
+          <span id={accessId} className="wf-variable-access">{access}</span>
         </div>
       </div>
       {input.description ? <p>{input.description}</p> : null}
+      {foreignSyntax ? (
+        <p className="wf-variable-picker-note" role="note">
+          Bound with {foreignSyntax}; this input accepts only a declared variable. Pick one to replace it.
+        </p>
+      ) : null}
       {authoring ? (
         <VariableTargetSelect
           ariaLabelledBy={labelId}
+          ariaDescribedBy={accessId}
           visibleVariables={authoring.visibleVariables}
           status={authoring.status}
           retry={authoring.retry}
           disabled={readOnly || input.isReadOnly === true}
           selected={selectedOptionKey(readBoundVariable(activity, input))}
           onSelect={selection => {
-            const reference = selection ? makeVariableReference(selection.referenceKey, selection.scopeId) : null;
+            // Publish reads the declared name alongside the key (RuntimeInputBindingCompiler.ReadVariableName).
+            const name = selection
+              ? authoring.visibleVariables.find(variable =>
+                optionKey(variable.referenceKey, variable.scopeId) === optionKey(selection.referenceKey, selection.scopeId))?.name
+              : undefined;
+            const reference = selection
+              ? { ...makeVariableReference(selection.referenceKey, selection.scopeId), ...(name ? { name } : {}) }
+              : null;
             onChange(writeInputValue(activity, input, withExpression(readWrappedInput(activity, input), variableSyntax, reference)), input);
           }}
         />

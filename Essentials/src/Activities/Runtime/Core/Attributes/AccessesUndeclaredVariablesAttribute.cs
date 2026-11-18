@@ -6,7 +6,7 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 /// spec 1231 FR-025). A name resolves at run time to the nearest visible declaration; an undeclared name faults the step.
 /// The marker is pinned into the activity contract and shown in the descriptor, so publication, inspection and Studio
 /// can show that the activity may touch any visible variable: the concurrent-write rule counts it as touching every
-/// visible variable, and a background placement is refused (ADR 0093 C9).
+/// visible variable, and ADR 0093 C9 refuses it a background placement (spec 1231 T030).
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]
 public sealed class AccessesUndeclaredVariablesAttribute : Attribute;

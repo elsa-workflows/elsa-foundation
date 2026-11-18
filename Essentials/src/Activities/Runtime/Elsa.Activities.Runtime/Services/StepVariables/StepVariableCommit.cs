@@ -13,6 +13,31 @@ namespace Elsa.Activities.Runtime.Services.StepVariables;
 /// </summary>
 internal static class StepVariableCommit
 {
+    /// <summary>
+    /// <see cref="ApplyAsync"/>, with a commit the step's state no longer allows (a written container frame was closed,
+    /// or its owner is gone) turned into a step fault: the result carries <see cref="StepVariableCommitResult.Failure"/>
+    /// and applies nothing, so the handler records it through its ordinary fault path.
+    /// </summary>
+    public static async ValueTask<StepVariableCommitResult> TryApplyAsync(
+        StepVariableSession? session,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        string workflowExecutionId,
+        ExecutableNode node,
+        ActivityExecutionState invocation,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ApplyAsync(session, workflowExecutionStateStore, activityExecutionStateStore, workflowExecutionId, node, invocation, occurredAt, cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or KeyNotFoundException)
+        {
+            return StepVariableCommitResult.None with { Failure = exception };
+        }
+    }
+
     public static async ValueTask<StepVariableCommitResult> ApplyAsync(
         StepVariableSession? session,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
@@ -118,6 +143,9 @@ internal sealed record StepVariableCommitResult(
     IReadOnlyList<RecordedVariableWrite> Written)
 {
     public static StepVariableCommitResult None { get; } = new(null, [], [], null, []);
+
+    /// <summary>A commit the step's state no longer allows; the step faults with it and nothing applies.</summary>
+    public Exception? Failure { get; init; }
 
     /// <summary>The invocation after the commit; null when there was no session.</summary>
     public ActivityExecutionState? Invocation { get; init; }

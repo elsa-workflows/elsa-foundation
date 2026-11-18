@@ -130,11 +130,6 @@ public sealed record ActivityExecutionState(
     public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
 
     /// <summary>
-    /// The completion a <c>Fault</c> lost update refused (spec 1221 FR-017): the body succeeded, but its commit did not
-    /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
-    /// every other invocation.
-    /// </summary>
-    /// <summary>
     /// The bases this invocation's own applied writes advanced (spec 1231 FR-010, ADR 0092 decision 4): one entry per
     /// variable, at the version its latest own write produced. Persisted with the invocation, so a session write on
     /// suspension and a capture on completion do not conflict, and restored on resume. Absent until the invocation
@@ -160,6 +155,11 @@ public sealed record ActivityExecutionState(
             : this with { SessionReads = [.. SessionReads ?? [], .. reads] };
     }
 
+    /// <summary>
+    /// The completion a <c>Fault</c> lost update refused (spec 1221 FR-017): the body succeeded, but its commit did not
+    /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
+    /// every other invocation.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RecordedActivityCompletion? RecordedCompletion { get; init; }
 

@@ -222,6 +222,24 @@ public sealed class StepVariableSessionTests
         Assert.Equal("node-parallel", Assert.Single(run.State("node-right").VariableWrites!).ScopeId);
     }
 
+    // FR-023, FR-024, FR-025: a step reaches only the variables its inputs bind, in their direction, unless its type is
+    // marked; the engine surface is for engine script activities.
+    [Theory]
+    [InlineData(typeof(ForgedReferenceActivity))]
+    [InlineData(typeof(RewrappedReadOnlyActivity))]
+    [InlineData(typeof(EngineSurfaceCastActivity))]
+    public async Task A_step_cannot_write_a_variable_its_inputs_do_not_bind_writable(Type activityType)
+    {
+        await using var harness = VariableLifecycleTestGraph.NewHarness(Ids);
+
+        var run = await harness.RunAsync(StepVariableTestGraph.Single(StepVariableTestGraph.CountLeaf("node-root", activityType)));
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-root").Status);
+        Assert.Equal(0, VariableLifecycleTestGraph.ReadCount(run));
+        Assert.Equal(0, StepVariableTestGraph.ReadInt(run, StepVariableTestGraph.OtherKey));
+        Assert.Null(run.State("node-root").VariableWrites);
+    }
+
     private static ExecutableNode OrderLeaf(Type activityType) =>
         StepVariableTestGraph.Leaf("node-root", activityType, new Dictionary<string, RuntimeInputBinding>
         {

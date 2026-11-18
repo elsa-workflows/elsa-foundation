@@ -678,7 +678,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // A step that suspends commits its changes so far with the suspension; its pending intents are not carried
             // across it (spec 1231 FR-015), and its resumed evaluation starts a fresh session (ADR 0092 decision 11).
             var suspendedAt = TimeProvider.GetUtcNow();
-            var suspensionWrites = await StepVariableCommit.ApplyAsync(
+            var suspensionWrites = await StepVariableCommit.TryApplyAsync(
                 stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), activityExecutionStateStore,
                 workItem.WorkflowExecutionId, executableNode, typedSuspendedState, suspendedAt, cancellationToken);
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
@@ -686,6 +686,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
                     invokePayload, state.WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
                     VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+                return;
+            }
+
+            if (suspensionWrites.Failure is { } suspensionFailure)
+            {
+                await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                    invokePayload, state, suspensionFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
                 return;
             }
 
@@ -734,7 +741,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         // Spec 1231 FR-011-FR-013: the step's session writes apply first, in this same commit, under the commit rule; a
         // Fault lost update refuses the whole step. The captures then apply on top, so a capture wins.
-        var stepWrites = await StepVariableCommit.ApplyAsync(
+        var stepWrites = await StepVariableCommit.TryApplyAsync(
             stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), activityExecutionStateStore,
             workItem.WorkflowExecutionId, executableNode, completedState, occurredAt, cancellationToken);
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
@@ -742,6 +749,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
                 invokePayload, state.WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        if (stepWrites.Failure is { } stepFailure)
+        {
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                invokePayload, state, stepFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
             return;
         }
 

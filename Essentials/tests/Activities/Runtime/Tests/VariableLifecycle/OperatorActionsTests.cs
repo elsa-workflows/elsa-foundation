@@ -617,7 +617,6 @@ public sealed class LoopItemFlakyActivity(FailureBudget budget, CountReadLog rea
     }
 }
 
-/// <summary>An External leaf that reads <c>Count</c>, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>
 /// <summary>Increments <c>count</c> in its session, then faults the first time it runs (spec 1231 T016).</summary>
 public sealed class FlakySessionIncrementActivity(FailureBudget budget) : Activity
 {
@@ -633,6 +632,7 @@ public sealed class FlakySessionIncrementActivity(FailureBudget budget) : Activi
     }
 }
 
+/// <summary>An External leaf that reads <c>Count</c>, faults while its budget lasts, and otherwise returns <c>Count + 1</c>.</summary>
 public sealed class FlakyIncrementActivity(FailureBudget budget, CountReadLog reads) : Activity<Incremented>
 {
     [ActivityInput]

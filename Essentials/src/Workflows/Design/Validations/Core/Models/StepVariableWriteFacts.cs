@@ -16,7 +16,7 @@ public sealed record StepVariableWriteFacts(
 }
 
 /// <summary>The may-write set of one node: its explicit targets and whether it may write every visible variable.</summary>
-public sealed record StepVariableWriters(IReadOnlyCollection<StepVariableTarget> Targets, bool MayWriteEveryVisibleVariable);
+public sealed record StepVariableWriters(IReadOnlyCollection<StepVariableWriteTarget> Targets, bool MayWriteEveryVisibleVariable);
 
 /// <summary>A variable a step may write: its declaring scope (<c>workflow</c> for the root) and reference key.</summary>
-public sealed record StepVariableTarget(string ScopeId, string ReferenceKey);
+public sealed record StepVariableWriteTarget(string ScopeId, string ReferenceKey);

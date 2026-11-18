@@ -17,6 +17,7 @@ const optionSeparator = "::";
 export function VariableTargetSelect({
   ariaLabelledBy,
   ariaLabel,
+  ariaDescribedBy,
   visibleVariables,
   status,
   retry,
@@ -27,6 +28,7 @@ export function VariableTargetSelect({
 }: {
   ariaLabelledBy?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
   visibleVariables: VisibleVariableView[];
   status: ScopedVariableAnalysisStatus;
   retry?: () => void;
@@ -45,6 +47,7 @@ export function VariableTargetSelect({
       <select
         aria-labelledby={ariaLabelledBy}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         value={selected}
         disabled={disabled || optionsUnavailable}
         onChange={event => onSelect(parseOptionKey(event.target.value))}
