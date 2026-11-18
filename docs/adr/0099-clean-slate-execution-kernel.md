@@ -69,7 +69,9 @@ Recovery in place adds three proposed obligations to the contract, a coordinator
 round, not an owner decision ([register](../architecture/decisions.md#the-gate-2-fix-round-17-november)): each model
 implements `RestoreWaits`, which returns the waits its committed state holds, each timer as a `TimerSpec` (the id
 `Send` returned, its kind, payload and absolute due), and arms a timer it may restore with `SendOptions.DueAt`, an
-absolute time on `ITurn.Now`'s clock that the kernel writes unchanged
+absolute time on `ITurn.Now`'s clock that the kernel writes unchanged; each job comes back as a `JobSpec` (job key,
+arguments captured at arm, effect key) and each subscription counts toward the plan's bounds (fourth review, also a
+coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fourth-review-round-18-november))
 ([observability](../architecture/observability.md#recover)).
 
 ### 3. Four logical seams
@@ -88,7 +90,9 @@ event matching and the effect key never cross tenants; every tenant-keyed record
 the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
 1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
 name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
-database's default collation is.
+database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
+insert-or-read before routing, so equivalent spellings reach one actor; an operation id is compared exactly and stored
+as a digest (fourth review R4-M6, a coordinator design choice).
 
 ### 4. Deployment profiles
 
@@ -157,11 +161,11 @@ Each answer is a Proposed page with the owner's decisions of 17 November at its 
 | Question | Page | Decisions in short |
 |---|---|---|
 | 1. Migrating running instances | [migrating-running-instances](../architecture/migrating-running-instances.md) | State versions per model and activity; release 1 migrates running and suspended instances at a turn boundary for the simple cases; a refused instance stays running |
-| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope; every delete names tenant, creation and terminal mark and is checked at the owner, with no force path |
+| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope; every delete names tenant, instance, creation and terminal mark and is checked at the owner, with no force path; a deleted child's retirement marker keeps a bounded cancellation obligation, so its parent's later terminate still reaches its descendants (coordinator design choices of the fourth review round) |
 | 3. Fairness and backpressure | [fairness-and-backpressure](../architecture/fairness-and-backpressure.md) | Admission at the edge; no running-instance quotas; backlog on the fence row; only load-shedding commands bypass `InboxFull` |
 | 4. Large fan-out | [large-fan-out](../architecture/large-fan-out.md) | Release 1 caps a parallel ForEach at 1,000 items, degree 16 by default and 64 at most; a combiner tree after release 1; a parked child keeps its parent waiting |
 | 5. Job workers | [job-workers](../architecture/job-workers.md) | One job contract; standalone Elsa.Jobs and the remote worker protocol in 1.x |
-| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps each row by kept reason and full delivery handle; every resolution (recover, discard, terminate, delete, and a finite `Parked` window's expiry as an automatic discard, a coordinator design choice of the gate 2 fix round) is a bounded drain; every resolution except recover sends a waiting parent the one final notice its drain owed, and a recover sends none, so the child's later end sends the ordinary notice |
+| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps each row by kept reason and full delivery handle; every resolution (recover, discard, terminate, delete, and a finite `Parked` window's expiry as an automatic discard, a coordinator design choice of the gate 2 fix round) is a bounded drain; every resolution except recover sends a waiting parent the one final notice its drain owed, and a recover sends none, so the child's later end sends the ordinary notice; the rows a recover released keep delivery precedence until consumed, and every Park selection names its instance (coordinator design choices of the fourth review round) |
 | 7. Write volume | [write-volume](../architecture/write-volume.md) | Snapshot plus journal stays; values by reference in the same database, accepted by a PostgreSQL run |
 
 The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), with the owner's six decisions of
