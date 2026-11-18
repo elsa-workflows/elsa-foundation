@@ -965,6 +965,36 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(ValueRepresentation.FormattedContent, responseBody.SourceRepresentation);
     }
 
+    // Spec 1231 FR-022, FR-026 (User Story 2 scenario 6, User Story 4 scenario 5): a variable-reference input reaches the
+    // catalog with its value type and direction, and the free-name marker as a design facet.
+    [Fact]
+    public void Variable_reference_inputs_carry_their_value_type_and_direction()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(VariableReferenceFixtureActivity).Assembly);
+        var inputs = CreateScanner().Scan(folder.Path)
+            .Single(model => model.ActivityTypeKey == typeof(VariableReferenceFixtureActivity).FullName)
+            .Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        var balance = inputs[nameof(VariableReferenceFixtureActivity.Balance)];
+        Assert.Equal((InputVariableAccess.ReadWrite, "Decimal"), (balance.VariableAccess, balance.Type.Alias));
+        Assert.Equal((InputVariableAccess.UiHint, InputVariableAccess.ExpressionType, true), (balance.UiHint, balance.DefaultSyntax, balance.IsRequired));
+        var currency = inputs[nameof(VariableReferenceFixtureActivity.Currency)];
+        Assert.Equal((InputVariableAccess.Read, "String"), (currency.VariableAccess, currency.Type.Alias));
+        Assert.Null(inputs[nameof(VariableReferenceFixtureActivity.Label)].VariableAccess);
+    }
+
+    [Fact]
+    public void The_free_name_marker_is_a_design_facet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(FreeNameFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        Assert.True(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(FreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.False(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(VariableReferenceFixtureActivity).FullName).DesignFacets));
+    }
+
     [Fact]
     public void SendHttpRequest_DeclaresConnectionAsAnHttpActivityConnection_AndNoCredentialInput()
     {

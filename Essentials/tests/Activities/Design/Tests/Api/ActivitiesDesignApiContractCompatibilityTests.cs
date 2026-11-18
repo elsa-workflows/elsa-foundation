@@ -262,7 +262,10 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // command constructors/deconstructors are retained and explicitly covered above.
         // It moved for RuntimeActivityType as an additive body init property on ActivityAuthoringDescriptorView: the declared
         // runtime type (e.g. Elsa.HttpEndpoint) a compiled node carries for a CLR activity whose catalog key is its CLR full name.
-        Assert.Equal("6413fb85c748296145925fb4272cacb8e4da10f83844d05e05c5da391c93e2ee", PublicShapeHash(ContractTypes));
+        // Spec 1231 moved it for VariableAccess, an optional trailing positional parameter on ActivityInputDescriptorView
+        // (as ConnectionType before it), and AccessesUndeclaredVariables, an additive body init property on
+        // ActivityAuthoringDescriptorView: an input's variable-reference direction and the free-name marker.
+        Assert.Equal("b62958b33e6d5393d406e685f7df2fd7f9bef3027127d6bffcce1f00faef8fd1", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
