@@ -67,3 +67,27 @@ answers (a doubt is a reset, as in the kernel), crash and restart, while leases 
 action: no commit landed under a stale epoch or bound, no two rows at one position of a virtual partition, every
 virtual partition's journal is gapless, and in (ii) the range rows cover without overlap. Then the system settles and
 every node must be able to commit on everything it holds. `mutations` switches one rule off at a time.
+
+In (i) it also models K1's protocol (slice 0 of the range-ownership work, before any Worker change):
+
+- **Seen and Trial marks per virtual-partition epoch (D4).** Messages arrive at a virtual partition; the owner polls
+  what was not seen at that partition's epoch (`Seen < epoch`), marks it in a fenced flush (on trial if it is a
+  suspect: on trial, or seen at a (partition, epoch) this process never took), and consumes it in a later flush. A take
+  from another owner counts an attempt on what was on trial at that partition's old epoch.
+- **The witness.** An outstanding flush spans several virtual partitions; one of them alone runs out of lease and
+  another node takes it; then the flush lands. It must be refused whole.
+- **The reset that keeps what is held.** After a refused flush the owner re-reads its rows (one statement, renewing
+  them, as a beat that returns its rows): it keeps every partition still its at the epoch it holds, with the store's
+  position, takes nothing, drops the rest, and polls the kept partitions again, including what it marked at their
+  epoch. A lost answer still resets by a take.
+- **The projector per virtual partition.** A round reads one partition's cursor and position and writes later or at
+  once, on any node; the write moves the cursor only if it is still where the round read it, and a round may die
+  between the read and the write. At the end every cursor catches up.
+
+Its checks, after every action: W1 a flush lands whole or not at all; W3 after the witness the old owner still serves
+every other partition of the flush at the same epoch and position (liveness); S1 no message is marked above its
+partition's epoch, or at it while the partition's owner does not have it in memory (stranded); S2 the poll's suspect
+test agrees with who really marked the message; T1 attempts count exactly the owners lost at the epoch the trial ran
+under; C1 a message is consumed once; P1 no journal row is projected twice or without a commit; and, after settling, P3
+every journal row is projected. The mutations `FenceSubset` (W1), `SeenAtNodeEpoch` (S1; T1 and S2 catch it alone too),
+`ResetAll` (W3), `ResetPollsSeenBelow` (S1) and `ProjectorBlindWrite` (P1) are each caught at both counts.

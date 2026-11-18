@@ -159,6 +159,74 @@ comparison. The 16-node runs refuse more because leases run out faster against m
 | (i) A release while a flush is in flight | not caught (as expected) | | a release changes no kept row; a commit that lands on a freed row before its take moves the position the take reads |
 | (i) A beat renews only the rows the last flush touched | not caught (as expected) | | an availability cost: idle rows expire and are taken; the owner resets; nothing wrong lands |
 
+### K1 slice 0: marks per virtual-partition epoch, partial takeover, the keeping reset, the projector (18 November)
+
+Before any Worker change, variant (i) of the simulation now also models what K1 changes in the protocol
+([the README](experiments/VirtualPartitions/README.md) has the detail):
+
+- **D4.** Messages carry Seen and Trial marks recorded at their virtual partition's epoch at the take. The poll reads
+  `Seen < epoch` against that partition's epoch. The suspect test asks whether this process took that (partition,
+  epoch). A take from another owner counts an attempt on what was on trial at that partition's old epoch.
+- **The witness.** A flush spanning several virtual partitions is outstanding. One of them alone runs out of lease and
+  another node takes it. Then the flush lands, and it must be refused whole.
+- **The keeping reset.** After a refused flush the owner re-reads its rows in one statement (it renews them, as a beat
+  that returns its rows). It keeps each partition still its at the epoch it holds, with the store's position. It takes
+  nothing and drops the rest. It then polls the kept partitions again, with `Seen <= epoch` this once. A lost answer
+  still resets by a take.
+- **The projector.** It runs rounds per virtual partition, on any node. A round's cursor write is conditional, and a
+  round may die between its read and its write.
+
+The checks run after every action:
+- **W1:** a flush lands whole or not at all.
+- **W3:** after the witness, the old owner still serves every other partition of the flush at the same epoch and position.
+- **S1:** no message is marked above its partition's epoch, and none is stranded (marked at the epoch while the owner
+  does not hold it in memory).
+- **S2:** the suspect test agrees with who really marked the message.
+- **T1:** attempts count exactly the owners lost at the epoch the trial ran under.
+- **C1:** a message is consumed once.
+- **P1:** no row is projected twice or without a commit.
+- **P3:** every row is projected after settling.
+
+Every run passed, and (ii)'s figures are unchanged, bit for bit (its seeds draw the same actions). The (i) rows
+differ from the table above because a quarter of (i)'s actions are now messages, the witness and projector rounds.
+The figures are per seed:
+
+| Run (i) | Landed / refused | Resets: by a take / keeping | Takes (rows) | Partial takeovers in flight | Marks (trials) / consumed | Projector rounds: run / to catch up | Time |
+|---|---|---|---|---|---|---|---|
+| 2,000 x 300, 4 nodes, 1,024 | 32.3 / 3.7 | 2.5 / 2.4 | 23.9 (140) | 1.3 | 8.0 (0.3) / 2.7 | 15.7 / 53.2 | 3.1 s |
+| 2,000 x 300, 4 nodes, 4,096 | 33.0 / 3.8 | 2.5 / 2.4 | 24.3 (550) | 1.3 | 8.0 (0.3) / 2.7 | 15.7 / 56.7 | 6.6 s |
+| 10,000 x 300, 4 nodes, 1,024 | 32.0 / 3.7 | 2.5 / 2.4 | 23.8 (141) | 1.2 | 7.9 (0.3) / 2.6 | 15.7 / 52.6 | 16.8 s |
+| 10,000 x 300, 4 nodes, 4,096 | 32.7 / 3.7 | 2.5 / 2.4 | 24.2 (555) | 1.2 | 7.9 (0.3) / 2.6 | 15.7 / 56.2 | 36.7 s |
+| 500 x 1,000, 4 nodes, 1,024 | 69.7 / 13.0 | 5.8 / 10.6 | 79.0 (111) | 4.1 | 58.1 (11.2) / 18.8 | 54.2 / 155.2 | 2.7 s |
+| 500 x 1,000, 4 nodes, 4,096 | 70.1 / 13.1 | 5.8 / 10.7 | 81.0 (431) | 4.1 | 56.3 (10.4) / 17.9 | 54.1 / 176.2 | 6.3 s |
+| 1,000 x 300, 16 nodes, 1,024 | 40.8 / 20.0 | 15.3 / 5.7 | 44.5 (72) | 1.0 | 1.5 (0.0) / 0.2 | 15.6 / 44.8 | 5.0 s |
+| 1,000 x 300, 16 nodes, 4,096 | 42.9 / 19.9 | 15.3 / 5.6 | 45.6 (280) | 1.0 | 1.5 (0.0) / 0.2 | 15.6 / 49.5 | 10.5 s |
+
+Trials are rare at 300 actions (0.3 per seed) and absent at 16 nodes. The 1,000-action runs exercise them (11 per
+seed). The new mutations, at 300 seeds of 300 actions and both counts, are each caught:
+
+| Mutation (i) | Caught | By |
+|---|---|---|
+| `FenceSubset`: the k-row fence covers only the rows still held, and the batch lands those | seed 1 at both counts | W1 |
+| `SeenAtNodeEpoch`: a mark records the picture's highest epoch | seed 2 at both counts | S1; with S1 off, T1 at seed 9; with both off, S2 at seed 34 |
+| `ResetAll`: a refused flush resets the whole picture by a take | seed 1 at both counts | W3, as liveness: the take is refused while the moved partition is live elsewhere, so the kept partitions go unserved until their lease runs out and a take moves them. Nothing wrong lands. |
+| `ResetPollsSeenBelow`: the poll after a keeping reset reads `Seen < epoch` | seeds 3 (1,024) and 38 (4,096) | S1 (stranded) |
+| `ProjectorBlindWrite`: the cursor write is not conditional | seed 1 at both counts | P1 |
+
+Every earlier mutation keeps its verdict. Two adjustments keep the earlier rules intact:
+- W3 skips a picture still in doubt, because `RetryAfterLostAnswer` does not reset by design and the position check is its backstop.
+- A lost answer still resets by a take. A keeping reset there would leave the position check as the only guard, and
+  `FenceWithoutPosition` would become a defect.
+
+What this settles for slices 2a and 2b:
+1. **The poll's `Seen < epoch` holds only after a reset by a take.** A reset that keeps partitions at their epoch must
+   read `Seen <= epoch` once for them, or re-take them. Otherwise what it marked there is stranded until a takeover.
+2. **A refused k-row fence does not say which row was stale.** The reset re-reads its rows: one statement over the
+   held set, returning id, epoch and position.
+3. **A mark takes its message's partition epoch,** so a batch carries an epoch per virtual partition and marks only
+   messages of partitions it fences. Today `InMemoryStore` writes `batch.Epoch`, which is the `SeenAtNodeEpoch` defect
+   once a batch spans partitions.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds
@@ -205,8 +273,8 @@ comparison. The 16-node runs refuse more because leases run out faster against m
   partitions; they do not exercise range ownership. The ownership simulation above models the protocol; the worker itself is unmodelled.
 - SQL Server and MySQL were not run (the checked-fence count above is PostgreSQL's); the SQL Server deadlock surface of
   *k* fence rows in one batch (E9) is an unmeasured risk for (i) in the batch there.
-- Not modelled: trial and attempt marks per virtual-partition epoch at a take in (i); a flush that spans two of a node's
-  range fragments in (ii); the projector's per-virtual-partition rounds; MongoDB.
+- Not modelled: a flush that spans two of a node's range fragments in (ii); MongoDB; in (i), the per-node Worker (D1)
+  itself, poison (`MaxAttempts`) and trial groups, and deletes in the projector.
 - `tcp` for one 100-instance flush read 3 instead of 2 once (README: the PostgreSQL stream varies by a read or two).
 - **Unverified (raised in review):** on PostgreSQL every row update is a new tuple version, so (i)'s beat of *R* rows
   every few seconds per node is steady WAL and vacuum churn even when the cluster is idle (1,024 rows per beat at
