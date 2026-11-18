@@ -189,6 +189,9 @@ run inline. Input bindings, structural evaluations and background workers have n
 - **Fault, cancel, suspend.** A step that faults or is cancelled saves nothing it staged. A step that suspends commits
   its changes so far with the suspension; the resumed evaluation gets a fresh session. A withheld value, an undeclared
   free name or a value of the wrong type faults the step on the host side, even when the body catches the exception.
+- **Background.** A background worker has no session. A marked type, an engine script activity and any
+  variable-reference input are refused a background placement under ADR 0093 C9 (`VF-BG-001 (C9)`), at publication,
+  template placement, admission and on the worker.
 - **Publish.** A variable-reference input must be bound, by a `Variable` expression, to a variable declared in a visible
   scope; a loop item or index is not a declared variable yet, so it cannot be bound, and at run time it is read-only.
   Draft validation reports each case as an error

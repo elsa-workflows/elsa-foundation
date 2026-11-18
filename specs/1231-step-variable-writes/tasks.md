@@ -11,7 +11,7 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 1: Setup
 
-- [ ] T001 Merge the initiative branch into the implementing branch and confirm S-10's types (`VariableReadSetEntry`, `VariableCommitRule`, `LostUpdateMode`, `VariableWriteSource.SessionChange`) and S-11's `BackgroundEligibility` are present; record the heads in the PR body.
+- [x] T001 Merge the initiative branch into the implementing branch and confirm S-10's types (`VariableReadSetEntry`, `VariableCommitRule`, `LostUpdateMode`, `VariableWriteSource.SessionChange`) and S-11's `BackgroundEligibility` are present; record the heads in the PR body. *Branch cut from `3f1e8b47ea` (S-10 #4316 on it); S-11 #4725 merged in at `db0e6d66e2`. Heads recorded in the PR body.*
 - [x] T002 [P] Add the public API entries to `PublicAPI.Unshipped.txt` of the touched packages as types are added (tracked per phase).
 
 ## Phase 2: Foundational — the session and the commit path (blocks every story)
@@ -60,10 +60,10 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 6: User Story 5 — background eligibility C9 (P2, same PR as Phase 4)
 
-- [ ] T030 [US5] Extend `BackgroundEligibility.AccessesVariablesByName(Type)` in `Essentials/src/Workflows/Runtime/Core/Background/BackgroundEligibility.cs`: `[AccessesUndeclaredVariables]`, any `VariableReference<T>` or `ReadOnlyVariableReference<T>` input (Q2); keep `IRuntimeScopedVariableReader` (FR-030 a–c).
-- [ ] T031 [US5] Add a subject fact `TouchesVariables` built from the pinned contract (marker, reference inputs), checked by C9 even when `TypeCheckedAtRunTime` (FR-031); update `ForPinnedNode` and the template placer's subject.
-- [ ] T032 [P] [US5] **(test-first)** For each signal — (a) marker, (b) writable reference, (c) read-only reference — publication is refused with exactly `VF-BG-001 (C9)` and the run-time re-check (admission and worker) refuses with the same text.
-- [ ] T033 [P] [US5] **(test-first)** Template placement in a design-only shell refuses the contract-visible signals at placement and the type-only ones at admission.
+- [x] T030 [US5] Extend `BackgroundEligibility.AccessesVariablesByName(Type)` in `Essentials/src/Workflows/Runtime/Core/Background/BackgroundEligibility.cs`: `[AccessesUndeclaredVariables]`, any `VariableReference<T>` or `ReadOnlyVariableReference<T>` input (Q2); keep `IRuntimeScopedVariableReader` (FR-030 a–c). *Done: `AccessesVariablesByName` covers `IRuntimeScopedVariableReader`, the marker (also inherited, and `IStepVariableSessionConsumer`), and any reference-typed property; the refusal names the signal.*
+- [x] T031 [US5] Add a subject fact `TouchesVariables` built from the pinned contract (marker, reference inputs), checked by C9 even when `TypeCheckedAtRunTime` (FR-031); update `ForPinnedNode` and the template placer's subject. *Done: `BackgroundEligibilitySubject.TouchesVariables` reads the pinned contract (marker, reference inputs); C9 checks it before the CLR type, so a deferred template placement refuses it. Every caller already builds the subject from the pinned node or contract.*
+- [x] T032 [P] [US5] **(test-first)** For each signal — (a) marker, (b) writable reference, (c) read-only reference — publication is refused with exactly `VF-BG-001 (C9)` and the run-time re-check (admission and worker) refuses with the same text. *`BackgroundEligibilityTests.C9_refuses_each_step_variable_signal` (publication and run time, per signal, plus the engine script case) and `BackgroundEligibilityPublicationTests.C9_refuses_a_step_variable_signal_in_the_background`.*
+- [x] T033 [P] [US5] **(test-first)** Template placement in a design-only shell refuses the contract-visible signals at placement and the type-only ones at admission. *`BackgroundEligibilityTests.A_placement_without_the_runtime_type_refuses_the_contract_visible_signals` and `…_leaves_a_type_only_signal_to_the_worker`.*
 - [x] T034 [US5] Update ADR 0093's C9 *Today* note only through an amendment PR if the coordinator chooses Q2's alternative; otherwise nothing (`RunJavaScript` is already refused in the background by S-11). *Nothing to do: Q2 was answered as recommended (2026-11-17), so no amendment.*
 
 ## Phase 7: Publish-time write analysis (all stories)
@@ -84,8 +84,8 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 ## Phase 9: Polish and evidence
 
 - [x] T042 Measure write cost for a 1 MiB value and a hot loop; record in research.md R-9 (FR-035, SC-007). *Measured; numbers in research.md R-9.*
-- [ ] T043 [P] Docs: activity authoring (step writes, references, the marker, `[ActivityLostUpdateMode]`), script docs (write forms; copy explicitly with `{...variables.o}`), `EXTENSION_POINTS.md`, Elsa 3 conversion guide, release notes (§E2.6.1 note).
-- [ ] T044 Map every ADR 0090 *Required evidence* item in scope to its test in the PR body (SC-001); list the host-interop items as out of scope (#4103).
+- [ ] T043 [P] Docs: activity authoring (step writes, references, the marker, `[ActivityLostUpdateMode]`), script docs (write forms; copy explicitly with `{...variables.o}`), `EXTENSION_POINTS.md`, Elsa 3 conversion guide, release notes (§E2.6.1 note). *Partly done in #4761: activity authoring (step writes, references, marker, lost-update mode) in `docs/runtime-variable-lifecycle.md`, both `EXTENSION_POINTS.md` entries, the validations README and `docs/reference/variable-write-order.md`. Script docs and the Elsa 3 guide land with Phases 5 and 8 in the second PR.*
+- [x] T044 Map every ADR 0090 *Required evidence* item in scope to its test in the PR body (SC-001); list the host-interop items as out of scope (#4103). *For this PR's scope, in #4761's body ("ADR evidence in scope → tests"); the script-write items with the second PR.*
 - [ ] T045 Set the spec's `Status: Implemented` in the finishing PR; update spec 1221's tasks.md notes for T015/T016 to point at this PR, and spec 1222 T047/T050 and spec 1228 T026/T028 if they can now proceed. *The finishing PR is the second S-7 PR (Phases 5 and 8); the first PR (#4761) keeps `Status: Approved`.*
 
 ## Phase 10: Studio presentation (FR-036), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
