@@ -757,7 +757,9 @@ Park decision.
     consumed it yet. A row marked at a lost owner's epoch keeps its old non-zero `Seen`, since a take never resets it,
     so it does not count until the new owner's re-poll marks it at `e`. A row that is absent (consumed, done and swept
     after its window) counts as taken up. The owner knows this from memory; a new owner after a takeover reads it with
-    one point lookup by full key, so a takeover adds no free page.
+    one point lookup by full key, so a takeover adds no free page. The Complete page waits on the same test, and only
+    on it: a gate row taken up and not yet consumed is delivered after Complete ahead of every untagged row, by the
+    release cohort precedence above (fourth review R4-B1).
   - **While the instance is suspended the gate waits.** Resume is a control kind that passes withholding, so it always
     reaches the instance and releases the gate; suspension cannot deadlock the drain.
   - **A row the model holds counts as taken up**, because a held row may wait for a later row, perhaps an unreleased
