@@ -68,6 +68,58 @@ internal static class WorkerSetChecks
         await TimerAcrossReset(check);
         await PollLimitAcrossReset(check);
         await WithoutOwnedSets(check);
+        await StandDownDuringRetake(check);
+        await StandDownMeetsRefusedFlush(check);
+    }
+
+    // A stand-down while a retake is in flight: the retake installs nothing, gives up what it took, and gives up what it
+    // had not reached yet (partition 2) at the epoch it held.
+    private static async Task StandDownDuringRetake(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(3, () => time);
+        var wire = new DelayedCommit(store);
+        var worker = new Worker("a", [0, 1, 2], wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 3 });
+        await new DurableHost([worker]).ActivateAsync(0);
+        var (e0, e2) = (worker.EpochOf(0), worker.EpochOf(2));
+        await store.AddAsync(Add(InstanceRef.In(1, "y"), "two"));
+        await Step(worker);
+        store.Partitions[1].LeaseUntil = 0;
+        await store.TakeAsync(1, "b", Defaults.Lease);
+        wire.DelayRetake = true;
+        var flush = worker.FlushAsync();        // refused: the retake of 0 executes, and its answer waits
+        await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await worker.DisposeAsync();
+        wire.RetakeReply.SetResult();
+        await flush.WaitAsync(TimeSpan.FromSeconds(5));
+        check(!worker.Owns && store.Partitions[0].Epoch == e0 + 1 && store.Partitions[0].Owner is null,
+            $"a stand-down during a retake installs nothing and releases what the retake took: owns {worker.Owns}, partition 0 owner {store.Partitions[0].Owner ?? "none"} at {store.Partitions[0].Epoch}");
+        check(store.Partitions[2].Epoch == e2 && store.Partitions[2].Owner is null && store.Partitions[1].Owner == "b",
+            $"and it releases the partition the retake had not reached, at its epoch: partition 2 owner {store.Partitions[2].Owner ?? "none"} at {store.Partitions[2].Epoch}");
+    }
+
+    // A stand-down whose own flush (writing what it holds in memory only) is refused takes nothing back.
+    private static async Task StandDownMeetsRefusedFlush(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(2, () => time);
+        var worker = new Worker("a", [0, 1], store, new WorkflowInstance([new Ticker(TimeSpan.FromSeconds(1))]), new() { Monotonic = () => time, Partitions = 2 });
+        await new DurableHost([worker]).ActivateAsync(0);
+        var e1 = worker.EpochOf(1);
+        foreach (var t in new[] { InstanceRef.In(0, "t"), InstanceRef.In(1, "u") })
+        {
+            worker.Post(new($"arm-{t.Partition}", t, "arm", Start: Ticker.Spec with { Ephemeral = true }), fresh: true);
+            worker.RunTurn(t.Id);
+        }
+        await worker.FlushAsync();
+        var unwritten = worker.Unwritten.Order(StringComparer.Ordinal).ToList();
+        store.Partitions[0].LeaseUntil = 0;
+        await store.TakeAsync(0, "b", Defaults.Lease);
+        await worker.DisposeAsync();            // writes 0/t and 1/u first: the fence of 0 is stale
+        check(unwritten.SequenceEqual(["0/t", "1/u"]) && !worker.Owns && store.Partitions[1].Epoch == e1 && !store.Instances.ContainsKey("1/u"),
+            $"a stand-down that meets a refused flush takes nothing back: unwritten [{string.Join(", ", unwritten)}], owns {worker.Owns}, partition 1 at epoch {store.Partitions[1].Epoch}");
+        check(store.Partitions[1].Owner is null && store.Partitions[0].Owner == "b",
+            $"and it gives up the partition still leased to it: partition 1 owner {store.Partitions[1].Owner ?? "none"}, partition 0 owner {store.Partitions[0].Owner}");
     }
 
     /// <summary>The partitions the store shows live under this worker's node at an epoch the worker does not hold.</summary>
@@ -194,14 +246,24 @@ internal static class WorkerSetChecks
         var worker = new Worker("a", [0, 1], store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2, PollLimit = 2 });
         await new DurableHost([worker]).ActivateAsync(0);
         var x = InstanceRef.In(0, "x");
-        await store.AddAsync(Add(InstanceRef.In(1, "y"), "two"));
+        var y = InstanceRef.In(1, "y");
+        await store.AddAsync(Add(y, "two"));
         await store.AddAsync(Add(x, "later1", due: time + 5_000));
         await store.AddAsync(Add(x, "later2", due: time + 5_000));
         await Step(worker);
         await Step(worker);
+        await worker.FlushAsync();
+        // A turn in 1 queued after the last flush; then 1 moves, and the flush that carries it is refused.
+        await store.AddAsync(Add(y, "three"));
+        await Step(worker);
+        var (revision, p0) = (store.Instances[y.Id].Revision, store.Partitions[0].Position);
+        var queued = worker.Queued;
         store.Partitions[1].LeaseUntil = 0;
         await store.TakeAsync(1, "b", Defaults.Lease);
-        await worker.FlushAsync();      // refused: the turn in 1 is stale
+        await worker.FlushAsync();
+        check(queued > 0 && store.Instances[y.Id].Revision == revision && store.Messages.ContainsKey("three") && store.Partitions[0].Position == p0
+              && store.Messages["later1"].Seen > 0 && store.Messages["later2"].Seen > 0,
+            $"with a poll limit of 2 and two rows held in 0, a flush with a turn in 1 is refused (queued {queued})");
         await store.AddAsync(Add(x, "fresh"));
         for (var i = 0; i < 20 && !Served(); i++)
         {
@@ -238,8 +300,8 @@ public sealed class TickerState
     public int Fired { get; set; }
 }
 
-/// <summary>Arms one timer 60 s out (beyond the poll horizon) and counts it when it fires.</summary>
-public sealed class Ticker : Model<TickerState>
+/// <summary>Arms one timer (60 s out by default, beyond the poll horizon) and counts it when it fires.</summary>
+public sealed class Ticker(TimeSpan? delay = null) : Model<TickerState>
 {
     public static readonly StartSpec Spec = new("ticker", "t");
     public override string Key => "ticker";
@@ -251,7 +313,7 @@ public sealed class Ticker : Model<TickerState>
             if (message.Kind == "arm" && !state.Armed)
             {
                 state.Armed = true;
-                turn.Send(turn.Instance.Ref, "timer", null, new SendOptions(Delay: TimeSpan.FromSeconds(60)));
+                turn.Send(turn.Instance.Ref, "timer", null, new SendOptions(Delay: delay ?? TimeSpan.FromSeconds(60)));
             }
             else if (message.Kind == "timer") state.Fired++;
         }

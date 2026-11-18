@@ -746,7 +746,9 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
-    public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets;
+    public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets, DelayRetake;
+    public TaskCompletionSource Retaken = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public int PollCalls, LoadCalls, CommitCalls;
@@ -769,7 +771,12 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
         return result;
     }
-    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default) => inner.RetakeAsync(partition, node, epoch, lease, ct);
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default)
+    {
+        var result = await inner.RetakeAsync(partition, node, epoch, lease, ct);
+        if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }
+        return result;
+    }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default)

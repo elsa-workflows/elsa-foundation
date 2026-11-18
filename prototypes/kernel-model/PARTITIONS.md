@@ -257,7 +257,8 @@ its re-poll with `Seen <= epoch`:
 - rows held in memory filled the poll limit, so new messages were never read.
 
 A new epoch fixes both, with less mechanism. Its cost is one take and one re-poll per refused fence, which is what a
-one-partition Worker pays today. The model's W4 cost check counts this as the accepted cost.
+one-partition Worker pays today. The model still lists `ResetAll` as a caught mutation, so its W4 cost check flags
+exactly what the Worker now does by design. Slice 7 aligns the model's reset and W4 with the Worker.
 
 ## Placement and rebalance (`sim --placement-check`)
 
