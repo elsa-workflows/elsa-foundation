@@ -115,8 +115,9 @@ the publish-time warning itself (spec 266, S-5), apart from its pointer to the `
   the base held by a suspended step; S-7 reuses them.
 - **Studio presentation is follow-up work in this repository**, not part of this PR. Studio lives here under `Studio/`
   (consolidated in #2644), so the initiative builds it itself: the distinct operator action names (FR-014, #4734) and
-  showing the lost-update warning, accepted completions, background input refreshes, the node settings and the
-  `variableWrites` diagnostics setting (FR-011, #4735). In this spec the warning *is* its write-history entry (FR-024);
+  showing the lost-update warning, accepted completions, background input refreshes and the `variableWrites`
+  diagnostics setting (FR-011, #4735). The node settings (FR-012, FR-019) are not offered to workflow authors in the
+  designer: they stay a backend and API capability for engineers (coordinator decision 2026-11-18). In this spec the warning *is* its write-history entry (FR-024);
   the API that exposes that history is S-6 (spec 1229).
 
 ## User Scenarios & Testing *(mandatory)*

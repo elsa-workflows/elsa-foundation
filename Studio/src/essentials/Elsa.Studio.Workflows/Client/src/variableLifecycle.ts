@@ -100,7 +100,7 @@ export function describeVariableWrite(record: VariableWriteRecordView, labelOf?:
     case lostUpdateWarningOutcome:
       return `This step wrote ${variable} without seeing the value ${overwritten} wrote, and replaced it (last write wins).`;
     case lostUpdateFaultOutcome:
-      return `This step's write to ${variable} was refused: ${overwritten} changed it after this step read it, and the step uses the Fault lost-update mode.`;
+      return `This step's write to ${variable} was refused: ${overwritten} changed it after this step read it, and this step is set to refuse a write when the value it read has changed (Fault mode).`;
     case acceptedOverrideOutcome:
       return `An operator accepted this step's recorded completion: its write to ${variable} replaced the value ${overwritten} wrote.`;
     default:
