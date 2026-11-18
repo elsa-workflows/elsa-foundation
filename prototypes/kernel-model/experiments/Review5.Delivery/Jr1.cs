@@ -4,7 +4,7 @@ namespace Kernel.Review5;
 /// The rule sets of JR-1 (R5-M4), two readings of the reviewed design and the repair:
 /// <c>Reviewed</c>: Park keeps the consumed delivery by adding Done and KeptBy, so the kept row is the ticket itself;
 /// <c>ReviewedKind</c>: the kept row also persists the changed kind, JobFinished under the ticket's own key;
-/// <c>Repaired</c>: a fenced conversion consumes the ticket and inserts a result row under a reserved-scope identity;
+/// <c>Repaired</c>: a fenced conversion consumes the ticket and inserts a result row under the kernel-issued identity of the transitions page (the ticket's full key plus /result, in the ticket's own scope);
 /// <c>Negative</c>: the conversion with that identity removed, an ordinary-scope result row;
 /// <c>GenerationBlind</c>: the repaired set with the generation check removed from the authentication and the Open;
 /// <c>ReviewedKeepsRegistry</c>: a third reading of the reviewed design, in which the parked consumption keeps J's key, so
@@ -26,15 +26,21 @@ enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind, Revi
 /// </summary>
 sealed class Jr1(string variant, JrRules rules)
 {
-    /// <summary>Proposed: the reserved scope of a kernel-issued job result row (2^62; only the kernel writes it).</summary>
-    public const long ResultScope = 1L << 62;
+    /// <summary>
+    /// The transitions page's identities (proposed): J's ticket of generation g is <c>{origin}!{len}_{key}#g{g}</c> (generation 0:
+    /// the built <c>Worker.TicketId</c>, Worker.cs 295), and its converted result row is the ticket's full key plus
+    /// <c>/result</c>, in the ticket's own scope (origin length + 1, which only the kernel issues).
+    /// </summary>
+    private InboxKey TicketKey(long generation) =>
+        generation == 0 ? _builtTicket : new InboxKey(FormattableString.Invariant($"{_builtTicket.Id}#g{generation}"), _builtTicket.Scope);
+    private InboxKey _builtTicket;
     private static readonly InstanceRef Self = new("0/subject");
     private const long Generation = 1;                 // proposed JobGeneration of J's ticket
 
     public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running", "obsolete", "result-parked-consume"];
     /// <summary>
     /// <c>result-parked-consume</c> isolates the registry rule for a converted result: every rule set converts with the
-    /// reserved identity; reviewed and negative clear J's entry when the parked instance consumes its result row (the
+    /// kernel-issued identity; reviewed and negative clear J's entry when the parked instance consumes its result row (the
     /// transitions page's rule before the coordinator's fix), repaired keeps it.
     /// </summary>
     private bool ResultCase => variant == "result-parked-consume";
@@ -84,7 +90,8 @@ sealed class Jr1(string variant, JrRules rules)
         var (key, arguments) = start.Jobs.Single();
         (_jobKey, _arguments) = (key, Json.Write(arguments));
         _effectKey = Json.Read<BackgroundArgs>(_arguments).EffectKey!;
-        _ticket = Real.Ticket(Self.Id, _jobKey, 1);
+        _builtTicket = Real.Ticket(Self.Id, _jobKey, 1);
+        _ticket = TicketKey(Generation);
         var ticket = new Message(_ticket.Id, Self, Kinds.Job, Json.Write(new JobTicketPayload(NativeModel.ModelKey, _jobKey, _arguments)), Self.Id,
             TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
         _row = new InstanceRow(Self.Id, NativeModel.ModelKey, "job", InstanceStatus.Running, Json.Write(start.State), 1, null,
@@ -121,11 +128,11 @@ sealed class Jr1(string variant, JrRules rules)
             {
                 // 4a. The conversion: a standalone fenced write consumes the ticket and inserts the result row (proposed).
                 result = ReservedIdentity
-                    ? new Message(ResultId(_ticket, Generation), Self, Kinds.JobFinished, completion.Payload, Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(ResultScope)
+                    ? new Message(ResultId(Generation), Self, Kinds.JobFinished, completion.Payload, Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope)
                     : new Message(_ticket.Id + ".result", Self, Kinds.JobFinished, completion.Payload, Self.Id, TargetCreation: 1, SenderCreation: 1);
                 await Commit(new TurnCommit(Self.Id, null, null, [_ticket], [], [result], [], [], null));
                 _authenticInMemory.Add(result.InboxKey);
-                _report.Line($"conversion: one fenced commit consumes ticket {_ticket.Id} (counted) and inserts result row {result.Id} (scope {(ReservedIdentity ? "2^62, reserved" : "0, ordinary")})");
+                _report.Line($"conversion: one fenced commit consumes ticket {_ticket.Id} (counted) and inserts result row {result.Id} (scope {(ReservedIdentity ? $"{_ticket.Scope}, the ticket's own" : "0, ordinary")})");
                 if (variant == "crash-after") await Takeover("after the conversion commit, before the parked instance consumed the result");
                 await ParkedConsume(result);
             }
@@ -166,14 +173,14 @@ sealed class Jr1(string variant, JrRules rules)
     }
 
     /// <summary>
-    /// The obsolete-generation variant: a reserved-scope result row of J's generation 0, left kept Arrived by an earlier Park
+    /// The obsolete-generation variant: a kernel-issued result row of J's generation 0, left kept Arrived by an earlier Park
     /// with another value (fixture setup: inserted by a commit, then kept), sits beside the current generation's.
     /// </summary>
     private async Task StaleResult()
     {
-        var stale = new Message(ResultId(_ticket, 0), Self, Kinds.JobFinished,
+        var stale = new Message(ResultId(0), Self, Kinds.JobFinished,
             Json.Write(new JobFinished(_jobKey, Json.Write(new BackgroundResult(TransitionKind.Complete, System.Text.Json.Nodes.JsonValue.Create("stale"), "Done", null)), null)),
-            Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(ResultScope);
+            Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
         await Commit(new TurnCommit(Self.Id, null, null, [], [], [stale], [], [], null));
         await Commit(new TurnCommit(Self.Id, null, null, [], [stale.InboxKey], [], [], [], null));
         _keptBy[stale.InboxKey] = "Arrived";
@@ -183,22 +190,19 @@ sealed class Jr1(string variant, JrRules rules)
     /// <summary>A kept or restored job row's key and generation: a ticket is of the current ticket's generation; a result row's is in its id.</summary>
     private (string Key, long Generation) JobOf(Message m)
     {
-        if (m.Kind == Kinds.Job)
-        {
-            var g = m.Id.LastIndexOf("@g", StringComparison.Ordinal);
-            return (m.Read<JobTicketPayload>().Key, g >= 0 ? long.Parse(m.Id[(g + 2)..], System.Globalization.CultureInfo.InvariantCulture) : Generation);
-        }
-        var key = m.Read<JobFinished>().Key;
-        var at = m.Id.LastIndexOf("!result!g", StringComparison.Ordinal);
-        return (key, at >= 0 && m.InboxScope == ResultScope ? long.Parse(m.Id[(at + 9)..], System.Globalization.CultureInfo.InvariantCulture) : Generation);
+        var key = m.Kind == Kinds.Job ? m.Read<JobTicketPayload>().Key : m.Read<JobFinished>().Key;
+        if (m.InboxScope != _ticket.Scope) return (key, Generation);     // an ordinary-scope row carries no generation (negative)
+        var id = m.Kind == Kinds.JobFinished && m.Id.EndsWith("/result", StringComparison.Ordinal) ? m.Id[..^"/result".Length] : m.Id;
+        var at = id.LastIndexOf("#g", StringComparison.Ordinal);
+        return (key, at >= 0 ? long.Parse(id[(at + 2)..], System.Globalization.CultureInfo.InvariantCulture) : 0);
     }
 
-    private static string ResultId(InboxKey ticket, long generation) => FormattableString.Invariant($"{ticket.Id}!result!g{generation}");
+    private string ResultId(long generation) => TicketKey(generation).Id + "/result";
 
-    /// <summary>Proposed authentication of a result row: the reserved scope, the id derived from S's ticket, a current generation.</summary>
+    /// <summary>Proposed authentication of a result row: the ticket's own scope, the id derived from J's ticket, the registry's current generation.</summary>
     private bool AuthenticResult(Message m) =>
-        m.Kind == Kinds.JobFinished && m.InboxScope == ResultScope && m.Read<JobFinished>() is { } finished &&
-        _registry.TryGetValue(finished.Key, out var g) && m.Id == ResultId(Real.Ticket(m.Target.Id, finished.Key, m.TargetCreation ?? 0), rules == JrRules.GenerationBlind ? JobOf(m).Generation : g);
+        m.Kind == Kinds.JobFinished && m.InboxScope == Real.Ticket(m.Target.Id, m.Read<JobFinished>().Key, m.TargetCreation ?? 0).Scope &&
+        _registry.TryGetValue(m.Read<JobFinished>().Key, out var g) && m.Id == ResultId(rules == JrRules.GenerationBlind ? JobOf(m).Generation : g);
 
     private async Task<Message> RunJob(Message ticket)
     {
@@ -237,13 +241,14 @@ sealed class Jr1(string variant, JrRules rules)
             return;
         }
         // RemainingJobs (WorkflowInstance.cs 135-144, called at 82): a consumed durable ticket, or this worker's completion, whose
-        // full key is J's ticket key takes J's key out of the row's registry.
+        // full key is J's ticket key takes J's key out of the row's registry. The built function derives the key with
+        // Worker.TicketId (no generation); here it is the registry's current generation's ticket key (R4-M3, proposed).
         var (key, _) = JobOf(m);
         var undoneTicket = m.Kind == Kinds.Job && m.InboxScope > 0;
-        var drops = (undoneTicket || _authenticInMemory.Contains(m.InboxKey)) && m.InboxKey == Real.Ticket(Self.Id, key, 1) && _registry.ContainsKey(key)
+        var drops = (undoneTicket || _authenticInMemory.Contains(m.InboxKey)) && _registry.TryGetValue(key, out var held) && m.InboxKey == TicketKey(held)
             && rules != JrRules.ReviewedKeepsRegistry && !(undoneTicket && KeepsUndoneTicket);
         if (undoneTicket && KeepsUndoneTicket) _report.Line($"the repaired rule keeps {key} in the registry: the consumed ticket is undone and of the current generation");
-        var resultRow = m.Kind == Kinds.JobFinished && m.InboxScope == ResultScope && _registry.TryGetValue(key, out var rg) && JobOf(m).Generation == rg;
+        var resultRow = m.Kind == Kinds.JobFinished && m.InboxScope == _ticket.Scope && _registry.TryGetValue(key, out var rg) && JobOf(m).Generation == rg;
         if (ResultCase && resultRow)
         {
             // The coordinator's rule: a parked consumption keeps the entry of a current-generation result row; it clears only
@@ -265,7 +270,7 @@ sealed class Jr1(string variant, JrRules rules)
         if (_authenticInMemory.Contains(m.InboxKey)) { why = "this owner's in-memory completion (CompletedJob)"; return true; }
         var builtRefuses = Real.DiscardedAt(m, _row);
         if ((rules is JrRules.Repaired or JrRules.GenerationBlind || ResultCase) && AuthenticResult(m))
-        { why = $"reserved-scope result of generation g{JobOf(m).Generation}, the registry's g{_registry[_jobKey]} (the built DiscardedAt alone {(builtRefuses ? "refuses it" : "admits it")})"; return true; }
+        { why = $"kernel-issued result row (the ticket's scope) of generation g{JobOf(m).Generation}, the registry's g{_registry[_jobKey]} (the built DiscardedAt alone {(builtRefuses ? "refuses it" : "admits it")})"; return true; }
         why = builtRefuses ? "the real DiscardedAt classifies it as a supplied completion" : "admitted";
         return !builtRefuses;
     }
@@ -297,7 +302,7 @@ sealed class Jr1(string variant, JrRules rules)
             if (reason != "Arrived" || !_store.Messages.TryGetValue(key, out var row) || row.Message.Kind != Kinds.Job || !KeepsUndoneTicket) continue;
             var (job, generation) = JobOf(row.Message);
             if (!_registry.TryGetValue(job, out var current) || generation != current) continue;
-            var restarted = new Message(FormattableString.Invariant($"{_ticket.Id}@g{current + 1}"), Self, Kinds.Job,
+            var restarted = new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
                 Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
             await Commit(new TurnCommit(Self.Id, null, null, [], [], [restarted], [], [], null));
             _registry[job] = current + 1;

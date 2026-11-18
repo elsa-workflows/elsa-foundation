@@ -206,6 +206,9 @@ sealed class Ev1(string variant, EvRules rules)
         _report.Line($"sweep at 101: E1 (KeepUntil {e1.KeepUntil}) is {(w.Store.EventRows.ContainsKey((e1.Key, e1.Id)) ? "kept" : "deleted")}; H = {(w.Horizon == long.MinValue ? "none" : w.Horizon.ToString())}");
         w.Now = 98;
         _report.Line("the database clock steps back to 98");
+        // W0, a non-keeping wait of another instance, commits before E2's match step: the publisher side delivers E2 to it.
+        var s0 = new InstanceRef("0/subject-0");
+        await Restore(w, new SubscriptionRow("order:4", s0.Id, "w-order", Creation: 1), keep: false);
         var (e2, ticket2) = await PublishTurn(w, "order:4", "\"payload-2\"", keep: 1);
         await Persist(w, e2); await MatchStep(w, e2, ticket2);
         _report.Line($"E2 is published at 98 with KeepUntil {e2.KeepUntil}, before the wait registers; it is live");
@@ -215,8 +218,10 @@ sealed class Ev1(string variant, EvRules rules)
         await Drain(w, meet);
         var delivered = w.Store.Messages.Values.Where(m => m.Message.Kind == Kinds.Event && m.Message.Target.Id == s.Id).Select(m => m.Message.Payload).ToList();
         _report.Line($"keeping wait registered at 99{(Repairedish ? $", P0 = {p0}" : "")}: the catch-up delivers [{string.Join(", ", delivered)}]");
-        // The repaired rule: P0 = max(99, H + 1) = 101 excludes the swept E1 and, as a cost of the step-back, the live E2 (KeepUntil 99).
+        // The repaired rule: P0 = max(99, H + 1) = 101 excludes the swept E1, and the live E2 (KeepUntil 99 <= H) from the new
+        // wait's catch-up as expired (the events page, the coordinator's statement of 18 November); E2 still reaches W0.
         _report.Expect("deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101)", Delivered(w, s), 0);
+        _report.Expect("deliveries of E2 to W0, registered before E2's match step (the publisher side)", Delivered(w, s0), 1);
         _report.Expect("E1 re-created", w.Store.EventRows.ContainsKey((e1.Key, e1.Id)), false);
         _report.Expect("the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0)", e1.KeepUntil < (Repairedish ? p0 : w.RegisteredAt[(wait.Key, wait.Instance, wait.Wait)]), true);
     }

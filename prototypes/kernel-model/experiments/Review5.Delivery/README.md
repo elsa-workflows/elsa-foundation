@@ -149,8 +149,10 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
 - `ev1-b-stepback`: E1 (KeepUntil 100) is swept at 101 with no ticket covering it, so H = 100. The clock steps back to
   98, and E2 is published with KeepUntil 99, before the wait registers. A keeping wait then registers at 99:
   P0 = max(99, 100 + 1) = 101.
-  - Repaired: the wait is not entitled to the swept E1 (100 < 101), and its catch-up delivers nothing. E2 is live and
-    excluded too (99 < 101), the cost of a clock step-back (see "Notes").
+  - Repaired: the wait is not entitled to the swept E1 (100 < 101), and its catch-up delivers nothing. E2, live with
+    KeepUntil 99 ≤ H, is excluded from the new wait's catch-up as expired. It still reaches W0, a non-keeping wait
+    registered before E2's match step, through the publisher side (asserted). This is the events page's statement
+    (observability.md, event eligibility, the coordinator's decision of 18 November).
   - `no-horizon` (P0 = 99) delivers E2 and is entitled to the swept E1. Reviewed (`KeptMatchesAsync` at 99) also
     delivers E2.
 - `ev1-b-suspended`: the publisher is suspended with its publish ticket for E (kept through 100) outstanding, and S is
@@ -292,7 +294,7 @@ handoff gate.
 
 - S runs `Sequence(Set svc alpha, Parallel(c, Set svc beta))` on the real `NativeModel`, with `c` a Background node
   bound to `svc` (as in Astra4.Sizes). Its real start turn arms the job (`NativeModel.cs` 347–355).
-- The ticket `c9_0/subject_1!2_w6` commits with the row through the real `CommitAsync`.
+- The ticket `c9_0/subject_1!2_w6#g1` commits with the row through the real `CommitAsync`.
 - The job body is the real `NativeModel.ExecuteJobAsync` (186–197) running `EffectEcho`. It counts physical invocations
   and returns `alpha|<effect key>`.
 - While J runs, an input parks S, mirroring `WorkflowInstance.Park` (120–132): the job registry is kept, and Park's
@@ -317,8 +319,12 @@ handoff gate.
 - `reviewed`: the completion stays in memory (`CompletedJob`, `Worker.cs` 1297–1306). The parked instance consumes it,
   `RemainingJobs` drops J's key, the Open clears the kept ticket, and the result is lost.
 - `reviewed-kind`: the kept row also persists the result kind under the ticket's key. It is lost the same way.
-- `repaired`: a standalone fenced commit consumes the ticket (counted) and inserts the result row `…!result!g1` under
-  the reserved scope 2^62. Its id derives from the ticket's full key and the generation.
+- `repaired`: a standalone fenced commit consumes the ticket (counted) and inserts the result row. It uses the
+  transitions page's identities:
+  - J's ticket of generation g is `{origin}!{len}_{key}#g{g}`; here `c9_0/subject_1!2_w6#g1`. Generation 0 is the built
+    `Worker.TicketId` form (`Worker.cs` 295).
+  - The result row is the ticket's full key plus `/result`, in the ticket's own scope (origin length + 1, 15 here),
+    which only the kernel issues; here `c9_0/subject_1!2_w6#g1/result`.
   - The row's key differs from the ticket's, so `RemainingJobs` keeps J in the registry.
   - The new owner accepts it by its identity and the registry's current generation. The built `DiscardedAt` alone
     refuses it, and the report prints that.
@@ -329,26 +335,27 @@ handoff gate.
   the kept ticket is restored and the built `Hold` and `StartJob` enter J a second time after its result had committed.
 - `negative`: the same conversion with an ordinary-scope result row. The real `DiscardedAt` refuses it after the
   takeover. In `jr1-crash-before` the negative removes the registry rule instead, and the result is lost.
-- `generation-blind` (`jr1-obsolete`): the Open restores the g0 row, and the model receives `stale`.
+- `generation-blind` (`jr1-obsolete`): the Open restores the g0 result row (`c9_0/subject_1!2_w6/result`), and the
+  model receives `stale`.
 
 **The variants.**
 
-- `jr1-result-parked-consume` (the transitions review's trace): every rule set converts under the reserved identity, so
+- `jr1-result-parked-consume` (the transitions review's trace): every rule set converts under the kernel-issued identity, so
   the run isolates the registry rule. J's body returns while S is parked, the standalone conversion writes
-  `…!result!g1`, and S consumes it while parked. Recover follows, with no takeover.
+  `c9_0/subject_1!2_w6#g1/result`, and S consumes it while parked. Recover follows, with no takeover.
   - Reviewed and negative (a parked consumption clears J's entry): the Open clears the kept result as one whose key the
     registry no longer holds. The model never receives V, and J is not re-run.
   - Repaired (the coordinator's rule): a parked consumption keeps the entry of a current-generation result row, and the
     entry clears only when a model turn of a running row consumes the result. The Open's obsolete check reads that
     registry, so the result is restored. The model receives V once, and J ran once.
-  - The built `RemainingJobs` matches the ticket's full key (`WorkflowInstance.cs` 142). With this harness's derivation
-    of the result id it would not clear J on the result row by itself. The reviewed rule here clears by J's key, as the
-    transitions review found the page's wording to do.
+  - The built `RemainingJobs` matches the ticket's full key (`WorkflowInstance.cs` 142), and the result row's key is the
+    ticket's key plus `/result`, so the built function alone would not clear J on the result row. The reviewed rule here,
+    which clears by J's key, is the transitions page's reading.
 - `jr1-crash-before`: the owner dies after J's body returned and before any commit recorded the result.
   - The new owner does not enter a parked row's ticket (`Worker.cs` 1169–1177), so the parked instance consumes it as
     late input.
   - Repaired: the registry keeps J. The Open's restart decisions are in force before any page decides what is obsolete:
-    recover restarts J from its JobSpec under g2 (`…!2_w6@g2`, R4-M3) and clears the g1 ticket, which is never restored
+    recover restarts J from its JobSpec under g2 (`…!2_w6#g2`, R4-M3) and clears the g1 ticket, which is never restored
     beside g2 (asserted). J runs a second time, within the at-most-two allowance, and its result `alpha|…` reaches the
     model once.
   - Reviewed: the built `RemainingJobs` drops J's key, the Open clears the ticket, and J is never re-run: the result
@@ -448,7 +455,7 @@ above:
 - FR-2: the drain's pages, gate and credit;
 - shared by the drain cases: `ReleasedBy` and the cohort mark;
 - Park's `KeptBy` and the recover page;
-- JR-1: `JobGeneration` and the reserved result scope.
+- JR-1: `JobGeneration` and the kernel-issued ticket and result identities.
 
 **Left for qualification at Kn:**
 
@@ -471,7 +478,7 @@ above:
    the mutation that shows the gate is not the bound.
 5. **Suspension:** pages wait while the instance is suspended (M3-5).
 6. **JR-1's Worker change:** the built `Delivery.SuppliedCompletion` (`Turns.cs` 109) refuses every durable
-   `job-finished` row, the reserved-scope result row included. Accepting that row is a K3 change row on the transitions
+   `job-finished` row, the kernel-issued result row (the ticket's key plus `/result`) included. Accepting that row is a K3 change row on the transitions
    page.
 
 ## Notes
@@ -481,7 +488,6 @@ above:
   combined mutation `split-no-row-hold` fails.
 - **An unswept event at H.** An event whose KeepUntil equals H but that the sweep has not deleted is excluded from a
   later wait's catch-up by P0 = H + 1 ms. It has already expired, so this is the stated, accepted behaviour.
-- **A clock step-back also excludes live events.** After the clock steps back below H, a live event published with
-  KeepUntil ≤ H (`ev1-b-stepback`'s E2, KeepUntil 99, published at 98) is excluded from a keeping wait that registers
-  before it expires. The run asserts this outcome of the stated rule. The cost falls only on a database clock that steps
-  back; a coordinator note may want to state it on the events page.
+- **A clock step-back** (confirmed by the coordinator, and stated on the events page): a live event with KeepUntil ≤ H
+  is excluded from a new wait's catch-up as expired. It still reaches every wait registered before its match step,
+  through the publisher side. `ev1-b-stepback` asserts both.
