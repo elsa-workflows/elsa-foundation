@@ -103,6 +103,7 @@ export interface StudioCodeEditorController {
   capture(): StudioCodeEditorSnapshot | null;
   apply(edit: {
     expected: StudioCodeEditorSnapshot;
+    range?: { from: number; to: number };
     insert: string;
     historyValue: unknown;
     selection?: StudioCodeEditorSelection;
@@ -127,6 +128,8 @@ export interface StudioCodeDocumentEditing {
 
 export interface StudioCodeEditorEngineProps {
   document: StudioCodeDocument;
+  /** Selection carried from the loading textarea to the rich editor for this surface. */
+  fallbackSelection?: { current: StudioCodeEditorSnapshot | null };
   documentEditing?: StudioCodeDocumentEditing;
   profile: StudioCodeEditorProfile;
   session: StudioCodeEditorSession;
