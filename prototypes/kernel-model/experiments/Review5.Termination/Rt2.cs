@@ -170,6 +170,7 @@ sealed class Rt2(string variant, Rules rules)
         var cascades = _h.CascadeCommits.Where(c => c.Actor == A && c.Page == 1).ToList();
         _report.Expect("T consumed (no longer pending)", _h.Pending(t.InboxKey), false);
         _report.Expect("terminates to G stored", _h.SentTo(G, Kinds.Terminate), 1);
+        _report.Expect("terminates to G stored without the cascade origin mark", _h.Sent.Count(m => m.Target.Id == G && m.Kind == Kinds.Terminate && !_h.Marks.Contains(m.InboxKey)), 0);
         _report.Expect("G", _h.Status(G), "Cancelled");
         _report.Expect("G2", _h.Status(G2), "Cancelled");
         _report.Expect("obligations still open", _h.OpenObligations, 0);

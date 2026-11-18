@@ -105,6 +105,16 @@ static class Real
         return type.Park(row, input.Actor, [delivery], null, error);
     }
 
+    /// <summary>
+    /// Turns.cs 249–259, a real <see cref="DurableTurn"/> over the same reflected input: what a model's turn sends
+    /// through <c>ITurn.Send</c> (<c>DurableTurn.Send</c>, Turns.cs 313–335) or an actor type composes (<c>Add</c>, 339–351).
+    /// </summary>
+    public static DurableTurn ModelTurn(Worker worker, InstanceRow row, Message message, long seq)
+    {
+        Count("DurableTurn");
+        return new DurableTurn(Input(worker, row, message, seq, out _));
+    }
+
     public static Delivery Delivery(Message message, long seq)
     {
         var delivery = new Delivery(message, seq);

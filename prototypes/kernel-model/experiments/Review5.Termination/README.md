@@ -5,7 +5,8 @@ Executable evidence for the termination findings of the fifth Astra High review 
 
 - **R5-B1:** a settled job ticket rolls back the marker's cascade (RT-2);
 - **R5-B2:** a valid registry needs more sends than one commit may carry (RT-3);
-- **R5-M5:** a running recipient has no parent binding (RT-4);
+- **R5-M5:** a running recipient has no parent binding (RT-4), under the coordinator's update of 18 November: only
+  kernel-composed terminates carry the cascade origin mark and are parent-bound;
 - **R5-m3:** RM-1's foreign-job mutation, with jobs that carry generations (RT-2).
 
 Every write in every run is a `CommitBatch` handed to the real prototype `InMemoryStore.CommitAsync`
@@ -22,13 +23,13 @@ Each case runs one schedule under three rule sets:
 - `negative`: the repaired rules with the case's one repaired rule put back as reviewed:
   - RT-2: the counted cancel;
   - RT-3: the durable cursor (the cursor lives in the owner's memory);
-  - RT-4: the parent binding at running and ended recipients.
+  - RT-4: the parent binding of marked terminates at running and ended recipients.
 
 Mutations of the repaired set run where they bite:
 
 - RT-2: `presence-from-memory`, `foreign-derivation`, `generation-blind` and `accept-off-registry`;
 - RT-3: `page-above-cap`, `no-next-control` and `delete-drops-discharging`;
-- RT-4: `binding-running-only`.
+- RT-4: `binding-running-only`, `bind-every-issued-terminate` and `commit-accepts-mark`.
 
 ## Run
 
@@ -77,12 +78,14 @@ Expected outcome per case and rule set. Every run's actual outcome equals its ex
 | `rt3-crash-landed` | R5-B2, a crash with an unknown outcome at page 5; the page landed | FAIL | PASS | FAIL | |
 | `rt3-crash-lost` | R5-B2, a crash with an unknown outcome at page 5; the page did not land | FAIL | PASS | FAIL | |
 | `rt3-delete-discharging` | R5-B2, an operator's delete while the obligation is Discharging | FAIL | PASS | PASS | `delete-drops-discharging` FAIL |
-| `rt4-running-unrelated` | R5-M5, a running unrelated H with a child | FAIL | PASS | FAIL | `binding-running-only` PASS |
-| `rt4-ended-registry` | R5-M5, an ended H with a registry | FAIL | PASS | FAIL | `binding-running-only` FAIL |
+| `rt4-running-unrelated` | R5-M5, a marked cascade terminate at a running unrelated H with a child | FAIL | PASS | FAIL | `binding-running-only` PASS |
+| `rt4-ended-registry` | R5-M5, the same at an ended H with a registry | FAIL | PASS | FAIL | `binding-running-only` FAIL |
 | `rt4-genuine-child` | R5-M5, a genuine child through the actual command path | PASS | PASS | PASS | |
 | `rt4-operator` | R5-M5, an operator's terminate is not parent-bound | PASS | PASS | PASS | |
+| `rt4-model-send` | R5-M5, a model's application terminate to a running non-child applies as built (no narrowing) | PASS | PASS | PASS | `bind-every-issued-terminate` FAIL |
+| `rt4-forgery` | R5-M5, the forgery control: a model's marked send is refused at the commit | FAIL | PASS | PASS | `commit-accepts-mark` FAIL |
 
-89 runs. A case whose three rule sets all pass is a control: it shows the reviewed rule covers that schedule, and a
+97 runs. A case whose three rule sets all pass is a control: it shows the reviewed rule covers that schedule, and a
 mutation, where listed, shows the repaired rule is what makes it pass. RT-3's negative passes where no owner loses its
 memory, since only a takeover or a crash can tell a durable cursor from one held in memory.
 
@@ -182,7 +185,7 @@ The cases:
 RT-2 runs assert:
 
 - T consumed;
-- one terminate to G stored, and G and G2 Cancelled;
+- one terminate to G stored, carrying the cascade origin mark, and G and G2 Cancelled;
 - no obligation open;
 - exactly one notice from A to P;
 - exactly one landed cascade commit, whose counted inputs are T and the pending tickets;
@@ -243,9 +246,15 @@ The cases:
 
 `page-above-cap` sets `P_cascade` to 10,001, above the cap, and fails on both 10,001 cases.
 
+The page numbers above are those at the default `P_cascade` of 1,000. With `--p-cascade`, each schedule's page is
+kept inside the cascade: the takeover and Complete come after page 3 or the last page but one, the crash at page 5 or
+the last page but one, and the delete after page 2 or the last page but two. The expected matrix holds for every
+`P_cascade` from 1 to 5,000, which gives 10,001 children three pages or more.
+
 RT-3 runs assert:
 
 - every child Cancelled;
+- every child terminate A's commits stored carries the cascade origin mark;
 - each child delivered exactly one terminate;
 - no obligation open;
 - exactly one notice from A to P;
@@ -253,34 +262,78 @@ RT-3 runs assert:
 - in the crash cases, that the stale batch did not land;
 - for the boundary cases under the default page size, the number of cascade commits.
 
-## RT-4 (R5-M5): the parent binding at every recipient state
+## RT-4 (R5-M5): the parent binding of marked terminates
 
-P → A → G is the genuine tree. Q → H → HK is unrelated, with H at the right creation in the same tenant. A is parked
-with its delete drain open, and RM-1's negative fixture lists H in A's retirement handoff beside G. `Validate` at
-retirement checks no membership, so the marker accepts H. P's delayed terminate then discharges A's marker, which
-sends terminate to G and to H.
+The rule, as the coordinator updated it on 18 November with the transitions docs author, so that built behaviour is
+not narrowed:
 
-- **Under `repaired`,** a terminate with an issued origin (an instance's send: a tree terminate, a cascade page, a
-  FailFast) is checked against the recipient's recorded `Parent` and `ParentCreation` before the actor type acts, at
-  a running recipient and at an ended one that still has a registry or jobs. A mismatch is a plain refusal: the
-  terminate is consumed with no effect and no cascade.
-- **Parked and draining recipients** check the binding under every rule set (the open-drain refusal of #4756).
-- **Under `reviewed`** a running or ended H runs the real `WorkflowInstance.Command` → `Terminate`. That is the
-  existing prototype behaviour the brief cites (`WorkflowInstance.cs` 63–64, 155–158, 177–203).
+- **The cascade origin mark.** Every terminate the kernel composes to end a subtree carries the mark. That is the
+  actor type's tree terminate, and every cascade page, from an ended instance, an open-drain refusal or a retirement
+  marker. The mark is a one-byte flag on an issued-origin message. No turn method sets it, outside entry clears it,
+  and the commit refuses a marked message that is not a `kernel.terminate` from the committing row.
+- **The binding.** A recipient checks `Sender` and `SenderCreation` against its recorded `Parent` and
+  `ParentCreation` on every marked terminate, in every state: running, parked, draining, ended with a registry or
+  obligation, and retired. A mismatch is refused with reason "parent" and no effect.
+- **A model's application terminate** (`ITurn.Send`, FailFast included) carries no mark. It keeps its built
+  authorization at a running recipient (`WorkflowInstance.cs` 63–64, 155–158, 177–203), and P-7's rule at a parked or
+  draining one.
+
+The harness holds the mark beside the stored message, written only when its commit lands (proposed, `Harness.Marks`).
+It marks every child terminate of a terminate's page, a marker's cascade page and an open-drain refusal's page, under
+every rule set; only the repaired binding and commit check read it. Its commit check (`CommitRefusal`) refuses two
+things before the store:
+
+- under every rule set, a composed `kernel.terminate` whose `Sender` and `SenderCreation` are not the committing
+  actor's own: the proposal's existing rule, "An actor type's composed send is checked";
+- under `repaired`, a mark on a model turn's send, or on anything but an issued `kernel.terminate`.
+
+A model's turn runs as a real `DurableTurn` over the reflected input. `DurableTurn.Send` (the method behind
+`ITurn.Send`, Turns.cs 313–335) or `Add` (339–351) composes the send, and `Seal` (481–508) seals it at the next
+revision.
+
+The tree for the marker cases: P → A → G is the genuine tree, and Q → H → HK is unrelated, with H at the right
+creation in the same tenant. X is a running root, unrelated to H. A is parked with its delete drain open, and RM-1's
+negative fixture lists H in A's retirement handoff beside G. `Validate` at retirement checks no membership, so the
+marker accepts H. P's delayed terminate then discharges A's marker, which sends marked terminates to G and to H.
+
+- **Under `reviewed`** a running or ended H runs the real `WorkflowInstance.Command` → `Terminate`.
+- **Parked and draining recipients and markers** check the binding under every rule set (the open-drain refusal of
+  #4756, RM-1).
 - **An outside add** never carries the issued scope (`AddAsync` takes `AsOrdinary`, `InMemoryStore.cs` 227–232 and
   `Messages.cs` 49–51), so it is an operator's terminate and is not parent-bound.
 
 The cases:
 
-- `rt4-running-unrelated`: under `reviewed` H's real terminate cancels H and sends HK a terminate, and H's notice
-  reaches Q. Under `repaired` H refuses, and H and HK keep running.
+- `rt4-running-unrelated`: the marked cascade terminate reaches a running H. Under `reviewed` H's real terminate
+  cancels H and sends HK a terminate, and H's notice reaches Q. Under `repaired` H refuses with reason "parent", and
+  H and HK keep running. `negative` turns the binding off.
 - `rt4-ended-registry`: H has finished but still owns HK. Under `reviewed` the real control path terminates HK.
-  `binding-running-only` checks running recipients only and fails here.
-- `rt4-genuine-child`: A is running. P's terminate ends A through the real control path, and A's ends G.
+  `binding-running-only` binds running recipients only and fails here.
+- `rt4-genuine-child`: A is running. P's terminate ends A through the real control path, and A's marked terminate
+  ends G.
 - `rt4-operator`: an operator's terminate of the running H ends H and HK under every rule set.
+- `rt4-model-send`: X's model turn sends `kernel.terminate` to H through `DurableTurn.Send`. The send is issued and
+  unmarked, so H applies it as built under every rule set: H and HK end Cancelled, and nothing is refused.
+  `bind-every-issued-terminate` binds every issued terminate, refuses X's, and fails.
+- `rt4-forgery`: three model turns of X, each with the mark set on its send:
+  - (a) a `kernel.terminate` to H;
+  - (b) an application message to H;
+  - (c) a composed `kernel.terminate` naming Q, H's parent, as `Sender`.
 
-RT-4 runs assert G's, H's and HK's states, the terminates sent to H and HK, H's refusal reason, the notices to Q and
-P, and that no obligation stays open.
+  Under `repaired` all three are refused at the commit: (a) and (b) because no turn sets the mark, and (c) by the
+  sender rule. X's row is unchanged, nothing is stored, and H keeps running. `reviewed` has no mark and no mark check,
+  so (a) and (b) land and X's application terminate ends H as built. (c) is refused there too, by the sender rule.
+  `commit-accepts-mark` lets (a) and (b) land with their marks: H then refuses (a) with reason "parent", but a mark
+  no kernel composition set is stored, and the run fails on that.
+
+RT-4 runs assert:
+
+- G's, H's and HK's states;
+- the terminates sent to H and HK, and whether they carry the mark;
+- H's refusal reason;
+- the notices to Q and P;
+- in the forgery case, which commits landed, X's revision and the stored marks;
+- that no obligation stays open.
 
 ## What this proves, and what it does not
 
@@ -292,7 +345,8 @@ P, and that no obligation stays open.
   delivery after an unknown outcome and a takeover;
 - the R5-B2 trace (10,001 children at a marker), the boundary at `P_cascade` and `P_cascade` + 1, and paging through
   a takeover, a crash with each unknown outcome, a delete while Discharging and the open drain;
-- the R5-M5 parent binding at a running and at an ended recipient, a genuine child, and an operator;
+- the R5-M5 parent binding of marked terminates at a running and at an ended recipient, a genuine child, an operator,
+  a model's application terminate applying as built, and the commit's refusal of a forged mark;
 - R5-m3: the generation-carrying key, an off-registry pair refused at retirement, a newer same-origin generation
   left alone, and the two derivation mutations.
 
@@ -302,7 +356,7 @@ P, and that no obligation stays open.
   row (`InMemoryStore.cs` 116–117), recorded as an I9 divergence (187–192);
 - the refusal path's consumption of a ticket at a retired row (`Worker.cs` 1051–1055, `Creation.cs` 103–117);
 - the running and ended rows' acceptance of any correctly issued terminate (`WorkflowInstance.cs` 63–64, 155–158,
-  179–203);
+  179–203), and a model's terminate composed by `DurableTurn.Send` (Turns.cs 313–335);
 - the built `Validate`'s refusal of the marker's retired-to-retired write, "invalid lifecycle retirement"
   (`Creation.cs` 156–160). Each marker cascade prints it; it is not asserted.
 
@@ -316,7 +370,8 @@ P, and that no obligation stays open.
 - the `kernel.cascade` control and its scope;
 - the send cap;
 - the retirement check of job pairs;
-- the parent binding at running and ended recipients.
+- the cascade origin mark, the commit's checks on composed terminates, and the parent binding of marked terminates
+  at running and ended recipients.
 
 **Left for qualification at the milestones** (the design brief places R5-B1 at K3, K4 and K6, R5-B2 at K3, K4, K6
 and K12, and R5-M5 at K3 and K6):
@@ -329,5 +384,8 @@ and K12, and R5-M5 at K3 and K6):
   marker's revision fence against a concurrent writer (K3, K4);
 - a page's row budget and the per-page notice and control on top of `P_cascade` entries, against a provider's
   transaction limits, and cascade throughput under load (K4, K12);
-- a parked recipient with no drain open, which RT-4 does not reach (K3, K6);
+- a parked recipient with no drain open, which RT-4 does not reach, and P-7's rule for an unmarked terminate there
+  (K3, K6);
+- outside entry clearing the mark, which no run exercises: an outside add never carries the issued scope, so no
+  harness path carries a mark in (K3);
 - real ownership (leases and takes across processes) and cross-partition transport (K4).

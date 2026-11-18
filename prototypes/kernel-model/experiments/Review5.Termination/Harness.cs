@@ -72,7 +72,7 @@ sealed class Harness
     public readonly HashSet<InboxKey> HeldBack = [], Stuck = [], WithModel = [];
     private readonly Dictionary<InboxKey, int> _attempts = [];
     private readonly List<(Owner Owner, string Actor)> _continuations = [];
-    private int _nodes;
+    private int _nodes, _triggers;
     public const int RetryLimit = 3;
 
     // Proposed columns, beside the real rows.
@@ -80,6 +80,8 @@ sealed class Harness
     public readonly Dictionary<(string Actor, string Key), long> JobGeneration = [];
     public readonly Dictionary<InboxKey, string> KeptBy = [];
     public readonly HashSet<string> DrainOpen = new(StringComparer.Ordinal);
+    /// <summary>The cascade origin mark (R5-M5, proposed): a flag on an issued-origin message that only kernel composition sets.</summary>
+    public readonly HashSet<InboxKey> Marks = [];
 
     // What the run observed.
     public readonly List<Message> Sent = [];
@@ -172,7 +174,8 @@ sealed class Harness
     // ---- commits ---------------------------------------------------------------------------------------------------
 
     /// <summary>One commit of the partition's owner. The send cap is checked first; a hook may crash the owner around it.</summary>
-    public CommitResult Commit(int partition, IReadOnlyList<TurnCommit> turns, Action? onLanded, string what, PageHook hook = PageHook.None)
+    public CommitResult Commit(int partition, IReadOnlyList<TurnCommit> turns, Action? onLanded, string what, PageHook hook = PageHook.None,
+        IReadOnlyCollection<InboxKey>? marks = null, bool kernel = true)
     {
         var owner = Owners[partition];
         var sends = turns.Sum(t => t.Sent.Count);
@@ -180,6 +183,16 @@ sealed class Harness
         {
             Line($"  {what}: refused before the store, {sends} sends above the send cap {SendCap} (proposed, enforced by the harness)");
             return new(false, $"send cap ({sends} sends)", Failure.Definite, null);
+        }
+        if (CommitRefusal(turns, marks ?? [], kernel) is { } refusal)
+        {
+            Line($"  {what}: refused before the store as a definite error: {refusal}");
+            return new(false, refusal, Failure.Definite, null);
+        }
+        if (marks is { Count: > 0 })
+        {
+            var inner = onLanded;
+            onLanded = () => { Marks.UnionWith(marks); inner?.Invoke(); };
         }
         var batch = new CommitBatch(partition, owner.Epoch, owner.Position, Lease, false, turns, [], []);
         if (hook == PageHook.CrashLost)
@@ -190,6 +203,51 @@ sealed class Harness
             return new(false, "crash before the commit", Failure.Unknown, batch);
         }
         return Land(owner, batch, onLanded, what);
+    }
+
+    /// <summary>
+    /// The commit's checks on composed terminates (proposed). Under every rule set, a <c>kernel.terminate</c> a turn
+    /// sends carries the committing actor's own id and creation as Sender and SenderCreation (observability, "An actor
+    /// type's composed send is checked"). With <see cref="Rules.CommitChecksMark"/>, a marked message must be a
+    /// <c>kernel.terminate</c> from the committing row that the kernel composed: no model turn sets the mark.
+    /// </summary>
+    private string? CommitRefusal(IReadOnlyList<TurnCommit> turns, IReadOnlyCollection<InboxKey> marks, bool kernel)
+    {
+        foreach (var turn in turns)
+        {
+            var creation = turn.Row?.Creation ?? Store.Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
+            foreach (var m in turn.Sent.Where(m => m.Kind == Kinds.Terminate))
+                if (m.Sender != turn.Instance || m.SenderCreation != creation)
+                    return $"the composed terminate {m.Id} names Sender {Name(m.Sender ?? "null")}/{m.SenderCreation}, not the committing {Name(turn.Instance)}/{creation}";
+            if (!Rules.CommitChecksMark) continue;
+            foreach (var m in turn.Sent.Where(m => marks.Contains(m.InboxKey)))
+            {
+                if (!kernel) return $"a model turn's send {m.Id} carries the cascade origin mark, which no turn method sets";
+                if (m.Kind != Kinds.Terminate || m.InboxKey != InboxKey.Issued(m.Id)) return $"the marked {m.Id} is no issued kernel.terminate";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A model's turn at <paramref name="actor"/>, triggered by an outside input: the real <c>DurableTurn</c> composes its
+    /// sends, sealed at the next revision. <paramref name="mark"/> picks sends to carry the mark (a forgery).
+    /// </summary>
+    public CommitResult ModelTurn(string actor, Action<DurableTurn> compose, Func<Message, bool>? mark, string what)
+    {
+        var trigger = new Message($"go-{++_triggers}", new InstanceRef(actor), "app.go", Sender: Operator, TargetCreation: Store.Instances[actor].Creation);
+        AddOutside(trigger);
+        HeldBack.Add(trigger.InboxKey);
+        var row = Store.Instances[actor];
+        var owner = Owners[new InstanceRef(actor).Partition];
+        var turn = Real.ModelTurn(owner.Worker, row, trigger, Store.Messages[trigger.InboxKey].Seq);
+        compose(turn);
+        var unit = turn.Seal(turn.Outcome(InstanceStatus.Running), row with { Revision = turn.Revision }, null, null);
+        var commit = ToTurnCommit(unit, []);
+        var marks = mark is null ? [] : commit.Sent.Where(mark).Select(m => m.InboxKey).ToList();
+        var result = Commit(owner.Partition, [commit], null, what, marks: marks, kernel: false);
+        Line($"{what}: sends [{string.Join(", ", commit.Sent.Select(m => $"{m.Kind} {m.Id} to {Name(m.Target.Id)} from {Name(m.Sender ?? "null")}/{m.SenderCreation}{(marks.Contains(m.InboxKey) ? ", marked" : "")}"))}]; {(result.Landed ? "landed" : "not landed")}");
+        return result;
     }
 
     /// <summary>After a landed page has been reported: the takeover or the crash its schedule puts there.</summary>
@@ -299,14 +357,15 @@ sealed class Harness
         var error = Real.TargetError(row, m);
         if (error is not null) { RefusalPath(owner, row, m, seq, error); return; }
         if (DrainOpen.Contains(id) && m.Kind == Kinds.Terminate) { OpenDrainRefusal(owner, row, m, seq); return; }
-        if (m.Kind == Kinds.Terminate && m.InboxKey == InboxKey.Issued(m.Id) && BindingApplies(row) && !ParentBound(m, row.Parent, row.ParentCreation, row.Creation))
+        var marked = Marks.Contains(m.InboxKey);
+        if (m.Kind == Kinds.Terminate && m.InboxKey == InboxKey.Issued(m.Id) && (marked || Rules.BindUnmarked) && BindingApplies(row) && !ParentBound(m, row.Parent, row.ParentCreation, row.Creation))
         {
-            Refusals.Add($"{m.Id}: parent binding");
-            ConsumeOnly(owner, m, $"refused by the parent binding (proposed, R5-M5): Sender {Name(m.Sender!)}/{m.SenderCreation} is not the recorded parent {(row.Parent is null ? "null" : Name(row.Parent))}/{row.ParentCreation}; no effect, no cascade");
+            Refusals.Add($"{m.Id}: parent");
+            ConsumeOnly(owner, m, $"refused, reason parent (proposed, R5-M5): {(marked ? "a marked" : "an unmarked")} terminate from {Name(m.Sender!)}/{m.SenderCreation}, not the recorded parent {(row.Parent is null ? "null" : Name(row.Parent))}/{row.ParentCreation}; no effect, no cascade");
             return;
         }
-        if (m.Kind == Kinds.Terminate && m.InboxKey == InboxKey.Issued(m.Id) && !BindingApplies(row) && !ParentBound(m, row.Parent, row.ParentCreation, row.Creation) && Shown(m))
-            Line($"  {m.Id} from {Name(m.Sender!)}/{m.SenderCreation} is not from the recorded parent {(row.Parent is null ? "null" : Name(row.Parent))}/{row.ParentCreation}; this rule set has no binding at {(row.Status == InstanceStatus.Running ? "a running" : "an ended")} recipient");
+        if (m.Kind == Kinds.Terminate && m.InboxKey == InboxKey.Issued(m.Id) && !ParentBound(m, row.Parent, row.ParentCreation, row.Creation) && Shown(m))
+            Line($"  {m.Id} ({(marked ? "marked" : "unmarked")}) from {Name(m.Sender!)}/{m.SenderCreation} is not from the recorded parent {(row.Parent is null ? "null" : Name(row.Parent))}/{row.ParentCreation}; under this rule set it is not parent-bound at {(row.Status == InstanceStatus.Running ? "a running" : "an ended")} recipient");
         var outcome = Real.Command(Type, owner.Worker, row, m, seq);
         if (outcome is null)
         {
@@ -318,7 +377,7 @@ sealed class Harness
         CommitOutcome(owner, row, m, outcome);
     }
 
-    /// <summary>R5-M5: which recipient states check the parent binding. Parked and draining recipients check it under every rule set (#4756).</summary>
+    /// <summary>R5-M5: at which states a marked terminate is parent-bound. Parked and draining recipients and markers check the binding under every rule set (#4756, RM-1).</summary>
     private bool BindingApplies(InstanceRow row) => row.Status == InstanceStatus.Running ? Rules.BindingRunning : (row.Children is not null || row.Jobs is not null) && Rules.BindingEnded;
 
     public static bool ParentBound(Message m, string? parent, long parentCreation, long creation) =>
@@ -379,7 +438,7 @@ sealed class Harness
         var shown = Names.ContainsKey(row.Id);
         if (shown) Line($"deliver {m.Id} (terminate from {Name(m.Sender ?? "?")}) to {Name(row.Id)}: the {what}; {row.Status} -> {outcome.Row.Status}, {ob.Children.Count} children, {ob.Jobs.Count} jobs; the built outcome cancels [{string.Join(", ", outcome.Cancelled.Select(c => c.Id))}]");
         var hook = Hook?.Invoke(row.Id, page.Number) ?? PageHook.None;
-        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, m), $"{Name(row.Id)}'s {what}", hook);
+        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, m), $"{Name(row.Id)}'s {what}", hook, MarksOf(page));
         if (result.Landed)
         {
             if (shown) Line($"  landed: page {page.Number} [{page.From}, {page.To}) of {ob.Entries} entries; {Describe(page)}{(notices.Count > 0 ? $"; notice {string.Join(", ", notices.Select(n => n.Id))} to {Name(row.Parent!)}" : "")}");
@@ -429,7 +488,7 @@ sealed class Harness
         var turn = new TurnCommit(marker.Id, null, null, [t.InboxKey, .. page.Consumed], [], page.Sends, [], [], null);
         Line($"  built CreationProtocol.Validate on the marker's write at revision {marker.Revision + 1}: {Real.Validate(new TurnCommit(marker.Id, marker with { Revision = marker.Revision + 1 }, marker.Revision, [], [], [], [], [], null), marker)} (the K3 change widens it; here the marker revision lives with the proposed columns)");
         var hook = Hook?.Invoke(marker.Id, page.Number) ?? PageHook.None;
-        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, t), $"the refusing commit at {Name(marker.Id)}'s marker", hook);
+        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, t), $"the refusing commit at {Name(marker.Id)}'s marker", hook, MarksOf(page));
         if (result.Landed) { Line($"  landed: page {page.Number} [{page.From}, {page.To}) of {ob.Entries} entries, {page.Consumed.Count + 1} counted inputs; {Describe(page)}"); AfterLanded(hook, result); AfterPage?.Invoke(marker.Id, page.Number); }
         else if (result.Error != "crash before the commit") Failed(owner, t, result);
     }
@@ -449,7 +508,7 @@ sealed class Harness
         var turn = new TurnCommit(actor, write, row.Retired ? null : row.Revision, [.. control is null ? [] : new[] { control.InboxKey }, .. page.Consumed], [], page.Sends, [], [], null);
         var hook = Hook?.Invoke(actor, page.Number) ?? PageHook.None;
         var where = row.Retired ? "marker" : "row";
-        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, control), $"page {page.Number} of {Name(actor)}'s cascade", hook);
+        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, control), $"page {page.Number} of {Name(actor)}'s cascade", hook, MarksOf(page));
         if (result.Landed)
         {
             Line($"page {page.Number} at {Name(actor)}'s {where} ({owner.Node}, epoch {owner.Epoch}, {(control is null ? "continued from memory" : control.Id)}): [{page.From}, {page.To}) of {ob.Entries}; {Describe(page)}");
@@ -474,6 +533,9 @@ sealed class Harness
         owner.MemoryCursor[ob.Actor] = page.To;
         if (page.More && !Rules.NextControl) _continuations.Add((owner, ob.Actor));
     }
+
+    /// <summary>Every child terminate a page sends is kernel-composed and carries the cascade origin mark.</summary>
+    private static List<InboxKey> MarksOf(Page page) => [.. page.Sends.Where(s => s.Kind == Kinds.Terminate).Select(s => s.InboxKey)];
 
     private Page Compose(Owner owner, Obligation ob, int from)
     {

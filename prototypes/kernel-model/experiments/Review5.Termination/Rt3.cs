@@ -39,24 +39,29 @@ sealed class Rt3(string variant, Rules rules)
         foreach (var id in ids) _h.Seed(new InstanceRow(id, "rt", "c", InstanceStatus.Running, "{}", 2, A, Creation: 1, StartIntent: "v1:c", ParentCreation: 1));
         foreach (var key in jobKeys) { _h.JobGeneration[(A, key)] = 1; _h.HeldBack.Add(_h.SeedTicket(A, 1, key, 1)); }
         if (!live) _h.DrainOpen.Add(A);
+        // The schedule's pages, kept inside the cascade for any P_cascade that gives 10,001 children three pages or more:
+        // at the default 1,000 (11 pages) a takeover after page 3, a crash at page 5, the delete after page 2, Complete after page 3.
+        var pages = (children + jobs + rules.PCascade - 1) / rules.PCascade;
         _h.Line($"setup: A {(live ? "running" : "parked, its delete drain open")}, {children} children at g2/child/1.1.1..{children} (each Running, parent A/1), {jobs} jobs; " +
-            $"A's registry (ChildRegistry.Write) is {System.Text.Encoding.UTF8.GetByteCount(registry ?? "")} UTF-8 bytes; P_cascade = {rules.PCascade}, send cap = {Harness.SendCap}");
+            $"A's registry (ChildRegistry.Write) is {System.Text.Encoding.UTF8.GetByteCount(registry ?? "")} UTF-8 bytes; P_cascade = {rules.PCascade}, send cap = {Harness.SendCap}, {pages} page(s)");
 
+        int Within(int page, int last) => Math.Max(1, Math.Min(page, last));
+        var (takeoverAfter, crashAt, deleteAfter, completeAfter) = (Within(3, pages - 1), Math.Max(2, Within(5, pages - 1)), Within(2, pages - 2), Within(3, pages - 1));
         switch (variant)
         {
-            case "takeover": _h.Hook = (actor, page) => actor == A && page == 3 && _hooked++ == 0 ? PageHook.TakeoverAfter : PageHook.None; break;
-            case "crash-landed": _h.Hook = (actor, page) => actor == A && page == 5 && _hooked++ == 0 ? PageHook.CrashLanded : PageHook.None; break;
-            case "crash-lost": _h.Hook = (actor, page) => actor == A && page == 5 && _hooked++ == 0 ? PageHook.CrashLost : PageHook.None; break;
+            case "takeover": _h.Hook = (actor, page) => actor == A && page == takeoverAfter && _hooked++ == 0 ? PageHook.TakeoverAfter : PageHook.None; break;
+            case "crash-landed": _h.Hook = (actor, page) => actor == A && page == crashAt && _hooked++ == 0 ? PageHook.CrashLanded : PageHook.None; break;
+            case "crash-lost": _h.Hook = (actor, page) => actor == A && page == crashAt && _hooked++ == 0 ? PageHook.CrashLost : PageHook.None; break;
             case "delete-discharging":
                 _h.AfterPage = (actor, page) =>
                 {
-                    if (actor != A || page != 2 || _hooked++ != 0) return;
+                    if (actor != A || page != deleteAfter || _hooked++ != 0) return;
                     _h.Line("an operator's qualified delete of the ended A arrives while its obligation is Discharging");
                     _h.AddOutside(new Message("op-delete-a", new InstanceRef(A), Kinds.Delete, Sender: Harness.Operator, TargetCreation: 1));
                 };
                 break;
             case "open-drain-10001":
-                _h.AfterPage = (actor, page) => { if (actor == A && page == 3 && _hooked++ == 0) _h.Complete(A); };
+                _h.AfterPage = (actor, page) => { if (actor == A && page == completeAfter && _hooked++ == 0) _h.Complete(A); };
                 break;
         }
 
@@ -74,19 +79,20 @@ sealed class Rt3(string variant, Rules rules)
                 _h.DeliverNow(Harness.Derive(A, "j2", 1, 1), "a fresh owner's poll refuses and consumes j2 at the retired A (Worker.cs 1050-1055); j1 is still pending");
             _h.HeldBack.Remove(t.InboxKey);
         }
-        else if (variant == "open-drain-10001") _h.Line("T is delivered while A's delete drain is open (J-1); Complete runs after page 3");
+        else if (variant == "open-drain-10001") _h.Line($"T is delivered while A's delete drain is open (J-1); Complete runs after page {completeAfter}");
         _h.Settle();
         _h.HeldBack.Clear();
         _h.Settle();
 
         var notCancelled = ids.Count(id => _h.Status(id) != "Cancelled");
         var deliveries = ids.Select(id => _h.TerminatesDelivered.GetValueOrDefault(id)).ToList();
-        _h.Line($"end: A {_h.Status(A)}; children Cancelled {children - notCancelled} of {children}; terminates delivered per child: min {deliveries.Min()}, max {deliveries.Max()}; " +
+        _h.Line($"end: A {_h.Status(A)}; children Cancelled {children - notCancelled} of {children}; terminates delivered per child: min {deliveries.DefaultIfEmpty().Min()}, max {deliveries.DefaultIfEmpty().Max()}; " +
             $"obligation {(_h.Obligations.TryGetValue(A, out var ob) ? ob.ToString() : "none")}; T pending {_h.Pending(t.InboxKey)}");
         _report.Expect("children not Cancelled", notCancelled, 0);
         _report.Expect("children that received no terminate", deliveries.Count(d => d == 0), 0);
         _report.Expect("children that received more than one terminate", deliveries.Count(d => d > 1), 0);
         _report.Expect("obligations still open", _h.OpenObligations, 0);
+        _report.Expect("A's child terminates stored without the cascade origin mark", _h.Sent.Count(m => m.Kind == Kinds.Terminate && m.Sender == A && !_h.Marks.Contains(m.InboxKey)), 0);
         _report.Expect("notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, A), 1);
         _report.Expect("A", _h.Status(A), variant is "marker-10001" or "jobs-marker" or "open-drain-10001" or "delete-discharging" ? "retired marker" : "Cancelled");
         if (variant is "live-p" or "live-p-plus-1" && rules.Paged && rules.PCascade == Program.PCascade)

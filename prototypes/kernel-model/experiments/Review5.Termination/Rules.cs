@@ -21,10 +21,14 @@ sealed record Rules(string Name)
     public bool DeleteDropsDischarging { get; init; }
     /// <summary>R5-B2: the page size, entries a discharge commit sends (child terminates plus job cancels).</summary>
     public int PCascade { get; init; } = Program.PCascade;
-    /// <summary>R5-M5, repaired: the parent binding at a running recipient.</summary>
+    /// <summary>R5-M5, repaired: a marked (kernel-composed) terminate is parent-bound at a running recipient.</summary>
     public bool BindingRunning { get; init; }
-    /// <summary>R5-M5, repaired: the parent binding at an ended recipient that still has a registry or jobs.</summary>
+    /// <summary>R5-M5, repaired: a marked terminate is parent-bound at an ended recipient that still has a registry or jobs.</summary>
     public bool BindingEnded { get; init; }
+    /// <summary>R5-M5, mutation: every issued terminate is parent-bound, a model's application terminate included.</summary>
+    public bool BindUnmarked { get; init; }
+    /// <summary>R5-M5, repaired: the commit refuses a cascade origin mark on anything but a kernel-composed terminate from the committing row.</summary>
+    public bool CommitChecksMark { get; init; }
     /// <summary>R5-m3, mutation: the cancel's derivation names another instance's origin.</summary>
     public bool ForeignDerivation { get; init; }
     /// <summary>R5-m3, mutation: the cancel's derivation ignores the generation and takes every same-origin ticket of the key.</summary>
@@ -33,7 +37,7 @@ sealed record Rules(string Name)
     public bool AcceptOffRegistry { get; init; }
 
     public static Rules Reviewed => new("reviewed") { CountedCancel = true };
-    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true };
+    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true, CommitChecksMark = true };
 
     /// <summary>The rule set by name, for a case family: <c>negative</c> removes the family's repaired rule.</summary>
     public static Rules For(string name, string family) => name switch
@@ -55,6 +59,8 @@ sealed record Rules(string Name)
         "no-next-control" => Repaired with { Name = name, NextControl = false },
         "delete-drops-discharging" => Repaired with { Name = name, DeleteDropsDischarging = true },
         "binding-running-only" => Repaired with { Name = name, BindingEnded = false },
+        "bind-every-issued-terminate" => Repaired with { Name = name, BindUnmarked = true },
+        "commit-accepts-mark" => Repaired with { Name = name, CommitChecksMark = false },
         _ => throw new ArgumentException($"unknown rule set '{name}'"),
     };
 }

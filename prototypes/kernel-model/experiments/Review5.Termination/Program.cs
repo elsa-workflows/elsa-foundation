@@ -42,6 +42,8 @@ static partial class Program
         .. Three("rt4-ended-registry", "FAIL", "PASS", "FAIL"), ("rt4-ended-registry", "binding-running-only", "FAIL"),
         .. Three("rt4-genuine-child", "PASS", "PASS", "PASS"),
         .. Three("rt4-operator", "PASS", "PASS", "PASS"),
+        .. Three("rt4-model-send", "PASS", "PASS", "PASS"), ("rt4-model-send", "bind-every-issued-terminate", "FAIL"),
+        .. Three("rt4-forgery", "FAIL", "PASS", "PASS"), ("rt4-forgery", "commit-accepts-mark", "FAIL"),
     ];
 
     private static IEnumerable<(string, string, string)> Three(string c, string reviewed, string repaired, string negative) =>
@@ -86,7 +88,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: [--p-cascade <n>] --case <id> --rules <reviewed|repaired|negative|presence-from-memory|foreign-derivation|generation-blind|accept-off-registry|page-above-cap|no-next-control|delete-drops-discharging|binding-running-only> | --all | --list");
+        Console.Error.WriteLine("usage: [--p-cascade <n>] --case <id> --rules <reviewed|repaired|negative|presence-from-memory|foreign-derivation|generation-blind|accept-off-registry|page-above-cap|no-next-control|delete-drops-discharging|binding-running-only|bind-every-issued-terminate|commit-accepts-mark> | --all | --list");
         return 2;
     }
 
