@@ -150,6 +150,32 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_computed_read_that_could_reach_a_loop_held_variable_is_refused()
+    {
+        // Elsa 4 never writes the Elsa 3 variable that held the loop's current value, so the lookup would read null.
+        var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[1]", "Object")), ("currentValue", Captured("item")));
+        loop.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['it', 'em'].join(''))"))));
+
+        var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "item", Name = "item", TypeName = "Object" });
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.ResolutionDiffers && diagnostic.Message.Contains("'item'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_computed_read_inside_a_loop_warns_that_it_can_reach_the_loops_values()
+    {
+        var loop = Activity("loop", "Elsa.For", ("start", Literal("0", "Int32")), ("end", Literal("1", "Int32")));
+        loop.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['Ord', 'er'].join(''))"))));
+
+        var result = await ConvertAsync(Sequence("root", loop), Order);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.ShadowedCandidate && diagnostic.Message.Contains("'index'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_computed_read_with_a_shadowed_candidate_converts_with_a_warning()
     {
         var container = Sequence("container", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['Ord', 'er'].join(''))"))));

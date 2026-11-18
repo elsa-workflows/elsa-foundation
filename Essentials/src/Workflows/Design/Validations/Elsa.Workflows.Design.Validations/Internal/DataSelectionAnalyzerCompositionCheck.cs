@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Core.Contracts;
 using CShells.Lifecycle;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,11 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposi
             descriptor.ServiceType == typeof(IUnorderedVariableWriteAnalyzer) && !descriptor.IsKeyedService).ToArray();
         if (writeOrder.Length != 1 || writeOrder[0].Lifetime != ServiceLifetime.Singleton)
             throw new InvalidOperationException("Exactly one singleton IUnorderedVariableWriteAnalyzer must be composed.");
+        // The rename planner (spec 1222) is a replacement contract consumed by the Design API: exactly one scoped.
+        var renamePlanners = composition.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IScriptVariableRenamePlanner) && !descriptor.IsKeyedService).ToArray();
+        if (renamePlanners.Length != 1 || renamePlanners[0].Lifetime != ServiceLifetime.Scoped)
+            throw new InvalidOperationException("Exactly one scoped IScriptVariableRenamePlanner must be composed.");
         return Task.CompletedTask;
     }
 

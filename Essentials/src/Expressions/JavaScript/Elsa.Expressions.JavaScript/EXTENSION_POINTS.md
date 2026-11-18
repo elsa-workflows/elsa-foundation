@@ -67,11 +67,13 @@ with portable expression evaluation.
 - **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Validations`, used by the publish compiler to
   pin literal reads and set the fallback marker, by `ScriptVariableReadValidator` for the draft diagnostics and by the
   rename planner.
-- **Override when:** a host uses another JavaScript parser or dialect. Register its analyzer after `JavaScriptFeature`:
-  the resolver keeps the last registration per language, so a later one replaces the default.
+- **Override when:** a host uses another JavaScript parser or dialect. Replace the default registration (remove it and
+  register its own): the resolver refuses two analyzers of different types for one language, so none wins silently.
 - **Host functions:** a host function that reads workflow variables is declared with
   `JavaScriptHostFunctionDeclaration(name, ReadsVariables: true)` (`Elsa.Expressions.JavaScript.Core`), registered in the
-  service collection; the analyzer then treats a call to it as an opaque read, so publish sets the fallback marker.
+  service collection as a singleton; the analyzer then treats a call to it as an opaque read, so publish sets the
+  fallback marker. The isolated engine has no way to install host functions yet, so a declaration only affects publish
+  until one exists; such a function would read through the request's `IExpressionVariableReader`.
 
 ## Cross-references
 

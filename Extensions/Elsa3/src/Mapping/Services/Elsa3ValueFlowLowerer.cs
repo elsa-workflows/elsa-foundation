@@ -325,6 +325,45 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         // is declared both on the workflow and by an enclosing container, that lookup reads the container's.
         if (rewrite.HasComputedVariableRead)
         {
+            // A loop's current value lives in an Elsa 3 variable that Elsa 4 never writes (its loops expose currentItem
+            // and index instead), so a computed name reaching that variable would read null where Elsa 3 read the value.
+            var loopHeld = definition.Variables
+                .Where(variable => outputs.Any(output => IsLoopVariable(output) &&
+                                                         output.MemoryReferenceId.Equals(variable.Id, StringComparison.Ordinal)))
+                .Select(variable => variable.Name)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (loopHeld.Length > 0)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.ResolutionDiffers,
+                    $"JavaScript reads variables by a computed name, and {string.Join(", ", loopHeld.Select(name => $"'{name}'"))} holds a loop's current value, which Elsa 4 does not write into that variable.",
+                    "Read the loop's current value by its literal name (getVariable('name')) in the Elsa 3 workflow, so it converts to the loop's own value, before import.",
+                    $"{property.JsonPath}.expression.value"));
+                return;
+            }
+
+            // A computed name inside a loop body can also reach the loop's own values, which Elsa 3 did not expose.
+            var loopValues = accessors.AncestorScopeNames(property.Activity)
+                .Select(scope => scope.Name)
+                .Where(Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (loopValues.Length > 0)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.ShadowedCandidate,
+                    $"JavaScript reads variables by a computed name inside a loop, so in Elsa 4 it can also read the loop's {string.Join(", ", loopValues.Select(name => $"'{name}'"))}, which Elsa 3 did not expose by that name.",
+                    "Check that the names the script builds do not match these, before import.",
+                    $"{property.JsonPath}.expression.value",
+                    null,
+                    Elsa3MigrationDiagnosticSeverity.Warning));
+            }
+
             var containerNames = accessors.AncestorScopeNames(property.Activity).Select(scope => scope.Name);
             var shadowed = definition.Variables
                 .Select(variable => variable.Name)

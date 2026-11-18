@@ -43,8 +43,9 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 ### `IScriptVariableRenamePlanner` *(Core — `Elsa.Workflows.Design.Core`)*
 
-- **Kind:** replacement contract, one per host. `ScriptVariableRenamePlanner` is the default, registered with
-  `TryAddScoped` by this feature, so a host's own registration made earlier wins.
+- **Kind:** replacement contract, exactly one per host. `ScriptVariableRenamePlanner` is the default, registered with
+  `TryAddScoped` by this feature, so a host's own scoped registration made earlier replaces it; a second registration
+  fails the shell at start (`DataSelectionAnalyzerCompositionCheck`), so none wins silently.
 - **Contract:** `PlanAsync(state, scopeId, referenceKey, newName, scriptInputKeyOf)` returns the script edits that keep
   each resolvable literal read on a renamed variable and the references it cannot safely update (spec 1222 FR-021,
   FR-022). It never changes the draft or a published version.

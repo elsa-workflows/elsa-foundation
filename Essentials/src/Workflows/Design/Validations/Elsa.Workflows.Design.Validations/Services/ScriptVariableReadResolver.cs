@@ -11,12 +11,21 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// first over the scopes visible to the node (loop iteration values innermost, then containers, then the workflow), and
 /// reports a script with a computed or opaque read conservatively. It never rewrites the source.
 /// </summary>
-/// <remarks>A later analyzer registration for a language replaces an earlier one.</remarks>
+/// <remarks>Exactly one analyzer per language; two of different types are refused.</remarks>
 public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAnalyzer> analyzers)
 {
     private readonly IReadOnlyDictionary<string, IScriptVariableReadAnalyzer> _analyzers = analyzers
         .GroupBy(analyzer => analyzer.Language, StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        .ToDictionary(group => group.Key, Single, StringComparer.OrdinalIgnoreCase);
+
+    // One analyzer per language: two of different types are refused rather than one winning silently. The same type
+    // registered twice (a feature configured twice) is one analyzer.
+    private static IScriptVariableReadAnalyzer Single(IGrouping<string, IScriptVariableReadAnalyzer> group) =>
+        group.Select(analyzer => analyzer.GetType()).Distinct().Count() == 1
+            ? group.First()
+            : throw new InvalidOperationException(
+                $"More than one script variable read analyzer is registered for language '{group.Key}': " +
+                $"{string.Join(", ", group.Select(analyzer => analyzer.GetType().Name).Distinct())}. Register exactly one per language.");
 
     /// <summary>Whether a script in <paramref name="language"/> can read variables by name.</summary>
     public bool Supports(string? language) => language is not null && _analyzers.ContainsKey(language);

@@ -193,7 +193,8 @@ against S-7. This is the distinction D-7 asks to preserve explicitly.
    computed and opaque writes are allowed and counted conservatively, but never create a variable).
 5. The body read plan publish stores on the node (`ScriptBodyReadPlan`, metadata key `runtime.scriptBodyReadPlan`) is
    what the session resolves the body's literal reads against; its fallback marker lists the candidates to load
-   before the body runs (Q5).
+   before the body runs (Q5). Node metadata is not part of the executable hash today, so T050 must either hash the
+   plan or move it into a hashed field before the runtime relies on it.
 
 ## R-11: Converter reconciliation (spec 247)
 

@@ -4,7 +4,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Records which committed variable values an input materialization actually read (spec 1221 FR-002, FR-004): a
-/// variable-read binding, a declared variable expression parameter, or an ambient variable an expression references.
+/// variable-read binding, a declared variable expression parameter (pinned by publish, spec 1222), or a variable an
+/// expression read by a computed name through the run-time lookup.
 /// A visible variable nobody read is never recorded. The recorder holds the committed envelope instances it was handed;
 /// the materializer maps them back to their frame and key to pin the version seen.
 /// </summary>
