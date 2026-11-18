@@ -86,13 +86,13 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 10: Studio presentation (FR-036), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
 
-- [ ] T046 Variable-reference input editor: bind a `VariableReference<T>` / `ReadOnlyVariableReference<T>` input to a
+- [x] T046 Variable-reference input editor: bind a `VariableReference<T>` / `ReadOnlyVariableReference<T>` input to a
   declared variable in scope, reusing `variableTargetPicker.tsx` and `variableReferenceContribution.tsx`; read-only
   references are labelled as reads.
-- [ ] T047 Show a node's may-write set in `ActivityPropertiesPanel.tsx`, and a marker for an activity carrying
+- [x] T047 Show a node's may-write set in `ActivityPropertiesPanel.tsx`, and a marker for an activity carrying
   `[AccessesUndeclaredVariables]` ("may write any visible variable"), from the authoring descriptor.
-- [ ] T048 [P] Tests in `__tests__/` (vitest): the picker offers only declared variables in scope, the may-write set and
-  the marker render from the descriptor.
+- [x] T048 [P] Tests in `__tests__/` (vitest): the picker offers only declared variables in scope, the may-write set and
+  the marker render from the descriptor. *`variableReferenceInputUi.test.tsx` (7 tests). Not yet checked visually in a running Studio.*
 
 ## Dependencies
 

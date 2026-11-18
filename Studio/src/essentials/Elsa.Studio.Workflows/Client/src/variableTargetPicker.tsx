@@ -7,8 +7,9 @@ import { WORKFLOW_SCOPE_ID } from "./scopedVariables";
  * selected activity, keyed `scopeId::referenceKey`, with an empty "Select a variable…" option and the
  * loading/error/unavailable/empty status notes. A selected reference that is not in the visible set (or is
  * filtered out by `workflowScopeOnly`) is preserved as a disabled "(not visible from this scope)" option so
- * an authored target is never silently dropped. Used by the Set Variable intrinsic inspector and the
- * activity output-capture editor; the caller supplies its own label markup around the select.
+ * an authored target is never silently dropped. Used by the Set Variable intrinsic inspector, the activity
+ * output-capture editor and variable-reference inputs (spec 1231 FR-036); the caller supplies its own label
+ * markup around the select.
  */
 
 const optionSeparator = "::";
@@ -21,7 +22,8 @@ export function VariableTargetSelect({
   retry,
   selected,
   onSelect,
-  workflowScopeOnly = false
+  workflowScopeOnly = false,
+  disabled = false
 }: {
   ariaLabelledBy?: string;
   ariaLabel?: string;
@@ -32,6 +34,7 @@ export function VariableTargetSelect({
   onSelect(selection: { referenceKey: string; scopeId: string } | null): void;
   // v1 output captures only offer workflow-scope targets; the intrinsic picker offers every scope.
   workflowScopeOnly?: boolean;
+  disabled?: boolean;
 }) {
   const options = workflowScopeOnly ? visibleVariables.filter(variable => variable.isWorkflowScope) : visibleVariables;
   const optionsUnavailable = status !== "ready";
@@ -43,7 +46,7 @@ export function VariableTargetSelect({
         aria-labelledby={ariaLabelledBy}
         aria-label={ariaLabel}
         value={selected}
-        disabled={optionsUnavailable}
+        disabled={disabled || optionsUnavailable}
         onChange={event => onSelect(parseOptionKey(event.target.value))}
       >
         <option value="">Select a variable…</option>

@@ -86,6 +86,7 @@ import {
 } from "./activityDataSelection";
 import { ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
 import { ActivityOutputIcon } from "./activityOutputIcon";
+import { isVariableReferenceInput, VariableReferenceInputRow, VariableWritesSummary } from "./variableReferenceInput";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -225,7 +226,12 @@ export function ActivityPropertiesPanel({
   const inputs = descriptor.inputs.filter(input => input.isBrowsable !== false);
 
   if (inputs.length === 0) {
-    return <p className="wf-muted">{emptyLabel}</p>;
+    return (
+      <>
+        <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} />
+        <p className="wf-muted">{emptyLabel}</p>
+      </>
+    );
   }
 
   const groups = groupInputs(inputs, readPropertyGroupMetadata(descriptor.customProperties));
@@ -241,7 +247,16 @@ export function ActivityPropertiesPanel({
   const renderGroups = (groupsToRender: typeof groups) => groupsToRender.map(group => (
     <section key={group.category} className="wf-property-group">
       {groupsToRender.length > 1 || group.configured || group.category !== "General" ? <h4>{group.label}</h4> : null}
-      {group.inputs.map(input => (
+      {group.inputs.map(input => isVariableReferenceInput(input) ? (
+        // A variable-reference input binds a declared variable in scope and nothing else (spec 1231 FR-036).
+        <VariableReferenceInputRow
+          key={input.name}
+          activity={activity}
+          input={input}
+          readOnly={readOnly}
+          onChange={commitInputChange}
+        />
+      ) : (
         <MemoizedPropertyRow
           key={input.name}
           activity={activity}
@@ -289,6 +304,7 @@ export function ActivityPropertiesPanel({
         hasSnapshot={expressionDescriptors.length > 0}
         onRetry={onRetryDescriptors}
       />
+      <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} />
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection
@@ -594,7 +610,7 @@ function PropertyRow({
       const changed: StudioActivityInputDescriptor[] = [];
       for (const [key, value] of Object.entries(values)) {
         const target = current.activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
-        if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target)) continue;
+        if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target) || isVariableReferenceInput(target)) continue;
         changed.push(target);
         next = writeInputValue(next, target, target.isWrapped === false ? value : withExpression(readWrappedInput(next, target), "Literal", value));
       }
@@ -2042,7 +2058,7 @@ function replacesGenericDictionaryEditor(
 /** Literal values of the activity's other readable inputs, keyed as property editor contributions address them. */
 function readLiteralInputValues(activity: ActivityNode, activityDescriptor: StudioActivityDescriptor) {
   return Object.fromEntries(activityDescriptor.inputs
-    .filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
+    .filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && !isVariableReferenceInput(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
     .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)]));
 }
 
