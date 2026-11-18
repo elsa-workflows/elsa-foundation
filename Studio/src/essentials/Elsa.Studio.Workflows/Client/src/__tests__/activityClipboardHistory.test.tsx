@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useActivityClipboard } from "../workflow-editor/useActivityClipboard";
+import type { useActivityClipboard } from "../workflow-editor/useActivityClipboard";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { useDraftHistory } from "../workflow-editor/useDraftHistory";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
@@ -20,18 +20,23 @@ function initial(definitionId = "definition-a"): WorkflowDraft {
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, clipboard: ReturnType<typeof useActivityClipboard>;
 let root: Root, container: HTMLDivElement, editCount: number, status: string;
 let disable: (value: boolean) => void;
+// The copy origin is page-level state, so every test gets a fresh hook module; a fresh import also stands in for a full page load.
+let useClipboard: typeof useActivityClipboard;
+async function freshClipboardModule() { vi.resetModules(); useClipboard = (await import("../workflow-editor/useActivityClipboard")).useActivityClipboard; }
+function remount() { flushSync(() => root.unmount()); root = createRoot(container); flushSync(() => root.render(<Probe />)); }
 function Probe() {
   const [disabled, setDisabled] = useState(false); disable = setDisabled;
   doc = useWorkflowDocument();
   history = useDraftHistory({ draft: doc.state.draft, restoreDraft: snapshot => doc.editDraft(() => snapshot) });
-  clipboard = useActivityClipboard({ resourceKind: "workflow", draft: doc.state.draft, frames: doc.state.frames, catalogByVersion: catalog,
+  clipboard = useClipboard({ resourceKind: "workflow", draft: doc.state.draft, frames: doc.state.frames, catalogByVersion: catalog,
     selectedNodeIds: ["producer", "consumer"], disabled, definitionId: doc.state.draft?.definitionId ?? "",
     editDraft: recipe => { editCount++; doc.editDraft(recipe); }, select: doc.select, setStatus: value => { status = value; } });
   return null;
 }
 function nodes() { return doc.state.draft!.state.rootActivity!.structure!.payload.activities as ActivityNode[]; }
 function load(draft: WorkflowDraft) { flushSync(() => { history.resetHistory(draft); doc.loadDraft(draft); }); }
-beforeEach(() => {
+beforeEach(async () => {
+  await freshClipboardModule();
   editCount = 0; status = ""; sessionStorage.clear(); container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load(initial());
 });
@@ -69,8 +74,7 @@ describe("actual resource-local clipboard and history", () => {
   it("explains a refused paste after the editor reopens on another workflow", () => {
     expect(clipboard.copy()).toBe(true);
     // Studio keys the editor by definition ID, so opening another workflow mounts a fresh editor.
-    flushSync(() => root.unmount()); root = createRoot(container); flushSync(() => root.render(<Probe />));
-    load(initial("definition-c"));
+    remount(); load(initial("definition-c"));
     const before = structuredClone(doc.state.draft);
     expect(clipboard.paste()).toBe(false);
     expect(doc.state.draft).toEqual(before);
@@ -80,24 +84,43 @@ describe("actual resource-local clipboard and history", () => {
 
   it("explains a refused paste after a full page load in the same tab", async () => {
     expect(clipboard.copy()).toBe(true);
-    vi.resetModules();
-    const reloaded = await import("../workflow-editor/useActivityClipboard");
-    let pasteAfterReload: () => boolean = () => true;
-    function ReloadedProbe() {
-      const reloadedDoc = useWorkflowDocument(); doc = reloadedDoc;
-      pasteAfterReload = reloaded.useActivityClipboard({ resourceKind: "workflow", draft: reloadedDoc.state.draft, frames: reloadedDoc.state.frames,
-        catalogByVersion: catalog, selectedNodeIds: [], disabled: false, definitionId: reloadedDoc.state.draft?.definitionId ?? "",
-        editDraft: recipe => { editCount++; reloadedDoc.editDraft(recipe); }, select: reloadedDoc.select, setStatus: value => { status = value; } }).paste;
-      return null;
-    }
-    flushSync(() => root.unmount()); root = createRoot(container); flushSync(() => root.render(<ReloadedProbe />));
-    flushSync(() => doc.loadDraft(initial("definition-d")));
-    expect(pasteAfterReload()).toBe(false);
+    await freshClipboardModule(); remount(); load(initial("definition-d"));
+    expect(clipboard.paste()).toBe(false);
     expect(editCount).toBe(0);
     expect(status).toBe("The copied activities came from another workflow, so they can't be pasted here yet.");
   });
 
+  it("uses the singular form for one copied activity", () => {
+    flushSync(() => clipboard.duplicate(["producer"]));
+    remount(); load(initial("definition-e"));
+    expect(clipboard.paste()).toBe(false);
+    expect(status).toBe("The copied activity came from another workflow, so it can't be pasted here yet.");
+  });
+
   it("says nothing on paste when nothing was copied", () => {
+    expect(clipboard.paste()).toBe(false);
+    remount(); load(initial("definition-b"));
+    expect(clipboard.paste()).toBe(false);
+    expect(status).toBe("");
+  });
+
+  it("says nothing when the editor reopens on the workflow the activities came from", () => {
+    expect(clipboard.copy()).toBe(true); status = "";
+    remount(); load(initial());
+    expect(clipboard.paste()).toBe(false);
+    expect(status).toBe("");
+  });
+
+  it("says nothing while the document is read-only, even after a copy elsewhere", () => {
+    expect(clipboard.copy()).toBe(true); status = "";
+    remount(); load(initial("definition-b")); flushSync(() => disable(true));
+    expect(clipboard.paste()).toBe(false);
+    expect(status).toBe("");
+  });
+
+  it("ignores an unreadable stored origin after a full page load", async () => {
+    sessionStorage.setItem("elsa.studio.activityClipboard.copyOrigin", "{not json");
+    await freshClipboardModule(); remount(); load(initial("definition-b"));
     expect(clipboard.paste()).toBe(false);
     expect(status).toBe("");
   });

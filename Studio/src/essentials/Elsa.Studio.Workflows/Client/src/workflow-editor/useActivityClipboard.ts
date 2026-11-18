@@ -37,12 +37,14 @@ function rememberCopyOrigin(origin: CopyOrigin) {
 }
 
 function readCopyOrigin(): CopyOrigin | null {
+  // Memory is the latest copy on this page; storage only matters after a full page load.
+  if (copyOriginInMemory) return copyOriginInMemory;
   try {
     const stored = JSON.parse(sessionStorage.getItem(copyOriginKey) ?? "null") as Partial<CopyOrigin> | null;
     if (stored && typeof stored.definitionId === "string" && typeof stored.resourceKind === "string" && typeof stored.count === "number")
       return stored as CopyOrigin;
-  } catch { /* Fall back to memory. */ }
-  return copyOriginInMemory;
+  } catch { /* Storage is unavailable or unreadable. */ }
+  return null;
 }
 
 function refusedPasteStatus(count: number) {
