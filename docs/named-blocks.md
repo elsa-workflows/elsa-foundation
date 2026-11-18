@@ -27,7 +27,7 @@ A block runs as its native container. Waiting inside a block survives a host res
 
 ## Promote a block to a reusable activity
 
-**Promote to reusable activity…** turns a selected block into an ordinary reusable activity and replaces the block with a call to it. Both editors show it; it is enabled for one selected block in an editable draft when the server supports reusable graph activities, and otherwise says why it is unavailable.
+**Promote to reusable activity…** turns a selected block into an ordinary reusable activity and replaces the block with a call to it. Both editors show it beside **Open block** when exactly one block is selected. It is enabled in an editable draft when the server supports reusable graph activities; otherwise it says why it is unavailable.
 
 1. **Review.** Studio proposes the reusable activity: its public inputs (and where each value comes from today), outputs and outcomes, the step count, and the call that will replace the block. Nothing changes yet. If the block depends on something a reusable activity cannot capture safely, the review names the reason and where it is. Examples: a script that reads workflow state outside its parameters, a write to a variable outside the block, a read that might not have a value yet when the call starts, or a Break or Complete whose target would change.
 2. **Create.** **Create reusable activity draft** creates an ordinary draft in Activity Definitions. If Studio cannot confirm whether the draft was created, it says so and does not create it again; check Activity Definitions before retrying.
