@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Loader, OctagonX, RotateCw, UserCheck } from "lucide-react";
+import { AlertTriangle, CheckCheck, Loader, OctagonX, RotateCw, UserCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   getAlterationJob,
@@ -8,7 +8,7 @@ import {
   submitAlterationPlan,
   supportsOperatorAlterations
 } from "../api/alterations";
-import { getActivityStateView, supportsActivityStateView } from "../api/runtime";
+import { getActivityExecutionInspection, getActivityStateView, supportsActivityStateView } from "../api/runtime";
 import { isCompensationScope } from "../compensationScope";
 import { isActiveIncident } from "../workflowRuntimeOverlays";
 import {
@@ -24,6 +24,8 @@ import {
 } from "../compensationRuntime";
 import {
   abandonActionModel,
+  acceptRecordedCompletionActionModel,
+  acceptRecordedCompletionExplanation,
   clearPendingOperatorAction,
   followOperatorPlan,
   incidentActionModel,
@@ -44,7 +46,7 @@ import {
   type PendingOperatorAction
 } from "../operatorActions";
 import { findActivityNode } from "../workflowAdapter";
-import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, RecordedCompletionView, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { OperatorActionDialog, type OperatorActionForm } from "./OperatorActionDialog";
 
 // Spec 260 (T422, T423): the run view's operator actions. One action per run at a time: a confirmed action is submitted
@@ -306,8 +308,76 @@ const resultMessages: Record<OperatorActionModel["kind"], string> = {
   retry: "Retry applied.",
   resolve: "Resolve applied.",
   abandon: "Recovery abandoned.",
-  decide: "Decision applied."
+  decide: "Decision applied.",
+  accept: "Recorded completion accepted."
 };
+
+/** The faulted activity an incident belongs to. */
+function incidentSourceOf(incident: IncidentStateSummary) {
+  return incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim() || undefined;
+}
+
+const candidateSeparator = "\u001f";
+
+/**
+ * Spec 1221 FR-017: Accept recorded completion is offered only for a faulted activity with a recorded completion, which
+ * only the activity-execution read carries. Reads it once per faulted activity that waits for intervention.
+ */
+function useRecordedCompletions(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  incidents: readonly IncidentStateSummary[],
+  activities: readonly ActivityExecutionStateSummary[],
+  enabled: boolean
+) {
+  const [state, setState] = useState<{ context: StudioEndpointContext; run: string; byActivity: ReadonlyMap<string, RecordedCompletionView | null> }>(
+    () => ({ context, run: workflowExecutionId, byActivity: new Map() }));
+  const requested = useRef<{ context: StudioEndpointContext; run: string; ids: Set<string> }>({ context, run: workflowExecutionId, ids: new Set() });
+  if (requested.current.context !== context || requested.current.run !== workflowExecutionId) {
+    requested.current = { context, run: workflowExecutionId, ids: new Set() };
+  }
+  const candidates = enabled
+    ? incidents
+      .filter(incident => incident.workflowExecutionId === workflowExecutionId && isWaitingForIntervention(incident))
+      .map(incidentSourceOf)
+      .filter((id): id is string => !!id && activities.some(activity => activity.activityExecutionId === id && activity.status === "Faulted"))
+    : [];
+  const candidateKey = candidates.join(candidateSeparator);
+  useEffect(() => {
+    if (!candidateKey) return;
+    const controller = new AbortController();
+    const marker = requested.current;
+    // Reads this run started and has not finished: a cleanup (a change of candidates, or StrictMode's remount) forgets
+    // them before aborting, so the next run reads them again instead of skipping them as already requested.
+    const inFlight = new Set<string>();
+    for (const id of candidateKey.split(candidateSeparator)) {
+      if (marker.ids.has(id)) continue;
+      marker.ids.add(id);
+      inFlight.add(id);
+      getActivityExecutionInspection(context, workflowExecutionId, id, controller.signal).then(
+        inspection => {
+          inFlight.delete(id);
+          if (controller.signal.aborted || requested.current !== marker) return;
+          setState(current => {
+            const base = current.context === context && current.run === workflowExecutionId ? current.byActivity : new Map();
+            return { context, run: workflowExecutionId, byActivity: new Map(base).set(id, inspection.recordedCompletion ?? null) };
+          });
+        },
+        () => {
+          inFlight.delete(id);
+          // Not offered when the read fails; the next change of candidates reads it again. A cancelled read was
+          // already forgotten by the cleanup, and may have been requested again since.
+          if (!controller.signal.aborted && requested.current === marker) marker.ids.delete(id);
+        });
+    }
+    return () => {
+      for (const id of inFlight) marker.ids.delete(id);
+      controller.abort();
+    };
+  }, [candidateKey, context, workflowExecutionId]);
+  const current = state.context === context && state.run === workflowExecutionId ? state.byActivity : new Map<string, RecordedCompletionView | null>();
+  return (activityExecutionId: string | undefined) => (activityExecutionId ? current.get(activityExecutionId) ?? null : null);
+}
 
 const sleep = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
 
@@ -337,6 +407,7 @@ export function useOperatorActions({
   const permissions = readWorkflowInstancePermissions(details);
   const actionAvailability = availabilityObservation.context === context ? availabilityObservation.status : "checking";
   const canAct = permissions.canManage && actionAvailability === "available";
+  const recordedCompletionOf = useRecordedCompletions(context, workflowExecutionId, details?.incidents ?? [], activities, canAct);
 
   useEffect(() => {
     let active = true;
@@ -406,13 +477,14 @@ export function useOperatorActions({
   apiRef.current = api;
 
   // Whether the run shows the action: the incident no longer waits, and for a decision the scope applied it (its
-  // journal no longer waits on that incident) or is no longer running.
+  // journal no longer waits on that incident) or is no longer running. Accept recorded completion supersedes the
+  // faulted step like a retry does (one handler, spec 1221 FR-017), so it is followed like a retry.
   const isApplied = useCallback(async (pending: PendingOperatorAction) => {
     const latest = await refreshRunRef.current();
     if (!latest) return false;
     const incident = latest.incidents?.find(candidate => candidate.incidentId === pending.incidentId);
     if (incident && isWaitingForIntervention(incident)) return false;
-    if (pending.kind !== "retry" && pending.scopeActivityExecutionId) {
+    if (pending.kind !== "retry" && pending.kind !== "accept" && pending.scopeActivityExecutionId) {
       const view = await journalsRef.current.reload(pending.scopeActivityExecutionId);
       const journal = typeof view === "object" ? readCompensationJournal(view) : null;
       if (journal && typeof view === "object" && view.activityStatus === "Running"
@@ -552,8 +624,18 @@ export function useOperatorActions({
   };
 
   // `journal` is the requester's exact journal when a caller has just read it; React state may not have rendered it yet.
-  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | { decision: string }, journal?: CompensationJournalSource) => {
+  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | "accept" | { decision: string }, journal?: CompensationJournalSource) => {
     const requester = interventionRequesterOf(incident);
+    if (action === "accept") {
+      const source = incidentSourceOf(incident);
+      const recorded = recordedCompletionOf(source);
+      if (!recorded) throw new Error("This step has no recorded completion to accept.");
+      return acceptRecordedCompletionActionModel(
+        { incidentId: incident.incidentId, workflowExecutionId: incident.workflowExecutionId, activityExecutionId: source },
+        activityLabel,
+        recorded,
+        requester);
+    }
     const compensationRequester = compensationRequesterForIncident(incident);
     if (compensationRequester) {
       const { requester, scopeNode } = compensationRequester;
@@ -668,10 +750,12 @@ export function useOperatorActions({
     const retryControlAvailable = canOfferRetry(incident, retryEligibility);
     const showCheckRetryAvailability = retryJournal.status === "unknown" && retryControlAvailable;
     const showRetry = retryControlAvailable && retryJournal.status !== "unknown";
+    // Accept shares Retry's preconditions and needs the recorded completion (spec 1221 FR-017).
+    const showAccept = showRetry && recordedCompletionOf(incidentSourceOf(incident)) !== null;
     if (!showCheckRetryAvailability && !showRetry && decisions.length === 0) return null;
     const actionReadKey = incidentActionReadKey(workflowExecutionId, incident.incidentId);
     const actionReadPending = pendingIncidentActionReads.has(actionReadKey);
-    const launch = async (action: "retry" | "retry-availability" | { decision: string }) => {
+    const launch = async (action: "retry" | "accept" | "retry-availability" | { decision: string }) => {
       if (pendingIncidentActionReadKeys.current.has(actionReadKey)) return;
       const origin = { context, workflowExecutionId, originGeneration: incidentActionOriginGeneration.current };
       const ownerDialog = document.activeElement instanceof HTMLElement
@@ -731,6 +815,15 @@ export function useOperatorActions({
           <button type="button" disabled={actionReadPending} onClick={() => void launch("retry")}>
             <RotateCw size={13} aria-hidden="true" /> Retry
           </button>
+        ) : null}
+        {showAccept ? (
+          <button type="button" disabled={actionReadPending} onClick={() => void launch("accept")}
+            aria-describedby={`accept-explanation-${incident.incidentId}`}>
+            <CheckCheck size={13} aria-hidden="true" /> Accept recorded completion
+          </button>
+        ) : null}
+        {showAccept ? (
+          <p className="wf-incident-operator-explanation" id={`accept-explanation-${incident.incidentId}`}>{acceptRecordedCompletionExplanation}</p>
         ) : null}
         {decisions.map(decision => (
           <button key={decision} type="button" disabled={actionReadPending} data-tone={decision === compensationDecisions.abandon ? "danger" : undefined} onClick={() => void launch({ decision })}>

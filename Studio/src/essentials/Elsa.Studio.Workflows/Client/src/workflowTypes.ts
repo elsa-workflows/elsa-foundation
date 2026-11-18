@@ -330,7 +330,8 @@ export type RuntimeDiagnosticsSubject =
   | "incidents"
   | "diagnostics"
   | "containerVariables"
-  | "durableValues";
+  | "durableValues"
+  | "variableWrites";
 
 export type RuntimeDiagnosticsSubjectOverrides = Partial<Record<RuntimeDiagnosticsSubject, RuntimeDiagnosticsEvidenceLevel>>;
 
@@ -969,6 +970,68 @@ export interface ActivityExecutionInspection {
   attempt?: ActivityExecutionAttempt | null;
   boundary?: ActivityExecutionBoundary | null;
   metadata: Record<string, string>;
+  /** Spec 1221 write-history records of this execution; absent when it wrote no variable or on older hosts. */
+  variableWrites?: VariableWriteRecordView[] | null;
+  /** The completion a `Fault` lost update refused; its presence is when Accept recorded completion is offered. */
+  recordedCompletion?: RecordedCompletionView | null;
+  /** The input evaluations a background admission refresh superseded. */
+  inputRefreshes?: ActivityInputRefreshView[] | null;
+}
+
+/**
+ * Where a variable-lifecycle value stands (spec 1229 FR-006). The view never carries the value: a captured `null` is
+ * `captured`. `evidenceId` names the activity value evidence the payload read resolves; an operational value (overwritten
+ * or refused) becomes readable through the write-history read of spec 1229.
+ */
+export interface VariableLifecycleValueState {
+  state: "captured" | "omitted" | "redacted" | "expired" | string;
+  digest?: string | null;
+  evidenceId?: string | null;
+  isOperational?: boolean;
+}
+
+export interface VariableWriterView {
+  source: string;
+  executableNodeId?: string | null;
+  invocationId?: string | null;
+  attemptId?: string | null;
+}
+
+export type VariableWriteOutcome = "Blind" | "Current" | "LostUpdateWarning" | "ReturnedValue" | "LostUpdateFault" | "AcceptedOverride";
+
+export interface VariableWriteRecordView {
+  scopeId: string;
+  frameId?: string | null;
+  variableKey: string;
+  writer: VariableWriterView;
+  outcome: VariableWriteOutcome | string;
+  baseVersion?: number | null;
+  currentVersion: number;
+  newVersion: number;
+  commitOrder: number;
+  commitSequence?: number | null;
+  occurredAt: string;
+  overwrittenWriter?: VariableWriterView | null;
+  writtenValue?: VariableLifecycleValueState | null;
+  overwrittenValue?: VariableLifecycleValueState | null;
+  rejectedValue?: VariableLifecycleValueState | null;
+}
+
+export interface RecordedCompletionView {
+  selectionState: string;
+  outcomeNames: string[];
+  attemptId: string;
+  attemptOrdinal?: number | null;
+  variableWrites: Array<{ variableKey: string; value: VariableLifecycleValueState }>;
+}
+
+export interface ActivityInputRefreshView {
+  supersededEvaluation: number;
+  replacedByEvaluation: number;
+  supersededMaterializedAt: string;
+  refreshedAt: string;
+  changes: Array<{ scopeId: string; variableKey: string; readVersion: number; currentVersion: number }>;
+  supersededInputs: Array<{ inputKey: string; value: VariableLifecycleValueState }>;
 }
 
 export interface ActivityExecutionAttempt {
