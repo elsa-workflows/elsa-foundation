@@ -111,7 +111,8 @@ describe("ActivityDefinitionContractEditor", () => {
 
     const advanced = input.querySelectorAll<HTMLElement>("[role='tabpanel']")[2];
     expect(advanced.hidden).toBe(true);
-    expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
+    expect(basicFields.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeNull();
     expect(advanced.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeNull();
     expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeTruthy();
@@ -135,11 +136,10 @@ describe("ActivityDefinitionContractEditor", () => {
     click(buttonByText(input, "Advanced"));
     expect(advanced.hidden).toBe(false);
     changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Durable storage driver"), "elsa.memory");
-    const keyInput = advanced.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
-    changeInput(keyInput, "custom_reference");
-    click(buttonByText(advanced, "Apply key"));
-
     click(buttonByText(input, "General"));
+    const keyInput = basicFields.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
+    changeInput(keyInput, "custom_reference");
+    click(buttonByText(basicFields, "Apply key"));
     expect(controlByLabel<HTMLInputElement>(input, "Value")).toBe(originalSource);
     expect(originalSource.value).toBe("pending default");
     expect(committed?.inputs[0]).toMatchObject({

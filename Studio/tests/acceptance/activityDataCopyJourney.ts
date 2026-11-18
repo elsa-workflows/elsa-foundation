@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { activityDataSupport, attachActivityDataJson, wireIdentity, type Binding, type Capture, type Created, type Node, type State, resolvedFeatureClosure, optionalBackendFeatures, type FeatureFact } from "./activityDataJourneySupport";
@@ -17,8 +18,12 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   const navigations: CopyNavigation[] = [];
   const sequencePairs = mode === "sequence-pairs";
   const servedAssets: { url: string; sha256: string }[] = [], assetReads: Promise<void>[] = [];
-  const builtAssets = JSON.parse(process.env.UX_WORKFLOW_ASSET_SHA256S ?? "{}") as Record<string, string>;
-  const copyImplementationAssets = JSON.parse(process.env.UX_COPY_IMPLEMENTATION_ASSETS ?? "{}") as Record<string, { sha256: string; sources: string[] }>;
+  const manifestPath = process.env.UX_WORKFLOW_ASSET_MANIFEST;
+  if (!manifestPath) throw new Error("Run through tools/ux-acceptance/run.py to provide the workflow asset manifest.");
+  const { workflowSourceAssets: builtAssets, copyImplementationAssets } = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    workflowSourceAssets: Record<string, string>;
+    copyImplementationAssets: Record<string, { sha256: string; sources: string[] }>;
+  };
   page.on("response", response => {
     if (response.request().resourceType() === "script" && response.ok()) assetReads.push((async () => {
       const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(await response.body()));

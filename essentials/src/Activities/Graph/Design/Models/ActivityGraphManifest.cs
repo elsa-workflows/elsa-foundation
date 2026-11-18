@@ -232,7 +232,9 @@ public sealed record ActivityGraphManifest(
             var referenceKey = ReadRequiredString(element, "outputReferenceKey", $"{pointer}/outputReferenceKey", findings);
             var source = ReadRequiredExpression(element, "source", $"{pointer}/source", findings);
             if (referenceKey is not null && source is not null)
+            {
                 mappings.Add(new(referenceKey, source));
+            }
 
             index++;
         }
