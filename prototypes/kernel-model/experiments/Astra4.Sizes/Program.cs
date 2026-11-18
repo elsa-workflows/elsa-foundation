@@ -68,30 +68,44 @@ Check(DeliveryId("e", "1/i", 1, "w1") != DeliveryId("e", "1/i", 1, "w2") && Matc
     "(Id, Match) separates two waits on one key and one wait on two keys");
 // The components ride in the delivery's payload ahead of the event's payload: a length-prefixed header, no escaping.
 // Proposed layout (this probe only): "1|", then for the key, the event id and the wait: a decimal count of UTF-16
-// units, ':', and the units themselves; the event's payload follows unchanged.
-static string Header(params string[] parts) => "1|" + string.Concat(parts.Select(p => FormattableString.Invariant($"{p.Length}:{p}")));
-static (string[] Parts, string Payload) Strip(string payload)
+// units, ':', and the units themselves; then a presence flag, '0' for no payload (nothing follows) or '1' followed by
+// the event's payload unchanged, so a null payload and an empty one stay apart.
+static string Header(string? payload, params string[] parts) =>
+    "1|" + string.Concat(parts.Select(p => FormattableString.Invariant($"{p.Length}:{p}"))) + (payload is null ? "0" : "1" + payload);
+static (string[] Parts, string? Payload) Strip(string stored)
 {
-    if (!payload.StartsWith("1|", StringComparison.Ordinal)) throw new FormatException("no header");
+    if (!stored.StartsWith("1|", StringComparison.Ordinal)) throw new FormatException("no header");
     var at = 2; var parts = new string[3];
     for (var i = 0; i < 3; i++)
     {
-        var colon = payload.IndexOf(':', at);
-        var n = int.Parse(payload.AsSpan(at, colon - at), System.Globalization.CultureInfo.InvariantCulture);
-        parts[i] = payload.Substring(colon + 1, n); at = colon + 1 + n;
+        var colon = stored.IndexOf(':', at);
+        var n = int.Parse(stored.AsSpan(at, colon - at), System.Globalization.CultureInfo.InvariantCulture);
+        parts[i] = stored.Substring(colon + 1, n); at = colon + 1 + n;
     }
-    return (parts, payload[at..]);
+    return stored[at] switch
+    {
+        '0' when stored.Length == at + 1 => (parts, null),
+        '1' => (parts, stored[(at + 1)..]),
+        _ => throw new FormatException("bad presence flag"),
+    };
 }
 foreach (var (label, name) in new[] { ("ASCII", Rep('k', N)), ("U+0001", ctl), ("'<'", lt) })
 {
-    var h = Header(Q(name), name, name);
+    var h = Header("", Q(name), name, name);
     Console.WriteLine($"  delivery header for key, event id and wait of {N} bytes of {label}: {Bytes(h)} bytes ({h.Length * 2} in UTF-16)");
 }
-var widest = Header(Q(ctl), ctl, ctl);
+var widest = Header("", Q(ctl), ctl, ctl);
 Check(Bytes(widest) <= 40 * 1024 && widest.Length * 2 <= 40 * 1024, "the header fits the proposed reserve C = 40 KiB, in WTF-8 and in UTF-16");
 var published = "{\"v\":\"<\u0001>\\\\ \\\"q\\\" " + Rep('\u0001', 64) + "\"}";
-var (back, unchanged) = Strip(Header(Q("k"), "e1", "w1") + published);
+var (back, unchanged) = Strip(Header(published, Q("k"), "e1", "w1"));
 Check(unchanged == published && back.SequenceEqual(new[] { Q("k"), "e1", "w1" }), "stripping the header returns the published payload unchanged, escapable characters included");
+var (_, none) = Strip(Header(null, Q("k"), "e1", "w1"));
+var (_, empty) = Strip(Header("", Q("k"), "e1", "w1"));
+Console.WriteLine($"  null payload: stripped {(none is null ? "null" : "a string")}, Values.Parse -> {(Values.Parse(none) is null ? "null" : "a value")}; " +
+    $"empty payload: stripped \"{empty}\", Values.Parse -> {Values.Parse(empty)?.ToJsonString() ?? "null"}");
+Check(none is null && empty == "" && Values.Parse(none) is null && Values.Parse(empty)?.ToJsonString() == "\"\"",
+    "the presence flag keeps a null payload (the model gets null) apart from an empty one (the model gets the JSON string \"\")");
+Check(Header(null, "k", "e", "w") != Header("", "k", "e", "w"), "null and empty payloads encode differently");
 
 // ---- R4-M2: a subscription's MongoDB write at the name limits, with the real BSON encoder -----------------------
 Console.WriteLine("R4-M2 subscription write on MongoDB (MongoDB.Bson 3.9.0; shape of MongoStore.ToDocument, MongoStore.cs 648-654)");
