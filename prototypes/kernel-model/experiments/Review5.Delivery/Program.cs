@@ -52,6 +52,7 @@ static partial class Program
         .. from v in new[] { "crash-after", "crash-after-keep", "obsolete" }
            from r in new[] { ("reviewed", "FAIL"), ("reviewed-kind", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"jr1-{v}", r.Item1, r.Item2),
         ("jr1-obsolete", "generation-blind", "FAIL"),
+        ("jr1-result-parked-consume", "reviewed", "FAIL"), ("jr1-result-parked-consume", "repaired", "PASS"), ("jr1-result-parked-consume", "negative", "FAIL"),
         ("jr1-crash-before", "reviewed", "FAIL"), ("jr1-crash-before", "reviewed-kind", "FAIL"), ("jr1-crash-before", "repaired", "PASS"), ("jr1-crash-before", "negative", "FAIL"),
         ("jr1-crash-after", "reviewed-keeps-registry", "FAIL"),
         .. from r in new[] { "reviewed", "reviewed-kind", "repaired", "negative" } select ("jr1-running", r, "PASS"),

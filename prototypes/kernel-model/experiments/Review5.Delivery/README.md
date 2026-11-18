@@ -73,6 +73,7 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 | `jr1-crash-after` | R5-M4: J completes while S is parked; crash after the conversion commit; takeover; recover | reviewed FAIL, reviewed-kind FAIL, reviewed-keeps-registry FAIL, repaired PASS, negative FAIL |
 | `jr1-crash-after-keep` | As above, crash after the parked instance kept the result | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-obsolete` | As `jr1-crash-after-keep`, with a kept result row of J's obsolete generation g0 | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL, generation-blind FAIL |
+| `jr1-result-parked-consume` | J finishes while S is parked; the conversion writes the result row; S consumes it while parked; recover | reviewed FAIL, repaired PASS, negative FAIL |
 | `jr1-crash-before` | Crash before the conversion commit, while S is parked: recover restarts J under the next generation | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-running` | Control: J completes while S runs, the built in-memory path | PASS under all four |
 | `po1-cohort` | R5-M6: exhausted J at 900, cohort suspect R at 1100, the mark set after Complete, a cold takeover with no control | reviewed FAIL, repaired PASS, negative FAIL |
@@ -332,12 +333,24 @@ handoff gate.
 
 **The variants.**
 
+- `jr1-result-parked-consume` (the transitions review's trace): every rule set converts under the reserved identity, so
+  the run isolates the registry rule. J's body returns while S is parked, the standalone conversion writes
+  `…!result!g1`, and S consumes it while parked. Recover follows, with no takeover.
+  - Reviewed and negative (a parked consumption clears J's entry): the Open clears the kept result as one whose key the
+    registry no longer holds. The model never receives V, and J is not re-run.
+  - Repaired (the coordinator's rule): a parked consumption keeps the entry of a current-generation result row, and the
+    entry clears only when a model turn of a running row consumes the result. The Open's obsolete check reads that
+    registry, so the result is restored. The model receives V once, and J ran once.
+  - The built `RemainingJobs` matches the ticket's full key (`WorkflowInstance.cs` 142). With this harness's derivation
+    of the result id it would not clear J on the result row by itself. The reviewed rule here clears by J's key, as the
+    transitions review found the page's wording to do.
 - `jr1-crash-before`: the owner dies after J's body returned and before any commit recorded the result.
   - The new owner does not enter a parked row's ticket (`Worker.cs` 1169–1177), so the parked instance consumes it as
     late input.
-  - Repaired: the registry keeps J. Recover clears the kept ticket and restarts J from its JobSpec under g2
-    (`…!2_w6@g2`, R4-M3). J runs a second time, the one re-run the at-least-once allowance permits, and its result
-    `alpha|…` reaches the model once.
+  - Repaired: the registry keeps J. The Open's restart decisions are in force before any page decides what is obsolete:
+    recover restarts J from its JobSpec under g2 (`…!2_w6@g2`, R4-M3) and clears the g1 ticket, which is never restored
+    beside g2 (asserted). J runs a second time, within the at-most-two allowance, and its result `alpha|…` reaches the
+    model once.
   - Reviewed: the built `RemainingJobs` drops J's key, the Open clears the ticket, and J is never re-run: the result
     is lost.
 - `jr1-running`: J completes while S runs, and the built path delivers it once under every rule set.
@@ -449,9 +462,11 @@ above:
 1. **`ev1-b-stepback`:** P0 = max(RegisteredAt, H + 1 ms). The run passes under `repaired`.
 2. **`ev1-replay-consumed`:** the sweep keeps an event's done delivery rows while the event row exists, and the event row
    while its publish ticket is outstanding (option (a)). The run passes under `repaired`.
-3. **`jr1-crash-before`:** while the instance is parked, consuming late input keeps the registry entry of an undone
-   current-generation ticket, and recover restarts the job from its JobSpec under the next generation. The run passes
-   under `repaired`. The third reviewed reading runs as `reviewed-keeps-registry`.
+3. **`jr1-crash-before` and `jr1-result-parked-consume`:** while the instance is parked, a late-input consumption keeps the
+   registry entry of an undone current-generation ticket and of a current-generation result row. The entry clears only
+   when a model turn of a running row consumes the result, or a resolution clears or discards the row. The Open's
+   restart decisions are in force before any page decides what is obsolete. Both runs pass under `repaired`. The third
+   reviewed reading runs as `reviewed-keeps-registry`.
 4. **FR-2:** the credit bounds the backlog, and the handoff gate governs Complete's entitlement. `seen-gate` stays as
    the mutation that shows the gate is not the bound.
 5. **Suspension:** pages wait while the instance is suspended (M3-5).

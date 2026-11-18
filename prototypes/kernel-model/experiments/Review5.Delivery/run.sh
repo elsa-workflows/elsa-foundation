@@ -97,6 +97,9 @@ run jr1-obsolete                reviewed-kind               # expected FAIL
 run jr1-obsolete                repaired                    # expected PASS
 run jr1-obsolete                negative                    # expected FAIL
 run jr1-obsolete                generation-blind            # expected FAIL
+run jr1-result-parked-consume   reviewed                    # expected FAIL
+run jr1-result-parked-consume   repaired                    # expected PASS
+run jr1-result-parked-consume   negative                    # expected FAIL
 run jr1-crash-before            reviewed                    # expected FAIL
 run jr1-crash-before            reviewed-kind               # expected FAIL
 run jr1-crash-before            repaired                    # expected PASS
