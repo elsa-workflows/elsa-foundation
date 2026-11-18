@@ -385,10 +385,10 @@ expired values from `null`.
   that wrote on the stale base), and MUST keep the overwritten value so that it can be restored (FR-026).
 - **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity
   type declares it, and an engineer may set it per node through the design API (the workflow designer does not offer it
-  to workflow authors; ADR 0092 decision 6). Only `Fault` nodes record digests in their read sets and use
-  the exact check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable, the
-  base version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply (D-3).
-  No other modes exist in this baseline, and no merge policy.
+  to workflow authors; ADR 0092 decision 6). Only `Fault` nodes record digests in their read sets and use the exact
+  check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable, the base
+  version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply (D-3). No
+  other modes exist in this baseline, and no merge policy.
 - **FR-012a**: Spec 266's publish-time warning for unordered writers MUST NOT direct workflow authors to the `Fault`
   mode; it offers structural remedies only (order the branches, capture into separate variables, or combine them with
   one write after the join).
