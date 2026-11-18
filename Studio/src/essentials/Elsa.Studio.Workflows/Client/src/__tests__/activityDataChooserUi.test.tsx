@@ -10,6 +10,7 @@ import type {
   StudioExpressionDescriptor
 } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { ActivityDataBrowser } from "../ActivityDataChooser";
 import { activityDataMemberReferenceContribution, activityResultReferenceContribution } from "../activityResultReferenceContribution";
 import type { ActivityDataSelectionHost, ActivityDataInputFinding } from "../activityDataSelection";
 import type { ActivityDataContextResult, ActivityDataShape, ActivityDataSourceFacts, ActivityDataSourceQuery, ActivityDataTarget } from "../api/activityDataSelection";
@@ -1307,3 +1308,106 @@ function enterMemberText(label: string, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
+describe("Expression insertion and member reads", () => {
+  // Owner decision (17 Nov): with member reads off, expression insertion offers whole values only, as the native chooser does.
+  const leaf = memberShape({ kind: "scalar", type: { alias: "String", collectionKind: "Single" } });
+  const customerParameter = { kind: "ActivityResult" as const, producerNodeId: "get-customer", projectionKey: "$result", isOptional: false };
+  const payloadParameter = { kind: "Variable" as const, declaringScopeNodeId: "workflow", variableKey: "payload" };
+  const listing = (path: readonly string[]): ActivityDataSourceFacts[] => [
+    { id: "activity:get-customer:$result", displayName: "get-customer", binding: null, reasonCode: null, availability: "definite",
+      activityResultSource: { producerNodeId: "get-customer", projectionKey: "$result" }, parameterSource: customerParameter },
+    { id: "variable:workflow:payload", displayName: "Payload", binding: null, reasonCode: null, availability: "definite",
+      activityResultSource: null, parameterSource: payloadParameter }
+  ].map(source => {
+    const shape = path.length ? leaf : memberShape({ members: [{ serializedName: "customerId", displayName: "Customer ID", shape: leaf }] });
+    return { ...source, parameterPath: [...path], type: shape.type, shape };
+  });
+  function expressionHost(memberReadsEnabled: boolean) {
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, query?: ActivityDataSourceQuery) => {
+      const path = query?.memberPath ?? [];
+      const sources = listing(path).filter(source => !query?.parameterSource || JSON.stringify(source.parameterSource) === JSON.stringify(query.parameterSource));
+      return answer("supported", { memberReadsEnabled, expressionParametersEnabled: true, expressionType: "JavaScript", snapshotHash: "hash", contextRevision: "context",
+        target: { displayName: "Customer ID", target: { nodeId: "node-1", inputKey: "customerId" }, constraint: null, type: { alias: "String", collectionKind: "Single" } }, sources });
+    });
+    return { requestSources, dataHost: host({ requestSources }) };
+  }
+  function renderExpressionBrowser(dataHost: ActivityDataSelectionHost, onInsert: (result: ActivityDataContextResult, source: ActivityDataSourceFacts) => void) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    function Harness() {
+      const anchor = React.useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = React.useState(false);
+      React.useEffect(() => setOpen(true), []);
+      return <>
+        <button ref={anchor} type="button">Insert data</button>
+        {open ? <ActivityDataBrowser host={dataHost} target={{ nodeId: "node-1", inputKey: "customerId" }} inputLabel="Customer ID" anchorRef={anchor} open
+          current={null} onSelect={() => undefined} onClose={() => setOpen(false)} expression={{ type: "JavaScript", onSelect: onInsert }} /> : null}
+      </>;
+    }
+    flushSync(() => root.render(<Harness />));
+    mounted = { root, container };
+  }
+  const memberNavigation = () => document.querySelector(".wf-data-chooser nav[aria-label='Member path'], .wf-data-chooser [role='listbox'][aria-label='Members'], .wf-data-chooser input[aria-label='Member name']");
+
+  it("with member reads off, lists whole outputs and variables without member navigation and inserts a whole object", async () => {
+    const { dataHost, requestSources } = expressionHost(false);
+    const onInsert = vi.fn();
+    renderExpressionBrowser(dataHost, onInsert);
+    await vi.waitFor(() => expect(dataOption("Payload")).toBeDefined());
+    expect(document.querySelector(".wf-data-chooser")?.textContent).toContain("Earlier outputs, workflow inputs and variables.");
+    expect(dataOption("Get customer")!.getAttribute("aria-disabled")).not.toBe("true");
+    expect.soft(document.querySelectorAll(".wf-data-members [role='option'] svg")).toHaveLength(0);
+    flushSync(() => dataOption("Get customer")!.click());
+    expect.soft(memberNavigation()).toBeNull();
+    await vi.waitFor(() => expect(onInsert).toHaveBeenCalledTimes(1));
+    expect(onInsert.mock.calls[0]![1]).toMatchObject({ parameterSource: customerParameter, parameterPath: [] });
+    expect(memberNavigation()).toBeNull();
+    expect(requestSources.mock.calls[1]![3]).toEqual({ expressionType: "JavaScript", parameterSource: customerParameter, expectedSnapshotHash: "hash", memberPath: [] });
+    expect(requestSources.mock.calls.every(call => (call[3]?.memberPath ?? []).length === 0)).toBe(true);
+  });
+
+  it("returns to the sources once, without a request loop, when a member answer withdraws member reads", async () => {
+    // The listing and the source root say member reads are on; the member answer says they are off.
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, query?: ActivityDataSourceQuery) => {
+      const path = query?.memberPath ?? [];
+      const sources = listing(path).filter(source => !query?.parameterSource || JSON.stringify(source.parameterSource) === JSON.stringify(query.parameterSource));
+      return answer("supported", { memberReadsEnabled: path.length === 0, expressionParametersEnabled: true, expressionType: "JavaScript", snapshotHash: "hash", contextRevision: "context",
+        target: { displayName: "Customer ID", target: { nodeId: "node-1", inputKey: "customerId" }, constraint: null, type: { alias: "String", collectionKind: "Single" } }, sources });
+    });
+    const onInsert = vi.fn();
+    renderExpressionBrowser(host({ requestSources }), onInsert);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    flushSync(() => dataOption("Get customer")!.click());
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    flushSync(() => dataOption("customerId")!.click());
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Listing, source root, member, and at most one refreshed listing.
+    expect(requestSources.mock.calls.length).toBeLessThanOrEqual(4);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    expect(document.querySelector(".wf-data-chooser nav[aria-label='Member path']")).toBeNull();
+    expect(onInsert).not.toHaveBeenCalled();
+    // The panel stays usable: the source can be opened again.
+    flushSync(() => dataOption("Get customer")!.click());
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  it("with member reads on, keeps member navigation and inserts the chosen member", async () => {
+    const { dataHost, requestSources } = expressionHost(true);
+    const onInsert = vi.fn();
+    renderExpressionBrowser(dataHost, onInsert);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    expect(dataOption("Get customer")!.querySelector("svg")).not.toBeNull();
+    flushSync(() => dataOption("Get customer")!.click());
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    expect(memberNavigation()).not.toBeNull();
+    expect(onInsert).not.toHaveBeenCalled();
+    flushSync(() => dataOption("customerId")!.click());
+    await vi.waitFor(() => expect(onInsert).toHaveBeenCalledTimes(1));
+    expect(onInsert.mock.calls[0]![1]).toMatchObject({ parameterSource: customerParameter, parameterPath: ["customerId"] });
+    expect(requestSources.mock.calls.at(-1)![3]).toEqual({ expressionType: "JavaScript", parameterSource: customerParameter, expectedSnapshotHash: "hash",
+      memberPath: ["customerId"], includeMemberShapes: true });
+  });
+});

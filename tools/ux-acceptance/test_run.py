@@ -22,16 +22,21 @@ def expression_fixture(syntax='JavaScript', composition='normal'):
     parameters = [{'kind': 'ActivityResult', 'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False},
                   {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None},
                   {'kind': 'Variable', 'declaringScopeNodeId': 'workflow', 'variableKey': 'escaped-payload'}]
-    sources = ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
-               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
-               '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
-               '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    whole_only = composition == 'default-off'
+    # Default-off inserts whole values only; the journey types the member access by hand after each insertion.
+    sources = ['args.data', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3'] if whole_only else \
+        ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+         'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
+        '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
+        '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    paths = [[], [], []] if whole_only else [['customerId'], [], ['a.b', '']]
     before_sources = ['', sources[1].removesuffix('args.data2' if syntax == 'JavaScript' else '{{ data2 }}'),
-                      sources[2].removesuffix('args.data3["a.b"][""]' if syntax == 'JavaScript' else '{{ data3["a.b"][""] }}')]
+                      sources[2].removesuffix('args.data3' if whole_only else 'args.data3["a.b"][""]' if syntax == 'JavaScript' else '{{ data3["a.b"][""] }}')]
     carrier = {'language': syntax, 'source': '', 'resultType': {'alias': 'String', 'collectionKind': 'Single'},
                'parameters': {}, 'options': {}, 'capabilityProfile': 'binding-pure-v1'}
     insertions, contexts = [], []
-    for index, (alias, path) in enumerate(zip(['data', 'data2', 'data3'], [['customerId'], [], ['a.b', '']])):
+    for index, (alias, path) in enumerate(zip(['data', 'data2', 'data3'], paths)):
         before = {'expressionType': syntax, 'value': {**copy.deepcopy(carrier), 'source': before_sources[index]}} if index else {'expressionType': syntax, 'value': ''}
         carrier['parameters'][alias] = parameters[index]; carrier['source'] = sources[index]
         after = {'expressionType': syntax, 'value': copy.deepcopy(carrier)}
@@ -1081,6 +1086,28 @@ class ExpressionProofTests(unittest.TestCase):
         for syntax, composition in [('JavaScript', 'normal'), ('Liquid', 'normal'), ('JavaScript', 'default-off')]:
             native, proof = expression_fixture(syntax, composition)
             acceptance.validate_expression_data(native, proof, f'insert {syntax} activity data', composition)
+
+    def test_default_off_expression_proof_rejects_member_navigation_and_normal_keeps_members(self):
+        # Owner decision (17 Nov): default-off expression insertion is whole-value only.
+        member_native, member_proof = expression_fixture(composition='normal')
+        for context in member_proof['contexts']: context['response']['analysis']['memberReadsEnabled'] = False
+        member_native['composition'] = member_proof['composition'] = 'default-off'
+        with self.assertRaisesRegex(ValueError, 'navigated a member'):
+            acceptance.validate_expression_data(member_native, member_proof, 'insert JavaScript activity data', 'default-off')
+        for change in ['listing-offer', 'browse-request']:
+            with self.subTest(change=change):
+                native, proof = copy.deepcopy(expression_fixture(composition='default-off'))
+                extra = copy.deepcopy(proof['contexts'][0])
+                if change == 'listing-offer': extra['response']['analysis']['sources'][0]['parameterPath'] = ['customerId']
+                if change == 'browse-request': extra['request']['query']['memberPath'] = ['customerId']
+                proof['contexts'].append(extra)
+                with self.assertRaisesRegex(ValueError, 'navigated a member'):
+                    acceptance.validate_expression_data(native, proof, 'insert JavaScript activity data', 'default-off')
+        whole_native, whole_proof = expression_fixture(composition='default-off')
+        for context in whole_proof['contexts']: context['response']['analysis']['memberReadsEnabled'] = True
+        whole_native['composition'] = whole_proof['composition'] = 'normal'
+        with self.assertRaises(ValueError):
+            acceptance.validate_expression_data(whole_native, whole_proof, 'insert JavaScript activity data', 'normal')
 
     def test_expression_proof_rejects_wrong_authority_path_carrier_context_and_runtime(self):
         for change in ['canonical-identity', 'literal-path', 'requested-path', 'snapshot', 'before', 'stored-parameter', 'source', 'capability',
