@@ -50,8 +50,9 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// <summary>
     /// The CLR type is not known to this host but is checked again where the node runs. Template placement sets it
     /// when the publishing host does not register a template node's runtime type (a design-only shell): the criteria
-    /// that read the contract and node shape still apply, and the ones that need the CLR type (the interface part of
-    /// C1, C2, C9 and the CLR parts of C3 and C4) are left to admission and the worker, which always re-check them. Only publication honours it:
+    /// that read the contract and node shape still apply (C9's contract-visible signals too, see
+    /// <see cref="TouchesVariables"/>), and the ones that need the CLR type (the interface part of C1, C2, the CLR-only
+    /// part of C9 and the CLR parts of C3 and C4) are left to admission and the worker, which always re-check them. Only publication honours it:
     /// <see cref="BackgroundEligibility.CheckRunTime"/> ignores it, so a run-time subject without a CLR type is refused.
     /// </summary>
     public bool TypeCheckedAtRunTime { get; init; }
@@ -192,10 +193,13 @@ public static class BackgroundEligibility
             return "the activity reads variables by name";
         if (VariableReferenceTypes.AccessesUndeclaredVariables(activityType))
             return "the activity type may read and write any visible variable by name ([AccessesUndeclaredVariables], or an engine script activity)";
+        // Only [ActivityInput] properties, as the scanner and the contract count them, named by their contract key.
         foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance).OrderBy(property => property.Name, StringComparer.Ordinal))
         {
+            if (Attribute.GetCustomAttribute(property, typeof(ActivityInputAttribute), inherit: true) is not ActivityInputAttribute input)
+                continue;
             if (VariableReferenceTypes.TryGet(property.PropertyType, out var access, out _))
-                return ReferenceSignal(property.Name, access);
+                return ReferenceSignal(input.Key ?? property.Name, access);
         }
 
         return null;
