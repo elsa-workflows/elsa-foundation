@@ -942,7 +942,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setScopeNavigation(current => current.context === browserContext && current.loading
       ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
     setActiveInspectorTab(initialInspectorTab);
-    if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
+    if (initialInspectorTab === "issues" || initialInspectorTab === "activity" || initialInspectorTab === "variables") openInspector();
   }, [browserContext, initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
@@ -2421,6 +2421,10 @@ function WorkflowInstanceInspector({
   const [lifecycleSupported, setLifecycleSupported] = useState<boolean | null>(null);
   const [lifecycleFilter, setLifecycleFilter] = useState<{ filter: VariableWriteFilter; version: number }>({ filter: {}, version: 0 });
 
+  // The badge's filter applies once: another run starts unfiltered.
+  const inspectedRun = summary?.workflowExecutionId;
+  useEffect(() => { setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 })); }, [inspectedRun]);
+
   useEffect(() => {
     let current = true;
     supportsVariableLifecycleInspection(context).then(supported => { if (current) setLifecycleSupported(supported); }, () => { if (current) setLifecycleSupported(false); });
@@ -2479,7 +2483,11 @@ function WorkflowInstanceInspector({
       }}
     >
       <div className="wf-panel-title wf-instance-panel-title">
-        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={shownTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={shownTab} onSelect={tabId => {
+          // Opening Variables from its tab shows the whole history; only the badge opens it filtered.
+          if (tabId === "variables") setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 }));
+          onActiveTabChange(tabId as InstanceInspectorTab);
+        }} />
         <span className="wf-panel-actions">
           {layoutMode !== "desktop" ? (
             <button
