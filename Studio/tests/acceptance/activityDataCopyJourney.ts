@@ -124,6 +124,14 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     navigations.push({ definitionId: created.definition.id, role, stage, consumerId, producerId, selectedNodeId: await selected.getAttribute("data-id") });
   }
 
+  /** Selects one Sequence step on the canvas (inspector folded away on narrow screens) and scrolls it into view. */
+  async function showSequence(nodeId: string) {
+    await s.canvas(); await node(nodeId).press("Enter");
+    await expect(page.locator('.wf-sequence-step[aria-pressed="true"]')).toHaveCount(1);
+    await expect(node(nodeId)).toHaveAttribute("aria-pressed", "true");
+    await node(nodeId).scrollIntoViewIfNeeded(); await expect(node(nodeId)).toBeInViewport();
+  }
+
   if (mode === "pairs" || sequencePairs) {
     for (const role of ["whole", "member"] as const) {
       const producer: Node = role === "whole" ? echo() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
@@ -265,11 +273,15 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await waitCount(created, 19);
     const pastedState = (await s.saved(created)).state;
     const copiedGroup = pastedState.rootActivity.structure!.payload.activities[2];
-    await capture(page, info, "scope-pasted");
+    await showSequence(copiedGroup.nodeId); await capture(page, info, "scope-pasted");
     await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 13);
-    expect((await s.saved(created)).state).toEqual(duplicatedState); await capture(page, info, "scope-paste-undo");
+    expect((await s.saved(created)).state).toEqual(duplicatedState);
+    // The paste is gone: the last remaining Sequence is the duplicate, with nothing after it.
+    await expect(node(copiedGroup.nodeId)).toHaveCount(0); await showSequence(duplicatedGroup.nodeId);
+    await capture(page, info, "scope-paste-undo");
     await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 19);
-    expect((await s.saved(created)).state).toEqual(pastedState); await capture(page, info, "scope-paste-redo");
+    expect((await s.saved(created)).state).toEqual(pastedState); await showSequence(copiedGroup.nodeId);
+    await capture(page, info, "scope-paste-redo");
     const [copiedProducer, copiedConsumer, copiedPortable, copiedSwitch] = copiedGroup.structure!.payload.activities;
     const copiedCase = (copiedSwitch.structure!.payload.cases as { activity: Node; condition: { value: Binding } }[])[0];
     expect(copiedCase.activity.nodeId).not.toBe("case-consumer");
@@ -282,8 +294,16 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.canvas(); await node(copiedGroup.nodeId).locator("..").getByRole("button", { name: /^Open Activities/ }).click();
     await s.select(copiedConsumer.nodeId); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
     await capture(page, info, "scope-copied-reference");
-    await s.select(copiedSwitch.nodeId); await capture(page, info, "switch-copied-condition");
-    await s.select(copiedPortable.nodeId); await capture(page, info, "portable-copied-preserved");
+    // The case condition lives in the Slots tab; the Inputs tab only points there.
+    await s.select(copiedSwitch.nodeId); await page.getByRole("tab", { name: "Slots", exact: true }).click();
+    const condition = page.locator(".wf-slot-list .wf-data-reference-source");
+    await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
+    await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
+    await page.getByRole("tab", { name: "Inputs", exact: true }).click();
+    // The preserved body reads args.customer; keep its remapped producer, the copied Get Customer, in view beside it.
+    await s.select(copiedPortable.nodeId);
+    await expect(page.locator(".wf-inspector-content")).toContainText("args.customer.customerId");
+    await node(copiedProducer.nodeId).scrollIntoViewIfNeeded(); await capture(page, info, "portable-copied-preserved");
     const minimal = process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal";
     if (minimal) {
       const descriptors = await s.api<{ items: { type: string }[] }>("/expressions/descriptors");
