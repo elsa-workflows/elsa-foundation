@@ -61,7 +61,8 @@ The default suits most workflows: unordered branches are the author's design, an
 repairable. Opt in to `Fault` where a lost update must never apply, such as a counter or a balance:
 
 - on the activity type: `[ActivityLostUpdateMode(LostUpdateMode.Fault)]`;
-- on one node: the node's `LostUpdateMode` setting.
+- on one node: the node's `LostUpdateMode` setting, set through the design API. The workflow designer does not offer
+  it to authors, and the publish warning for unordered writes does not point to it.
 
 Either one opts the node in. Publishing pins the mode in the executable node (`runtime.lostUpdateMode`), so changing
 it takes effect on the next published version. Only `Fault` nodes store digests in their read sets.
@@ -82,9 +83,9 @@ state (`InputRefreshes`) with the variables that changed, for example `count v0 
 changed again. The refresh covers only the gap between Start and admission: two background steps admitted on the same
 value still meet the commit rule when their results arrive. Code: `BackgroundActivityCoordinator.RefreshInputsAsync`.
 
-A node can turn the refresh off (`DisableBackgroundInputRefresh`, pinned as `runtime.backgroundInputRefresh=off`). The
-worker then runs on the inputs Start read, and a stale base meets the commit rule: a warning by default, a fault under
-`Fault`.
+A node can turn the refresh off (`DisableBackgroundInputRefresh`, set through the design API like `LostUpdateMode`,
+pinned as `runtime.backgroundInputRefresh=off`). The worker then runs on the inputs Start read, and a stale base meets
+the commit rule: a warning by default, a fault under `Fault`.
 
 ## Suspension
 
