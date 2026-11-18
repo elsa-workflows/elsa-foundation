@@ -157,6 +157,22 @@ public sealed class StepVariableSessionUnitTests
         Assert.Equal(["$.status"], Assert.Single(session.Intents).DroppedMembers);
     }
 
+    [Fact]
+    public void A_read_modify_write_loop_keeps_the_dropped_members_of_the_stored_value()
+    {
+        // The second read returns the step's own narrowed write; the loss is still against the stored value.
+        var order = ValueEnvelope.Inline(StepVariableTestGraph.AnyType,
+            JsonSerializer.SerializeToElement(new { total = 1, status = "open" }), ValueProtectionPolicy.InstanceInline);
+        var session = Session(Root((StepVariableTestGraph.OrderKey, order)),
+            bound: new() { [("workflow", StepVariableTestGraph.OrderKey)] = true });
+        var reference = new VariableReference<OrderTotal>("order", "workflow", StepVariableTestGraph.OrderKey);
+
+        session.Set(reference, session.Get(reference));
+        session.Set(reference, session.Get(reference));
+
+        Assert.Equal(["$.status"], Assert.Single(session.Intents).DroppedMembers);
+    }
+
     private static VariableReference<int> Count() => new("count", "workflow", CountKey);
 
     private static ValueEnvelope Int(int value) =>

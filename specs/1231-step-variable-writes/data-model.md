@@ -10,7 +10,7 @@ Types S-10 (#4316) builds are reused and only referenced here: `VariableReadSetE
 | `AttemptId` | The attempt it belongs to; a new attempt and every resume get a fresh session. |
 | `Reads` | Ordered `VariableSessionRead` list for this attempt (below). Not carried to a new attempt or across a suspension. |
 | Pending intents | One `StepVariableWriteIntent` per variable, latest wins within the step. |
-| View | Read-your-writes: committed value at first read, overlaid with pending intents. |
+| View | Read-your-writes over the frame chain loaded when the step started (spec 1221 FR-021: nothing else commits to the instance while an inline step runs), overlaid with pending intents. |
 | `PendingFault` | A host-side fault (withheld value, undeclared name, failed type check) raised even when the body catches it. |
 
 ## VariableSessionRead (`Elsa.Workflows.Runtime.Core`)
@@ -32,7 +32,7 @@ suspension, fault and cancellation, cleared for every successor.
 | `Kind` | `WholeAssignment` (C#) or `MemberChange` (script, from Phase 5; changed paths from S-8). Decides the no-op equality (C4). |
 | `Value` | The whole value: base plus changes (C3). |
 | `Base` | `VariableWriteBase?` chosen per research R-3; null = blind. |
-| `OwnerInvocationId` | The invocation whose own-write base the applied write advances. |
+| `OwnerInvocationId` | The activity whose container frame declares the variable (the commit writes that frame); null for a workflow variable. The writing invocation's own-write base advances separately (`InvocationVariableBases.Advance`). |
 | `DroppedMembers` | C# only: members the read type dropped, for the FR-017 warning on the write record. |
 
 The writer (node, invocation, attempt) is set

@@ -234,9 +234,10 @@ internal sealed class StepVariableSession : IStepVariableSession
         }
 
         // A read as a narrower type may drop members of the stored value; a write of it back declares that loss (ADR 0046
-        // V6). The comparison runs only when the value is written back, so a read serializes nothing.
-        if (inline.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-            _typedReads[variable.Address] = inline;
+        // V6). The comparison runs only when the value is written back, so a read serializes nothing. It is always made
+        // against the stored value: a later read of the step's own pending write, already narrowed, does not replace it.
+        if (inline.ValueKind is JsonValueKind.Object or JsonValueKind.Array && !_intents.ContainsKey(variable.Address))
+            _typedReads.TryAdd(variable.Address, inline);
 
         return value;
     }
