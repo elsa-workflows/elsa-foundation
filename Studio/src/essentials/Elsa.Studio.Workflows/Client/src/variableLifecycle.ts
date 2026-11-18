@@ -64,7 +64,8 @@ export function writerLabel(writer: VariableWriterView | null | undefined, label
   const node = writer.executableNodeId ? labelOf?.(writer.executableNodeId) ?? writer.executableNodeId : null;
   const source = writeSourceLabels[writer.source] ?? writer.source;
   if (!node) return writer.source === "Alteration" ? "an operator alteration" : `a ${source}`;
-  return writer.source === "Capture" ? node : `${node} (${source})`;
+  // A capture is named by its node; another kind of write adds its kind, unless the node is already called that.
+  return writer.source === "Capture" || node.toLowerCase() === source.toLowerCase() ? node : `${node} (${source})`;
 }
 
 /** "v1 → v2", with the base it was built on when it differs: "built on v0, current v1 → v2". */

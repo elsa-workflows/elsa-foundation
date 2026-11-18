@@ -87,7 +87,7 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
       <dl className="wf-variable-write-facts">
         <div><dt>Writer</dt><dd>{writerLabel(record.writer, labelOf)}</dd></div>
         <div><dt>{record.outcome === lostUpdateFaultOutcome ? "Changed by" : "Overwritten writer"}</dt><dd>{writerLabel(record.overwrittenWriter, labelOf)}</dd></div>
-        <div><dt>When</dt><dd>{formatDate(record.occurredAt)}{record.commitSequence != null ? ` · commit ${record.commitSequence}` : ""}</dd></div>
+        <div><dt>When</dt><dd>{formatDate(record.occurredAt)}</dd></div>
         {record.writtenValue ? (
           <VariableValueState
             label="Written value"

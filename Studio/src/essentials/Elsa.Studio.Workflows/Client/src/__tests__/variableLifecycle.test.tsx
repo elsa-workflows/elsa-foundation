@@ -131,6 +131,7 @@ describe("variable lifecycle model", () => {
     expect(writerLabel({ source: "Capture", executableNodeId: "node-a" }, labelOf)).toBe("Add bonus");
     expect(writerLabel({ source: "Intrinsic", executableNodeId: "node-x" }, labelOf)).toBe("node-x (Set Variable)");
     expect(writerLabel({ source: "Alteration" })).toBe("an operator alteration");
+    expect(writerLabel({ source: "Intrinsic", executableNodeId: "set-count" }, () => "Set Variable")).toBe("Set Variable");
     expect(writerLabel(null)).toBe("an earlier writer");
   });
 
@@ -191,7 +192,7 @@ describe("run view", () => {
     expect(text).toContain("Overwritten writerAdd bonus");
     expect(text).toContain("Overwritten valueKept for recovery");
     expect(text).toContain("Modify variable");
-    expect(text).toContain("commit 9");
+    expect(text).not.toContain("commit 9");
   });
 
   it("shows a Fault refusal with what was refused and why, and the recorded completion", () => {

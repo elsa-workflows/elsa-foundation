@@ -440,7 +440,8 @@ export function InspectorPanel({
           <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
             label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />
-          {!intrinsicDescriptor && !selectedReusableDefinitionId ? (
+          {/* Engine intrinsics pin no lost-update mode (ExecutableNodeCompiler), so the setting would do nothing there. */}
+          {!intrinsicDescriptor ? (
             <VariableLifecycleNodeSettings node={selectedNode} readOnly={readOnly} onChange={onSelectedActivityChange} />
           ) : null}
         </StudioTabPanel>
