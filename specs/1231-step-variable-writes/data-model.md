@@ -9,7 +9,7 @@ Types S-10 (#4316) builds are reused and only referenced here: `VariableReadSetE
 |---|---|
 | `InvocationId`, `AttemptId` | The step it belongs to. Dropped at the step's transition. |
 | `SessionReads` | Ordered `VariableReadSetEntry` list for this attempt (version; digest under `Fault`). Not carried to a new attempt or across a suspension. |
-| `PendingIntents` | One `WriteIntent` per variable, latest wins within the step. |
+| `PendingIntents` | One `WriteIntent` (in code: `StepVariableWriteIntent`) per variable, latest wins within the step. |
 | `View` | Read-your-writes: committed value at first read, overlaid with pending intents. |
 
 ## WriteIntent
