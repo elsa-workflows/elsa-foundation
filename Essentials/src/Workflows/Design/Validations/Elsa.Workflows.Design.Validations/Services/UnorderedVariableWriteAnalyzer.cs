@@ -104,8 +104,9 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                 : $" Structure '{structure.Kind}' (node '{structure.NodeId}') does not declare how its children are ordered, so they are treated as unordered.";
         return text +
                " The last successfully committed write wins, so the final value can differ between runs." +
-               " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join." +
-               " A step that reads the variable and writes it back is a read-modify-write (ADR 0092). If an update must never be lost (a counter, a balance), set this node's lost-update mode to Fault (node setting LostUpdateMode, or [ActivityLostUpdateMode(LostUpdateMode.Fault)] on the activity type): a write on a stale base then faults instead of applying with a warning. See docs/runtime-variable-lifecycle.md.";
+               // Authors get structural remedies only: the lost-update mode is a runtime concept kept out of their view
+               // (coordinator decision 2026-11-18, spec 1221 FR-012a).
+               " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join.";
     }
 
     private static string DuplicateMessage(string nodeId, string scopeId, string referenceKey, IReadOnlyList<string> outputKeys) =>
