@@ -74,6 +74,8 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 | `jr1-crash-after-keep` | As above, crash after the parked instance kept the result | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-obsolete` | As `jr1-crash-after-keep`, with a kept result row of J's obsolete generation g0 | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL, generation-blind FAIL |
 | `jr1-result-parked-consume` | J finishes while S is parked; the conversion writes the result row; S consumes it while parked; recover | reviewed FAIL, repaired PASS, negative FAIL |
+| `jr1-result-kept-lookup` | The integration review's trace: the result row kept Arrived at the Open, the ticket absent | reviewed FAIL, repaired PASS, ticket-only-lookup FAIL |
+| `jr1-result-pending-lookup` | As above, with the result row still pending at the Open | reviewed FAIL, repaired PASS, ticket-only-lookup FAIL |
 | `jr1-crash-before` | Crash before the conversion commit, while S is parked: recover restarts J under the next generation | reviewed FAIL, reviewed-kind FAIL, repaired PASS, negative FAIL |
 | `jr1-running` | Control: J completes while S runs, the built in-memory path | PASS under all four |
 | `po1-cohort` | R5-M6: exhausted J at 900, cohort suspect R at 1100, the mark set after Complete, a cold takeover with no control | reviewed FAIL, repaired PASS, negative FAIL |
@@ -358,6 +360,25 @@ handoff gate.
   - The built `RemainingJobs` matches the ticket's full key (`WorkflowInstance.cs` 142), and the result row's key is the
     ticket's key plus `/result`, so the built function alone would not clear J on the result row. The reviewed rule here,
     which clears by J's key, is the transitions page's reading.
+- **The Open's disposition lookup.** For each job its restored waits name, the Open probes J's current ticket:
+  - a pending ticket runs;
+  - a kept Arrived ticket restarts from its JobSpec under the next generation;
+  - a ticket done or absent with no KeptBy restarts.
+
+  Repaired (the coordinator's rule after the integration review) also probes the minted `{ticket id}/result` row first.
+  A pending result row stays and a kept Arrived one is restored by its page; neither restarts J. Only when neither the
+  ticket nor its result row exists does the job restart.
+- `jr1-result-kept-lookup` and `jr1-result-pending-lookup` (the integration review's trace):
+  - Every rule set converts under the kernel-issued identity and keeps J's registry entry, so the runs isolate the
+    lookup.
+  - J at g1 finishes while S is parked. The standalone conversion consumes `…!2_w6#g1` and inserts
+    `…!2_w6#g1/result`. S consumes it while parked (kept), or it is still pending at the Open. A crash takeover precedes
+    recover.
+  - Reviewed and `ticket-only-lookup` apply the stated table without the result probe. The ticket is absent, so the
+    Open writes Restarted(g2), and the g1 result is cleared as obsolete or refused for its generation: V is lost. J runs
+    twice, and the model's result comes from the g2 ticket.
+  - Repaired: no Restarted(g2). One model result comes from the g1 result row, with V, after one invocation.
+  - The other JR-1 runs keep their outcomes under the full table.
 - `jr1-crash-before`: the owner dies after J's body returned and before any commit recorded the result.
   - The new owner does not enter a parked row's ticket (`Worker.cs` 1169–1177), so the parked instance consumes it as
     late input.
