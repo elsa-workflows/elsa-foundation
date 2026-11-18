@@ -122,6 +122,27 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_switch_case_condition_that_reads_the_variable_is_flagged()
+    {
+        // The condition lives in the Switch structure, which an edit by input key cannot reach (FR-022).
+        var switchNode = new ActivityNode("switch", "av-switch", [], [],
+            new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind, Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new Elsa.Activities.Switch.Models.SwitchAuthoredStructure(
+                [
+                    new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Big")
+                    {
+                        CaseId = "big",
+                        Condition = new ArgumentState("condition", new ArgumentValue("variables.order.total > 10", "JavaScript"), null, null, null, null)
+                    }
+                ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+        var plan = await PlanAsync(State(switchNode), "order-key", "purchase");
+
+        Assert.Empty(plan.Edits);
+        Assert.Equal(ScriptVariableRenameFlagReason.StructureInput, Assert.Single(plan.Flags).Reason);
+    }
+
+    [Fact]
     public async Task A_script_body_is_planned_when_its_input_is_named()
     {
         var node = Node("script", new ArgumentState("script", new ArgumentValue("return variables.order.total;", "Literal"), null, null, null, null));

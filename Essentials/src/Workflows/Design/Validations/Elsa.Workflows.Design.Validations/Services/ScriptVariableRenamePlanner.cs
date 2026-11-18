@@ -51,7 +51,21 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
         {
             var scopes = visibility.GetVisibleScopes(node.NodeId);
             var scriptInput = scriptInputKeyOf is null ? null : await scriptInputKeyOf(node, cancellationToken);
-            foreach (var input in node.Inputs)
+            // A structure-owned input (a Switch case condition) is read like any input but lives in the node's structure,
+            // where an edit by input key cannot reach it: its reads of the variable are flagged instead.
+            var structureInputs = structures.ProjectInputs(node);
+            foreach (var structureInput in structureInputs.Inputs.Where(input => input.State is not null))
+            {
+                var ownedState = structureInput.State! with { ReferenceKey = structureInput.ReferenceKey };
+                if (ReadScript(ownedState, scriptInput: null) is { } owned &&
+                    resolver.Analyze(owned.Language, owned.Source) is { ReadsVariables: true } ownedAnalysis &&
+                    ResolvesTo(scopes, oldName, scopeId, referenceKey) &&
+                    (ownedAnalysis.LiteralNames.Contains(oldName, StringComparer.Ordinal) || ownedAnalysis.HasComputedRead))
+                    flags.Add(new(node.NodeId, structureInput.ReferenceKey, ScriptVariableRenameFlagReason.StructureInput,
+                        $"The structure input '{structureInput.ReferenceKey}' reads '{oldName}'; change it to '{newName}' by hand."));
+            }
+
+            foreach (var input in node.Inputs.Where(input => !structureInputs.ConsumedInputKeys.Contains(input.ReferenceKey, StringComparer.Ordinal)))
             {
                 if (ReadScript(input, scriptInput) is not { } script ||
                     resolver.Analyze(script.Language, script.Source, script.IsBody) is not { } analysis ||

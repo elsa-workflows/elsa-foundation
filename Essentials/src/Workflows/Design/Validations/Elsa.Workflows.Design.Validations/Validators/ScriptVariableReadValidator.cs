@@ -49,9 +49,16 @@ public sealed class ScriptVariableReadValidator(
         {
             var scopes = visibility.GetVisibleScopes(node.NodeId);
             var scriptInput = await ScriptInputKeyAsync(node, cancellationToken);
-            foreach (var input in node.Inputs)
+            // The node's own inputs and those its structure owns (a Switch case condition), as publish compiles them.
+            var structureInputs = activityStructureService.ProjectInputs(node);
+            var inputs = node.Inputs
+                .Where(input => !structureInputs.ConsumedInputKeys.Contains(input.ReferenceKey, StringComparer.Ordinal))
+                .Select(input => (Bag: "inputs", State: input))
+                .Concat(structureInputs.Inputs.Where(input => input.State is not null)
+                    .Select(input => (Bag: "structure", State: input.State! with { ReferenceKey = input.ReferenceKey })));
+            foreach (var (bag, input) in inputs)
             {
-                var path = $"{node.NodeId}/inputs/{input.ReferenceKey}";
+                var path = $"{node.NodeId}/{bag}/{input.ReferenceKey}";
                 ScriptVariableReadPlan? plan;
                 var isBody = scriptInput is not null && StringComparer.Ordinal.Equals(input.ReferenceKey, scriptInput);
                 if (isBody)

@@ -29,5 +29,8 @@ public enum ScriptVariableRenameFlagReason
     Captured,
 
     /// <summary>A read of the renamed variable that, under the new name, a nearer declaration would capture.</summary>
-    Retargeted
+    Retargeted,
+
+    /// <summary>A read in an input the node's structure owns (a Switch case condition), which an edit by input key cannot reach.</summary>
+    StructureInput
 }
