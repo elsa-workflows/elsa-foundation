@@ -31,9 +31,14 @@ it("offers promotion only where the owning resource can author reusable activiti
   expect(promote()).toBeUndefined();
 });
 
+it.each([["no selection", [] as string[]], ["a selection that is not a block", ["after"]], ["two selected nodes", ["block", "after"]]])(
+  "keeps the toolbar to its block commands for %s", (_, selection) => {
+    selected = selection; render();
+    expect(promote()).toBeUndefined();
+  });
+
 it.each([
   ["a read-only document", () => { nativeContext = { ...nativeContext, canEdit: false }; }, "Open an editable draft to promote a block."],
-  ["a selection that is not a block", () => { selected = ["after"]; }, "Select one named block to promote it to a reusable activity."],
   ["capabilities still loading", () => { host = { ...host, capabilitiesState: "loading" }; }, "Loading reusable activity authoring…"],
   ["a server without reusable authoring", () => { host = { ...host, capabilitiesState: "failed" }; }, "Reusable activity authoring is unavailable on this server."]
 ])("disables promotion for %s and says why", (_, change, reason) => {
