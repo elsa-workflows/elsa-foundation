@@ -131,8 +131,10 @@ them. The store never refuses an insert for depth:
 **Kept rows of a parked instance.** Arrivals that a parked instance consumes become done rows kept for its recovery
 ([observability](observability.md#what-park-keeps)). While parked they are outside due depth and add no poll delay;
 their growth is storage, which ends when the Park is resolved. Recovery restores them page by page. A page waits while
-the previous page's last restored row is not yet taken up by a poll and while the instance is suspended, so a drain adds at most one
-page of rows not yet taken up plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
+the previous page's last restored row is not yet handed off to the model, while the owner has more than one page of
+restored rows not handed off, and while the instance is suspended (fifth review R5-M3). A poll's `Seen` mark alone
+no longer counts, so a drain's restored rows not yet handed off are at most one page when a page is admitted and
+two pages at any time, plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
 would hold it above the high water mark for good.
 
@@ -189,6 +191,7 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 | Ingress adapter (broker, webhook, schedule source) | The same refusal. A broker adapter stops acknowledging and pauses consumption, so the broker keeps the backlog; a schedule source fires late. |
 | Outside publisher | Admission against its tenant's rate. The publish's fan-out into waiting instances is never refused: the waits are committed. |
 | A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn, the [parallel ForEach cap](large-fan-out.md), and credits. The kernel checks the cap when it seals the turn's outcome, so a model cannot catch it; a turn above it fails, and the kernel parks the instance as for any turn that throws. The target's lag shows in the depth metric. |
+| A termination cascade | Kernel work, never a model turn. A terminate's cascade to the children and jobs of a large registry is paged: each commit sends at most `P_cascade` = 1,000 entries (proposed), under a durable cursor, so every page is bounded and the cap never meets it, while model turns keep the cap as decided ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and idempotent", fifth review R5-B2). |
 | A timer, job result or child completion | Nothing: it is owed and lands. |
 
 ## Fair scheduling within a pass
@@ -277,7 +280,8 @@ The sketch's release 1 scope names "admission control with bounded inboxes". Pro
 
 Defaults (rates, high and low water, budget, sample interval, send cap) are set by the release 1 cost runs. Proposed
 starting points, all unmeasured: `PassTurnBudget` 500 (equal to `MaxBatch`), high water 10,000 and low water 8,000 due
-rows per virtual partition, a 5 s sample interval, 10,000 sends per turn.
+rows per virtual partition, a 5 s sample interval, 10,000 sends per turn. The send cap applies to model turns; kernel
+cascade pages are bounded kernel work of at most `P_cascade` = 1,000 entries each (proposed, fifth review R5-B2).
 
 **Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
 an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.

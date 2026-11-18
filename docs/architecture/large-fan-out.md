@@ -147,7 +147,14 @@ partition with new owners, and checks that the reloaded checkpoint matches (meas
 **Cancellation.** A cancel or terminate of the root uses the kernel's forced termination: each instance sends a
 terminate to the children it started that have not finished, and the terminate recurses. With credits, only
 outstanding children exist; sub-ranges past the cursor were never started and need nothing. A cancel of a
-100,000-item fan-out therefore sends at most C terminates per live combiner. A child deleted while the terminate was
+100,000-item fan-out therefore sends at most C terminates per live combiner. An instance outside the pattern can
+still hold any number of children that it started over many turns, one per turn being enough, so its terminate does
+not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
+the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
+children end in 11 commits and no commit meets the send cap (proposed, fifth review R5-B2;
+[observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
+idempotent"). Each job cancel in a cascade is idempotent: a ticket already consumed or `Done` is skipped, never
+counted, so one settled ticket cannot roll back the children's terminates (fifth review R5-B1). A child deleted while the terminate was
 on its way still ends its subtree: its retirement marker keeps its parent, child registry and job keys, and a
 parent-bound terminate refused there as `RetiredCreation` cascades from the marker (proposed, fourth review R4-B2;
 [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). Each cancelled child still sends its
@@ -161,8 +168,11 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   live subtree. A model may send the kernel's terminate kind through `ITurn.Send` (`Kinds.RequireApplicationSend`
   refuses only job and event tickets today; the proposed reserved kinds leave `kernel.terminate` open). The send path
   stamps the sender and its creation from the committing actor, so
-  a child accepts a terminate whose stamped sender and creation equal its recorded parent's, including when the child
-  is parked ([observability](observability.md#every-park-operation-names-its-park)). While a discard, expiry,
+  a child accepts a terminate whose stamped sender and creation equal its recorded parent's, in every state, parked
+  included, and refuses a terminate from any other instance in every state, running included (fifth review R5-M5;
+  [observability](observability.md#every-park-operation-names-its-park)). FailFast is a model turn, so the send cap
+  applies to it unchanged; its at most C terminates stay within the cap whenever C does, and each child's own
+  terminate then pages that child's subtree as kernel work. While a discard, expiry,
   terminate or delete drain is open on the child, the terminate is refused as "resolution open", and the refusing
   commit still cascades to the child's children and jobs when the terminate has authority over it (the same section).
   A child deleted before the terminate arrived refuses it at its retirement marker and still cascades under the same
