@@ -62,7 +62,7 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await expect(notice).toContainText("reads variables by a computed name and could read 'order'");
   await capture(page, info, "rename-notice");
 
-  await notice.getByRole("button", { name: "Go to Write Line, input Text", exact: true }).click();
+  await notice.getByRole("button", { name: "Write Line · Text, go to input", exact: true }).click();
   await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Copy Node ID", exact: true })).toBeVisible();
   const text = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });

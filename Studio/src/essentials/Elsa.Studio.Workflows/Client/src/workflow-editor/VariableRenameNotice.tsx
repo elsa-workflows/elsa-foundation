@@ -53,7 +53,18 @@ export function useVariableRename({ context, state, catalog, updateState }: {
     if (!current || disposed.current) return;
     try {
       const plan = await planVariableRename(context, withVariableName(current, scopeId, referenceKey, oldName, catalog), scopeId, referenceKey, newName);
-      if (disposed.current || !plan) return;
+      if (disposed.current) return;
+      if (!plan) {
+        // FR-022: a rename never breaks a read silently, even on a host that cannot plan one.
+        setOutcome({
+          oldName,
+          newName,
+          updated: 0,
+          flags: [],
+          error: `Scripts that read '${oldName}' were not checked: this server does not plan variable renames. Check them by hand.`
+        });
+        return;
+      }
       const target = latest.current ?? current;
       const { state: next, skipped } = applyVariableRenameEdits(target, plan.edits, catalog);
       if (plan.edits.length > skipped.length) {
@@ -140,7 +151,7 @@ export function VariableRenameNotice({ outcome, labelFor, onSelectReference, onD
                       variant="ghost"
                       size="sm"
                       className="wf-variable-rename-notice-target"
-                      aria-label={`Go to ${label.activity}, input ${label.input}`}
+                      aria-label={`${label.activity} · ${label.input}, go to input`}
                       onClick={() => onSelectReference(flag.nodeId, flag.inputKey)}
                     >
                       {label.activity} · {label.input}

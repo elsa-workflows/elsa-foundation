@@ -7,8 +7,8 @@ import { capabilityIds, hasCapabilityLink, resolveCapabilityLink } from "./capab
 // Kept apart from workflowDesign.ts, which the Definitions landing path loads: only the editor plans renames.
 /**
  * Plans how the draft's scripts follow a variable rename (spec 1222 FR-021, FR-022). `state` must still carry the
- * variable's old name. Resolves to null when the host does not advertise the rename plan, so Studio renames the
- * declaration alone, as it did before.
+ * variable's old name. Resolves to null when the host does not advertise the rename plan: Studio then renames the
+ * declaration alone and tells the author the scripts were not checked.
  */
 export async function planVariableRename(
   context: StudioEndpointContext,

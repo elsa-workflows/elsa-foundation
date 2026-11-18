@@ -210,7 +210,7 @@ describe("rename follow-up", () => {
     // The summary is announced through a live region that stays mounted; the list itself is not live.
     expect(host.querySelector("[role='status']")!.textContent).toContain("1 reference needs your attention.");
     expect(host.querySelector("[aria-label='Variable rename']")!.getAttribute("role")).toBeNull();
-    const goTo = host.querySelector<HTMLButtonElement>("[aria-label='Go to Node switch, input Input Case:big:Condition']")!;
+    const goTo = host.querySelector<HTMLButtonElement>("[aria-label='Node switch · Input Case:big:Condition, go to input']")!;
     flushSync(() => goTo.click());
     expect(onSelectReference).toHaveBeenCalledWith("switch", "Case:big:Condition");
   });
@@ -293,17 +293,17 @@ describe("rename follow-up", () => {
     expect(host.textContent).toContain("The script changed while the rename was planned");
   });
 
-  it("renames the declaration alone when the host does not advertise the plan", async () => {
+  it("renames the declaration alone, and says the scripts were not checked, when the host does not advertise the plan", async () => {
     const { context, postJson } = api(null, false);
     const updateState = vi.fn();
     const host = render(<Harness context={context} draft={state(writeLine("a", "variables.order"))} updateState={updateState} />);
 
     flushSync(() => host.querySelector("button")!.click());
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await waitFor(() => expect(host.querySelector("[aria-label='Variable rename']")).not.toBeNull());
 
     expect(postJson).not.toHaveBeenCalled();
     expect(updateState).not.toHaveBeenCalled();
-    expect(host.querySelector("[aria-label='Variable rename']")).toBeNull();
+    expect(host.textContent).toContain("Scripts that read 'order' were not checked");
   });
 
   it("says the scripts were not updated when planning fails", async () => {
