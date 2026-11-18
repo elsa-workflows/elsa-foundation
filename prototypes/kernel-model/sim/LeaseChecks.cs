@@ -769,6 +769,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
         return result;
     }
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default) => inner.RetakeAsync(partition, node, epoch, lease, ct);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default)

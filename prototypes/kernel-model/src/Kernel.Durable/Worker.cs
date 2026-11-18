@@ -133,8 +133,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // The (partition, epoch) pairs this process has held: what it marked then did not kill it. Epochs count per partition,
     // so a row is compared only with its own partition's epochs (D4).
     private readonly HashSet<(int Partition, long Epoch)> _mine = [];
-    // One child id issuer per held partition, at the epoch it is held. A keeping reset keeps the epoch and so the issuer,
-    // with its sequence; a take bumps the epoch and starts a new one.
+    // One child id issuer per held partition, at the epoch it is held. A take or a retake bumps the epoch and starts a new
+    // one; a turn still running from before keeps the old issuer, and its result goes with its generation.
     private readonly Dictionary<int, ChildIssuer> _issuers = [];
 
     /// <summary>One virtual partition while this worker holds its fence: its own epoch, position and journal.</summary>
@@ -143,7 +143,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         public readonly long Epoch = epoch;
         public long Position = position;
         public long Renewed, SafeUntil;     // per partition: a commit renews only the rows it fences
-        public bool Again;                  // after a keeping reset: poll Seen <= epoch until a poll comes back short
     }
     private readonly SortedDictionary<int, Held> _held = [];
 
@@ -476,6 +475,38 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         finally { _taking = false; }
         if (lease is not { Taken.Count: > 0 }) return;    // a take of a set keeps what it got
+        Install(lease, started);
+    }
+
+    /// <summary>
+    /// After a refused fence or a lost answer over several partitions: take back, one at a time, each partition this
+    /// node still holds at the epoch it held, at a new epoch. One that was released or taken since, or whose take fails,
+    /// is dropped; the takes that succeed are kept.
+    /// </summary>
+    private async Task RetakeAsync(IReadOnlyList<PartitionFence> held, CancellationToken cancellationToken)
+    {
+        if (_taking) return;
+        _taking = true;
+        var (started, taken, now) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue);
+        try
+        {
+            foreach (var fence in held)
+                try
+                {
+                    if (await _store.RetakeAsync(fence.Partition, Node, fence.Epoch, _options.Lease, cancellationToken) is not { } one) continue;
+                    taken.Add(one.For(fence.Partition));
+                    now = Math.Min(now, one.Now);
+                }
+                catch (Exception) { /* not taken, or taken without knowing: dropped, and its host takes it as usual */ }
+        }
+        finally { _taking = false; }
+        if (taken.Count == 0) return;
+        Install(new(taken, now), started);
+        _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
+    }
+
+    private void Install(OwnedLease lease, long started)
+    {
         Reset();    // a take starts from empty memory
         Observe(lease.Now);
         _renewed = lease.Now;
@@ -577,9 +608,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _polling = true;
         _consumed.Clear();
         Polled polled;
-        // After a keeping reset a partition reads Seen <= epoch (a poll at epoch + 1): a plain Seen < epoch would leave
-        // what this owner marked there before the reset for no one. No take issues epoch + 1 while this fence holds.
-        var fences = _held.Select(h => new PartitionFence(h.Key, h.Value.Epoch + (h.Value.Again ? 1 : 0), h.Value.Position)).ToList();
+        var fences = Fences;
         try
         {
             polled = fences.Count == 1 ? await _store.PollAsync(fences[0].Partition, fences[0].Epoch, _options.Horizon, _options.PollLimit, cancellationToken)
@@ -598,8 +627,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
         if (!LeaseUsable()) return;
-        if (polled.Messages.Count < _options.PollLimit)
-            foreach (var held in _held.Values) held.Again = false;
         foreach (var row in polled.Messages)
         {
             if (!_items.ContainsKey(row.Message.InboxKey) && !_consumed.Contains(row.Message.InboxKey)) _options.OnObservedDelivery?.Invoke(row);
@@ -1591,19 +1618,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             catch (Exception)
             {
-                if (generation != _generation) return Outcome.Lost;
-                // Unknown outcome. Over several partitions, take back each one still mine or free, at a new epoch.
-                var retake = _held.Count > 1 && !Has(Flaw.NoResetAfterFailedCommit) ? _held.Keys.ToList() : null;
-                Fail(units);
-                if (retake is not null) await TakeAsync(retake, cancellationToken);
+                if (generation == _generation) await FailAsync(units, cancellationToken);     // unknown outcome
                 return Outcome.Lost;
             }
             if (generation != _generation) return Outcome.Lost; // reset while the commit was in flight: its result is nobody's
             if (!result.Landed)
             {
-                // The fence matched nothing. Over several partitions, keep the ones still held.
-                if (_held.Count > 1 && !Has(Flaw.NoResetAfterFailedCommit)) await KeepAsync(cancellationToken);
-                else Fail(units);
+                await FailAsync(units, cancellationToken);      // the fence matched nothing
                 return Outcome.Lost;
             }
             foreach (var fence in batch.Fenced)
@@ -1662,40 +1683,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!Owns) return;
         _renewed = _held.Values.Min(h => h.Renewed);
         Volatile.Write(ref _safeUntil, _held.Values.Min(h => h.SafeUntil));
-    }
-
-    /// <summary>
-    /// The keeping reset, after a refused fence over a set (coordinator decisions on slice 0): the refusal does not say
-    /// which row was stale, so memory goes as in any reset, and one read renews each partition still held at its epoch
-    /// and gives its position. Those stay in the set and are polled again with Seen &lt;= epoch; the rest are dropped. No
-    /// take: a take would bump the kept epochs. An unknown outcome resets by a take instead (each partition still mine
-    /// or free, at a new epoch), so the position check is never the only guard.
-    /// </summary>
-    private async Task KeepAsync(CancellationToken cancellationToken)
-    {
-        var (held, releasing) = (Fences.ToDictionary(f => f.Partition), _releasing);
-        Reset();
-        if (releasing)
-        {
-            // A stand-down keeps nothing: what is still held is given up, as the release would have.
-            try { await _store.ReleaseAsync(held.Values, cancellationToken); } catch (Exception) { /* then the leases run out */ }
-            return;
-        }
-        var generation = _generation;
-        var started = _options.Monotonic();
-        RenewedSet kept;
-        try { kept = await _store.RenewAsync(held.Values, Node, _options.Lease, cancellationToken); }
-        catch (Exception) { return; }   // nothing kept: the host takes again
-        if (generation != _generation || Owns) return;
-        // A release clears the owner and keeps the epoch: a row is kept only if both are still mine.
-        foreach (var row in kept.Rows)
-            if (row.Owner == Node && held.TryGetValue(row.Partition, out var mine) && mine.Epoch == row.Epoch)
-                _held[row.Partition] = new(row.Epoch, row.Position) { Renewed = kept.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds, Again = true };
-        if (!Owns) return;
-        Observe(kept.Now);
-        Renewed();
-        _woken = true;
-        LeaseUsable();
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
@@ -1757,6 +1744,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void ForgetInMemory(string instance)
     {
         foreach (var item in _items.Values.Where(i => !i.Durable && Canonical(i.Message.Target.Id) == instance).ToList()) Forget(item);   // its timers go, its jobs are cancelled
+    }
+
+    /// <summary>
+    /// A refused fence or an unknown outcome: reset. Over several partitions, the worker then takes back the ones still
+    /// its own (<see cref="RetakeAsync"/>), unless it is standing down. A refused fence does not say which row was
+    /// stale, and a new epoch also fences out a commit whose answer was lost and that lands later.
+    /// </summary>
+    private async Task FailAsync(List<TurnOutcome> units, CancellationToken cancellationToken)
+    {
+        var (held, releasing) = (Fences, _releasing);
+        Fail(units);
+        if (held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit)) await RetakeAsync(held, cancellationToken);
     }
 
     private void Fail(List<TurnOutcome> units)
@@ -1979,7 +1978,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 /// One per process. At most one of its workers has a trial in flight, and then the others start nothing. A death kills
 /// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too
 /// (<see cref="Flaw.TrialPerPartition"/> is the mutation). A reset releases the gate, so a trial in a partition the
-/// worker dropped gates nothing it kept.
+/// worker dropped gates nothing it took back.
 /// </summary>
 public sealed class TrialGate
 {
