@@ -1003,6 +1003,48 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task A_republish_whose_script_read_now_resolves_to_another_declaration_warns_on_the_response()
+    {
+        // Spec 1222 FR-024 (VF-READ-005): same node, input and name, but publish now pins another variable.
+        var first = await ReadsGreetingHandler("version-1", "1.0.0", "greeting-old").Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var second = await ReadsGreetingHandler("version-2", "2.0.0", "greeting-new").Handle(new PublishWorkflow("version-2"), CancellationToken.None);
+
+        Assert.Null(first.Warnings);
+        var warning = Assert.Single(second.Warnings!);
+        Assert.StartsWith(Elsa.Workflows.Design.Core.Services.ScriptVariableReadDiagnostics.ShadowChange, warning, StringComparison.Ordinal);
+        Assert.Contains("'greeting-new'", warning, StringComparison.Ordinal);
+    }
+
+    private PublishWorkflowRequestHandler ReadsGreetingHandler(string versionId, string version, string greetingKey)
+    {
+        var workflowVersion = WorkflowVersion(
+            Node("consumer", new WorkflowArgumentState("Text", new ArgumentValue("variables.greeting + '!'", "JavaScript"), null, null, null, null)),
+            "definition-1",
+            versionId,
+            version);
+        workflowVersion.State = new WorkflowDefinitionState(
+            [new Elsa.Expressions.Core.Models.VariableDefinition(greetingKey, "greeting", new TypeReference("String"), null, null)],
+            workflowVersion.State.RootActivity, [], [], null);
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var compiler = TestCompiler.Create(
+            versionStore,
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            scriptVariableReadResolver: new Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver([new GreetingReadAnalyzer()]));
+        return Handler(layout: null, compiler, versionStore);
+    }
+
+    /// <summary>A stand-in for the JavaScript analyzer, which this project does not reference: reads <c>greeting</c> literally.</summary>
+    private sealed class GreetingReadAnalyzer : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => "JavaScript";
+
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis Analyze(string source, bool scriptBody = false) =>
+            new(source.Contains("variables.greeting", StringComparison.Ordinal) ? ["greeting"] : [], false);
+    }
+
+    [Fact]
     public async Task ExplicitNamedSlotKeepsDefaultAndNamedAuthoritiesLiveSideBySide()
     {
         var defaultVersion = WorkflowVersion(Node("write-default", Text("default")), "definition-1", "version-1", "1.0.0");

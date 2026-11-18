@@ -249,7 +249,7 @@ public sealed record VariableReadFallback
         Candidates = candidates.ToArray();
     }
 
-    /// <summary>The variables the expression could read, nearest scope first; a shadowed name appears once per scope.</summary>
+    /// <summary>The variables the expression could read, nearest scope first, each name once (the innermost declaration).</summary>
     [JsonPropertyName("candidates")]
     public IReadOnlyList<VariableReadCandidate> Candidates { get; }
 }
