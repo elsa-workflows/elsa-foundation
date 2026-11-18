@@ -332,7 +332,7 @@ export function incidentActionModel(
 
 /** What Accept recorded completion does, against Retry and Re-execute (spec 1221 FR-014, FR-017). */
 export const acceptRecordedCompletionExplanation =
-  "Accept recorded completion: completes the step with the result it already produced, without running its body again. Retry runs the same invocation again on its committed inputs; Re-execute runs a new invocation on fresh inputs. Both run the body again.";
+  "Accept recorded completion: completes the step with the result it already produced, without running its body again. Retry runs the same invocation again on its committed inputs, so after a refused write the body runs again and its write is refused again while the variable stays changed; Re-execute runs a new invocation on fresh inputs. Both run the body again.";
 
 /**
  * Accept recorded completion for a faulted activity whose commit a `Fault` lost update refused (spec 1221 FR-017):

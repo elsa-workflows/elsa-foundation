@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { AlertTriangle, History, RefreshCw } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import type {
@@ -109,8 +110,10 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
       {record.outcome === lostUpdateWarningOutcome ? (
         <p className="wf-variable-write-hint">
           To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. Studio cannot
-          show the kept value yet; in runs captured with the Variable writes diagnostics level on, the step that wrote it
-          ({writerLabel(record.overwrittenWriter, labelOf)}) shows the value it wrote.
+          show the kept value yet
+          {record.overwrittenWriter?.executableNodeId
+            ? `; in runs captured with the Variable writes diagnostics level on, the step that wrote it (${writerLabel(record.overwrittenWriter, labelOf)}) shows the value it wrote.`
+            : "."}
         </p>
       ) : null}
     </article>
@@ -125,6 +128,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
   inspection: Pick<ActivityExecutionInspection, "variableWrites" | "recordedCompletion" | "subStatus" | "valueSnapshots"> & { status?: string | null };
   labelOf?: LabelOf;
 }) {
+  const headingId = useId();
   const records = variableWriteDiagnostics(inspection);
   const recorded = inspection.recordedCompletion;
   const refusedByLostUpdate = inspection.subStatus === variableLostUpdateSubStatus;
@@ -133,9 +137,9 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
   if (records.length === 0 && !recorded && !refusedByLostUpdate) return null;
   const evidenceById = new Map((inspection.valueSnapshots ?? []).filter(item => item.evidenceId).map(item => [item.evidenceId!, item]));
   return (
-    <section className="wf-instance-section wf-variable-writes" aria-label="Variable write diagnostics">
+    <section className="wf-instance-section wf-variable-writes" aria-labelledby={headingId} data-testid="variable-write-diagnostics">
       <header className="wf-runtime-evidence-heading">
-        <h4><History size={14} aria-hidden="true" /> Variable writes</h4>
+        <h4 id={headingId}><History size={14} aria-hidden="true" /> Variable writes</h4>
         <LostUpdateBadge count={countLostUpdates(records)} label={lostUpdateBadgeLabel(records)} />
       </header>
       {refusedByLostUpdate ? (

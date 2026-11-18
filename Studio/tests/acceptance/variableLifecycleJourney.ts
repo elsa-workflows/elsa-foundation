@@ -120,7 +120,7 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
     const tab = inspector().getByRole("tab", { name: "Activity", exact: true });
     await tab.click();
     await expect(tab).toHaveAttribute("aria-selected", "true");
-    const section = inspector().getByLabel("Variable write diagnostics", { exact: true });
+    const section = inspector().getByRole("region", { name: "Variable writes", exact: true });
     await expect(section).toBeVisible({ timeout: 30_000 });
     await section.scrollIntoViewIfNeeded();
     return section;

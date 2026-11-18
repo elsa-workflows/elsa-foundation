@@ -251,6 +251,16 @@ describe("run view", () => {
     expect(text).not.toContain("Open incident details");
   });
 
+  it("does not point to a step when an operator alteration wrote the overwritten value", () => {
+    const overAlteration: VariableWriteRecordView = { ...lostUpdateWarning(), overwrittenWriter: { source: "Alteration" } };
+    flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [overAlteration] })} labelOf={labelOf} />));
+
+    const text = container.textContent!;
+    expect(text).toContain("Overwritten writeran operator alteration");
+    expect(text).toContain("Studio cannot show the kept value yet.");
+    expect(text).not.toContain("the step that wrote it");
+  });
+
   it("renders nothing for a step whose writes all applied", () => {
     flushSync(() => root.render(<VariableWriteDiagnosticsSection inspection={inspection({ variableWrites: [{ ...lostUpdateWarning(), outcome: "Current" }] })} />));
     expect(container.innerHTML).toBe("");
@@ -406,7 +416,7 @@ describe("incident operator actions", () => {
 
     expect(buttons()).toEqual(["Retry", "Accept recorded completion"]);
     expect(container.querySelector(".wf-incident-operator-explanation")!.textContent)
-      .toContain("Retry runs the same invocation again on its committed inputs; Re-execute runs a new invocation on fresh inputs");
+      .toContain("Retry runs the same invocation again on its committed inputs, so after a refused write the body runs again and its write is refused again");
 
     flushSync(() => [...container.querySelectorAll<HTMLButtonElement>(".wf-incident-operator-actions button")]
       .find(button => button.textContent!.includes("Accept"))!.click());
