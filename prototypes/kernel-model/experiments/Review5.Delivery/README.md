@@ -228,8 +228,8 @@ The outcomes:
 
 - `reviewed`: `PrecedesPoison` rejects R's trial because J sorts first.
   - `po1-cohort`: the mark withholds J while R is pending, and nothing moves until the step bound (stall).
-  - `po1-open`: C waits for its untried gate row R, J (a released row) is offered and parks S, and R then reaches the
-    parked instance as late input (wrong order; F never completes).
+  - `po1-open`: C waits for its untried gate row R, J (a released row) is offered and parks S, the re-park interrupts
+    the drain, and R then reaches the parked instance as late input (wrong order; F never completes).
 - `repaired`: in the cohort context a non-cohort poison input never precedes a cohort suspect. R is tried first, and its
   real timer turn completes F. The mark clears (`po1-cohort`) or C completes (`po1-open`), and then J parks S, its fault
   naming J.

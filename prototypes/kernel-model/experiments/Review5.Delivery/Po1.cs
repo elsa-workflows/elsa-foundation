@@ -243,6 +243,12 @@ sealed class Po1(string variant, PoRules rules)
     {
         var key = item.Message.InboxKey;
         _memory.Remove(key);
+        if (item.Message.Kind == Fr2.DrainKind && !_drainOpen)
+        {
+            await Commit([new TurnCommit(Self.Id, null, null, [key], [], [], [], [], null)]);
+            _report.Line("C: no open resolution (the re-park interrupted the drain); consumed");
+            return;
+        }
         if (item.Message.Kind == Fr2.DrainKind)
         {
             // The final page found no row; it completes when gate row R is taken up (FR-1's gate): consumed, or seen at this
@@ -279,6 +285,7 @@ sealed class Po1(string variant, PoRules rules)
             _row = next;
             _transitions.Add($"{Name(item)} -> park (MaxAttempts)");
             _report.Line($"{Name(item)}: on trial when {item.Attempts} owners were lost: S parks ({_row.Fault})");
+            if (_drainOpen) { _drainOpen = false; _report.Line("the re-park interrupts the open drain: its Resolution is cleared in the parking commit (observability.md, Interruption)"); }
             return;
         }
         var host = new NativeHost(_info, _now, _row.Revision + 1) { Inbox = [item.Message], State = Json.Read<NativeState>(_row.State) };
