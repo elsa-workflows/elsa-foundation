@@ -39,8 +39,8 @@ export function VariableLifecycleNodeSettings({ node, readOnly = false, onChange
         </select>
         <small id={`${id}-mode-help`} className="wf-muted">
           {mode === "Fault"
-            ? "If a variable this step reads and writes changed before its write commits, the write is refused and the step faults (VariableLostUpdate). An operator can then run the step again or accept the completion it recorded."
-            : "If a variable this step reads and writes changed before its write commits, the write still applies and the run records a lost-update warning with the value it replaced. A variable it only reads never causes one. Some activity types always use Fault, whatever this setting says."}
+            ? "If a variable this step reads and writes changed before its write commits, the write is refused and the step faults (VariableLostUpdate). An operator can then accept the completion it recorded, when the runtime kept one; a retry is refused again while the variable stays changed."
+            : "If a variable this step reads and writes changed before its write commits, the write still applies and the run records a lost-update warning, keeping the value it replaced for recovery. A variable it only reads never causes one. Some activity types always use Fault, whatever this setting says."}
         </small>
       </div>
       <div className="wf-node-lifecycle-checkbox">

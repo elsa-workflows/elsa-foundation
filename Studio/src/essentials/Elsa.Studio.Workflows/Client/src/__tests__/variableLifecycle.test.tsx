@@ -197,6 +197,7 @@ describe("run view", () => {
     expect(text).toContain("Read version 0 · was version 1 · now version 2");
     expect(text).toContain('without seeing the value "Add bonus" wrote');
     expect(text).toContain('the step that wrote it ("Add bonus") shows the value');
+    expect(text).toContain("in runs captured with the Variable writes diagnostics level on");
     expect(text).not.toContain("spec 1229");
     expect(text).toContain('Writer"Increment"');
     expect(text).toContain('Overwritten writer"Add bonus"');

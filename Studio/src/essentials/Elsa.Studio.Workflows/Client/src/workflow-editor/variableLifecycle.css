@@ -136,3 +136,11 @@
   align-items: flex-start;
   gap: 6px;
 }
+
+.wf-node-lifecycle-checkbox input:disabled + .wf-node-lifecycle-field label {
+  color: var(--studio-text-muted);
+}
+
+.wf-variable-writes > .wf-variable-write-hint + .wf-variable-write-list {
+  margin-top: 8px;
+}

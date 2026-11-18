@@ -108,9 +108,9 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
       </dl>
       {record.outcome === lostUpdateWarningOutcome ? (
         <p className="wf-variable-write-hint">
-          To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. With the Variable writes
-          diagnostics level on, the step that wrote it ({writerLabel(record.overwrittenWriter, labelOf)}) shows the value
-          it wrote.
+          To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. Studio cannot
+          show the kept value yet; in runs captured with the Variable writes diagnostics level on, the step that wrote it
+          ({writerLabel(record.overwrittenWriter, labelOf)}) shows the value it wrote.
         </p>
       ) : null}
     </article>
