@@ -10,7 +10,8 @@ static partial class Program
 {
     public static string Name(FrRules rules) => rules switch
     { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", FrRules.HeldBlocks => "held-blocks", FrRules.MemoryPrecedence => "memory-precedence",
-      FrRules.TrialPlainSeq => "trial-plain-seq", _ => "no-cohort-mark" };
+      FrRules.TrialPlainSeq => "trial-plain-seq", FrRules.NoCohortMark => "no-cohort-mark",
+      FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", _ => "mark-ignores-controls" };
 
     public static string Name(RtRules rules) => rules switch
     {
@@ -31,6 +32,10 @@ static partial class Program
         ("fr1-poll-limit", "trial-plain-seq", "FAIL"), ("fr1-poll-limit", "no-cohort-mark", "FAIL"),
         ("fr1-trial-takeover-open", "reviewed", "FAIL"), ("fr1-trial-takeover-open", "repaired", "PASS"), ("fr1-trial-takeover-open", "negative", "PASS"),
         ("fr1-trial-takeover-open", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover-open", "no-cohort-mark", "PASS"),
+        ("fr1-held-poll-limit", "reviewed", "FAIL"), ("fr1-held-poll-limit", "repaired", "PASS"), ("fr1-held-poll-limit", "negative", "FAIL"),
+        ("fr1-held-poll-limit", "one-row-read-counts-held", "FAIL"),
+        ("fr1-control-after-complete", "reviewed", "FAIL"), ("fr1-control-after-complete", "repaired", "PASS"), ("fr1-control-after-complete", "negative", "FAIL"),
+        ("fr1-control-after-complete", "mark-ignores-controls", "FAIL"),
         ("fr1-model-end", "reviewed", "PASS"), ("fr1-model-end", "repaired", "PASS"), ("fr1-model-end", "negative", "PASS"),
         ("fr1-model-end-recall", "reviewed", "PASS"), ("fr1-model-end-recall", "repaired", "PASS"), ("fr1-model-end-recall", "negative", "PASS"),
         ("fr1-held", "reviewed", "PASS"), ("fr1-held", "repaired", "PASS"), ("fr1-held", "negative", "PASS"), ("fr1-held", "held-blocks", "FAIL"),
@@ -75,7 +80,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -86,7 +91,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark,
+                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();

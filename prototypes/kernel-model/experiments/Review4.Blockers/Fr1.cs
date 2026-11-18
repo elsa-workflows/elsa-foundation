@@ -5,9 +5,11 @@ namespace Kernel.Review4;
 /// <c>HeldBlocks</c> counts a held cohort row in the precedence (E-8);
 /// <c>MemoryPrecedence</c> keeps the cohort in the owner's memory only (E-7);
 /// <c>TrialPlainSeq</c> tries suspects in plain seq order, as the built NextTrial does;
-/// <c>NoCohortMark</c> drops the durable cohort mark, so the owner knows only the cohort rows it has read.
+/// <c>NoCohortMark</c> drops the durable cohort mark, so the owner knows only the cohort rows it has read;
+/// <c>OneRowReadCountsHeld</c> makes the cohort read return one row, held keys included (G1);
+/// <c>MarkIgnoresControls</c> lets a control polled while the mark is set run ahead of the cohort read (G2).
 /// </summary>
-enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence, TrialPlainSeq, NoCohortMark }
+enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence, TrialPlainSeq, NoCohortMark, OneRowReadCountsHeld, MarkIgnoresControls }
 
 /// <summary>One inbox row as the proposed drain sees it: full key, seq, kind, release tag, Seen epoch, Done, KeptBy.</summary>
 sealed class InboxRow(string name, Message message, long seq)
@@ -89,13 +91,19 @@ sealed class Fr1(string variant, FrRules rules)
     private bool _f2WaitingWhenAArrived;
     private string _f2Wait = "";
     private InboxRow _r = null!;
+    private InboxRow? _r1;
+    private string _xFrame = "";
+    private bool _r1HeldAtR2;
+    private string _terminatedAfter = "";
+    private static readonly InstanceRef Neighbour = new("0/neighbour");
 
     public static readonly string[] Variants =
-        ["base", "takeover-before-complete", "takeover-after-complete", "trial-takeover", "trial-takeover-open", "poll-limit", "model-end", "model-end-recall", "held"];
+        ["base", "takeover-before-complete", "takeover-after-complete", "trial-takeover", "trial-takeover-open", "poll-limit", "model-end", "model-end-recall", "held",
+         "held-poll-limit", "control-after-complete"];
 
     private bool Precedence => rules is not (FrRules.Reviewed or FrRules.Negative);
-    private bool DurableMark => rules is FrRules.Repaired or FrRules.HeldBlocks or FrRules.TrialPlainSeq;
-    private bool CohortTrials => rules is FrRules.Repaired or FrRules.HeldBlocks or FrRules.MemoryPrecedence or FrRules.NoCohortMark;
+    private bool DurableMark => rules is FrRules.Repaired or FrRules.HeldBlocks or FrRules.TrialPlainSeq or FrRules.OneRowReadCountsHeld or FrRules.MarkIgnoresControls;
+    private bool CohortTrials => rules is FrRules.Repaired or FrRules.HeldBlocks or FrRules.MemoryPrecedence or FrRules.NoCohortMark or FrRules.OneRowReadCountsHeld or FrRules.MarkIgnoresControls;
     private bool ShelvesTarget => rules is FrRules.Reviewed or FrRules.TrialPlainSeq;
 
     public async Task<Report> RunAsync()
@@ -107,14 +115,19 @@ sealed class Fr1(string variant, FrRules rules)
             "model-end" => "an earlier cohort row that ends the model leaves R to the finished-instance rule (dropped), and the drain completes with no KeptBy left",
             "model-end-recall" => "control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left",
             "held" => "a row the model holds never blocks delivery; the held cohort row still receives the input it waits for",
+            "held-poll-limit" => "with R1 held and R2 not yet polled, the cohort read skips held keys and finds R2, so R2 reaches the model before A ends it",
+            "control-after-complete" => "a control polled while the cohort mark is set waits until the read finds no non-held cohort row, so R reaches the model before the terminate",
             _ => "the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)",
         });
         HeldGate.Accepts = 0;
-        var workflow = held ? "held" : variant == "model-end" ? "evt" : "two";
+        var heldPoll = variant == "held-poll-limit";
+        var control = variant == "control-after-complete";
+        var workflow = held ? "held" : heldPoll ? "held2" : variant == "model-end" ? "evt" : "two";
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow("two", Wf.Parallel("p", null, Wf.Delay("F", 50), Wf.Delay("F2", 100))))
             .Add(Wf.Workflow("evt", Wf.Event("go", "go")))
-            .Add(Wf.Workflow("held", Wf.Node<HeldGate>("H").With(Wf.Event("go", "go"))));
+            .Add(Wf.Workflow("held", Wf.Node<HeldGate>("H").With(Wf.Event("go", "go"))))
+            .Add(Wf.Workflow("held2", Wf.Parallel("p", null, Wf.Node<HeldGate>("H").With(Wf.Event("go", "go")), Wf.Event("X", "x"))));
         _model = new NativeModel(registry);
         var spec = NativeModel.Spec(workflow);
         _info = new InstanceInfo(Self, NativeModel.ModelKey, workflow, null, _instance.Creation);
@@ -135,6 +148,15 @@ sealed class Fr1(string variant, FrRules rules)
             Require(state.Waits.Single(w => w.Value.Frame == fFrame).Value.Key == _r.Key.Id, "R is F's timer");
             _report.Line($"start: real Native turn armed F ({fFrame}) with timer R = {_r.Key.Id} due {_r.Message.Due} and F2 ({f2Frame}) with timer T2 due {_rows.Single(x => x.Name == "T2").Message.Due}");
         }
+        else if (heldPoll)
+        {
+            var hFrame = state.Frames.Values.Single(f => f.Node == "H").Id;
+            _xFrame = state.Frames.Values.Single(f => f.Node == "X").Id;
+            _r1 = new InboxRow("R1", new Message("signal-1", Self, CompositeSignal.Kind, Json.Write(new CompositeSignal(hFrame, "deferred")), "0/operator", TargetCreation: 1), 1000);
+            _r = new InboxRow("R2", new Message("resume-x", Self, NativeKinds.Resume, Json.Write(new ResumeStimulus("x")), "0/operator", TargetCreation: 1), 1100);
+            _rows.Add(_r1); _rows.Add(_r);
+            _report.Line($"start: real Native turn ran Parallel(H ({hFrame}), a composite that defers signals until its child Event 'go' completes; Event X ({_xFrame})); R1 = composite signal to H at seq 1000, R2 = native.resume x at seq 1100");
+        }
         else if (held)
         {
             var hFrame = state.Frames.Values.Single(f => f.Node == "H").Id;
@@ -151,6 +173,7 @@ sealed class Fr1(string variant, FrRules rules)
 
         // 2. Park (proposed): R arrived and was consumed while parked, so it is kept with KeptBy = Arrived.
         _instance.Status = InstanceStatus.Faulted;
+        if (_r1 is not null) { _r1.Done = true; _r1.KeptBy = "Arrived"; _r1.Fate = "kept"; _report.Line($"park: {_r1.Describe()}"); }
         _r.Done = true; _r.KeptBy = "Arrived"; _r.Fate = "kept";
         _report.Line($"park: {_r.Describe()}");
         if (modelEnd)
@@ -166,7 +189,7 @@ sealed class Fr1(string variant, FrRules rules)
         _report.Line("open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800");
 
         // 4. A arrives during the drain from another sender, with a lower seq than R: withheld (not released).
-        InboxRow? a = modelEnd ? null : held
+        InboxRow? a = modelEnd || control ? null : held
             ? new InboxRow("A", new Message("late-go", Self, NativeKinds.Resume, Json.Write(new ResumeStimulus("go")), "0/other", TargetCreation: 1), 900)
             : new InboxRow("A", new Message("late-cancel", Self, NativeKinds.Cancel, null, "0/other", TargetCreation: 1), 900);
         if (a is not null)
@@ -193,6 +216,13 @@ sealed class Fr1(string variant, FrRules rules)
         for (; step < 40; step++)
         {
             var polled = PollStore();
+            if (rules == FrRules.MarkIgnoresControls && _instance.CohortMark is not null &&
+                Offer(ignoreMark: true).FirstOrDefault(x => IsControl(x.Kind)) is { } early)
+            {
+                _report.Line($"deliver {early.Name}: a control, offered in the built order while the cohort mark is set (mark-ignores-controls)");
+                await DeliverAsync(early);
+                continue;
+            }
             var read = CohortRead();
             var trial = NextTrial();
             if (trial is not null)
@@ -219,16 +249,51 @@ sealed class Fr1(string variant, FrRules rules)
                 if (variant == "takeover-after-complete") Takeover(crash: false, "after Complete committed, before R reached a model turn");
                 if (variant == "trial-takeover") Takeover(crash: true, "after Complete committed, before R reached a model turn");
                 if (variant == "poll-limit") { Takeover(crash: true, "after Complete committed, before R reached a model turn"); _pollLimit = 1; _report.Line("the new owner's PollLimit is 1: one row per poll, in seq order"); }
+                if (heldPoll)
+                {
+                    for (var n = 1; n <= 4; n++)
+                        _rows.Add(new InboxRow($"N{n}", new Message($"neighbour-{n}", Neighbour, NativeKinds.Resume, null, "0/other", TargetCreation: 1), 1000 + n));
+                    _report.Line("arrivals for another instance of the partition: N1..N4 at seq 1001-1004");
+                    Takeover(crash: false, "after Complete committed, before R1 or R2 reached a model turn");
+                    _pollLimit = 2; _report.Line("the new owner's PollLimit is 2: two rows per poll, in seq order");
+                }
+                if (control)
+                {
+                    var k = new InboxRow("K", new Message("parent-terminate", Self, Kinds.Terminate, null, "0/parent", TargetCreation: 1, SenderCreation: 1), 1000);
+                    _rows.Add(k);
+                    _report.Line($"arrival: {k.Describe()}, the parent's tree terminate (a control kind)");
+                    Takeover(crash: false, "after Complete committed, before R reached a model turn");
+                    _pollLimit = 1; _report.Line("the new owner's PollLimit is 1: one row per poll, in seq order");
+                }
             }
         }
         if (step == 40) { _stalled = true; _report.Line("stalled: the step bound was reached with the drain still waiting"); }
 
-        var undone = _rows.Where(x => !x.Done && !x.Deleted).ToList();
+        var undone = _rows.Where(x => !x.Done && !x.Deleted && (x.Message.Due ?? 0) <= Now).ToList();
         _report.Line($"model inputs: [{string.Join(", ", _modelInputs)}]");
         _report.Line($"rows: {string.Join("; ", _rows.Where(x => x.Name is not "start").Select(x => $"{x.Name} {x.Fate}"))}");
         _report.Line($"instance: status {_instance.Status}, resolution {(_instance.OpenGeneration is null ? "cleared" : "open")}, ResolutionGeneration {_instance.ResolutionGeneration}, cohort mark {(_instance.CohortMark is { } m ? $"({m.Creation},{m.Generation})" : "none")}");
 
-        if (modelEnd)
+        if (heldPoll)
+        {
+            _report.Expect("model inputs", string.Join(",", _modelInputs), "R1,R2,A");
+            _report.Expect("R1 held by the model when R2 was delivered", _r1HeldAtR2, true);
+            _report.Expect("X completions (records c:" + _xFrame + ":X)", _records.Count(x => x == $"c:{_xFrame}:X"), 1);
+            _report.Expect("R2's fate", _r.Fate, "consumed by a model turn");
+            _report.Expect("instance ended", _instance.Status, InstanceStatus.Cancelled);
+            _report.Expect("R1's fate (handed back with the ending input, as held rows are)", _r1!.Fate, "consumed by a model turn");
+            _report.Expect("undone rows remaining", undone.Count, 0);
+        }
+        else if (control)
+        {
+            _report.Expect("model inputs", string.Join(",", _modelInputs), "R");
+            _report.Expect("F completions (records c:" + fFrame + ":F)", _records.Count(x => x == $"c:{fFrame}:F"), 1);
+            _report.Expect("R's fate", _r.Fate, "consumed by a model turn");
+            _report.Expect("the terminate ran after R (built terminate)", _terminatedAfter, "R");
+            _report.Expect("instance ended", _instance.Status, InstanceStatus.Cancelled);
+            _report.Expect("undone rows remaining", undone.Count, 0);
+        }
+        else if (modelEnd)
         {
             _report.Expect("model inputs", string.Join(",", _modelInputs), "Q");
             _report.Expect("instance ended", _instance.Status, InstanceStatus.Cancelled);
@@ -290,7 +355,9 @@ sealed class Fr1(string variant, FrRules rules)
     {
         var rows = _rows.Where(x => !x.Done && !x.Deleted && (x.Message.Due ?? 0) <= Now && !_memory.Contains(x.Key))
             .OrderBy(x => x, Comparer<InboxRow>.Create(InboxRow.Compare)).Take(_pollLimit).ToList();
-        foreach (var row in rows) Remember(row);
+        foreach (var row in rows)
+            if (row.Message.Target.Id == Self.Id) Remember(row);
+            else { row.Done = true; row.Fate = "consumed by its own instance's turn"; _memory.Add(row.Key); }
         if (rows.Count > 0 && _epoch > 1) _report.Line($"poll at epoch {_epoch} (limit {_pollLimit}): [{string.Join(", ", rows.Select(x => x.Name + (_suspects.Contains(x.Key) ? " (suspect)" : "")))}]");
         return rows.Count;
     }
@@ -304,22 +371,47 @@ sealed class Fr1(string variant, FrRules rules)
 
     /// <summary>
     /// Proposed: while the durable cohort mark is set and this owner holds no non-held cohort row in memory, it reads the
-    /// instance's cohort rows (released by the marked generation, not Done). A read that finds none clears the mark.
+    /// instance's cohort rows (released by the marked generation, not Done), skipping the keys the model holds. A read
+    /// that finds none clears the mark. The <c>OneRowReadCountsHeld</c> mutation reads one row, held keys included.
     /// </summary>
     private bool CohortRead()
     {
-        if (!DurableMark || _instance.CohortMark is not { } mark || _rows.Any(x => _memory.Contains(x.Key) && Cohort(x))) return false;
-        var found = _rows.Where(x => !x.Done && !x.Deleted && x.ReleasedBy == mark).ToList();
+        if (!DurableMark || _instance.CohortMark is not { } mark || _rows.Any(x => _memory.Contains(x.Key) && !_held.Contains(x.Key) && Cohort(x))) return false;
+        var candidates = _rows.Where(x => !x.Done && !x.Deleted && x.ReleasedBy == mark).OrderBy(x => x, Comparer<InboxRow>.Create(InboxRow.Compare)).ToList();
+        if (rules == FrRules.OneRowReadCountsHeld)
+        {
+            var one = candidates.Take(1).ToList();
+            if (one.Count == 1 && _held.Contains(one[0].Key))
+            {
+                _report.Line($"one-row cohort read returns {one[0].Name}, which the model holds: nothing for the mark to wait for");
+                return false;
+            }
+            candidates = one;
+        }
+        var found = candidates.Where(x => !_held.Contains(x.Key)).ToList();
         if (found.Count == 0)
         {
             _instance.CohortMark = null;
-            _report.Line("cohort read finds no cohort row: the mark is cleared");
+            _report.Line("cohort read finds no non-held cohort row: the mark is cleared");
             return true;
         }
         var added = found.Where(x => !_memory.Contains(x.Key)).ToList();
         foreach (var row in added) Remember(row);
-        if (added.Count > 0) _report.Line($"cohort read (mark set): loads [{string.Join(", ", added.Select(x => x.Name + (_suspects.Contains(x.Key) ? " (suspect)" : "")))}]");
+        if (added.Count > 0) _report.Line($"cohort read (mark set, held keys skipped): loads [{string.Join(", ", added.Select(x => x.Name + (_suspects.Contains(x.Key) ? " (suspect)" : "")))}]");
         return added.Count > 0;
+    }
+
+    /// <summary>
+    /// A terminate of the running instance: the actor type's built terminate (WorkflowInstance.cs 179–203, mirrored),
+    /// with no model turn. The instance ends Cancelled, and what is still pending meets the finished-instance rule.
+    /// </summary>
+    private void BuiltTerminate(InboxRow head)
+    {
+        head.Done = true; head.Fate = "consumed (built terminate)";
+        if (_instance.ModelEnded) { _report.Line($"{head.Name}: the instance has ended; the terminate changes nothing"); return; }
+        _terminatedAfter = string.Join(",", _modelInputs);
+        _instance.Status = InstanceStatus.Cancelled; _instance.ModelEnded = true; _held.Clear();
+        _report.Line($"{head.Name}: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn");
     }
 
     /// <summary>
@@ -353,7 +445,7 @@ sealed class Fr1(string variant, FrRules rules)
     }
 
     /// <summary>What the owner offers to a turn: polled, marked, not held, eligible rows, in the rule set's order.</summary>
-    private List<InboxRow> Offer()
+    private List<InboxRow> Offer(bool ignoreMark = false)
     {
         var deliverable = _rows.Where(x => _memory.Contains(x.Key) && !_suspects.Contains(x.Key) && !x.Deleted && !x.Done && !_held.Contains(x.Key)
             && (x.Message.Due ?? 0) <= Now && Eligible(x) && !Blocked(x)).ToList();
@@ -368,12 +460,14 @@ sealed class Fr1(string variant, FrRules rules)
         // After Complete: the remaining non-held cohort rows first; a control waits behind them; no other row of the
         // instance is offered while one remains (the cohort mark's rule, proposed).
         var cohort = deliverable.Where(Cohort).ToList();
-        return CohortPending() ? cohort : [.. cohort, .. deliverable.Where(x => !Cohort(x))];
+        return CohortPending() && !ignoreMark ? cohort : [.. cohort, .. deliverable.Where(x => !Cohort(x))];
     }
 
     private async Task DeliverAsync(InboxRow head)
     {
         if (head.Kind == DrainKind) { Page(head, nextDrainSeq: _nextSeq++); return; }
+        if (head.Kind == Kinds.Terminate) { BuiltTerminate(head); return; }
+        if (_r1 is not null && head == _r) _r1HeldAtR2 = _held.Contains(_r1.Key);
         if (head.Name == "A")
         {
             _aWhileHeld = _held.Contains(_r.Key);
@@ -458,7 +552,7 @@ sealed class Fr1(string variant, FrRules rules)
             var name = i < names.Length ? names[i] : sent.Kind == NativeKinds.Continue ? $"K{_nextSeq}" : $"M{_nextSeq}";
             _rows.Add(new InboxRow(name, sent, i < seqs.Length ? seqs[i] : _nextSeq++));
         }
-        if (host.EndStatus is { } end) { _instance.Status = end; _instance.ModelEnded = true; }
+        if (host.EndStatus is { } end) { _instance.Status = end; _instance.ModelEnded = true; _held.Clear(); } // held rows meet the finished-instance rule
         _instance.State = Json.Write(host.State);
         _records.AddRange(host.Records);
 
