@@ -3,15 +3,16 @@
 # Run from anywhere; it works in prototypes/kernel-model. Each run prints its report and its exit code
 # (0 = every assertion held, 1 = an assertion failed). The script exits with --all's result: 0 only when every run
 # matches the expected matrix.
+# Setup failures stop the script; a case that fails its assertions (exit 1) does not.
 set -u
-cd "$(dirname "$0")/../.."
-dotnet restore experiments/Review4.Blockers --locked-mode
-dotnet build experiments/Review4.Blockers -c Release --no-restore
+cd "$(dirname "$0")/../.." || { echo "cannot enter prototypes/kernel-model" >&2; exit 2; }
+dotnet restore experiments/Review4.Blockers --locked-mode || { echo "locked restore failed" >&2; exit 2; }
+dotnet build experiments/Review4.Blockers -c Release --no-restore || { echo "Release build failed" >&2; exit 2; }
 BIN=experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll
 
 run() { dotnet "$BIN" --case "$1" --rules "$2"; echo "exit $? ($1, $2)"; echo; }
 
-# Every case and rule set (the README maps each run to its page case).
+# Every case and rule set (the README maps each run to its page case). A failing case does not stop the script.
 run fr1-base                       reviewed                  # expected FAIL
 run fr1-base                       repaired                  # expected PASS
 run fr1-base                       negative                  # expected FAIL
@@ -50,6 +51,10 @@ run fr1-control-after-complete     reviewed                  # expected FAIL
 run fr1-control-after-complete     repaired                  # expected PASS
 run fr1-control-after-complete     negative                  # expected FAIL
 run fr1-control-after-complete     mark-ignores-controls     # expected FAIL
+run fr1-control-crash              reviewed                  # expected FAIL
+run fr1-control-crash              repaired                  # expected PASS
+run fr1-control-crash              negative                  # expected FAIL
+run fr1-control-crash              boundary-holds-cohort     # expected FAIL
 run fr1-ticket-control             reviewed                  # expected PASS
 run fr1-ticket-control             repaired                  # expected PASS
 run fr1-ticket-control             negative                  # expected PASS

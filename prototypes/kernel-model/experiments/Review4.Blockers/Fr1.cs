@@ -8,12 +8,13 @@ namespace Kernel.Review4;
 /// <c>SkipTarget</c> lets a withheld suspect skip its whole target, as the built NextTrial does;
 /// <c>NoShelf</c> does not shelve (mark seen) a suspect the cohort rule passes over;
 /// <c>ControlsWaitOnTicket</c> counts job tickets as cohort rows, so controls wait on a hanging ticket (E-11);
+/// <c>BoundaryHoldsCohort</c> keeps cohort suspects behind a control's recovery boundary, as built;
 /// <c>NoCohortMark</c> drops the durable cohort mark, so the owner knows only the cohort rows it has read;
 /// <c>OneRowReadCountsHeld</c> makes the cohort read return one row, held keys included (E-8 run 2);
 /// <c>MarkIgnoresControls</c> lets a control polled while the mark is set run ahead of the cohort read (E-7 control run).
 /// </summary>
 enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence, TrialPlainSeq, NoCohortMark, OneRowReadCountsHeld, MarkIgnoresControls,
-    SkipTarget, NoShelf, ControlsWaitOnTicket }
+    SkipTarget, NoShelf, ControlsWaitOnTicket, BoundaryHoldsCohort }
 
 /// <summary>One inbox row as the proposed drain sees it: full key, seq, kind, release tag, Seen epoch, Done, KeptBy.</summary>
 sealed class InboxRow(string name, Message message, long seq)
@@ -107,7 +108,8 @@ sealed class Fr1(string variant, FrRules rules)
 
     public static readonly string[] Variants =
         ["base", "takeover-before-complete", "takeover-after-complete", "trial-takeover", "trial-takeover-open", "poll-limit", "model-end", "model-end-recall", "held",
-         "held-poll-limit", "control-after-complete", "ticket-control", "ticket-control-parent", "ticket-control-suspend"];
+         "held-poll-limit", "control-after-complete", "ticket-control", "ticket-control-parent", "ticket-control-suspend",
+         "control-crash"];
 
     private bool Precedence => rules is not (FrRules.Reviewed or FrRules.Negative);
     private bool DurableMark => Precedence && rules is not (FrRules.MemoryPrecedence or FrRules.NoCohortMark);
@@ -115,6 +117,7 @@ sealed class Fr1(string variant, FrRules rules)
     private bool SkipsTarget => rules is FrRules.Reviewed or FrRules.SkipTarget;
     private bool Shelves => rules != FrRules.NoShelf;
     private bool TicketsCount => rules == FrRules.ControlsWaitOnTicket;
+    private bool CohortBeforeBoundary => CohortTrials && rules != FrRules.BoundaryHoldsCohort;
     private static bool IsTicket(string kind) => kind is Kinds.Job or Kinds.Meet or Kinds.Publish;
 
     public async Task<Report> RunAsync()
@@ -127,13 +130,13 @@ sealed class Fr1(string variant, FrRules rules)
             "model-end-recall" => "control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left",
             "held" => "a row the model holds never blocks delivery; the held cohort row still receives the input it waits for",
             "held-poll-limit" => "with R1 held and R2 not yet polled, the mark's check skips held keys and finds R2, so R2 reaches the model before A ends it",
-            "control-after-complete" => "a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate",
+            "control-after-complete" or "control-crash" => "a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate",
             "ticket-control" or "ticket-control-parent" or "ticket-control-suspend" => "a restored job ticket is never a cohort row: with J hanging and the mark set, controls apply at once",
             _ => "the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)",
         });
         HeldGate.Accepts = 0;
         var heldPoll = variant == "held-poll-limit";
-        var control = variant == "control-after-complete";
+        var control = variant is "control-after-complete" or "control-crash";
         var ticket = variant.StartsWith("ticket-control", StringComparison.Ordinal);
         var workflow = held ? "held" : heldPoll ? "held2" : variant == "model-end" || ticket ? "evt" : "two";
         var registry = new WorkflowRegistry()
@@ -294,8 +297,13 @@ sealed class Fr1(string variant, FrRules rules)
                     var k = new InboxRow("K", new Message("parent-terminate", Self, Kinds.Terminate, null, "0/parent", TargetCreation: 1, SenderCreation: 1), 1000);
                     _rows.Add(k);
                     _report.Line($"arrival: {k.Describe()}, the parent's tree terminate (a control kind)");
-                    Takeover(crash: false, "after Complete committed, before R reached a model turn");
-                    _pollLimit = 1; _report.Line("the new owner's PollLimit is 1: one row per poll, in seq order");
+                    if (variant == "control-crash")
+                        Takeover(crash: true, "after Complete committed, before R reached a model turn; R carries the lost owner's mark");
+                    else
+                    {
+                        Takeover(crash: false, "after Complete committed, before R reached a model turn");
+                        _pollLimit = 1; _report.Line("the new owner's PollLimit is 1: one row per poll, in seq order");
+                    }
                 }
             }
         }
@@ -511,6 +519,18 @@ sealed class Fr1(string variant, FrRules rules)
         var boundary = _rows.Where(x => _memory.Contains(x.Key) && !x.Done && !x.Deleted && IsControl(x.Kind))
             .OrderBy(x => x, Comparer<InboxRow>.Create(InboxRow.Compare)).FirstOrDefault();
         var skipped = false;
+        // Proposed: while the drain is open or the cohort mark is set, cohort suspects are tried first, in tuple order,
+        // ahead of a control's cut. The control takes its built place once no non-held cohort row remains.
+        if (CohortBeforeBoundary && (_instance.OpenGeneration is not null || _instance.CohortMark is not null))
+            foreach (var suspect in suspects)
+            {
+                if ((suspect.Message.Due ?? 0) > Now) continue;
+                if (!Eligible(suspect)) { if (SkipsTarget) break; continue; }   // the skip-target rule applies here too
+                if (!Cohort(suspect) || _held.Contains(suspect.Key)) continue;
+                if (boundary is not null && suspect.Seq >= boundary.Seq)
+                    _report.Line($"{suspect.Name} is a cohort suspect behind {boundary.Name}'s recovery boundary: it is tried first");
+                return suspect;
+            }
         foreach (var suspect in suspects)
         {
             if ((suspect.Message.Due ?? 0) > Now || boundary is not null && suspect.Seq >= boundary.Seq) continue;
