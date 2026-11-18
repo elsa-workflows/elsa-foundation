@@ -57,7 +57,10 @@ an `IExpressionVariableReader` with the request. Each read it serves is resolved
 protection, and recorded on the host side: a present read joins the step's input read set and input snapshot
 (`ComputedVariableReads`), a name that matches nothing reads `undefined` (nil in Liquid) and is recorded absent
 with warning `VF-READ-001`, and a withheld or transient match faults the step even if the script catches the
-error. An expression without the marker gets no reader and loads only the variables it names.
+error. An expression without the marker gets no reader and loads only the variables it names. A marker with an empty
+candidate list means publish could not resolve the expression's scopes (an occurrence input inside a reusable
+activity's body, compiled at placement): every read it makes, literal or computed, then goes through the recorded
+run-time lookup.
 
 `WorkflowInstance` was added by the ADR 0045 amendment for issue #2717 (spec 247). It reads the running
 instance's correlation ID or instance ID from committed runtime state as a declared parameter, so it satisfies

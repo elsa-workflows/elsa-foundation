@@ -92,6 +92,8 @@ public sealed class ScriptVariableReadAnalyzerTests
     [Theory]
     [InlineData("globalThis.variables.order")]
     [InlineData("this.getVariable('order')")]
+    [InlineData("globalThis['variables'].order")]
+    [InlineData("(new (class { v = variables })()).v.order")]
     public void The_root_reached_through_another_object_is_an_opaque_read(string source)
     {
         Assert.True(_javaScript.Analyze(source)!.HasComputedRead);

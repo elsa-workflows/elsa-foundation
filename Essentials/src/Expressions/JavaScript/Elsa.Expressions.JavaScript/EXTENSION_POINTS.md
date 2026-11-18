@@ -57,6 +57,10 @@ with portable expression evaluation.
 
 ### IScriptVariableReadAnalyzer *(Core — Elsa.Expressions.Core)*
 
+- **Kind:** replacement contract per language: exactly one analyzer per language, any lifetime (JavaScript registers
+  a singleton, Liquid a scoped one, since it holds the scoped `FluidParser`). Two of different types for one language
+  fail the shell at start through `DataSelectionAnalyzerCompositionCheck` (Design.Validations, which Publishing and the
+  Design API depend on).
 - **Contract:** `Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer` (spec 1222 FR-014) —
   `Analyze(source, scriptBody)` parses a script (never evaluates it) and returns a `ScriptVariableReadAnalysis`, or
   `null` when it does not parse: `LiteralNames` read as `variables.X`, `variables['X']` or `getVariable('X')`, and

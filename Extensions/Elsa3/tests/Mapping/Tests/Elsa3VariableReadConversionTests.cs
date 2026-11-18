@@ -203,6 +203,16 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_liquid_loop_variable_named_variables_is_refused()
+    {
+        var result = await ConvertAsync(
+            Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("Liquid", "{% for variables in Variables.Order %}{{ Variables.Order }}{% endfor %}")))),
+            Order);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    [Fact]
     public async Task A_run_javascript_body_keeps_reading_variables_through_args()
     {
         // FR-026a: the body has no variables root until T047, so its reads stay args.

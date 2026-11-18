@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core.Models;
 
-namespace Elsa.Workflows.Design.Core.Services;
+namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>What publish resolved for one script's variable reads.</summary>
 public sealed record ScriptVariableReadPlan(

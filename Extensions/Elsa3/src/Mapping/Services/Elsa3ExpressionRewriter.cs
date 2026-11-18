@@ -287,6 +287,15 @@ public sealed class Elsa3ExpressionRewriter
                 MutationGuidance));
         }
 
+        // A loop variable named `variables` would capture the converted `variables.X` reads inside it (spec 1222 FR-028).
+        if (syntax.OfType<Fluid.Ast.ForStatement>().Any(loop => loop.Identifier == "variables"))
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                "Liquid declares its own 'variables' loop variable, and converted variable reads in its scope would read the loop item instead of the workflow's variables.",
+                "Rename the loop variable in the Elsa 3 workflow before import."));
+        }
+
         foreach (var member in syntax.OfType<Fluid.Ast.MemberExpression>())
         {
             var segments = member.Segments;

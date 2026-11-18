@@ -49,7 +49,9 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 
 ### `IScriptVariableReadAnalyzer` *(Core — `Elsa.Expressions.Core`)*
 
-- One per expression language; see the JavaScript catalog. The Liquid feature registers `LiquidVariableReadAnalyzer`.
+- **Kind:** replacement contract per language: exactly one per language, checked at shell start (see the JavaScript
+  catalog). The JavaScript feature registers `JavaScriptVariableReadAnalyzer`, the Liquid feature
+  `LiquidVariableReadAnalyzer`.
 
 ## Cross-references
 

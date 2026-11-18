@@ -128,6 +128,12 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     HasComputedRead = true;
                     Visit(global.Object);
                     return;
+                case MemberExpression { Computed: true, Property: Literal { Value: VariablesRoot or GetVariable } } bracketed
+                    when bracketed.Object is ThisExpression or Identifier { Name: "globalThis" or "self" or "window" }:
+                    // globalThis['variables']: the root reached through another object by a literal key.
+                    HasComputedRead = true;
+                    Visit(bracketed.Object);
+                    return;
                 case MemberExpression member:
                     Visit(member.Object);
                     if (member.Computed)
@@ -154,13 +160,20 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     if (!property.Shorthand)
                         Visit(property.Value);
                     return;
-                case MethodDefinition or PropertyDefinition or AccessorProperty:
-                    foreach (var child in node.ChildNodes)
-                    {
-                        if (child is not Identifier && child is not PrivateIdentifier)
-                            Visit(child);
-                    }
-
+                case MethodDefinition method:
+                    if (method.Computed)
+                        Visit(method.Key);
+                    Visit(method.Value);
+                    return;
+                case PropertyDefinition field:
+                    if (field.Computed)
+                        Visit(field.Key);
+                    Visit(field.Value);
+                    return;
+                case AccessorProperty accessor:
+                    if (accessor.Computed)
+                        Visit(accessor.Key);
+                    Visit(accessor.Value);
                     return;
                 case LabeledStatement labeled:
                     Visit(labeled.Body);

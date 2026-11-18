@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Design.Core.Services;
+namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>The planned script updates of one variable rename.</summary>
 public sealed record ScriptVariableRenamePlan(

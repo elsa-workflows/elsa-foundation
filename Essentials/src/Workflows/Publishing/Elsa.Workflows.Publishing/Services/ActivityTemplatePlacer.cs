@@ -58,7 +58,8 @@ public sealed class ActivityTemplatePlacer(
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler outputCaptureCompiler)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler,
+    Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -659,7 +660,57 @@ public sealed class ActivityTemplatePlacer(
         // An occurrence inside a reusable activity is authored like any node, so the same secret refusals apply
         // to it against its template root's activity kind and type.
         inputBindingCompiler.EnsureSecretBindingsAdmissible(frame.OccurrenceId!, templateRoot.Descriptor, inputStates);
-        return inputBindingCompiler.CompileAll(frame.OccurrenceId!, overlay.InputContracts ?? contract.Inputs.Values.ToArray(), inputStates);
+        return MarkScriptReads(inputBindingCompiler.CompileAll(frame.OccurrenceId!, overlay.InputContracts ?? contract.Inputs.Values.ToArray(), inputStates));
+    }
+
+    /// <summary>
+    /// An occurrence's inputs are compiled here, without the authored scopes publish pins against, so a script that
+    /// reads variables gets the fallback marker with no candidate list: every read it makes, literal or computed, is
+    /// served and recorded by the run-time lookup over the variables visible to the occurrence (spec 1222 FR-008, FR-010).
+    /// </summary>
+    private IReadOnlyDictionary<string, RuntimeInputBinding> MarkScriptReads(IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
+    {
+        if (scriptVariableReadResolver is null)
+            return bindings;
+
+        var marked = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var (key, binding) in bindings)
+        {
+            if (binding.Expression is not { VariableReadFallback: null } expression ||
+                !scriptVariableReadResolver.Supports(expression.Language) ||
+                scriptVariableReadResolver.Analyze(expression.Language, expression.Expression) is not { ReadsVariables: true })
+            {
+                marked[key] = binding;
+                continue;
+            }
+
+            marked[key] = new RuntimeInputBinding(
+                binding.InputName,
+                binding.TargetType,
+                binding.EffectivePolicy,
+                binding.Source,
+                binding.Selection,
+                binding.Literal,
+                binding.WorkflowRequest,
+                binding.Variable,
+                binding.ActivityResult,
+                new RuntimeExpressionBinding(
+                    expression.Language,
+                    expression.Expression,
+                    expression.ResultType,
+                    expression.Metadata,
+                    expression.Parameters,
+                    expression.Options,
+                    expression.CapabilityProfile,
+                    expression.ParameterConversionPlans,
+                    new VariableReadFallback([])),
+                binding.Metadata,
+                binding.ConversionPlan,
+                binding.ConversionRequest,
+                binding.Secret);
+        }
+
+        return marked;
     }
 
     // Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the

@@ -111,7 +111,7 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(GetVersion))]
 [JsonSerializable(typeof(AnalyzeScopedVariablesRequest))]
 [JsonSerializable(typeof(PlanVariableRenameRequest))]
-[JsonSerializable(typeof(Elsa.Workflows.Design.Core.Services.ScriptVariableRenamePlan))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Core.Models.ScriptVariableRenamePlan))]
 [JsonSerializable(typeof(ActivityInputOptionsRequest))]
 [JsonSerializable(typeof(ExpressionToolingContextRequest))]
 [JsonSerializable(typeof(ExpressionToolingCompletionRequest))]
