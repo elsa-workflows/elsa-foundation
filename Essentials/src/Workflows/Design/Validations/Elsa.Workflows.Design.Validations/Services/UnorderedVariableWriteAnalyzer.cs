@@ -105,7 +105,7 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
         return text +
                " The last successfully committed write wins, so the final value can differ between runs." +
                // Authors get structural remedies only: the lost-update mode is a runtime concept kept out of their view
-               // (coordinator decision 2026-11-18, spec 1221 FR-012a).
+               // (spec 1221 FR-012a, ADR 0092 decision 6).
                " To make it deterministic, order the branches, capture into separate variables, or combine them with one write after the join.";
     }
 
