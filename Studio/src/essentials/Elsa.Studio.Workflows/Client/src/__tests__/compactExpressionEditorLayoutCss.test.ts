@@ -40,6 +40,6 @@ describe("compact expression editor with an actions row", () => {
 
   it("keeps the actions row clear of the focused line's ring", () => {
     expect(rule(editorStyles, ".studio-code-editor-compact > .studio-code-editor-actions")).toMatch(/margin-block-end:\s*0\.375rem;/);
-    expect(editorStyles).toMatch(/\.studio-code-editor-rich \.cm-editor:focus-within[\s\S]*?outline-offset:\s*2px/);
+    expect(editorStyles).toMatch(/\.studio-code-editor-rich \.cm-editor:focus-within[^{}]*\{[^}]*outline-offset:\s*2px/);
   });
 });
