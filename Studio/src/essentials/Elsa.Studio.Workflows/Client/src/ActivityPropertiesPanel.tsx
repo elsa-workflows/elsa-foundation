@@ -1,6 +1,6 @@
 import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
 import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
-import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover, StudioField, StudioFieldAdornmentProvider } from "@elsa-workflows/studio-ui";
@@ -89,6 +89,9 @@ import {
 import { ActivityDataBindingChangeProvider, ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
 import { activityDataMemberDescriptors } from "./activityDataPickerModel";
 import { ActivityOutputIcon } from "./activityOutputIcon";
+// Imported directly: a lazy section suspended on its first mount, and React held the reveal back, so a reopened
+// expression showed no bindings (#4743). The module is already in this graph through ExpressionEditorWithDataInsertion.
+import { WorkflowInputArgumentBindings } from "./workflowInputArgumentBindings";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -104,7 +107,6 @@ const inlineSyntaxEditorIds = new Set([
 const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
 // The built-in masked editor: the only editor a masked literal is given.
 const maskedPropertyEditorId = "studio.property.password";
-const WorkflowInputArgumentBindings = lazy(() => import("./workflowInputArgumentBindings"));
 
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
@@ -1220,17 +1222,15 @@ function PropertyRow({
         </>
       )}
       {canEditWorkflowInputArguments ? (
-        <Suspense fallback={null}>
-          <WorkflowInputArgumentBindings
-            inputs={workflowInputs}
-            value={value}
-            syntax={syntax}
-            activityInput={input}
-            wrapped={wrapped!}
-            disabled={readOnly}
-            onChange={next => onChange(writeInputValue(activity, input, next), input)}
-          />
-        </Suspense>
+        <WorkflowInputArgumentBindings
+          inputs={workflowInputs}
+          value={value}
+          syntax={syntax}
+          activityInput={input}
+          wrapped={wrapped!}
+          disabled={readOnly}
+          onChange={next => onChange(writeInputValue(activity, input, next), input)}
+        />
       ) : null}
       {wrapped && !secretOnly && (conversionOpen || conversionAuthored) ? (
         <div id={conversionRegionId} className="wf-conversion-region">
