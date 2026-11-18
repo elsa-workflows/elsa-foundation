@@ -98,8 +98,12 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   // #4693: a member reference card shows its type line when its own details answer arrives. Capture each
   // copy only once that line is shown, so the copy is compared with its original on equal terms.
   const typeLine = page.locator(".wf-data-reference .wf-data-chooser-note");
-  async function captureReference(role: "whole" | "member", name: string) {
-    if (role === "member") await expect(typeLine).toHaveText(["String"]);
+  async function captureReference(role: "whole" | "member", name: string, copy = true) {
+    if (role === "member") {
+      // The card must be the copy's own, never a previous selection's.
+      if (copy) await expect(s.reference()).toContainText("(copy", { timeout: 30_000 });
+      await expect(typeLine).toHaveText(["String"], { timeout: 30_000 });
+    }
     await capture(page, info, name);
   }
   async function duplicateSelected() {
@@ -144,7 +148,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
         await expect(s.chooser()).toHaveCount(0);
         await expect.poll(() => s.stored(created)).toEqual(whole);
       }
-      await captureReference(role, `${role}-original`);
+      await captureReference(role, `${role}-original`, false);
       const before = await s.saved(created);
       await selectPair(); await duplicateSelected(); await waitCount(created, 5);
       const duplicated = await savedNodes(created);
