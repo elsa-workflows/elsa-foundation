@@ -61,7 +61,8 @@ unchanged.*
 | §2.24.2 / §2.24.3 sanctioned patterns | PASS | A static rule set over runtime contracts; no new extension point. Not a replacement contract on purpose (R-2). |
 | §E2.2 Runtime takes no Design reference | PASS | The component sits in Runtime Core and reads pinned runtime contracts only. |
 | §2.17 duplication beats dependency | PASS | The point is to remove a duplicated rule list; Publishing already depends on Runtime Core. |
-| §E2.6.1 executable-always-runs | ACTION | A pinned background node that now fails C3, C4, C9 or C10 at run time is refused with an incident (Q5). No shipped activity is marked today, so only custom activities can be affected; the release notes say so (T030). |
+| §2.1 / §2.17 thin `.Core` implementation | DEVIATION | `BackgroundEligibility` is a rule set (domain-deciding branches) in `Elsa.Workflows.Runtime.Core`. Justified under Complexity Tracking. |
+| §E2.6.1 executable-always-runs | ACTION | A pinned background node that now fails C3, C4, C9 or C10 at run time is refused with an incident (Q5). No shipped activity was marked before this spec (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so no pinned built-in can be in the background and only custom activities can be affected; the release notes say so (T030). |
 | §E5 / §4.2 versioning | ACTION | Marking a built-in changes its contract fingerprint; each marked activity's version moves per its module's rule (T020). `BackgroundEligibility` is new public API in `PublicAPI.Unshipped.txt`. |
 | §2.22 docs | ACTION | Spec 241's contract, the attribute's docs, the background activities doc and `EXTENSION_POINTS.md` if it lists the attribute (T028–T030). |
 | §2.23.1–§2.23.2 tests | PASS | One refusal test per criterion and point; the happy path per marked built-in; provider pair for decision 6. |
@@ -75,7 +76,7 @@ unchanged.*
 | P-1 | One static component in Runtime Core | R-2. Two entry points, one criterion list. |
 | P-2 | First failing criterion wins | Criteria run in order C1 … C10; the report is stable whichever point checks. |
 | P-3 | Placement precondition stays outside C1–C10 | Undefined `ExecutionPlacement` is refused before the criteria, as today. |
-| P-4 | C10 reuses the snapshot checks | `EnsureSecretBindingsAdmissible` and the snapshot materializer stay; the component adds the input representation check and calls them where they apply. |
+| P-4 | C10 reuses the snapshot checks | `EnsureSecretBindingsAdmissible` and the snapshot materializer stay where they run (compiler, placer, activation); the component adds the input representation check and lets a `SecretRead` binding through, so a secret binding an activity refuses is still reported as `VF-ACT-012`. |
 | P-5 | No queue change | R-6; evidence only. |
 
 ## Project Structure
@@ -122,4 +123,6 @@ Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/       
 
 ## Complexity Tracking
 
-No constitution violation needs justifying.
+| Deviation | Why it is needed | Simpler alternative rejected because |
+|---|---|---|
+| A domain-deciding rule set (`BackgroundEligibility`) lives in `Elsa.Workflows.Runtime.Core`, above the §2.1/§2.17 thin bar for a `.Core`. | ADR 0093 decision 3 (accepted) requires one component for publication, template placement, admission and the worker, in Runtime Core, because Publishing and `Elsa.Activities.Runtime` both reference it and it checks contracts that live there. It is static and holds no service, persistence or infrastructure; its only input beyond the subject is the well-known type registry the caller passes in, an existing `.Core` contract. | An implementation project both callers reference does not exist; creating one, or adding a Publishing → `Elsa.Workflows.Runtime` reference, adds a dependency direction ADR 0093 avoided. Two copies in the callers are what the ADR removes. |

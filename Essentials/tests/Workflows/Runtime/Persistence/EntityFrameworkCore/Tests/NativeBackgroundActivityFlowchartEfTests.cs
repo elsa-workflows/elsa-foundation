@@ -731,7 +731,9 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
         PersistenceMode persistenceMode = PersistenceMode.Durable,
         bool includeBpmnFeature = false,
         string activityIdNamespace = "activity",
-        NativeBpmnCallbackCapture? callbacks = null)
+        NativeBpmnCallbackCapture? callbacks = null,
+        RuntimeProvider provider = RuntimeProvider.EntityFrameworkCore,
+        Action<IServiceCollection>? configure = null)
     {
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
@@ -762,14 +764,16 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
                     services.Add(new ServiceDescriptor(typeof(IWorkflowSchedulerWorkHandler), provider => new NativeCapturedCallbackHandler(
                         (IWorkflowSchedulerWorkHandler)ActivatorUtilities.CreateInstance(provider, original.ImplementationType!), callbacks), original.Lifetime));
                 }
-                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
-                {
-                    Provider = "Sqlite",
-                    ConnectionString = $"Data Source={_databasePath};Pooling=False",
-                    RecoveryContinuationSigningKey = RecoverySigningKey,
-                    HierarchyCursorSigningKey = HierarchySigningKey
-                })
-                .AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+                configure?.Invoke(services);
+                if (provider == RuntimeProvider.EntityFrameworkCore)
+                    services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+                    {
+                        Provider = "Sqlite",
+                        ConnectionString = $"Data Source={_databasePath};Pooling=False",
+                        RecoveryContinuationSigningKey = RecoverySigningKey,
+                        HierarchyCursorSigningKey = HierarchySigningKey
+                    })
+                    .AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
             })
             .WithPersistenceMode(persistenceMode)
             .Build(
@@ -931,10 +935,15 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
             .QueryPageAsync(new WorkflowExecutionStatePageQuery(10, WorkflowExecutionId: executionId));
     }
 
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable() => NewForkExecutable(
+        BackgroundNode(LeftNodeId, "left", LeftVariableKey, "left"),
+        BackgroundNode(RightNodeId, "right", RightVariableKey, "right"),
+        new RuntimeVariableDeclaration(LeftVariableKey, "left", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline),
+        new RuntimeVariableDeclaration(RightVariableKey, "right", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline));
+
+    // A Sequence of a Flowchart that forks to two background leaves and joins, then a final step.
+    private static WorkflowExecutable NewForkExecutable(ExecutableNode left, ExecutableNode right, params RuntimeVariableDeclaration[] variables)
     {
-        var left = BackgroundNode(LeftNodeId, "left", LeftVariableKey, "left");
-        var right = BackgroundNode(RightNodeId, "right", RightVariableKey, "right");
         var fork = InlineNode<ForkOrFinalPassActivity>(ForkNodeId, new Dictionary<string, string>());
         var join = InlineNode<ForkOrFinalPassActivity>(JoinNodeId, new Dictionary<string, string>());
         var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));
@@ -979,11 +988,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
                 JsonSerializer.SerializeToElement(new SequenceExecutableStructure([FlowchartNodeId, FinalNodeId]))),
             activityContract: sequenceContract);
 
-        return WorkflowExecutionHarness.NewExecutable(
-            sequence,
-            WorkflowExecutionHarness.Identity,
-            new RuntimeVariableDeclaration(LeftVariableKey, "left", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline),
-            new RuntimeVariableDeclaration(RightVariableKey, "right", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline));
+        return WorkflowExecutionHarness.NewExecutable(sequence, WorkflowExecutionHarness.Identity, variables);
     }
 
     private static WorkflowExecutable NewBpmnExecutable(
@@ -1123,6 +1128,18 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(input.Type, JsonSerializer.SerializeToElement(inputName), ValueProtectionPolicy.InstanceInline));
+        return BackgroundNode(nodeId, activityType, contract, new Dictionary<string, RuntimeInputBinding> { [binding.InputName] = binding }, variableKey, captureName);
+    }
+
+    // A background leaf whose single result projection is captured into a workflow variable.
+    private static ExecutableNode BackgroundNode(
+        string nodeId,
+        Type activityType,
+        ActivityContract contract,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        string variableKey,
+        string captureName)
+    {
         var projection = Assert.Single(contract.Result.Projections.Values);
         var capture = new RuntimeOutputCapture(
             projection.Key,
@@ -1144,7 +1161,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
             activityTypeVersion: "1.0.0",
             descriptorType: contract.DescriptorKind,
             descriptorPayload: contract.DescriptorPayload,
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { [binding.InputName] = binding },
+            inputBindings: inputBindings,
             metadata: new Dictionary<string, string>(),
             activityContract: contract,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture> { [projection.Key] = capture },
