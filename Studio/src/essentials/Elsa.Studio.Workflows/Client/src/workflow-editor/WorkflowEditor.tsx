@@ -23,6 +23,9 @@ import {
   updateActivity,
   type ChildSlot
 } from "../workflowAdapter";
+import { VariableRenameContext } from "../variableRenameContext";
+import { workflowVariableScopeId } from "../variableRename";
+import { VariableRenameNotice, useVariableRename } from "./VariableRenameNotice";
 import {
   indexActivityPresentation,
   resolveActivityLabel,
@@ -1136,6 +1139,27 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Spec 1222 FR-021/FR-022: a committed variable rename updates the scripts that read the variable and lists the
+  // references to repair by hand. Container variables are renamed in the inspector (scope = the inspected node); the
+  // Variables tab re-provides the workflow scope.
+  const variableRename = useVariableRename({ context, state: draft?.state, catalog: catalogByVersion, updateState: updateDraftState });
+  const inspectorRenameScope = useMemo(
+    () => documentAdapter || !inspectedNode ? null : { scopeId: inspectedNode.nodeId, onVariableRenamed: variableRename.onVariableRenamed },
+    [documentAdapter, inspectedNode, variableRename.onVariableRenamed]);
+  const variableRenameLabel = useCallback((nodeId: string) => {
+    const node = findActivityNode(draft?.state.rootActivity, nodeId, catalogByVersion);
+    if (!node) return nodeId;
+    const item = catalogByVersion.get(node.activityVersionId);
+    return resolveActivityLabel(
+      draft?.activityPresentation?.find(record => record.nodeId === nodeId),
+      item,
+      item?.activityTypeKey ?? node.activityVersionId);
+  }, [draft?.state.rootActivity, draft?.activityPresentation, catalogByVersion]);
+  const goToRenamedReference = useCallback((nodeId: string) => {
+    setCanvasView("designer");
+    repairVariableReference(nodeId);
+  }, [repairVariableReference]);
+
   // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
   // contracts and are not offered it here.
   const activityDataSelection = useWorkflowActivityDataSelection({
@@ -1312,6 +1336,7 @@ export function WorkflowEditor({
         </div> : bpmnInspectorProps && !selectedNode ? (
         <BpmnElementInspector {...bpmnInspectorProps} />
       ) : (
+        <VariableRenameContext.Provider value={inspectorRenameScope}>
         <InspectorPanel
           bpmnRoutingPanel={bpmnInspectorProps && selectedNode ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
           key={inspectedNode?.nodeId ?? "no-activity"}
@@ -1368,6 +1393,7 @@ export function WorkflowEditor({
             onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
           } : undefined}
         />
+        </VariableRenameContext.Provider>
       )}
       </>
     },
@@ -1635,6 +1661,12 @@ export function WorkflowEditor({
               onSelect={tabId => setCanvasView(tabId as CanvasView)}
             />
           </div>
+          <VariableRenameNotice
+            outcome={variableRename.outcome}
+            labelFor={variableRenameLabel}
+            onSelectNode={goToRenamedReference}
+            onDismiss={variableRename.dismiss}
+          />
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
@@ -1648,7 +1680,9 @@ export function WorkflowEditor({
             </div>
           ) : canvasView !== "designer" ? (
             <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}>
+              <VariableRenameContext.Provider value={documentAdapter ? null : { scopeId: workflowVariableScopeId, onVariableRenamed: variableRename.onVariableRenamed }}>
               <WorkflowDataView section={canvasView} draft={draft} context={context} onStateChange={updateDraftState} />
+              </VariableRenameContext.Provider>
             </fieldset>
           ) : (
           <>

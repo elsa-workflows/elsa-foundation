@@ -33,7 +33,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
     IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
     IExpressionAuthoringContextService? expressionTooling = null,
     IEnumerable<IExpressionToolingProvider>? expressionToolingProviders = null,
-    IExpressionToolingProviderResolver? expressionToolingResolver = null) : IApiCapabilitySource
+    IExpressionToolingProviderResolver? expressionToolingResolver = null,
+    IScriptVariableRenamePlanner? renamePlanner = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -41,6 +42,9 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
         var links = new List<ApiCapabilityLink>();
         if (scopedVariables is not null)
             links.Add(new("scoped-variable-analysis", "design/workflows/scoped-variables/analyze"));
+        // Spec 1222 FR-021: Studio plans a variable rename through this link and hides the rename follow-up without it.
+        if (renamePlanner is not null)
+            links.Add(new("scoped-variable-rename-plan", "design/workflows/scoped-variables/rename-plan"));
         if (inputOptionsProviders?.Any() == true)
             links.Add(new(
                 "activity-input-options",

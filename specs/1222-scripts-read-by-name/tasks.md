@@ -133,12 +133,12 @@ script names literally refuses at publish; a published version is unchanged by a
 ### Tests for User Story 4
 
 - [x] T033 [P] [US4] Cover publish refusal for an unresolvable literal name and the shadow-change warning (resolves to a different declaration than the previously published version) in `Essentials/tests/.../RenameSafetyPublishTests.cs`. Done in `WorkflowExecutableCompilerTests.ScriptReads.cs` and `ScriptVariableReadValidatorTests.cs`.
-- [x] T034 [P] [US4] Cover Studio rename updating a resolvable reference and flagging both an unresolvable one and a computed read whose conservative report contains the variable, in the Design/Studio tests. Done for the backend planner and its endpoint; the Studio UI wiring is tracked as noted in the PR. Done for the planner in `Essentials/tests/Activities/ControlFlow/Tests/ScriptVariableRenamePlannerTests.cs`.
+- [x] T034 [P] [US4] Cover Studio rename updating a resolvable reference and flagging both an unresolvable one and a computed read whose conservative report contains the variable, in the Design/Studio tests. Done for the planner in `Essentials/tests/Activities/ControlFlow/Tests/ScriptVariableRenamePlannerTests.cs` and for Studio in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/variableRename.test.tsx`.
 
 ### Implementation for User Story 4
 
 - [x] T035 [US4] In the publish resolver, refuse a literal name that no longer resolves, and warn when a literal name resolves to a different declaration than the previously published version (R-9).
-- [x] T036 [US4] Studio rename: update references the resolver can resolve; surface the rest (including computed reads with the variable among their candidates) for manual repair; keep readable names in source; never alter a published version. Done for the backend (`ScriptVariableRenamePlanner`, `POST scoped-variables/rename-plan`); the Studio UI wiring is tracked as noted in the PR.
+- [x] T036 [US4] Studio rename: update references the resolver can resolve; surface the rest (including computed reads with the variable among their candidates) for manual repair; keep readable names in source; never alter a published version. Backend: `ScriptVariableRenamePlanner` and `POST scoped-variables/rename-plan`, advertised as the `scoped-variable-rename-plan` link. Studio: the workflow and container variable editors report a committed rename (on blur), the editor plans it from the old name, applies the edits to the draft and lists the flagged references with a way to go to each (`variableRename.ts`, `workflow-editor/VariableRenameNotice.tsx`).
 
 **Checkpoint**: rename-safe.
 

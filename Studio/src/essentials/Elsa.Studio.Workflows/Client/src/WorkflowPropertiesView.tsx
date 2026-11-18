@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -30,6 +30,8 @@ import {
   variableNameKeys
 } from "./workflowProperties";
 import { collectionKinds } from "./workflowTypes";
+import { VariableRenameContext, useVariableRenameScope } from "./variableRenameContext";
+import { workflowVariableScopeId } from "./variableRename";
 import type {
   CollectionKind,
   VariableDefinition,
@@ -355,7 +357,7 @@ interface ArgumentColumns {
 function ArgumentsEditor({
   items, typeOptions, storageOptions, storageOptionsStatus, editorForAlias,
   namePrefix, nameKeys, title, addLabel, emptyLabel,
-  create, patch, columns, warnings, onChange
+  create, patch, columns, warnings, onNameCommitted, onChange
 }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
@@ -371,8 +373,12 @@ function ArgumentsEditor({
   patch(existing: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown>;
   columns: ArgumentColumns;
   warnings?: Map<string, string>;
+  /** Called once a row's name edit is committed (on blur) with the name it had when editing began. */
+  onNameCommitted?(referenceKey: string, oldName: string, newName: string): void;
   onChange(next: unknown[]): void;
 }) {
+  // The name each row had when its name field took focus: a rename is reported once, when the edit ends.
+  const namesAtFocus = useRef(new Map<number, string>());
   const { add, update, remove } = buildCollectionOps<Record<string, unknown>>(items, onChange, {
     namePrefix,
     nameKeys,
@@ -404,7 +410,18 @@ function ArgumentsEditor({
         return (
           <tr key={index}>
             <td>
-              <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
+              <input
+                type="text"
+                aria-label={`${namePrefix} name`}
+                value={name}
+                onFocus={() => namesAtFocus.current.set(index, name)}
+                onBlur={() => {
+                  const before = namesAtFocus.current.get(index);
+                  namesAtFocus.current.delete(index);
+                  if (onNameCommitted && referenceKey && before && name.trim() && before !== name) onNameCommitted(referenceKey, before, name);
+                }}
+                onChange={event => update(index, { name: event.target.value })}
+              />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
             <td>
@@ -478,6 +495,9 @@ export function VariablesEditor({ items, typeOptions, storageOptions, storageOpt
   warnings?: Map<string, string>;
   onChange(next: unknown[]): void;
 }) {
+  // A committed rename is reported to the nearest workflow editor, which updates the scripts that read the variable
+  // (spec 1222 FR-021); outside one, a rename changes the declaration alone.
+  const renameScope = useVariableRenameScope();
   return (
     <ArgumentsEditor
       items={items}
@@ -485,6 +505,9 @@ export function VariablesEditor({ items, typeOptions, storageOptions, storageOpt
       storageOptions={storageOptions}
       storageOptionsStatus={storageOptionsStatus}
       editorForAlias={editorForAlias}
+      onNameCommitted={renameScope
+        ? (referenceKey, oldName, newName) => renameScope.onVariableRenamed(renameScope.scopeId, referenceKey, oldName, newName)
+        : undefined}
       namePrefix="Variable"
       nameKeys={variableNameKeys}
       title={title}
@@ -698,16 +721,20 @@ export function WorkflowDataView({ section, draft, context, onStateChange }: {
   onStateChange(producer: StateProducer): void;
 }) {
   const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
+  const renameScope = useVariableRenameScope();
+  const workflowRenameScope = useMemo(
+    () => renameScope ? { ...renameScope, scopeId: workflowVariableScopeId } : null,
+    [renameScope]);
   return (
     <div className="wf-properties-view">
-      {section === "variables" ? <VariablesEditor
+      {section === "variables" ? <VariableRenameContext.Provider value={workflowRenameScope}><VariablesEditor
         items={toRecords(draft.state.variables)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
-      /> : section === "inputs" ? <InputsEditor
+      /></VariableRenameContext.Provider> : section === "inputs" ? <InputsEditor
         items={toRecords(draft.state.inputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
