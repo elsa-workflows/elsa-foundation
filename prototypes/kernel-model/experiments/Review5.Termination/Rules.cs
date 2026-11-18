@@ -29,15 +29,23 @@ sealed record Rules(string Name)
     public bool BindUnmarked { get; init; }
     /// <summary>R5-M5, repaired: the commit refuses a cascade origin mark on anything but a kernel-composed terminate from the committing row.</summary>
     public bool CommitChecksMark { get; init; }
+    /// <summary>R5-B2, repaired: Validate is widened for exactly one shape, the retirement in the commit that terminates the row (ThenDelete).</summary>
+    public bool WidenedValidate { get; init; }
+    /// <summary>R5-B2, repaired: key admission reads the bound actor's cascade state and refuses a reuse retryably while it discharges.</summary>
+    public bool AdmissionReadsCascade { get; init; }
     /// <summary>R5-m3, mutation: the cancel's derivation names another instance's origin.</summary>
     public bool ForeignDerivation { get; init; }
     /// <summary>R5-m3, mutation: the cancel's derivation ignores the generation and takes every same-origin ticket of the key.</summary>
     public bool GenerationBlind { get; init; }
     /// <summary>R5-m3, mutation: retirement accepts a job pair the previous row's registry does not hold.</summary>
     public bool AcceptOffRegistry { get; init; }
+    /// <summary>R5-m3, mutation: retirement keeps only the fourth round's two checks, so a repeated pair can stand for a missing one.</summary>
+    public bool AcceptDuplicatePair { get; init; }
+    /// <summary>R5-m3, mutation: the fourth round's derivation, the generation inside the length-prefixed key.</summary>
+    public bool GenerationInsideKey { get; init; }
 
     public static Rules Reviewed => new("reviewed") { CountedCancel = true };
-    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true, CommitChecksMark = true };
+    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true, CommitChecksMark = true, WidenedValidate = true, AdmissionReadsCascade = true };
 
     /// <summary>The rule set by name, for a case family: <c>negative</c> removes the family's repaired rule.</summary>
     public static Rules For(string name, string family) => name switch
@@ -49,12 +57,16 @@ sealed record Rules(string Name)
             "rt2" => Repaired with { Name = name, CountedCancel = true },
             "rt3" => Repaired with { Name = name, DurableCursor = false },
             "rt4" => Repaired with { Name = name, BindingRunning = false, BindingEnded = false },
+            "thendelete" => Repaired with { Name = name, WidenedValidate = false },
+            "keyreuse" => Repaired with { Name = name, AdmissionReadsCascade = false },
             _ => throw new ArgumentException(family),
         },
         "presence-from-memory" => Repaired with { Name = name, PresenceFromMemory = true },
         "foreign-derivation" => Repaired with { Name = name, ForeignDerivation = true },
         "generation-blind" => Repaired with { Name = name, GenerationBlind = true },
         "accept-off-registry" => Repaired with { Name = name, AcceptOffRegistry = true },
+        "accept-duplicate-pair" => Repaired with { Name = name, AcceptDuplicatePair = true },
+        "generation-inside-key" => Repaired with { Name = name, GenerationInsideKey = true },
         "page-above-cap" => Repaired with { Name = name, PCascade = Harness.SendCap + 1 },
         "no-next-control" => Repaired with { Name = name, NextControl = false },
         "delete-drops-discharging" => Repaired with { Name = name, DeleteDropsDischarging = true },

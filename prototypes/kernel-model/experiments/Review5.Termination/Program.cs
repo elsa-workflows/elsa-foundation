@@ -26,8 +26,11 @@ static partial class Program
         .. Three("rt2-takeover", "FAIL", "PASS", "FAIL"), ("rt2-takeover", "presence-from-memory", "FAIL"),
         .. Three("rt2-open-drain-mixed", "FAIL", "PASS", "FAIL"),
         .. Three("rt2-live-pending", "PASS", "PASS", "PASS"),
+        .. Three("rt2-live-pending-g0", "PASS", "PASS", "PASS"),
         .. Three("rt2-generations", "PASS", "PASS", "PASS"), ("rt2-generations", "foreign-derivation", "FAIL"), ("rt2-generations", "generation-blind", "FAIL"),
         .. Three("rt2-off-registry", "PASS", "PASS", "PASS"), ("rt2-off-registry", "accept-off-registry", "FAIL"),
+        .. Three("rt2-duplicate-pair", "PASS", "PASS", "PASS"), ("rt2-duplicate-pair", "accept-duplicate-pair", "FAIL"),
+        .. Three("rt2-ticket-collision", "PASS", "PASS", "PASS"), ("rt2-ticket-collision", "generation-inside-key", "FAIL"),
         .. Three("rt3-live-p", "PASS", "PASS", "PASS"),
         .. Three("rt3-live-p-plus-1", "PASS", "PASS", "PASS"),
         .. Three("rt3-live-10001", "FAIL", "PASS", "PASS"), ("rt3-live-10001", "page-above-cap", "FAIL"),
@@ -38,6 +41,13 @@ static partial class Program
         .. Three("rt3-crash-landed", "FAIL", "PASS", "FAIL"),
         .. Three("rt3-crash-lost", "FAIL", "PASS", "FAIL"),
         .. Three("rt3-delete-discharging", "FAIL", "PASS", "PASS"), ("rt3-delete-discharging", "delete-drops-discharging", "FAIL"),
+        .. Three("rt3-thendelete-root-p-plus-1", "FAIL", "PASS", "FAIL"),
+        .. Three("rt3-thendelete-root-10001", "FAIL", "PASS", "FAIL"),
+        .. Three("rt3-thendelete-child-p-plus-1", "FAIL", "PASS", "FAIL"),
+        .. Three("rt3-thendelete-child-10001", "FAIL", "PASS", "FAIL"),
+        .. Three("rt3-thendelete-kept-p-plus-1", "PASS", "PASS", "PASS"),
+        .. Three("rt3-thendelete-kept-10001", "FAIL", "PASS", "PASS"),
+        .. Three("rt3-key-reuse-discharging", "PASS", "PASS", "FAIL"),
         .. Three("rt4-running-unrelated", "FAIL", "PASS", "FAIL"), ("rt4-running-unrelated", "binding-running-only", "PASS"),
         .. Three("rt4-ended-registry", "FAIL", "PASS", "FAIL"), ("rt4-ended-registry", "binding-running-only", "FAIL"),
         .. Three("rt4-genuine-child", "PASS", "PASS", "PASS"),
@@ -53,8 +63,8 @@ static partial class Program
     {
         if (args.Length >= 2 && args[0] == "--p-cascade")
         {
-            PCascade = int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
-            if (PCascade < 1) { Console.Error.WriteLine("--p-cascade must be positive"); return 2; }
+            if (!int.TryParse(args[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out PCascade) || PCascade < 1)
+            { Console.Error.WriteLine($"--p-cascade needs a positive whole number, not '{args[1]}'"); return 2; }
             args = args[2..];
         }
         if (args.SequenceEqual(["--list"]))
@@ -88,7 +98,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: [--p-cascade <n>] --case <id> --rules <reviewed|repaired|negative|presence-from-memory|foreign-derivation|generation-blind|accept-off-registry|page-above-cap|no-next-control|delete-drops-discharging|binding-running-only|bind-every-issued-terminate|commit-accepts-mark> | --all | --list");
+        Console.Error.WriteLine("usage: [--p-cascade <n>] --case <id> --rules <reviewed|repaired|negative|presence-from-memory|foreign-derivation|generation-blind|accept-off-registry|page-above-cap|no-next-control|delete-drops-discharging|binding-running-only|bind-every-issued-terminate|commit-accepts-mark|accept-duplicate-pair|generation-inside-key> (a rule set of the case's family) | --all | --list");
         return 2;
     }
 
@@ -97,7 +107,7 @@ static partial class Program
         Real.Reset();
         var family = id.Length > 4 ? id[..3] : "";
         var variant = id.Length > 4 ? id[4..] : "";
-        var set = Rules.For(rules, family);
+        var set = Rules.For(rules, id.StartsWith("rt3-thendelete-", StringComparison.Ordinal) ? "thendelete" : id.StartsWith("rt3-key-reuse", StringComparison.Ordinal) ? "keyreuse" : family);
         return family switch
         {
             "rt2" when Rt2.Variants.Contains(variant) => new Rt2(variant, set).Run(),

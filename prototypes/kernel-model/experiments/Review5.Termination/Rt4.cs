@@ -60,21 +60,22 @@ sealed class Rt4(string variant, Rules rules)
         if (variant == "forgery")
         {
             var revision = _h.Store.Instances[X].Revision;
-            var results = new List<bool>
+            var results = new List<CommitResult>
             {
                 _h.ModelTurn(X, turn => turn.Send(new InstanceRef(H), Kinds.Terminate, null, new SendOptions(TargetCreation: 1)), m => true,
-                    "(a) X's model turn sends kernel.terminate to H and sets the mark on it").Landed,
+                    "(a) X's model turn sends kernel.terminate to H and sets the mark on it"),
                 _h.ModelTurn(X, turn => turn.Send(new InstanceRef(H), "app.ping", null, new SendOptions(TargetCreation: 1)), m => true,
-                    "(b) X's model turn sets the mark on an application message").Landed,
+                    "(b) X's model turn sets the mark on an application message"),
                 _h.ModelTurn(X, turn => turn.Add(new Message(FormattableString.Invariant($"{Real.Origin(X, 1)}#{revision + 1}.0007"), new InstanceRef(H), Kinds.Terminate,
-                    Sender: Q, TargetCreation: 1, SenderCreation: 1)), m => true, "(c) a composed kernel.terminate from X's commit names Q, H's parent, as Sender, marked").Landed,
+                    Sender: Q, TargetCreation: 1, SenderCreation: 1)), m => true, "(c) a composed kernel.terminate from X's commit names Q, H's parent, as Sender, marked"),
             };
             _h.Settle();
-            _h.Line($"end: X revision {_h.Store.Instances[X].Revision}; H {_h.Status(H)}; HK {_h.Status(HK)}; marks on X's sends {_h.Sent.Count(m => m.Target.Id == H && _h.Marks.Contains(m.InboxKey))}");
-            _report.ExpectSequence("the three commits landed", [.. results.Select(r => r.ToString())], ["False", "False", "False"]);
+            _h.Line($"end: X revision {_h.Store.Instances[X].Revision}; H {_h.Status(H)}; HK {_h.Status(HK)}; marks on X's sends {_h.Sent.Count(m => m.Sender == X && _h.Marks.Contains(m.InboxKey))}");
+            _report.ExpectSequence("the three commits landed", [.. results.Select(r => r.Landed.ToString())], ["False", "False", "False"]);
+            _report.Expect("(c) is refused by the sender rule", results[2].Error?.Contains("names Sender Q/1, not the committing X/1", StringComparison.Ordinal) == true, true);
             _report.Expect("X's row revision", _h.Store.Instances[X].Revision, revision);
-            _report.Expect("messages from X's commits stored", _h.Sent.Count(m => m.Target.Id == H), 0);
-            _report.Expect("stored messages carrying a mark no kernel composition set", _h.Sent.Count(m => m.Target.Id == H && _h.Marks.Contains(m.InboxKey)), 0);
+            _report.Expect("messages from X's commits stored", _h.Sent.Count(m => m.Sender == X), 0);
+            _report.Expect("stored messages carrying a mark no kernel composition set (structural check of the mark rule)", _h.Sent.Count(m => m.Sender == X && _h.Marks.Contains(m.InboxKey)), 0);
             _report.Expect("H", _h.Status(H), "Running");
             _report.Expect("HK", _h.Status(HK), "Running");
             _h.CommonChecks();
@@ -117,7 +118,7 @@ sealed class Rt4(string variant, Rules rules)
         else
         {
             _report.Expect("terminates from A's marker to H", toH.Count, 1);
-            _report.Expect("A's cascade terminate to H carries the mark", toH.Count == 1 && _h.Marks.Contains(InboxKey.Issued(toH[0])), true);
+            _report.Expect("A's cascade terminate to H carries the mark (structural: every page terminate is marked)", toH.Count == 1 && _h.Marks.Contains(InboxKey.Issued(toH[0])), true);
             _report.Expect("H's refusal of A's terminate", _h.Refusals.Any(r => toH.Count == 1 && r == $"{toH[0]}: parent") ? "parent" : "accepted", "parent");
             _report.Expect("H", _h.Status(H), variant == "ended-registry" ? "Finished" : "Running");
             _report.Expect("HK", _h.Status(HK), "Running");

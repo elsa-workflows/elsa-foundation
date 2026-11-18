@@ -54,6 +54,21 @@ static class Real
     public static TurnOutcome Refuse(string actor, InstanceRow? row, Delivery delivery, string reason)
     { Count("CreationProtocol.Refuse"); return CreationProtocol.Refuse(actor, row, [delivery], reason); }
 
+    private static readonly MethodInfo StartErrorMethod = Find(typeof(CreationProtocol), "StartError");
+
+    /// <summary>Creation.cs 89–101, <c>CreationProtocol.StartError</c>: whether a start may create the next creation (Worker.cs 1076–1080 routes a start here).</summary>
+    public static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, InboxKey message)
+    { Count("CreationProtocol.StartError"); return (string?)StartErrorMethod.Invoke(null, [previous, start, kind, payload, message]); }
+
+    public static string? Fingerprint(StartSpec start, string kind, string? payload) { Count("CreationProtocol.Fingerprint"); return CreationProtocol.Fingerprint(start, kind, payload); }
+
+    /// <summary>KeyAdmission.cs 48–84, <c>InMemoryStore.AcceptAsync</c>: the built key admission.</summary>
+    public static KeyDecision Accept(InMemoryStore store, KeyRequest request)
+    { Count("InMemoryStore.AcceptAsync"); return store.AcceptAsync(request).AsTask().GetAwaiter().GetResult(); }
+
+    /// <summary>KeyAdmission.cs 24–33, <c>KeyRequest.Validate</c>.</summary>
+    public static void ValidateKey(KeyRequest request) { Count("KeyRequest.Validate"); request.Validate(); }
+
     /// <summary>Creation.cs 145–176, <c>CreationProtocol.Validate</c>: the commit's creation-header check. Returns its refusal, or "accepted".</summary>
     public static string Validate(TurnCommit turn, InstanceRow? previous)
     {

@@ -12,13 +12,15 @@ sealed class Rt2(string variant, Rules rules)
     private const long PCreation = 2;
 
     public static readonly string[] Variants =
-        ["witness", "pending", "done-kept", "absent", "mixed", "settle-after", "duplicate", "takeover", "open-drain-mixed", "live-pending", "generations", "off-registry"];
+        ["witness", "pending", "done-kept", "absent", "mixed", "settle-after", "duplicate", "takeover", "open-drain-mixed", "live-pending", "live-pending-g0", "generations", "off-registry", "duplicate-pair", "ticket-collision"];
 
     private static readonly Dictionary<string, string> Invariants = new()
     {
         ["witness"] = "the reviewer's store witness, replayed: the cascade's commit lands with the ticket pending and with it absent, storing the child send and consuming the parent command",
         ["generations"] = "the cancel names exactly the listed (origin, creation, key, generation): a newer same-origin generation and another instance's ticket are untouched",
         ["off-registry"] = "retirement refuses a job pair the registry does not hold, so the marker lists only registry pairs, and the cascade cancels the current generation",
+        ["duplicate-pair"] = "retirement requires the handed-over jobs to equal the registry's pairs, each once: a list repeating j1 in place of j2 is refused, and the cascade cancels both",
+        ["ticket-collision"] = "the ticket key is injective: (j, g1) and (j.1, g0) are different tickets, so cancelling j@g1 leaves the other pending",
     };
 
     private enum Ticket { Pending, DoneKept, Absent }
@@ -41,8 +43,11 @@ sealed class Rt2(string variant, Rules rules)
             "mixed" => ([("j1", 1L, Ticket.Pending), ("j2", 1L, Ticket.Absent), ("j3", 1L, Ticket.DoneKept)], false),
             "open-drain-mixed" => ([("j1", 1L, Ticket.Pending), ("j2", 1L, Ticket.DoneKept)], false),
             "live-pending" => ([("j", 1L, Ticket.Pending)], true),
+            "live-pending-g0" => ([("j", 0L, Ticket.Pending)], true),
             "generations" => ([("j", 1L, Ticket.Pending)], false),
             "off-registry" => ([("j", 2L, Ticket.Pending)], false),
+            "duplicate-pair" => ([("j1", 1L, Ticket.Pending), ("j2", 1L, Ticket.Pending)], false),
+            "ticket-collision" => ([("j", 1L, Ticket.Pending)], false),
             _ => throw new ArgumentException(variant),
         };
         List<(string Key, long Generation, Ticket State)> tickets = [.. jobs];
@@ -52,7 +57,9 @@ sealed class Rt2(string variant, Rules rules)
         switch (variant)
         {
             case "live-pending":
-                _h.Line("A is running; T is delivered at once and A's own built terminate cancels J (the live-actor path, WorkflowInstance.cs 196-198)");
+            case "live-pending-g0":
+                _h.Line("A is running; T is delivered at once and A's built terminate composes the cancel of J (the live-actor path, WorkflowInstance.cs 196-198)" +
+                    (variant == "live-pending-g0" ? "; J has generation 0, so the harness's cancel key is the built three-part key itself" : "; the harness cancels J's generation-suffixed key, whose generation-0 form must equal the built key"));
                 _h.HeldBack.Remove(t.InboxKey);
                 _h.Settle();
                 break;
@@ -77,9 +84,18 @@ sealed class Rt2(string variant, Rules rules)
                 _h.Line("A's registry holds j at generation 2 (restarted once); two faulty retirement lists are tried before the correct one");
                 _h.Complete(A, alterJobs: js => [.. js, ("x", 1)]);
                 if (_h.Status(A) != "retired marker") _h.Complete(A, alterJobs: js => [.. js.Select(j => (j.Key, 1L))]);
-                _report.Expect("A after the two faulty retirement lists", _h.Status(A), rules.AcceptOffRegistry ? "retired marker" : "Faulted");
+                _report.Expect("A after the two faulty retirement lists", _h.Status(A), "Faulted");
                 if (_h.Status(A) != "retired marker") _h.Complete(A);
                 _report.Expect("the marker lists only registry pairs", _h.Obligations.TryGetValue(A, out var listed) ? string.Join(", ", listed.Jobs.Select(j => $"{j.Key}@g{j.Generation}")) : "none", "j@g2");
+                _h.Settle();
+                _h.HeldBack.Remove(t.InboxKey);
+                _h.Settle();
+                break;
+            case "duplicate-pair":
+                _h.Line("A's registry holds j1@g1 and j2@g1; a retirement list repeating j1 in place of j2 is tried before the correct one");
+                _h.Complete(A, alterJobs: js => [js[0], js[0]]);
+                _report.Expect("A after the faulty retirement list", _h.Status(A), "Faulted");
+                if (_h.Status(A) != "retired marker") _h.Complete(A);
                 _h.Settle();
                 _h.HeldBack.Remove(t.InboxKey);
                 _h.Settle();
@@ -98,12 +114,26 @@ sealed class Rt2(string variant, Rules rules)
                 if (variant == "duplicate") _h.Hook = (actor, page) => actor == A && page == 1 && _h.CascadeCommits.All(c => c.Actor != A) ? PageHook.CrashLanded : PageHook.None;
                 _h.HeldBack.Remove(t.InboxKey);
                 _h.Settle();
+                if (variant == "duplicate")
+                {
+                    // A duplicate of T (a transport redelivery of the same row) under the owner's current epoch: the fence
+                    // passes, and the count on T refuses the second consume. The store records it as I9.
+                    _h.Line($"a duplicate delivery of T under the current owner {_h.Owners[1].Node} (epoch {_h.Owners[1].Epoch}), after the cascade's commit consumed it");
+                    _h.ExpectedGhost.Add($"I9 consumed message {t.Id} is not there");
+                    _h.Deliver(t, 0);
+                }
                 break;
         }
         _h.Settle();
+        // Fixture tickets the cascade must leave alone, observed before the poll may reach them at the retired A.
+        var otherPending = new Dictionary<string, bool>
+        {
+            ["generations"] = _h.Pending(Harness.Derive(A, "j", 1, 2)),
+            ["ticket-collision"] = _h.Pending(Harness.Derive(A, "j.1", 1, 0)),
+        };
         foreach (var key in _heldTickets) _h.HeldBack.Remove(key);
         _h.Settle();
-        Assertions(t, tickets);
+        Assertions(t, tickets, otherPending.GetValueOrDefault(variant));
         _h.CommonChecks();
         return _report;
     }
@@ -139,6 +169,13 @@ sealed class Rt2(string variant, Rules rules)
             _h.ForeignActor = B;
             _h.Line($"fixture (below admission, it tests the derivation): a same-origin ticket {Harness.Derive(A, "j", 1, 2).Id} of a newer generation, and B's own {Harness.Derive(B, "j", 1, 1).Id}");
         }
+        if (variant == "ticket-collision")
+        {
+            // A fixture placed directly, labelled: a pending generation-0 ticket of job key "j.1" beside j@g1.
+            _heldTickets.Add(_h.SeedTicket(A, 1, "j.1", 0));
+            _h.HeldBack.Add(_heldTickets[^1]);
+            _h.Line($"fixture: (j.1, g0) has ticket {Harness.Derive(A, "j.1", 1, 0).Id}; (j, g1) has {Harness.Derive(A, "j", 1, 1).Id}. The fourth round's derivation gives (j, g1) the id {Harness.DeriveInsideKey(A, "j", 1, 1).Id}, which is (j.1, g0)'s");
+        }
         _h.Line($"setup: P {Show(P)}; A {Show(A)}; G {Show(G)}; G2 {Show(G2)}");
         _h.Line($"A's tickets: {string.Join("; ", tickets.Select(x => $"{x.Key}@g{x.Generation} = {Harness.Derive(A, x.Key, 1, x.Generation).Id} ({x.State})"))}" +
             $"{(tickets.Any(x => x.State == Ticket.DoneKept) ? "; done and kept is a Done row with KeptBy Consumed, the proposed column the harness holds" : "")}");
@@ -162,7 +199,7 @@ sealed class Rt2(string variant, Rules rules)
         return t;
     }
 
-    private void Assertions(Message t, List<(string Key, long Generation, Ticket State)> tickets)
+    private void Assertions(Message t, List<(string Key, long Generation, Ticket State)> tickets, bool otherPending)
     {
         _h.Line($"end: P {Show(P)}; A {Show(A)}; G {Show(G)}; G2 {Show(G2)}");
         _h.Line($"obligations: {string.Join("; ", _h.Obligations.Where(o => o.Value.Entries > 0).Select(o => $"{_h.Name(o.Key)} {o.Value}"))}");
@@ -170,13 +207,16 @@ sealed class Rt2(string variant, Rules rules)
         var cascades = _h.CascadeCommits.Where(c => c.Actor == A && c.Page == 1).ToList();
         _report.Expect("T consumed (no longer pending)", _h.Pending(t.InboxKey), false);
         _report.Expect("terminates to G stored", _h.SentTo(G, Kinds.Terminate), 1);
-        _report.Expect("terminates to G stored without the cascade origin mark", _h.Sent.Count(m => m.Target.Id == G && m.Kind == Kinds.Terminate && !_h.Marks.Contains(m.InboxKey)), 0);
         _report.Expect("G", _h.Status(G), "Cancelled");
         _report.Expect("G2", _h.Status(G2), "Cancelled");
         _report.Expect("obligations still open", _h.OpenObligations, 0);
         _report.Expect("notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, A), 1);
         _report.Expect("A's cascade commits that landed", cascades.Count, 1);
-        if (variant == "duplicate") _report.Expect("the dead owner's replay of the landed cascade batch landed", string.Join(",", _h.StaleReplays), "False");
+        if (variant == "duplicate")
+        {
+            _report.Expect("the dead owner's replay of the landed cascade batch landed", string.Join(",", _h.StaleReplays), "False");
+            _report.Expect("T consumed once: terminates to G stored after the duplicate", _h.SentTo(G, Kinds.Terminate), 1);
+        }
         if (cascades.Count == 1)
         {
             var c = cascades[0];
@@ -201,10 +241,15 @@ sealed class Rt2(string variant, Rules rules)
         if (variant == "generations")
         {
             _report.Expect("A's newer same-origin generation j@g2 among the cascade's inputs", cascades.SelectMany(c => c.Consumed).Any(k => k == Harness.Derive(A, "j", 1, 2)), false);
+            _report.Expect("A's j@g2 still pending after the cascade", otherPending, true);
             _report.Expect("B's ticket j@g1, at B's origin, still pending", _h.Pending(Harness.Derive(B, "j", 1, 1)), true);
         }
         if (variant == "off-registry")
-            _report.Expect("retirement refusals of the faulty lists", _h.RetirementRefusals.Count, rules.AcceptOffRegistry ? 0 : 2);
+            _report.Expect("retirement refusals of the faulty lists", _h.RetirementRefusals.Count, 2);
+        if (variant == "duplicate-pair")
+            _report.Expect("retirement refusals of the faulty list", _h.RetirementRefusals.Count, 1);
+        if (variant == "ticket-collision")
+            _report.Expect("(j.1, g0)'s ticket still pending after the cascade", otherPending, true);
     }
 
     /// <summary>

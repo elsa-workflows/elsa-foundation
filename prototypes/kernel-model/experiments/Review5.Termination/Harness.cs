@@ -82,6 +82,8 @@ sealed class Harness
     public readonly HashSet<string> DrainOpen = new(StringComparer.Ordinal);
     /// <summary>The cascade origin mark (R5-M5, proposed): a flag on an issued-origin message that only kernel composition sets.</summary>
     public readonly HashSet<InboxKey> Marks = [];
+    /// <summary>Rows <c>ProtectsDeletion</c> protects (a fixture: the stub model has no metadata), for ThenDelete's kept variant.</summary>
+    public readonly HashSet<string> Protects = new(StringComparer.Ordinal);
 
     // What the run observed.
     public readonly List<Message> Sent = [];
@@ -90,7 +92,13 @@ sealed class Harness
     public readonly List<(string Actor, int Page, IReadOnlyList<InboxKey> Consumed, long Epoch)> CascadeCommits = [];
     public readonly List<bool> StaleReplays = [];
     public readonly List<string> RetirementRefusals = [];
-    public int Pages, IdMismatches, LargestCommit;
+    public int Pages, IdMismatches, CancelKeyMismatches, LargestCommit;
+    public readonly Dictionary<string, int> FirstPageJobEntries = new(StringComparer.Ordinal);
+    public readonly List<string> StartRefusals = [], Births = [];
+    public readonly List<string> ThenDeleteShapes = [];
+    public readonly List<(string Actor, int Page, InboxKey? Control)> LostPages = [];   // pages whose commit a crash kept from the store
+    public readonly List<string> ExpectedGhost = [];   // I9 entries a schedule provokes on purpose (a redelivered, consumed row)
+    public Action<string>? AfterDelete;               // (actor) -> a scheduled step after a delete landed
     public string? ForeignActor;                      // R5-m3's foreign-derivation mutation names this origin
     public Func<string, int, PageHook>? Hook;         // (actor, page) -> takeover or crash around that page's commit
     public Action<string, int>? AfterPage;            // (actor, page) -> a scheduled step after that page landed
@@ -156,17 +164,26 @@ sealed class Harness
 
     /// <summary>
     /// The exact ticket key of a job (R5-B1, R5-m3): instance, creation, job key and <c>JobGeneration</c>. The built
-    /// <c>Worker.TicketId</c> takes the first three (Worker.cs 295–296); the generation is carried by the proposed
-    /// suffix <c>key.generation</c> inside the built length-prefixed key, which stays injective since the generation is
-    /// the digits after the last dot. Generation 0 is the built three-part key.
+    /// <c>Worker.TicketId</c> takes the first three (Worker.cs 295–296), and generation 0 keeps exactly that key. A
+    /// positive generation appends <c>#g{generation}</c> after the built id (proposed). The built id ends with the job
+    /// key under its own length prefix (<c>!{length}_{key}</c>), so nothing a key spells reaches past it: the two forms,
+    /// and any two generations, never meet. The scope is the built one.
     /// </summary>
-    public static InboxKey Derive(string actor, string key, long creation, long generation) =>
+    public static InboxKey Derive(string actor, string key, long creation, long generation)
+    {
+        var built = Real.Ticket(actor, key, creation);
+        return generation > 0 ? new InboxKey(FormattableString.Invariant($"{built.Id}#g{generation}"), built.Scope) : built;
+    }
+
+    /// <summary>The fourth review's derivation, the generation inside the length-prefixed key (<c>key.generation</c>): <c>(j.1, 0)</c> and <c>(j, 1)</c> meet.</summary>
+    public static InboxKey DeriveInsideKey(string actor, string key, long creation, long generation) =>
         Real.Ticket(actor, generation > 0 ? FormattableString.Invariant($"{key}.{generation}") : key, creation);
 
     public void AddOutside(Message message)
     {
         if (!Real.Add(Store, message)) throw new InvalidOperationException("outside add refused: " + message.Id);
-        _queue[Store.Messages[message.InboxKey].Seq] = message.InboxKey;
+        var stored = message.AsOrdinary().InboxKey;   // AddAsync stores every outside add under the ordinary key (InMemoryStore.cs 231)
+        _queue[Store.Messages[stored].Seq] = stored;
     }
 
     public bool Pending(InboxKey key) => Store.Messages.TryGetValue(key, out var row) && !row.Done;
@@ -226,6 +243,8 @@ sealed class Harness
                 if (m.Kind != Kinds.Terminate || m.InboxKey != InboxKey.Issued(m.Id)) return $"the marked {m.Id} is no issued kernel.terminate";
             }
         }
+        if (Rules.CommitChecksMark && marks.FirstOrDefault(k => !turns.Any(t => t.Sent.Any(m => m.InboxKey == k))) is { Id: not null } stray)
+            return $"the mark names {stray.Id}, which this batch does not send";
         return null;
     }
 
@@ -354,6 +373,7 @@ sealed class Harness
         var row = Store.Instances.GetValueOrDefault(id);
         if (row is null) { ConsumeOnly(owner, m, "no target: consumed unseen"); return; }
         if (m.InboxKey.Scope == CascadeScope) { Discharge(owner, id, m); return; }
+        if (m.Kind == Kinds.Start && m.Start is not null) { StartAt(owner, row, m, seq); return; }
         var error = Real.TargetError(row, m);
         if (error is not null) { RefusalPath(owner, row, m, seq, error); return; }
         if (DrainOpen.Contains(id) && m.Kind == Kinds.Terminate) { OpenDrainRefusal(owner, row, m, seq); return; }
@@ -373,12 +393,52 @@ sealed class Harness
             if (Shown(m)) Line($"deliver {m.Id} ({m.Kind}) to {Name(id)}: WorkflowInstance.Command hands it to the model; no model turn is modelled, so it stays in the inbox");
             return;
         }
-        if (m.Kind == Kinds.Terminate && outcome.Row is not null && !outcome.Delete) { CommitTerminate(owner, row, m, seq, outcome, "built terminate (WorkflowInstance.cs 179-203)"); return; }
+        if (m.Kind == Kinds.Terminate && outcome.Row is not null && !outcome.Delete)
+        {
+            var thenDelete = ThenDelete(m) && row.Status == InstanceStatus.Running;
+            if (thenDelete && Protects.Contains(row.Id)) Line($"  {m.Id} carries ThenDelete; ProtectsDeletion protects {Name(row.Id)}, so it is terminated and kept");
+            CommitTerminate(owner, row, m, seq, outcome, thenDelete && !Protects.Contains(row.Id) ? "built terminate, then the delete in the same commit (ThenDelete)" : "built terminate (WorkflowInstance.cs 179-203)",
+                thenDelete && !Protects.Contains(row.Id));
+            return;
+        }
         CommitOutcome(owner, row, m, outcome);
     }
 
-    /// <summary>R5-M5: at which states a marked terminate is parent-bound. Parked and draining recipients and markers check the binding under every rule set (#4756, RM-1).</summary>
+    /// <summary>
+    /// R5-M5: at which states a marked terminate is parent-bound. A recipient whose delete drain is open, and a marker,
+    /// check the binding under every rule set (#4756, RM-1). A parked recipient with no drain open is not modelled
+    /// apart: its row is Faulted, so this treats it as an ended row.
+    /// </summary>
     private bool BindingApplies(InstanceRow row) => row.Status == InstanceStatus.Running ? Rules.BindingRunning : (row.Children is not null || row.Jobs is not null) && Rules.BindingEnded;
+
+    /// <summary>An operator's terminate that also deletes (proposed payload <c>{"ThenDelete":true}</c>, data lifecycle "Terminate, then delete").</summary>
+    private static bool ThenDelete(Message m) => m.InboxKey.Scope == 0 && m.Payload is { } p && p.Contains("\"ThenDelete\":true", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A start at an id (Worker.cs 1076–1080 routes it to the real <c>StartError</c>). The proposed defence in depth
+    /// refuses it with ObligationOutstanding while the id's marker holds an open obligation. An accepted start writes
+    /// the successor row through the real commit (the start's model turn is not modelled).
+    /// </summary>
+    private void StartAt(Owner owner, InstanceRow row, Message m, long seq)
+    {
+        var error = Real.StartError(row, m.Start!, m.Kind, m.Payload, m.InboxKey);
+        if (error is null && Obligations.TryGetValue(row.Id, out var ob) && ob.Open) error = "ObligationOutstanding";
+        if (error is not null)
+        {
+            StartRefusals.Add($"{m.Id}: {error}");
+            var refused = Commit(owner.Partition, [ToTurnCommit(Real.Refuse(row.Id, row, Real.Delivery(m, seq), error), [])], null, $"refuse the start {m.Id}");
+            Line($"deliver the start {m.Id} (creation {m.Start!.Creation?.Generation}) to {Name(row.Id)}: CreationProtocol.StartError -> {(error == "ObligationOutstanding" ? "accepted, then refused with ObligationOutstanding (the obligation is open)" : error)}; consumed, no row{(refused.Landed ? "" : "; did not land")}");
+            if (!refused.Landed) Failed(owner, m, refused);
+            return;
+        }
+        var spec = m.Start!;
+        var born = new InstanceRow(row.Id, spec.Model, spec.Definition, InstanceStatus.Running, "{}", row.Revision + 1, null, Creation: spec.Creation!.Generation,
+            StartIntent: Real.Fingerprint(spec, m.Kind, m.Payload));
+        var result = Commit(owner.Partition, [new TurnCommit(row.Id, born, row.Revision, [m.InboxKey], [], [], [], [], Json.Write(new[] { "started" }))], null, $"the start of creation {born.Creation} at {Name(row.Id)}");
+        if (result.Landed) Births.Add($"{row.Id}@{born.Creation}");
+        Line($"deliver the start {m.Id} to {Name(row.Id)}: CreationProtocol.StartError accepts creation {born.Creation}; {(result.Landed ? $"the successor row lands at revision {born.Revision}" : "did not land")}");
+        if (!result.Landed) Failed(owner, m, result);
+    }
 
     public static bool ParentBound(Message m, string? parent, long parentCreation, long creation) =>
         parent is not null && m.InboxKey == InboxKey.Issued(m.Id) && m.Sender == parent && m.SenderCreation == parentCreation && m.TargetCreation == creation;
@@ -412,7 +472,8 @@ sealed class Harness
         if (!ParentBound(m, row.Parent, row.ParentCreation, row.Creation)) { Refusals.Add($"{m.Id}: resolution open (no cascade)"); ConsumeOnly(owner, m, "refused, resolution open, no cascade"); return; }
         Refusals.Add($"{m.Id}: resolution open (with cascade)");
         Line($"deliver {m.Id} to {Name(row.Id)} while its delete drain is open: refused, resolution open; the refusing commit runs the built terminate of the ended row (WorkflowInstance.cs 63-64, 158, 179-198)");
-        var outcome = Real.Command(Type, owner.Worker, row, m, seq) ?? throw new InvalidOperationException("an ended row with a registry takes the control path");
+        var outcome = Real.Command(Type, owner.Worker, row, m, seq) ?? throw new InvalidOperationException("an ended row takes the actor type's own path");
+        if (outcome.Row is null) { CommitOutcome(owner, row, m, outcome); return; }   // no registry and no jobs: consumed with no change (WorkflowInstance.cs 78–90)
         CommitTerminate(owner, row, m, seq, outcome, "refusing commit (J-1)");
     }
 
@@ -421,7 +482,7 @@ sealed class Harness
     /// and the child terminates paged. The page's ids are the built Terminate's (origin, the next revision, ordinal);
     /// the harness checks that.
     /// </summary>
-    private void CommitTerminate(Owner owner, InstanceRow row, Message m, long seq, TurnOutcome outcome, string what)
+    private void CommitTerminate(Owner owner, InstanceRow row, Message m, long seq, TurnOutcome outcome, string what, bool thenDelete = false)
     {
         var ob = new Obligation
         {
@@ -430,6 +491,12 @@ sealed class Harness
             IdRevision = outcome.Row!.Revision, State = "Discharging",
         };
         var page = Compose(owner, ob, 0);
+        // The built outcome cancels each job by the three-part key (WorkflowInstance.cs 198). The harness cancels the
+        // generation-suffixed key; the built key must equal that key's generation-0 form for every job, in order.
+        var builtCancels = outcome.Cancelled.ToList();
+        if (builtCancels.Count != ob.Jobs.Count) CancelKeyMismatches++;
+        else for (var i = 0; i < ob.Jobs.Count; i++)
+            if (builtCancels[i] != Derive(row.Id, ob.Jobs[i].Key, row.Creation, 0)) CancelKeyMismatches++;
         var built = outcome.Sent.Where(s => s.Kind == Kinds.Terminate).ToList();
         foreach (var s in page.Sends.Where(s => s.Kind == Kinds.Terminate))
             if (!built.Any(b => b.InboxKey == s.InboxKey && b.Target == s.Target && b.TargetCreation == s.TargetCreation && b.Sender == s.Sender && b.SenderCreation == s.SenderCreation)) IdMismatches++;
@@ -438,7 +505,34 @@ sealed class Harness
         var shown = Names.ContainsKey(row.Id);
         if (shown) Line($"deliver {m.Id} (terminate from {Name(m.Sender ?? "?")}) to {Name(row.Id)}: the {what}; {row.Status} -> {outcome.Row.Status}, {ob.Children.Count} children, {ob.Jobs.Count} jobs; the built outcome cancels [{string.Join(", ", outcome.Cancelled.Select(c => c.Id))}]");
         var hook = Hook?.Invoke(row.Id, page.Number) ?? PageHook.None;
-        var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, m), $"{Name(row.Id)}'s {what}", hook, MarksOf(page));
+        Action onLanded = () => Applied(owner, ob, page, m);
+        if (thenDelete)
+        {
+            // One commit terminates, sends page 1 and retires the row (proposed). The marker is the terminated row's,
+            // at the commit's revision: Retire(previous) with the terminal status.
+            var marker = Real.Retire(row) with { Status = outcome.Row.Status };
+            var retiring = turn with { Row = marker, Delete = true, Unsubscribe = true, Journal = Json.Write(new[] { "terminated", "deleted" }) };
+            var listEqual = ob.Children.SequenceEqual(Real.ReadRegistry(row.Children)) && ob.Jobs.Select(j => j.Key).SequenceEqual(Real.ReadJobs(row.Jobs));
+            var shape = $"marker {marker.Status} at revision {marker.Revision}, obligation list equal to the previous registry and jobs: {listEqual}, cursor {page.To} (at most P_cascade {Rules.PCascade}: {page.To <= Rules.PCascade})";
+            ThenDeleteShapes.Add(shape);
+            Line($"  ThenDelete: {shape}; built CreationProtocol.Validate on that retirement: {Real.Validate(retiring, row)}");
+            if (Rules.WidenedValidate && listEqual && page.To <= Rules.PCascade && Consumed(turn, m))
+            {
+                // The widened Validate admits exactly this shape. The built one, inside CommitAsync, refuses it, so the
+                // real commit carries the terminate (row write, counts, sends) and the harness puts the marker in its
+                // place in the same step.
+                Line("  the widened Validate (proposed) admits that shape; the real commit lands the terminate, and the harness writes the marker in its place");
+                onLanded = () =>
+                {
+                    Applied(owner, ob, page, m);
+                    Store.Instances[row.Id] = marker;
+                    DrainOpen.Remove(row.Id);
+                    if (ob.Open) ob.MarkerRevision = marker.Revision;
+                };
+            }
+            else turn = retiring;
+        }
+        var result = Commit(owner.Partition, [turn], onLanded, $"{Name(row.Id)}'s {what}", hook, MarksOf(page));
         if (result.Landed)
         {
             if (shown) Line($"  landed: page {page.Number} [{page.From}, {page.To}) of {ob.Entries} entries; {Describe(page)}{(notices.Count > 0 ? $"; notice {string.Join(", ", notices.Select(n => n.Id))} to {Name(row.Parent!)}" : "")}");
@@ -452,10 +546,13 @@ sealed class Harness
             var park = Real.Park(Type, owner.Worker, row, m, seq, "send cap");
             var parked = Commit(owner.Partition, [ToTurnCommit(park, [])], null, $"{Name(row.Id)}'s Park");
             Line($"  the turn fails and parks (owner card): {Name(row.Id)} {row.Status} -> {park.Row?.Status}, {m.Id} consumed, its {ob.Children.Count} children left running{(parked.Landed ? "" : "; the Park did not land")}");
+            if (!parked.Landed) Failed(owner, m, parked);
             return;
         }
         if (result.Error != "crash before the commit") Failed(owner, m, result);
     }
+
+    private static bool Consumed(TurnCommit turn, Message m) => turn.Consumed.Contains(m.InboxKey) || turn.Done.Contains(m.InboxKey);
 
     private void CommitOutcome(Owner owner, InstanceRow row, Message m, TurnOutcome outcome)
     {
@@ -471,6 +568,7 @@ sealed class Harness
         if (Shown(m))
             Line($"deliver {m.Id} ({m.Kind}) to {Name(row.Id)}: WorkflowInstance.Command -> {(outcome.Delete ? "delete, retirement marker (CreationProtocol.Retire)" : outcome.Row is { } r ? $"row at revision {r.Revision}, {r.Status}, children {r.Children ?? "null"}" : "consumed with no change")}{(result.Landed ? "" : "; did not land")}");
         if (note is not null) Line(note);
+        if (result.Landed && outcome.Delete) AfterDelete?.Invoke(row.Id);
         if (!result.Landed) Failed(owner, m, result);
     }
 
@@ -507,6 +605,7 @@ sealed class Harness
         var write = row.Retired ? null : row with { Revision = row.Revision + 1 };
         var turn = new TurnCommit(actor, write, row.Retired ? null : row.Revision, [.. control is null ? [] : new[] { control.InboxKey }, .. page.Consumed], [], page.Sends, [], [], null);
         var hook = Hook?.Invoke(actor, page.Number) ?? PageHook.None;
+        if (hook == PageHook.CrashLost) LostPages.Add((actor, page.Number, control?.InboxKey));
         var where = row.Retired ? "marker" : "row";
         var result = Commit(owner.Partition, [turn], () => Applied(owner, ob, page, control), $"page {page.Number} of {Name(actor)}'s cascade", hook, MarksOf(page));
         if (result.Landed)
@@ -522,6 +621,7 @@ sealed class Harness
     private void Applied(Owner owner, Obligation ob, Page page, Message? consumed)
     {
         if (ob.Entries == 0) return;
+        if (page.Number == 1 && page.From == 0) FirstPageJobEntries[ob.Actor] = Math.Min(page.To, ob.Jobs.Count);
         Pages++;
         Obligations[ob.Actor] = ob;
         if (Store.Instances.GetValueOrDefault(ob.Actor) is { Retired: true }) ob.MarkerRevision++;
@@ -562,7 +662,7 @@ sealed class Harness
 
     /// <summary>
     /// R5-B1. Reviewed: every listed ticket is a counted consume. Repaired: the owner decides presence under its own
-    /// fence, from the store's row at its epoch: pending is consumed (counted 1) with the in-process cancel, done and
+    /// fence, from the store's row at its epoch: pending is consumed (counted 1; the in-process driver cancel is not modelled), done and
     /// kept has its kept state cleared, absent is nothing.
     /// </summary>
     private void Cancel(Owner owner, Obligation ob, (string Key, long Generation) job, Page page)
@@ -571,7 +671,7 @@ sealed class Harness
         var keys = Rules.GenerationBlind
             ? Store.Messages.Values.Where(r => r.Message.Kind == Kinds.Job && r.Message.Target.Id == origin && r.Message.TargetCreation == ob.Creation && JobKey(r.Message) == job.Key)
                 .OrderBy(r => r.Seq).Select(r => r.Message.InboxKey).ToList()
-            : [Derive(origin, job.Key, ob.Creation, job.Generation)];
+            : [Rules.GenerationInsideKey ? DeriveInsideKey(origin, job.Key, ob.Creation, job.Generation) : Derive(origin, job.Key, ob.Creation, job.Generation)];
         foreach (var key in keys)
         {
             if (Rules.CountedCancel) { page.Consumed.Add(key); page.Notes.Add($"{key.Id}: counted consume"); continue; }
@@ -580,7 +680,7 @@ sealed class Harness
             var source = Rules.PresenceFromMemory ? "owner memory" : $"store row at epoch {owner.Epoch}";
             if (!present) page.Notes.Add($"{key.Id}: absent ({source}), nothing");
             else if (!Rules.PresenceFromMemory && row!.Done) { page.KeptCleared.Add(key); page.Notes.Add($"{key.Id}: done and kept ({KeptBy.GetValueOrDefault(key, "no KeptBy")}), kept state cleared"); }
-            else { page.Consumed.Add(key); page.Notes.Add($"{key.Id}: pending ({source}), consumed (counted 1), in-process cancel"); }
+            else { page.Consumed.Add(key); page.Notes.Add($"{key.Id}: pending ({source}), consumed (counted 1; driver cancel not modelled)"); }
         }
     }
 
@@ -618,10 +718,15 @@ sealed class Harness
             var jobs = alterJobs?.Invoke([.. registry]) ?? registry;
             var children = Real.ReadRegistry(row.Children);
             if (extraChildren is not null) { children.AddRange(extraChildren); Line($"fixture: the retirement handoff also lists [{string.Join(", ", extraChildren.Select(c => $"{Name(c.Id)}/{c.Creation}"))}] (RM-1's negative fixture; Validate at retirement checks no membership)"); }
+            // The handed-over jobs must equal the registry's current-generation pairs as a set, each exactly once.
+            // accept-duplicate-pair keeps only the fourth round's two checks: every pair in the registry, and no more pairs.
             var off = jobs.Where(j => !registry.Contains(j)).ToList();
-            if (off.Count > 0 || jobs.Count > registry.Count)
+            var exact = jobs.Count == registry.Count && jobs.Distinct().Count() == jobs.Count && jobs.ToHashSet().SetEquals(registry)
+                && children.Distinct().Count() == children.Count;   // and each child appears once
+            var twoChecks = off.Count == 0 && jobs.Count <= registry.Count;
+            if (!(Rules.AcceptDuplicatePair ? twoChecks : exact))
             {
-                var text = $"the retirement list names [{string.Join(", ", off.Select(j => $"{j.Key}@g{j.Generation}"))}], not in the registry [{string.Join(", ", registry.Select(j => $"{j.Item1}@g{j.Item2}"))}]";
+                var text = $"the retirement list [{string.Join(", ", jobs.Select(j => $"{j.Key}@g{j.Generation}"))}] is not the registry's pairs [{string.Join(", ", registry.Select(j => $"{j.Item1}@g{j.Item2}"))}], each once";
                 if (!Rules.AcceptOffRegistry)
                 {
                     RetirementRefusals.Add(text);
@@ -659,8 +764,9 @@ sealed class Harness
     public void CommonChecks()
     {
         Report.Expect("the store's ghost (I9: a counted input missing at the current epoch, InMemoryStore.cs 187-192)",
-            Store.Ghost.Count == 0 ? "none" : string.Join(" | ", Store.Ghost), "none");
+            Store.Ghost.Count == 0 ? "none" : string.Join(" | ", Store.Ghost), ExpectedGhost.Count == 0 ? "none" : string.Join(" | ", ExpectedGhost));
         Report.Expect("cascade child terminates whose id differs from the built Terminate's composition", IdMismatches, 0);
+        Report.Expect("built Terminate cancel keys that are not the generation-0 form of the harness's cancel keys", CancelKeyMismatches, 0);
         Line($"commits through InMemoryStore.CommitAsync: {Real.Calls.GetValueOrDefault("InMemoryStore.CommitAsync")}, terminate and cascade commits with entries (every actor) {Pages}, largest commit {LargestCommit} sends (cap {SendCap})");
     }
 }
