@@ -29,10 +29,15 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(page.getByText("Current: 2", { exact: true })).toBeVisible();
     await expect(chooser).toContainText("Execution 2 of 10");
     await expect(details.getByText(/Iteration \d/)).toHaveCount(0);
-    if (host === "instance" && width === 390) await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).click();
+    if (host === "instance" && width === 390) {
+      await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).click();
+      // Closing the panel moves focus to the selected node on the next frame; let it land before focusing write-two.
+      await expect(canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ })).toBeFocused();
+    }
     // At maximum zoom write-two's centre sits under the details panel, so a pointer click makes Playwright
     // scroll React Flow's overflow-hidden wrapper, which React Flow resets on scroll; the click can then land
-    // on write-one's port label (#4763). Keyboard selection does not depend on where the node is drawn.
+    // on write-one's port label (#4763). Enter goes through activateWorkflowCanvasNode, which does not depend
+    // on where the node is drawn.
     await canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ }).press("Enter");
     await expect(details.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(details.locator(".wf-execution-navigator")).toHaveCount(0);
