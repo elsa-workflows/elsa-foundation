@@ -16,6 +16,9 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   const composition = process.env.UX_ACTIVITY_DATA_COMPOSITION ?? "normal";
   expect(["normal", "default-off"]).toContain(composition);
   if (composition === "default-off") expect(syntax).toBe("JavaScript");
+  // Owner decision (17 Nov): with member reads off (default-off), expression insertion offers whole values only, as the
+  // native chooser does. The author writes the same member access by hand, so the expression and its result match normal.
+  const wholeOnly = composition === "default-off";
   const contexts: Context[] = [], pending: Promise<void>[] = [], insertions: unknown[] = [];
   page.on("response", response => {
     if (response.ok() && response.url().includes("/design/workflows/activity-data/context"))
@@ -45,6 +48,13 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
     await button().press("Enter");
     await expect(chooser().getByRole("option").first()).toBeFocused();
   }
+  async function noMemberNavigation() {
+    await expect(chooser().getByRole("option").first()).toBeVisible();
+    await expect(chooser().locator("[role='option'] svg.lucide-chevron-right")).toHaveCount(0);
+    await expect(chooser().getByRole("navigation", { name: "Member path", exact: true })).toHaveCount(0);
+    await expect(chooser().getByRole("listbox", { name: "Members", exact: true })).toHaveCount(0);
+    await expect(chooser().getByRole("textbox", { name: "Member name", exact: true })).toHaveCount(0);
+  }
   async function insert(alias: string, path: string[], action: () => Promise<void>, expectedSource: string) {
     const before = await s.stored(created), start = contexts.length;
     await openChooser(); await action();
@@ -65,14 +75,16 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   }
   await s.open(created); await expect(button()).toBeEnabled();
   const before = await s.stored(created), writes = s.writes();
-  await openChooser(); await capture(page, info, "expression-sources"); await page.keyboard.press("Escape");
+  await openChooser(); if (wholeOnly) await noMemberNavigation();
+  await capture(page, info, "expression-sources"); await page.keyboard.press("Escape");
   await expect(chooser()).toHaveCount(0); await expect(button()).toBeFocused();
   expect(await s.stored(created)).toEqual(before); expect(s.writes()).toBe(writes);
   await capture(page, info, "expression-cancelled");
-  let text = syntax === "JavaScript" ? 'args.data["customerId"]' : '{{ data["customerId"] }}';
-  await insert("data", ["customerId"], async () => {
+  let text = wholeOnly ? "args.data" : syntax === "JavaScript" ? 'args.data["customerId"]' : '{{ data["customerId"] }}';
+  await insert("data", wholeOnly ? [] : ["customerId"], async () => {
+    // Choosing the Customer object inserts it whole when member reads are off; no member view opens.
     await chooser().getByRole("option").filter({ has: page.locator(".wf-data-chooser-option-label", { hasText: /› Customer$/ }) }).press("Enter");
-    await chooser().getByRole("option", { name: /^customerId/ }).press("Enter");
+    if (!wholeOnly) await chooser().getByRole("option", { name: /^customerId/ }).press("Enter");
   }, text);
   expect((await value()).parameters.data).toMatchObject({ kind: "ActivityResult", producerNodeId: "producer", projectionKey: "Customer" });
   const selected = await s.stored(created);
@@ -84,13 +96,18 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   await page.getByRole("button", { name: "Open expanded Text editor", exact: true }).click();
   const expanded = page.getByRole("dialog", { name: "Text", exact: true });
   await expect(expanded.locator(".cm-content")).toBeFocused();
-  if (syntax === "JavaScript") { await page.keyboard.insertText('.toUpperCase() + "-" + '); text += '.toUpperCase() + "-" + '; }
+  if (syntax === "JavaScript") {
+    const typed = `${wholeOnly ? '["customerId"]' : ""}.toUpperCase() + "-" + `;
+    await page.keyboard.insertText(typed); text += typed;
+  }
   else { await page.keyboard.insertText(" | upcase"); text = '{{ data["customerId"] | upcase }}'; await content().press("ControlOrMeta+End"); await page.keyboard.insertText("-"); text += "-"; }
   await settled(text);
   const suffixBefore = await s.stored(created);
   text += syntax === "JavaScript" ? "args.data2" : "{{ data2 }}";
   await insert("data2", [], async () => {
+    if (wholeOnly) await noMemberNavigation();
     await chooser().getByRole("group", { name: "Workflow inputs", exact: true }).getByRole("option", { name: /Suffix/ }).press("Enter");
+    if (wholeOnly) return;
     const whole = chooser().getByRole("button", { name: "Use whole value", exact: true });
     await expect(whole).toBeEnabled(); await whole.press("Enter");
   }, text);
@@ -107,9 +124,16 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   const preview = page.locator(".studio-code-editor-preview"); if (await preview.isVisible()) await preview.click();
   await expect(content()).toBeFocused(); await content().press("ControlOrMeta+End");
   await page.keyboard.insertText(syntax === "JavaScript" ? ' + "-" + ' : "-"); text += syntax === "JavaScript" ? ' + "-" + ' : "-"; await settled(text);
-  text += syntax === "JavaScript" ? 'args.data3["a.b"][""]' : '{{ data3["a.b"][""] }}';
-  await insert("data3", ["a.b", ""], async () => {
-    await chooser().getByRole("group", { name: "Variables", exact: true }).getByRole("option", { name: /Escaped payload/ }).press("Enter");
+  text += wholeOnly ? "args.data3" : syntax === "JavaScript" ? 'args.data3["a.b"][""]' : '{{ data3["a.b"][""] }}';
+  await insert("data3", wholeOnly ? [] : ["a.b", ""], async () => {
+    const payload = chooser().getByRole("group", { name: "Variables", exact: true }).getByRole("option", { name: /Escaped payload/ });
+    if (wholeOnly) {
+      // Default-off has no member view to capture: this state is the whole variable offered with no way into "a.b".
+      await noMemberNavigation(); await expect(payload).toBeVisible();
+      await capture(page, info, "expression-escaped-member");
+      await payload.press("Enter"); return;
+    }
+    await payload.press("Enter");
     const member = chooser().getByRole("textbox", { name: "Member name", exact: true });
     await expect(member).toBeEnabled(); await member.fill("a.b"); await member.press("Enter");
     await expect(chooser().getByRole("navigation", { name: "Member path", exact: true })).toContainText('"a.b"');
@@ -120,6 +144,7 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
     await capture(page, info, "expression-escaped-member");
     await chooser().getByRole("button", { name: "Use this value", exact: true }).press("Enter");
   }, text);
+  if (wholeOnly) { await page.keyboard.insertText('["a.b"][""]'); text += '["a.b"][""]'; await settled(text); }
   expect((await value()).parameters.data3).toEqual({ kind: "Variable", declaringScopeNodeId: "workflow", variableKey: "escaped-payload" });
   expect(Object.keys((await value()).parameters)).toEqual(["data", "data2", "data3"]);
   await capture(page, info, "expression-transformed");

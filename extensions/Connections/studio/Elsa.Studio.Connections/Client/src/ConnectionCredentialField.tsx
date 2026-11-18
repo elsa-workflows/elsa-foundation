@@ -17,6 +17,7 @@ export function ConnectionCredentialField({
   field,
   value,
   disabled = false,
+  allowUnchanged = false,
   error,
   onChange
 }: {
@@ -24,6 +25,7 @@ export function ConnectionCredentialField({
   field: AuthSchemeField;
   value: ConnectionCredentialInput;
   disabled?: boolean;
+  allowUnchanged?: boolean;
   error?: string;
   onChange(value: ConnectionCredentialInput): void;
 }) {
@@ -44,7 +46,7 @@ export function ConnectionCredentialField({
   const statusId = useId();
   const detailsId = useId();
   const radioName = useId();
-  const source = value.source === "secret" ? "secret" : "value";
+  const source = value.source;
   const selectedName = value.source === "secret" ? value.existingSecretName : "";
   const selectedSecret = value.source === "secret" ? value.selectedSecret : undefined;
   const currentResult = visibleState.items.find(item => item.name === selectedName);
@@ -53,7 +55,7 @@ export function ConnectionCredentialField({
   const selectionExpired = !!selectedSecret && !isEligibleSecret(selectedSecret);
   const selectionUnavailable = selectionUnresolved || selectionExpired;
   const invalid = selectionUnavailable && source === "secret";
-  const missing = field.required && (source === "secret" ? !selectedName : value.source !== "value" || !value.value.trim());
+  const missing = source !== "unchanged" && field.required && (source === "secret" ? !selectedName : value.source !== "value" || !value.value.trim());
   const validationMessage = error || (invalid ? "Select an available active text Secret before creating this connection." :
     touched && missing ? `${field.displayName} is required. Choose an existing Secret or enter a new value.` : null);
   const errorId = `${selectId}-error`;
@@ -94,6 +96,11 @@ export function ConnectionCredentialField({
         Choose an existing Secret or enter a new value. Secret values are never loaded here.
       </p>
       <div className="connection-credential-sources">
+        {allowUnchanged ? <label>
+          <input type="radio" name={radioName} value="unchanged" checked={source === "unchanged"}
+            onChange={() => { setTouched(false); onChange({ source: "unchanged" }); }} />
+          Keep stored credential
+        </label> : null}
         <label>
           <input
             type="radio"
@@ -116,7 +123,7 @@ export function ConnectionCredentialField({
         </label>
       </div>
 
-      {source === "secret" ? (
+      {source === "unchanged" ? <p>The stored credential will be kept.</p> : source === "secret" ? (
         <div className="connection-secret-picker">
           <div className="connection-secret-search-row">
             <label htmlFor={searchId}>Search Secrets for {field.displayName}</label>

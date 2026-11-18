@@ -7,7 +7,8 @@ import type {
   ConnectionSecretPickerMetadata,
   ConnectionTestResponse,
   CreateConnectionRequest,
-  ListConnectionsResponse
+  ListConnectionsResponse,
+  UpdateConnectionRequest
 } from "./connectionTypes";
 
 const basePath = "/connections";
@@ -81,6 +82,10 @@ export async function testConnection(context: StudioEndpointContext, name: strin
 
 export async function revokeConnection(context: StudioEndpointContext, name: string) {
   return context.http.postJson<ConnectionMetadata>(`${basePath}/${encodeURIComponent(name)}/revoke`, {});
+}
+
+export async function updateConnection(context: StudioEndpointContext, name: string, request: UpdateConnectionRequest) {
+  return context.http.putJson<ConnectionMetadata>(`${basePath}/${encodeURIComponent(name)}`, request);
 }
 
 export async function deleteConnection(context: StudioEndpointContext, name: string) {

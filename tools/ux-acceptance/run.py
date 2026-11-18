@@ -577,6 +577,20 @@ def expression_parameter(value):
     return result
 
 
+def expression_insertion_expectations(syntax, composition):
+    """Paths each insertion is admitted at, and the source after it. Default-off inserts whole values and the journey
+    types the same member access by hand, so the final expression and its runtime result match normal."""
+    if composition == 'default-off':
+        return [[], [], []], ['args.data', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+                              'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3']
+    paths = [['customerId'], [], ['a.b', '']]
+    sources = ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
+               '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
+               '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    return paths, sources
+
+
 def validate_expression_data(native, proof, title, composition):
     syntax = {'insert JavaScript activity data': 'JavaScript', 'insert Liquid activity data': 'Liquid'}[title]
     if proof.get('syntax') != syntax or proof.get('composition') != composition or composition not in {'normal', 'default-off'} or \
@@ -585,11 +599,14 @@ def validate_expression_data(native, proof, title, composition):
     expected_parameters = [{'kind': 'ActivityResult', 'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False},
                            {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None},
                            {'kind': 'Variable', 'declaringScopeNodeId': 'workflow', 'variableKey': 'escaped-payload'}]
-    paths = [['customerId'], [], ['a.b', '']]
-    sources = ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
-               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
-               '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
-               '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    paths, sources = expression_insertion_expectations(syntax, composition)
+    if composition == 'default-off':
+        # Owner decision (17 Nov): with member reads off, expression insertion never asks for or is offered a member.
+        for context in proof.get('contexts', []):
+            query = context.get('request', {}).get('query') or {}
+            offers = (context.get('response', {}).get('analysis') or {}).get('sources', [])
+            if query.get('memberPath') or any(offer.get('parameterPath') for offer in offers):
+                raise ValueError('Default-off expression insertion navigated a member')
     insertions = proof.get('insertions', [])
     if len(insertions) != 3 or len({item.get('definitionId') for item in insertions}) != 1:
         raise ValueError('Expression insertion inventory incomplete')

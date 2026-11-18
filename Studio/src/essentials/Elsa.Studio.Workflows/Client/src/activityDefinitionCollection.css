@@ -4,7 +4,10 @@
 .ad-designed-collection .ad-tools-disclosure[open] .ad-disclosure-panel { position: absolute; z-index: 5; top: calc(100% + .4rem); right: 0; display: grid; width: max-content; min-width: 13rem; gap: .35rem; padding: .55rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
 .ad-designed-collection .ad-disclosure-panel button { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 2.3rem; padding: .4rem .6rem; border: 0; border-radius: var(--studio-radius); color: inherit; text-align: left; background: transparent; cursor: pointer; }
 .ad-designed-collection .ad-disclosure-panel button:hover { background: var(--studio-accent-soft); }
-.ad-designed-collection .ad-advanced-filters[open] { grid-column: 1 / -1; }
+.ad-designed-collection .ad-collection-filters { display: flex; flex-wrap: wrap; align-items: end; gap: var(--studio-space-3); }
+.ad-designed-collection .ad-collection-filters > .studio-search { flex: 1 0 0; min-width: 0; }
+.ad-designed-collection .ad-advanced-filters { position: relative; }
+.ad-designed-collection .ad-advanced-filters[open] { flex-basis: 100%; order: 1; }
 .ad-designed-collection .ad-advanced-filters[open] > summary { margin-bottom: .65rem; }
 .ad-designed-collection .ad-advanced-filter-fields { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(8rem, .5fr); gap: .75rem; }
 .ad-designed-collection .ad-advanced-filter-fields label { display: grid; gap: .35rem; min-width: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
@@ -26,6 +29,7 @@
 .ad-create-advanced .ad-key-summary span, .ad-create-advanced label small { color: var(--studio-text-muted); font-weight: 400; }
 
 @media (max-width: 600px) {
+  .ad-designed-collection .ad-collection-filters > .studio-search { flex-basis: 100%; }
   .ad-designed-collection .ad-advanced-filter-fields { grid-template-columns: 1fr; }
   .ad-designed-collection .ad-tools-disclosure[open] .ad-disclosure-panel { position: static; width: 100%; margin-top: .4rem; }
   .ad-designed-collection .ad-collection-disclosure > summary { width: 100%; }

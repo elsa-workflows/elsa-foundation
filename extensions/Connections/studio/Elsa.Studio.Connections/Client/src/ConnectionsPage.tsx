@@ -18,6 +18,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<ConnectionDescriptorsResponse | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingName, setEditingName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const visibleItems = contextIsLoaded ? items : [];
   const visibleDescriptors = contextIsLoaded ? descriptors : null;
   const selected = visibleItems.find(item => item.name === selectedName) ?? null;
+  const editingConnection = editingName ? (visibleItems.find(item => item.name === editingName) ?? null) : null;
 
   const load = useCallback(async (query: string) => {
     const requestContext = context;
@@ -74,6 +76,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
     setDescriptors(null);
     setSelectedName(null);
     setCreating(false);
+    setEditingName(null);
     setNotice(null);
     setBusy(null);
     setSearch("");
@@ -102,6 +105,13 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
     setBusy(action);
     setNotice(null);
     try {
+      if (action === "Edit") {
+        setSelectedName(null);
+        setEditingName(connection.name);
+        operationRef.current = null;
+        setBusy(null);
+        return;
+      }
       if (action !== "Test" && !await dialogs.confirm({ message: `${action} ${connection.name}?`, tone: "danger" })) return;
       if (!isCurrent()) return;
       if (action === "Test") {
@@ -153,6 +163,14 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
         focusAfterCreate.current = true;
         notifications?.notify({ level: "success", title: `Connection '${created.name}' created.` });
         setCreating(false); setSelectedName(null); setSearch(appliedSearch);
+      }
+      void load(appliedSearchRef.current);
+    }} /> : null}
+    {editingConnection && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} initialConnection={editingConnection} onCancel={() => setEditingName(null)} onCreated={(updated, canNotify) => {
+      if (currentOwner.current !== owner) return;
+      if (canNotify) {
+        notifications?.notify({ level: "success", title: `Connection '${updated.name}' updated.` });
+        setEditingName(null); setSelectedName(null);
       }
       void load(appliedSearchRef.current);
     }} /> : null}

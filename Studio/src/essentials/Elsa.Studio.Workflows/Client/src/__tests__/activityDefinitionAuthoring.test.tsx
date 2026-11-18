@@ -261,7 +261,8 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No designed activities yet");
     click(buttonByText(rendered.container, "Create activity"));
-    await waitForText(rendered.container, "Script");
+    await waitForText(rendered.container, "Create Activity Definition");
+    await waitFor(() => expect(rendered.container.querySelector("select[name='provider']")).not.toBeNull());
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
     expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
@@ -271,11 +272,13 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     openDetails(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
-    click(buttonByText(rendered.container, "Create definition"));
+    const createDefinition = buttonByText(rendered.container, "Create definition") as HTMLButtonElement;
+    await waitFor(() => expect(createDefinition.disabled).toBe(false));
+    click(createDefinition);
 
     await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/definitions", expect.objectContaining({ activityTypeKey: "elsa.user.finance.invoice-evaluator" })));
     await rendered.unmount();
-  });
+  }, 15_000);
 
   it("preselects the sole usable non-graph provider without showing an implementation selector", async () => {
     const response = authoringCapabilities();

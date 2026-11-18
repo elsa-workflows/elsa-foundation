@@ -2,7 +2,7 @@ import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } f
 import { X } from "lucide-react";
 import { useDialogFocus, describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { AdvancedSection, StudioField } from "@elsa-workflows/studio-ui";
-import { createConnection } from "./connectionsApi";
+import { createConnection, updateConnection } from "./connectionsApi";
 import type {
   AuthSchemeDescriptor,
   AuthSchemeField,
@@ -11,26 +11,36 @@ import type {
   ConnectionMetadata,
   ConnectionSettingField,
   ConnectionTypeDescriptor,
-  CreateConnectionRequest
+  CreateConnectionRequest,
+  UpdateConnectionRequest
 } from "./connectionTypes";
 import { ConnectionCredentialField, isEligibleSecret } from "./ConnectionCredentialField";
 
 export function ConnectionCreateDialog({
   context,
   descriptors,
+  initialConnection,
   onCancel,
   onCreated
 }: {
   context: StudioEndpointContext;
   descriptors: ConnectionDescriptorsResponse;
+  initialConnection?: ConnectionMetadata;
   onCancel(): void;
   onCreated(connection: ConnectionMetadata, canNotify: boolean): void;
 }) {
-  const [name, setName] = useState("");
-  const [typeName, setTypeName] = useState(() => initialTypeName(descriptors));
-  const [authScheme, setAuthScheme] = useState(() => initialSchemeName(descriptors, initialTypeName(descriptors)));
-  const [settings, setSettings] = useState<Record<string, string>>({});
-  const [credentialInputs, setCredentialInputs] = useState<Record<string, ConnectionCredentialInput>>({});
+  const isEdit = !!initialConnection;
+  const [name, setName] = useState(() => initialConnection?.name ?? "");
+  const [displayName, setDisplayName] = useState(() => initialConnection?.displayName ?? "");
+  const [tags, setTags] = useState(() => initialConnection?.tags.join(", ") ?? "");
+  const [typeName, setTypeName] = useState(() => initialConnection?.typeName ?? initialTypeName(descriptors));
+  const [authScheme, setAuthScheme] = useState(() => {
+    if (initialConnection) return initialConnection.authScheme;
+    const baseType = initialTypeName(descriptors);
+    return initialSchemeName(descriptors, baseType);
+  });
+  const [settings, setSettings] = useState<Record<string, string>>(() => initialConnection ? { ...initialConnection.settings } : {});
+  const [credentialInputs, setCredentialInputs] = useState<Record<string, ConnectionCredentialInput>>(() => initialConnection ? buildInitialCredentials(initialConnection) : {});
   const [boundContext, setBoundContext] = useState(context);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +123,7 @@ export function ConnectionCreateDialog({
   const validRequiredSchemeSettings = nonSensitiveSchemeFields.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validCredentials = sensitiveFields.every(field => {
     const input = visibleCredentials[field.name] ?? defaultCredentialInput();
+    if (input.source === "unchanged") return isEdit && !!initialConnection?.secretFieldNames.includes(field.name);
     if (input.source === "value") return !field.required || input.value.trim().length > 0;
     if (!input.existingSecretName) return !field.required;
     return input.selectedSecret?.name === input.existingSecretName
@@ -143,18 +154,20 @@ export function ConnectionCreateDialog({
   useEffect(() => {
     if (boundContext === context) return;
     setBoundContext(context);
-    setName("");
-    const nextTypeName = initialTypeName(descriptors);
+    setName(initialConnection?.name ?? "");
+    setDisplayName(initialConnection?.displayName ?? "");
+    setTags(initialConnection?.tags.join(", ") ?? "");
+    const nextTypeName = initialConnection?.typeName ?? initialTypeName(descriptors);
     setTypeName(nextTypeName);
-    setAuthScheme(initialSchemeName(descriptors, nextTypeName));
-    setSettings({});
-    setCredentialInputs({});
+    setAuthScheme(initialConnection?.authScheme ?? initialSchemeName(descriptors, nextTypeName));
+    setSettings(initialConnection ? { ...initialConnection.settings } : {});
+    setCredentialInputs(initialConnection ? buildInitialCredentials(initialConnection) : {});
     setTouched({});
     setRevealedSettings([]);
     clearErrors();
     submittingRef.current = false;
     setSubmitting(false);
-  }, [boundContext, context, descriptors]);
+  }, [boundContext, context, descriptors, isEdit, initialConnection]);
 
   function clearErrors(field?: string) {
     setError(null);
@@ -223,21 +236,40 @@ export function ConnectionCreateDialog({
           secretFields![field.name] = { value: input.value };
         }
       }
-      const request: CreateConnectionRequest = {
-        name: name.trim(),
-        typeName: visibleTypeName,
-        authScheme: visibleAuthScheme,
-        settings: Object.fromEntries(Object.entries(visibleSettings).filter(([, value]) => value.trim().length > 0)),
-        secretFields: secretFields!
-      };
-      const created = await createConnection(operationContext, request);
-      if (currentScopeRef.current !== operationScope) return;
+      const filteredSettings = Object.fromEntries(Object.entries(visibleSettings).filter(([, value]) => value.trim().length > 0));
 
-      closed = true;
-      submittingRef.current = false;
-      setSubmitting(false);
-      onCreated(created, isCurrent());
-      if (isCurrent()) onCancel();
+      if (isEdit) {
+        const updateRequest: UpdateConnectionRequest = {
+          displayName: displayName.trim(),
+          tags: tags.split(",").map(tag => tag.trim()).filter(Boolean),
+          settings: filteredSettings,
+          secretFields: secretFields!
+        };
+        const updated = await updateConnection(operationContext, name.trim(), updateRequest);
+        if (currentScopeRef.current !== operationScope) return;
+
+        closed = true;
+        submittingRef.current = false;
+        setSubmitting(false);
+        onCreated(updated, isCurrent());
+        if (isCurrent()) onCancel();
+      } else {
+        const request: CreateConnectionRequest = {
+          name: name.trim(),
+          typeName: visibleTypeName,
+          authScheme: visibleAuthScheme,
+          settings: filteredSettings,
+          secretFields: secretFields!
+        };
+        const created = await createConnection(operationContext, request);
+        if (currentScopeRef.current !== operationScope) return;
+
+        closed = true;
+        submittingRef.current = false;
+        setSubmitting(false);
+        onCreated(created, isCurrent());
+        if (isCurrent()) onCancel();
+      }
     } catch (cause) {
       const message = await describeApiError(cause);
       const validation = await tryExtractValidationErrors(cause);
@@ -253,7 +285,7 @@ export function ConnectionCreateDialog({
         setRevealedSettings(current => [...new Set([...current,
           ...Object.keys(mapped).filter(key => key.startsWith("settings.")).map(key => key.slice("settings.".length))])]);
         setFieldErrors(mapped);
-        setError(message || "The connection could not be created.");
+        setError(message || (isEdit ? "The connection could not be updated." : "The connection could not be created."));
       }
     } finally {
       if (!closed && currentScopeRef.current === operationScope) {
@@ -379,6 +411,7 @@ export function ConnectionCreateDialog({
           context={context}
           field={field}
           value={visibleCredentials[field.name] ?? defaultCredentialInput()}
+          allowUnchanged={isEdit && initialConnection.secretFieldNames.includes(field.name)}
           disabled={!contextIsCurrent || submitting}
           error={fieldErrors[`secretFields.${field.name}`]}
           onChange={input => setCredentialInput(field.name, input)}
@@ -431,9 +464,9 @@ export function ConnectionCreateDialog({
         <form onSubmit={event => void submit(event)}>
           <header className="connections-create-header">
             <div>
-              <p className="connections-create-eyebrow">New connection</p>
-              <h2 id={dialogTitleId}>Create connection</h2>
-              <p className="connections-modal-help">Choose a service and how it authenticates. Secret values are never shown here.</p>
+              <p className="connections-create-eyebrow">{isEdit ? "Edit" : "New"} connection</p>
+              <h2 id={dialogTitleId}>{isEdit ? "Edit connection" : "Create connection"}</h2>
+              <p className="connections-modal-help">{isEdit ? "Update settings and credentials for this connection. Secret values are never shown here." : "Choose a service and how it authenticates. Secret values are never shown here."}</p>
             </div>
             <button
               type="button"
@@ -456,29 +489,43 @@ export function ConnectionCreateDialog({
 
                 <input
                   id={nameId}
-                  data-dialog-initial-focus
-                  required
+                  data-dialog-initial-focus={!isEdit}
+                  required={!isEdit}
                   autoComplete="off"
+                  readOnly={isEdit}
                   aria-invalid={!!visibleNameError || undefined}
                   aria-describedby={`${nameId}-help${visibleNameError ? ` ${nameId}-error` : ""}`}
                   onBlur={() => touch("name")}
-                  disabled={!contextIsCurrent || submitting}
+                  disabled={isEdit || !contextIsCurrent || submitting}
                   value={contextIsCurrent ? name : ""}
                   onChange={event => {
                     setName(event.target.value);
                     clearErrors("name");
                   }}
                 />
-                <small id={`${nameId}-help`}>Use letters, numbers, dots, dashes or underscores. Maximum 128 characters.</small>
+                <small id={`${nameId}-help`}>{isEdit ? "Name cannot be changed." : "Use letters, numbers, dots, dashes or underscores. Maximum 128 characters."}</small>
                 {visibleNameError ? <span id={`${nameId}-error`} className="connections-create-field-error">{visibleNameError}</span> : null}
               </StudioField></div>
+              {isEdit ? <>
+                <div className="connections-create-field"><StudioField controlId={`${nameId}-display-name`} label="Display name">
+                  <input id={`${nameId}-display-name`} value={contextIsCurrent ? displayName : ""}
+                    disabled={!contextIsCurrent || submitting}
+                    onChange={event => setDisplayName(event.target.value)} />
+                </StudioField></div>
+                <div className="connections-create-field"><StudioField controlId={`${nameId}-tags`} label="Tags">
+                  <input id={`${nameId}-tags`} value={contextIsCurrent ? tags : ""}
+                    aria-describedby={`${nameId}-tags-help`} disabled={!contextIsCurrent || submitting}
+                    onChange={event => setTags(event.target.value)} />
+                  <small id={`${nameId}-tags-help`}>Separate tags with commas.</small>
+                </StudioField></div>
+              </> : null}
               <div className="connections-create-field"><StudioField controlId={typeId} label="Type">
 
                 <select
                   id={typeId}
                   required
                   value={visibleTypeName}
-                  disabled={!contextIsCurrent || submitting}
+                  disabled={isEdit || !contextIsCurrent || submitting}
                   onChange={event => changeType(event.target.value)}
                 >
                   {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName}</option>)}
@@ -490,7 +537,7 @@ export function ConnectionCreateDialog({
                   id={schemeId}
                   required
                   value={visibleAuthScheme}
-                  disabled={!contextIsCurrent || submitting || availableSchemes.length === 0}
+                  disabled={isEdit || !contextIsCurrent || submitting || availableSchemes.length === 0}
                   onChange={event => changeScheme(event.target.value)}
                 >
                   {availableSchemes.map(scheme => <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>)}
@@ -518,7 +565,7 @@ export function ConnectionCreateDialog({
 
           <div className="connections-create-actions">
             <button type="button" disabled={submitting} onClick={onCancel}>Cancel</button>
-            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Creating…" : "Create"}</button>
+            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create")}</button>
           </div>
         </form>
       </section>
@@ -581,6 +628,14 @@ function isKnownApiKeyTextField(field: AuthSchemeField | undefined, name: string
 
 function defaultCredentialInput(): ConnectionCredentialInput {
   return { source: "secret", existingSecretName: "" };
+}
+
+function buildInitialCredentials(connection: ConnectionMetadata): Record<string, ConnectionCredentialInput> {
+  const credentials: Record<string, ConnectionCredentialInput> = {};
+  for (const fieldName of connection.secretFieldNames) {
+    credentials[fieldName] = { source: "unchanged" };
+  }
+  return credentials;
 }
 
 function isSettingPresent(field: { editorHint: string }, value?: string) {

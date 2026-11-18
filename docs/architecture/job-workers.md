@@ -278,6 +278,13 @@ this contract:
   - **the attempt number**, which in process is one plus the ticket's recorded attempts (owners lost while it was on
     trial). It is a lower bound on executions, since an owner lost outside a trial counts nothing;
   - **the deadline and the cancellation token.**
+- **A restart after a Park runs the same invocation (proposed, fourth review R4-M3).** Today the ticket is the only
+  durable home of a job's arguments: the model passes them to `StartJob` and keeps only the job key. Release 1's model
+  also records an immutable `JobSpec` at arm (the key, the arguments and the effect key), and a recover's restart
+  writes the new ticket from that spec under the next ticket generation, so it keeps the invocation's effect key and
+  never reads the old ticket, which a page may have cleared to a payload-free marker or the sweep removed. A kept
+  ticket of an obsolete generation is cleared and never restored, since physical entry checks no generation
+  ([observability](observability.md#recover)).
 - `StartJob` accepts an optional timeout. The kernel writes a timer message to the instance in the same commit and
   recalls it when the result arrives; on expiry it cancels the job and gives the model a timeout result. That costs one
   timer row per job that asks for a timeout.

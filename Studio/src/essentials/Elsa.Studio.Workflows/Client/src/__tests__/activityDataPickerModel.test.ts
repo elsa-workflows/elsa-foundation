@@ -209,3 +209,34 @@ describe("member browsing facts", () => {
   });
 
 });
+
+describe("expression member browsing and member reads", () => {
+  // Owner decision (17 Nov): with member reads off, expression insertion offers whole values only.
+  const parameterSource = { kind: "ActivityResult" as const, producerNodeId: "producer", projectionKey: "$result", isOptional: false };
+  const expression = (path: string[], memberReadsEnabled: boolean, shape: ActivityDataShape) => result([{
+    id: "activity:producer:$result", displayName: "producer", binding: null, reasonCode: null, availability: "definite",
+    activityResultSource: { producerNodeId: "producer", projectionKey: "$result" }, parameterSource, parameterPath: path, type: shape.type, shape
+  }], { memberReadsEnabled, expressionParametersEnabled: true, expressionType: "JavaScript" });
+  const object = (overrides: Partial<ActivityDataShape> = {}) => shape({ members: [{ serializedName: "customerId", displayName: "Customer ID",
+    shape: shape({ kind: "scalar", type: { alias: "String", collectionKind: "Single" } }) }], ...overrides });
+  const expressionLabels = { ...labels, expressionType: "JavaScript" };
+
+  it("lists no members or literal entry for an expression when member reads are off, and keeps the whole value usable", () => {
+    for (const shape of [object(), object({ state: "unknown", kind: "unknown", members: [] }), object({ kind: "map", members: [] })]) {
+      const model = activityDataMemberBrowser(expression([], false, shape), "activity:producer:$result", [], expressionLabels);
+      expect(model).toMatchObject({ members: [], allowLiteral: false, reason: null, information: null, typeLabel: "Customer" });
+    }
+  });
+
+  it("refuses a member path for an expression when member reads are off", () => {
+    const model = activityDataMemberBrowser(expression(["customerId"], false, object()), "activity:producer:$result", ["customerId"], expressionLabels);
+    expect(model).toMatchObject({ members: [], allowLiteral: false, reason: "Member selection is not enabled on this server." });
+  });
+
+  it("keeps expression member browsing when member reads are on", () => {
+    const model = activityDataMemberBrowser(expression([], true, object()), "activity:producer:$result", [], expressionLabels);
+    expect(model.reason).toBeNull();
+    expect(model.members.map(member => member.memberPath)).toEqual([["customerId"]]);
+    expect(activityDataMemberBrowser(expression([], true, object({ state: "unknown", kind: "unknown", members: [] })), "activity:producer:$result", [], expressionLabels).allowLiteral).toBe(true);
+  });
+});

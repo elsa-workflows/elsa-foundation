@@ -219,7 +219,7 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
           </StudioAlert>
         ) : null}
         {capabilities.kind === "denied" ? <StudioAlert tone="info">Reading what this model supports needs permission to author agents.</StudioAlert> : null}
-        {capabilities.kind === "unusable" ? <StudioAlert tone="warning">This model connection cannot be used by agents right now, so testing and publishing are unavailable. Check the connection in Connections, or choose another one. {retry}</StudioAlert> : null}
+        {capabilities.kind === "unusable" ? <StudioAlert tone="warning">This model connection isn't available for agents right now — for example, credentials may be missing or the endpoint is unreachable. Review the connection in Connections, or pick a different model. {retry}</StudioAlert> : null}
         {capabilities.kind === "unavailable" ? <StudioAlert tone="warning">What this model supports could not be read. {retry}</StudioAlert> : null}
         {model && !model.supportsJsonSchema ? <StudioAlert tone="warning">This model does not declare structured JSON results, so the agent cannot be published with it.</StudioAlert> : null}
         {modelId || connectionName ? (
