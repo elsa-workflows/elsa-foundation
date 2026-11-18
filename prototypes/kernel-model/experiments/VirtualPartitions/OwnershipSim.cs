@@ -24,6 +24,7 @@ public enum Mutation
     ResetAll = 2048,               // (i): a refused flush resets the whole picture (a take), dropping what is still held
     ResetPollsSeenBelow = 4096,    // (i): the poll after a keeping reset still reads Seen < epoch, as a steady poll does
     ProjectorBlindWrite = 8192,    // (i): a projector round moves its partition's cursor without checking it is where it read it
+    ProjectorJumps = 16384,        // (i): a projector round moves the cursor to the partition's position, past rows it did not read
 }
 
 /// <summary>
@@ -77,34 +78,32 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
     public List<string> Faults { get; } = [];
     public Action<string>? Log { get; init; }
     public long Landed, Refused, Resets, Takes, Splits, Merges, Moved, FenceRowsTouched, RowsTaken;
-    public long KeepResets, Witnesses, Marks, Trials, Consumed, Rounds, SettleRounds;
+    public long KeepResets, Witnesses, Marks, Trials, Attempts, Consumed, Rounds, SettleRounds;
 
     private bool Has(Mutation m) => (mutation & m) != 0;
     private static string Process(Node n) => n.Name;
 
     // ---- the store's side ------------------------------------------------------------------------------------------
 
-    private Ownership? Take(VpRange range, Node node)
+    private Ownership? Take(VpRange range, Node node, IReadOnlySet<int>? only = null)
     {
         var o = new Ownership(Process(node), range);
         if (fence == Fence.PerVirtualPartition)
         {
-            for (var vp = range.Lo; vp < range.Hi; vp++)
-            {
-                var row = _vps[vp];
-                if (row.Owner is not null && row.Owner != o.Node && row.Lease >= _time) return null;
-            }
-            // A take from another owner counts an attempt on what was on trial at that partition's epoch (D4); the
-            // ghost counts the owners lost at the epoch the trial really ran under.
+            // A take keeps what it got: it skips the rows another owner holds live.
+            bool Free(int vp) => (only is null || only.Contains(vp)) && _vps[vp] is var row && (row.Owner is null || row.Owner == o.Node || row.Lease < _time);
+            // A take from another owner counts an attempt on what was on trial at that partition's epoch (D4). T1 checks
+            // the epoch: the same test on the epoch the trial really ran under, whatever the mark recorded.
             foreach (var m in _msgs)
-                if (!m.Done && range.Contains(m.Vp) && _vps[m.Vp] is { Owner: { } before } row && before != o.Node)
+                if (!m.Done && range.Contains(m.Vp) && Free(m.Vp) && _vps[m.Vp] is { Owner: { } before } row && before != o.Node)
                 {
-                    if (m.Trial == row.Epoch) m.Attempts++;
+                    if (m.Trial == row.Epoch) { m.Attempts++; Attempts++; }
                     if (m.TrialAt == row.Epoch) m.Lost++;
                 }
             for (var vp = range.Lo; vp < range.Hi; vp++)
             {
                 var row = _vps[vp];
+                if (!Free(vp)) continue;
                 (row.Owner, row.Epoch, row.Lease) = (o.Node, row.Epoch + 1, _time + Lease);
                 (o.VpEpoch[vp], o.Position[vp]) = (row.Epoch, row.Position);
                 node.Mine.Add((vp, row.Epoch));
@@ -118,8 +117,9 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
             o.Epoch = row.Epoch;
             for (var vp = range.Lo; vp < range.Hi; vp++) o.Position[vp] = _position[vp];
         }
+        if (o.Position.Count == 0) return null;
         Takes++;
-        RowsTaken += range.Count;
+        RowsTaken += o.Position.Count;
         return o;
     }
 
@@ -187,7 +187,7 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         if (_projected[vp] != from && !Has(Mutation.ProjectorBlindWrite)) return;     // lost the race: lost whole, read again
         for (var p = from + 1; p <= to; p++)
             if (!_journal.Contains((vp, p)) || !_view.Add((vp, p))) Faults.Add($"P1 row {p} of virtual partition {vp} was projected {(_journal.Contains((vp, p)) ? "twice" : "without a commit")}");
-        _projected[vp] = to;
+        _projected[vp] = Has(Mutation.ProjectorJumps) ? _vps[vp].Position : to;
     }
 
     private void Beat(Ownership o, Node node)
@@ -281,6 +281,21 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
     /// <summary>A node takes a range: whatever it still pictured over those virtual partitions is stale once the take bumps their epochs.</summary>
     private void Acquire(Node node, VpRange range)
     {
+        if (fence == Fence.PerVirtualPartition)
+        {
+            // (i) The take re-reads only the partitions it takes: they leave the pictures that hold them, the rest stays,
+            // and what the take got fills a hole of the picture whose range contains it, or is a picture of its own.
+            foreach (var p in node.Held.ToList())
+            {
+                foreach (var vp in p.Position.Keys.Where(range.Contains).ToList()) { p.Position.Remove(vp); p.VpEpoch.Remove(vp); }
+                if (p.Position.Count == 0) { node.Held.Remove(p); node.Doubtful.Remove(p); }
+            }
+            if (Take(range, node) is not { } got) return;
+            if (node.Held.FirstOrDefault(p => p.Range.Lo <= range.Lo && range.Hi <= p.Range.Hi) is { } holder)
+                foreach (var (vp, e) in got.VpEpoch) (holder.VpEpoch[vp], holder.Position[vp]) = (e, got.Position[vp]);
+            else node.Held.Add(got);
+            return;
+        }
         node.Held.RemoveAll(o => o.Range.Lo < range.Hi && range.Lo < o.Range.Hi);
         node.Doubtful.RemoveWhere(d => d.Range.Lo < range.Hi && range.Lo < d.Range.Hi);
         if (Take(range, node) is { } taken) node.Held.Add(taken);
@@ -291,12 +306,24 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         node.Held.Remove(o);
         node.Doubtful.Remove(o);
         Resets++;
-        Acquire(node, o.Range);
+        if (fence == Fence.PerRange) { Acquire(node, o.Range); return; }
+        // (i) Re-take, one partition at a time and each at a new epoch, those of the picture still mine or free; drop the rest.
+        if (Take(o.Range, node, o.Position.Keys.ToHashSet()) is { } again) node.Held.Add(again);
+        Served(node, "a reset");
+    }
+
+    /// <summary>(i) L1: what a live process holds live in the store, it serves in a picture at the store's epoch.</summary>
+    private int Unserved(Node node) => !node.Alive ? 0 : Enumerable.Range(0, count).Count(vp => _vps[vp] is var row && row.Owner == node.Name
+        && row.Lease >= _time && !node.Held.Any(p => p.VpEpoch.TryGetValue(vp, out var e) && e == row.Epoch));
+
+    private void Served(Node node, string after)
+    {
+        if (Unserved(node) is var n and > 0) Faults.Add($"L1 liveness: after {after} {node.Name} holds {n} virtual partitions live in the store that it serves in no picture");
     }
 
     /// <summary>
     /// (i) After a refused flush: keep from the store what is still mine at the epochs I hold (one statement, as a beat that
-    /// returns its rows, renewing them), drop the rest, take no row. The kept partitions' memory is dropped and polled again,
+    /// returns id, owner, epoch and position, renewing them), drop the rest, take no row. The kept partitions' memory is dropped and polled again,
     /// reading what I marked at their epoch too: the poll's Seen &lt; epoch would leave it for no one.
     /// </summary>
     private void KeepReset(Node node, Ownership o)
@@ -307,9 +334,10 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         foreach (var vp in o.Position.Keys.ToList())
             if (_vps[vp] is var row && row.Owner == o.Node && row.Epoch == o.VpEpoch[vp]) (o.Position[vp], row.Lease) = (row.Position, _time + Lease);
             else { o.Position.Remove(vp); o.VpEpoch.Remove(vp); }
-        if (o.Position.Count == 0) { node.Held.Remove(o); return; }
+        if (o.Position.Count == 0) node.Held.Remove(o);
         foreach (var m in node.Memory.Keys.Where(m => o.Owns(m.Vp)).ToList()) node.Memory.Remove(m);
         Poll(node, o, again: !Has(Mutation.ResetPollsSeenBelow));
+        Served(node, "a keeping reset");
     }
 
     /// <summary>(i) The poll (D4): what is not done and was not seen at its partition's epoch; <paramref name="again"/>: or was.</summary>
@@ -339,7 +367,7 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
     }
 
     private bool SameEpochs(Ownership a, Ownership b, IEnumerable<int> vps) =>
-        fence == Fence.PerRange ? a.Epoch == b.Epoch && a.Range == b.Range : vps.All(vp => a.VpEpoch.TryGetValue(vp, out var e) && b.VpEpoch.TryGetValue(vp, out var f) && e == f);
+        fence == Fence.PerRange ? a.Epoch == b.Epoch && a.Range == b.Range : vps.Where(a.VpEpoch.ContainsKey).ToList() is { Count: > 0 } held && held.All(vp => b.VpEpoch.TryGetValue(vp, out var f) && a.VpEpoch[vp] == f);
 
     /// <summary>What the node does with a commit's answer: moves its positions, or doubts (a lost answer), or resets.</summary>
     private void Answer(Node node, Ownership current, Ownership sent, bool landed, List<int> vps, List<Mark> marks)
@@ -348,7 +376,7 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         Log?.Invoke($"    answer: {(landed ? lost ? "landed, answer lost" : "landed" : "refused")}");
         if (landed && !lost)
         {
-            foreach (var (vp, k) in vps.GroupBy(v => v).Select(g => (g.Key, g.Count()))) current.Position[vp] = sent.Position[vp] + k;
+            foreach (var (vp, k) in vps.GroupBy(v => v).Select(g => (g.Key, g.Count()))) if (current.Position.ContainsKey(vp)) current.Position[vp] = sent.Position[vp] + k;
             node.Touched = [.. vps];
             foreach (var (m, _, consume) in marks)
                 if (node.Memory.TryGetValue(m, out var memo) && memo.Epoch == sent.VpEpoch[m.Vp]) { if (consume) node.Memory.Remove(m); else memo.Marked = true; }
@@ -459,18 +487,32 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
                 var spanned = sent.Vps.Distinct().Where(vp => _vps[vp].Owner == sent.Picture.Node && _vps[vp].Epoch == sent.Picture.VpEpoch[vp]).Order().ToList();
                 var takers = _nodes.Where(n => n.Alive && n.Name != sent.Picture.Node).ToList();
                 if (spanned.Count < 2 || takers.Count == 0) break;
-                var b = spanned[random.Next(spanned.Count)];
-                _vps[b].Lease = _time - 1;      // b's lease alone ran out: its beat was late, and commits renewed the others
-                Acquire(takers[random.Next(takers.Count)], new VpRange(b, b + 1));
+                // Some, never all, move: by lease expiry (a late beat; commits renewed the rest), or by a cooperative release.
+                var moved = spanned.OrderBy(_ => random.Next()).Take(1 + random.Next(spanned.Count - 1)).ToList();
+                var release = random.Next(2) == 0;
+                foreach (var vp in moved)
+                {
+                    if (!release) _vps[vp].Lease = _time - 1;
+                    else if (sent.Node.Held.FirstOrDefault(p => p.VpEpoch.TryGetValue(vp, out var e) && e == _vps[vp].Epoch) is { } p)
+                    {
+                        (_vps[vp].Owner, Moved) = (null, Moved + 1);
+                        p.Position.Remove(vp);
+                        p.VpEpoch.Remove(vp);
+                        if (p.Position.Count == 0) sent.Node.Held.Remove(p);
+                    }
+                    Acquire(takers[random.Next(takers.Count)], new VpRange(vp, vp + 1));
+                }
                 Witnesses++;
                 var (landed, current) = Land(sent);
-                if (landed) Faults.Add($"W1 the flush of {sent.Node.Name} over {string.Join(",", spanned)} landed after {b} was taken over");
-                // The old owner keeps the rest at the same epochs and positions, served at once: no take, no hole. (A picture
-                // still in doubt did not reset: RetryAfterLostAnswer, whose backstop is the position check.)
-                if (current is not null && sent.Node.Alive && !sent.Node.Doubtful.Contains(current))
-                    foreach (var vp in spanned.Where(vp => vp != b))
-                        if (!sent.Node.Held.Any(p => p.VpEpoch.TryGetValue(vp, out var e) && e == _vps[vp].Epoch && e == sent.Picture.VpEpoch[vp] && p.Position[vp] == _vps[vp].Position))
-                            Faults.Add($"W3 liveness: after the partial fence failure {sent.Node.Name} no longer serves virtual partition {vp}, which it still holds at epoch {_vps[vp].Epoch}");
+                if (landed) Faults.Add($"W1 the flush of {sent.Node.Name} over {string.Join(",", spanned)} landed after {string.Join(",", moved)} moved");
+                // W3: what the old owner still holds it serves, at the store's epoch and position. W4 (cost): the reset took
+                // none of it again. (A picture still in doubt under RetryAfterLostAnswer did not reset; the position check is its backstop.)
+                if (current is not null && sent.Node.Alive && !(Has(Mutation.RetryAfterLostAnswer) && sent.Node.Doubtful.Contains(current)))
+                    foreach (var vp in spanned.Except(moved).Where(vp => _vps[vp].Owner == sent.Node.Name))
+                        if (!sent.Node.Held.Any(p => p.VpEpoch.TryGetValue(vp, out var e) && e == _vps[vp].Epoch && p.Position[vp] == _vps[vp].Position))
+                            Faults.Add($"W3 liveness: after the partial fence failure {sent.Node.Name} does not serve virtual partition {vp}, which it still holds");
+                        else if (_vps[vp].Epoch != sent.Picture.VpEpoch[vp])
+                            Faults.Add($"W4 cost: after the partial fence failure {sent.Node.Name} took virtual partition {vp} again (epoch {sent.Picture.VpEpoch[vp]} to {_vps[vp].Epoch}) where it could keep it");
                 break;
             }
             case 11 when fence == Fence.PerVirtualPartition:
@@ -505,7 +547,7 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         }
         foreach (var m in _msgs)
         {
-            if (m.Attempts != m.Lost) return $"T1 the message to {m.Vp} counts {m.Attempts} attempts; {m.Lost} owners were lost while it was on trial at their epoch";
+            if (m.Attempts != m.Lost) return $"T1 the message to {m.Vp} counts {m.Attempts} attempts; the takes that found it on trial at the epoch the trial really ran under number {m.Lost}";
             if (m.Done) continue;
             var row = _vps[m.Vp];
             if (m.Seen > row.Epoch) return $"S1 the message to {m.Vp} is marked seen at {m.Seen}, above its partition's epoch {row.Epoch}: no owner polls it";
@@ -540,7 +582,9 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
         // kernel does, and the take drops it when another node holds the range now. What is held after that must commit.
         foreach (var node in _nodes)
             foreach (var o in node.Held.ToList())
-                if (node.Doubtful.Contains(o) || !Commit(o, [First(o)])) Reset(node, o);
+                if (!node.Held.Contains(o)) continue;       // (i) a take of another picture's range emptied it
+                else if (node.Doubtful.Contains(o)) Reset(node, o);
+                else if (!Commit(o, [First(o)])) { if (fence == Fence.PerVirtualPartition) KeepReset(node, o); else Reset(node, o); }
                 else o.Position[First(o)]++;
         foreach (var node in _nodes)
             foreach (var o in node.Held)
@@ -549,12 +593,15 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
                 o.Position[First(o)]++;
             }
         var covered = Map().Entries.Where(e => e.Owner is null).Sum(e => e.Range.Count);
+        // (i) A row a live process owns and does not serve is as uncovered as a free one (a dead process's rows wait for their lease).
+        if (fence == Fence.PerVirtualPartition)
+            covered += _nodes.Sum(Unserved);
         // (i) The projector catches up: what was read lands, then rounds per virtual partition until every cursor is at its position.
         foreach (var (vp, from, to) in _rounds) Project(vp, from, to);
         if (fence == Fence.PerVirtualPartition)
             for (var vp = 0; vp < count; vp++)
                 for (; _projected[vp] < _vps[vp].Position; SettleRounds++) Project(vp, _projected[vp], Math.Min(_vps[vp].Position, _projected[vp] + 4));
-        return Check() ?? (covered > 0 ? $"liveness: {covered} virtual partitions have no owner after settling" : null)
+        return Check() ?? (covered > 0 ? $"liveness: {covered} virtual partitions have no owner that serves them after settling" : null)
             ?? (_view.Count < (fence == Fence.PerVirtualPartition ? _journal.Count : 0) ? $"P3 liveness: {_journal.Count - _view.Count} journal rows were never projected" : null);
     }
 
@@ -564,7 +611,7 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
     public static int Sweep(int seeds, int actions, int count, int nodes, Fence fence, Mutation mutation = Mutation.None, bool quiet = false)
     {
         long landed = 0, refused = 0, resets = 0, takes = 0, splits = 0, merges = 0, moved = 0, fenceRows = 0, rowsTaken = 0;
-        long keepResets = 0, witnesses = 0, marks = 0, trials = 0, consumed = 0, rounds = 0, settleRounds = 0;
+        long keepResets = 0, witnesses = 0, marks = 0, trials = 0, attempts = 0, consumed = 0, rounds = 0, settleRounds = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         for (var seed = 1; seed <= seeds; seed++)
         {
@@ -575,11 +622,11 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
                 return seed;
             }
             landed += sim.Landed; refused += sim.Refused; resets += sim.Resets; takes += sim.Takes; splits += sim.Splits; merges += sim.Merges; moved += sim.Moved; fenceRows += sim.FenceRowsTouched; rowsTaken += sim.RowsTaken;
-            keepResets += sim.KeepResets; witnesses += sim.Witnesses; marks += sim.Marks; trials += sim.Trials; consumed += sim.Consumed; rounds += sim.Rounds; settleRounds += sim.SettleRounds;
+            keepResets += sim.KeepResets; witnesses += sim.Witnesses; marks += sim.Marks; trials += sim.Trials; attempts += sim.Attempts; consumed += sim.Consumed; rounds += sim.Rounds; settleRounds += sim.SettleRounds;
         }
         if (!quiet)
             Console.WriteLine($"{Name(fence)}, {count} vps, {nodes} nodes: {seeds} seeds of {actions} actions, {watch.Elapsed.TotalSeconds:F1} s, 0 failed; per seed: {landed / (double)seeds:F1} commits landed, {refused / (double)seeds:F1} refused, {resets / (double)seeds:F1} resets, {takes / (double)seeds:F1} takes of {rowsTaken / Math.Max(1.0, takes):F0} rows, {splits / (double)seeds:F1} splits, {merges / (double)seeds:F1} merges, {moved / (double)seeds:F0} vps moved; fence rows per commit {fenceRows / Math.Max(1.0, landed + refused):F2}"
-                + (fence == Fence.PerRange ? "" : $"; {keepResets / (double)seeds:F1} resets keeping the rest, {witnesses / (double)seeds:F1} partial takeovers of a flush in flight, {marks / (double)seeds:F1} marks ({trials / (double)seeds:F1} trials), {consumed / (double)seeds:F1} consumed, projector rounds {rounds / (double)seeds:F1} and {settleRounds / (double)seeds:F1} to catch up"));
+                + (fence == Fence.PerRange ? "" : $"; {keepResets / (double)seeds:F1} resets keeping the rest, {witnesses / (double)seeds:F1} partial takeovers of a flush in flight, {marks / (double)seeds:F1} marks ({trials / (double)seeds:F2} trials, {attempts / (double)seeds:F2} attempts counted), {consumed / (double)seeds:F1} consumed, projector rounds {rounds / (double)seeds:F1} and {settleRounds / (double)seeds:F1} to catch up"));
         return 0;
     }
 
@@ -616,9 +663,10 @@ public sealed class OwnershipSim(int count, int nodes, Fence fence, Mutation mut
             yield return (Mutation.BeatRenewsTouchedOnly, false, "availability only: idle rows expire and are taken, the owner resets");
             yield return (Mutation.FenceSubset, true, "");
             yield return (Mutation.SeenAtNodeEpoch, true, "");
-            yield return (Mutation.ResetAll, true, "");       // safe; caught as liveness (W3): the kept partitions go unserved
+            yield return (Mutation.ResetAll, true, "");       // safe; caught as a cost (W4): the kept partitions are taken again
             yield return (Mutation.ResetPollsSeenBelow, true, "");
             yield return (Mutation.ProjectorBlindWrite, true, "");
+            yield return (Mutation.ProjectorJumps, true, "");
         }
     }
 
