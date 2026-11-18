@@ -78,6 +78,8 @@ public sealed class StepVariableSessionTests
         Assert.Equal(0, VariableLifecycleTestGraph.ReadCount(run));
         Assert.Equal(0, StepVariableTestGraph.Version(run, VariableLifecycleTestGraph.CountKey).Version);
         Assert.Null(run.State("node-root").VariableWrites);
+        // As on a fault, the cancelled attempt keeps its session reads for inspection (FR-007).
+        Assert.Equal(0, Assert.Single(run.State("node-root").SessionReads!).Entry.Version);
     }
 
     [Fact]

@@ -666,7 +666,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 inspectionAccumulator,
                 TimeProvider,
                 workItem,
-                state,
+                WithSessionReads(state, stepSession),
                 returnedCancellationReason,
                 valueSnapshots,
                 cancellationToken: cancellationToken);

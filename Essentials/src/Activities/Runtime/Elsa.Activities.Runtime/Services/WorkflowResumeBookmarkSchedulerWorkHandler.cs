@@ -523,7 +523,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
                 _timeProvider,
                 workItem,
-                executionState,
+                WithSessionReads(executionState, stepSession),
                 returnedCancellationReason,
                 valueSnapshots,
                 cancellationToken: cancellationToken);

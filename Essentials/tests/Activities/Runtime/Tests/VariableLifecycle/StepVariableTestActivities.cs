@@ -125,7 +125,7 @@ public sealed class WriteThenFaultActivity : Activity
     }
 }
 
-/// <summary>Writes <c>count</c>, then cancels: nothing it staged may be saved.</summary>
+/// <summary>Reads and writes <c>count</c>, then cancels: nothing it staged may be saved; its read is kept.</summary>
 public sealed class WriteThenCancelActivity : Activity
 {
     [ActivityInput]
@@ -133,7 +133,7 @@ public sealed class WriteThenCancelActivity : Activity
 
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
     {
-        context.Variables.Set(Count, 5);
+        context.Variables.Set(Count, context.Variables.Get(Count) + 5);
         return ValueTask.FromResult(ActivityTransition.Cancel<ActivityUnit>("The body cancelled after its write."));
     }
 }
