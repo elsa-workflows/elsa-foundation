@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Update;
 using Npgsql;
 
@@ -125,6 +126,12 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        // D5 (K1), ENGINES.md E7: SQL Server's and MySQL's providers put at most 42 statements in one command unless told,
+        // so a flush of 100 instances was several round trips. The store tells them 1,000, as the cost runs do; a context
+        // that sets its own MaxBatchSize keeps it.
+        if (optionsBuilder.Options.Extensions.OfType<RelationalOptionsExtension>().FirstOrDefault() is { MaxBatchSize: null } relational &&
+            relational.GetType().Name is "SqlServerOptionsExtension" or "MySQLOptionsExtension")
+            ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(relational.WithMaxBatchSize(1000));
         MySqlCommandBatchPreparer.Configure(optionsBuilder);
         optionsBuilder.AddInterceptors(AliasUpdateGuard.Instance);
     }
@@ -356,7 +363,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -378,6 +385,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
+            }
+            catch (OutsideFencedSet outside)
+            {
+                throw new StoreException(Failure.Definite, outside.Message);      // every fence held; the transaction was rolled back
             }
             catch (DbUpdateConcurrencyException e) when (!careful && e.Entries.Any(x => x.Entity is SubscriptionEntity))
             {
@@ -560,23 +571,34 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
 
+    /// <summary>Whether every fence of the batch still holds: one read over its k rows.</summary>
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
-        return await db.Partitions.AsNoTracking().AnyAsync(p => p.Id == batch.Partition && p.Epoch == batch.Epoch && p.Position == batch.Position, cancellationToken);
+        var fenced = batch.Fenced;
+        var ids = fenced.Select(f => f.Partition).ToList();
+        var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
+        return fenced.All(rows.Contains);
     }
 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
-        var rows = await db.Database.SqlQueryRaw<PollRow>(Engine?.Poll ??
-            $"""
-             SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
-             FROM (SELECT {Now} AS now) t
-             LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
-             ORDER BY m."Seq" LIMIT {"{3}"}
-             """, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
+    }
+
+    // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
+    private string PollSql => Engine?.Poll ??
+        $"""
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         FROM (SELECT {Now} AS now) t
+         LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
+         ORDER BY m."Seq" LIMIT {"{3}"}
+         """;
+
+    private Polled ToPolled(List<PollRow> rows)
+    {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));

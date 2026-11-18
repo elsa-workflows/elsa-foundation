@@ -178,6 +178,9 @@ internal static class OwnedSetChecks
         Context.Equal(0L, (await c.Row(4, "h4"))!.Seen, "handover seen mark of a message to partition 4, outside the flush");
         Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [], seen: ["m4"])).AsTask(), "a flush over 1 and 6 marking a message of 4"),
             "outcome of a flush marking a message outside its fenced set");
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [Make.Turn("1/x", Make.Row("1/x", 3), expected: 2, consumed: ["m4"])])).AsTask(), "a turn in 1 consuming a message of 4"),
+            "outcome of a flush consuming a message outside its fenced set");
+        Context.Equal(2L, (await c.S.LoadAsync(["1/x"])).Single().Revision, "revision of 1/x after the refused consume");
         Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 0)], [], seen: ["n1"])).AsTask(), "a flush whose higher fence alone is stale"),
             "outcome of a flush whose higher fence alone is stale");
         Context.Equal(0L, (await c.Row(1, "n1"))!.Seen, "seen mark written by the refused flush");

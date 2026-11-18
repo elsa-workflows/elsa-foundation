@@ -204,7 +204,10 @@ comparison. The 16-node runs refuse more because leases run out faster against m
   for the fence rows. The kernel simulation at both sizes and its mutation pins (43 and 9) ran unchanged on 64
   partitions; they do not exercise range ownership. The ownership simulation above models the protocol; the worker itself is unmodelled.
 - SQL Server and MySQL were not run (the checked-fence count above is PostgreSQL's); the SQL Server deadlock surface of
-  *k* fence rows in one batch (E9) is an unmeasured risk for (i) in the batch there.
+  *k* fence rows in one batch (E9) is an unmeasured risk for (i) in the batch there. K1 slice 3 ran the lock-order
+  case on all three engines in both fence modes: locked in ascending partition id, two overlapping range commits
+  complete with no deadlock; locked in batch order they deadlock ([experiments/K1.LockOrder](experiments/K1.LockOrder/README.md)).
+  Provider qualification is K4.
 - Not modelled: trial and attempt marks per virtual-partition epoch at a take in (i); a flush that spans two of a node's
   range fragments in (ii); the projector's per-virtual-partition rounds; MongoDB.
 - `tcp` for one 100-instance flush read 3 instead of 2 once (README: the PostgreSQL stream varies by a read or two).
@@ -215,7 +218,9 @@ comparison. The 16-node runs refuse more because leases run out faster against m
 - **Unverified (raised in review):** EF's SQL Server and MySQL providers put at most 42 statements in one command by
   default (ENGINES.md E7; the cost runs and the conformance suite set `MaxBatchSize(1000)`, the experiment's context does
   not), so a 100-instance flush there is about ten round trips in either variant at the default, and an in-batch fence
-  rides only in the first command. Not measured.
+  rides only in the first command. Not measured. Since K1 slice 3 (D5) the store's context sets `MaxBatchSize(1000)` on
+  SQL Server and MySQL when the caller sets none; the owned commit, the default, sends its own commands and is not
+  affected.
 
 ## Recommendation, and what the owner decided
 
