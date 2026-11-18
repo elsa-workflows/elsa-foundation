@@ -24,14 +24,16 @@ Each case runs one schedule under three rule sets:
 - `repaired`: the fifth fix round's repair rules, as the coordinator's design brief states them;
 - `negative`: the repaired rules with the case's one repaired rule put back as reviewed:
   - RT-2: the counted cancel;
-  - RT-3: the durable cursor (the cursor lives in the owner's memory); for the ThenDelete cases, the widened
-    `Validate`; for the key-reuse case, admission's cascade read;
+  - RT-2: for `rt2-duplicate-pair`, the reviewed text's two hand-off checks;
+  - RT-3: the durable cursor (the cursor lives in the owner's memory); for the ThenDelete cases on a running row, the
+    widened `Validate`; for ThenDelete on an ended row, the cascade (the plain qualified delete); for the key-reuse
+    case, admission's cascade read;
   - RT-4: the parent binding of marked terminates at running and ended recipients.
 
 Mutations of the repaired set run where they bite:
 
-- RT-2: `presence-from-memory`, `foreign-derivation`, `generation-blind`, `generation-inside-key`,
-  `accept-off-registry` and `accept-duplicate-pair`;
+- RT-2: `presence-from-memory`, `foreign-derivation`, `generation-blind`, `generation-inside-key` and
+  `accept-off-registry`;
 - RT-3: `page-above-cap`, `no-next-control` and `delete-drops-discharging`;
 - RT-4: `binding-running-only`, `bind-every-issued-terminate` and `commit-accepts-mark`.
 
@@ -74,7 +76,7 @@ Expected outcome per case and rule set. Every run's actual outcome equals its ex
 | `rt2-live-pending-g0` | R5-B1 on the live path at generation 0: the cancel key is the built key itself | PASS | PASS | PASS | |
 | `rt2-generations` | R5-m3, a newer same-origin generation and another instance's ticket | PASS | PASS | PASS | `foreign-derivation` FAIL, `generation-blind` FAIL |
 | `rt2-off-registry` | R5-m3, retirement refuses a pair the registry does not hold | PASS | PASS | PASS | `accept-off-registry` FAIL |
-| `rt2-duplicate-pair` | R5-m3, retirement refuses `[j1@g1, j1@g1]` for registry `[j1@g1, j2@g1]` | PASS | PASS | PASS | `accept-duplicate-pair` FAIL |
+| `rt2-duplicate-pair` | R5-m3, retirement refuses `[j1@g1, j1@g1]` for registry `[j1@g1, j2@g1]` | FAIL | PASS | FAIL | |
 | `rt2-ticket-collision` | R5-m3, `(j, g1)` and `(j.1, g0)` are different tickets | PASS | PASS | PASS | `generation-inside-key` FAIL |
 | `rt3-live-p` | R5-B2, exactly `P_cascade` (1,000) children, live actor | PASS | PASS | PASS | |
 | `rt3-live-p-plus-1` | R5-B2, `P_cascade` + 1 children, live actor | PASS | PASS | PASS | |
@@ -86,12 +88,16 @@ Expected outcome per case and rule set. Every run's actual outcome equals its ex
 | `rt3-crash-landed` | R5-B2, a crash with an unknown outcome at page 5; the page landed | FAIL | PASS | FAIL | |
 | `rt3-crash-lost` | R5-B2, a crash with an unknown outcome at page 5; the page did not land | FAIL | PASS | FAIL | |
 | `rt3-delete-discharging` | R5-B2, an operator's delete while the obligation is Discharging | FAIL | PASS | PASS | `delete-drops-discharging` FAIL |
-| `rt3-thendelete-root-p-plus-1` | R5-B2, ThenDelete on a running root, `P_cascade` + 1 entries | FAIL | PASS | FAIL | |
+| `rt3-thendelete-root-p-plus-1` | ThenDelete on a running root, `P_cascade` + 1 entries (the Validate/RD8 gap) | FAIL | PASS | FAIL | |
 | `rt3-thendelete-root-10001` | R5-B2, the same with 10,001 children and 2 jobs | FAIL | PASS | FAIL | |
-| `rt3-thendelete-child-p-plus-1` | R5-B2, ThenDelete on a running child, `P_cascade` + 1 entries | FAIL | PASS | FAIL | |
+| `rt3-thendelete-child-p-plus-1` | ThenDelete on a running child, `P_cascade` + 1 entries (the Validate/RD8 gap) | FAIL | PASS | FAIL | |
 | `rt3-thendelete-child-10001` | R5-B2, the same with 10,001 children and 2 jobs | FAIL | PASS | FAIL | |
 | `rt3-thendelete-kept-p-plus-1` | R5-B2, ThenDelete on a protected child: terminated and kept | PASS | PASS | PASS | |
 | `rt3-thendelete-kept-10001` | R5-B2, the same with 10,001 children and 2 jobs | FAIL | PASS | PASS | |
+| `rt3-thendelete-ended-root-p-plus-1` | R5-B2, ThenDelete on a finished root that still owns its registry, `P_cascade` + 1 entries | FAIL | PASS | FAIL | |
+| `rt3-thendelete-ended-root-10001` | R5-B2, the same with 10,001 children and 2 jobs | FAIL | PASS | FAIL | |
+| `rt3-thendelete-ended-child-p-plus-1` | R5-B2, ThenDelete on a finished child that still owns its registry, `P_cascade` + 1 entries | FAIL | PASS | FAIL | |
+| `rt3-thendelete-ended-child-10001` | R5-B2, the same with 10,001 children and 2 jobs | FAIL | PASS | FAIL | |
 | `rt3-key-reuse-discharging` | R5-B2, a keyed root deleted while Discharging, its key reused | PASS | PASS | FAIL | |
 | `rt4-running-unrelated` | R5-M5, a marked cascade terminate at a running unrelated H with a child | FAIL | PASS | FAIL | `binding-running-only` PASS |
 | `rt4-ended-registry` | R5-M5, the same at an ended H with a registry | FAIL | PASS | FAIL | `binding-running-only` FAIL |
@@ -100,7 +106,7 @@ Expected outcome per case and rule set. Every run's actual outcome equals its ex
 | `rt4-model-send` | R5-M5, a model's application terminate to a running non-child applies as built (no narrowing) | PASS | PASS | PASS | `bind-every-issued-terminate` FAIL |
 | `rt4-forgery` | R5-M5, the forgery control: a model's marked send is refused at the commit | FAIL | PASS | PASS | `commit-accepts-mark` FAIL |
 
-129 runs. A case whose three rule sets all pass is a control: it shows the reviewed rule covers that schedule, and a
+140 runs. A case whose three rule sets all pass is a control: it shows the reviewed rule covers that schedule, and a
 mutation, where listed, shows the repaired rule is what makes it pass. RT-3's negative passes where no owner loses its
 memory, since only a takeover or a crash can tell a durable cursor from one held in memory.
 
@@ -152,8 +158,9 @@ the refusal path composes the cascade: a terminate to G, a cancel of each listed
 built `Worker.TicketId` takes the first three (`c{n}_{actor}_{creation}!{length}_{key}`), and generation 0 keeps exactly
 that key. A positive generation appends `#g{generation}` after the built id. The job key sits under its own length
 prefix, so nothing a key spells reaches past it. The two forms, and any two generations, therefore never derive the
-same id: `(j.1, g0)` is `…!3_j.1` and `(j, g1)` is `…!1_j#g1`. The fourth round's form put the generation inside the
-key (`key.generation`), where those two meet; `rt2-ticket-collision` runs it as the mutation `generation-inside-key`.
+same id: `(j.1, g0)` is `…!3_j.1` and `(j, g1)` is `…!1_j#g1`. This harness's earlier proposed derivation put the
+generation inside the key (`key.generation`), where those two meet; the reviewed docs state no derivation.
+`rt2-ticket-collision` runs that form as the mutation `generation-inside-key`.
 The witness case uses the built three-part key, as the reviewer did.
 
 On the live and open-drain paths the real `Terminate` composes its cancels with the built three-part key
@@ -209,10 +216,11 @@ The cases:
   A stays unretired. The correct list is then accepted, and the cascade consumes `j@g2`. `accept-off-registry` lets
   the first list through, so the marker lists `x@g1`.
 - `rt2-duplicate-pair` (R5-m3): A's registry holds `j1@g1` and `j2@g1`. The handed-over jobs must equal the
-  registry's current-generation pairs as a set, each once (and each child appears once), so `[j1@g1, j1@g1]` is
-  refused under every rule set and the correct list is accepted. The reviewed text's two checks (each pair in the
-  registry, no more pairs than it holds) admit that list; `accept-duplicate-pair` keeps only those two, and the
-  cascade consumes j1 twice and leaves j2 uncancelled.
+  registry's current-generation pairs as a set, each once (and each child appears once). Under `repaired`
+  `[j1@g1, j1@g1]` is refused and the correct list is accepted. The reviewed text (`data-lifecycle.md` 102 at
+  `0a1bb5e0c`) has two checks only, each pair in the registry and no more pairs than it holds, which admit that
+  list. `reviewed` and `negative` run those two checks: the marker lists j1 twice, the cascade consumes j1 twice, and
+  j2 is left uncancelled.
 - `rt2-ticket-collision` (R5-m3): A's registry holds `j@g1`. A fixture places a pending generation-0 ticket of job key
   `j.1` beside it. The cascade consumes `j@g1`'s ticket, and `(j.1, g0)`'s stays pending (observed before the poll
   can reach it). `generation-inside-key` derives `(j, g1)` as `…!3_j.1` and cancels the wrong ticket.
@@ -321,10 +329,32 @@ child of a running P, or a child whose row `ProtectsDeletion` protects (a fixtur
   - A protected row is terminated and kept, and its obligation pages on the live row.
 - **Under `reviewed` and `negative`** (the built `Validate`, not widened), the one commit goes to the store with the
   marker. It is refused as a definite error on every attempt, so A keeps running, and so do its children. Under
-  `reviewed` a 10,001-child turn exceeds the send cap first and parks. The kept variant's reviewed run passes at
-  `P_cascade` + 1 (one commit within the cap) and fails at 10,001 (the cap).
+  `reviewed` a 10,001-child turn exceeds the send cap first and parks.
+- **Which finding each row bears on.** The `P_cascade` + 1 rows' reviewed FAIL is the Validate/RD8 gap: the reviewed
+  `Validate` refuses any one-commit terminate-and-retire of a running row, at any size, and the reviewer reproduced it
+  with no children. Only the 10,001 rows bear on R5-B2. The kept variant's reviewed run passes at `P_cascade` + 1 (one
+  commit within the cap) and fails at 10,001 (the cap).
 - **Every ThenDelete run also asserts** that page 1 holds both job entries (jobs first) and consumes both pending
-  tickets. Where A retires, it asserts the retiring commit's shape.
+  tickets. Where A retires, it asserts the retiring commit's shape and A's end state; both are labelled structural,
+  since the rule writes them.
+
+### ThenDelete on an ended row with a registry
+
+A finished A that still owns its registry and two jobs (a terminal parent keeps its registry, `WorkflowInstance.cs`
+63–64) receives an operator's `ThenDelete`. For a child, A's one notice from its own end is stored before the run.
+
+- **`repaired`** (the third `Validate` shape: a commit that starts a terminate's cascade, at a running row or at an
+  ended row with a registry). The commit runs the real `Terminate` of the ended row, sends the first page and
+  retires the row with a Discharging obligation equal to the registry and jobs. An ended row's marker is
+  `Retire(previous)` as built, so the built `Validate` admits this commit, and the whole retiring commit goes through
+  the real store. The pages go on at the marker. All descendants end Cancelled, the obligation clears, and P has its
+  one notice and no second.
+- **`reviewed`** follows the reviewed text: a `ThenDelete` reaching a run that has already ended takes the
+  qualified-delete path. That is the built delete of the ended row (`WorkflowInstance.cs` 161–166), which terminates
+  none of its children, so they keep running.
+- **`negative`** has no cascade on the ended path, the same plain delete.
+- **An ended row with an empty registry and no jobs** takes the plain qualified delete under every rule set; no run
+  covers it separately.
 
 ### Key reuse while Discharging (PC-3)
 
@@ -441,7 +471,8 @@ RT-4 runs assert:
   after an unknown outcome, a duplicate delivery refused by the count on T, and a takeover;
 - the R5-B2 trace (10,001 children at a marker), the boundary at `P_cascade` and `P_cascade` + 1, and paging through
   a takeover, a crash with each unknown outcome, a delete while Discharging and the open drain; ThenDelete on a
-  running root, child and protected child; and key reuse while a keyed root's marker is Discharging;
+  running root, child and protected child, and on a finished root and child that still own a registry; and key
+  reuse while a keyed root's marker is Discharging;
 - the R5-M5 parent binding of marked terminates at a running and at an ended recipient, a genuine child, an operator,
   a model's application terminate applying as built, and the commit's refusal of a forged mark;
 - R5-m3: the injective generation-carrying key and its collision run, an off-registry pair and a repeated pair
@@ -456,7 +487,8 @@ RT-4 runs assert:
   179–203), and a model's terminate composed by `DurableTurn.Send` (Turns.cs 313–335);
 - the built `Validate`'s refusal of the marker's retired-to-retired write, "invalid lifecycle retirement"
   (`Creation.cs` 156–160). Each marker cascade prints it; it is not asserted. The same check refuses ThenDelete's
-  terminate-and-retire commit, which the reviewed and negative ThenDelete runs hit through the real store;
+  terminate-and-retire commit of a running row, which the reviewed and negative ThenDelete runs hit through the real
+  store. At an ended row the same check admits the retiring cascade commit, since its marker is `Retire(previous)`;
 - the built key admission's fresh physical id on reuse (`KeyAdmission.cs` 60–67), and its stored receipt for a
   repeated operation (55–56).
 

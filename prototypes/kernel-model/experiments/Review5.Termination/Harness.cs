@@ -96,8 +96,8 @@ sealed class Harness
     public readonly Dictionary<string, int> FirstPageJobEntries = new(StringComparer.Ordinal);
     public readonly List<string> StartRefusals = [], Births = [];
     public readonly List<string> ThenDeleteShapes = [];
-    public readonly List<(string Actor, int Page, InboxKey? Control)> LostPages = [];
-    public readonly HashSet<InboxKey> ModelSends = [];   // every send a model turn attempted, landed or not (provenance)   // pages whose commit a crash kept from the store
+    public readonly List<(string Actor, int Page, InboxKey? Control)> LostPages = [];   // pages whose commit a crash kept from the store
+    public readonly HashSet<InboxKey> ModelSends = [];   // every send a model turn attempted, landed or not (provenance)
     public readonly List<string> ExpectedGhost = [];   // I9 entries a schedule provokes on purpose (a redelivered, consumed row)
     public Action<string>? AfterDelete;               // (actor) -> a scheduled step after a delete landed
     public string? ForeignActor;                      // R5-m3's foreign-derivation mutation names this origin
@@ -176,7 +176,7 @@ sealed class Harness
         return generation > 0 ? new InboxKey(FormattableString.Invariant($"{built.Id}#g{generation}"), built.Scope) : built;
     }
 
-    /// <summary>The fourth review's derivation, the generation inside the length-prefixed key (<c>key.generation</c>): <c>(j.1, 0)</c> and <c>(j, 1)</c> meet.</summary>
+    /// <summary>This harness's earlier proposed derivation, the generation inside the length-prefixed key (<c>key.generation</c>): <c>(j.1, 0)</c> and <c>(j, 1)</c> meet. The reviewed docs state no derivation.</summary>
     public static InboxKey DeriveInsideKey(string actor, string key, long creation, long generation) =>
         Real.Ticket(actor, generation > 0 ? FormattableString.Invariant($"{key}.{generation}") : key, creation);
 
@@ -388,6 +388,15 @@ sealed class Harness
         }
         if (m.Kind == Kinds.Terminate && m.InboxKey == InboxKey.Issued(m.Id) && !ParentBound(m, row.Parent, row.ParentCreation, row.Creation) && Shown(m))
             Line($"  {m.Id} ({(marked ? "marked" : "unmarked")}) from {Name(m.Sender!)}/{m.SenderCreation} is not from the recorded parent {(row.Parent is null ? "null" : Name(row.Parent))}/{row.ParentCreation}; under this rule set it is not parent-bound at {(row.Status == InstanceStatus.Running ? "a running" : "an ended")} recipient");
+        if (ThenDelete(m) && row.Status != InstanceStatus.Running && (row.Children is not null || row.Jobs is not null) && !Rules.EndedThenDeleteCascades)
+        {
+            // The reviewed text: a ThenDelete reaching a run that has already ended takes the qualified-delete path
+            // (data lifecycle, "Terminate, then delete"). That is the built delete (WorkflowInstance.cs 161–166), which
+            // terminates none of the children.
+            Line($"  {m.Id} carries ThenDelete and {Name(row.Id)} has ended: the qualified-delete path, the built delete of the ended row");
+            CommitOutcome(owner, row, m, Real.Command(Type, owner.Worker, row, m with { Kind = Kinds.Delete }, seq)!);
+            return;
+        }
         var outcome = Real.Command(Type, owner.Worker, row, m, seq);
         if (outcome is null)
         {
@@ -397,7 +406,9 @@ sealed class Harness
         }
         if (m.Kind == Kinds.Terminate && outcome.Row is not null && !outcome.Delete)
         {
-            var thenDelete = ThenDelete(m) && row.Status == InstanceStatus.Running;
+            // ThenDelete starts the terminate's cascade at a running row, or at an ended row with a registry or jobs
+            // (the third Validate shape); an ended row with neither takes the Command path above as consumed input.
+            var thenDelete = ThenDelete(m) && (row.Status == InstanceStatus.Running || row.Children is not null || row.Jobs is not null);
             if (thenDelete && Protects.Contains(row.Id)) Line($"  {m.Id} carries ThenDelete; ProtectsDeletion protects {Name(row.Id)}, so it is terminated and kept");
             CommitTerminate(owner, row, m, seq, outcome, thenDelete && !Protects.Contains(row.Id) ? "built terminate, then the delete in the same commit (ThenDelete)" : "built terminate (WorkflowInstance.cs 179-203)",
                 thenDelete && !Protects.Contains(row.Id));
@@ -517,8 +528,21 @@ sealed class Harness
             var listEqual = ob.Children.SequenceEqual(Real.ReadRegistry(row.Children)) && ob.Jobs.Select(j => j.Key).SequenceEqual(Real.ReadJobs(row.Jobs));
             var shape = $"marker {marker.Status} at revision {marker.Revision}, obligation list equal to the previous registry and jobs: {listEqual}, cursor {page.To} (at most P_cascade {Rules.PCascade}: {page.To <= Rules.PCascade})";
             ThenDeleteShapes.Add(shape);
-            Line($"  ThenDelete: {shape}; built CreationProtocol.Validate on that retirement: {Real.Validate(retiring, row)}");
-            if (Rules.WidenedValidate && listEqual && page.To <= Rules.PCascade && Consumed(turn, m))
+            var builtVerdict = Real.Validate(retiring, row);
+            Line($"  ThenDelete: {shape}; built CreationProtocol.Validate on that retirement: {builtVerdict}");
+            if (builtVerdict == "accepted" && listEqual && page.To <= Rules.PCascade && Consumed(turn, m))
+            {
+                // An ended row's marker is Retire(previous) as built, so the real commit carries the whole retiring commit.
+                Line("  the built Validate admits it (an ended row's marker is Retire(previous)), so the real commit retires the row");
+                turn = retiring;
+                onLanded = () =>
+                {
+                    Applied(owner, ob, page, m);
+                    DrainOpen.Remove(row.Id);
+                    if (ob.Open) ob.MarkerRevision = marker.Revision;
+                };
+            }
+            else if (Rules.WidenedValidate && listEqual && page.To <= Rules.PCascade && Consumed(turn, m))
             {
                 // The widened Validate admits exactly this shape. The built one, inside CommitAsync, refuses it, so the
                 // real commit carries the terminate (row write, counts, sends) and the harness puts the marker in its
@@ -721,7 +745,8 @@ sealed class Harness
             var children = Real.ReadRegistry(row.Children);
             if (extraChildren is not null) { children.AddRange(extraChildren); Line($"fixture: the retirement handoff also lists [{string.Join(", ", extraChildren.Select(c => $"{Name(c.Id)}/{c.Creation}"))}] (RM-1's negative fixture; Validate at retirement checks no membership)"); }
             // The handed-over jobs must equal the registry's current-generation pairs as a set, each exactly once.
-            // accept-duplicate-pair keeps only the fourth round's two checks: every pair in the registry, and no more pairs.
+            // The reviewed text (data-lifecycle.md 102 at 0a1bb5e0c) has two checks only: every pair in the registry, and no
+            // more pairs than it holds. Rules.AcceptDuplicatePair runs those, which admit a repeated pair.
             var off = jobs.Where(j => !registry.Contains(j)).ToList();
             var exact = jobs.Count == registry.Count && jobs.Distinct().Count() == jobs.Count && jobs.ToHashSet().SetEquals(registry)
                 && children.Distinct().Count() == children.Count;   // and each child appears once

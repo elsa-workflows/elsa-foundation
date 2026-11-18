@@ -13,6 +13,7 @@ sealed class Rt3(string variant, Rules rules)
     public static readonly string[] Variants =
         ["live-p", "live-p-plus-1", "live-10001", "marker-10001", "open-drain-10001", "jobs-marker", "takeover", "crash-landed", "crash-lost", "delete-discharging",
          "thendelete-root-p-plus-1", "thendelete-root-10001", "thendelete-child-p-plus-1", "thendelete-child-10001", "thendelete-kept-p-plus-1", "thendelete-kept-10001",
+         "thendelete-ended-root-p-plus-1", "thendelete-ended-root-10001", "thendelete-ended-child-p-plus-1", "thendelete-ended-child-10001",
          "key-reuse-discharging"];
 
     private Harness _h = null!;
@@ -147,28 +148,36 @@ sealed class Rt3(string variant, Rules rules)
     /// </summary>
     private Report ThenDelete()
     {
-        var kind = variant.Split('-')[1];
+        var ended = variant.StartsWith("thendelete-ended-", StringComparison.Ordinal);
+        var kind = variant.Split('-')[ended ? 2 : 1];
         var big = variant.EndsWith("10001", StringComparison.Ordinal);
+        var status = ended ? InstanceStatus.Finished : InstanceStatus.Running;
         var actor = kind == "root" ? "1/r" : A;
         var children = big ? 10_001 : rules.PCascade - 1;
         if (kind != "root")
             _h.Seed(new InstanceRow(P, "rt", "p", InstanceStatus.Running, "{}", 4, null, Children: Real.WriteRegistry([new(A, 1)]), Creation: PCreation, StartIntent: "v1:p"), "P");
         var ids = Children(actor, children, 1);
-        _h.Seed(new InstanceRow(actor, "rt", "a", InstanceStatus.Running, "{}", 7, kind == "root" ? null : P, Jobs: Real.WriteJobs(["j1", "j2"]),
+        _h.Seed(new InstanceRow(actor, "rt", "a", status, "{}", 7, kind == "root" ? null : P, Jobs: Real.WriteJobs(["j1", "j2"]),
             Children: Real.WriteRegistry([.. ids.Select(id => new CreationAddress(id, 1))]), Creation: 1, StartIntent: "v1:a", ParentCreation: kind == "root" ? 0 : PCreation), "A");
         var tickets = new[] { "j1", "j2" }.Select(k => { _h.JobGeneration[(actor, k)] = 1; return _h.SeedTicket(actor, 1, k, 1); }).ToList();
         if (kind == "kept") _h.Protects.Add(actor);
-        _h.Line($"setup: A {(kind == "root" ? "a running root" : "a running child of P")}{(kind == "kept" ? ", protected by ProtectsDeletion (fixture)" : "")}, {children} children and 2 pending jobs: {children + 2} entries; P_cascade = {rules.PCascade}");
+        if (ended && kind != "root")
+        {
+            // A finished on its own before the run: its one notice to P (the real Finished) is stored, still in P's inbox.
+            var notice = Real.Finished(_h.Store.Instances[actor]);
+            _h.Commit(new InstanceRef(actor).Partition, [new TurnCommit(actor, null, null, [], [], [notice], [], [], null)], null, "setup: A's notice from its own end");
+        }
+        _h.Line($"setup: A {(kind == "root" ? $"a {(ended ? "finished" : "running")} root" : $"a {(ended ? "finished" : "running")} child of P")}{(ended ? " that still owns its registry and jobs (WorkflowInstance.cs 63-64)" : "")}{(kind == "kept" ? ", protected by ProtectsDeletion (fixture)" : "")}, {children} children and 2 pending jobs: {children + 2} entries; P_cascade = {rules.PCascade}");
         _h.AddOutside(new Message("op-a", new InstanceRef(actor), Kinds.Terminate, Json.Write(new { ThenDelete = true, Instance = actor }), Harness.Operator, TargetCreation: 1));
         _h.Settle();
         ExpectCascade(ids, actor);
-        _report.Expect("A", _h.Status(actor), kind == "kept" ? "Cancelled" : "retired marker");
-        if (kind != "root") _report.Expect("notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, actor), 1);
+        _report.Expect("A (structural: the end state the rule writes)", _h.Status(actor), kind == "kept" ? "Cancelled" : "retired marker");
+        if (kind != "root") _report.Expect(ended ? "notices P received from A (its one notice, from its own end)" : "notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, actor), 1);
         _report.Expect("job entries in the first page (jobs first)", _h.FirstPageJobEntries.GetValueOrDefault(actor, -1), 2);
         var first = _h.CascadeCommits.FirstOrDefault(c => c.Actor == actor && c.Page == 1).Consumed ?? [];
         _report.Expect("both pending job tickets consumed by the first page", tickets.All(first.Contains), true);
         if (kind != "kept")
-            _report.Expect("the retiring commit's shape: list equal to the previous registry and jobs, cursor at most P_cascade",
+            _report.Expect("the retiring commit's shape (structural): list equal to the previous registry and jobs, cursor at most P_cascade",
                 _h.ThenDeleteShapes.Count > 0 && _h.ThenDeleteShapes.All(x => x.Contains("jobs: True", StringComparison.Ordinal) && x.Contains(": True)", StringComparison.Ordinal)), true);
         _h.CommonChecks();
         return _report;

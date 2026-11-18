@@ -39,13 +39,15 @@ sealed record Rules(string Name)
     public bool GenerationBlind { get; init; }
     /// <summary>R5-m3, mutation: retirement accepts a job pair the previous row's registry does not hold.</summary>
     public bool AcceptOffRegistry { get; init; }
-    /// <summary>R5-m3, mutation: retirement keeps only the fourth round's two checks, so a repeated pair can stand for a missing one.</summary>
+    /// <summary>R5-m3: retirement keeps only the reviewed text's two checks (data-lifecycle.md 102 at 0a1bb5e0c), so a repeated pair can stand for a missing one. Reviewed, and the duplicate-pair negative.</summary>
     public bool AcceptDuplicatePair { get; init; }
-    /// <summary>R5-m3, mutation: the fourth round's derivation, the generation inside the length-prefixed key.</summary>
+    /// <summary>R5-m3, mutation: this harness's earlier proposed derivation, the generation inside the length-prefixed key (the reviewed docs state none).</summary>
     public bool GenerationInsideKey { get; init; }
 
-    public static Rules Reviewed => new("reviewed") { CountedCancel = true };
-    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true, CommitChecksMark = true, WidenedValidate = true, AdmissionReadsCascade = true };
+    public static Rules Reviewed => new("reviewed") { CountedCancel = true, AcceptDuplicatePair = true };
+    /// <summary>R5-B2: ThenDelete at an ended row with a registry or jobs starts the terminate's cascade (repaired); otherwise it is the plain qualified delete.</summary>
+    public bool EndedThenDeleteCascades { get; init; }
+    public static Rules Repaired => new("repaired") { Paged = true, BindingRunning = true, BindingEnded = true, CommitChecksMark = true, WidenedValidate = true, AdmissionReadsCascade = true, EndedThenDeleteCascades = true };
 
     /// <summary>The rule set by name, for a case family: <c>negative</c> removes the family's repaired rule.</summary>
     public static Rules For(string name, string family) => name switch
@@ -59,13 +61,14 @@ sealed record Rules(string Name)
             "rt4" => Repaired with { Name = name, BindingRunning = false, BindingEnded = false },
             "thendelete" => Repaired with { Name = name, WidenedValidate = false },
             "keyreuse" => Repaired with { Name = name, AdmissionReadsCascade = false },
+            "duplicate-pair" => Repaired with { Name = name, AcceptDuplicatePair = true },
+            "thendelete-ended" => Repaired with { Name = name, EndedThenDeleteCascades = false },
             _ => throw new ArgumentException(family),
         },
         "presence-from-memory" => Repaired with { Name = name, PresenceFromMemory = true },
         "foreign-derivation" => Repaired with { Name = name, ForeignDerivation = true },
         "generation-blind" => Repaired with { Name = name, GenerationBlind = true },
         "accept-off-registry" => Repaired with { Name = name, AcceptOffRegistry = true },
-        "accept-duplicate-pair" => Repaired with { Name = name, AcceptDuplicatePair = true },
         "generation-inside-key" => Repaired with { Name = name, GenerationInsideKey = true },
         "page-above-cap" => Repaired with { Name = name, PCascade = Harness.SendCap + 1 },
         "no-next-control" => Repaired with { Name = name, NextControl = false },

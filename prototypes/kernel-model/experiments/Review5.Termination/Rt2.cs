@@ -174,7 +174,7 @@ sealed class Rt2(string variant, Rules rules)
             // A fixture placed directly, labelled: a pending generation-0 ticket of job key "j.1" beside j@g1.
             _heldTickets.Add(_h.SeedTicket(A, 1, "j.1", 0));
             _h.HeldBack.Add(_heldTickets[^1]);
-            _h.Line($"fixture: (j.1, g0) has ticket {Harness.Derive(A, "j.1", 1, 0).Id}; (j, g1) has {Harness.Derive(A, "j", 1, 1).Id}. The fourth round's derivation gives (j, g1) the id {Harness.DeriveInsideKey(A, "j", 1, 1).Id}, which is (j.1, g0)'s");
+            _h.Line($"fixture: (j.1, g0) has ticket {Harness.Derive(A, "j.1", 1, 0).Id}; (j, g1) has {Harness.Derive(A, "j", 1, 1).Id}. This harness's earlier proposed derivation gives (j, g1) the id {Harness.DeriveInsideKey(A, "j", 1, 1).Id}, which is (j.1, g0)'s");
         }
         _h.Line($"setup: P {Show(P)}; A {Show(A)}; G {Show(G)}; G2 {Show(G2)}");
         _h.Line($"A's tickets: {string.Join("; ", tickets.Select(x => $"{x.Key}@g{x.Generation} = {Harness.Derive(A, x.Key, 1, x.Generation).Id} ({x.State})"))}" +
