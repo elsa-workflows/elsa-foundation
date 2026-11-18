@@ -13,7 +13,8 @@ static partial class Program
       FrRules.TrialPlainSeq => "trial-plain-seq", FrRules.NoCohortMark => "no-cohort-mark",
       FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", FrRules.MarkIgnoresControls => "mark-ignores-controls",
       FrRules.SkipTarget => "skip-target", FrRules.NoShelf => "no-shelf", FrRules.ControlsWaitOnTicket => "controls-wait-on-ticket",
-      FrRules.BoundaryHoldsCohort => "boundary-holds-cohort", _ => "boundary-holds-cohort-nonsuspect" };
+      FrRules.BoundaryHoldsCohort => "boundary-holds-cohort", FrRules.BoundaryHoldsCohortNonsuspect => "boundary-holds-cohort-nonsuspect",
+      _ => "clear-with-held" };
 
     public static string Name(RtRules rules) => rules switch
     {
@@ -36,7 +37,9 @@ static partial class Program
         ("fr1-trial-takeover-open", "reviewed", "FAIL"), ("fr1-trial-takeover-open", "repaired", "PASS"), ("fr1-trial-takeover-open", "negative", "PASS"),
         ("fr1-trial-takeover-open", "trial-plain-seq", "PASS"), ("fr1-trial-takeover-open", "skip-target", "FAIL"), ("fr1-trial-takeover-open", "no-cohort-mark", "PASS"),
         ("fr1-held-poll-limit", "reviewed", "FAIL"), ("fr1-held-poll-limit", "repaired", "PASS"), ("fr1-held-poll-limit", "negative", "FAIL"),
-        ("fr1-held-poll-limit", "one-row-read-counts-held", "FAIL"),
+        ("fr1-held-poll-limit", "one-row-read-counts-held", "FAIL"), ("fr1-held-poll-limit", "clear-with-held", "PASS"),
+        ("fr1-held-crash", "reviewed", "FAIL"), ("fr1-held-crash", "repaired", "PASS"), ("fr1-held-crash", "negative", "FAIL"),
+        ("fr1-held-crash", "clear-with-held", "FAIL"), ("fr1-held-crash", "one-row-read-counts-held", "PASS"),
         ("fr1-control-after-complete", "reviewed", "FAIL"), ("fr1-control-after-complete", "repaired", "PASS"), ("fr1-control-after-complete", "negative", "FAIL"),
         ("fr1-control-after-complete", "mark-ignores-controls", "FAIL"),
         ("fr1-control-crash", "reviewed", "FAIL"), ("fr1-control-crash", "repaired", "PASS"), ("fr1-control-crash", "negative", "FAIL"),
@@ -92,7 +95,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-cohort-nonsuspect|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-cohort-nonsuspect|clear-with-held|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -104,7 +107,7 @@ static partial class Program
             var set = rules switch
             {
                 "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls, "skip-target" => FrRules.SkipTarget, "no-shelf" => FrRules.NoShelf,
-                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-cohort-nonsuspect" => FrRules.BoundaryHoldsCohortNonsuspect,
+                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-cohort-nonsuspect" => FrRules.BoundaryHoldsCohortNonsuspect, "clear-with-held" => FrRules.ClearWithHeld,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();
