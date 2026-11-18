@@ -5,27 +5,13 @@
   white-space: nowrap;
 }
 
-.wf-lost-update-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border: 1px solid var(--studio-warning);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
-  color: var(--studio-warning-fg);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-button.wf-lost-update-badge {
+/* The clickable badge is the shared status chip inside a button that adds no styling of its own. */
+.wf-lost-update-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   cursor: pointer;
-}
-
-button.wf-lost-update-badge:hover {
-  filter: brightness(0.96);
 }
 
 .wf-variable-writes .wf-runtime-evidence-heading h4 {

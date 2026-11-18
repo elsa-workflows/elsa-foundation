@@ -123,9 +123,9 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   const warning = await seed("Default");
   let section = await openActivity(warning.runId, warning.step);
   await expect(section).toContainText("Lost update");
-  await expect(section).toContainText("built on v0, current v1 → v2");
-  await expect(section.locator(".wf-variable-write-facts")).toContainText("WriterEvent");
-  await expect(section.locator(".wf-variable-write-facts")).toContainText("Overwritten writerSet Variable");
+  await expect(section).toContainText("Read version 0 · was version 1 · now version 2");
+  await expect(section.locator(".wf-variable-write-facts")).toContainText('Writer"Event"');
+  await expect(section.locator(".wf-variable-write-facts")).toContainText('Overwritten writer"Set Variable"');
   await expect(section.locator(".wf-variable-write-facts")).toContainText("Overwritten valueKept for recovery");
   await expect(inspector().locator(".wf-activity-overview")).toContainText("1 lost update");
   await capture(page, info, "lost-update-warning");

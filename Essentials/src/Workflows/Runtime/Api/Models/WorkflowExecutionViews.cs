@@ -200,14 +200,17 @@ public sealed record ActivityExecutionInspectionView(
     /// <summary>The input evaluations a background admission refresh superseded (spec 1221 FR-018, FR-020).</summary>
     public IReadOnlyCollection<ActivityInputRefreshView>? InputRefreshes { get; init; }
 
-    /// <summary>Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view.</summary>
-    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state) =>
+    /// <summary>
+    /// Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view. Record i is
+    /// the state's <c>VariableWrites[i]</c>, so a later per-entry read (spec 1229) can address it by that index.
+    /// </summary>
+    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state, bool canInspectSensitiveValues) =>
         state is null
             ? this
             : this with
             {
                 VariableWrites = state.VariableWrites is { Count: > 0 } writes
-                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots)).ToArray()
+                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots, canInspectSensitiveValues)).ToArray()
                     : null,
                 RecordedCompletion = RecordedCompletionView.From(state.RecordedCompletion),
                 InputRefreshes = state.InputRefreshes is { Count: > 0 } refreshes

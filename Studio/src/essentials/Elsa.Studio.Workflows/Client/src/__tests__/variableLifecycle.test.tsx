@@ -128,18 +128,20 @@ describe("variable lifecycle model", () => {
   });
 
   it("names writers by label, node id, or kind of write", () => {
-    expect(writerLabel({ source: "Capture", executableNodeId: "node-a" }, labelOf)).toBe("Add bonus");
-    expect(writerLabel({ source: "Intrinsic", executableNodeId: "node-x" }, labelOf)).toBe("node-x (Set Variable)");
+    expect(writerLabel({ source: "Capture", executableNodeId: "node-a" }, labelOf)).toBe('"Add bonus"');
+    expect(writerLabel({ source: "Intrinsic", executableNodeId: "node-x" }, labelOf)).toBe('"node-x" (Set Variable)');
     expect(writerLabel({ source: "Alteration" })).toBe("an operator alteration");
-    expect(writerLabel({ source: "Intrinsic", executableNodeId: "set-count" }, () => "Set Variable")).toBe("Set Variable");
+    expect(writerLabel({ source: "Intrinsic", executableNodeId: "set-count" }, () => "Set Variable")).toBe('"Set Variable"');
     expect(writerLabel(null)).toBe("an earlier writer");
   });
 
   it("keeps value states distinct and never treats an operational value as readable here", () => {
     expect(presentValueState({ state: "captured", isOperational: true }).label).toBe("Kept for recovery");
-    expect(presentValueState({ state: "captured", isOperational: true }).detail).toContain("write history view");
+    expect(presentValueState({ state: "captured", isOperational: true }).detail).toContain("Studio cannot show it yet");
     expect(presentValueState({ state: "captured", evidenceId: "ev-1" }).label).toBe("Captured");
-    expect(presentValueState({ state: "omitted" }).label).toBe("Not captured");
+    expect(presentValueState({ state: "omitted" }).label).toBe("No value evidence");
+    expect(presentValueState({ state: "omitted" }).detail).toContain("removed by retention");
+    expect(presentValueState({ state: "omitted", isOperational: true }).label).toBe("Not kept");
     expect(presentValueState({ state: "redacted" }).label).toBe("Redacted");
     expect(presentValueState({ state: "expired" }).label).toBe("Expired");
   });
@@ -186,10 +188,13 @@ describe("run view", () => {
     const text = container.textContent!;
     expect(container.querySelector(".wf-lost-update-status .studio-status-chip[data-tone=warning]")!.textContent).toContain("1 lost update");
     expect(text).toContain("Lost update");
-    expect(text).toContain("built on v0, current v1 → v2");
-    expect(text).toContain("without seeing the value Add bonus wrote");
-    expect(text).toContain("WriterIncrement");
-    expect(text).toContain("Overwritten writerAdd bonus");
+    expect(text).toContain("Read version 0 · was version 1 · now version 2");
+    expect(text).toContain('without seeing the value "Add bonus" wrote');
+    expect(text).toContain('the step that wrote it ("Add bonus") shows the value');
+    expect(text).not.toContain("spec 1229");
+    expect(text).toContain('Writer"Increment"');
+    expect(text).toContain('Overwritten writer"Add bonus"');
+    expect(text).toContain("Fingerprint abcdef012345");
     expect(text).toContain("Overwritten valueKept for recovery");
     expect(text).toContain("Modify variable");
     expect(text).not.toContain("commit 9");
@@ -202,11 +207,12 @@ describe("run view", () => {
     const text = container.textContent!;
     expect(text).toContain("Write refused");
     expect(text).toContain("faulted with VariableLostUpdate");
-    expect(text).toContain("Changed byAdd bonus");
+    expect(text).toContain('Changed by"Add bonus"');
+    expect(text).toContain("Read version 0 · was version 1 · not written");
     expect(text).toContain("Refused valueKept for recovery");
     expect(text).not.toContain("Written value");
     expect(text).toContain("Recorded completion kept");
-    expect(text).toContain("outcome Done and would write count");
+    expect(text).toContain('outcome Done and would write "count"');
   });
 
   it("shows an accepted override with the value it overwrote and where its written value came from", () => {
@@ -236,7 +242,8 @@ describe("run view", () => {
     const text = container.textContent!;
     expect(text).toContain("Evaluation 1");
     expect(text).toContain("replaced by evaluation 2");
-    expect(text).toContain("because count v0 → v1");
+    expect(text).toContain('because "count" changed from version 0 to version 1');
+    expect(container.querySelector("section[aria-label='Superseded input evaluations']")).not.toBeNull();
     expect(text).toContain("Amount (evaluation 1)Redacted");
   });
 
@@ -244,8 +251,9 @@ describe("run view", () => {
     const onSelect = vi.fn();
     flushSync(() => root.render(<><LostUpdateBadge count={0} /><LostUpdateBadge count={3} onSelect={onSelect} /></>));
 
-    const badge = container.querySelector<HTMLButtonElement>("button.wf-lost-update-badge")!;
-    expect(container.querySelectorAll(".wf-lost-update-badge, .wf-lost-update-status")).toHaveLength(1);
+    const badge = container.querySelector<HTMLButtonElement>("button.wf-lost-update-button")!;
+    expect(badge.querySelector(".studio-status-chip[data-tone=warning]")).not.toBeNull();
+    expect(container.querySelectorAll(".wf-lost-update-status")).toHaveLength(1);
     expect(badge.textContent).toContain("3 lost updates");
     badge.click();
     expect(onSelect).toHaveBeenCalledTimes(1);

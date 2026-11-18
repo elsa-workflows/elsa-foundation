@@ -35,13 +35,14 @@ public sealed class ActivityExecutionInspectionService(
         var state = activityExecutionStateStore is null
             ? null
             : await activityExecutionStateStore.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
         return ActivityExecutionInspectionView.From(
             projection,
             boundary,
-            await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken),
+            canInspectSensitiveValues,
             attempt,
             await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken))
-            .WithVariableLifecycle(state);
+            .WithVariableLifecycle(state, canInspectSensitiveValues);
     }
 }
 

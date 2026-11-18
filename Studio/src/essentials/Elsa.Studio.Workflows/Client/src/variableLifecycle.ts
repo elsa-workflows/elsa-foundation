@@ -65,14 +65,17 @@ export function writerLabel(writer: VariableWriterView | null | undefined, label
   const source = writeSourceLabels[writer.source] ?? writer.source;
   if (!node) return writer.source === "Alteration" ? "an operator alteration" : `a ${source}`;
   // A capture is named by its node; another kind of write adds its kind, unless the node is already called that.
-  return writer.source === "Capture" || node.toLowerCase() === source.toLowerCase() ? node : `${node} (${source})`;
+  return writer.source === "Capture" || node.toLowerCase() === source.toLowerCase() ? `"${node}"` : `"${node}" (${source})`;
 }
 
-/** "v1 → v2", with the base it was built on when it differs: "built on v0, current v1 → v2". */
+/**
+ * The variable's versions around the write, in words: "Read version 0 · was version 1 · now version 2". A variable's
+ * version counts the writes that changed it; a lost update is a write whose read version is older than the current one.
+ */
 export function versionSummary(record: Pick<VariableWriteRecordView, "baseVersion" | "currentVersion" | "newVersion" | "outcome">) {
-  const base = record.baseVersion == null ? "blind write" : `built on v${record.baseVersion}`;
-  if (record.outcome === lostUpdateFaultOutcome) return `${base}, current v${record.currentVersion}; not applied`;
-  return `${base}, current v${record.currentVersion} → v${record.newVersion}`;
+  const read = record.baseVersion == null ? "Written without reading it" : `Read version ${record.baseVersion}`;
+  if (record.outcome === lostUpdateFaultOutcome) return `${read} · was version ${record.currentVersion} · not written`;
+  return `${read} · was version ${record.currentVersion} · now version ${record.newVersion}`;
 }
 
 /** What one record means for an operator, in one sentence. */
@@ -107,20 +110,22 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
     case "captured":
       if (value.evidenceId) return { label: "Captured", detail: "Captured as value evidence of this step.", tone: "neutral" };
       return value.isOperational
-        ? { label: "Kept for recovery", detail: "Kept on the write history; it becomes readable in the write history view (spec 1229).", tone: "neutral" }
+        ? { label: "Kept for recovery", detail: "Kept on the write history; Studio cannot show it yet.", tone: "neutral" }
         : { label: "Captured", detail: "Captured on the durable record; Studio cannot read it here.", tone: "neutral" };
     case "redacted":
       return { label: "Redacted", detail: "The value is sensitive or withheld and is not shown.", tone: "warning" };
     case "expired":
       return { label: "Expired", detail: "The value passed its retention and was removed.", tone: "muted" };
     case "omitted":
-      return {
-        label: "Not captured",
-        detail: value.isOperational
-          ? "No value was kept."
-          : "No value evidence is available: Variable writes is off unless given its own diagnostics level, or the capture failed or was removed.",
-        tone: "muted"
-      };
+      // This read cannot tell a value never captured from one retention removed (spec 1229's history read can), so it
+      // names the causes instead of claiming one.
+      return value.isOperational
+        ? { label: "Not kept", detail: "No value was kept.", tone: "muted" }
+        : {
+          label: "No value evidence",
+          detail: "Not captured (Variable writes is off unless given its own diagnostics level), not captured because the capture failed, or removed by retention.",
+          tone: "muted"
+        };
     default:
       return { label: value.state, detail: "", tone: "muted" };
   }
@@ -129,6 +134,13 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
 /** "count v0 → v1, total v2 → v3": why a background step ran on a second evaluation of its inputs. */
 export function inputRefreshReason(refresh: Pick<ActivityInputRefreshView, "changes">) {
   return refresh.changes.map(change => `${change.variableKey} v${change.readVersion} → v${change.currentVersion}`).join(", ");
+}
+
+/** The same reason in words: "count changed from version 0 to version 1". */
+export function describeInputRefreshReason(refresh: Pick<ActivityInputRefreshView, "changes">) {
+  return refresh.changes
+    .map(change => `"${change.variableKey}" changed from version ${change.readVersion} to version ${change.currentVersion}`)
+    .join(", ");
 }
 
 /** The two node settings of spec 1221 (FR-012, FR-019), as the authored node carries them. */

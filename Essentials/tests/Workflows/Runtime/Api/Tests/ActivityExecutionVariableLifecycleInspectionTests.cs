@@ -175,6 +175,46 @@ public sealed class ActivityExecutionVariableLifecycleInspectionTests
     }
 
     [Fact]
+    public async Task The_value_digest_is_withheld_from_a_caller_who_may_not_inspect_sensitive_values_and_beside_a_redacted_value()
+    {
+        // The digest is an unsalted hash of the value: from the digest of a Boolean or a small number the value follows.
+        const string digest = "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b";
+        var evidence = ActivityExecutionInspectionValueSnapshot.FromDecision(
+            "approved",
+            ActivityExecutionInspectionValueSubject.VariableWrite,
+            new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.Payload, "Full payload captured by runtime diagnostics policy."),
+            new RuntimeValueTypeDescriptor("alias", "Boolean", null),
+            Now,
+            JsonSerializer.SerializeToElement(true),
+            isSensitive: false,
+            phase: "scope-1",
+            sequence: 1);
+        await SaveAsync(State() with
+        {
+            VariableWrites =
+            [
+                new VariableWriteRecord("scope-1", "approved", new VariableWriter(VariableWriteSource.Capture, "node-1", "inv-1"),
+                    VariableCommitOutcome.Blind, baseVersion: null, currentVersion: 0, newVersion: 1, commitOrder: 1, Now) { Digest = digest }
+            ]
+        }, evidence);
+
+        var withoutPermission = Assert.Single((await ViewAsync(canInspectSensitiveValues: false)).VariableWrites!).WrittenValue!;
+        var withPermission = Assert.Single((await ViewAsync()).VariableWrites!).WrittenValue!;
+
+        Assert.Equal(VariableLifecycleValueStateView.Redacted, withoutPermission.State);
+        Assert.Null(withoutPermission.Digest);
+        Assert.Equal(VariableLifecycleValueStateView.Captured, withPermission.State);
+        Assert.Equal(digest, withPermission.Digest);
+        // A redacted value never carries its digest, whoever asks.
+        var redacted = VariableLifecycleValueStateView.FromEvidence(
+            ActivityExecutionInspectionValueSnapshotView.From(evidence, ActivityExecutionId, 0, canInspectSensitiveValues: false, canResolveValuePayloads: false),
+            digest,
+            canInspectSensitiveValues: true);
+        Assert.Equal(VariableLifecycleValueStateView.Redacted, redacted.State);
+        Assert.Null(redacted.Digest);
+    }
+
+    [Fact]
     public async Task An_execution_with_no_lifecycle_records_carries_none()
     {
         await SaveAsync(State());
@@ -226,18 +266,18 @@ public sealed class ActivityExecutionVariableLifecycleInspectionTests
             ActivitySchedulingProvenance.Empty, [], [], [], evidence, new Dictionary<string, string>()));
     }
 
-    private async Task<ActivityExecutionInspectionView> ViewAsync() =>
-        (await new ActivityExecutionInspectionService(_workflows, _inspections, new InspectionAccess(), activityExecutionStateStore: _states)
+    private async Task<ActivityExecutionInspectionView> ViewAsync(bool canInspectSensitiveValues = true) =>
+        (await new ActivityExecutionInspectionService(_workflows, _inspections, new InspectionAccess(canInspectSensitiveValues), activityExecutionStateStore: _states)
             .GetAsync(new GetActivityExecution(WorkflowExecutionId, ActivityExecutionId), CancellationToken.None))!;
 
-    private sealed class InspectionAccess : IActivityInspectionContextAsync
+    private sealed class InspectionAccess(bool canInspectSensitiveValues = true) : IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant-a";
         public string AuditSubject => "subject-1";
         public string RequestCorrelationId => "request-1";
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("structure");
         public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
-        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(canInspectSensitiveValues);
         public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 }

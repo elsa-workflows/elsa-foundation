@@ -34,13 +34,13 @@ export function VariableLifecycleNodeSettings({ node, readOnly = false, onChange
           aria-describedby={`${id}-mode-help`}
           onChange={event => onChange(writeLostUpdateMode(node, event.target.value === "Fault" ? "Fault" : "Default"))}
         >
-          <option value="Default">Default: last write wins, with a warning</option>
-          <option value="Fault">Fault: refuse a write on a changed value</option>
+          <option value="Default">Default (warn)</option>
+          <option value="Fault">Fault (refuse)</option>
         </select>
         <small id={`${id}-mode-help`} className="wf-muted">
           {mode === "Fault"
             ? "If a variable this step reads and writes changed before its write commits, the write is refused and the step faults (VariableLostUpdate). An operator can then retry, re-execute, or accept the recorded completion."
-            : "If a variable this step reads and writes changed before its write commits, the write still applies and the run records a lost-update warning with the value it replaced. A variable it only reads never causes one. An activity type that declares Fault stays Fault."}
+            : "If a variable this step reads and writes changed before its write commits, the write still applies and the run records a lost-update warning with the value it replaced. A variable it only reads never causes one. Some activity types always use Fault, whatever this setting says."}
         </small>
       </label>
       <div className="wf-node-lifecycle-checkbox">

@@ -10,8 +10,8 @@ import type {
 import {
   acceptedOverrideOutcome,
   countLostUpdates,
+  describeInputRefreshReason,
   describeVariableWrite,
-  inputRefreshReason,
   lostUpdateFaultOutcome,
   lostUpdateWarningOutcome,
   outcomeLabel,
@@ -38,9 +38,10 @@ export function LostUpdateBadge({ count, onSelect, label }: { count: number; onS
   if (count <= 0) return null;
   const text = label ?? (count === 1 ? "1 lost update" : `${count} lost updates`);
   const content = <><AlertTriangle size={12} aria-hidden="true" /> {text}</>;
+  const chip = <StatusChip tone="warning">{content}</StatusChip>;
   return onSelect
-    ? <button type="button" className="wf-lost-update-badge" onClick={onSelect}>{content}</button>
-    : <span className="wf-lost-update-status"><StatusChip tone="warning">{content}</StatusChip></span>;
+    ? <button type="button" className="wf-lost-update-status wf-lost-update-button" onClick={onSelect}>{chip}</button>
+    : <span className="wf-lost-update-status">{chip}</span>;
 }
 
 /** A value state, linked to its captured value evidence when the record names one. */
@@ -57,7 +58,7 @@ export function VariableValueState({ label, value, evidence, note }: {
       <dt>{label}</dt>
       <dd>
         <span className="wf-variable-value-state-label">{presentation.label}</span>
-        {value?.digest ? <code className="wf-variable-value-digest" title="Value digest">{shortDigest(value.digest)}</code> : null}
+        {value?.digest ? <small className="wf-variable-value-digest">Fingerprint <code title={value.digest}>{shortDigest(value.digest)}</code></small> : null}
         {evidence ? <RuntimeValueEvidenceContent snapshot={evidence} /> : <small>{note ?? presentation.detail}</small>}
       </dd>
     </div>
@@ -103,7 +104,9 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
       </dl>
       {record.outcome === lostUpdateWarningOutcome ? (
         <p className="wf-variable-write-hint">
-          To restore the overwritten value, set it again with the Modify variable alteration.
+          To restore the overwritten value, set it again with the Modify variable alteration. With the Variable writes
+          diagnostics level on, the step that wrote it ({writerLabel(record.overwrittenWriter, labelOf)}) shows the value
+          it wrote.
         </p>
       ) : null}
     </article>
@@ -143,11 +146,11 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
         </div>
       ) : null}
       {recorded ? (
-        <div className="wf-recorded-completion" aria-label="Recorded completion">
+        <section className="wf-recorded-completion" aria-label="Recorded completion">
           <strong>Recorded completion kept</strong>
           <p>
             The body finished{recorded.attemptOrdinal ? ` on attempt ${recorded.attemptOrdinal}` : ""} with outcome {recorded.outcomeNames.length > 0 ? recorded.outcomeNames.join(", ") : "none"}
-            {recorded.variableWrites.length > 0 ? ` and would write ${recorded.variableWrites.map(write => write.variableKey).join(", ")}` : ""}.
+            {recorded.variableWrites.length > 0 ? ` and would write ${recorded.variableWrites.map(write => `"${write.variableKey}"`).join(", ")}` : ""}.
             Accept recorded completion, in the incident's operator actions, completes the step with it without running the body again.
           </p>
           {recorded.variableWrites.length > 0 ? (
@@ -157,7 +160,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
               ))}
             </dl>
           ) : null}
-        </div>
+        </section>
       ) : null}
     </section>
   );
@@ -167,14 +170,14 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
 export function InputRefreshHistory({ refreshes }: { refreshes: readonly ActivityInputRefreshView[] | null | undefined }) {
   if (!refreshes?.length) return null;
   return (
-    <div className="wf-input-refreshes" aria-label="Superseded input evaluations">
+    <section className="wf-input-refreshes" aria-label="Superseded input evaluations">
       <strong><RefreshCw size={13} aria-hidden="true" /> Inputs evaluated again before this background step ran</strong>
       <ol>
         {refreshes.map(refresh => (
           <li key={`${refresh.supersededEvaluation}:${refresh.refreshedAt}`}>
             <p>
               Evaluation {refresh.supersededEvaluation} (from {formatDate(refresh.supersededMaterializedAt)}) was replaced by
-              evaluation {refresh.replacedByEvaluation} at {formatDate(refresh.refreshedAt)}, because {inputRefreshReason(refresh)}.
+              evaluation {refresh.replacedByEvaluation} at {formatDate(refresh.refreshedAt)}, because {describeInputRefreshReason(refresh)}.
             </p>
             {refresh.supersededInputs.length > 0 ? (
               <dl className="wf-variable-write-facts">
@@ -186,6 +189,6 @@ export function InputRefreshHistory({ refreshes }: { refreshes: readonly Activit
           </li>
         ))}
       </ol>
-    </div>
+    </section>
   );
 }
