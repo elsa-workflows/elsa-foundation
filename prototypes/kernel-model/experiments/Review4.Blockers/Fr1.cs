@@ -1,7 +1,10 @@
 namespace Kernel.Review4;
 
-/// <summary>The rule sets of FR-1 (R4-B1). <c>HeldBlocks</c> is a mutation of the repaired set for the held variant.</summary>
-enum FrRules { Reviewed, Repaired, Negative, HeldBlocks }
+/// <summary>
+/// The rule sets of FR-1 (R4-B1). Two mutations of the repaired set: <c>HeldBlocks</c> counts a held cohort row in the
+/// precedence (E-8), and <c>MemoryPrecedence</c> keeps the cohort in the owner's memory only (E-7).
+/// </summary>
+enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence }
 
 /// <summary>One inbox row as the proposed drain sees it: full key, seq, kind, release tag, Seen epoch, Done, KeptBy.</summary>
 sealed class InboxRow(string name, Message message, long seq)
@@ -61,6 +64,7 @@ sealed class Fr1(string variant, FrRules rules)
     private readonly List<InboxRow> _rows = [];
     private readonly FrInstance _instance = new();
     private readonly HashSet<InboxKey> _held = [];   // owner memory: rows a model turn handed back
+    private readonly HashSet<InboxKey> _memoryCohort = []; // owner memory: rows it saw a page release (MemoryPrecedence only)
     private readonly List<string> _modelInputs = [];
     private long _epoch = 1;
     private long _nextSeq = 2000;
@@ -71,12 +75,14 @@ sealed class Fr1(string variant, FrRules rules)
     private bool _aWhileHeld;
     private bool _f2WaitingWhenAArrived;
 
-    public static readonly string[] Variants = ["base", "takeover-before-complete", "takeover-after-complete", "held"];
+    public static readonly string[] Variants = ["base", "takeover-before-complete", "takeover-after-complete", "model-end", "held"];
 
     public async Task<Report> RunAsync()
     {
         var held = variant == "held";
-        _report = new Report($"FR-1/{variant}", Program.Name(rules), held
+        _report = new Report($"FR-1/{variant}", Program.Name(rules), variant == "model-end"
+            ? "an earlier cohort row that ends the model leaves R with no model turn, and the drain still completes with no KeptBy left"
+            : held
             ? "a row the model holds never blocks delivery; the held cohort row still receives the input it waits for"
             : "the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)");
         HeldGate.Accepts = 0;
@@ -116,6 +122,13 @@ sealed class Fr1(string variant, FrRules rules)
         _instance.Status = InstanceStatus.Faulted;
         r.Done = true; r.KeptBy = "Arrived"; r.Fate = "kept";
         _report.Line($"park: {r.Describe()}");
+        var modelEnd = variant == "model-end";
+        if (modelEnd)
+        {
+            var q = new InboxRow("Q", new Message("parked-cancel", Self, NativeKinds.Cancel, null, "0/other2", TargetCreation: 1), 1000) { Done = true, KeptBy = "Arrived", Fate = "kept" };
+            _rows.Add(q);
+            _report.Line($"park: {q.Describe()}, an earlier kept row that ends the model");
+        }
 
         // 3. Recover Open (proposed): generation 1, cursor before the first row, instance running, first kernel.drain.
         _instance.ResolutionGeneration = 1; _instance.OpenGeneration = 1; _instance.Cursor = null; _instance.Status = InstanceStatus.Running;
@@ -123,11 +136,14 @@ sealed class Fr1(string variant, FrRules rules)
         _report.Line("open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800");
 
         // 4. A arrives during the drain from another sender, with a lower seq than R: withheld (not released).
-        var a = held
+        InboxRow? a = modelEnd ? null : held
             ? new InboxRow("A", new Message("late-go", Self, NativeKinds.Resume, Json.Write(new ResumeStimulus("go")), "0/other", TargetCreation: 1), 900)
             : new InboxRow("A", new Message("late-cancel", Self, NativeKinds.Cancel, null, "0/other", TargetCreation: 1), 900);
-        _rows.Add(a);
-        _report.Line($"arrival: {a.Describe()} from sender 0/other, withheld while the recover drain is open");
+        if (a is not null)
+        {
+            _rows.Add(a);
+            _report.Line($"arrival: {a.Describe()} from sender 0/other, withheld while the recover drain is open");
+        }
 
         // 5. C0's page is the final page: it restores R and sends C at seq 950 (another clock; valid on MongoDB).
         var first = Poll();
@@ -164,7 +180,16 @@ sealed class Fr1(string variant, FrRules rules)
         _report.Line($"rows: {string.Join("; ", _rows.Where(x => x.Name is not "start").Select(x => $"{x.Name} {x.Fate}"))}");
         _report.Line($"instance: status {_instance.Status}, resolution {(_instance.OpenGeneration is null ? "cleared" : "open")}, ResolutionGeneration {_instance.ResolutionGeneration}");
 
-        if (!held)
+        if (modelEnd)
+        {
+            _report.Expect("model inputs", string.Join(",", _modelInputs), "Q");
+            _report.Expect("instance ended", _instance.Status, InstanceStatus.Cancelled);
+            _report.Expect("drain completed", _instance.OpenGeneration is null && _rows.Single(x => x.Name == "C").Done, true);
+            _report.Expect("R reached a model turn", r.Fate == "consumed by a model turn", false);
+            _report.Expect("rows still kept", _rows.Count(x => x.KeptBy is not null), 0);
+            _report.Expect("undone rows remaining", undone.Count, 0);
+        }
+        else if (!held)
         {
             var records = _records;
             _report.Expect("F completions (records c:" + fFrame + ":F)", records.Count(x => x == $"c:{fFrame}:F"), 1);
@@ -198,7 +223,8 @@ sealed class Fr1(string variant, FrRules rules)
 
     private static bool IsControl(string kind) => Kinds.IsControl(kind) || kind == DrainKind;
 
-    private bool Cohort(InboxRow row) => !row.Done && row.ReleasedBy == (_instance.Creation, _instance.ResolutionGeneration);
+    private bool Cohort(InboxRow row) => !row.Done && row.ReleasedBy == (_instance.Creation, _instance.ResolutionGeneration) &&
+        (rules != FrRules.MemoryPrecedence || _memoryCohort.Contains(row.Key));
 
     private bool Eligible(InboxRow row) =>
         _instance.OpenGeneration is not { } open || IsControl(row.Kind) || row.ReleasedBy == (_instance.Creation, open);
@@ -212,13 +238,15 @@ sealed class Fr1(string variant, FrRules rules)
         var deliverable = _rows.Where(x => !x.Deleted && !x.Done && !_held.Contains(x.Key) && (x.Message.Due ?? 0) <= Now && Eligible(x) && !Blocked(x)).ToList();
         foreach (var row in deliverable) row.Seen = _epoch;
         deliverable.Sort(InboxRow.Compare);
-        return rules switch
-        {
-            FrRules.Reviewed => deliverable,
-            FrRules.Negative => [.. deliverable.Where(x => IsControl(x.Kind)), .. deliverable.Where(x => !IsControl(x.Kind))],
-            _ => [.. deliverable.Where(x => IsControl(x.Kind)), .. deliverable.Where(x => !IsControl(x.Kind) && Cohort(x)),
-                  .. deliverable.Where(x => !IsControl(x.Kind) && !Cohort(x))],
-        };
+        // Control kinds go first only while a recover drain is open or a cohort row remains. Otherwise the built order
+        // holds: a control is taken alone, after the rows ahead of it (Worker.cs 868-874), which with one input per
+        // turn is plain tuple order.
+        var open = _instance.OpenGeneration is not null;
+        var cohortRemains = rules != FrRules.Negative && _rows.Any(x => !x.Deleted && Cohort(x));
+        if (rules == FrRules.Reviewed || !open && !cohortRemains) return deliverable;
+        if (rules == FrRules.Negative) return [.. deliverable.Where(x => IsControl(x.Kind)), .. deliverable.Where(x => !IsControl(x.Kind))];
+        return [.. deliverable.Where(x => IsControl(x.Kind)), .. deliverable.Where(x => !IsControl(x.Kind) && Cohort(x)),
+                .. deliverable.Where(x => !IsControl(x.Kind) && !Cohort(x))];
     }
 
     /// <summary>A kernel.drain turn: a page, or Complete when no kept row remains past the cursor and the gate row is taken up.</summary>
@@ -231,7 +259,7 @@ sealed class Fr1(string variant, FrRules rules)
         if (page.Count > 0)
         {
             foreach (var row in page)
-            { row.Done = false; row.KeptBy = null; row.Seen = 0; row.ReleasedBy = (_instance.Creation, generation); row.Fate = "released"; }
+            { row.Done = false; row.KeptBy = null; row.Seen = 0; row.ReleasedBy = (_instance.Creation, generation); row.Fate = "released"; _memoryCohort.Add(row.Key); }
             _instance.Cursor = page[^1]; _instance.Gate = page[^1].Key;
             var next = new InboxRow("C", Drain(nextDrainSeq), nextDrainSeq);
             _rows.Add(next);
@@ -250,6 +278,7 @@ sealed class Fr1(string variant, FrRules rules)
     {
         _epoch++;
         _held.Clear();
+        _memoryCohort.Clear();
         _report.Line($"takeover {when}: new owner at epoch {_epoch} rebuilds from durable rows only (memory, holds and polled rows are lost)");
     }
 

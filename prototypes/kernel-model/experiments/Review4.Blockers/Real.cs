@@ -3,7 +3,7 @@ using System.Reflection;
 namespace Kernel.Review4;
 
 /// <summary>
-/// The prototype functions the outcomes depend on, called as built. Four of them are internal to their assemblies,
+/// The prototype functions the outcomes depend on, called as built. Several of them are internal to their assemblies,
 /// so the harness reaches them by reflection and leaves their projects unchanged. Each call is counted,
 /// and every report prints the counts, so a reader can see which real code a run went through.
 /// </summary>
@@ -17,7 +17,14 @@ static class Real
     private static readonly MethodInfo RegistryWrite = Find(Registry, "Write");
     private static readonly MethodInfo FinishedMethod = Find(typeof(WorkflowInstance), "Finished");
 
+    private static readonly PropertyInfo SuppliedCreatorProperty = typeof(Message).GetProperty("SuppliedCreator", BindingFlags.NonPublic | BindingFlags.Instance)
+        ?? throw new MissingMemberException(nameof(Message), "SuppliedCreator");
+    private static readonly Type SlotType = typeof(Delivery).Assembly.GetType("Kernel.Durable.Slot", throwOnError: true)!;
+    private static readonly MethodInfo DiscardedAtMethod = typeof(Delivery).GetMethod("DiscardedAt", BindingFlags.NonPublic | BindingFlags.Instance)
+        ?? throw new MissingMethodException(nameof(Delivery), "DiscardedAt");
+
     public static readonly SortedDictionary<string, int> Calls = new(StringComparer.Ordinal);
+    public static string? LastStartError;
 
     private static MethodInfo Find(Type type, string name) =>
         type.GetMethod(name, Internal) ?? throw new MissingMethodException(type.FullName, name);
@@ -30,7 +37,23 @@ static class Real
 
     /// <summary>Creation.cs, <c>CreationProtocol.StartError</c>: whether a start may create the next creation.</summary>
     public static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, InboxKey message)
-    { Count("CreationProtocol.StartError"); return (string?)StartErrorMethod.Invoke(null, [previous, start, kind, payload, message]); }
+    { Count("CreationProtocol.StartError"); return LastStartError = (string?)StartErrorMethod.Invoke(null, [previous, start, kind, payload, message]); }
+
+    /// <summary>Messages.cs 52–54, <c>Message.SuppliedCreator</c>: a start whose creator scope was not minted by the kernel.</summary>
+    public static bool SuppliedCreator(Message message)
+    { Count("Message.SuppliedCreator"); return (bool)SuppliedCreatorProperty.GetValue(message)!; }
+
+    /// <summary>
+    /// Turns.cs 112, <c>Delivery.DiscardedAt</c>, over a real <c>Slot</c> whose committed row is <paramref name="row"/>:
+    /// whether the Worker consumes the delivery with no turn (Worker.cs 1030–1037).
+    /// </summary>
+    public static bool DiscardedAt(Message message, InstanceRow row)
+    {
+        Count("Delivery.DiscardedAt");
+        var slot = Activator.CreateInstance(SlotType, nonPublic: true)!;
+        SlotType.GetField("Row")!.SetValue(slot, row);
+        return (bool)DiscardedAtMethod.Invoke(new Delivery(message, 0), [slot])!;
+    }
 
     /// <summary>Creation.cs, <c>CreationProtocol.Retire</c>: the built delete's retirement marker.</summary>
     public static InstanceRow Retire(InstanceRow row) { Count("CreationProtocol.Retire"); return CreationProtocol.Retire(row); }
@@ -55,7 +78,7 @@ static class Real
 
     public static InboxKey Ticket(string actor, string key, long creation) { Count("InboxKey.Ticket"); return InboxKey.Ticket(actor, key, creation); }
 
-    public static void Reset() => Calls.Clear();
+    public static void Reset() { Calls.Clear(); LastStartError = null; }
 
     public static void CountModelTurn() => Count("NativeModel.TurnAsync");
 

@@ -9,23 +9,30 @@ return await Program.MainAsync(args);
 static partial class Program
 {
     public static string Name(FrRules rules) => rules switch
-    { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", _ => "held-blocks" };
+    { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", FrRules.HeldBlocks => "held-blocks", _ => "memory-precedence" };
 
     public static string Name(RtRules rules) => rules switch
-    { RtRules.Reviewed => "reviewed", RtRules.Repaired => "repaired", RtRules.Negative => "negative", _ => "cascade-any" };
+    {
+        RtRules.Reviewed => "reviewed", RtRules.Repaired => "repaired", RtRules.Negative => "negative", RtRules.CascadeAny => "cascade-any",
+        RtRules.SuccessorAdmitted => "successor-admitted", _ => "successor-inherits",
+    };
 
-    // Case, rule set, expected result. "OPEN" marks a run that fails under every rule set because the design does not
-    // yet say what happens (rt1-successor-gap); it is evidence for a decision, not a passing repair.
+    // Case, rule set, expected result. Every case runs reviewed, repaired and negative; a mutation of the repaired set
+    // runs where it bites. The page case each run backs is in the README.
     private static readonly (string Case, string Rules, string Expected)[] Matrix =
     [
         .. from v in new[] { "base", "takeover-before-complete", "takeover-after-complete" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr1-{v}", r.Item1, r.Item2),
+        ("fr1-takeover-before-complete", "memory-precedence", "FAIL"), ("fr1-takeover-after-complete", "memory-precedence", "FAIL"),
+        ("fr1-model-end", "reviewed", "PASS"), ("fr1-model-end", "repaired", "PASS"), ("fr1-model-end", "negative", "PASS"),
         ("fr1-held", "reviewed", "PASS"), ("fr1-held", "repaired", "PASS"), ("fr1-held", "negative", "PASS"), ("fr1-held", "held-blocks", "FAIL"),
-        ("rt1-a", "reviewed", "FAIL"), ("rt1-a", "repaired", "PASS"), ("rt1-a", "negative", "FAIL"),
+        .. from v in new[] { "a", "a-g-deleted" }
+           from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"rt1-{v}", r.Item1, r.Item2),
         ("rt1-b", "reviewed", "PASS"), ("rt1-b", "repaired", "PASS"), ("rt1-b", "negative", "PASS"),
-        ("rt1-nonparent", "reviewed", "PASS"), ("rt1-nonparent", "repaired", "PASS"), ("rt1-nonparent", "negative", "PASS"), ("rt1-nonparent", "cascade-any", "FAIL"),
-        ("rt1-successor", "reviewed", "PASS"), ("rt1-successor", "repaired", "PASS"), ("rt1-successor", "negative", "PASS"),
-        ("rt1-successor-gap", "reviewed", "FAIL (OPEN)"), ("rt1-successor-gap", "repaired", "FAIL (OPEN)"), ("rt1-successor-gap", "negative", "FAIL (OPEN)"),
+        ("rt1-nonparent", "reviewed", "FAIL"), ("rt1-nonparent", "repaired", "PASS"), ("rt1-nonparent", "negative", "FAIL"), ("rt1-nonparent", "cascade-any", "FAIL"),
+        ("rt1-successor", "reviewed", "PASS"), ("rt1-successor", "repaired", "PASS"), ("rt1-successor", "negative", "PASS"), ("rt1-successor", "successor-inherits", "FAIL"),
+        ("rt1-successor-unreachable", "reviewed", "FAIL"), ("rt1-successor-unreachable", "repaired", "PASS"), ("rt1-successor-unreachable", "negative", "FAIL"),
+        ("rt1-successor-gap", "reviewed", "FAIL"), ("rt1-successor-gap", "repaired", "PASS"), ("rt1-successor-gap", "negative", "FAIL"), ("rt1-successor-gap", "successor-admitted", "FAIL"),
     ];
 
     public static async Task<int> MainAsync(string[] args)
@@ -45,9 +52,9 @@ static partial class Program
                 Console.Write(report.Render());
                 Console.WriteLine();
                 var actual = report.Passed ? "PASS" : "FAIL";
-                var matches = e.StartsWith(actual, StringComparison.Ordinal);
+                var matches = e == actual;
                 if (!matches) mismatches++;
-                summary.Add($"{c,-34} {r,-12} actual {actual}  expected {e,-12} {(matches ? "as expected" : "MISMATCH")}");
+                summary.Add($"{c,-30} {r,-19} actual {actual}  expected {e}  {(matches ? "as expected" : "MISMATCH")}");
             }
             Console.WriteLine("== summary ==");
             foreach (var line in summary) Console.WriteLine(line);
@@ -60,7 +67,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|cascade-any> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|cascade-any|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -71,7 +78,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks,
+                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();
@@ -80,7 +87,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => RtRules.Reviewed, "repaired" => RtRules.Repaired, "negative" => RtRules.Negative, "cascade-any" => RtRules.CascadeAny,
+                "reviewed" => RtRules.Reviewed, "repaired" => RtRules.Repaired, "negative" => RtRules.Negative, "cascade-any" => RtRules.CascadeAny, "successor-admitted" => RtRules.SuccessorAdmitted, "successor-inherits" => RtRules.SuccessorInherits,
                 _ => throw new ArgumentException($"RT-1 has no rule set '{rules}'"),
             };
             return new Rt1(id[4..], set).Run();
