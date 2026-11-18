@@ -43,7 +43,7 @@ changes, they are rechecked.
   lost-update **warning** is raised as an instance diagnostic in Studio and an entry in the write history, naming the
   variable, the base and current versions and both writers, and keeping the overwritten value so it can be restored.
   Opt-in: `Fault`, declared by an activity type or set per node by an engineer through the design API, for strict
-  read-modify-write. Studio does not offer it to workflow authors (coordinator decision 2026-11-18).
+  read-modify-write. The workflow designer does not offer it to authors (coordinator decision 2026-11-18).
   This replaces the earlier draft's `Fault` default with a `LastWins` override.
 - **Tracking (decision 5).** Light tracking by default: the base version and the current version decide alone, and a
   value that moved and came back (`0 → 1 → 0`) also warns. The exact check (stored digests compared on a version
@@ -192,7 +192,7 @@ kept; a third that accepts a recorded completion without re-running the body.
 
 An engineer building a counter or a balance knows that an update must never be lost. They set `Fault` on the node
 through the design API, or the activity type declares it, and a real lost update stops the step before the wrong value
-spreads. The setting is not shown to workflow authors in Studio (coordinator decision 2026-11-18).
+spreads. The workflow designer does not show the setting to authors (coordinator decision 2026-11-18).
 
 **Why this priority**: the default keeps unordered designs running with a visible record; the opt-in keeps a strict
 mode available where it has real value. It depends on US1's commit machinery.
@@ -383,12 +383,12 @@ expired values from `null`.
   instance diagnostic shown in Studio and an entry in the write history (FR-024), not only a log line. It MUST name the
   variable, the base version, the current version and both writers (the one whose value was overwritten and the one
   that wrote on the stale base), and MUST keep the overwritten value so that it can be restored (FR-026).
-- **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity type
-  declares it, and an engineer may set it per node through the design API (Studio does not offer it to workflow
-  authors; coordinator decision 2026-11-18). Only `Fault` nodes record digests in their read sets and use
-  the exact check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable,
-  the base version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply
-  (D-3). No other modes exist in this baseline, and no merge policy.
+- **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity
+  type declares it, and an engineer may set it per node through the design API (the workflow designer does not offer it
+  to workflow authors; coordinator decision 2026-11-18). Only `Fault` nodes record digests in their read sets and use
+  the exact check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable, the
+  base version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply (D-3).
+  No other modes exist in this baseline, and no merge policy.
 - **FR-012a**: Spec 266's publish-time warning for unordered writers MUST NOT direct workflow authors to the `Fault`
   mode; it offers structural remedies only (order the branches, capture into separate variables, or combine them with
   one write after the join). Amended by coordinator decision 2026-11-18.
@@ -422,8 +422,8 @@ expired values from `null`.
   versions and, for any variable that changed since Start, refresh the inputs as a new **evaluation** of the same
   invocation (same `InvocationId`, its own sequence number, idempotency keys derived from the evaluation).
 - **FR-019**: A node MUST be able to turn refresh off, set per node by an engineer through the design API like FR-012
-  (Studio does not offer it to workflow authors); its stale base is then handled at commit under the commit rule and
-  the node's mode (a warning by default, a fault under `Fault`).
+  (the workflow designer does not offer it to workflow authors); its stale base is then handled at commit under the
+  commit rule and the node's mode (a warning by default, a fault under `Fault`).
 - **FR-020**: A refresh MUST supersede the first snapshot, link to it with the reason, keep both in the history, and the
   snapshot the worker receives MUST be immutable thereafter. Refresh MUST cover only the Start-to-admission gap.
 

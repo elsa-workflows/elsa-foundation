@@ -192,7 +192,8 @@ public sealed class ExecutableNodeCompiler(
         };
 
         // Spec 1221 FR-012: strict read-modify-write is an opt-in, by the activity type's declaration or the node's
-        // setting (set through the design API). Either one opts the node in; the default mode is pinned by the key's absence.
+        // setting (set through the design API). Either one opts the node in; the default mode is pinned by the key's
+        // absence.
         if (nodeLostUpdateMode == LostUpdateMode.Fault ||
             clrActivityType?.GetCustomAttribute<ActivityLostUpdateModeAttribute>(inherit: true)?.Mode == LostUpdateMode.Fault)
             metadata[RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault;
