@@ -1,5 +1,5 @@
 Review4.Blockers results
-commit feeb37b227a01b70f98b87a984f30ae0e54e846c (tree 95d7a1c2abcf500269773f30368289f487ed0c43, prototype tree 49a55fed1957401d3352b6893726e2961906a021)
+commit 96d865b6ed4a32ee4597dbe040c5f3af11ff7d78 (tree 326a82dbe8ce31b4992860b7a181ca4a0e1659c8, prototype tree 68d93dd01a95ada3e7ece8d62197e5c21feafb8c)
 branch base (merge-base with origin/main) 4b129bcb2b144b7c5db271b1578cd16a2e4d1e89; main has no prototypes/kernel-model change since
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review4.Block
     dotnet build experiments/Review4.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll --all, twice
-    -> exit 0 both times, byte-identical output (SHA-256 25ecaa516c65dc71582df427d3a2d4e71f5737fc37a524b0c0f6bb0261a6d916), below
+    -> exit 0 both times, byte-identical output (SHA-256 c07a431a35c1da487684504f8e2bde0cf04237ea2604df637c9eb277508350ad), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-base, reviewed)
@@ -38,6 +38,14 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 0 (fr1-trial-takeover-open, negative)
   exit 1 (fr1-trial-takeover-open, trial-plain-seq)
   exit 0 (fr1-trial-takeover-open, no-cohort-mark)
+  exit 1 (fr1-held-poll-limit, reviewed)
+  exit 0 (fr1-held-poll-limit, repaired)
+  exit 1 (fr1-held-poll-limit, negative)
+  exit 1 (fr1-held-poll-limit, one-row-read-counts-held)
+  exit 1 (fr1-control-after-complete, reviewed)
+  exit 0 (fr1-control-after-complete, repaired)
+  exit 1 (fr1-control-after-complete, negative)
+  exit 1 (fr1-control-after-complete, mark-ignores-controls)
   exit 0 (fr1-model-end, reviewed)
   exit 0 (fr1-model-end, repaired)
   exit 0 (fr1-model-end, negative)
@@ -118,7 +126,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
   deliver R (order: [R])
   model turn R (native.timer): c:f2:F
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
@@ -209,7 +217,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
   C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution and sets the cohort mark (1,1)
   deliver R (order: [R])
   model turn R (native.timer): c:f2:F
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
@@ -302,7 +310,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
   poll at epoch 2 (limit 500): [A, R]
   deliver R (order: [R])
   model turn R (native.timer): c:f2:F
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
@@ -455,7 +463,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
   poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
   trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn R (native.timer): c:f2:F
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
@@ -518,7 +526,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
   poll at epoch 2 (limit 500): [A (suspect), R (suspect)]
   trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
   instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
@@ -611,10 +619,10 @@ invariant: the final released cohort reaches the model before a later-delivered 
   crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   the new owner's PollLimit is 1: one row per poll, in seq order
   poll at epoch 2 (limit 1): [A (suspect)]
-  cohort read (mark set): loads [R (suspect)]
+  cohort read (mark set, held keys skipped): loads [R (suspect)]
   trial of R alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn R (native.timer): c:f2:F
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn A (native.cancel): end Cancelled; recalled [T2]
   model inputs: [R, A]
@@ -677,10 +685,10 @@ invariant: the final released cohort reaches the model before a later-delivered 
   crash takeover by another process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
   the new owner's PollLimit is 1: one row per poll, in seq order
   poll at epoch 2 (limit 1): [A (suspect)]
-  cohort read (mark set): loads [R (suspect)]
+  cohort read (mark set, held keys skipped): loads [R (suspect)]
   trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
   model turn A (native.cancel): end Cancelled; recalled [R, T2]
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   model inputs: [A]
   rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
   instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
@@ -869,7 +877,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
     FAIL instance ended: Running (expected Cancelled)
     FAIL drain completed: False (expected True)
     FAIL R's fate: released (expected consumed by a model turn)
-    FAIL undone rows remaining: 4 (expected 0)
+    FAIL undone rows remaining: 3 (expected 0)
   real prototype calls: NativeModel.TurnAsync x1
 RESULT FR-1/trial-takeover-open rules=reviewed: FAIL
 
@@ -1085,7 +1093,7 @@ invariant: the final released cohort reaches the model before a later-delivered 
     FAIL instance ended: Running (expected Cancelled)
     FAIL drain completed: False (expected True)
     FAIL R's fate: released (expected consumed by a model turn)
-    FAIL undone rows remaining: 4 (expected 0)
+    FAIL undone rows remaining: 3 (expected 0)
   real prototype calls: NativeModel.TurnAsync x1
 RESULT FR-1/trial-takeover-open rules=trial-plain-seq: FAIL
 
@@ -1123,6 +1131,295 @@ invariant: the final released cohort reaches the model before a later-delivered 
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x3
 RESULT FR-1/trial-takeover-open rules=no-cohort-mark: PASS
+
+== FR-1/held-poll-limit | rules=reviewed ==
+invariant: with R1 held and R2 not yet polled, the cohort read skips held keys and finds R2, so R2 reaches the model before A ends it
+  model turn start (start): no records
+  start: real Native turn ran Parallel(H (f2), a composite that defers signals until its child Event 'go' completes; Event X (f3)); R1 = composite signal to H at seq 1000, R2 = native.resume x at seq 1100
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  park: R2(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1, R2] with ReleasedBy (1,1); cursor -> R2; gate row R2; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); R2(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1, R2])
+  C: no kept row past the cursor and gate row R2 taken up (seen 1 = epoch 1): Complete clears the resolution
+  arrivals for another instance of the partition: N1..N4 at seq 1001-1004
+  retake by the same process after Complete committed, before R1 or R2 reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 2: two rows per poll, in seq order
+  poll at epoch 2 (limit 2): [A, R1]
+  deliver A (order: [A, R1])
+  model turn A (native.cancel): end Cancelled
+  poll at epoch 2 (limit 2): [N1, N2]
+  deliver R1 (order: [R1])
+  R1: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  poll at epoch 2 (limit 2): [N3, N4]
+  poll at epoch 2 (limit 2): [R2]
+  deliver R2 (order: [R2])
+  R2: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: [A]
+  rows: R1 dropped (finished instance, Cancelled); R2 dropped (finished instance, Cancelled); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); N1 consumed by its own instance's turn; N2 consumed by its own instance's turn; N3 consumed by its own instance's turn; N4 consumed by its own instance's turn
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs: A (expected R1,R2,A)
+    FAIL R1 held by the model when R2 was delivered: False (expected True)
+    FAIL X completions (records c:f3:X): 0 (expected 1)
+    FAIL R2's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R1's fate (handed back with the ending input, as held rows are): dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held-poll-limit rules=reviewed: FAIL
+
+== FR-1/held-poll-limit | rules=repaired ==
+invariant: with R1 held and R2 not yet polled, the cohort read skips held keys and finds R2, so R2 reaches the model before A ends it
+  model turn start (start): no records
+  start: real Native turn ran Parallel(H (f2), a composite that defers signals until its child Event 'go' completes; Event X (f3)); R1 = composite signal to H at seq 1000, R2 = native.resume x at seq 1100
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  park: R2(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1, R2] with ReleasedBy (1,1); cursor -> R2; gate row R2; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); R2(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1, R2])
+  C: no kept row past the cursor and gate row R2 taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  arrivals for another instance of the partition: N1..N4 at seq 1001-1004
+  retake by the same process after Complete committed, before R1 or R2 reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 2: two rows per poll, in seq order
+  poll at epoch 2 (limit 2): [A, R1]
+  deliver R1 (order: [R1])
+  model turn R1 (native.composite-signal): signal-deferred:signal-1:f2; held [R1]
+  poll at epoch 2 (limit 2): [N1, N2]
+  cohort read (mark set, held keys skipped): loads [R2]
+  deliver R2 (order: [R2])
+  model turn R1+R2 (native.resume): c:f3:X; signal-deferred:signal-1:f2; held [R1]
+  poll at epoch 2 (limit 2): [N3, N4]
+  cohort read finds no non-held cohort row: the mark is cleared
+  deliver A (order: [A])
+  model turn A+R1 (native.cancel): signal-rejected:signal-1:f2; end Cancelled
+  model inputs: [R1, R2, A]
+  rows: R1 consumed by a model turn; R2 consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); N1 consumed by its own instance's turn; N2 consumed by its own instance's turn; N3 consumed by its own instance's turn; N4 consumed by its own instance's turn
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: R1,R2,A (expected R1,R2,A)
+    PASS R1 held by the model when R2 was delivered: True (expected True)
+    PASS X completions (records c:f3:X): 1 (expected 1)
+    PASS R2's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS R1's fate (handed back with the ending input, as held rows are): consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x4
+RESULT FR-1/held-poll-limit rules=repaired: PASS
+
+== FR-1/held-poll-limit | rules=negative ==
+invariant: with R1 held and R2 not yet polled, the cohort read skips held keys and finds R2, so R2 reaches the model before A ends it
+  model turn start (start): no records
+  start: real Native turn ran Parallel(H (f2), a composite that defers signals until its child Event 'go' completes; Event X (f3)); R1 = composite signal to H at seq 1000, R2 = native.resume x at seq 1100
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  park: R2(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1, R2] with ReleasedBy (1,1); cursor -> R2; gate row R2; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); R2(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1, R2])
+  C: no kept row past the cursor and gate row R2 taken up (seen 1 = epoch 1): Complete clears the resolution
+  arrivals for another instance of the partition: N1..N4 at seq 1001-1004
+  retake by the same process after Complete committed, before R1 or R2 reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 2: two rows per poll, in seq order
+  poll at epoch 2 (limit 2): [A, R1]
+  deliver A (order: [A, R1])
+  model turn A (native.cancel): end Cancelled
+  poll at epoch 2 (limit 2): [N1, N2]
+  deliver R1 (order: [R1])
+  R1: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  poll at epoch 2 (limit 2): [N3, N4]
+  poll at epoch 2 (limit 2): [R2]
+  deliver R2 (order: [R2])
+  R2: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: [A]
+  rows: R1 dropped (finished instance, Cancelled); R2 dropped (finished instance, Cancelled); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); N1 consumed by its own instance's turn; N2 consumed by its own instance's turn; N3 consumed by its own instance's turn; N4 consumed by its own instance's turn
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs: A (expected R1,R2,A)
+    FAIL R1 held by the model when R2 was delivered: False (expected True)
+    FAIL X completions (records c:f3:X): 0 (expected 1)
+    FAIL R2's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R1's fate (handed back with the ending input, as held rows are): dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held-poll-limit rules=negative: FAIL
+
+== FR-1/held-poll-limit | rules=one-row-read-counts-held ==
+invariant: with R1 held and R2 not yet polled, the cohort read skips held keys and finds R2, so R2 reaches the model before A ends it
+  model turn start (start): no records
+  start: real Native turn ran Parallel(H (f2), a composite that defers signals until its child Event 'go' completes; Event X (f3)); R1 = composite signal to H at seq 1000, R2 = native.resume x at seq 1100
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  park: R2(seq 1100, native.resume, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1, R2] with ReleasedBy (1,1); cursor -> R2; gate row R2; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); R2(seq 1100, native.resume, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1, R2])
+  C: no kept row past the cursor and gate row R2 taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  arrivals for another instance of the partition: N1..N4 at seq 1001-1004
+  retake by the same process after Complete committed, before R1 or R2 reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 2: two rows per poll, in seq order
+  poll at epoch 2 (limit 2): [A, R1]
+  deliver R1 (order: [R1])
+  model turn R1 (native.composite-signal): signal-deferred:signal-1:f2; held [R1]
+  poll at epoch 2 (limit 2): [N1, N2]
+  one-row cohort read returns R1, which the model holds: nothing for the mark to wait for
+  deliver A (order: [A])
+  model turn A+R1 (native.cancel): signal-rejected:signal-1:f2; end Cancelled
+  poll at epoch 2 (limit 2): [N3, N4]
+  cohort read (mark set, held keys skipped): loads [R2]
+  deliver R2 (order: [R2])
+  R2: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  cohort read finds no non-held cohort row: the mark is cleared
+  model inputs: [R1, A]
+  rows: R1 consumed by a model turn; R2 dropped (finished instance, Cancelled); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); N1 consumed by its own instance's turn; N2 consumed by its own instance's turn; N3 consumed by its own instance's turn; N4 consumed by its own instance's turn
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs: R1,A (expected R1,R2,A)
+    FAIL R1 held by the model when R2 was delivered: False (expected True)
+    FAIL X completions (records c:f3:X): 0 (expected 1)
+    FAIL R2's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS R1's fate (handed back with the ending input, as held rows are): consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/held-poll-limit rules=one-row-read-counts-held: FAIL
+
+== FR-1/control-after-complete | rules=reviewed ==
+invariant: a control polled while the cohort mark is set waits until the read finds no non-held cohort row, so R reaches the model before the terminate
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  arrival: K(seq 1000, kernel.terminate, released -, seen 0, done False, kept -), the parent's tree terminate (a control kind)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [K]
+  deliver K (order: [K])
+  K: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn
+  poll at epoch 2 (limit 1): [R]
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: []
+  rows: R dropped (finished instance, Cancelled); T2 pending; C0 consumed (drain turn); C consumed (drain turn); K consumed (built terminate)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs:  (expected R)
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL R's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    FAIL the terminate ran after R (built terminate):  (expected R)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x1
+RESULT FR-1/control-after-complete rules=reviewed: FAIL
+
+== FR-1/control-after-complete | rules=repaired ==
+invariant: a control polled while the cohort mark is set waits until the read finds no non-held cohort row, so R reaches the model before the terminate
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  arrival: K(seq 1000, kernel.terminate, released -, seen 0, done False, kept -), the parent's tree terminate (a control kind)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [K]
+  cohort read (mark set, held keys skipped): loads [R]
+  deliver R (order: [R])
+  model turn R (native.timer): c:f2:F
+  cohort read finds no non-held cohort row: the mark is cleared
+  deliver K (order: [K])
+  K: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn
+  model inputs: [R]
+  rows: R consumed by a model turn; T2 pending; C0 consumed (drain turn); C consumed (drain turn); K consumed (built terminate)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: R (expected R)
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS the terminate ran after R (built terminate): R (expected R)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/control-after-complete rules=repaired: PASS
+
+== FR-1/control-after-complete | rules=negative ==
+invariant: a control polled while the cohort mark is set waits until the read finds no non-held cohort row, so R reaches the model before the terminate
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  arrival: K(seq 1000, kernel.terminate, released -, seen 0, done False, kept -), the parent's tree terminate (a control kind)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [K]
+  deliver K (order: [K])
+  K: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn
+  poll at epoch 2 (limit 1): [R]
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: []
+  rows: R dropped (finished instance, Cancelled); T2 pending; C0 consumed (drain turn); C consumed (drain turn); K consumed (built terminate)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs:  (expected R)
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL R's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    FAIL the terminate ran after R (built terminate):  (expected R)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x1
+RESULT FR-1/control-after-complete rules=negative: FAIL
+
+== FR-1/control-after-complete | rules=mark-ignores-controls ==
+invariant: a control polled while the cohort mark is set waits until the read finds no non-held cohort row, so R reaches the model before the terminate
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  marks at epoch 1: R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  arrival: K(seq 1000, kernel.terminate, released -, seen 0, done False, kept -), the parent's tree terminate (a control kind)
+  retake by the same process after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  the new owner's PollLimit is 1: one row per poll, in seq order
+  poll at epoch 2 (limit 1): [K]
+  deliver K: a control, offered in the built order while the cohort mark is set (mark-ignores-controls)
+  K: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn
+  poll at epoch 2 (limit 1): [R]
+  deliver R (order: [R])
+  R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  cohort read finds no non-held cohort row: the mark is cleared
+  model inputs: []
+  rows: R dropped (finished instance, Cancelled); T2 pending; C0 consumed (drain turn); C consumed (drain turn); K consumed (built terminate)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs:  (expected R)
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL R's fate: dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    FAIL the terminate ran after R (built terminate):  (expected R)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x1
+RESULT FR-1/control-after-complete rules=mark-ignores-controls: FAIL
 
 == FR-1/model-end | rules=reviewed ==
 invariant: an earlier cohort row that ends the model leaves R to the finished-instance rule (dropped), and the drain completes with no KeptBy left
@@ -1167,7 +1464,7 @@ invariant: an earlier cohort row that ends the model leaves R to the finished-in
   model turn Q (native.cancel): end Cancelled
   deliver R (order: [R])
   R: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   model inputs: [Q]
   rows: R dropped (finished instance, Cancelled); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
   instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
@@ -1248,7 +1545,7 @@ invariant: control: the ending turn recalls R, so R never reaches a model turn, 
   C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
   deliver Q (order: [Q, R])
   model turn Q (native.cancel): end Cancelled; recalled [R, T2]
-  cohort read finds no cohort row: the mark is cleared
+  cohort read finds no non-held cohort row: the mark is cleared
   model inputs: [Q]
   rows: R recalled by Q's turn (never reached the model); T2 recalled by Q's turn (never reached the model); Q consumed by a model turn; C0 consumed (drain turn); C consumed (drain turn)
   instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
@@ -1329,11 +1626,11 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
   deliver S (order: [S])
   model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
+  cohort read finds no non-held cohort row: the mark is cleared
   deliver A (order: [A])
   model turn A+S (native.resume): c:f2:go; signal-deferred:signal-1:f1; held [S]; sent [K2001]
   deliver K2001 (order: [K2001])
   model turn S+K2001 (native.continue): c:f1:H; end Finished
-  cohort read finds no cohort row: the mark is cleared
   model inputs: [S, A, K2001]
   rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); K2001 consumed by a model turn
   instance: status Finished, resolution cleared, ResolutionGeneration 1, cohort mark none
@@ -1389,9 +1686,10 @@ invariant: a row the model holds never blocks delivery; the held cohort row stil
   C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
   deliver S (order: [S])
   model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
+  cohort read finds no non-held cohort row: the mark is cleared
   model inputs: [S]
   rows: S released; C0 consumed (drain turn); A pending; C consumed (drain turn)
-  instance: status Running, resolution cleared, ResolutionGeneration 1, cohort mark (1,1)
+  instance: status Running, resolution cleared, ResolutionGeneration 1, cohort mark none
   S held by the model when A was delivered: A never delivered
   assertions:
     FAIL A reached a model turn: False (expected True)
@@ -2409,6 +2707,14 @@ fr1-trial-takeover-open        repaired            actual PASS  expected PASS  a
 fr1-trial-takeover-open        negative            actual PASS  expected PASS  as expected
 fr1-trial-takeover-open        trial-plain-seq     actual FAIL  expected FAIL  as expected
 fr1-trial-takeover-open        no-cohort-mark      actual PASS  expected PASS  as expected
+fr1-held-poll-limit            reviewed            actual FAIL  expected FAIL  as expected
+fr1-held-poll-limit            repaired            actual PASS  expected PASS  as expected
+fr1-held-poll-limit            negative            actual FAIL  expected FAIL  as expected
+fr1-held-poll-limit            one-row-read-counts-held actual FAIL  expected FAIL  as expected
+fr1-control-after-complete     reviewed            actual FAIL  expected FAIL  as expected
+fr1-control-after-complete     repaired            actual PASS  expected PASS  as expected
+fr1-control-after-complete     negative            actual FAIL  expected FAIL  as expected
+fr1-control-after-complete     mark-ignores-controls actual FAIL  expected FAIL  as expected
 fr1-model-end                  reviewed            actual PASS  expected PASS  as expected
 fr1-model-end                  repaired            actual PASS  expected PASS  as expected
 fr1-model-end                  negative            actual PASS  expected PASS  as expected
@@ -2444,4 +2750,4 @@ rt1-successor-gap              reviewed            actual FAIL  expected FAIL  a
 rt1-successor-gap              repaired            actual PASS  expected PASS  as expected
 rt1-successor-gap              negative            actual FAIL  expected FAIL  as expected
 rt1-successor-gap              successor-admitted  actual FAIL  expected FAIL  as expected
-61/61 runs as expected
+69/69 runs as expected
