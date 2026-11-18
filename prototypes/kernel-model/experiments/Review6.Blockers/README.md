@@ -70,10 +70,13 @@ is what makes the case pass.
 ## The kernel the cases run on
 
 - **The store.** One real `InMemoryStore` with 4 partitions and a harness clock. Every partition has an owner that
-  takes its fence through the real `TakeAsync`. Every write after setup is a `CommitBatch` through the real
-  `CommitAsync` (`InMemoryStore.cs` 87–194), which checks the fence, counts every consumed input and refuses a send
-  whose key exists. Setup seeds instance rows directly into the store. Outside messages enter through the real
-  `AddAsync` (227–232).
+  takes its fence through the real `TakeAsync`. Setup seeds instance rows directly into the store. Outside messages
+  enter through the real `AddAsync` (227–232).
+  - **NT-1.** Every write after setup is a `CommitBatch` through the real `CommitAsync` (`InMemoryStore.cs` 87–194),
+    which checks the fence, counts every consumed input and refuses a send whose key exists.
+  - **PI-1.** The writes go through the real `PublishAsync`, `PublishedMatchesAsync`, `KeptMatchesAsync`,
+    `AddEventAsync`, `CommitAsync` and `SweepAsync`. The proposed batched sweeps (`Pi1.EventSweep` and
+    `Pi1.MessageSweep`, `Pi1.cs` 209–223) remove rows directly from `Store.EventRows` and `Store.Messages`.
 - **Turns of the actor type are the real ones.** The terminate is the built `WorkflowInstance` terminate
   (`WorkflowInstance.cs` 179–203), reached through the real `Command` (31–93). A failed turn parks through the real
   `WorkflowInstance.Park` (120–132). Each outcome becomes a `TurnCommit` as `Worker.cs` 1450–1455 builds one.
@@ -135,7 +138,9 @@ without it.
 
 - **`reviewed`.** In `nt1-witness` the growth turn lands (16,453,632 ≤ 16,457,728). `TerminateMetadata` then grows the
   state by 24,500 bytes, to 16,461,364. The ending commit comes to 16,478,132 and is refused. P parks Faulted, keeps
-  its registry and sends Q one Faulted notice. No terminate to G is ever stored, and G stays Running.
+  its registry and sends Q one Faulted notice. On this one-terminate schedule no terminate to G is stored, and G
+  stays Running. Under the built code a second terminate would reach G through the parked row
+  (`WorkflowInstance.cs` 63–64), so the robust failure is the room-for-terminate assertion.
 - **`repaired`.** The same growth turn is refused, because the check counts the 24,500 bytes. It parks with P's
   previous state. The operator's terminate then reaches the parked row. The built terminate of an ended row sends G its
   terminate, and G ends Cancelled.
@@ -281,8 +286,10 @@ Existing prototype behaviour that the cases rest on:
 ## What this proves, and what it does not
 
 - **NT-1.** The reviewed check admits a Native state whose ending commit cannot fit, so the first child terminate is
-  never sent. Counting a measured `TerminalGrowth` at every commit keeps every landed state terminable, at the exact
-  boundary, for a plain terminate and a protected `ThenDelete`.
+  not sent on this schedule. Counting a measured `TerminalGrowth` at every commit keeps every landed state
+  terminable, at the exact boundary, for a plain terminate and a protected `ThenDelete`. For the plain terminate the
+  admission and the ending commit both have a margin of 0. For `ThenDelete` only the admission has a margin of 0,
+  and its ending commit has a margin of 48 bytes.
   - **Not covered.** It does not measure a provider's stored encoding: the 366 bytes of other fields and the UTF-16
     doubling are qualified at K4. It does not drive the state through authored workflow turns (K6), and it does not
     exercise the paged cascade beyond one child, which `Review5.Termination` covers.

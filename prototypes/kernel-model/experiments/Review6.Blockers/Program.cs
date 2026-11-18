@@ -1,7 +1,10 @@
 using Kernel.Review6;
 
 // Gate 2, sixth review: NT-1 (R6-B1) and PI-1 (R6-B2), each under the reviewed, repaired and negative rule sets, with
-// mutations where they bite. Every write after setup goes through the real InMemoryStore.
+// mutations where they bite. NT-1's writes after setup are CommitBatches through the real InMemoryStore.CommitAsync.
+// PI-1's go through the real PublishAsync, PublishedMatchesAsync, KeptMatchesAsync, AddEventAsync, CommitAsync and
+// SweepAsync; its proposed batched sweeps (Pi1.EventSweep, Pi1.MessageSweep) remove rows from Store.EventRows and
+// Store.Messages directly.
 //   --case <id> --rules <set>   one run; exit 1 when an assertion fails
 //   --all                       every case and rule set; exit 0 only when every run matches the expected outcome
 //   --list                      the cases, their rule sets and the expected outcome of each
