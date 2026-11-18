@@ -45,18 +45,22 @@ public static class StoreBatchRules
             lowest!=new PartitionFence(batch.Partition,batch.Epoch,batch.Position))
             throw new StoreException(Failure.Definite,"An owned batch fences each of its partitions once and names the lowest.");
         var fenced=fences.Select(f=>f.Partition).ToHashSet();
-        foreach (var turn in batch.Turns)
+        foreach (var turn in batch.Turns.Where(t => !TicketsOnly(t)))
             if (AddressPartition(turn.Instance) is not { } partition || !fenced.Contains(partition))
                 throw new StoreException(Failure.Definite,$"Turn {turn.Instance} is outside the batch's fenced partitions.");
         if (fences.Count>1 && !ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
     }
 
-    /// <summary>An owned set names each partition once: a set poll with a repeated partition is refused (a repeated partition in a release is harmless).</summary>
+    /// <summary>An owned set names each partition once: a set poll or renew with a repeated partition is refused (a repeated partition in a release is harmless).</summary>
     public static void RequireDistinct(IReadOnlyCollection<PartitionFence> owned)
     {
         if (owned.Select(f=>f.Partition).Distinct().Count()!=owned.Count)
             throw new StoreException(Failure.Definite,"An owned set names each of its partitions once.");
     }
+
+    /// <summary>The owner's turn of no actor that only consumes tickets (meet and publish): the store checks each ticket's partition.</summary>
+    public static bool TicketsOnly(TurnCommit turn) => turn.Instance.Length == 0 && turn.Row is null && turn.Expected is null && !turn.Delete && turn.Journal is null
+        && turn.Sent.Count == 0 && turn.Subscribed.Count == 0 && turn.Unsubscribed.Count == 0 && !turn.Unsubscribe && turn.Held is not { Count: > 0 };
 
     /// <summary>The partition an actor address embeds, or null when it embeds none.</summary>
     public static int? AddressPartition(string id)

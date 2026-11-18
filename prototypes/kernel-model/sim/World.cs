@@ -98,6 +98,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
+    public bool OwnedSetsAvailable => world.Store.OwnedSetsAvailable;     // the set operations go through this wire's own calls
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)
@@ -127,6 +128,13 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
     }
 
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.TakeGeneration++;
+        return Send("take", $"retake p{partition} e{epoch}", () => world.Store.RetakeAsync(partition, node, epoch, lease));
+    }
+
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
@@ -148,7 +156,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         Committed committed;
         try
         {
-            committed = await Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
+            committed = await Send("commit", $"commit {string.Join(" ", batch.Fenced.Select(f => $"p{f.Partition} e{f.Epoch} @{f.Position}"))} [{string.Join(", ", batch.Turns.Select(Describe))}]"
                 + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
                 () => Commit(batch, sendings, recorded));
         }
@@ -158,8 +166,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     private ValueTask<Committed> Commit(CommitBatch batch, (string Instance, string Key)[] sendings, System.Runtime.CompilerServices.StrongBox<bool> recorded)
     {
-        var partition = world.Store.Partitions[batch.Partition];
-        var fenced = partition.Epoch == batch.Epoch && partition.Position == batch.Position;
+        var fenced = batch.Fenced.All(f => world.Store.Partitions[f.Partition] is var row && row.Epoch == f.Epoch && row.Position == f.Position);
         var landed = world.Store.CommitAsync(batch);
         if (landed.Result.Landed)
         {

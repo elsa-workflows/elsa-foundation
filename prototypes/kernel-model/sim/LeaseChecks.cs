@@ -7,6 +7,7 @@ public static class LeaseChecks
     {
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        await WorkerSetChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
         await StarterContextChecks.Run(Check, CaseInsensitive);
@@ -744,7 +745,11 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool DelayNext, DelayTake;
+    public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets, DelayRetake;
+    public TaskCompletionSource Retaken = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -754,14 +759,22 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         CommitCalls++;
+        Batches.Add(batch);
         var result = await inner.CommitAsync(batch, cancellationToken);
         if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await Reply.Task; }
+        if (LoseNext) { LoseNext = false; throw new IOException("the commit executed and its answer was lost"); }
         return result;
     }
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken ct = default)
     {
         var result = await inner.TakeAsync(partition, node, lease, ct);
         if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
+        return result;
+    }
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default)
+    {
+        var result = await inner.RetakeAsync(partition, node, epoch, lease, ct);
+        if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }
         return result;
     }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);

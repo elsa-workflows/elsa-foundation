@@ -13,6 +13,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;
     private long _until;                    // when the stall ends, on Environment.TickCount64
@@ -146,6 +147,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     }
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken));
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         _releases[partition] = Environment.TickCount64;
