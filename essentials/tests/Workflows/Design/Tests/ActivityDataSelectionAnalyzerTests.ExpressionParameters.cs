@@ -19,7 +19,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Portable_only_earlier_run_source_has_fresh_exact_metadata_without_native_member_reads()
     {
         var shapes = new ParameterShape();
-        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(shapes));
+        using var provider = Provider(services => { MemberReadsOn(services); services.AddSingleton<IActivitySerializedShapeSource>(shapes); });
         var document = Document(Placed("flowchart-cycle"));
         var parameter = new ActivityResultExpressionParameterBinding("producer", "$result");
         var listed = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() { ExpressionType = "JavaScript" });
@@ -27,14 +27,51 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Null(root.Binding); Assert.Equal("EarlierProducerRun", root.ReasonCode); Assert.Equal(parameter, root.ParameterSource);
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"),
             new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["a.b", ""] });
-        Assert.Empty(result.Findings); Assert.True(result.ExpressionParametersEnabled); Assert.False(result.MemberReadsEnabled);
+        Assert.Empty(result.Findings); Assert.True(result.ExpressionParametersEnabled); Assert.True(result.MemberReadsEnabled);
         var offer = Assert.Single(result.Sources); Assert.Equal(parameter, offer.ParameterSource);
         Assert.Equal(new[] { "a.b", "" }, offer.ParameterPath!.Value.ToArray()); Assert.Equal("String", offer.Shape.Type!.Alias); Assert.Empty(result.MemberReads);
         var direct = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() { Source = ScopeFreeResult("producer") });
         Assert.Contains(direct.Findings, finding => finding.Type == "ValueFlow/EarlierProducerRun");
         var native = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() { Source = ScopeFreeResult("producer"), MemberPath = ["a.b"] });
-        Assert.Contains(native.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberBinding");
+        Assert.Contains(native.Findings, finding => finding.Type == "ValueFlow/EarlierProducerRun");
+        Assert.DoesNotContain(native.Sources, source => source.Binding is not null);
         Assert.Contains(shapes.Paths, path => path.SequenceEqual(new[] { "a.b", "" }));
+    }
+
+    /// <summary>
+    /// Owner decision (17 Nov, #4522): with member reads off, expression insertion offers no member navigation. A
+    /// member path on an expression parameter is refused as the native member read is, with a reason the client can
+    /// show; the whole value of the same source stays offered.
+    /// </summary>
+    [Theory]
+    [InlineData("result")]
+    [InlineData("request")]
+    [InlineData("variable")]
+    public async Task With_member_reads_off_a_member_path_expression_parameter_is_refused_and_the_whole_value_stays_offered(string role)
+    {
+        var shapes = new ParameterShape();
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(shapes));
+        var (document, parameter) = role switch
+        {
+            "request" => (RequestDocument(), (ExpressionParameterBinding)new WorkflowRequestExpressionParameterBinding("customer")),
+            "variable" => (VariableDocument(), new VariableExpressionParameterBinding("workflow", "customer")),
+            _ => (Document(Placed("sequence")), new ActivityResultExpressionParameterBinding("producer", "$result"))
+        };
+        var refused = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"),
+            new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["customerId"] });
+        Assert.False(refused.MemberReadsEnabled); Assert.True(refused.ExpressionParametersEnabled);
+        Assert.Empty(refused.Sources);
+        var finding = Assert.Single(refused.Findings);
+        Assert.Equal("ActivityData/UnsupportedMemberBinding", finding.Type);
+        Assert.Equal("consumer/inputs/CustomerId", finding.Path);
+        Assert.Contains("member reads are off", finding.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(shapes.Paths, path => !path.IsEmpty);
+
+        var whole = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"),
+            new() { ExpressionType = "JavaScript", ParameterSource = parameter });
+        Assert.Empty(whole.Findings);
+        var offer = Assert.Single(whole.Sources);
+        Assert.Equal(parameter, offer.ParameterSource); Assert.Empty(offer.ParameterPath!.Value);
     }
 
     [Theory]
@@ -42,7 +79,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("variable")]
     public async Task Expression_parameters_use_authoritative_request_names_and_variable_scopes(string role)
     {
-        using var provider = Provider();
+        using var provider = Provider(MemberReadsOn);
         var document = role == "request" ? RequestDocument() : VariableDocument();
         var listed = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() { ExpressionType = "Liquid" });
         var offer = Assert.Single(listed.Sources);
@@ -53,7 +90,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var focused = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"),
             new() { ExpressionType = "Liquid", ParameterSource = expected, MemberPath = ["customerId"] });
         Assert.Empty(focused.Findings); Assert.Equal(expected, Assert.Single(focused.Sources).ParameterSource);
-        Assert.False(focused.MemberReadsEnabled);
+        Assert.True(focused.MemberReadsEnabled);
     }
 
     [Theory]
@@ -61,7 +98,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("activity.shape.metadata-unavailable", true)]
     public async Task Portable_metadata_preserves_known_absence_distinct_from_missing_metadata(string reason, bool admitted)
     {
-        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new MissingResultShape(reason)));
+        using var provider = Provider(services => { MemberReadsOn(services); services.AddSingleton<IActivitySerializedShapeSource>(new MissingResultShape(reason)); });
         var result = await Analyzer(provider).AnalyzeAsync(Document(Placed("sequence")), new("consumer", "CustomerId"),
             new() { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result"), MemberPath = ["customerId"] });
         Assert.Equal(admitted, result.Findings.IsEmpty);
@@ -74,7 +111,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData(true)]
     public async Task A_conditional_portable_source_requires_the_explicit_optional_contract(bool optional)
     {
-        using var provider = Provider();
+        using var provider = Provider(MemberReadsOn);
         var chart = Flowchart([Node("start"), Node("producer"), Node("consumer")], [("start", "consumer"), ("producer", "consumer")], "start");
         var parameter = new ActivityResultExpressionParameterBinding("producer", "$result", optional);
         var result = await Analyzer(provider).AnalyzeAsync(Document(chart), new("consumer", "CustomerId"),
@@ -94,7 +131,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("scope")]
     public async Task Portable_metadata_rejects_mixed_or_unadmitted_sources(string scenario)
     {
-        using var provider = Provider();
+        using var provider = Provider(MemberReadsOn);
         var document = Document(Placed("sequence"));
         ExpressionParameterBinding parameter = scenario switch
         {
@@ -128,10 +165,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("missing")]
     public async Task Protected_or_known_invalid_metadata_paths_offer_no_parameter(string scenario)
     {
-        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new ParameterShape(scenario)));
+        using var provider = Provider(services => { MemberReadsOn(services); services.AddSingleton<IActivitySerializedShapeSource>(new ParameterShape(scenario)); });
         var result = await Analyzer(provider).AnalyzeAsync(Document(Placed("sequence")), new("consumer", "CustomerId"), new()
         { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result"), MemberPath = ["a.b", ""] });
-        Assert.NotEmpty(result.Findings); Assert.Empty(result.Sources); Assert.False(result.MemberReadsEnabled);
+        Assert.NotEmpty(result.Findings); Assert.DoesNotContain(result.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberBinding");
+        Assert.Empty(result.Sources); Assert.True(result.MemberReadsEnabled);
     }
 
     [Theory]
@@ -143,7 +181,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("segments-over", false)]
     public async Task Portable_metadata_enforces_exact_shared_UTF16_and_segment_bounds(string scenario, bool allowed)
     {
-        using var provider = Provider();
+        using var provider = Provider(MemberReadsOn);
         ImmutableArray<string> path = scenario switch
         {
             "limit" => [new string('x', 4096)], "over-limit" => [new string('x', 4097)],

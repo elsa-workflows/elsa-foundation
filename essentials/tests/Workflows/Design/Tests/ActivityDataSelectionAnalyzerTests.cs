@@ -89,7 +89,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Equal(new[] { "ValueFlow/CyclicBackEdge" }, stored.Findings.Select(finding => finding.Type));
 
         var portable = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"),
-            new() { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result"), MemberPath = ["customerId"] });
+            new() { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result") });
         Assert.Empty(portable.Sources);
         Assert.Contains(portable.Findings, finding => finding.Type == "ValueFlow/CyclicBackEdge");
     }

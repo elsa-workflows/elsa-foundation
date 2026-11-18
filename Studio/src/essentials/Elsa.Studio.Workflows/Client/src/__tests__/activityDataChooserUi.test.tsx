@@ -1394,6 +1394,32 @@ describe("Expression insertion and member reads", () => {
     expect(onInsert).not.toHaveBeenCalled();
   });
 
+  it("returns to the sources once when the server refuses an expression member path because member reads are off", async () => {
+    // The listing still says member reads are on; the server refuses the member path itself (#4754).
+    const requestSources = vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, _skip: number, query?: ActivityDataSourceQuery) => {
+      const path = query?.memberPath ?? [];
+      if (path.length > 0) return answer("invalid", { findings: [{ path: "node-1/inputs/customerId", type: "ActivityData/UnsupportedMemberBinding",
+        message: "Member reads are off on this server, so an expression cannot read a member of this source." }] });
+      const sources = listing(path).filter(source => !query?.parameterSource || JSON.stringify(source.parameterSource) === JSON.stringify(query.parameterSource));
+      return answer("supported", { memberReadsEnabled: true, expressionParametersEnabled: true, expressionType: "JavaScript", snapshotHash: "hash", contextRevision: "context",
+        target: { displayName: "Customer ID", target: { nodeId: "node-1", inputKey: "customerId" }, constraint: null, type: { alias: "String", collectionKind: "Single" } }, sources });
+    });
+    const onInsert = vi.fn();
+    renderExpressionBrowser(host({ requestSources }), onInsert);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    flushSync(() => dataOption("Get customer")!.click());
+    await vi.waitFor(() => expect(dataOption("customerId")).toBeDefined());
+    flushSync(() => dataOption("customerId")!.click());
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Listing, source root, refused member, and at most one refreshed listing.
+    expect(requestSources.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(requestSources.mock.calls.filter(call => (call[3]?.memberPath ?? []).length > 0)).toHaveLength(1);
+    await vi.waitFor(() => expect(dataOption("Get customer")).toBeDefined());
+    expect(document.querySelector(".wf-data-chooser nav[aria-label='Member path']")).toBeNull();
+    expect(document.querySelector(".wf-data-chooser [role='alert']")).toBeNull();
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
   it("with member reads on, keeps member navigation and inserts the chosen member", async () => {
     const { dataHost, requestSources } = expressionHost(true);
     const onInsert = vi.fn();

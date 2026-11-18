@@ -124,7 +124,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         if (query.ParameterSource is not null)
         {
             var binding = ActivityDataReadBinding.Parameter(query.ParameterSource);
-            if (binding is null)
+            // Owner decision (17 Nov, #4522): with member reads off, expression insertion offers no member navigation.
+            // A member path is refused as a native member read is; the whole value of the same source stays offered.
+            if (!query.MemberPath.IsDefaultOrEmpty && !options.Value.MemberReads)
+                findings.Add(new(Path(consumer, target.InputKey), "ActivityData/UnsupportedMemberBinding",
+                    "Member reads are off on this server, so expression insertion cannot select a member of this source. Insert the whole value and write the member access in the expression."));
+            else if (binding is null)
                 findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidSource", "This parameter kind is not a selectable whole data source."));
             else if (await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken) is { } source)
                 candidates.Add(source);

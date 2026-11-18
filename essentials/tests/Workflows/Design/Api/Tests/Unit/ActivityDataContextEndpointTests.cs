@@ -397,7 +397,7 @@ public sealed class ActivityDataContextEndpointTests
     [Fact]
     public async Task Portable_parameter_metadata_round_trips_the_canonical_offer_and_exact_path_without_writing()
     {
-        using var host = new Host();
+        using var host = new Host(services => services.Configure<WorkflowDesignValidatorOptions>(options => options.MemberReads = true));
         var before = host.Drafts.Draft.State;
         var root = await host.Invoke(host.Request() with { Query = new() { ExpressionType = "JavaScript" } });
         Assert.Equal("supported", root.Body.State); Assert.True(root.Body.Analysis!.ExpressionParametersEnabled); Assert.Equal("JavaScript", root.Body.Analysis.ExpressionType);
@@ -406,7 +406,7 @@ public sealed class ActivityDataContextEndpointTests
             Query = new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["a.b", ""] } });
         Assert.Equal("supported", result.Body.State); Assert.Equal("no-store", result.CacheControl);
         Assert.Equal(root.Body.SnapshotHash, result.Body.SnapshotHash);
-        Assert.False(result.Body.Analysis!.MemberReadsEnabled); Assert.Empty(result.Body.Analysis.MemberReads);
+        Assert.True(result.Body.Analysis!.MemberReadsEnabled); Assert.Empty(result.Body.Analysis.MemberReads);
         var offer = Assert.Single(result.Body.Analysis.Sources); Assert.Equal(parameter, offer.ParameterSource);
         Assert.Equal(new[] { "a.b", "" }, offer.ParameterPath!.Value.ToArray());
         using var json = JsonDocument.Parse(result.Json);
@@ -414,6 +414,24 @@ public sealed class ActivityDataContextEndpointTests
         Assert.Equal("ActivityResult", wire.GetProperty("parameterSource").GetProperty("kind").GetString());
         Assert.False(wire.GetProperty("parameterSource").TryGetProperty("memberPath", out _));
         Assert.Equal(new[] { "a.b", "" }, wire.GetProperty("parameterPath").EnumerateArray().Select(segment => segment.GetString()));
+        Assert.Same(before, host.Drafts.Draft.State);
+    }
+
+    [Fact]
+    public async Task With_member_reads_off_a_member_path_parameter_query_is_invalid_with_its_reason_and_writes_nothing()
+    {
+        using var host = new Host();
+        var before = host.Drafts.Draft.State;
+        var parameter = new ActivityResultExpressionParameterBinding("producer", "$result");
+        var refused = await host.Invoke(host.Request() with { Query = new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["customerId"] } });
+        Assert.Equal("invalid", refused.Body.State); Assert.Equal("no-store", refused.CacheControl);
+        Assert.False(refused.Body.Analysis!.MemberReadsEnabled); Assert.Empty(refused.Body.Analysis.Sources);
+        var finding = Assert.Single(refused.Body.Analysis.Findings);
+        Assert.Equal("ActivityData/UnsupportedMemberBinding", finding.Type);
+        Assert.Contains("member reads are off", finding.Message, StringComparison.OrdinalIgnoreCase);
+        var whole = await host.Invoke(host.Request() with { Query = new() { ExpressionType = "JavaScript", ParameterSource = parameter } });
+        Assert.Equal("supported", whole.Body.State);
+        Assert.Equal(parameter, Assert.Single(whole.Body.Analysis!.Sources).ParameterSource);
         Assert.Same(before, host.Drafts.Draft.State);
     }
 

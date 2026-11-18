@@ -215,7 +215,10 @@ answer must match the current resource, consuming input, document/base revision 
 The path describes metadata traversal only and never becomes a persisted parameter member kind.
 Older servers omit the capability or return false: Studio preserves the expression and explains that
 compatible insertion is unavailable. Portable metadata support does not enable native MemberReads or
-override the source admission, owner restrictions or protected-path rules.
+override the source admission, owner restrictions or protected-path rules. While member reads are off
+(`memberReadsEnabled` false) a focused portable query with a non-empty `memberPath` is refused like a native
+member read: it reports `ActivityData/UnsupportedMemberBinding` and returns no offer, and the whole value of
+the same `parameterSource` stays offered (owner decision, 17 Nov, #4522).
 
 Choose a legal alias without replacing a different existing parameter. Reuse an alias only when its
 binding is identical; otherwise allocate a distinct alias and preserve all existing manual source,
