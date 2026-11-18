@@ -1219,8 +1219,8 @@ jobs:
     if: needs.plan-scope.outputs.studio-ux == 'true'
     runs-on: ubuntu-latest
     # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
-    # Standard composed proof has an 80-minute owned envelope; subsequent qualified probes retain their own caps.
-    timeout-minutes: 120
+    # Standard composed proof has an 170-minute owned envelope; subsequent qualified probes retain their own caps.
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v4
         with:
