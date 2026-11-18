@@ -147,7 +147,7 @@ internal static class TestCompiler
         IExecutableNodeMetadataEnricher? metadataEnricher = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null,
-        Elsa.Workflows.Design.Core.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();

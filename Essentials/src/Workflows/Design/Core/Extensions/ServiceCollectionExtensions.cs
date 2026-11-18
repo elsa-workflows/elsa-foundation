@@ -12,8 +12,6 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         services.TryAddScoped<ScopedVariableResolver>();
         services.TryAddScoped<ScopedVariablePicker>();
-        services.TryAddScoped<ScriptVariableReadResolver>();
-        services.TryAddScoped<ScriptVariableRenamePlanner>();
         services.TryAddScoped<ScopedVariableAuthoringContract>();
         services.TryAddScoped<IExpressionAuthoringContextService, ExpressionAuthoringContextService>();
         return services;

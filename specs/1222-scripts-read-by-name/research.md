@@ -180,6 +180,21 @@ this spec's body surface waits on both. Writes
 evaluation; the session shows pending writes; a computed write to a non-existent variable refuses) to be verified
 against S-7. This is the distinction D-7 asks to preserve explicitly.
 
+**Write assumptions handed to S-7 (T039).** The read model above relies on these properties of S-7's variable session
+(spec 1231). S-7 verifies each one in its own tests; spec 1222's Phase 8 (T045, T047, T050) builds on them:
+
+1. Writes from a step commit with the step, at output evaluation; an input-binding expression of the same or a later
+   step never sees a pending write (here: `ExpressionReadSetTests` shows the second leaf reading the committed value,
+   not the first leaf's write).
+2. A `RunJavaScript` body's session returns the committed value plus the step's own pending writes (read-your-writes),
+   and records each read with the version it read and the variable's protection policy in S-10's `SessionReads`.
+3. Loop items and indexes are frozen in the body and are not tracked as session reads (ADR 0090 decision 2).
+4. A computed write to a name that matches no visible variable refuses (ADR 0090 decision 3 as amended by #4729:
+   computed and opaque writes are allowed and counted conservatively, but never create a variable).
+5. The body read plan publish stores on the node (`ScriptBodyReadPlan`, metadata key `runtime.scriptBodyReadPlan`) is
+   what the session resolves the body's literal reads against; its fallback marker lists the candidates to load
+   before the body runs (Q5).
+
 ## R-11: Converter reconciliation (spec 247)
 
 **Decision.**

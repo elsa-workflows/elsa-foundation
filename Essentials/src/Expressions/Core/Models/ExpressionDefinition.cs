@@ -330,7 +330,7 @@ public static class ExpressionCapabilityProfiles
 }
 
 /// <summary>A complete immutable parameter snapshot supplied to a pure evaluator.</summary>
-public sealed class ExpressionEvaluationRequest
+public sealed record ExpressionEvaluationRequest
 {
     public ExpressionEvaluationRequest(
         ExpressionDefinition definition,

@@ -8,6 +8,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -32,7 +33,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     [Fact]
     public async Task A_literal_read_is_pinned_to_its_declaring_scope_without_rewriting_the_source()
     {
-        var executable = await CompileReadsAsync(Node("consumer", Text("variables.greeting + '!'")), [Greeting]);
+        var executable = await CompileReadsAsync(Node("consumer", JavaScriptText("variables.greeting + '!'")), [Greeting]);
 
         var expression = executable.RootActivity.InputBindings["Text"].Expression!;
         Assert.Equal("variables.greeting + '!'", expression.Expression);
@@ -47,7 +48,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         var inner = new Elsa.Expressions.Core.Models.VariableDefinition("inner-greeting", "greeting", new TypeReference("String"), null, null);
 
-        var executable = await CompileReadsAsync(SequenceNode("container", [Node("consumer", Text("variables.greeting"))], [inner]), [Greeting]);
+        var executable = await CompileReadsAsync(SequenceNode("container", [Node("consumer", JavaScriptText("variables.greeting"))], [inner]), [Greeting]);
 
         var parameter = (VariableExpressionParameterBinding)executable.NodesById["consumer"].InputBindings["Text"].Expression!.Parameters["variables.greeting"];
         Assert.Equal(("container", "inner-greeting"), (parameter.DeclaringScopeNodeId, parameter.VariableKey));
@@ -56,7 +57,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     [Fact]
     public async Task A_computed_read_sets_the_fallback_marker_with_the_visible_variables()
     {
-        var executable = await CompileReadsAsync(Node("consumer", Text("variables[key]")), [Greeting]);
+        var executable = await CompileReadsAsync(Node("consumer", JavaScriptText("variables[key]")), [Greeting]);
 
         var fallback = executable.RootActivity.InputBindings["Text"].Expression!.VariableReadFallback!;
         var candidate = Assert.Single(fallback.Candidates);
@@ -68,7 +69,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         // FR-012, FR-023.
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
-            CompileReadsAsync(Node("consumer", Text("variables.missing")), [Greeting]).AsTask());
+            CompileReadsAsync(Node("consumer", JavaScriptText("variables.missing")), [Greeting]).AsTask());
 
         Assert.Contains(ScriptVariableReadDiagnostics.UnresolvedLiteralRead, exception.Message, StringComparison.Ordinal);
         Assert.Contains("'missing'", exception.Message, StringComparison.Ordinal);
@@ -134,8 +135,8 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         // FR-024, FR-025: the published version keeps its own pin; the new one is published with a warning.
         var inner = new Elsa.Expressions.Core.Models.VariableDefinition("inner-greeting", "greeting", new TypeReference("String"), null, null);
-        var published = await CompileReadsAsync(SequenceNode("container", [Node("consumer", Text("variables.greeting"))]), [Greeting]);
-        var candidate = await CompileReadsAsync(SequenceNode("container", [Node("consumer", Text("variables.greeting"))], [inner]), [Greeting]);
+        var published = await CompileReadsAsync(SequenceNode("container", [Node("consumer", JavaScriptText("variables.greeting"))]), [Greeting]);
+        var candidate = await CompileReadsAsync(SequenceNode("container", [Node("consumer", JavaScriptText("variables.greeting"))], [inner]), [Greeting]);
 
         var warning = Assert.Single(ScriptReadShadowChanges.Find(published, candidate));
 

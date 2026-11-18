@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using MinimalEndpoints;
@@ -19,7 +20,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.PlanVariableRename;
 /// </summary>
 [Post("scoped-variables/rename-plan")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class Endpoint(ScriptVariableRenamePlanner planner, IActivityDefinitionLookup? catalog = null)
+public sealed class Endpoint(IScriptVariableRenamePlanner planner, IActivityDefinitionLookup? catalog = null)
     : ApiEndpoint<PlanVariableRenameRequest, ScriptVariableRenamePlan>
 {
     public override void Configure(ApiEndpointOptions options)

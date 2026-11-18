@@ -264,17 +264,29 @@ public sealed class GraphBodyScopeTests
     }
 
     [Theory]
-    [InlineData("variables.RunningTotal + 1")]
-    [InlineData("getVariable('RunningTotal') + 1")]
-    [InlineData("getRunningTotal() + 1")]
-    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script)
+    [InlineData("variables.RunningTotal + 1", false)]
+    [InlineData("getVariable('RunningTotal') + 1", false)]
+    [InlineData("getVariable(['Running', 'Total'].join('')) + 1", true)]
+    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script, bool computed)
     {
-        // The ambient variables surface below a closed scope is the graph's variables, named by their rows.
+        // Below a closed scope a script's variables are the graph's, named by their rows: a literal read is pinned to the
+        // boundary's variable at publish, and a computed one is looked up among the graph's variables (spec 1222).
         await using var harness = ScriptingHarness();
         var body = Echo("node-read-total", new RuntimeInputBinding(
             nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", script)));
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                script,
+                parameters: computed
+                    ? null
+                    : new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+                    {
+                        ["variables.RunningTotal"] = new Elsa.Expressions.Core.Models.VariableExpressionParameterBinding(BoundaryNodeId, "total", Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Variables)
+                    },
+                variableReadFallback: computed
+                    ? new Elsa.Expressions.Core.Models.VariableReadFallback([new Elsa.Expressions.Core.Models.VariableReadCandidate("RunningTotal", BoundaryNodeId, "total")])
+                    : null)));
         var boundary = Boundary(
             body,
             variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))]);

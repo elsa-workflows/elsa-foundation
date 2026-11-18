@@ -772,3 +772,10 @@ override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.GetHashCode()
 override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.ToString() -> string!
 static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator !=(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool
 static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator ==(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionEvaluationRequest!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Equals(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? other) -> bool
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ToString() -> string!
+static Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? left, Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.operator ==(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? left, Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? right) -> bool

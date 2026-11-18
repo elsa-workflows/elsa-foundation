@@ -3,7 +3,9 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
-namespace Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Core.Services;
+
+namespace Elsa.Workflows.Design.Validations.Services;
 
 /// <summary>
 /// Plans how the scripts of a draft follow a variable rename (spec 1222 FR-021, FR-022, research R-9). A literal read
@@ -13,7 +15,7 @@ namespace Elsa.Workflows.Design.Core.Services;
 /// read that could reach the variable, and a read of the new name that the rename would capture. It plans for the draft
 /// only; a published version keeps its own pins (FR-025).
 /// </summary>
-public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resolver, IActivityStructureService structures)
+public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resolver, IActivityStructureService structures) : IScriptVariableRenamePlanner
 {
     public const int MaxDepth = ScopedVariablePicker.DefaultMaxDepth;
 
@@ -170,32 +172,4 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
         value.Length > 0 &&
         (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
         value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
-}
-
-/// <summary>The planned script updates of one variable rename.</summary>
-public sealed record ScriptVariableRenamePlan(
-    string OldName,
-    string NewName,
-    IReadOnlyList<ScriptVariableRenameEdit> Edits,
-    IReadOnlyList<ScriptVariableRenameFlag> Flags);
-
-/// <summary>A script input whose source the rename updates: replace <see cref="OldSource"/> with <see cref="NewSource"/>.</summary>
-public sealed record ScriptVariableRenameEdit(string NodeId, string InputKey, string OldSource, string NewSource);
-
-/// <summary>A reference the rename cannot safely update, surfaced for manual repair.</summary>
-public sealed record ScriptVariableRenameFlag(string NodeId, string InputKey, ScriptVariableRenameFlagReason Reason, string Message);
-
-public enum ScriptVariableRenameFlagReason
-{
-    /// <summary>The language gives no source positions (Liquid).</summary>
-    NoSourcePositions,
-
-    /// <summary>A <c>variables.X</c> read whose new name is not a JavaScript identifier.</summary>
-    NameNotAnIdentifier,
-
-    /// <summary>A computed read whose candidates include the renamed variable.</summary>
-    ComputedRead,
-
-    /// <summary>A read of the new name that the renamed variable would capture.</summary>
-    Captured
 }
