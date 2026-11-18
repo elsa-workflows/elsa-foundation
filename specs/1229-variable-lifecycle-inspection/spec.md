@@ -42,7 +42,7 @@ per-activity lost-update count and the store columns it queries by (Q2, Q7), and
 
 **Studio.** The presentation of these views (instance diagnostics badge, write history, journal, comparison) is part of
 this spec and is built in this repository's Studio under `Studio/` (FR-017, Phase 9). Spec 1221's own Studio items
-(lost-update records on an activity, Accept recorded completion, input refreshes, node settings) are #4735; this spec's
+(lost-update records on an activity, Accept recorded completion, input refreshes) are #4735; this spec's
 screens build on that work. The physical storage of the write history is spec 1221's choice. Write-time
 behaviour (the commit rule, the warning, `Fault`) is spec 1221's. A merge policy is not part of ADR 0092.
 
