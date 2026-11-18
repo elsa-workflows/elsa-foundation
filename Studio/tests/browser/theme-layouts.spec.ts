@@ -66,13 +66,15 @@ test("classic layout keeps the docked designer", async ({ page }) => {
 
 test("classic layout hides the minimap while a one-step graph fits the canvas", async ({ page }) => {
   await openFlowchartWithOneStep(page, "classic");
-  await expect(page.locator(".react-flow")).toBeVisible();
-  await expect.poll(async () => page.locator(".react-flow").evaluate(element => {
-    const box = (element as HTMLElement).getBoundingClientRect();
-    return box.width > 100 && box.height > 100;
-  })).toBe(true);
-  await expect(page.locator(".react-flow__node")).toHaveCount(1);
-  await expect(page.locator(".react-flow__minimap")).toHaveCount(0);
+  const canvas = page.locator(".react-flow");
+  await expect(canvas).toBeVisible();
+  await expect(canvas.locator(".react-flow__node")).toHaveCount(1);
+  await expect.poll(() => canvas.evaluate(element => {
+    const node = element.querySelector<HTMLElement>(".react-flow__node");
+    return !!node && node.offsetWidth > 0 && node.offsetHeight > 0
+      && node.offsetWidth < element.clientWidth && node.offsetHeight < element.clientHeight;
+  }), { message: "the node fits in the canvas at its natural size" }).toBe(true);
+  await expect(canvas.locator(".react-flow__minimap")).toHaveCount(0);
 });
 
 test("classic layout shows the minimap once the graph outgrows the canvas", async ({ page }) => {
