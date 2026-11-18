@@ -29,6 +29,11 @@ describe("Expression field that shows a hint instead of an editor", () => {
     expect(buttons).toMatch(/flex:\s*0 0 auto/);
   });
 
+  it("gives the standalone buttons a full border, including the left edge a control row removes", () => {
+    const border = rule(`${hintField} \\.wf-syntax-picker-trigger\\.inline,\\s*${hintField} > \\.wf-expression-expand-button`);
+    expect(border).toMatch(/border:\s*1px solid var\(--wf-border\)/);
+  });
+
   it("keeps a visible focus state on the standalone buttons", () => {
     const focus = rule(`${hintField} \\.wf-syntax-picker-trigger\\.inline:is\\(:focus-visible, \\.open\\),\\s*${hintField} > \\.wf-expression-expand-button:focus-visible`);
     expect(focus).toMatch(/box-shadow:\s*var\(--wf-focus-ring\)/);

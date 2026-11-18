@@ -5543,7 +5543,7 @@ button.wf-reference-select {
 
 .wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) .wf-syntax-picker-trigger.inline,
 .wf-expression-field:has(> .wf-expression-editor > .wf-expression-editor-hint) > .wf-expression-expand-button {
-  border-color: var(--wf-border);
+  border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
 }
 
