@@ -142,6 +142,7 @@ public sealed class ScriptVariableReadAnalyzerTests
     [InlineData("{{ variables[key] }}", null, true)]
     [InlineData("{% for v in variables %}{{ v }}{% endfor %}", null, true)]
     [InlineData("{{ order.variables }}", null, false)]
+    [InlineData("{% assign variables = order %}{{ variables.total }}", null, true)]
     public void Liquid_reads_are_parsed_from_the_template(string template, string? literal, bool computed)
     {
         var analysis = _liquid.Analyze(template)!;

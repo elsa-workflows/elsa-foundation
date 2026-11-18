@@ -8,6 +8,10 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 /// literal read on the renamed variable, and the references to repair by hand. The workflow design validations feature
 /// registers the default.
 /// </summary>
+/// <remarks>
+/// Replacement contract: exactly one scoped implementation per host. A host's own registration made before the feature
+/// replaces the default; a second registration fails the shell at start.
+/// </remarks>
 public interface IScriptVariableRenamePlanner
 {
     /// <summary>

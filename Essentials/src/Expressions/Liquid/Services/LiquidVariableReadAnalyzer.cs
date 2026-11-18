@@ -24,13 +24,35 @@ internal sealed class LiquidVariableReadAnalyzer(FluidParser parser) : IScriptVa
 
         var visitor = new ReadVisitor();
         visitor.VisitTemplate(template);
-        return new ScriptVariableReadAnalysis(visitor.LiteralNames, visitor.HasComputedRead);
+        // A template that assigns, captures or loops into its own `variables` reads that local: pin nothing.
+        return visitor.DeclaresRoot
+            ? new ScriptVariableReadAnalysis([], hasComputedRead: true)
+            : new ScriptVariableReadAnalysis(visitor.LiteralNames, visitor.HasComputedRead);
     }
 
     private sealed class ReadVisitor : AstVisitor
     {
         public List<string> LiteralNames { get; } = [];
         public bool HasComputedRead { get; private set; }
+        public bool DeclaresRoot { get; private set; }
+
+        protected override Statement VisitAssignStatement(AssignStatement assignStatement)
+        {
+            DeclaresRoot |= assignStatement.Identifier == VariablesRoot;
+            return base.VisitAssignStatement(assignStatement);
+        }
+
+        protected override Statement VisitCaptureStatement(CaptureStatement captureStatement)
+        {
+            DeclaresRoot |= captureStatement.Identifier == VariablesRoot;
+            return base.VisitCaptureStatement(captureStatement);
+        }
+
+        protected override Statement VisitForStatement(ForStatement forStatement)
+        {
+            DeclaresRoot |= forStatement.Identifier == VariablesRoot;
+            return base.VisitForStatement(forStatement);
+        }
 
         protected override Expression VisitMemberExpression(MemberExpression memberExpression)
         {

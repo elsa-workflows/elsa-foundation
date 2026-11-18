@@ -195,6 +195,26 @@ public sealed class ExecutableNodeCompiler(
             executionPlacement: activity.ExecutionPlacement);
     }
 
+    /// <summary>
+    /// Pins the script reads of the inputs a workflow authors on a placed reusable activity (spec 1222): they are compiled
+    /// before the node tree, so they get their pins here, against the scopes visible to the placed node.
+    /// </summary>
+    public IReadOnlyDictionary<string, RuntimeInputBinding> PinPlacedBoundaryReads(
+        ActivityNode rootActivity,
+        ActivityTreeProjection projection,
+        IEnumerable<VariableDefinition> workflowVariables,
+        string nodeId,
+        IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        if (scriptVariableReadResolver is null)
+            return bindings;
+        if (!ReadVisibility.TryGetValue(projection, out _))
+            ReadVisibility.AddOrUpdate(projection, new ScopedVariableResolver(activityStructureService)
+                .Resolve(workflowVariables, rootActivity, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true));
+        return PinScriptReads(nodeId, bindings, projection, scriptBodyInputKey: null, out _);
+    }
+
     private static Dictionary<string, string> WithBodyReadPlan(Dictionary<string, string> metadata, ScriptBodyReadPlan? plan)
     {
         if (plan is not null)

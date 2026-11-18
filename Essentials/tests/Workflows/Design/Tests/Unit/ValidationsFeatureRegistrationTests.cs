@@ -267,6 +267,39 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Single(child, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
     }
 
+    [Fact]
+    public async Task A_second_rename_planner_fails_the_shell_at_start()
+    {
+        // Spec 1222, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner, Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IScriptVariableRenamePlanner", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Two_read_analyzers_for_one_language_fail_the_shell_at_start()
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new LanguageAnalyzer("JavaScript"));
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new OtherLanguageAnalyzer("JavaScript"));
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("'JavaScript'", exception.Message, StringComparison.Ordinal);
+    }
+
+    private class LanguageAnalyzer(string language) : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => language;
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? Analyze(string source, bool scriptBody = false) => null;
+    }
+
+    private sealed class OtherLanguageAnalyzer(string language) : LanguageAnalyzer(language);
+
     private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
         provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "DataSelectionAnalyzerCompositionCheck");
 

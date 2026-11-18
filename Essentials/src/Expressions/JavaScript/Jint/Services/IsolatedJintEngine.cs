@@ -123,7 +123,11 @@ internal static class IsolatedJintEngine
         {
             if (values.TryGetValue(name, out var known))
                 return known;
-            if (reader is null)
+            // A name that only an engine probe asks for (JSON.stringify asks for toJSON, string conversion for toString
+            // and valueOf, await for then) is not looked up when no variable has it: the engine cannot tell its own
+            // probe from a script's, so such a name reads undefined unrecorded on every path. A variable that has the
+            // name is a candidate, and reading it is recorded as usual.
+            if (reader is null || (EngineProbes.Contains(name) && !reader.CandidateNames.Contains(name, StringComparer.Ordinal)))
                 return JsValue.Undefined;
 
             var read = reader.Read(name);
@@ -168,8 +172,7 @@ internal static class IsolatedJintEngine
             // A name that is not a candidate is still looked up, so the missing read is recorded with its warning. The
             // engine's own probes (JSON.stringify asks for toJSON, string conversion for toString and valueOf, await for
             // then) are not reads a script made, so they read undefined unrecorded.
-            var miss = new ClrFunction(engine, "miss", (_, arguments) =>
-                arguments.At(0).AsString() is var name && EngineProbes.Contains(name) ? JsValue.Undefined : Read(name));
+            var miss = new ClrFunction(engine, "miss", (_, arguments) => Read(arguments.At(0).AsString()));
             var factory = engine.Evaluate(
                 "(function (target, miss) {" +
                 " var has = Function.prototype.call.bind(Object.prototype.hasOwnProperty); var get = Reflect.get;" +

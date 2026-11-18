@@ -253,6 +253,10 @@ public sealed class Elsa3ExpressionRewriter
         }
     }
 
+    private static bool IsLiquidIdentifier(string value) =>
+        value.Length > 0 && (char.IsLetter(value[0]) || value[0] == '_') &&
+        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '-');
+
     private static Elsa3ExpressionRewriteResult RewriteLiquid(
         string source,
         TypeReference resultType,
@@ -322,7 +326,8 @@ public sealed class Elsa3ExpressionRewriter
                     continue;
                 }
 
-                requestedEdits.Add(new LiquidRootEdit(root.Identifier, memberSegment.Identifier, $"variables.{variableName}"));
+                requestedEdits.Add(new LiquidRootEdit(root.Identifier, memberSegment.Identifier,
+                    IsLiquidIdentifier(variableName) ? $"variables.{variableName}" : $"variables[{JsonSerializer.Serialize(variableName)}]"));
                 continue;
             }
 

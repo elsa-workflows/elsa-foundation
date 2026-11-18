@@ -101,6 +101,18 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task A_placed_reusable_activitys_authored_input_is_pinned_too()
+    {
+        // Boundary inputs compile before the node tree; their script reads get pinned all the same.
+        var executable = await PlacedReusableCompiler(
+            new WorkflowArgumentState("value", new ArgumentValue("variables.CallerResult + 1", "JavaScript"), null, null, null, null),
+            readResolver: ReadResolver).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var parameter = (VariableExpressionParameterBinding)executable.RootActivity.InputBindings["value"].Expression!.Parameters["variables.CallerResult"];
+        Assert.Equal((VariableReference.WorkflowScopeId, "caller-result"), (parameter.DeclaringScopeNodeId, parameter.VariableKey));
+    }
+
+    [Fact]
     public async Task A_script_body_gets_a_body_read_plan_apart_from_its_inputs()
     {
         // FR-004, FR-033, T049: body targets are never materialized into the input snapshot.

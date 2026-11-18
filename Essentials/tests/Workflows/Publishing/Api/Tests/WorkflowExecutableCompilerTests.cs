@@ -1044,6 +1044,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
         bool primaryInputIsRequired = true,
         bool primaryInputIsNullable = false,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var primaryInputKey = authoredInput?.ReferenceKey ?? "value";
@@ -1130,7 +1131,8 @@ public sealed partial class WorkflowExecutableCompilerTests
             new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
-            new WorkflowExecutablePlacementSidecarContext());
+            new WorkflowExecutablePlacementSidecarContext(),
+            scriptVariableReadResolver: readResolver);
     }
 
     [Fact]
