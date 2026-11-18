@@ -3504,7 +3504,11 @@ sweep cursor reads through an index on `(tenant, KeepUntil, Match)` (K4). The in
 kernel generates on every provider, a random 128-bit value, unique and never reused, so no store read-back is needed
 (K4). Each registration's meet chain has its own `CatchUpId` and successor keys, so a re-registration of the same
 incarnation after its chain finished reuses no key (K3). MongoDB's sweep cursor wraps only when it is exhausted, so a
-covered front whose coverage clears later waits for the next wrap; that cost is measured at K12.
+covered front whose coverage clears later waits for the next wrap; that cost is measured at K12. Each outside publish
+attempt draws a fresh incarnation, so an attempt that proves a duplicate is placed by that draw, and an over-mark
+partition can refuse it `InboxFull` (retryable, nothing written) before the duplicate answer; K4 either accepts this
+or places outside publishes by a digest of `(Q(t, key), id)` alone. `Subscriptions.Incarnation` is 16 bytes, so on
+MongoDB, whose `ObjectId` is 12 bytes, the kernel or the driver generates it (K4).
 
 **R6-m3: three fixtures had incompatible oracles.** TR-5 run 2 uses 1,324 jobs, the most a row's registries admit,
 and 2,772 timers. SB-7 run 5's turn publish runs 590 steps, its insert-only first step included, and the outside
