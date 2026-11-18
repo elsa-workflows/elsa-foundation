@@ -223,6 +223,31 @@ class WorkflowScopeTests(unittest.TestCase):
             scope.changed_paths('push', {'before': 'b' * 40}, 'h' * 40, 'a' * 40)
             self.assertIn(f"{'a' * 40}..{'h' * 40}", run.call_args.args[0])
 
+    def test_main_reads_the_history_for_a_push_only(self):
+        import tempfile
+        for event_name, calls in (('push', 1), ('pull_request', 0), ('merge_group', 0), ('schedule', 0)):
+            with self.subTest(event=event_name), tempfile.TemporaryDirectory() as tmp:
+                event_path, output_path = Path(tmp, 'event.json'), Path(tmp, 'output')
+                event_path.write_text(json.dumps({'before': 'b' * 40}))
+                env = {'GITHUB_EVENT_PATH': str(event_path), 'GITHUB_EVENT_NAME': event_name,
+                       'GITHUB_SHA': 'h' * 40, 'GITHUB_OUTPUT': str(output_path)}
+                with patch.dict(scope.os.environ, env), \
+                        patch.object(scope, 'last_validated_push', return_value=None) as history, \
+                        patch.object(scope.subprocess, 'run') as run:
+                    run.return_value.returncode = 0
+                    run.return_value.stdout = ''
+                    scope.main()
+                self.assertEqual(calls, history.call_count)
+                if event_name == 'push':
+                    self.assertIn('studio-heavy=true', output_path.read_text())
+
+    def test_plan_scope_can_read_runs_and_only_a_push_gets_the_token(self):
+        workflow = (scope.ROOT / '.github/workflows/ci.yml').read_text()
+        job = workflow.split('\n  plan-scope:\n', 1)[1].split('\n  plan-tiers:\n', 1)[0]
+        self.assertIn('    permissions:\n      contents: read\n      actions: read\n', job)
+        self.assertIn("GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}", job)
+        self.assertEqual(1, job.count('GH_TOKEN'))
+
     def test_manual_suites_are_isolated(self):
         for suite in [*self.patterns, 'studio-order']:
             with self.subTest(suite=suite):
