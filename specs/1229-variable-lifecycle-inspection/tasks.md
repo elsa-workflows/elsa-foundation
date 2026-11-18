@@ -98,7 +98,8 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
   sum on EF). SC-004 is not met: every read loads all of the instance's rows (the overwrite walk and the run-time paths
   need the whole graph), so its cost grows with the instance. Recorded on the PR with the projection fallback (R-2)
   proposed. Instance details read time: one indexed column sum added.
-- [ ] T023 Run [quickstart.md](quickstart.md) on the Workbench; access tests for SC-005.
+- [x] T023 Run [quickstart.md](quickstart.md) on the Workbench; access tests for SC-005.
+  Done on the composed host: the UX acceptance journey `variable lifecycle warnings and refusals` (Studio/tests/acceptance/variableLifecycleJourney.ts) seeds real runs on Workbench + Studio with disposable stores. It covers a real lost-update warning and a Fault refusal, the run badge, the write history filtered to lost updates (the concurrent overwrite named), the commit journal, and the comparison refused for different versions. CI runs it on every Studio PR and keeps the screenshots (`tools/ux-acceptance/run.py`, captures listed there). It replaces the manual quickstart steps; SC-005 access is covered by `VariableLifecycleInspectionServiceTests` and `VariableLifecycleEndpointTests`.
 - [x] T024 Move the Studio items to Phase 9 (T025–T029); nothing is handed to another repository.
 
 ## Phase 9: Studio presentation (FR-017), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
@@ -107,14 +108,15 @@ Builds on #4735 (spec 1221's activity-level items) and on this spec's endpoints 
 
 - [x] T025 [P] API client and types for the variables, variable-writes, journal and compare endpoints next to
   `workflowInstanceInspection.ts`, with cursor paging.
-- [ ] T026 [US2] Instance diagnostics badge for the lost-update count on the instance view (`WorkflowInstanceTimeline.tsx`),
+- [x] T026 [US2] Instance diagnostics badge for the lost-update count on the instance view (`WorkflowInstanceTimeline.tsx`),
   opening the write history filtered to lost updates.
+  Done: #4759's `LostUpdateBadge` on the run's Timeline tab (`WorkflowInstances.tsx`), with the run's `lostUpdateWarningCount`; it opens the new Variables tab with the write history filtered to `lostUpdateWarning`.
 - [x] T027 [US1] [US2] Write history view per variable: writers, versions, commit order, lost-update and
   concurrent-overwrite marks, values through `RuntimeValueEvidence.tsx` (value states, payload read).
-  Built in `VariableLifecycleViews.tsx` (filters: variable, outcome, source, frame, overwrites). Mounted on the instance view with T026, after #4735 (PR #4759) merges.
+  Built in `VariableLifecycleViews.tsx` (filters: variable, outcome, source, frame, overwrites). Mounted as the run view's Variables tab (shown when the host advertises the routes; `?tab=variables`).
 - [x] T028 [US3] [US4] Journal view in commit order (stamps, input refreshes, writes) and the comparison view of two
   instances (first divergence, differing variables, digests only).
-  Built in `VariableLifecycleViews.tsx`; mounted with T026.
+  Built in `VariableLifecycleViews.tsx`; the Journal and Compare tabs of the Variables tab.
 - [x] T029 [P] Tests in `__tests__/` (vitest) for the client paging and each view's states, including omitted and
   redacted values and a legacy instance with no history.
 

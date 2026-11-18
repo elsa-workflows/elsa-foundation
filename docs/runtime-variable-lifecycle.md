@@ -209,9 +209,9 @@ activity-execution inspection; values follow the sensitive-value rules.
 - **Cost.** The run time pays only for the scheduling causes and the per-row count. Each read loads the instance's rows
   once; spec 1229's measurement (T022) is in its tasks and on its PR.
 
-Studio has a client for these routes and the history, journal and comparison views
-(`VariableLifecycleViews.tsx`). Placing them on the instance view, with the lost-update badge that opens the filtered
-history, follows the activity-level Studio work of spec 1221 (#4735).
+Studio shows these reads on the run view's Variables tab (write history with its filters, journal, comparison), on hosts
+that advertise the routes. The run's lost-update count shows on its Timeline tab and opens the write history filtered to
+lost updates. Values appear only through their states and the payload read.
 
 ## What is not covered yet
 

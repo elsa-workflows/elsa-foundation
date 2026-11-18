@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Approved — re-confirmed 2026-11-17 after the pre-merge review; it applies ADR 0092 as merged (`f52a661df`); no ADR change is needed.
+**Status**: Implemented — 2026-11-19 on the initiative branch (#4760); approved 2026-11-17, applying ADR 0092 as merged (`f52a661df`) and as amended for decisions 6 and 9 (#4791). Measured limits and open asks are on #4760 and in tasks.md.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-6**,
 decisions **D-8** and **D-9**.

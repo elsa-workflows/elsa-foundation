@@ -76,9 +76,7 @@ A BPMN process with link events, with a cycle that can be entered at more than o
 a boundary event leads into, declares nothing, so its writes are reported as undeclared.
 A `Break` that ends a Flowchart cancels the other paths' running activities, so they commit nothing afterwards.
 
-Seeing the actual run order is not available yet: per-variable write history and the winning write
-([#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290)), a commit-ordered journal and instance
-comparison ([#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291)) and a run-time trace of overwrites
-([#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292)) are separate work, specified in
-[spec 1229](../../specs/1229-variable-lifecycle-inspection/spec.md). Until they ship, the
-warning names the declared writers but gives no run-time evidence.
+The actual run order is visible per run ([spec 1229](../../specs/1229-variable-lifecycle-inspection/spec.md)): the
+write history of each variable with the winning write, the writes that overwrote a concurrent branch, the
+commit-ordered journal and a comparison of two runs of one version, through the runtime inspection routes and the run
+view's Variables tab in Studio. See *Inspecting the lifecycle* in [the variable lifecycle](../runtime-variable-lifecycle.md).

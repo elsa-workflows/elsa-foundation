@@ -14,7 +14,7 @@ import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
@@ -82,6 +82,9 @@ import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
 import "./minimalRunInspection.css";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import { VariableLifecyclePanel } from "../VariableLifecycleViews";
+import { supportsVariableLifecycleInspection, type VariableWriteFilter } from "../api/variableLifecycle";
+import { LostUpdateBadge } from "./VariableLifecycleEvidence";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -2413,6 +2416,15 @@ function WorkflowInstanceInspector({
   onToggleMaximized?(): void;
 }) {
   const inspectorRef = useRef<HTMLElement>(null);
+  // Spec 1229 FR-017: the variable lifecycle reads, on hosts that advertise them.
+  const [lifecycleSupported, setLifecycleSupported] = useState(false);
+  const [lifecycleFilter, setLifecycleFilter] = useState<{ filter: VariableWriteFilter; version: number }>({ filter: {}, version: 0 });
+
+  useEffect(() => {
+    let current = true;
+    supportsVariableLifecycleInspection(context).then(supported => { if (current) setLifecycleSupported(supported); }, () => { if (current) setLifecycleSupported(false); });
+    return () => { current = false; };
+  }, [context]);
 
   useEffect(() => {
     if (!responsiveOpen) return;
@@ -2437,8 +2449,15 @@ function WorkflowInstanceInspector({
     { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
     { id: "activity", title: "Activity", order: 1, icon: <ActivityIcon size={14} />, render: () => null },
     { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 2, icon: <AlertCircle size={14} />, render: () => null },
-    { id: "details", title: "Details", order: 3, icon: <SlidersHorizontal size={14} />, render: () => null }
+    ...(lifecycleSupported ? [{ id: "variables", title: "Variables", order: 3, icon: <Variable size={14} />, render: () => null }] : []),
+    { id: "details", title: "Details", order: 4, icon: <SlidersHorizontal size={14} />, render: () => null }
   ];
+  const lostUpdateWarningCount = details?.lostUpdateWarningCount ?? 0;
+  // T026: the run's lost-update count opens the write history filtered to lost updates.
+  const openLostUpdates = () => {
+    setLifecycleFilter(current => ({ filter: { outcome: "lostUpdateWarning" }, version: current.version + 1 }));
+    onActiveTabChange("variables");
+  };
 
   return (
     <aside
@@ -2502,6 +2521,14 @@ function WorkflowInstanceInspector({
             <div className="wf-instance-tab-content">
               {activeTab === "timeline" ? (
                 <>
+                  {lostUpdateWarningCount > 0 ? (
+                    <div className="wf-instance-lost-updates" role="status">
+                      <LostUpdateBadge
+                        count={lostUpdateWarningCount}
+                        label={lostUpdateWarningCount === 1 ? "1 lost update in this run" : `${lostUpdateWarningCount} lost updates in this run`}
+                        onSelect={lifecycleSupported ? openLostUpdates : undefined} />
+                    </div>
+                  ) : null}
                   {details.activityNextContinuationToken ? <p className="wf-instance-note" role="note">Runtime returned another activity page. This timeline shows the current bounded page; exact incident links can load an associated activity separately.</p> : null}
                   <WorkflowExecutionTimeline
                     activities={details.activities}
@@ -2522,6 +2549,12 @@ function WorkflowInstanceInspector({
                   focusInputKey={focusInputKey}
                   onSelectEvidence={openActivityEvidence}
                 />
+              ) : activeTab === "variables" && lifecycleSupported ? (
+                <VariableLifecyclePanel
+                  key={`${summary.workflowExecutionId}:${lifecycleFilter.version}`}
+                  context={context}
+                  workflowExecutionId={summary.workflowExecutionId}
+                  initialFilter={lifecycleFilter.filter} />
               ) : activeTab === "issues" ? (
                 <>
                   <WorkflowIncidentList

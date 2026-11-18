@@ -30,3 +30,4 @@
 .wf-variable-divergence { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .wf-variable-shown-values { display: grid; gap: 4px; font-size: 12px; }
 .wf-variable-shown-values dt { color: var(--wf-muted-text); }
+.wf-instance-lost-updates { margin-bottom: 8px; }

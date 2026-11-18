@@ -147,6 +147,37 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   await expect(section).not.toContainText("Recorded completion kept");
   await capture(page, info, "fault-refusal");
 
+  // Spec 1229: the run's lost-update count opens the instance's write history, filtered to lost updates.
+  await openActivity(warning.runId, warning.step);
+  const timeline = inspector().getByRole("tab", { name: "Timeline", exact: true });
+  await timeline.click();
+  const badge = inspector().getByRole("button", { name: "1 lost update in this run" });
+  await expect(badge).toBeVisible({ timeout: 30_000 });
+  await capture(page, info, "run-lost-update-badge");
+  await badge.click();
+  await expect(inspector().getByRole("tab", { name: "Variables", exact: true })).toHaveAttribute("aria-selected", "true");
+  const history = inspector().getByRole("table", { name: "Variable write history" });
+  await expect(history).toContainText("Lost update", { timeout: 30_000 });
+  // The Set step on the other branch was not ordered before the resumed step: a concurrent overwrite, naming it.
+  await expect(history).toContainText("Lost update over");
+  await expect(history).toContainText("Current value");
+  await capture(page, info, "write-history-lost-updates");
+
+  // The journal lists the run's commits in order, with the write in the commit that applied it.
+  const lifecycle = inspector().getByRole("region", { name: "Variable lifecycle", exact: true });
+  await lifecycle.getByRole("tab", { name: "Journal", exact: true }).click();
+  const journal = lifecycle.getByRole("list", { name: "Commit journal" });
+  await expect(journal).toContainText("write", { timeout: 30_000 });
+  await expect(journal).toContainText("completed");
+  await capture(page, info, "commit-journal");
+
+  // Two runs of different versions are not compared.
+  await lifecycle.getByRole("tab", { name: "Compare", exact: true }).click();
+  await lifecycle.getByLabel("Other instance").fill(refusal.runId);
+  await lifecycle.getByRole("button", { name: "Compare", exact: true }).click();
+  await expect(lifecycle.getByRole("status")).toContainText("they run different versions", { timeout: 30_000 });
+  await capture(page, info, "compare-refused");
+
   // The write history's values are opt-in.
   await page.goto("/workflows/runtime-diagnostics");
   const row = page.locator(".runtime-diagnostics-subject").filter({ hasText: "Variable writes" });
