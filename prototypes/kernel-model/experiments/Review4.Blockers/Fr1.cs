@@ -9,12 +9,13 @@ namespace Kernel.Review4;
 /// <c>NoShelf</c> does not shelve (mark seen) a suspect the cohort rule passes over;
 /// <c>ControlsWaitOnTicket</c> counts job tickets as cohort rows, so controls wait on a hanging ticket (E-11);
 /// <c>BoundaryHoldsCohort</c> keeps cohort suspects behind a control's recovery boundary, as built;
+/// <c>BoundaryHoldsNoncohortSuspect</c> keeps a cohort row that is no suspect behind the boundary in ordinary delivery, as built (E-7 reset run);
 /// <c>NoCohortMark</c> drops the durable cohort mark, so the owner knows only the cohort rows it has read;
 /// <c>OneRowReadCountsHeld</c> makes the cohort read return one row, held keys included (E-8 run 2);
 /// <c>MarkIgnoresControls</c> lets a control polled while the mark is set run ahead of the cohort read (E-7 control run).
 /// </summary>
 enum FrRules { Reviewed, Repaired, Negative, HeldBlocks, MemoryPrecedence, TrialPlainSeq, NoCohortMark, OneRowReadCountsHeld, MarkIgnoresControls,
-    SkipTarget, NoShelf, ControlsWaitOnTicket, BoundaryHoldsCohort }
+    SkipTarget, NoShelf, ControlsWaitOnTicket, BoundaryHoldsCohort, BoundaryHoldsNoncohortSuspect }
 
 /// <summary>One inbox row as the proposed drain sees it: full key, seq, kind, release tag, Seen epoch, Done, KeptBy.</summary>
 sealed class InboxRow(string name, Message message, long seq)
@@ -103,13 +104,14 @@ sealed class Fr1(string variant, FrRules rules)
     private readonly List<string> _applied = [];
     private bool _suspended;
     private bool _readFound;
+    private readonly HashSet<InboxKey> _recoveryOrdering = [];
     private string _lastRead = "";
     private static readonly InstanceRef Neighbour = new("0/neighbour");
 
     public static readonly string[] Variants =
         ["base", "takeover-before-complete", "takeover-after-complete", "trial-takeover", "trial-takeover-open", "poll-limit", "model-end", "model-end-recall", "held",
          "held-poll-limit", "control-after-complete", "ticket-control", "ticket-control-parent", "ticket-control-suspend",
-         "control-crash"];
+         "control-crash", "control-reset", "trial-takeover-open-poll-limit"];
 
     private bool Precedence => rules is not (FrRules.Reviewed or FrRules.Negative);
     private bool DurableMark => Precedence && rules is not (FrRules.MemoryPrecedence or FrRules.NoCohortMark);
@@ -118,6 +120,7 @@ sealed class Fr1(string variant, FrRules rules)
     private bool Shelves => rules != FrRules.NoShelf;
     private bool TicketsCount => rules == FrRules.ControlsWaitOnTicket;
     private bool CohortBeforeBoundary => CohortTrials && rules != FrRules.BoundaryHoldsCohort;
+    private bool CohortOfferedPastBoundary => CohortTrials && rules != FrRules.BoundaryHoldsNoncohortSuspect;
     private static bool IsTicket(string kind) => kind is Kinds.Job or Kinds.Meet or Kinds.Publish;
 
     public async Task<Report> RunAsync()
@@ -130,13 +133,13 @@ sealed class Fr1(string variant, FrRules rules)
             "model-end-recall" => "control: the ending turn recalls R, so R never reaches a model turn, and the drain completes with no KeptBy left",
             "held" => "a row the model holds never blocks delivery; the held cohort row still receives the input it waits for",
             "held-poll-limit" => "with R1 held and R2 not yet polled, the mark's check skips held keys and finds R2, so R2 reaches the model before A ends it",
-            "control-after-complete" or "control-crash" => "a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate",
+            "control-after-complete" or "control-crash" or "control-reset" => "a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate",
             "ticket-control" or "ticket-control-parent" or "ticket-control-suspend" => "a restored job ticket is never a cohort row: with J hanging and the mark set, controls apply at once",
             _ => "the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)",
         });
         HeldGate.Accepts = 0;
         var heldPoll = variant == "held-poll-limit";
-        var control = variant is "control-after-complete" or "control-crash";
+        var control = variant is "control-after-complete" or "control-crash" or "control-reset";
         var ticket = variant.StartsWith("ticket-control", StringComparison.Ordinal);
         var workflow = held ? "held" : heldPoll ? "held2" : variant == "model-end" || ticket ? "evt" : "two";
         var registry = new WorkflowRegistry()
@@ -232,7 +235,8 @@ sealed class Fr1(string variant, FrRules rules)
         PollStore();
         _report.Line($"marks at epoch {_epoch}: {string.Join("; ", _rows.Where(x => _memory.Contains(x.Key) && !x.Done).Select(x => x.Describe()))}");
         if (variant == "takeover-before-complete") Takeover(crash: false, "after R was marked seen, before any model turn received it");
-        if (variant == "trial-takeover-open") Takeover(crash: true, "after R and A were marked seen, before Complete and before any model turn received R");
+        if (variant is "trial-takeover-open" or "trial-takeover-open-poll-limit") Takeover(crash: true, "after R and A were marked seen, before Complete and before any model turn received R");
+        if (variant == "trial-takeover-open-poll-limit") { _pollLimit = 1; _report.Line("the new owner's PollLimit is 1: one row per poll, in seq order"); }
 
         // 7. Delivery, one input per model turn, in the order the rule set dictates.
         var step = 0;
@@ -299,6 +303,8 @@ sealed class Fr1(string variant, FrRules rules)
                     _report.Line($"arrival: {k.Describe()}, the parent's tree terminate (a control kind)");
                     if (variant == "control-crash")
                         Takeover(crash: true, "after Complete committed, before R reached a model turn; R carries the lost owner's mark");
+                    else if (variant == "control-reset")
+                        Takeover(crash: false, "after an unknown commit outcome: Reset sets Epoch = 0 and drops memory (Worker.cs 476-502), then the same process takes the partition again; R keeps this process's earlier mark");
                     else
                     {
                         Takeover(crash: false, "after Complete committed, before R reached a model turn");
@@ -308,6 +314,8 @@ sealed class Fr1(string variant, FrRules rules)
             }
         }
         if (step == 40) { _stalled = true; _report.Line("stalled: the step bound was reached with work still pending"); }
+        else if (!_instance.ModelEnded && _rows.Any(x => !x.Done && !x.Deleted && (x.Message.Due ?? 0) <= Now && x.Message.Target.Id == Self.Id && !IsTicket(x.Kind)))
+        { _stalled = true; _report.Line("stalled: no row can move, and work is still pending"); }
 
         var undone = _rows.Where(x => !x.Done && !x.Deleted && (x.Message.Due ?? 0) <= Now).ToList();
         _report.Line($"model inputs: [{string.Join(", ", _modelInputs)}]");
@@ -328,6 +336,7 @@ sealed class Fr1(string variant, FrRules rules)
             {
                 _report.Expect("instance ended", _instance.Status, InstanceStatus.Cancelled);
                 _report.Expect("J", _r.Fate, "cancelled by the terminate");
+                _report.Expect("J's late result", _rows.SingleOrDefault(x => x.Name == "Jr")?.Fate, "dropped (finished instance, Cancelled)");
             }
         }
         else if (heldPoll)
@@ -406,7 +415,8 @@ sealed class Fr1(string variant, FrRules rules)
         rules == FrRules.HeldBlocks && !IsControl(row.Kind) && !Cohort(row) && _rows.Any(x => _held.Contains(x.Key) && Cohort(x));
 
     /// <summary>
-    /// The store poll as built (InMemoryStore.cs 219–221: <c>Seen &lt; epoch</c>, not Done, due, in seq order, at most the
+    /// The store poll as built, with Horizon 0 (InMemoryStore.cs 217–221: <c>Seen &lt; epoch</c>, not Done,
+    /// <c>Due &lt;= now + Horizon</c>, in seq order, at most the
     /// poll limit) and the owner's handling of each row: a row already in memory is ignored (Worker.cs 532, the item is
     /// held already); a row another owner marked is a suspect (Worker.cs 577–578); every other polled row is marked seen
     /// at this epoch by the next flush (Worker.cs 1397), whether or not the drain withholds it. An untried, unshelved
@@ -428,9 +438,21 @@ sealed class Fr1(string variant, FrRules rules)
     private void Remember(InboxRow row)
     {
         _memory.Add(row.Key);
+        // Worker.cs 617/636: a previously marked row (Seen or Trial) carries RecoveryOrdering, even when this process marked it.
+        if (row.Seen > 0) _recoveryOrdering.Add(row.Key);
         if (!IsControl(row.Kind) && row.Seen > 0 && !_mine.Contains(row.Seen)) _suspects.Add(row.Key);
         else row.Seen = _epoch;
     }
+
+    /// <summary>
+    /// Worker.cs 796–820, RecoveryBoundary: for an owner that is not on trial, there is a boundary only while some row in
+    /// memory carries RecoveryOrdering or is a suspect; it is then the earliest due control still pending.
+    /// </summary>
+    private InboxRow? RecoveryBoundary() =>
+        _rows.Any(x => _memory.Contains(x.Key) && !x.Done && !x.Deleted && (_recoveryOrdering.Contains(x.Key) || _suspects.Contains(x.Key)))
+            ? _rows.Where(x => _memory.Contains(x.Key) && !x.Done && !x.Deleted && IsControl(x.Kind) && (x.Message.Due ?? 0) <= Now)
+                .OrderBy(x => x, Comparer<InboxRow>.Create(InboxRow.Compare)).FirstOrDefault()
+            : null;
 
     /// <summary>
     /// Proposed: the mark's read, a one-row existence check. While the durable cohort mark is set and this owner holds no
@@ -495,7 +517,12 @@ sealed class Fr1(string variant, FrRules rules)
         _instance.Status = InstanceStatus.Cancelled; _instance.ModelEnded = true; _held.Clear();
         _applied.Add($"{head.Name} terminate");
         var cancelled = _rows.Where(x => IsTicket(x.Kind) && !x.Done && !x.Deleted).ToList();
-        foreach (var t in cancelled) { t.Deleted = true; t.Fate = "cancelled by the terminate"; }
+        foreach (var t in cancelled)
+        {
+            t.Deleted = true; t.Fate = "cancelled by the terminate";
+            // The hanging driver finishes later; its result reaches the ended instance.
+            _rows.Add(new InboxRow($"{t.Name}r", new Message($"{t.Key.Id}.late", Self, Kinds.JobFinished, Json.Write(new JobFinished("j", "late", null)), Self.Id, TargetCreation: 1, SenderCreation: 1), _nextSeq++));
+        }
         _report.Line($"{head.Name}: built terminate (WorkflowInstance.cs 179-203, mirrored), Running -> Cancelled, no model turn" +
             (cancelled.Count > 0 ? $"; cancels [{string.Join(", ", cancelled.Select(t => t.Name))}]" : ""));
     }
@@ -538,6 +565,11 @@ sealed class Fr1(string variant, FrRules rules)
             if (!Eligible(suspect))
             {
                 if (SkipsTarget) skipped = true;
+                else if (Shelves && suspect.Seen != _epoch)
+                {
+                    suspect.Seen = _epoch;
+                    _report.Line($"{suspect.Name} is shelved: the open drain withholds it, so it is passed over and the flush marks it seen at epoch {_epoch}");
+                }
                 continue;
             }
             if (CohortTrials && !Cohort(suspect) && CohortPending())
@@ -560,6 +592,16 @@ sealed class Fr1(string variant, FrRules rules)
         var deliverable = _rows.Where(x => _memory.Contains(x.Key) && !_suspects.Contains(x.Key) && !x.Deleted && !x.Done && !_held.Contains(x.Key) && !IsTicket(x.Kind)
             && (x.Message.Due ?? 0) <= Now && Eligible(x) && !Blocked(x)).ToList();
         deliverable.Sort(InboxRow.Compare);
+        // Worker.cs 829–842, Deliverable: with a recovery boundary, only the inputs in front of it (BeforeRecoveryControl,
+        // by seq for durable rows), then the control itself. Proposed: while the drain is open or the mark is set, a
+        // cohort row is exempt from the cut.
+        if (RecoveryBoundary() is { } cut)
+        {
+            var exempt = CohortOfferedPastBoundary && (_instance.OpenGeneration is not null || _instance.CohortMark is not null);
+            deliverable = deliverable.Where(x => x == cut || !IsControl(x.Kind) && (x.Seq < cut.Seq || exempt && Cohort(x))).ToList();
+            var held = deliverable.Where(x => !IsControl(x.Kind) && x.Seq >= cut.Seq).Select(x => x.Name).ToList();
+            ReadLine($"recovery boundary at {cut.Name}: rows past it are cut{(held.Count > 0 ? $", except the cohort rows [{string.Join(", ", held)}]" : "")}");
+        }
         var open = _instance.OpenGeneration is not null;
         if (rules == FrRules.Reviewed) return deliverable;
         if (rules == FrRules.Negative)
@@ -629,7 +671,7 @@ sealed class Fr1(string variant, FrRules rules)
         _epoch++;
         if (crash) _mine.Clear();
         _mine.Add(_epoch);
-        _memory.Clear(); _suspects.Clear(); _held.Clear(); _memoryCohort.Clear();
+        _memory.Clear(); _suspects.Clear(); _held.Clear(); _memoryCohort.Clear(); _recoveryOrdering.Clear();
         _report.Line($"{(crash ? "crash takeover by another process" : "retake by the same process")} {when}: new owner at epoch {_epoch} rebuilds from durable rows only (memory, holds and polled rows are lost)");
     }
 
