@@ -128,6 +128,13 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
     }
 
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.TakeGeneration++;
+        return Send("take", $"retake p{partition} e{epoch}", () => world.Store.RetakeAsync(partition, node, epoch, lease));
+    }
+
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 

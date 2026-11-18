@@ -8,6 +8,7 @@ internal static class ParkR14AliasChecks
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
         public bool CommitClockAvailable => inner.CommitClockAvailable;
+        public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
         public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
         {
             return inner.CommitAsync(batch, cancellationToken);

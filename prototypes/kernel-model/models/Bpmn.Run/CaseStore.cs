@@ -7,6 +7,7 @@ internal sealed class CaseStore(IKernelStore inner) : IKernelStore
     public int Attempts(string instance) => _attempts.GetValueOrDefault(instance);
 
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         foreach (var turn in batch.Turns) _attempts[turn.Instance] = Attempts(turn.Instance) + 1;

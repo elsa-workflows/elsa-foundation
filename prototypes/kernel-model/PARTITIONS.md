@@ -247,6 +247,18 @@ What this settles for slices 2a, 2b and 7:
    the kept epoch are expected. Slice 7 tests that reading.
 6. **D1's fairness check** (one turn loop serving all of a node's partitions) is not modelled here. It is deferred to slice 5.
 
+**What the integrated Worker chose (slice 2a, #4811).** The Worker resets by a retake per partition on both a refused
+fence and a lost answer. After the reset it takes back, one at a time and at a new epoch, each partition its node still
+holds at the epoch it held (`IKernelStore.RetakeAsync`). A row that was released, or taken since by another node or at
+another epoch, is dropped. The model's keeping reset was the cheaper option. The review of #4811 found two failures in
+its re-poll with `Seen <= epoch`:
+- a handed-over timer beyond the poll horizon was skipped, and the re-poll then ended on a short poll, so the timer
+  never fired;
+- rows held in memory filled the poll limit, so new messages were never read.
+
+A new epoch fixes both, with less mechanism. Its cost is one take and one re-poll per refused fence, which is what a
+one-partition Worker pays today. The model's W4 cost check counts this as the accepted cost.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds

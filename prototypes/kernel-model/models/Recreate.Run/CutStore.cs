@@ -6,6 +6,7 @@ internal sealed class CutStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public string? Cut;
     public int Hits;
