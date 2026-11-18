@@ -1,5 +1,5 @@
 Review5.Delivery results
-commit acc1f96b5c377b0ba681764470b9d2b92047615b (tree 4b905189ba8e957d4c68720c4a3ee4b0067660a0, prototype tree d3bbda841f0cbacdfdea6ba885067f23b8e350ba)
+commit 97efc280375584ad07c8afb02e3ec9939b08fb1b (tree da40d7ff0e8a3883fc116d517105cce79c612a5f, prototype tree 2ed8bea9f127b9ab08093c294bd5fbb5458b9ef2)
 branch base (merge-base with origin/main) 3919ffd949315b40097c49c80ef3c9672bac5c5b
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review5.Deliv
     dotnet build experiments/Review5.Delivery -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review5.Delivery/bin/Release/net10.0/Kernel.Review5.Delivery.dll --all, twice
-    -> exit 0 and 0, identical output (SHA-256 8274a0f5c73e4a957781c33400f64d837000301917ac59e7da5ae2fdcd9bdf43), below
+    -> exit 0 and 0, identical output (SHA-256 2116e79c210a888b57f26768acc1fb71f764784b3399ef3fcefea4ca3d6679e8), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule):
   exit 1 (ev1-a, reviewed)
@@ -1936,7 +1936,7 @@ invariant: a job result that completes while its instance is parked reaches the 
   crash takeover after the conversion commit, before the parked instance consumed the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   the parked instance's owner refuses c9_0/subject_1!2_w6#g1.result: the real DiscardedAt classifies it as a supplied completion; it is consumed with no turn and not kept
   recover: S runs again (revision 3)
-  recover: lookup w6: ticket done or absent (the result row is not probed): Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
+  recover: lookup w6: ticket done or absent, no result row: Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
   the owner polls c9_0/subject_1!2_w6#g2 (kernel.job): a ticket, which the built Hold and StartJob enter again
   J's body ran (physical invocation 2): alpha|c9_0/subject_1/c/-/0
   the completion reaches the running instance's next turn, as built: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
@@ -2020,7 +2020,7 @@ invariant: a job result that completes while its instance is parked reaches the 
   the parked instance consumes c9_0/subject_1!2_w6#g1.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: lookup w6: ticket done or absent (the result row is not probed): Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
+  recover: lookup w6: ticket done or absent, no result row: Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
   recover: the page clears c9_0/subject_1!2_w6#g1.result (job-finished): generation g1 is not the registry's g2
   the owner polls c9_0/subject_1!2_w6#g2 (kernel.job): a ticket, which the built Hold and StartJob enter again
   J's body ran (physical invocation 2): alpha|c9_0/subject_1/c/-/0
@@ -2112,7 +2112,7 @@ invariant: a job result that completes while its instance is parked reaches the 
   the parked instance consumes c9_0/subject_1!2_w6#g1.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: lookup w6: ticket done or absent (the result row is not probed): Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
+  recover: lookup w6: ticket done or absent, no result row: Restarted(g2) from its JobSpec (c9_0/subject_1!2_w6#g2)
   recover: the page clears c9_0/subject_1!2_w6/result (job-finished): generation g0 is not the registry's g2
   recover: the page clears c9_0/subject_1!2_w6#g1.result (job-finished): generation g1 is not the registry's g2
   the owner polls c9_0/subject_1!2_w6#g2 (kernel.job): a ticket, which the built Hold and StartJob enter again
