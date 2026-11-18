@@ -332,7 +332,7 @@ export function incidentActionModel(
 
 /** What Accept recorded completion does, against Retry and Re-execute (spec 1221 FR-014, FR-017). */
 export const acceptRecordedCompletionExplanation =
-  "Completes the step with the result it already produced, without running its body again. Retry runs the same invocation again on its committed inputs; Re-execute runs a new invocation on fresh inputs. Both run the body again.";
+  "Accept recorded completion: completes the step with the result it already produced, without running its body again. Retry runs the same invocation again on its committed inputs; Re-execute runs a new invocation on fresh inputs. Both run the body again.";
 
 /**
  * Accept recorded completion for a faulted activity whose commit a `Fault` lost update refused (spec 1221 FR-017):
@@ -358,7 +358,7 @@ export function acceptRecordedCompletionActionModel(
     effect: [
       `Completes ${quote(activityLabel)} with the completion it recorded before its commit was refused (outcome: ${outcomes}). Its body does not run again.`,
       writes.length > 0
-        ? `Writes ${writes.map(quote).join(", ")} as an override of the current value; the write history keeps the value each write overwrote, so it can be restored with Modify variable.`
+        ? `Writes ${writes.map(quote).join(", ")} as an override of the current value; the write history keeps the value each write overwrote, so it can be restored with the runtime API's ModifyVariable alteration.`
         : "The recorded completion writes no variable.",
       "Retry would run the same invocation again on its committed inputs, and Re-execute a new invocation on fresh inputs; both run the body again."
     ],
@@ -417,9 +417,9 @@ export function operatorRefusalMessage(code: string | null | undefined): string 
     case "NoRecordedCompletion":
       return `This step has no recorded completion to accept: only a step whose body succeeded and whose commit a lost update refused has one.${nothingChanged}`;
     case "RecordedCompletionContractChanged":
-      return `The activity contract changed since the completion was recorded, so it cannot be accepted. Run the step again with Retry instead.${nothingChanged}`;
+      return `The activity contract changed since the completion was recorded, so it cannot be accepted.${nothingChanged}`;
     case "RecordedCompletionScopeChanged":
-      return `A variable the recorded completion writes is no longer declared as it was, so it cannot be accepted. Run the step again with Retry instead.${nothingChanged}`;
+      return `A variable the recorded completion writes is no longer declared as it was, so it cannot be accepted.${nothingChanged}`;
     case "RootVariableFrameUnavailable":
       return `The run has no workflow variables it can write right now, so the recorded completion cannot be accepted.${nothingChanged}`;
     case "InvalidDecideInterventionPayload":

@@ -125,7 +125,7 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
       if (value.evidenceId) return { label: "Captured", detail: "Captured as value evidence of this step.", tone: "neutral" };
       return value.isOperational
         ? { label: "Kept for recovery", detail: "Kept on the write history; Studio cannot show it yet.", tone: "neutral" }
-        : { label: "Captured", detail: "Captured on the durable record; Studio cannot read it here.", tone: "neutral" };
+        : { label: "Captured", detail: "Kept on the durable record; Studio cannot read it here.", tone: "neutral" };
     case "redacted":
       return { label: "Redacted", detail: "The value is sensitive or withheld and is not shown.", tone: "warning" };
     case "expired":

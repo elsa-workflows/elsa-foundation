@@ -200,9 +200,9 @@ describe("run view", () => {
     expect(text).not.toContain("spec 1229");
     expect(text).toContain('Writer"Increment"');
     expect(text).toContain('Overwritten writer"Add bonus"');
-    expect(text).toContain("Fingerprint abcdef012345");
+    expect(text).not.toContain("Fingerprint");
     expect(text).toContain("Overwritten valueKept for recovery");
-    expect(text).toContain("Modify variable");
+    expect(text).toContain("ModifyVariable alteration");
     expect(text).not.toContain("commit 9");
   });
 
@@ -237,6 +237,17 @@ describe("run view", () => {
     expect(text).toContain("The value the accepted completion recorded");
     expect(text).not.toContain("Variable writes is off");
     expect(container.querySelector(".wf-lost-update-status")).toBeNull();
+  });
+
+  it("tells a superseded step's recorded completion apart as history, without pointing to Accept", () => {
+    flushSync(() => root.render(<VariableWriteDiagnosticsSection
+      inspection={{ ...inspection({ subStatus: "VariableLostUpdate", variableWrites: [refusal()], recordedCompletion: recordedCompletion() }), status: "Superseded" }} labelOf={labelOf} />));
+
+    const text = container.textContent!;
+    expect(text).toContain("Recorded completion (history)");
+    expect(text).toContain("can no longer be accepted here");
+    expect(text).toContain("has since replaced this step");
+    expect(text).not.toContain("Open incident details");
   });
 
   it("renders nothing for a step whose writes all applied", () => {

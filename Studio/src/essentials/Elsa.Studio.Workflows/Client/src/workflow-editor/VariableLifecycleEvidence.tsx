@@ -59,7 +59,10 @@ export function VariableValueState({ label, value, evidence, note }: {
       <dt>{label}</dt>
       <dd>
         <span className="wf-variable-value-state-label">{presentation.label}</span>
-        {value?.digest ? <small className="wf-variable-value-digest">Fingerprint <code title={value.digest}>{shortDigest(value.digest)}</code></small> : null}
+        {/* The fingerprint identifies a captured value without showing it; beside a missing value it means nothing. */}
+        {value?.digest && value.state === "captured"
+          ? <small className="wf-variable-value-digest" title="Identifies the value without showing it">Fingerprint <code>{shortDigest(value.digest)}</code></small>
+          : null}
         {evidence ? <RuntimeValueEvidenceContent snapshot={evidence} /> : <small>{note ?? presentation.detail}</small>}
       </dd>
     </div>
@@ -105,7 +108,7 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
       </dl>
       {record.outcome === lostUpdateWarningOutcome ? (
         <p className="wf-variable-write-hint">
-          To restore the overwritten value, set it again with the Modify variable alteration. With the Variable writes
+          To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. With the Variable writes
           diagnostics level on, the step that wrote it ({writerLabel(record.overwrittenWriter, labelOf)}) shows the value
           it wrote.
         </p>
@@ -119,12 +122,14 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
  * Renders nothing for a step whose writes all applied cleanly.
  */
 export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
-  inspection: Pick<ActivityExecutionInspection, "variableWrites" | "recordedCompletion" | "subStatus" | "valueSnapshots">;
+  inspection: Pick<ActivityExecutionInspection, "variableWrites" | "recordedCompletion" | "subStatus" | "valueSnapshots"> & { status?: string | null };
   labelOf?: LabelOf;
 }) {
   const records = variableWriteDiagnostics(inspection);
   const recorded = inspection.recordedCompletion;
   const refusedByLostUpdate = inspection.subStatus === variableLostUpdateSubStatus;
+  // A retry or an accepted completion supersedes the faulted step; the source keeps its records as history.
+  const superseded = inspection.status === "Superseded";
   if (records.length === 0 && !recorded && !refusedByLostUpdate) return null;
   const evidenceById = new Map((inspection.valueSnapshots ?? []).filter(item => item.evidenceId).map(item => [item.evidenceId!, item]));
   return (
@@ -137,6 +142,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
         <p className="wf-variable-write-hint" role="note">
           This step faulted with {variableLostUpdateSubStatus}: a variable it read and writes changed before its write
           could commit, so the write was refused instead of overwriting the newer value.
+          {superseded ? " An operator action has since replaced this step with a new execution." : null}
         </p>
       ) : null}
       {records.length > 0 ? (
@@ -148,11 +154,13 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
       ) : null}
       {recorded ? (
         <section className="wf-recorded-completion" aria-label="Recorded completion">
-          <strong>Recorded completion kept</strong>
+          <strong>{superseded ? "Recorded completion (history)" : "Recorded completion kept"}</strong>
           <p>
             The body finished{recorded.attemptOrdinal ? ` on attempt ${recorded.attemptOrdinal}` : ""} with outcome {recorded.outcomeNames.length > 0 ? recorded.outcomeNames.join(", ") : "none"}
             {recorded.variableWrites.length > 0 ? ` and would write ${recorded.variableWrites.map(write => `"${write.variableKey}"`).join(", ")}` : ""}.
-            Accept recorded completion, in the incident's operator actions, completes the step with it without running the body again.
+            {superseded
+              ? " This step has since been replaced by a new execution, so the recorded completion can no longer be accepted here."
+              : " While the step waits for intervention, an operator who may manage this run can apply it with Accept recorded completion, under Issues › Open incident details. It completes the step without running the body again."}
           </p>
           {recorded.variableWrites.length > 0 ? (
             <dl className="wf-variable-write-facts">
