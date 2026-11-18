@@ -320,9 +320,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     `TargetCreation`, and `Sender` and `SenderCreation` equal to the row's `Parent` and `ParentCreation`), or an
     operator's whose `ParkSelection` equals the Park identity in `ParkRecord`. Any other terminate, an application
     send from a non-parent or an operator's with no selection or another one, is refused with no cascade. This gate is
-    a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)). The parent binding it
-    names is checked at every recipient state, a running one included ("Parent binding at every recipient state"
-    below, fifth review R5-M5).
+    a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)). The terminates a cascade
+    sends carry the cascade origin mark, and every recipient checks the parent binding on them in every state, a
+    running one included ("Cascade terminates are parent-bound in every state" below, fifth review R5-M5).
   - **The retirement marker keeps the obligation after a delete** (proposed, fourth review R4-B2). A parent-bound
     terminate committed while a delete drain is open can be delivered after that drain's Complete has retired the row.
     Existing prototype behaviour: the built delete retires the row and terminates none of its children
@@ -377,36 +377,46 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
 
   So a terminate is accepted at a parked child without a `ParkSelection` when no discard, expiry, terminate or delete
   drain is open (above), it has an issued origin, its `TargetCreation` equals the row's creation, and its `Sender` and
-  `SenderCreation`, stamped or checked as above, equal the row's recorded `Parent` and `ParentCreation`. An
-  operator's terminate, an outside add, needs a `ParkSelection` there. A terminate from any other instance, an
-  application send from a non-parent included, is refused at every state (next bullet). A send from an earlier
-  creation of the parent fails the binding and is refused.
-- **Parent binding at every recipient state** (proposed, fifth review R5-M5). A `kernel.terminate` with an issued
-  origin comes from an instance: a parent's tree terminate, a combiner's FailFast, a page of a termination cascade
-  sent from a live row or a retirement marker, or a model's own send. Every such terminate is parent-bound wherever it
-  arrives. The recipient compares its `Sender` and `SenderCreation` with its recorded `Parent` and `ParentCreation`
-  before it acts, in every state: running, parked, draining, ended with a registry or an obligation, and retired. A
-  mismatch is a plain refusal: the message is consumed with no other change, no cascade and no notice, and it counts
-  in `elsa.kernel.park.refused` with reason parent. The order of the checks is unchanged where it is already stated: the
-  tenant and creation checks first, then "resolution open" while a discard, expiry, terminate or delete drain is
-  open, then the binding.
-  - **Existing prototype behaviour:** a running row, or an ended row that still has children or jobs, goes to the
-    control path (`WorkflowInstance.cs` 63–64), whose `Control` sends every terminate to `Terminate` (155–158), and
-    `Terminate` (177–203) ends the row, cancels its jobs and terminates its children with no look at the sender. So a
-    correctly issued terminate from any instance ends a running H and its subtree today. The fourth round's RT-1
-    supplied the binding in its fixture before its live termination (`ParentBound`,
-    `experiments/Review4.Blockers/Rt1.cs` 329–330, used at 352–357); the proposal moves that check into the actor
-    type's control path, ahead of `Terminate`.
+  `SenderCreation`, stamped or checked as above, equal the row's recorded `Parent` and `ParentCreation`. Any other
+  sender, an application send from a non-parent included, needs a `ParkSelection`. A send from an earlier creation of
+  the parent fails the binding and is refused.
+- **Cascade terminates are parent-bound in every state** (proposed, fifth review R5-M5). The kernel tells an
+  internal cascade apart from every other authorized terminate:
+  - **The cascade origin mark.** Every terminate the kernel composes to end a subtree carries it: the actor type's
+    tree terminate (`WorkflowInstance.cs` 196–197) and every page of a termination cascade, sent by a `kernel.cascade`
+    discharge from an ended instance, by an open-drain refusal or by a retirement marker ("A termination cascade is
+    paged and idempotent" below). It is a flag on the message row, one byte among the fixed-width fields, on a
+    message with an issued origin. Only the kernel sets it. No turn method can: `ITurn.Send`, `SendFromReceivedAddress`,
+    `Add` and `AddTerminalNotice` never set it, and `SendOptions` has no field for it. Every outside entry point clears
+    it, as it resets a supplied scope (`Messages.cs` 49). The commit refuses, as a definite error, a cascade-marked
+    message that is not a `kernel.terminate` with an issued origin whose `Sender` and `SenderCreation` are the
+    committing row's own. So a model cannot forge it.
+  - **The binding.** A recipient checks every cascade-marked terminate before it acts, in every state: running,
+    parked, draining, ended with a registry or an obligation, and retired. It compares the terminate's `Sender` and
+    `SenderCreation` with its recorded `Parent` and `ParentCreation`. A mismatch is a plain refusal: the message is
+    consumed with no other change, no cascade and no notice, and it counts in `elsa.kernel.park.refused` with reason
+    parent. The order of the checks is unchanged where it is already stated: the tenant and creation checks first,
+    then "resolution open" while a discard, expiry, terminate or delete drain is open, then the binding.
+  - **A model's application terminate keeps its built authorization.** A `kernel.terminate` a model sends through
+    `ITurn.Send`, a combiner's FailFast included, carries no mark. Existing prototype behaviour: at a running row,
+    or an ended row that still has children or jobs, it goes to the control path (`WorkflowInstance.cs` 63–64), whose
+    `Control` sends every terminate to `Terminate` (155–158). `Terminate` (177–203) ends the row, cancels its jobs and
+    terminates its children with no check on the sender, and that stays as built. At a parked or draining row P-7's
+    rule applies (above): the parent's terminate is accepted, any other sender needs a `ParkSelection`, and an open
+    discard, expiry, terminate or delete drain refuses it as "resolution open". At a retirement marker it gets the
+    plain refusal unless it is parent-bound (DT-8).
+  - **What the review's trace needed.** The fourth round's RT-1 supplied the binding in its fixture before its live
+    termination (`ParentBound`, `experiments/Review4.Blockers/Rt1.cs` 329–330, used at 352–357). The proposal puts
+    that check in the actor type's control path, ahead of `Terminate`, for cascade-marked terminates.
   - **An operator's terminate is not parent-bound.** It is an outside add, whose scope the entry point resets to the
-    ordinary one (`Messages.cs` 49), so it never has an issued origin, whatever `Sender` it names. Its authority is the
-    terminate permission checked at ingress, and at a parked or draining row its `ParkSelection`, as above.
+    ordinary one (`Messages.cs` 49), so it never has an issued origin or the mark, whatever `Sender` it names. Its
+    authority is the terminate permission checked at ingress, and at a parked or draining row its `ParkSelection`,
+    as above.
   - **Retirement keeps no membership check.** The retirement marker's validation still checks the list's shape and
-    its jobs against the previous row's `Jobs` and never decodes the child registry ([data
+    its jobs against the previous row's `Jobs`, and it never decodes the child registry ([data
     lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). A listed instance that is not the retired row's
-    child refuses that cascade's terminate under this binding, whatever its state, so a wrong entry ends nothing.
-  - **One consequence.** A model can no longer end an instance it did not start by sending it `kernel.terminate`;
-    that takes an operator's terminate. Release 1's FailFast and tree terminate only ever address the sender's own
-    children, so neither is affected.
+    child refuses that cascade's marked terminate under this binding, whatever its state, so a wrong entry ends
+    nothing.
 - **A termination cascade is paged and idempotent** (proposed, fifth review R5-B1 and R5-B2). Three paths end a
   subtree: the live actor's terminate (`WorkflowInstance.cs` 177–203, which terminates every child at 196–197 and
   cancels every job at 198), the refusing commit while a drain is open (J-1, above), and a retirement marker's
@@ -426,7 +436,7 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     The ending turn or the refusing commit sends the first page in its own commit, so a registry of at most
     `P_cascade` entries ends in one commit, as today. The page's terminates take issued ids derived from the row's
     origin and the page commit's revision, as the built tree terminate derives them (`WorkflowInstance.cs` 196), so
-    no two pages share an id.
+    no two pages share an id, and each carries the cascade origin mark (above).
   - **`kernel.cascade` is a private control.** It lives in the control identity domain (control scope 2^62, no
     `Match`, a private kind), is minted by layer 2 only, in the commit that records its full key in
     `Cascade.Control`, with the row's own id and creation as `Sender` and `SenderCreation` and its creation as
@@ -468,8 +478,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     marker, still `Discharging`, with its cursor, `Control` and `Serial`, so the next `kernel.cascade` meets the
     marker and the pages continue there with no parent terminate. This holds for a root too: a root's marker keeps
     a `Discharging` obligation, and it never has a `Held` one, since no terminate can pass the parent binding
-    there. A keyed root deleted while `Discharging` refuses a successor start at its id with `ObligationOutstanding`
-    until the last page clears the list, at most ⌈n / `P_cascade`⌉ page turns later; the start's caller retries.
+    there. While a retired creation's cascade is still `Discharging`, the creation protocol refuses a successor start
+    at its id with `ObligationOutstanding`, a retryable refusal: the start's caller retries, and the refusal ends when
+    the last page clears the list, at most ⌈n / `P_cascade`⌉ page turns after the delete. In valid operation only a
+    keyed root meets it, since a successor at a generated child id cannot be produced (DT-9).
   - **Crash and takeover.** The cursor, the list, `Control` and `Serial` commit with each page, and the outstanding
     `kernel.cascade` is a pending row, so a new owner polls it and continues from the cursor. A page whose commit
     outcome is unknown is reset and recomputed from the committed row, as every commit is: if it landed, the cursor
@@ -771,8 +783,8 @@ Park decision.
     passes over it: the next row is offered, and the held row is handed back with it as the built `Hold` does (FINDINGS
     section 14). A held cohort row can still receive the later input it waits for, an unreleased row included.
   - **What entitles Complete.** The page that finds no row completes when the persisted cursor has passed the last
-    kept row and the progress gate admits it: the previous page's last restored row is handed off and the owner holds
-    no more than one page of restored rows not yet handed off ("The progress gate" below, fifth review R5-M3).
+    kept row and the progress gate admits it: the previous page's last restored row is handed off and the credit
+    leaves room for a row ("The progress gate" below, fifth review R5-M3).
     Complete does not wait for every released row to be consumed. After Complete the order rests on the durable `ReleasedBy` tag of each unconsumed
     released row, the generation on the instance row and the `Cohort` mark, so it survives a takeover: a new owner
     reads all three.
@@ -1028,7 +1040,7 @@ Park decision.
   so other instances of the partition keep their share.
 - **The progress gate** (revised, fifth review R5-M3). Restored rows become due depth and owner memory, so a drain
   must not restore faster than the instance's model takes them. A poll's `Seen` mark alone no longer admits a page;
-  a page is admitted on handoff, under a bounded credit:
+  a page is admitted on handoff, and its size is cut by a credit:
   - `ParkRecord.Resolution` records the handle of the last row the previous page restored. Restored rows are offered
     in tuple order within the cohort, so that row is the last of its page to be offered.
   - **Handed off.** A restored row is handed off, at the current owner, when it was delivered into a model turn that
@@ -1036,20 +1048,25 @@ Park decision.
     ticket), or when it is shelved or withheld by suspension, during which the gate waits anyway (below). A suspect on
     trial counts as handed off once its trial turn commits. A row that is `Done` or absent (consumed, or done and
     swept after its window) counts as handed off. A `Seen = e` mark by itself does not count.
-  - **The gate and the credit.** A page waits, by sending its `kernel.drain` with a delay, until the gate row is
-    handed off, and also while the owner has more than one page of the open Resolution's restored rows not yet
-    handed off: more than `P_page` rows, or more than `M` × `P_page` bytes of encoded row size (the payload size,
-    which the page reads as metadata, plus the metadata). The Complete page waits on the same test and, as every page
-    does, while the instance is suspended (M3-5). A gate row handed off and not yet consumed (held, or shelved) is
-    delivered after Complete ahead of every untagged row, by the release cohort precedence above (fourth review
-    R4-B1).
-  - **The owner's count.** A healthy owner knows from memory which restored rows it has polled and handed off. The
-    rows of the open Resolution are the not-`Done` rows with its `ReleasedBy`; where the owner needs the count from the
-    store, it reads them in tuple order, at most `P_page` + 1 rows past the keys it has handed off, with the cohort
-    read's partial index, so one read decides the credit.
+  - **The gate.** A page waits, by sending its `kernel.drain` with a delay, until the gate row is handed off. The
+    Complete page waits on the same test and, as every page does, while the instance is suspended (M3-5). A gate row
+    handed off and not yet consumed (held, or shelved) is delivered after Complete ahead of every untagged row, by the
+    release cohort precedence above (fourth review R4-B1).
+  - **The credit.** Let u be the open Resolution's restored rows that the owner has not handed off, and b their
+    encoded size (each row's payload size, which the page reads as metadata, plus its metadata). An admitted page
+    restores at most `P_page` − u rows, and stops before a row that would take b above `M` × `P_page` bytes; a page
+    with u = 0 always restores its first row, as every page has room for its first row. When the credit allows no
+    row (u = `P_page`, or the next row would pass the byte credit while u > 0), the page restores nothing, moves no
+    cursor and waits as for the gate, so a page cut to zero by the credit is never taken for the page that finds no
+    row and never completes the drain.
+  - **The owner's count.** A healthy owner knows u and b from memory: which restored rows it has polled and handed
+    off. The rows of the open Resolution are the not-`Done` rows with its `ReleasedBy`; where the owner needs the
+    count from the store, it reads them in tuple order, at most `P_page` rows past the keys it has handed off, with
+    the cohort read's partial index, so one read decides the credit.
   - **Ownership loss resets the credit** to the durable state. A new owner, or the same process after a reset, has
     handed off nothing: it counts every restored, not-`Done` row of the open Resolution as not handed off, so after a
-    takeover it hands them off again, by delivery, trial, `Hold` or job start, before the next page. It reads the
+    takeover the next page restores only as many rows as the credit leaves, none while a full page is pending, until
+    the new owner hands them off again, by delivery, trial, `Hold` or job start. It reads the
     gate row with one point lookup by full key: `Done` or absent counts, anything else waits for its own handoff. So
     a takeover adds no free page, and a mark the lost owner made counts for nothing.
   - **While the instance is suspended the gate waits.** Resume is a control kind that passes withholding, so it always
@@ -1061,12 +1078,10 @@ Park decision.
     Resolution's `ReleasedBy`; and a kept row was consumed, so it was due. Only suspension withholds it, and resume
     passes. A row whose delivery needs Complete (an unreleased arrival, a timer the open re-armed, a restarted ticket)
     is never a gate row, since no page restores it. So the gate never waits for a row that only Complete can release.
-  - **The bound, stated honestly** (fifth review R5-M3). At every page admission the owner has at most one page of
-    the drain's restored rows not handed off, and a page adds at most one more, so at any time the restored rows not
-    handed off are at most 2 · `P_page` rows and 2 · `M` · `P_page` bytes, and no page is admitted above one page.
-    Under one owner with no reset the cohort is offered in tuple order and the gate row is the last of its page, so
-    the gate alone keeps them within the page just restored; the credit bounds them after a takeover or a reset,
-    when the gate row can be handed off before rows ahead of it. The rows the model holds come on top. Held
+  - **The bound, stated honestly** (fifth review R5-M3). A page adds at most `P_page` − u rows to the u already
+    pending, and handoffs only lower u, so at all times the drain's restored rows not handed off are at most
+    `P_page`, and their bytes at most `M` × `P_page`, or the one row a page restored with nothing pending when that
+    row alone is larger (a message row is at most the 16 MiB row cap). The rows the model holds come on top. Held
     rows stay due and unconsumed, and the built `Hold` hands them back to every turn (FINDINGS section 14), so a model
     that defers everything (a StateMachine during a suspended action) can hold the whole backlog in memory, as it
     would hold the same rows arriving live. A cap on held restored rows was rejected: reaching it with no progress
@@ -1498,10 +1513,22 @@ calls one new model hook.
   discarded as a supplied completion. So the owner converts the ticket into a result row of its own:
   - **Its identity.** The result row's id is the ticket's id with the suffix `/result`, under the ticket's scope
     (the origin's length plus one, `Messages.cs` 31), so its full key derives from the ticket's (instance, creation,
-    job key, `JobGeneration`). Only layer 2 writes that scope: outside entry points reset a supplied scope to the
-    ordinary one (`Messages.cs` 49), and turn sends take the issued scope (`Turns.cs` 327–330). Its kind is
-    `job-finished`, its `Sender` and `SenderCreation` the instance's own, and its `TargetCreation` the instance's
-    creation. The built code already reads a durable `job-finished` in a ticket scope as the worker's own
+    job key, `JobGeneration`). The ticket's job key keeps its length prefix in the id (`Worker.TicketId`,
+    `Worker.cs` 295–296), so the suffix never makes the id equal to another key's ticket. **No producer outside layer
+    2 can write that scope** (existing prototype behaviour for every producer named here):
+    - the only turn method that writes a ticket scope is `StartJob`, which mints the ticket itself, of kind
+      `kernel.job`, under `InboxKey.Ticket` (`Turns.cs` 401; `Messages.cs` 31);
+    - every other turn send takes the issued scope, −1 (`SendNext`, `Turns.cs` 327–330), and an actor type's `Add`
+      takes the issued, the custom (`int.MaxValue` + 2 plus the actor's length) or the ordinary scope (`Turns.cs`
+      347–351; `Messages.cs` 30);
+    - the stores' public add and the worker's in-memory posts reset a supplied scope to the ordinary one
+      (`InMemoryStore.cs` 231, `Worker.cs` 548 and 563, through `AsOrdinary`, `Messages.cs` 49), and key admission
+      writes the ordinary or the child-creator scope (`KeyAdmission.cs` 71–73);
+    - an actor type that composes `TurnOutcome.Sent` directly can set any scope (`Turns.cs` 208), so the commit check
+      below covers it.
+
+    Its kind is `job-finished`, its `Sender` and `SenderCreation` the instance's own, and its `TargetCreation` the
+    instance's creation. The built code already reads a durable `job-finished` in a ticket scope as the worker's own
     (`IsDurableJobTicket`, `Turns.cs` 99). The commit refuses, as a definite error, a `job-finished` row in a ticket
     scope that layer 2's conversion did not mint in that commit, as it refuses an unminted private control.
   - **Its contents.** The `JobFinished` payload (the model's job key, the result and the error), the generation and
@@ -1579,15 +1606,18 @@ store conformance suite need it:
   the live terminate, the open-drain refusal cascade and the marker's cascade: a pending ticket consumed and counted,
   a kept `Done` ticket's `KeptBy` cleared, a `Done` or absent one left alone and never counted, presence decided by
   the owner under its fence (fifth review R5-B1);
-- the parent binding of every terminate with an issued origin, checked before any effect in every recipient state,
-  running and ended included, with a mismatch a plain refusal (fifth review R5-M5);
+- the cascade origin mark on every kernel-composed tree terminate and cascade page, which only the kernel sets and
+  the commit checks, and the parent binding of every marked terminate, checked before any effect in every recipient
+  state, running and ended included, with a mismatch a plain refusal; a model's application terminate keeps its built
+  authorization (fifth review R5-M5);
 - the fenced conversion of a completed job into a result row, `{ticket id}/result` in the ticket's scope, minted only
   by layer 2, written by the consuming turn's commit or by a standalone fenced write while the instance is not
   deliverable (fifth review R5-M4);
 - the poison comparison in the cohort order while a recover drain is open or the `Cohort` mark is set (fifth review
   R5-M6);
-- the progress gate on handoff with a credit of one page (`P_page` rows or `M` × `P_page` bytes) of restored rows not
-  handed off, reset to the durable state at ownership loss, and the pending-row gauges (fifth review R5-M3);
+- the progress gate on handoff, and the credit that cuts each page to at most `P_page` − u rows and `M` × `P_page`
+  bytes of restored rows not handed off (u the rows pending), reset to the durable state at ownership loss, and the
+  pending-row gauges (fifth review R5-M3);
 - three kernel control kinds, `kernel.drain`, `kernel.park-expiry` and `kernel.cascade` (fifth review R5-B2), which
   pass withholding, are never suspects and are exempt from the poison check;
 - the consume rule that keeps no arrival after a resolution opens, and the interruption rules that resume keeping;
@@ -2156,7 +2186,10 @@ unchanged prototype code and executes no proposed transition.
    start to a retired child id is a supplied creator and is consumed with no change (existing prototype behaviour,
    `Messages.cs` 52–54, `Turns.cs` 112, `Worker.cs` 1030–1037), while a keyed start has no parent
    (`KeyAdmission.cs` 31–32). As a defence in depth, the creation protocol also refuses a new creation at an id whose
-   marker still holds an obligation, with reason `ObligationOutstanding`; in valid operation it never fires.
+   marker still holds an obligation, with reason `ObligationOutstanding`; in valid operation it never fires for a
+   `Held` obligation. (Corrected by the fifth review's R5-B2: it does fire in valid operation as a retryable refusal
+   of a successor start while a retired creation's cascade is still `Discharging`, for at most ⌈n / `P_cascade`⌉
+   pages; case PC-3.)
 8. Executed in this repair: RT-1, with the real `CreationProtocol.TargetError` and `CreationProtocol.Retire`
    extended in the harness only as proposed, runs order (a) under the reviewed rules (G, G2 and J survive), the
    repaired rules (all three terminated) and the negative control (the marker drops the registry): `rt1-a` and
@@ -2345,17 +2378,22 @@ below qualify them at their milestones.
    control path cancels H and its children (`WorkflowInstance.cs` 63–64, 155–158, 177–203). RT-1 passed only because
    its fixture checked `ParentBound` before its live termination (`experiments/Review4.Blockers/Rt1.cs` 329–330,
    352–357).
-2. Revised: every terminate with an issued origin is parent-bound in every recipient state ("Parent binding at every
-   recipient state" above).
-3. Replay: H is running. Before it acts it compares the terminate's `Sender` (A) and `SenderCreation` with its
-   recorded `Parent` (Q) and `ParentCreation`. They differ, so the message is consumed with no other change. H and its
-   child keep running, no job is cancelled and no notice is sent. A's marker still clears its list.
+2. Revised: the kernel's cascade terminates carry the cascade origin mark, which no model can set, and every
+   recipient checks the parent binding on a marked terminate in every state ("Cascade terminates are parent-bound in
+   every state" above). Other authorized terminates keep their own rules.
+3. Replay: the marker's cascade composes H's terminate with the mark. H is running. Before it acts it compares the
+   terminate's `Sender` (A) and `SenderCreation` with its recorded `Parent` (Q) and `ParentCreation`. They differ, so
+   the message is consumed with no other change. H and its child keep running, no job is cancelled and no notice is
+   sent. A's marker still clears its list.
 4. An ended H that still lists children: the same check runs on the ended row's control path, so its children keep
    running. A parked or draining H refuses as before.
 5. A genuine child G of A passes the check in every state and is terminated as built; a retired G cascades from its
-   own marker under the same binding. An operator's terminate has no issued origin, so the ingress permission and its
-   `ParkSelection` keep governing it.
-6. Executed in this repair (pending harness PR): RT-4, through the actor type's control path, for a running unrelated
+   own marker under the same binding.
+6. What keeps working as built: a model's application `kernel.terminate`, sent through `ITurn.Send` with no mark,
+   still ends a running instance it addresses, its child or not (`WorkflowInstance.cs` 63–64, 155–158, 177–203), and
+   P-7's rule still governs it at a parked or draining row. An operator's terminate has no issued origin, so the
+   ingress permission and its `ParkSelection` keep governing it.
+7. Executed in this repair (pending harness PR): RT-4, through the actor type's control path, for a running unrelated
    H with a child, an ended H with a registry and a genuine child. The page cases are PB-1 and PB-2.
 
 **R5-M4: a completed job's result had no durable identity of its own.**
@@ -2416,19 +2454,20 @@ below qualify them at their milestones.
    another 170, and repeat. The owner has 340 or more pending ordinary deliveries, the model holds none, and the held
    gauge reads zero. Each page meets its byte cap, and the bound across pages does not follow. FR-1's page checked
    its gate only on its empty-page branch (`experiments/Review4.Blockers/Fr1.cs` 725–749).
-2. Revised: a page waits until the previous page's gate row is handed off, and while the owner has more than one
-   page of the drain's restored rows not handed off ("The progress gate" above).
+2. Revised: a page waits until the previous page's gate row is handed off, and an admitted page restores at most
+   `P_page` − u rows, u being the drain's restored rows not yet handed off ("The progress gate" above).
 3. Replay: page 1 restores 170 rows, and the owner polls and marks them. The next `kernel.drain` runs first, by
    priority. Its gate row is marked and not handed off, so it restores nothing and sends its control again with a
    delay. The model's turns take the rows in tuple order, and each committed turn hands its rows off. Once the gate
-   row's turn has committed and no more than 170 rows are pending, page 2 restores the next 170.
+   row's turn has committed, page 2 restores 170 − u rows, all 170 when every row of page 1 has been handed off.
 4. Held rows count as handed off, so a model that holds every row still lets the drain proceed, and the held gauge
    shows them. Suspension holds the gate as before, and resume releases it.
 5. A takeover between pages resets the credit: the new owner counts the restored, not-`Done` rows as pending and
-   hands them off again, by trial, delivery or `Hold`, before the next page, so the lost owner's marks give no free
-   page.
-6. The bound: at most one page pending when a page is admitted and at most two until the next handoffs, plus held
-   rows; `elsa.kernel.drain.pending` and its byte gauge report it beside `elsa.kernel.drain.held`.
+   hands them off again, by trial, delivery or `Hold`; until it does, the next page restores only what the credit
+   leaves, so the lost owner's marks give no free page.
+6. The bound: at all times at most `P_page` restored rows, and `M` × `P_page` bytes, not handed off (or the one
+   larger row a page restored with nothing pending), plus held rows; `elsa.kernel.drain.pending` and its byte gauge
+   report it beside `elsa.kernel.drain.held`.
 7. R4-B1's schedule: Complete also waits for its gate row's handoff, so in that base trace R reaches its model turn
    before C completes, and the outcome is unchanged (F completes once, then A ends the model). The cohort precedence
    after Complete stays for the rows the credit lets through unconsumed (held, or shelved while suspended) and for
@@ -2461,7 +2500,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-2 | Ownership changes at a page boundary, and a page commit has an unknown outcome. The drain continues from the committed cursor, with no row restored twice or skipped | K3, K4 |
 | M3-3 | Recovery while another partition of the same node is busy, and while the same partition is busy. Other instances keep their turn share; their latency is recorded | K12 |
 | M3-4 | During a drain, a sender with kept rows sends again. The new row is delivered after all of that sender's kept rows | K3 |
-| M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is not yet handed off, while more than one page of restored rows is not handed off (fifth review R5-M3, HC-1), or while the instance is suspended, and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
+| M3-5 | A recover drain under a virtual partition above its high water mark: a page waits only while its previous page's last restored row is not yet handed off, or while the instance is suspended, and restores at most `P_page` less the restored rows not yet handed off (fifth review R5-M3, HC-1), and never on the partition's backlog; unrelated ingress is refused only by the threshold's own rule | K3, K12 |
 | M3-6 | A re-park during a recover drain: the Resolution is cleared; restored-but-undelivered rows and drain-time arrivals are kept as `Arrived`, the parking turn's rows as `Consumed`, unreached rows keep their reasons; `kernel.park-expiry` is re-armed for the window's remaining time; a second recover drains every row still kept and delivers each once; the re-park keeps the Park mark and the retained dispositions and reverts `Selected` rows to `Consumed`. A terminate during a recover drain, and a terminate of a parked child: no model turn runs after the terminate is accepted; its open removes the waits, cancels the jobs and terminates the children; the kept rows are cleared, the status is Cancelled at Complete, and the parent receives exactly one final notice. A delete during a recover drain whose model runs is refused with no change; a delete whose checks pass against the row's current terminal mark during a discard, expiry or terminate drain takes the drain over (DT-1), and a terminate that interrupted a running recover leaves no mark to name until its Complete (DT-2); at its Complete a taken-over terminate is first ended Cancelled with its terminal mark, then deleted, with one parent notice; while a terminate drain runs, lists show the row's current status (Faulted for a parked child, Running after a recover's open) with the sub-state "terminating"; discard and delete drains of a parked child send the parent one final Faulted notice | K3, K6 |
 | M3-7 | One page on MongoDB within its document, message and transaction-lifetime limits | K4 |
 | M3-8 | MongoDB: kept rows with one `seq` straddle a page boundary. The tuple cursor restores or clears every one, and none stays kept; mutation: a cursor on `seq` alone leaves rows kept. The prototype's MongoDB store sorts by `(seq, _id)` (`MongoStore.cs`), so the tuple cursor is a provider contract implemented and qualified here | K4 |
@@ -2469,7 +2508,7 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | M3-10 | The model finishes, is cancelled or ends faulted by its outcome during a recover drain: the drain runs to Complete; pages after the end clear and restore nothing; withheld rows are consumed and dropped; every `KeptBy` is cleared and the Park resolved; the parent receives exactly one notice, from the end's own turn. A delete naming the end's mark after the end takes the drain over, deletes at Complete and sends no notice, and no row keeps `KeptBy`; one naming the Park's mark is refused as naming an earlier transition. The end's turn records the model's end in the Resolution; a late delivery reaching `MaxAttempts` after it records a failed input, opens no Park and leaves the drain running, and the same delivery before the end, with no end recorded, interrupts the drain as a re-park. During a discard, expiry, terminate or delete drain, a late delivery reaching `MaxAttempts` is likewise a failed late input: the instance keeps its status, the drain continues, and no Park or keeping resumes. On an ended row with no unresolved Park (after a completed discard or expiry, after a recovered instance ends, or on one that never parked) it is a failed late input that opens no Park and keeps no row. A turn that throws before the end is a re-park (M3-6) Each of the five `MaxAttempts` states is asserted on its own. The mark: when the model ends mid-drain, its end writes a terminal mark that stays through Complete, and a qualified delete naming that mark after Complete is accepted; a recover that completes with the model running leaves no mark until the next end. | K3, K6 |
 | M3-11 | The deadlock trace: during a recover drain, unreleased arrivals withheld until Complete push the virtual partition above its high water mark. The drain still completes, each page waiting only for its previous page's restored rows; the withheld rows are then released and the backlog falls. Mutation: gate on the partition's backlog, and the drain never completes | K3, K12 |
 | M3-12 | `KeptAsync` returns every kept row with its handle and reason; a `retry` built from its handles restores exactly those rows; a handle a drain has since cleared is refused, except a timer's handle that its Park retains as `Suppressed` (re-armed) or `Rearmed` (accepted as a no-op) | K9, K11 |
-| M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with the rows not handed off within the credit's bound (fifth review R5-M3) plus the held rows, as `elsa.kernel.drain.pending` and `elsa.kernel.drain.held` report; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate row by one point lookup, counts every restored, not-`Done` row as not handed off until it hands it off itself, and gives a lost owner's `Seen` mark no weight; a gate row consumed and swept counts as handed off (HC-2) | K3, K7, K12 |
+| M3-13 | The gate's bounds. A suspended recovering instance restores no page until resumed, then the drain completes. A model that holds every restored row (a StateMachine during a suspended action) lets the drain complete, with at most `P_page` rows not handed off (fifth review R5-M3) plus the held rows, as `elsa.kernel.drain.pending` and `elsa.kernel.drain.held` report; K12 measures the whole owner's memory with the intended holding models, since the page bound alone does not bound it. A partition taken over repeatedly during a drain adds no page per take: each new owner reads the gate row by one point lookup, counts every restored, not-`Done` row as not handed off until it hands it off itself, and gives a lost owner's `Seen` mark no weight; a gate row consumed and swept counts as handed off (HC-2) | K3, K7, K12 |
 | R-1 | `RestoreWaits` for Native, Flowchart and StateMachine: subscriptions, timers and jobs restored per the table above, with kept events in the gap, retained dispositions, and the interrupted-resume trace of M3-14; each plan's `TimerSpec` equals the timer row the model sent (TR-2) | K6, K7 |
 | M3-14 | The interrupted-resume trace: timer T consumed by the Park is cleared unarmed in an early page; arrival X re-parks in a later page; the sweep runs before the second Open and, in a second run, after it; a takeover is injected between every pair of steps. A second `resume` leaves T unarmed in every run; a `retry` naming T re-arms it once, with the sweep before and after that retry, and a second retry after an interrupted one is accepted and leaves exactly one armed T and one firing; in both sweep orders T fires at the same point, after Complete, and the revived row's `KeepUntil` equals an inserted row's; a job restarted by the first resume is not restarted again. A further schedule: a drain releases T, the consuming turn throws, and the re-park keeps T `Consumed` with that marker; a second resume suppresses T and clears it; a retry revives T before the sweep, and in a second run inserts it after the sweep. In both runs T has no `ReleasedBy`, no page restores it, and it fires once after Complete. A message Y pending at that Open, added after an earlier R, is delivered in the same order against T in both sweep orders. Mutation: the revive keeps the old marker; the `Stale` arm restores T and it fires during the drain in the revive run only. Mutation: revive by update, keeping the old `seq`; T runs before Y in the revive run and after it in the insert run | K3, K4, K6, K7 |
 | P-1 | The stale-Park trace with the clock pinned: A and B share tenant t and caller key K, and both park at first revision 7 at the same `ParkAt`, so their Park marks are equal and only the creation differs; the test asserts this precondition before injecting anything. A discard is prepared from A's `ParkSelection`. Handled before retirement: its turn runs while A is still parked, before A is resolved and deleted, and discards A only. Submitted after B exists: refused for its creation (reason run); B's kept rows and their reasons, status, Park mark, waits and parent notices are unchanged, and the outcome records the refusal under its operation id | K3, K4 |
@@ -2526,17 +2565,17 @@ the in-memory store and in the simulation, with a mutation that fails it; K4 hol
 | IC-2 | **One cancel rule on every cascade path** (R5-B1). Preconditions: A, a child of P, with child G and two jobs: J1 pending, and J2, whose result the owner converted while A was suspended (R5-M4), so its ticket is absent while A's registry still lists (J2, g). Runs: P's tree terminate of running, suspended A (the live terminate, `WorkflowInstance.cs` 196–198); P-7's open-drain refusal at parked A with a discard drain open; the marker cascade after A's delete. Outcome: each commit consumes the terminate and J1's ticket only, J1 receives the in-process cancel, J2's cancel is a no-op, J2's pending result row is dropped under the finished-instance rule, G ends Cancelled, and P hears once. Mutation: the live terminate keeps the counted cancel; its commit diverges on J2's missing ticket and A keeps running with G | K3, K6 |
 | PC-1 | **The configured boundary of a paged cascade** (fifth review R5-B2). Preconditions: A, a child of P, starts n children over many turns, one per turn, each with a child of its own, and no jobs; n is `P_cascade` (1,000), `P_cascade` + 1 and 10,001. Runs, for each n: (a) P terminates running A; (b) A is deleted while P's terminate is in flight, so the cascade runs from the marker (DT-7's order (a)); (c) P-7's open-drain refusal at parked A. Outcome: the first page is in the ending or refusing commit; no commit sends more than `P_cascade` messages; the page commits number ⌈n / `P_cascade`⌉ (1, 2 and 11), as `elsa.kernel.cascade.pages` counts; every child and grandchild ends Cancelled, and each child receives exactly one terminate from A; P receives exactly one notice (Cancelled in (a), Faulted from A's Complete in (b), the open drain's in (c)); A's obligation ends cleared; a model turn that sends 10,001 messages still fails and parks under the send cap. K12 runs n = 10,001 under load and records the time to the last descendant's end and the other instances' turn share. Executed in this repair (pending harness PR): RT-3 (`P_cascade`, `P_cascade` + 1 and 10,001). Mutation (the reviewed rule): one commit for the whole list under the send cap; at 10,001 it fails on every attempt and every child stays live | K3, K4, K12 |
 | PC-2 | **A takeover and an unknown outcome partway through a cascade** (R5-B2). Preconditions: PC-1 run (b) with n = 10,001. Interleaving: a takeover after page 3 commits and before page 4; separately, page 6's commit has an unknown outcome, once landed and once not. Outcome: the new owner polls the outstanding `kernel.cascade`, reads the cursor from the marker and continues with page 4; after the unknown outcome the owner resets and recomputes from the committed marker, so a landed page is not sent again and an unlanded one is sent under the same ids and control key; in every run each child receives exactly one terminate and the list clears after page 11; a `kernel.cascade` whose key is not `Cascade.Control` is consumed and dropped (reason control). Executed in this repair (pending harness PR): RT-3 (takeover partway). Mutation: the cursor kept in the owner's memory only; after the takeover the new owner starts the list again, and children 1 to 3,000 receive a second terminate, which the count fails | K3, K4 |
-| PC-3 | **A delete while Discharging** (R5-B2). Preconditions: a root R (no parent) with 10,001 live children, terminated by an operator; A, a child of P, with 10,001 live children, terminated by P; a keyed root K-R under caller key K with 2,001 children, terminated by an operator. Interleaving: after page 2 of each cascade has committed, an operator deletes the row naming its Cancelled mark; for K-R, a keyed start under K is sent before and after the last page. Outcome: each marker keeps the obligation, still `Discharging`, with its cursor, `Control` and `Serial`; the pages continue at the marker with no further terminate, and every descendant ends Cancelled; R's marker keeps the obligation although R has no parent; the keyed start before the last page is refused with `ObligationOutstanding` and the one after it is admitted under the next creation; no marker sends a parent anything. Executed in this repair (pending harness PR): RT-3 (delete while `Discharging`). Mutation: `Retire` drops a `Discharging` obligation, as it keeps no list today; children 2,001 to 10,001 stay live. Mutation: a root's marker keeps nothing, as for a `Held` list; R's remaining children stay live | K3, K4, K6 |
+| PC-3 | **A delete while Discharging** (R5-B2). Preconditions: a root R (no parent) with 10,001 live children, terminated by an operator; A, a child of P, with 10,001 live children, terminated by P; a keyed root K-R under caller key K with 2,001 children, terminated by an operator. Interleaving: after page 2 of each cascade has committed, an operator deletes the row naming its Cancelled mark; for K-R, a keyed start under K is sent before and after the last page. Outcome: each marker keeps the obligation, still `Discharging`, with its cursor, `Control` and `Serial`; the pages continue at the marker with no further terminate, and every descendant ends Cancelled; R's marker keeps the obligation although R has no parent; the keyed start before the last page is refused with `ObligationOutstanding`, a retryable refusal that writes nothing, and its caller's retry after the last page, the third of ⌈2,001 / `P_cascade`⌉ = 3 and one page after the delete, is admitted under the next creation; no marker sends a parent anything. Executed in this repair (pending harness PR): RT-3 (delete while `Discharging`). Mutation: `Retire` drops a `Discharging` obligation, as it keeps no list today; children 2,001 to 10,001 stay live. Mutation: a root's marker keeps nothing, as for a `Held` list; R's remaining children stay live | K3, K4, K6 |
 | PC-4 | **Real models end their whole tree, and the cap still binds models** (R5-B2). Preconditions: a Native workflow that dispatches 10,001 child workflows over many turns, one `DispatchWorkflow` per iteration, each child waiting on a timer; and a combiner tree whose combiner under FailFast holds C outstanding children. Runs: the root is terminated by an operator; one leaf faults under FailFast; a test model that sends 10,001 messages in one turn. Outcome: the Native root's terminate ends it Cancelled and its cascade pages end every child, each child's Cancelled notice refused at the root as `UnknownChildCreation`; the FailFast turn sends at most C terminates, a model turn within the cap, and the tree ends as large fan-out states; the 10,001-send turn fails and the instance parks (fairness decision 3). Mutation: the cascade's exemption widened to every turn, model turns included; the 10,001-send model turn commits. Mutation: the Native root's terminate sends its whole registry in one turn under the cap; it fails on every attempt and the 10,001 children stay live | K3, K6 |
-| PB-1 | **The parent binding at a running and an ended recipient** (fifth review R5-M5). Preconditions: RM-1's negative fixture: A's retirement list names H, same tenant, right creation, whose recorded parent is Q; H has a live child H1 and a pending job JH. Runs: H running; H ended with a registry still listing H1; H parked with no drain open; and, without a marker, an application send of `kernel.terminate` from an unrelated running instance B to running H. Interleaving: P discharges A's marker, or B's turn commits. Outcome: through the actor type's control path, H refuses the terminate with no effect: H keeps its status and revision, H1 keeps running, JH's ticket is not cancelled, no notice is sent, and `elsa.kernel.park.refused` counts reason parent; A's marker still clears its list. Executed in this repair (pending harness PR): RT-4 (running H, ended H). Mutation (the reviewed rule): the binding checked only at a parked or draining recipient; the running and the ended H are terminated, and H1 and JH are cancelled | K3, K6 |
-| PB-2 | **A genuine child and an operator's terminate still apply** (R5-M5). Preconditions: A with a genuine child G (with child G2), and an unrelated running instance X. Runs: G running, parked with no drain open, ended with a registry, and retired with a `Held` obligation, each receiving A's tree terminate or A's marker cascade; an operator's terminate of X with the terminate permission, and one without it. Outcome: G accepts in every state and its subtree ends Cancelled; the operator's terminate ends X, since it has no issued origin and no binding applies; the one without the permission is refused at ingress and writes no row. Executed in this repair (pending harness PR): RT-4 (genuine child). Mutation: bind every terminate, an operator's outside add included; the operator's terminate of X is refused and X keeps running | K3, K6 |
+| PB-1 | **The parent binding of a cascade terminate at a running and an ended recipient** (fifth review R5-M5). Preconditions: RM-1's negative fixture: A's retirement list names H, same tenant, right creation, whose recorded parent is Q; H has a live child H1 and a pending job JH. Runs: H running; H ended with a registry still listing H1; H parked with no drain open; and, as a forgery control, a test model that tries to send a cascade-marked `kernel.terminate` through every turn method, and a test actor type that composes a marked terminate whose `Sender` is another actor. Interleaving: P discharges A's marker, so H receives A's marked terminate. Outcome: through the actor type's control path, H refuses the marked terminate with no effect: H keeps its status and revision, H1 keeps running, JH's ticket is not cancelled, no notice is sent, and `elsa.kernel.park.refused` counts reason parent; A's marker still clears its list; no turn method can set the mark, so the model's sends arrive unmarked, and the composed foreign-sender terminate is refused at the commit as a definite error. Executed in this repair (pending harness PR): RT-4 (running H, ended H). Mutation (the reviewed rule): the binding checked only at a parked or draining recipient; the running and the ended H are terminated, and H1 and JH are cancelled. Mutation: the mark left off the marker's cascade pages; the running H is terminated | K3, K6 |
+| PB-2 | **A genuine child, a model's application terminate and an operator's terminate still apply** (R5-M5). Preconditions: A with a genuine child G (with child G2), and an unrelated running instance X with a child X1. Runs: G running, parked with no drain open, ended with a registry, and retired with a `Held` obligation, each receiving A's tree terminate or A's marker cascade; a model of an unrelated running instance B that sends `kernel.terminate` to X through `ITurn.Send` (X is not B's child); the same application send from B to a parked X with no `ParkSelection`; an operator's terminate of X with the terminate permission, and one without it. Outcome: G accepts in every state and its subtree ends Cancelled; B's application terminate ends the running X as built (`WorkflowInstance.cs` 63–64, 155–158, 177–203), and X's own cascade, marked and sent from X, ends X1 under X1's binding to X; at the parked X, B's send is refused under P-7's rule, since it is not the parent and names no Park; the operator's terminate ends X, since it has no issued origin and no binding applies; the one without the permission is refused at ingress and writes no row. Executed in this repair (pending harness PR): RT-4 (genuine child). Mutation: bind every terminate with an issued origin, application sends included; B's terminate of the running X is refused and the built behaviour is lost. Mutation: bind every terminate, an operator's outside add included; the operator's terminate of X is refused and X keeps running | K3, K6 |
 | JC-1 | **A completed job across Park, takeover and recover** (fifth review R5-M4). Preconditions: a Native workflow arms background job J at the current generation g1, whose activity returns a fixed value V and counts its physical invocations; the instance then parks on another input while J runs. Interleaving: J finishes while the instance is parked; the owner's standalone conversion commits; a takeover; a `resume`. Crash runs: a crash just before the conversion's commit, and one just after it. Outcome: in the crash-after run J's ticket is gone after the conversion, the result row `{ticket id}/result`, in the ticket's scope, is kept `Arrived`, no owner starts J after the takeover, and the recover restores the result row, whose generation check against the registry's current g1 accepts it; in the crash-before run the parked instance keeps the still-pending ticket `Arrived`, the recover restores it, J runs again under the same effect key, and its result is converted and delivered; in both the model receives V exactly once and resumes its frame once, and the physical invocations are one and two, never more. Executed in this repair (pending harness PR): JR-1. Mutation (the reviewed rule): Park keeps the ticket row with `Done` and `KeptBy`; the recover restores a ticket, the owner starts J again, and the invocation count fails. Mutation: persist only the changed kind under the ticket's key; after the takeover the row is discarded as a supplied completion and the model never receives V | K3, K4, K6 |
 | JC-2 | **Only the kernel writes a result row** (R5-M4). Runs: an outside add of a `job-finished` naming J's key, in the ordinary scope; an actor type's composed `job-finished` in J's ticket scope; a kept result row of an obsolete generation g0 beside the current g1; a terminate after the conversion and before the result is consumed; a deliverable instance whose model turn holds the result, then a takeover. Outcome: the outside add is discarded as a supplied completion, as built (`Turns.cs` 109–111); the composed row is refused at the commit as a definite error; g0's row is cleared by the page that reaches it and never restored (JS-2's rule) and g1's is delivered; the terminate's cancel of J is the idempotent no-op and the pending result row is dropped under the finished-instance rule; the holding turn's commit converts the result, so after the takeover J does not run again and the model receives the held result once. Mutation: accept a `job-finished` in a ticket scope that the conversion did not mint; the composed row reaches the model as J's result | K3, K4 |
 | PP-1 | **A cohort suspect against an exhausted ticket** (fifth review R5-M6). Preconditions: an early page restores job ticket J (`seq` 900) and the owner starts it; J hangs, and owners are lost during its physical trial until J reaches `MaxAttempts`; the next owner marks J; a later page restores timer R (`seq` 1100) for frame F. Runs: (a) a takeover with the drain still open, R and J both suspects; (b) a takeover after Complete with the `Cohort` mark set, R held at the lost owner by a model that waits for a later input; (c) the last failed owner, where J reaches `MaxAttempts` at that takeover itself; (d) a cold takeover with no control kind in the inbox. Outcome: in every run R's trial comes first and alone, before J takes the poison path. In (a), (c) and (d) the model consumes R and F completes once; then the drain completes, or the mark's read finds no offerable cohort row, and J takes the `MaxAttempts` path, which re-parks the instance while the drain is open and parks it under a new Park after Complete, with J `Consumed`. In (b) the trial hands R back to the model, which holds it again, the mark's read passes the held R, and J's poison parks the instance, which keeps R and J `Consumed`, so no restored row is lost and a later recover delivers R again. Executed in this repair (pending harness PR): PO-1. Mutation (the reviewed rule): `PrecedesPoison` in plain inbox order; R's trial is never selected, J waits behind the drain or the mark, and F completes zero times | K3, K4 |
 | PP-2 | **Cohort progress and the ordinary earlier poison** (R5-M6). Runs: (a) cohort progress, then a successful Park: PP-1's run (d) taken after Complete, where the model consumes R, the mark's read finds no cohort row and the mark clears, and J's poison parks the instance, a Park that keeps J `Consumed` so that a later `retry` can select it and a `resume` restarts it under the next generation; (b) no drain and no mark: an exhausted input E at `seq` 900 and a later suspect S at 1100 of one instance, with a pending job ticket on the same slot. Outcome: (a) as stated, with J's attempts counted once; (b) E poisons first and the instance parks before S's trial, as built, and no physical job or job trial starts on the slot while E's poison is due (`Worker.cs` 753–754). Executed in this repair (pending harness PR): PO-1. Mutation: the cohort order applied with no drain or mark; S is tried before E, against the built order | K3, K4 |
-| HC-1 | **Controls win before any model work** (fifth review R5-M3). Preconditions: a parked Native instance with 4 × `P_page` = 680 kept `Arrived` rows from one sender; a `resume`; a fixture that gives every `kernel.drain` priority over model turns. Interleaving: after each page the owner polls and marks its rows `Seen = e`, and the next `kernel.drain` runs before any model turn. A second run uses rows whose payloads are 1 MiB each, so the byte credit binds before the row credit. Outcome: the second page waits, its control sent again with a delay and nothing restored, until the first page's gate row is handed off and no more than one page is pending; at no time are more than 2 · `P_page` restored rows (or 2 · `M` · `P_page` bytes) not handed off, and never more than one page at an admission, as `elsa.kernel.drain.pending` and its byte gauge report; every row is delivered once, in per-sender order, and the drain completes. Executed in this repair (pending harness PR): FR-2 (several full pages, controls winning). Mutation (the reviewed rule): the gate counts `Seen = e`; all four pages are restored before the first model turn and 680 rows are pending | K3, K12 |
-| HC-2 | **Hold, suspension, trial and takeover under the credit** (R5-M3). Runs: (a) the model holds every restored row (a StateMachine during a suspended action): pages proceed, held rows count as handed off and `elsa.kernel.drain.held` reports them; (b) the instance is suspended after page 1: no page is admitted until resume; (c) a takeover between pages 2 and 3, page 2's rows marked by the lost owner and none handed off at the new owner: the new owner counts them pending, tries or delivers them, and only then admits page 3; (d) a reset after an unknown commit outcome, as (c); (e) a restored ticket counts as handed off once started as a job. Outcome as stated, and in every run the drain completes with each row delivered once. Executed in this repair (pending harness PR): FR-2 (Hold, suspension, takeover between pages). Mutation: the credit survives ownership loss (the new owner trusts the lost owner's handoffs); in (c) page 3 is admitted with 170 rows pending at the new owner | K3 |
-| HC-3 | **What the credit shows and costs** (R5-M3). Preconditions: HC-1's drain beside a second instance B of the same partition with steady input of its own. Outcome: the pending row and byte gauges and the held gauge equal the fixture's counts at every sample; B keeps its turn share within the pass budget while the drain's pages wait, and the share is recorded; K12 measures the owner's memory for the drain at the intended holding models. Executed in this repair (pending harness PR): FR-2 (pending rows, bytes and another actor's turn share). Mutation: a gauge that omits rows polled and not handed off; it reads zero in HC-1's run while 170 rows are pending | K3, K12 |
+| HC-1 | **Controls win before any model work** (fifth review R5-M3). Preconditions: a parked Native instance with 4 × `P_page` = 680 kept `Arrived` rows from one sender; a `resume`; a fixture that gives every `kernel.drain` priority over model turns. Interleaving: after each page the owner polls and marks its rows `Seen = e`, and the next `kernel.drain` runs before any model turn. A second run uses rows whose payloads are 1 MiB each, so the byte credit binds before the row credit; a third run has the model hand off only some rows of a page before the gate row (the fixture holds the rest as suspects at a new owner), so a page is admitted with u > 0; a fourth has the credit cut a page to zero when no kept row remains to be read. Outcome: the second page waits, its control sent again with a delay and nothing restored, until the first page's gate row is handed off; an admitted page restores at most `P_page` − u rows and stops at the byte credit; at no time are more than `P_page` restored rows, or more than `M` · `P_page` bytes, not handed off, as `elsa.kernel.drain.pending` and its byte gauge report, except that one row larger than the byte credit is restored alone when nothing is pending; a page cut to zero restores nothing and waits, and only a later admitted page that reads no row completes the drain; every row is delivered once, in per-sender order, and the drain completes. Executed in this repair (pending harness PR): FR-2 (several full pages, controls winning). Mutation (the reviewed rule): the gate counts `Seen = e`; all four pages are restored before the first model turn and 680 rows are pending. Mutation: an admitted page restores `P_page` rows whatever u; in the third run more than `P_page` rows are pending. Mutation: a page cut to zero completes the drain; Complete runs with rows still kept | K3, K12 |
+| HC-2 | **Hold, suspension, trial and takeover under the credit** (R5-M3). Runs: (a) the model holds every restored row (a StateMachine during a suspended action): pages proceed, held rows count as handed off and `elsa.kernel.drain.held` reports them; (b) the instance is suspended after page 1: no page is admitted until resume; (c) a takeover between pages 2 and 3, page 2's rows marked by the lost owner and none handed off at the new owner: the new owner counts them pending, so page 3, once its gate row is handed off, restores only 170 − u rows, none while all 170 are pending, and the rows not handed off never exceed 170; (d) a reset after an unknown commit outcome, as (c); (e) a restored ticket counts as handed off once started as a job. Outcome as stated, and in every run the drain completes with each row delivered once. Executed in this repair (pending harness PR): FR-2 (Hold, suspension, takeover between pages). Mutation: the credit survives ownership loss (the new owner trusts the lost owner's handoffs); in (c) page 3 restores 170 rows while 169 are pending at the new owner, 339 in all | K3 |
+| HC-3 | **What the credit shows and costs** (R5-M3). Preconditions: HC-1's drain beside a second instance B of the same partition with steady input of its own. Outcome: the pending row and byte gauges and the held gauge equal the fixture's counts at every sample, and the pending row gauge never exceeds `P_page`; B keeps its turn share within the pass budget while the drain's pages wait, and the share is recorded; K12 measures the owner's memory for the drain at the intended holding models. Executed in this repair (pending harness PR): FR-2 (pending rows, bytes and another actor's turn share). Mutation: a gauge that omits rows polled and not handed off; it reads zero in HC-1's run while 170 rows are pending | K3, K12 |
 | RA-1 | **The two pending `Rearmed` branches** (R4-m3). Preconditions: a Native frame F waits on T; a retry re-arms T (`Rearmed`); a re-park follows; T fires while parked and is kept `Arrived`; a resume of generation g opens, and a page restores T with (c, g); a further interruption comes before T is consumed, and the fixture keeps T unconsumed while parked; the next resume, of generation g + 1, opens while T is pending with the older tag, and a retry in a second run names T; an unreleased model-ending arrival A with a lower `seq` than T is pending. Outcome: the retry counts T "already re-armed"; a page of g + 1 restores T through the `Stale` arm with (c, g + 1), in tuple order within the cohort; T is delivered during the drain, before A, and F resumes once. Control run: a T the g + 1 Open itself re-armed (pending, null tag) is withheld until Complete and is never a gate row, as in S-7's first run. Mutation: every pending `Rearmed` timer waits for Complete (the page skips it); after Complete T is an ordinary row, A goes first and ends the model, and F resumes zero times | K3, K6 |
 | PS-1 | **Distinct targets of one tenant** (R4-M5). Preconditions: tenant t; A under caller key K1 and B under K2, each on creation 1; both park at first Park revision 7 at the same pinned `ParkAt`, so the creation and both mark components are equal, which the test asserts. Interleaving, each in its own run: a discard, a resume with no handles and a retry-all, each prepared from A's `ParkSelection` (read once from `ParkedItem` and once from a `KeptAsync` page), are sent with B as the request's target; a control run sends each to A. Outcome: at B each is refused (reason target) before the creation and mark checks; B's kept rows and reasons, status, mark, waits and parent notices are unchanged, and the refusal is recorded under the operation id; at A each acts. `ParkedItem` and every `KeptPage` selection carry `Instance`, and the opaque handle passes it through the operator API unchanged (K9, K11). Mutation: drop the `Instance` check; at B the discard clears B's kept rows and sends B's parent a Faulted notice, and the resume and retry-all recover B | K3, K9, K11 |
 | DT-7 | **The retirement cascade, in both orders** (R4-B2). Preconditions: P-7's fixture, P waiting on child A, parked at r1 with more than `2P` kept rows; A has a live child G, itself with a child G2, and an in-flight job J; P, A and G on three partitions. A's unprotected parked-instance delete drain is open, and in a second fixture an operator delete naming r1 has taken over a discard drain. P is terminated while A's drain is open, so its tree terminate to A commits while A exists. Order (a): the fixture holds that cross-partition send until after A's Complete has written the Faulted notice and the retirement marker. Order (b): it is delivered between two pages, before Complete. Variant: G itself has been deleted while G2 lives, so the cascade reaches G's marker. Outcome: (a) after Complete the marker holds P, P's creation, {G} and {J}; the delayed terminate is refused as `RetiredCreation`, and in the same commit the marker sends G a terminate from A, cancels J and clears its retained registry and job keys; (b) the terminate is refused as "resolution open" with P-7's cascade, and Complete leaves a marker that retains nothing. In every run G and G2 end Cancelled (in the variant, G's marker cascades on to G2), J's ticket is cancelled and its late result refused at the marker, G's notice to A is refused there, P has received exactly one Faulted notice and nothing more, and invariant 17 holds for P's tree. Executed in this repair: `rt1-a` and `rt1-a-g-deleted` for order (a), which fail under the reviewed rules and pass under the repaired ones, and `rt1-b` for order (b), which passes under both, since #4756's open-drain cascade already covers it (#4781). Mutation (the reviewed rule): the marker keeps nothing, as `Retire` is built; in order (a) G, G2 and J survive and invariant 17 fails | K3, K4, K6 |

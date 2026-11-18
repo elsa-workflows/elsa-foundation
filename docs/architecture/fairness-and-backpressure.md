@@ -131,10 +131,10 @@ them. The store never refuses an insert for depth:
 **Kept rows of a parked instance.** Arrivals that a parked instance consumes become done rows kept for its recovery
 ([observability](observability.md#what-park-keeps)). While parked they are outside due depth and add no poll delay;
 their growth is storage, which ends when the Park is resolved. Recovery restores them page by page. A page waits while
-the previous page's last restored row is not yet handed off to the model, while the owner has more than one page of
-restored rows not handed off, and while the instance is suspended (fifth review R5-M3). A poll's `Seen` mark alone
-no longer counts, so a drain's restored rows not yet handed off are at most one page when a page is admitted and
-two pages at any time, plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
+the previous page's last restored row is not yet handed off to the model and while the instance is suspended, and a
+page restores at most `P_page` less the restored rows not yet handed off (fifth review R5-M3). A poll's `Seen` mark
+alone no longer counts, so a drain's restored rows not yet handed off are at most one page at all times, plus the
+rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
 would hold it above the high water mark for good.
 
