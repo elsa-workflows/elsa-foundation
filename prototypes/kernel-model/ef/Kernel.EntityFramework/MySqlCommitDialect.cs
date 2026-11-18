@@ -25,8 +25,8 @@ internal sealed class MySqlCommitDialect : CommitDialect
         }
         else
         {
-            // k rows: locked in ascending Id order first (the primary key, as the take's range would take them), then one UPDATE over a derived table.
-            c.Statement($"""SELECT COUNT(*) FROM "Partitions" WHERE "Id" IN ({string.Join(", ", rows.Select(r => r.Id))}) FOR UPDATE""", Expect.Count, rows.Count);
+            // k rows: locked in ascending Id order first, then one UPDATE over a derived table.
+            LockRows(c, rows);
             var f = string.Join(" UNION ALL ", rows.Select(r => FormattableString.Invariant($"SELECT {r.Id} AS id, {r.Epoch} AS epoch, {r.Position} AS pos, {r.NewPosition} AS np")));
             c.Statement($"""UPDATE "Partitions" p JOIN ({f}) AS f ON p."Id" = f.id SET p."Position" = f.np, p.{lease} WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""");
         }
@@ -36,8 +36,11 @@ internal sealed class MySqlCommitDialect : CommitDialect
     public override void Checked(OwnedCommand c, string dml, int count) { c.Statement(dml); c.Statement("SELECT ROW_COUNT()", Expect.Count, count); }
     public override void Free(OwnedCommand c, string dml) { c.Statement(dml); c.Statement("SELECT 0", Expect.Skip); }
     public override void InsertMessages(OwnedCommand c, string insert, int count) { c.Statement(insert); c.Statement("SELECT LAST_INSERT_ID(), ROW_COUNT()", Expect.Seq, count); }
-    public override void KeyedMessages(OwnedCommand c, string action, IReadOnlyList<string[]> keys, bool exact) =>
-        Checked(c, $"""{action} WHERE "Done" = 0 AND "EventMatch" IS NULL AND {KeyColumns(exact)} IN ({KeyList(keys)})""", keys.Count);
+    public override void KeyedMessages(OwnedCommand c, string action, IReadOnlyList<string[]> keys, bool exact, string where = "") =>
+        Checked(c, $"""{action} WHERE "Done" = 0 AND "EventMatch" IS NULL AND {KeyColumns(exact)} IN ({KeyList(keys)}){where}""", keys.Count);
+    /// <summary>InnoDB reads an IN list over the primary key as sorted ranges: the rows are locked in ascending Id.</summary>
+    protected override void Lock(OwnedCommand c, IReadOnlyList<int> ids) =>
+        c.Statement($"""SELECT COUNT(*) FROM "Partitions" WHERE "Id" IN ({Ids(ids)}) FOR UPDATE""", Expect.Count, ids.Count);
     /// <summary>The row the database holds under the alias must be equal to both spellings: a count of 1, else not landed.</summary>
     public override void AliasCheck(OwnedCommand c, string rowId, string actor) =>
         c.Statement($"""SELECT COUNT(*) FROM "Instances" WHERE "Id" = {rowId} AND "Id" = {actor}""", Expect.Count, 1);

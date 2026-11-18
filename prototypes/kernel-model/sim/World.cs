@@ -635,7 +635,7 @@ public sealed partial class World
                 if (!AdmitCaller(process, caller, () => actor.Worker.Post(asked, fresh: true, ambient: ambient))) return null;
                 Asked.Add((process, caller, asked.Target.Id));
                 if (asked.Start?.Model == "http") Oracle.ExpectHttp(asked);
-                (_postedHttpStarts ??= new()).Add(asked, new(ambient, actor.Id, actor.Worker.Epoch));
+                (_postedHttpStarts ??= new()).Add(asked, new(ambient, actor.Id, actor.Worker.EpochOf(asked.Target.Partition)));
                 (_callerCheckpoints ??= [])[caller] = new(asked, Store.WatchDeletion(new(asked.Target.Id, generation)));
                 if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
