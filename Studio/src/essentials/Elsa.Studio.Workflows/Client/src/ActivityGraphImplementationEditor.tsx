@@ -1,3 +1,4 @@
+import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
@@ -146,6 +147,7 @@ const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
 };
 
 export function ActivityGraphPublicInterfaceEditor({
+  draftId,
   contractSection,
   context,
   contract,
@@ -240,6 +242,7 @@ export function ActivityGraphPublicInterfaceEditor({
                 return (
                   <ActivityGraphOutputMappingEditor
                     key={output.referenceKey}
+                    draftId={draftId}
                     output={output}
                     mapping={mapping}
                     assignedBySetOutput={assignedOutputNames.has(output.name)}
@@ -1178,6 +1181,7 @@ function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<strin
 const graphOutputSyntaxes = new Set(["literal", "object", "input", "variable", "javascript"]);
 
 export function ActivityGraphOutputMappingEditor({
+  draftId,
   output,
   mapping,
   assignedBySetOutput,
@@ -1191,6 +1195,7 @@ export function ActivityGraphOutputMappingEditor({
   readOnly,
   onChange
 }: {
+  draftId: string;
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
   assignedBySetOutput: boolean;
@@ -1226,7 +1231,22 @@ export function ActivityGraphOutputMappingEditor({
     return contribution ? [{ descriptor: expression, contribution }] : [];
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
   const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
-  const currentSyntax = mapping?.source.syntax ?? "";
+  const [replacementSource, setReplacementSource] = useState<string | null>(null);
+  const outputSource = useRef<HTMLDivElement>(null);
+  const replacementInput = useRef<HTMLTextAreaElement>(null);
+  const replacementButton = useRef<HTMLButtonElement>(null);
+  const replacementOpen = !valueReadOnly && replacementSource !== null;
+  useEffect(() => {
+    if (replacementOpen) replacementInput.current?.focus();
+  }, [replacementOpen]);
+  const authoredSyntax = mapping?.source.syntax ?? "";
+  const javaScript = authoredSyntax.toLowerCase() === "javascript";
+  const currentSyntax = javaScript ? "JavaScript" : authoredSyntax;
+  const storedValue = mapping?.source.value;
+  const stableInputKeys = javaScript && isRecord(storedValue) && storedValue.inputBinding === "referenceKey" && typeof storedValue.source === "string";
+  const expressionValue = stableInputKeys ? storedValue.source : storedValue;
+  const storeValue = (syntax: string, source: unknown, stable: boolean) =>
+    syntax === "JavaScript" && stable ? { source: typeof source === "string" ? source : "", inputBinding: "referenceKey" } : source;
   const active = available.find(item => item.descriptor.type === currentSyntax);
   const supportedMapping = graphOutputSyntaxes.has(currentSyntax.toLowerCase());
   const Editor = active?.contribution.surfaces.inline;
@@ -1236,9 +1256,10 @@ export function ActivityGraphOutputMappingEditor({
     descriptor,
     activity: root,
     expressionDescriptors,
-    readOnly
+    readOnly,
+    editorSessionScope: `activity-output:${draftId}:${output.referenceKey}`
   };
-  const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
+  const diagnostics = active?.contribution.diagnostics?.(context, expressionValue) ?? [];
 
   const defaultSource = embedded
     ? ["Literal", "Input", "Variable"].map(type => supportedSources.find(item => item.descriptor.type === type)).find(Boolean) ?? supportedSources[0]
@@ -1249,7 +1270,7 @@ export function ActivityGraphOutputMappingEditor({
     const nextContext = { ...context, syntax: first.descriptor.type };
     onChange({
       syntax: first.descriptor.type,
-      value: first.contribution.createDefaultValue?.(nextContext) ?? null
+      value: storeValue(first.descriptor.type, first.contribution.createDefaultValue?.(nextContext) ?? null, true)
     });
   };
   const changeSyntax = (syntax: string) => {
@@ -1259,27 +1280,54 @@ export function ActivityGraphOutputMappingEditor({
     onChange({
       ...(mapping?.source ?? {}),
       syntax,
-      value: next.contribution.createDefaultValue?.(nextContext) ?? null
+      value: storeValue(syntax, next.contribution.createDefaultValue?.(nextContext) ?? null, true)
     });
   };
 
   return (
     <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
-      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}
+      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}
       {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
-      <div data-output-source>{!mapping ? <>
+      <div data-output-source ref={outputSource} tabIndex={-1}>{!mapping ? <>
         {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly || replacementOpen}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
         {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
-        {Editor ? <Editor
+        {javaScript && Editor && !stableInputKeys && typeof expressionValue === "string" && !valueReadOnly ? <div>
+          {replacementSource === null ? <>
+            <p className="wf-muted">This expression uses input names.</p>
+            <StudioButton ref={replacementButton} size="sm" onClick={() => setReplacementSource("")}>Replace with stable-key expression</StudioButton>
+          </> : <>
+            <StudioField label="Current expression using input names">
+              <textarea value={expressionValue} readOnly />
+            </StudioField>
+            <StudioField label="Expression using stable input keys">
+              <textarea ref={replacementInput} value={replacementSource} onChange={event => setReplacementSource(event.target.value)} />
+            </StudioField>
+            <StudioButton size="sm" disabled={!replacementSource.trim()} onClick={() => {
+              onChange({ ...mapping.source, value: storeValue(currentSyntax, replacementSource, true) });
+              setReplacementSource(null);
+              requestAnimationFrame(() => outputSource.current?.focus());
+            }}>Apply replacement</StudioButton>
+            <StudioButton size="sm" onClick={() => {
+              setReplacementSource(null);
+              requestAnimationFrame(() => replacementButton.current?.focus());
+            }}>Cancel</StudioButton>
+          </>}
+        </div> : null}
+        {replacementOpen ? null : Editor ? <ExpressionEditorWithDataInsertion
+          key={output.referenceKey}
+          editor={Editor}
+          contribution={active.contribution}
+          ownerValue={expressionValue}
+          reusableOutput={stableInputKeys ? "referenceKey" : "name"}
           descriptor={descriptor}
           syntax={currentSyntax}
-          value={mapping.source.value}
+          value={expressionValue}
           disabled={valueReadOnly || !supportedMapping}
           context={context}
-          onChange={nextValue => onChange({ ...mapping.source, value: nextValue })}
+          onChange={nextValue => onChange({ ...mapping.source, value: storeValue(currentSyntax, nextValue, stableInputKeys) })}
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}
         {diagnostics.map((diagnostic, index) => <span key={`${diagnostic.code ?? "diagnostic"}:${index}`} role={diagnostic.severity === "error" ? "alert" : "status"}>{diagnostic.message}</span>)}
       </>}

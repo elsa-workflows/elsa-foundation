@@ -29,7 +29,7 @@ import {
   setStudioCodeEditorSessionEntry,
   subscribeToStudioCodeEditorSessionRevocation
 } from "../sessions/studioCodeEditorSessions";
-import type { StudioCodeDiagnostic, StudioCodeEditorEngineProps, StudioCodeEditorSnapshot, StudioCodeEditorSelection, StudioCodeEditorBookmark } from "../types";
+import type { StudioCodeDiagnostic, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorSnapshot, StudioCodeEditorSelection, StudioCodeEditorBookmark } from "../types";
 import { ownerHistoryValue, ownerHistoryInversion, ownerValueKey, setOwnerHistoryValue, snapshotOwnerValue } from "./codeMirrorDocumentEditing";
 
 const studioHighlightStyle = HighlightStyle.define([
@@ -92,6 +92,12 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
 
     const view = claimCompactView(entry, props.profile, container)
       ?? new EditorView({ state: entry.state, parent: container });
+    const handoff = props.fallbackSelection;
+    const fallback = handoff?.current;
+    if (handoff) handoff.current = null;
+    if (fallback && fallback.source === view.state.doc.toString()) {
+      view.dispatch({ selection: fallback.selection });
+    }
     activeCodeMirrorViews.add(view);
     viewRef.current = view;
     container.dataset.studioCodeEditorSurface = "codemirror";
@@ -122,7 +128,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       viewRef.current = undefined;
     };
   // A session survives profile remounts. A changed URI/session intentionally mounts a new view.
-  }, [entry, props.autoFocus, props.document.language, props.document.uri, props.profile, props.session]);
+  }, [entry, props.autoFocus, props.document.language, props.document.uri, props.fallbackSelection, props.profile, props.session]);
 
   const registerController = props.documentEditing?.onController;
   useEffect(() => {
@@ -331,13 +337,14 @@ function createEditingController(view: EditorView, entry: CodeMirrorSessionEntry
       capturedEdits.set(snapshot, { entry, revision: entry.revision, generation });
       return snapshot;
     },
-    apply(edit: { expected: StudioCodeEditorSnapshot; insert: string; historyValue: unknown; selection?: StudioCodeEditorSelection }) {
+    apply(edit: Parameters<StudioCodeEditorController["apply"]>[0]) {
       const captured = capturedEdits.get(edit.expected);
       if (!available() || !captured || captured.entry !== entry || captured.revision !== entry.revision || captured.generation !== generation) return false;
       let payload: unknown;
       try { payload = snapshotOwnerValue(edit.historyValue); } catch { return false; }
       const { anchor, head } = edit.expected.selection;
-      const from = Math.min(anchor, head), to = Math.max(anchor, head);
+      const { from, to } = edit.range ?? { from: Math.min(anchor, head), to: Math.max(anchor, head) };
+      if (![from, to].every(Number.isInteger) || from < 0 || to < from || to > view.state.doc.length) return false;
       const length = view.state.doc.length - (to - from) + edit.insert.length;
       const selection = edit.selection ?? { anchor: from + edit.insert.length, head: from + edit.insert.length };
       if (![selection.anchor, selection.head].every(position => Number.isInteger(position) && position >= 0 && position <= length)) return false;

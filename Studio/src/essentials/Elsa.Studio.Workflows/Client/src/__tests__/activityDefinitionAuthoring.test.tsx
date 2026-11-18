@@ -1078,8 +1078,9 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    click(buttonByText(pane, "Advanced"));
-    change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
+    const key = controlByLabel<HTMLInputElement>(pane, "Stable reference key");
+    expect(key.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    change(key, "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
     expect(putJson).not.toHaveBeenCalled();
@@ -1590,7 +1591,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
     expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
-    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("General");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);

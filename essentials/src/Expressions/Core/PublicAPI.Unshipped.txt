@@ -682,3 +682,10 @@ override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding
 override sealed Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
+Elsa.Expressions.Core.Contracts.IPortableExpressionSourceValidator
+Elsa.Expressions.Core.Contracts.IPortableExpressionSourceValidator.Language.get -> string!
+Elsa.Expressions.Core.Contracts.IPortableExpressionSourceValidator.Validate(Elsa.Expressions.Core.Models.PortableExpressionSource! source) -> System.Collections.Generic.IEnumerable<string!>!
+Elsa.Expressions.Core.Models.PortableExpressionSource
+Elsa.Expressions.Core.Models.PortableExpressionSource.Text.get -> string!
+Elsa.Expressions.Core.Models.PortableExpressionSource.UsesReferenceKeys.get -> bool
+static Elsa.Expressions.Core.Models.PortableExpressionSource.TryRead(System.Text.Json.JsonElement value, bool allowReferenceKeys, out Elsa.Expressions.Core.Models.PortableExpressionSource? source) -> bool

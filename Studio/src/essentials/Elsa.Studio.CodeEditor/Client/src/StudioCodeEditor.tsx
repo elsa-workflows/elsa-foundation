@@ -92,14 +92,18 @@ export function StudioCodeEditor({
   const languageLabel = languageAdapter?.displayName ?? document.language;
   const loadEditor = languageAdapter?.loadEditor;
   const RichCodeEditor = useMemo(() => loadEditor ? lazy(loadEditor) : null, [loadEditor]);
-  void authorizationGeneration;
   const session = suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri);
   const isCompactPreview = profile === "compact" && !compactActive && !editingInteraction.current;
+  const fallbackSelection = useMemo<NonNullable<StudioCodeEditorEngineProps["fallbackSelection"]>>(
+    () => ({ current: null }),
+    [session, document.uri, document.language, profile, RichCodeEditor, isCompactPreview, authorizationRevoked, authorizationGeneration]
+  );
   const engineProps: StudioCodeEditorEngineProps = {
     document,
     documentEditing,
     profile,
     session,
+    fallbackSelection: RichCodeEditor ? fallbackSelection : undefined,
     readOnly,
     theme,
     minHeight,

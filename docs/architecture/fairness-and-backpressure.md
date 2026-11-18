@@ -131,8 +131,13 @@ them. The store never refuses an insert for depth:
 **Kept rows of a parked instance.** Arrivals that a parked instance consumes become done rows kept for its recovery
 ([observability](observability.md#what-park-keeps)). While parked they are outside due depth and add no poll delay;
 their growth is storage, which ends when the Park is resolved. Recovery restores them page by page. A page waits while
-the previous page's last restored row is not yet taken up by a poll and while the instance is suspended, so a drain adds at most one
-page of rows not yet taken up plus the rows its model holds ([observability](observability.md#resolving-a-park-a-bounded-drain)).
+the previous page's last restored row is not yet handed off to the model and while the instance is suspended, and a
+page restores at most `P_page` less the restored rows not yet handed off (fifth review R5-M3). A poll's `Seen` mark
+alone no longer counts. The drain admits a page only while the restored rows the current owner has not handed off
+number fewer than `P_page` and their bytes stay under `B_credit` = 4 MiB (proposed), and with none pending a page
+always restores its first row. So at all times, across any number of takeovers, the drain's restored rows not `Done`, other than restored tickets running as jobs, are at most `P_page`
+plus the rows its model holds or has held and not since consumed, and their bytes at most `B_credit` plus those held
+rows' bytes plus one row larger than `B_credit` restored alone ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The gate does not wait on this threshold, because a recover drain's own withheld arrivals count in the backlog and
 would hold it above the high water mark for good.
 
@@ -189,6 +194,7 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 | Ingress adapter (broker, webhook, schedule source) | The same refusal. A broker adapter stops acknowledging and pauses consumption, so the broker keeps the backlog; a schedule source fires late. |
 | Outside publisher | Admission against its tenant's rate. The publish's fan-out into waiting instances is never refused: the waits are committed. |
 | A turn (`Send`, `Start`, `Publish`) | Its sends always commit with its state. It is bounded where it starts: the cap on sends per turn, the [parallel ForEach cap](large-fan-out.md), and credits. The kernel checks the cap when it seals the turn's outcome, so a model cannot catch it; a turn above it fails, and the kernel parks the instance as for any turn that throws. The target's lag shows in the depth metric. |
+| A termination cascade | Nothing: its terminates and cancels are owed and land, as every internal send does. A cascade page is a kernel commit, never a turn. A terminate's cascade to the children and jobs of a large registry is paged: each commit carries at most `P_cascade` = 1,000 entries (proposed) and one `kernel.cascade`, under a durable cursor, so every page is bounded, while every turn, model and actor-type alike, keeps the cap as decided ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and idempotent", fifth review R5-B2). |
 | A timer, job result or child completion | Nothing: it is owed and lands. |
 
 ## Fair scheduling within a pass
@@ -277,7 +283,9 @@ The sketch's release 1 scope names "admission control with bounded inboxes". Pro
 
 Defaults (rates, high and low water, budget, sample interval, send cap) are set by the release 1 cost runs. Proposed
 starting points, all unmeasured: `PassTurnBudget` 500 (equal to `MaxBatch`), high water 10,000 and low water 8,000 due
-rows per virtual partition, a 5 s sample interval, 10,000 sends per turn.
+rows per virtual partition, a 5 s sample interval, 10,000 sends per turn. The send cap applies to every turn
+unchanged, model and actor-type turns alike; a cascade page is a kernel commit of at most `P_cascade` = 1,000 entries
+and one `kernel.cascade` (proposed, fifth review R5-B2).
 
 **Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
 an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.
