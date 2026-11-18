@@ -477,13 +477,14 @@ export function useOperatorActions({
   apiRef.current = api;
 
   // Whether the run shows the action: the incident no longer waits, and for a decision the scope applied it (its
-  // journal no longer waits on that incident) or is no longer running.
+  // journal no longer waits on that incident) or is no longer running. Accept recorded completion supersedes the
+  // faulted step like a retry does (one handler, spec 1221 FR-017), so it is followed like a retry.
   const isApplied = useCallback(async (pending: PendingOperatorAction) => {
     const latest = await refreshRunRef.current();
     if (!latest) return false;
     const incident = latest.incidents?.find(candidate => candidate.incidentId === pending.incidentId);
     if (incident && isWaitingForIntervention(incident)) return false;
-    if (pending.kind !== "retry" && pending.scopeActivityExecutionId) {
+    if (pending.kind !== "retry" && pending.kind !== "accept" && pending.scopeActivityExecutionId) {
       const view = await journalsRef.current.reload(pending.scopeActivityExecutionId);
       const journal = typeof view === "object" ? readCompensationJournal(view) : null;
       if (journal && typeof view === "object" && view.activityStatus === "Running"

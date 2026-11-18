@@ -102,7 +102,8 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
     await expect.poll(async () => {
       const all = await executions();
       step = all.find(item => item.authoredActivityId === "wait-for-total")?.activityExecutionId ?? "";
-      const written = all.some(item => item.authoredActivityId === "set-count");
+      // Listed is not enough: a scheduled Set step has not written count yet.
+      const written = all.some(item => item.authoredActivityId === "set-count" && item.status === "Completed");
       if (step) bookmark = (await api<{ bookmarks: { stimulusType: string; stimulusHash: string }[] }>(`${instance}/activity-executions/${step}`)).bookmarks[0];
       return { waiting: !!bookmark, written };
     }, { timeout: 30_000, message: "The wait step suspends and the other branch writes count" }).toEqual({ waiting: true, written: true });
