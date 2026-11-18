@@ -9,6 +9,7 @@ internal static class ParkR15Checks
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
         public bool CommitClockAvailable => inner.CommitClockAvailable;
+        public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
         public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
         {
             TrialWrites += batch.Trial.Count;

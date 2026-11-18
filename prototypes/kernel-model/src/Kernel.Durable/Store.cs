@@ -82,11 +82,6 @@ public sealed record PartitionFence(int Partition, long Epoch, long Position);
 /// <summary>A take of a set: what it got, in ascending partition id, each at its own epoch and position.</summary>
 public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
-/// <summary>One fence row as a keeping reset reads it: its owner (null once released), epoch and position.</summary>
-public sealed record FenceRead(int Partition, string? Owner, long Epoch, long Position);
-
-/// <summary>What <see cref="IKernelStore.RenewAsync"/> read: one row per partition asked for, at database time <c>Now</c>.</summary>
-public sealed record RenewedSet(IReadOnlyList<FenceRead> Rows, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
@@ -243,24 +238,13 @@ public interface IKernelStore : IMembership
     }
 
     /// <summary>
-    /// The read of a keeping reset, after a refused fence (which does not say which row was stale): one read over the
-    /// set that returns each row's owner, epoch and position, and renews, as a beat does, each row that
-    /// <paramref name="node"/> still holds at its fence's epoch. A release clears the owner and keeps the epoch, so the
-    /// caller keeps a row only if both match. The default beats one row at a time and reports a row whose beat does not
-    /// land as of no owner.
+    /// Take one partition again after a reset, only if <paramref name="node"/> still holds it at <paramref name="epoch"/>:
+    /// the take bumps the epoch, keeps the position and is no death. A row that was released (no owner) or taken since,
+    /// by another node or by this node elsewhere (another epoch), is left alone: null. A store with owned sets implements
+    /// it; the default refuses, so a worker drops that partition and its host takes it as usual.
     /// </summary>
-    async ValueTask<RenewedSet> RenewAsync(IReadOnlyCollection<PartitionFence> held, string node, TimeSpan lease, CancellationToken cancellationToken = default)
-    {
-        StoreBatchRules.RequireDistinct(held);
-        var (rows, now) = (new List<FenceRead>(), long.MaxValue);
-        foreach (var fence in held.OrderBy(f => f.Partition))
-        {
-            var beat = await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [], [], []), cancellationToken);
-            rows.Add(beat.Landed ? new(fence.Partition, node, fence.Epoch, fence.Position) : new(fence.Partition, null, 0, 0));
-            if (beat.Landed) now = Math.Min(now, beat.Now);
-        }
-        return new(rows, now == long.MaxValue ? 0 : now);
-    }
+    ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This store does not retake a partition at an epoch.");
 
     /// <summary>One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most <paramref name="limit"/>.</summary>
     async ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)

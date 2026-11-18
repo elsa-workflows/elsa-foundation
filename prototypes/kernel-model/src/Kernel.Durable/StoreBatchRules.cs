@@ -59,7 +59,8 @@ public static class StoreBatchRules
     }
 
     /// <summary>The owner's turn of no actor that only consumes tickets (meet and publish): the store checks each ticket's partition.</summary>
-    public static bool TicketsOnly(TurnCommit turn) => turn.Instance.Length == 0 && turn.Row is null && !turn.Delete && turn.Journal is null && turn.Sent.Count == 0;
+    public static bool TicketsOnly(TurnCommit turn) => turn.Instance.Length == 0 && turn.Row is null && turn.Expected is null && !turn.Delete && turn.Journal is null
+        && turn.Sent.Count == 0 && turn.Subscribed.Count == 0 && turn.Unsubscribed.Count == 0 && !turn.Unsubscribe && turn.Held is not { Count: > 0 };
 
     /// <summary>The partition an actor address embeds, or null when it embeds none.</summary>
     public static int? AddressPartition(string id)

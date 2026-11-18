@@ -254,20 +254,15 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    /// <summary>The keeping reset's read: one transaction over the set; a row the node still holds at its fence's epoch is renewed.</summary>
-    public ValueTask<RenewedSet> RenewAsync(IReadOnlyCollection<PartitionFence> held, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    /// <summary>The retake after a reset: only a row this node still holds at that epoch; one more epoch, no death.</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            StoreBatchRules.RequireDistinct(held);
-            var (now, rows) = (clock(), new List<FenceRead>());
-            foreach (var fence in held.OrderBy(f => f.Partition))
-            {
-                var row = Partitions[fence.Partition];
-                if (row.Owner == node && row.Epoch == fence.Epoch) row.LeaseUntil = now + (long)lease.TotalMilliseconds;
-                rows.Add(new(fence.Partition, row.Owner, row.Epoch, row.Position));
-            }
-            return new(new RenewedSet(rows, now));
+            var (row, now) = (Partitions[partition], clock());
+            if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
+            (row.Epoch, row.LeaseUntil) = (row.Epoch + 1, now + (long)lease.TotalMilliseconds);
+            return new(new Lease(row.Epoch, row.Position, now));
         }
     }
 
