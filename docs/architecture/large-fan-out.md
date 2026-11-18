@@ -153,8 +153,8 @@ not send them all in one commit: the ending turn sends the first `P_cascade` = 1
 the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
 children end in 11 commits and no commit meets the send cap (proposed, fifth review R5-B2;
 [observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
-idempotent"). Each job cancel in a cascade is idempotent: a ticket already consumed or `Done` is skipped, never
-counted, so one settled ticket cannot roll back the children's terminates (fifth review R5-B1). A child deleted while the terminate was
+idempotent"). Each job cancel in a cascade is idempotent: a ticket already consumed or `Done` is never counted as
+consumed, so one settled ticket cannot roll back the children's terminates (fifth review R5-B1). A child deleted while the terminate was
 on its way still ends its subtree: its retirement marker keeps its parent, child registry and job keys, and a
 parent-bound terminate refused there as `RetiredCreation` cascades from the marker (proposed, fourth review R4-B2;
 [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). Each cancelled child still sends its
