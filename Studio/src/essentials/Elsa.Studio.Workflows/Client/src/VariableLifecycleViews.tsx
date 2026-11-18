@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   compareInstances,
@@ -209,6 +209,8 @@ export function InstanceComparisonSummary({ comparison }: { comparison: Instance
 }
 
 type LifecycleTab = "history" | "journal" | "compare";
+const lifecycleTabs: readonly LifecycleTab[] = ["history", "journal", "compare"];
+const lifecycleTabTitles: Record<LifecycleTab, string> = { history: "Write history", journal: "Journal", compare: "Compare" };
 type Loaded<T> = { status: "idle" | "loading" } | { status: "ready"; items: T[]; next: string | null; total?: number | null } | { status: "failed"; error: string };
 
 /**
@@ -229,6 +231,21 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
   const [comparison, setComparison] = useState<{ status: "idle" | "loading" } | { status: "ready"; value: InstanceComparison } | { status: "failed"; error: string }>({ status: "idle" });
   const [shownValues, setShownValues] = useState<Record<string, { status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }>>({});
 
+  const idBase = useId();
+  const tabButtons = useRef<Partial<Record<LifecycleTab, HTMLButtonElement | null>>>({});
+  // Arrow keys, Home and End move between the views, as in the run details tablist.
+  const moveTab = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = lifecycleTabs.indexOf(tab);
+    const next = event.key === "ArrowRight" ? lifecycleTabs[(index + 1) % lifecycleTabs.length]
+      : event.key === "ArrowLeft" ? lifecycleTabs[(index + lifecycleTabs.length - 1) % lifecycleTabs.length]
+      : event.key === "Home" ? lifecycleTabs[0]
+      : event.key === "End" ? lifecycleTabs[lifecycleTabs.length - 1]
+      : null;
+    if (!next) return;
+    event.preventDefault();
+    setTab(next);
+    tabButtons.current[next]?.focus();
+  };
   const historyRequest = useRef(0);
   const journalRequest = useRef(0);
   const compareRequest = useRef(0);
@@ -307,15 +324,24 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
 
   return (
     <section className="wf-variable-lifecycle" aria-label="Variable lifecycle">
-      <div className="wf-variable-tabs" role="tablist">
-        {(["history", "journal", "compare"] as const).map(name => (
-          <button key={name} type="button" role="tab" aria-selected={tab === name} onClick={() => setTab(name)}>
-            {name === "history" ? "Write history" : name === "journal" ? "Journal" : "Compare"}
+      <div className="wf-variable-tabs" role="tablist" aria-label="Variable lifecycle views" onKeyDown={moveTab}>
+        {lifecycleTabs.map(name => (
+          <button
+            key={name}
+            ref={element => { tabButtons.current[name] = element; }}
+            id={`${idBase}-${name}-tab`}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            aria-controls={`${idBase}-${name}-panel`}
+            tabIndex={tab === name ? 0 : -1}
+            onClick={() => setTab(name)}>
+            {lifecycleTabTitles[name]}
           </button>
         ))}
       </div>
       {tab === "history" ? (
-        <div role="tabpanel">
+        <div role="tabpanel" id={`${idBase}-history-panel`} aria-labelledby={`${idBase}-history-tab`}>
           <div className="wf-variable-filters">
             <label>
               Variable <input value={filter.variableKey ?? ""} onChange={event => setFilter(current => ({ ...current, variableKey: event.target.value || undefined }))} />
@@ -353,12 +379,12 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
         </div>
       ) : null}
       {tab === "journal" ? (
-        <div role="tabpanel">
+        <div role="tabpanel" id={`${idBase}-journal-panel`} aria-labelledby={`${idBase}-journal-tab`}>
           <PagedContent loaded={journal} onMore={next => void loadJournal(next)}>{items => <InstanceJournalList commits={items} />}</PagedContent>
         </div>
       ) : null}
       {tab === "compare" ? (
-        <div role="tabpanel">
+        <div role="tabpanel" id={`${idBase}-compare-panel`} aria-labelledby={`${idBase}-compare-tab`}>
           <form className="wf-variable-filters" onSubmit={event => { event.preventDefault(); void compare(); }}>
             <label>Other instance <input value={otherId} onChange={event => setOtherId(event.target.value)} placeholder="Workflow instance ID" /></label>
             <button type="submit" className="wf-button" disabled={!otherId.trim() || comparison.status === "loading"}>Compare</button>

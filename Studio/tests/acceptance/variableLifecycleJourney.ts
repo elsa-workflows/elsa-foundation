@@ -161,6 +161,10 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   // The Set step on the other branch was not ordered before the resumed step: a concurrent overwrite, naming it.
   await expect(history).toContainText("Lost update over");
   await expect(history).toContainText("Current value");
+  // Filtered to lost updates: the Set step's applied write is not listed.
+  await expect(inspector().getByRole("region", { name: "Variable lifecycle", exact: true }).getByLabel("Outcome")).toHaveValue("lostUpdateWarning");
+  await expect(history.getByRole("row")).toHaveCount(2);
+  await expect(history).not.toContainText("Applied");
   await capture(page, info, "write-history-lost-updates");
 
   // The journal lists the run's commits in order, with the write in the commit that applied it.

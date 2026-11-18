@@ -12,7 +12,7 @@ import {
   type JournalCommit,
   type VariableWriteEntry
 } from "../api/variableLifecycle";
-import { InstanceComparisonSummary, InstanceJournalList, VariableWriteHistoryTable } from "../VariableLifecycleViews";
+import { InstanceComparisonSummary, InstanceJournalList, VariableLifecyclePanel, VariableWriteHistoryTable } from "../VariableLifecycleViews";
 
 afterEach(clearApiCapabilityCache);
 
@@ -127,6 +127,16 @@ describe("variable lifecycle views", () => {
     ]} />);
 
     expect(markup).toContain("Met a version of node-left · branch left");
+  });
+
+  it("names its views tablist and links each tab to its panel with one tab in the tab order", () => {
+    const markup = renderToStaticMarkup(<VariableLifecyclePanel context={context(async () => capabilities)} workflowExecutionId="run-1" />);
+
+    expect(markup).toContain('role="tablist" aria-label="Variable lifecycle views"');
+    expect(markup.match(/role="tab"/g)).toHaveLength(3);
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(markup).toMatch(/aria-controls="[^"]+-history-panel"/);
+    expect(markup).toMatch(/role="tabpanel" id="[^"]+-history-panel" aria-labelledby="[^"]+-history-tab"/);
   });
 
   it("says when an instance has no recorded history", () => {

@@ -2417,7 +2417,8 @@ function WorkflowInstanceInspector({
 }) {
   const inspectorRef = useRef<HTMLElement>(null);
   // Spec 1229 FR-017: the variable lifecycle reads, on hosts that advertise them.
-  const [lifecycleSupported, setLifecycleSupported] = useState(false);
+  // null while the host's capabilities are being read.
+  const [lifecycleSupported, setLifecycleSupported] = useState<boolean | null>(null);
   const [lifecycleFilter, setLifecycleFilter] = useState<{ filter: VariableWriteFilter; version: number }>({ filter: {}, version: 0 });
 
   useEffect(() => {
@@ -2449,10 +2450,12 @@ function WorkflowInstanceInspector({
     { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
     { id: "activity", title: "Activity", order: 1, icon: <ActivityIcon size={14} />, render: () => null },
     { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 2, icon: <AlertCircle size={14} />, render: () => null },
-    ...(lifecycleSupported ? [{ id: "variables", title: "Variables", order: 3, icon: <Variable size={14} />, render: () => null }] : []),
+    ...(lifecycleSupported !== false ? [{ id: "variables", title: "Variables", order: 3, icon: <Variable size={14} />, render: () => null }] : []),
     { id: "details", title: "Details", order: 4, icon: <SlidersHorizontal size={14} />, render: () => null }
   ];
   const lostUpdateWarningCount = details?.lostUpdateWarningCount ?? 0;
+  // A host without the variable lifecycle reads has no Variables tab: a request for it shows the Timeline.
+  const shownTab: InstanceInspectorTab = activeTab === "variables" && lifecycleSupported === false ? "timeline" : activeTab;
   // T026: the run's lost-update count opens the write history filtered to lost updates.
   const openLostUpdates = () => {
     setLifecycleFilter(current => ({ filter: { outcome: "lostUpdateWarning" }, version: current.version + 1 }));
@@ -2476,7 +2479,7 @@ function WorkflowInstanceInspector({
       }}
     >
       <div className="wf-panel-title wf-instance-panel-title">
-        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={shownTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
         <span className="wf-panel-actions">
           {layoutMode !== "desktop" ? (
             <button
@@ -2519,14 +2522,14 @@ function WorkflowInstanceInspector({
           {state === "failed" ? <WfErrorCard message={error} /> : null}
           {state === "ready" && details ? (
             <div className="wf-instance-tab-content">
-              {activeTab === "timeline" ? (
+              {shownTab === "timeline" ? (
                 <>
                   {lostUpdateWarningCount > 0 ? (
-                    <div className="wf-instance-lost-updates" role="status">
+                    <div className="wf-instance-lost-updates">
                       <LostUpdateBadge
                         count={lostUpdateWarningCount}
                         label={lostUpdateWarningCount === 1 ? "1 lost update in this run" : `${lostUpdateWarningCount} lost updates in this run`}
-                        onSelect={lifecycleSupported ? openLostUpdates : undefined} />
+                        onSelect={lifecycleSupported === true ? openLostUpdates : undefined} />
                     </div>
                   ) : null}
                   {details.activityNextContinuationToken ? <p className="wf-instance-note" role="note">Runtime returned another activity page. This timeline shows the current bounded page; exact incident links can load an associated activity separately.</p> : null}
@@ -2538,7 +2541,7 @@ function WorkflowInstanceInspector({
                     onSelectEvidence={openActivityEvidence}
                   />
                 </>
-              ) : activeTab === "activity" ? (activityContent ??
+              ) : shownTab === "activity" ? (activityContent ??
                 <WorkflowActivityExecutionDetails
                   context={context}
                   activity={selectedActivity}
@@ -2549,13 +2552,15 @@ function WorkflowInstanceInspector({
                   focusInputKey={focusInputKey}
                   onSelectEvidence={openActivityEvidence}
                 />
-              ) : activeTab === "variables" && lifecycleSupported ? (
+              ) : shownTab === "variables" && lifecycleSupported === null ? (
+                <div className="wf-empty">Loading variables...</div>
+              ) : shownTab === "variables" ? (
                 <VariableLifecyclePanel
                   key={`${summary.workflowExecutionId}:${lifecycleFilter.version}`}
                   context={context}
                   workflowExecutionId={summary.workflowExecutionId}
                   initialFilter={lifecycleFilter.filter} />
-              ) : activeTab === "issues" ? (
+              ) : shownTab === "issues" ? (
                 <>
                   <WorkflowIncidentList
                     incidents={incidentEvidenceAvailable ? incidents : undefined}
