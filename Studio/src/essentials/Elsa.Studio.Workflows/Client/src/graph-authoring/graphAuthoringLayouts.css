@@ -46,7 +46,7 @@
 .wf-panel-back-button {
   display: inline-flex;
   flex: 0 0 auto;
-  height: 28px;
+  height: 32px;
   align-items: center;
   gap: 6px;
   border: 1px solid var(--wf-border);

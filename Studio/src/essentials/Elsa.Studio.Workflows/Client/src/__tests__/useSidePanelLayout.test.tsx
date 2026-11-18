@@ -313,14 +313,56 @@ describe("adaptive workflow side-panel layout", () => {
     expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
   });
 
-  it("retains an explicitly saved single inspector on phones", async () => {
+  it("starts phones on the canvas even with a saved single inspector, and keeps that preference", async () => {
     window.localStorage.setItem(workflowPaletteCollapsedStorageKey, "true");
     renderLayout();
     await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
     flushSync(() => resize?.(364));
     expect(layout.paletteCollapsed).toBe(true);
-    expect(layout.inspectorExpanded).toBe(true);
+    expect(layout.inspectorExpanded).toBe(false);
+    expect(classes()).not.toContain("inspector-sheet");
     expect(window.localStorage.getItem(workflowPaletteCollapsedStorageKey)).toBe("true");
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
+    flushSync(() => resize?.(1280));
+    expect(layout.inspectorExpanded).toBe(true);
+  });
+
+  it.each([
+    ["a saved collapsed palette", true, { [workflowPaletteCollapsedStorageKey]: "true" }],
+    ["no palette and a saved collapsed palette", false, { [workflowPaletteCollapsedStorageKey]: "true" }],
+    ["a saved collapsed inspector", true, { [workflowInspectorCollapsedStorageKey]: "true" }]
+  ] as const)("opens and leaves the phone inspector sheet with %s without rewriting saved preferences", async (_, palettePresent, saved) => {
+    for (const [key, value] of Object.entries(saved)) window.localStorage.setItem(key, value);
+    const before = { ...window.localStorage };
+    renderLayout(palettePresent);
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(360));
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorSheet).toBe(true);
+    flushSync(() => layout.showCanvas());
+    expect(layout.inspectorExpanded).toBe(false);
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorExpanded).toBe(false);
+    for (const key of [workflowPaletteCollapsedStorageKey, workflowInspectorCollapsedStorageKey]) {
+      expect(window.localStorage.getItem(key) ?? "false").toBe(before[key] ?? "false");
+    }
+  });
+
+  it("leaves a maximized phone inspector for the canvas and restores the desktop panels", async () => {
+    renderLayout();
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(360));
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    flushSync(() => layout.toggleSidePanelMaximized("inspector"));
+    expect(layout.maximizedSidePanel).toBe("inspector");
+    flushSync(() => layout.showCanvas());
+    expect(layout.maximizedSidePanel).toBeNull();
+    expect(layout.inspectorExpanded).toBe(false);
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
+    flushSync(() => resize?.(1280));
+    expect(classes()).not.toContain("inspector-collapsed");
+    expect(layout.inspectorExpanded).toBe(true);
   });
 
   it("preserves the compact inspector minimum by reducing canvas reserve only when needed", () => {

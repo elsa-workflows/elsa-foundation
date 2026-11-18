@@ -25,6 +25,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await source.press("Enter");
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     if (narrow) {
+      // Opening the sheet from the node moves focus into it rather than losing it with the hidden canvas.
+      if (editorSheet) await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeFocused();
       await page.getByRole("button", { name: host === "instance" ? "Back to workflow run canvas" : "Back to canvas", exact: true }).press("Enter");
       await expect(source).toBeFocused();
     }

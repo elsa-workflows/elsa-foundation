@@ -89,7 +89,7 @@ describe("theme layouts in the designer", () => {
   });
 
   it("offers the way back to the canvas from a phone inspector sheet and drops its resize handles", () => {
-    const toggleSidePanelCollapsed = vi.fn();
+    const showCanvas = vi.fn();
     const renderWorkbench = (layout: ReturnType<typeof useSidePanelLayout>) => flushSync(() => root.render(
       <GraphAuthoringWorkbench
         resourceKind="workflow-definition"
@@ -100,13 +100,13 @@ describe("theme layouts in the designer", () => {
       />
     ));
 
-    renderWorkbench(sidePanelLayout({ phoneWidth: true, inspectorSheet: true, paletteCollapsed: true, paletteExpanded: false, toggleSidePanelCollapsed }));
+    renderWorkbench(sidePanelLayout({ phoneWidth: true, inspectorSheet: true, paletteCollapsed: true, paletteExpanded: false, showCanvas }));
     const back = container.querySelector<HTMLButtonElement>("[aria-label='Back to canvas']");
     expect(back?.textContent).toBe("Canvas");
     expect(container.querySelector(".wf-palette [aria-label='Back to canvas']")).toBeNull();
     expect(container.querySelector("[role='separator']")).toBeNull();
     flushSync(() => back!.click());
-    expect(toggleSidePanelCollapsed).toHaveBeenCalledWith("inspector");
+    expect(showCanvas).toHaveBeenCalledOnce();
 
     renderWorkbench(sidePanelLayout({ phoneWidth: true, inspectorSheet: false, inspectorCollapsed: true, inspectorExpanded: false }));
     expect(container.querySelector("[aria-label='Back to canvas']")).toBeNull();
@@ -114,6 +114,26 @@ describe("theme layouts in the designer", () => {
     renderWorkbench(sidePanelLayout());
     expect(container.querySelector("[aria-label='Back to canvas']")).toBeNull();
     expect(container.querySelectorAll("[role='separator']")).toHaveLength(2);
+  });
+
+  it("moves focus from a hidden canvas control to the way back when the sheet opens", () => {
+    const render = (inspectorSheet: boolean) => flushSync(() => root.render(
+      <GraphAuthoringWorkbench
+        resourceKind="workflow-definition"
+        layout={sidePanelLayout({ phoneWidth: true, inspectorSheet })}
+        canvas={<section className="wf-canvas-shell"><button type="button" className="wf-sequence-step">Write Line</button></section>}
+        inspector={{ ariaLabel: "Inspector panel", tabLabel: "Inspector tabs", tabs: [{ id: "inspector", title: "Inspector", order: 0, icon: null, render: () => null }], activeTabId: "inspector", onSelect: () => {} }}
+      />
+    ));
+    render(false);
+    container.querySelector<HTMLButtonElement>(".wf-sequence-step")!.focus();
+    render(true);
+    expect(document.activeElement).toBe(container.querySelector("[aria-label='Back to canvas']"));
+
+    render(false);
+    container.querySelector<HTMLButtonElement>("[aria-label='Collapse inspector panel']")!.focus();
+    render(true);
+    expect(document.activeElement).toBe(container.querySelector("[aria-label='Collapse inspector panel']"));
   });
 
   it.each([
@@ -152,6 +172,7 @@ function sidePanelLayout(overrides: Partial<ReturnType<typeof useSidePanelLayout
     inspectorExpanded: true,
     phoneWidth: false,
     inspectorSheet: false,
+    showCanvas: () => {},
     editorBodyClassName: "wf-editor-body",
     editorBodyStyle: { "--wf-palette-width": "260px", "--wf-inspector-width": "320px" },
     setInspectorCollapsed: () => {},
