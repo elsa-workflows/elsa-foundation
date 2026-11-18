@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 for (const theme of ["light", "dark"]) {
   for (const viewport of [
@@ -1048,7 +1048,8 @@ for (const theme of ["light", "dark"]) {
 test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
-  const changesRegion = page.getByRole("region", { name: "Changes", exact: true });
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  const changesRegion = publicationDialog.getByRole("region", { name: "Changes", exact: true });
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
@@ -1060,13 +1061,13 @@ test("Activity Definition publication keeps first and later recommendation seman
   await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
-  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  const firstVersion = await openPublicationVersion(publicationDialog);
+  await firstVersion.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
   await expect(page.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
   await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
   await publicationDialog.getByText("Publication review details", { exact: true }).click();
   await expect(publicationDialog.getByRole("button", { name: "Published 2.0.0" })).toBeDisabled();
@@ -1082,9 +1083,11 @@ test("Activity Definition publication keeps first and later recommendation seman
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
+  await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
   await expect(changesRegion).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
-  await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
+  const nextVersion = await openPublicationVersion(publicationDialog);
+  await expect(nextVersion).toHaveValue("2.1.0");
+  await nextVersion.fill("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
   await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
   await expect(page.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
@@ -1094,6 +1097,11 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.proposalApplies).toBe(0);
   expect(state.publishedDraftIds).toEqual(["activity-draft-browser", "activity-draft-browser-follow-up"]);
 });
+
+async function openPublicationVersion(dialog: Locator) {
+  await dialog.locator("summary").filter({ hasText: /^Version$/ }).click();
+  return dialog.getByRole("textbox", { name: "Publication version" });
+}
 
 test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
@@ -1105,7 +1113,8 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  const version = await openPublicationVersion(page.getByRole("dialog", { name: "Review & publish" }));
+  await version.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
@@ -1334,7 +1343,9 @@ test("Activity Definition publication reconciles an ambiguous response without d
   await createBrowserActivity(page);
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Minimum valid version: 1.0.0")).toBeVisible();
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  await openPublicationVersion(publicationDialog);
+  await expect(publicationDialog.getByText("Minimum valid version: 1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
   expect(state.publicationWrites).toBe(1);

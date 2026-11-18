@@ -81,7 +81,10 @@ a `tenant` column that the owner checks on load and consumption.
 
 An event match encodes the complete stored tuple `(subscription key, event ID, instance, wait, creation)`. Under the
 proposed tenancy contract the subscription key is tenant-qualified, so the tuple names the tenant, and a publish
-matches only its own tenant's subscriptions.
+matches only its own tenant's subscriptions. In the proposed release 1 encoding (fourth review R4-M1) the stored
+match is a 64-character SHA-256 digest of the stored event's qualified key and id, and the delivery's wire id is `ev:`
+and a digest of the event id, instance, creation and wait, so a delivery's key has a fixed size whatever its names;
+the components travel in the delivery's payload ([observability](observability.md#resolving-a-park-a-bounded-drain)).
 The publisher and catch-up paths select canonical persisted events and subscriptions using provider equality;
 they do not build identity or payload from a retried caller's replacement values. SQL insertion assigns a negative
 scope within the wire ID and compares exact `EventMatch` bytes. MongoDB keeps the match in its composite `_id`.
@@ -93,6 +96,8 @@ SQL row mutations also check the expected match, so a reused physical scope cann
 | Private issued IDs on SQL Server/MySQL | Raw big-endian UTF-16 in `IssuedWire`, with empty text `Id`; ordinary/event IDs retain native text. Declared binary limits are 900/1,020 bytes respectively; ordinary IDs retain 450 UTF-16 units on SQL Server and 255 Unicode scalar values on MySQL. This is not an unbounded-key guarantee. |
 | Private issued IDs on PostgreSQL/SQLite | NUL or unpaired UTF-16 units use reversible binary/base64 encoding with a distinct scope. Representable issued IDs retain text. No ordinary caller prefix is reserved by this encoding. |
 | Opaque keys in JSON | `DurableKeyJson` preserves unsupported UTF-16 units and escapes tagged property names. It applies to annotated framework keys and registries, not every application state field. |
+| Event match and delivery id (proposed) | `Match` is 64 ASCII hex characters and an event delivery's `Id` 67, on every provider (128 and 134 bytes in SQL Server's UTF-16), computed from the persisted event and subscription rows. Today's JSON match measured 24,787 bytes for four names at 1,024 bytes each ([observability](observability.md#resolving-a-park-a-bounded-drain)). |
+| Caller-key binding (proposed) | One row per tenant and caller key, the key `Q(t, key)` in a pinned column unique under the pinned collation, holding the actor id and the reuse window. Written by a store-side insert-or-read before a keyed request is routed and never deleted, so every equivalent spelling reaches one actor ([tenancy](tenancy.md#names-one-namespace-per-tenant)). |
 | Projected message metadata (proposed) | Every field a recovery page reads (full key, `Kind`, `Sender` and the fixed fields) has an admission limit checked at every ingress, giving a per-row maximum `M` = 24 KiB below the page bound `B` = 4 MiB ([observability](observability.md#resolving-a-park-a-bounded-drain)). The kernel's limit is the tighter one where a provider declares its own. Unmeasured until K4. |
 
 Child addresses are bounded issuer identities containing destination partition, issuer partition, fenced epoch
@@ -115,7 +120,8 @@ The embedded MongoDB documents in the inventory are the composite `_id` keys.
 | Instance identity | `Id` / `_id` is a string; `Partition` / `partition` is an integer routing key. `Model` and `Definition` identify the execution model and its definition. |
 | Checkpoint | `State` is opaque model JSON; `StateVersion` is its integer version. `Revision` is a 64-bit optimistic concurrency value. |
 | Instance lifecycle | `Status` and `History` are stored enum values; `Suspended` is Boolean. `Parent` and `Fault` are nullable strings. |
-| Work in flight | `Jobs` is a nullable serialized list of job keys; opaque keys can use the framework codec. `Children` is a nullable JSON array of child instance IDs. `CustomHandles` is the nullable serialized registry of composed recallable handles; it can retain handles after remote consumption. Job arguments and durable job tickets live in `Messages`, not in a separate jobs table. |
+| Work in flight | `Jobs` is a nullable serialized list of job keys; opaque keys can use the framework codec. `Children` is a nullable JSON array of child instance IDs. `CustomHandles` is the nullable serialized registry of composed recallable handles; it can retain handles after remote consumption. Job arguments and durable job tickets live in `Messages`, not in a separate jobs table. Proposed for release 1 (fourth review R4-M3): the model also keeps each job's immutable `JobSpec` in its own `State`, so a recover's restart writes the ticket from the spec and never reads the old ticket ([observability](observability.md#recover)). |
+| Subscription keep flag (proposed) | `Subscriptions.Keep` (Boolean) records that a wait asked for kept events, so a recover's catch-up can page an instance's kept-event waits after its Open by reference (fourth review R4-M2, [observability](observability.md#recover)). |
 | Message envelope | `Target`, `Kind` and optional `Sender` are strings. `Payload` is an optional opaque string, commonly serialized JSON. `Start` is an optional serialized `StartSpec`, including model, definition, input and execution options. |
 | Message scheduling | `Seq`, `Due`, `Seen`, `Trial` and non-null `KeepUntil` are 64-bit numbers; `Attempts` is an integer and `Done` is Boolean. Stored `Due=0` means immediately due. |
 | Reply address | `ReplyTo` is a nullable string carrying node, absolute deadline, request ID and an optional early-output flag. It is not a durable response receipt. |
