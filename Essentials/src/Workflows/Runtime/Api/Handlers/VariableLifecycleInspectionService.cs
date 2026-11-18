@@ -481,8 +481,15 @@ internal sealed class VariableLifecycleInspectionService(
     {
         if (envelope is null)
             return new VariableValueStateView(ValueStates.Omitted, null, null, true);
+        // A withheld value (a secret reference, an encrypted value) is never shown or released, whoever asks.
+        if (envelope.Presence == ValuePresence.Withheld)
+            return new VariableValueStateView(ValueStates.Redacted, null, null, true);
         if (InlineValue(envelope) is null)
-            return new VariableValueStateView(ValueStates.Omitted, null, null, true);
+        {
+            // Kept outside the record (a stored reference): captured, but this read cannot release it.
+            var stored = envelope.Presence == ValuePresence.Present && envelope.ExternalReference is not null;
+            return new VariableValueStateView(stored ? (canInspectSensitive ? ValueStates.Captured : ValueStates.Redacted) : ValueStates.Omitted, null, null, true);
+        }
         if (!canInspectSensitive)
             return new VariableValueStateView(ValueStates.Redacted, null, null, true);
         return new VariableValueStateView(ValueStates.Captured, null, PayloadRef(entry, which), true);

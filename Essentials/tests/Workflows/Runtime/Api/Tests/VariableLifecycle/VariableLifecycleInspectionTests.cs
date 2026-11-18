@@ -216,6 +216,19 @@ public sealed class VariableLifecycleInspectionTests
     }
 
     [Fact]
+    public void An_automatic_retry_is_ordered_after_what_its_first_attempt_was_ordered_after()
+    {
+        var model = Build(
+            Row("seq", "node-seq", stamps: [Scheduled(1)], status: ActivityExecutionStatus.Running),
+            Row("a", "node-a", parent: "seq", stamps: [Scheduled(2), Completed(3)], writes: [Write("a", "node-a", 3, 0, 1)]),
+            Row("b1", "node-b", parent: "seq", causedBy: ["a"], stamps: [Scheduled(4), Faulted(5)], status: ActivityExecutionStatus.Faulted),
+            Row("b2", "node-b", parent: "seq", attempt: new ActivityExecutionAttemptLineage(2, "b1", "b1"), stamps: [Scheduled(6), Completed(7)],
+                writes: [Write("b2", "node-b", 7, 1, 2)]));
+
+        Assert.Null(Entry(model, "b2").Overwrote);
+    }
+
+    [Fact]
     public void Re_execution_after_ModifyVariable_is_ordered_after_the_alteration()
     {
         var alteration = Write("alteration:job-1", null!, 4, 1, 2, source: VariableWriteSource.Alteration, frameRevision: 2);

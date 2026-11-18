@@ -220,9 +220,14 @@ internal sealed class VariableLifecycleInspection
             pending.Push((scheduler, bound));
         foreach (var cause in row.Provenance.CausedBy ?? [])
             pending.Push((cause, bound));
-        // An operator's retry continues the faulted row it replaced.
+        // A retry continues the attempt it repeats: an operator's (row metadata), an automatic one (provenance
+        // metadata), and any attempt lineage.
         if (row.Metadata.TryGetValue(RuntimeMetadataKeys.RetryOfActivityExecutionId, out var retried) && !string.IsNullOrWhiteSpace(retried))
             pending.Push((retried, bound));
+        if (row.Provenance.Metadata.TryGetValue(RuntimeMetadataKeys.RetrySourceActivityExecutionId, out var source) && !string.IsNullOrWhiteSpace(source))
+            pending.Push((source, bound));
+        if ((row.Attempt ?? row.Provenance.Attempt)?.PreviousAttemptActivityExecutionId is { Length: > 0 } previous)
+            pending.Push((previous, bound));
     }
 
     private static bool IsAlterationScheduled(ActivityExecutionState row) =>
