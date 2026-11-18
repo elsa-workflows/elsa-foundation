@@ -18,7 +18,9 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
 /// Spec 1230 US5: the Essentials built-ins the assessment marks publish in the background; the ones it does not mark are
-/// refused naming their first failing criterion, or the missing declaration when only C7/C8 stand in the way.
+/// refused naming their first failing criterion that publication checks, or the missing declaration when they fail none
+/// (PublishEvent's C6 is checked only after a run, RunJavaScript's variable access is not visible to the C9 check, the
+/// Q8 cases, C7/C8).
 /// The eight Microsoft 365 and Slack connector activities that qualify by reading stay unmarked until their background
 /// runs pass (#4737).
 /// </summary>

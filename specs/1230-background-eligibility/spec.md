@@ -158,7 +158,9 @@ records, for every built-in activity, whether it qualifies and why not.
 **Why this priority**: No shipped activity an author can place is marked today (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so background execution is unusable without custom code.
 
 **Independent Test**: Each marked activity publishes and runs in the background end-to-end; each assessed but
-unmarked activity is refused naming its first failing criterion (or, for C7/C8, is simply not marked).
+unmarked activity is refused: naming its first failing criterion that publication checks (C1–C5, C9, C10), or the missing
+declaration when it fails none of those (`PublishEvent`'s C6 is checked only after a run, `RunJavaScript`'s variable
+access is not visible to the C9 check, the Q8 cases, C7/C8; acceptance scenario 2).
 
 **Acceptance Scenarios**:
 
@@ -336,4 +338,6 @@ without a secret reference (C10) is refused at admission with an incident (Q5). 
 template node with an `Any` or `System.Object` result (C3), for example, is refused where it was copied through before. No shipped activity was marked
 before (apart from the internal `AgentModelTurn`, which only the agent template places and which meets every criterion), so only custom activities are affected. Five built-ins are now `[BackgroundExecutionSafe]`: `Break`, `Fault`, `WriteLine`, `WriteLines` and `BpmnDecision`. The
 Microsoft 365 and Slack activities that qualify stay unmarked until their background runs pass (#4737). `RunJavaScript` is not marked: scripts read and write variables by
-name, and a background worker has no access to variables (C9).
+name, and a background worker has no access to variables (C9). Admission now checks the activity's CLR type, so a
+coordinator host needs the activity types of the background nodes it runs, as a worker does; a missing type is refused
+as `VF-BG-001 (C1)`. A worker without the type still faults with `BG-ACT-002`.

@@ -320,6 +320,21 @@ public sealed class BackgroundActivityWorkerTests
     }
 
     [Fact]
+    public async Task Reports_a_missing_activity_type_as_a_deployment_gap_before_eligibility()
+    {
+        // A worker host without the pinned activity's module faults with BG-ACT-002, not as an eligibility violation.
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        await using var harness = await Harness.CreateAsync<int>(probe, "1", registerActivityType: false);
+
+        await harness.RunAsync();
+
+        var result = harness.Store.Item!.Result!;
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, result.Kind);
+        Assert.Equal("BG-ACT-002: The pinned background activity type is unavailable.", result.Fault!.Message);
+        Assert.Equal(0, probe.Executions);
+    }
+
+    [Fact]
     public async Task Refuses_a_pinned_node_with_an_untyped_Any_result_naming_C3()
     {
         // Spec 1230 FR-004: an executable pinned before run time checked C3 is refused on the worker.
@@ -474,7 +489,8 @@ public sealed class BackgroundActivityWorkerTests
             IWorkflowExecutableReader? executableReaderOverride = null,
             Func<BackgroundActivityWorkRequest, BackgroundActivityWorkRequest>? configureRequest = null,
             Func<ActivityResultContract, ActivityResultContract>? configureResult = null,
-            Action<IServiceCollection>? configureServices = null)
+            Action<IServiceCollection>? configureServices = null,
+            bool registerActivityType = true)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
@@ -505,7 +521,8 @@ public sealed class BackgroundActivityWorkerTests
             var provider = services.BuildServiceProvider();
 
             var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
-            types.RegisterType(activityType, activityAlias);
+            if (registerActivityType)
+                types.RegisterType(activityType, activityAlias);
             types.RegisterType(resultType, resultAlias);
             var serializer = provider.GetRequiredService<IPayloadSerializer>();
             var descriptorPayload = serializer.SerializeToElement(new ClrActivityDescriptor(activityAlias));

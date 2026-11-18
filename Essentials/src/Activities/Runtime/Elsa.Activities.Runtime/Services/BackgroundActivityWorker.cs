@@ -145,17 +145,18 @@ public sealed class BackgroundActivityWorker(
 
             SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(request.CoordinatorWorkItem, request.Executable, executable.Identity);
             var node = SchedulerWorkHandlerHelpers.ResolveExecutableNode(request.CoordinatorWorkItem, executable, request.ExecutableNodeId, "BackgroundActivity");
-            BackgroundActivityEligibility.EnsureEligible(node, services.GetRequiredService<IWellKnownTypeRegistry>());
-            if (node.ActivityContract!.SchemaFingerprint != request.ContractFingerprint ||
+            // A worker without the pinned activity type is a deployment gap (BG-ACT-002), reported before eligibility.
+            var types = services.GetRequiredService<IWellKnownTypeRegistry>();
+            if (!types.TryGetTypeOrDefault(node.ActivityContract!.Activation.Capability, out var pinnedActivityType) ||
+                !typeof(IActivity).IsAssignableFrom(pinnedActivityType))
+                throw new InvalidOperationException("BG-ACT-002: The pinned background activity type is unavailable.");
+            BackgroundActivityEligibility.EnsureEligible(node, types);
+            if (node.ActivityContract.SchemaFingerprint != request.ContractFingerprint ||
                 request.InputSnapshot.ContractFingerprint != request.ContractFingerprint ||
                 request.InputSnapshot.InvocationId != request.InvocationId)
                 throw new InvalidOperationException("BG-ACT-002: Background input, invocation or activity contract pin does not match.");
             var codec = services.GetRequiredService<BackgroundActivityCompletionCodec>();
             codec.ResolveResultType(node.ActivityContract);
-            var types = services.GetRequiredService<IWellKnownTypeRegistry>();
-            if (!types.TryGetTypeOrDefault(node.ActivityContract.Activation.Capability, out var pinnedActivityType) ||
-                !typeof(IActivity).IsAssignableFrom(pinnedActivityType))
-                throw new InvalidOperationException("BG-ACT-002: The pinned background activity type is unavailable.");
             if (node.ActivityContract.DescriptorKind == typeof(ClrActivityDescriptor).FullName)
             {
                 var descriptor = services.GetRequiredService<IPayloadSerializer>()
