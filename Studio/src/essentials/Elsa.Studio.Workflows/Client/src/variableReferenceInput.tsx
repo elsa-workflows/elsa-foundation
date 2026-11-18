@@ -5,8 +5,8 @@ import { makeVariableReference, readVariableReference } from "./scopedVariables"
 import { optionKey, selectedOptionKey, VariableTargetSelect } from "./variableTargetPicker";
 import { indexVariableDeclarations, variableOptionKey } from "./variableReferenceContribution";
 import { readArgumentType } from "./workflowProperties";
-import { formatArgumentType, isArgumentTypeCompatible, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
-import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
+import { formatArgumentType, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
+import type { ActivityNode, ArgumentType, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
  * Variable-reference inputs (spec 1231 FR-022, FR-036): an activity input of CLR type `VariableReference<T>` or
@@ -64,10 +64,27 @@ function readStoredVariableName(activity: ActivityNode, input: StudioActivityInp
   return null;
 }
 
+const openTypeAliases = new Set([
+  "elsa.any", "object", "system.object", "jsonnode", "system.text.json.nodes.jsonnode", "jsonelement", "system.text.json.jsonelement"
+]);
+
 /**
- * The visible variables a reference input can be bound to: those whose declared type fits the input's value type, by the
- * same rule as the Variable editor (`isArgumentTypeCompatible`). A variable whose declaration is not known here is kept,
- * since its type cannot be judged.
+ * Whether a variable of `variableType` fits a reference input of value type `inputTypeName`: the rule publish applies
+ * (StepVariableWriteValidation.TypeFits). An Any, Object or JSON type on either side takes any value; otherwise the alias
+ * and the collection kind must be the same.
+ */
+export function referenceTypeFits(variableType: ArgumentType, inputTypeName: string, inputCollectionKind?: string | null): boolean {
+  const variableAlias = variableType.alias.trim().toLowerCase();
+  const inputAlias = inputTypeName.trim().toLowerCase();
+  if (openTypeAliases.has(variableAlias) || openTypeAliases.has(inputAlias)) return true;
+  const variableKind = (variableType.collectionKind || "Single").toLowerCase();
+  const inputKind = (inputCollectionKind || "Single").toLowerCase();
+  return variableAlias === inputAlias && variableKind === inputKind;
+}
+
+/**
+ * The visible variables a reference input can be bound to: those whose declared type fits the input's value type
+ * (`referenceTypeFits`). A variable whose declaration is not known here is kept, since its type cannot be judged.
  */
 export function compatibleVariables(
   visibleVariables: VisibleVariableView[],
@@ -78,7 +95,7 @@ export function compatibleVariables(
   const declarations = indexVariableDeclarations(workflowState);
   return visibleVariables.filter(variable => {
     const declaration = declarations.get(variableOptionKey(variable.referenceKey, variable.scopeId));
-    return !declaration || isArgumentTypeCompatible(readArgumentType(declaration), input.typeName, input.collectionKind);
+    return !declaration || referenceTypeFits(readArgumentType(declaration), input.typeName, input.collectionKind);
   });
 }
 
@@ -163,6 +180,9 @@ export function VariableReferenceInputRow({
           ariaDescribedBy={describedBy}
           visibleVariables={offered}
           unlistedLabel={unlistedLabel}
+          emptyLabel={authoring.visibleVariables.length > 0 && offered.length === 0
+            ? `No visible variable fits ${formatTypeName(input.typeName)}. Declare one of that type.`
+            : undefined}
           status={authoring.status}
           retry={authoring.retry}
           disabled={readOnly || input.isReadOnly === true}

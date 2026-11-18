@@ -25,7 +25,8 @@ export function VariableTargetSelect({
   onSelect,
   workflowScopeOnly = false,
   disabled = false,
-  unlistedLabel
+  unlistedLabel,
+  emptyLabel
 }: {
   ariaLabelledBy?: string;
   ariaLabel?: string;
@@ -40,6 +41,8 @@ export function VariableTargetSelect({
   disabled?: boolean;
   // The text of a selection that is not among the options; defaults to its key, "not visible from this scope".
   unlistedLabel?: string;
+  // The note when no option is offered; defaults to "no variables are visible here".
+  emptyLabel?: string;
 }) {
   const options = workflowScopeOnly ? visibleVariables.filter(variable => variable.isWorkflowScope) : visibleVariables;
   const optionsUnavailable = status !== "ready";
@@ -75,7 +78,7 @@ export function VariableTargetSelect({
       ) : status === "unavailable" ? (
         <p className="wf-variable-picker-note">Variable scope information is unavailable. The current target is preserved.</p>
       ) : options.length === 0 ? (
-        <p className="wf-variable-picker-note">No variables are visible here. Declare one on the workflow or a container scope.</p>
+        <p className="wf-variable-picker-note">{emptyLabel ?? "No variables are visible here. Declare one on the workflow or a container scope."}</p>
       ) : null}
     </div>
   );

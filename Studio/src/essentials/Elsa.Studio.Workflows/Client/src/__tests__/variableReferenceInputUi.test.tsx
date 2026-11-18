@@ -9,7 +9,8 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { toActivityDescriptor } from "../workflow-editor/useWorkflowEditorData";
-import type { ActivityCatalogItem, ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ArgumentType, VisibleVariableView, WorkflowDefinitionState } from "../workflowTypes";
+import { referenceTypeFits } from "../variableReferenceInput";
 
 // Spec 1231 FR-036: variable-reference inputs bind a declared variable in scope; the panel shows the node's
 // may-write set and the marker for an activity that may write any visible variable.
@@ -214,6 +215,42 @@ describe("variable-reference inputs", () => {
       .map(option => option.value)
       .filter(value => value !== "");
     expect(offered).toEqual(["workflow::counter-key"]);
+  });
+
+  it("judges type fit as publish does: open types fit anything, collection kinds must match", () => {
+    const type = (alias: string, collectionKind = "Single") => ({ alias, collectionKind } as ArgumentType);
+    expect(referenceTypeFits(type("Elsa.Any"), "String")).toBe(true);
+    expect(referenceTypeFits(type("Object"), "Int32")).toBe(true);
+    expect(referenceTypeFits(type("JsonElement"), "Int32")).toBe(true);
+    expect(referenceTypeFits(type("Int32"), "Elsa.Any")).toBe(true);
+    expect(referenceTypeFits(type("Int32"), "Int32")).toBe(true);
+    expect(referenceTypeFits(type("Int32", "List"), "Int32", "Array")).toBe(false);
+    expect(referenceTypeFits(type("Int32", "Array"), "Int32", "Array")).toBe(true);
+    expect(referenceTypeFits(type("String"), "Int32")).toBe(false);
+  });
+
+  it("offers an Any variable to a typed input and says so when no visible variable fits", () => {
+    const declare = (referenceKey: string, name: string, alias: string) =>
+      ({ referenceKey, name, type: { alias, collectionKind: "Single" as const }, storageDriverType: null, default: null });
+    const withAny = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        workflowState: { variables: [declare("bag-key", "Bag", "Elsa.Any")], rootActivity: node() },
+        variables: [{ referenceKey: "bag-key", name: "Bag", scopeId: "workflow", isWorkflowScope: true }]
+      }
+    );
+    expect([...withAny.querySelectorAll<HTMLOptionElement>(".wf-variable-picker select option")].map(option => option.value))
+      .toContain("workflow::bag-key");
+
+    const none = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        workflowState: { variables: [declare("label-key", "Label", "String")], rootActivity: node() },
+        variables: [{ referenceKey: "label-key", name: "Label", scopeId: "workflow", isWorkflowScope: true }]
+      }
+    );
+    expect(none.querySelector(".wf-variable-picker .wf-variable-picker-note")?.textContent)
+      .toBe("No visible variable fits Int32. Declare one of that type.");
   });
 
   it("names a bound variable whose type no longer fits, instead of calling it out of scope", () => {
