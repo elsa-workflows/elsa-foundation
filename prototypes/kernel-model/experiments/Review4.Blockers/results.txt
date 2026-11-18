@@ -1,0 +1,905 @@
+Review4.Blockers results
+commit 4653c73838c120b5d2b6c8475008cc5494f18da2 (tree b9ea197d972229ea3d3b75435426facc59514df6, prototype tree 0f2fa82d604bc5d8dc8451f08169d74db256ac7b), based on origin/main 4b129bcb2b144b7c5db271b1578cd16a2e4d1e89
+dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
+
+commands, from prototypes/kernel-model, after removing experiments/Review4.Blockers/bin and obj:
+  experiments/Review4.Blockers/run.sh, which runs:
+    dotnet restore experiments/Review4.Blockers --locked-mode          -> exit 0
+    dotnet build experiments/Review4.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
+    each case and rule set, then --all                                 -> exit codes below
+  dotnet experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll --all  -> exit 0, output below
+
+run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
+  exit 1 (fr1-base, reviewed)
+  exit 0 (fr1-base, repaired)
+  exit 1 (fr1-base, negative)
+  exit 1 (fr1-takeover-before-complete, reviewed)
+  exit 0 (fr1-takeover-before-complete, repaired)
+  exit 1 (fr1-takeover-before-complete, negative)
+  exit 1 (fr1-takeover-after-complete, reviewed)
+  exit 0 (fr1-takeover-after-complete, repaired)
+  exit 1 (fr1-takeover-after-complete, negative)
+  exit 0 (fr1-held, reviewed)
+  exit 0 (fr1-held, repaired)
+  exit 0 (fr1-held, negative)
+  exit 1 (fr1-held, held-blocks)
+  exit 1 (rt1-a, reviewed)
+  exit 0 (rt1-a, repaired)
+  exit 1 (rt1-a, negative)
+  exit 0 (rt1-b, reviewed)
+  exit 0 (rt1-b, repaired)
+  exit 0 (rt1-b, negative)
+  exit 0 (rt1-nonparent, reviewed)
+  exit 0 (rt1-nonparent, repaired)
+  exit 0 (rt1-nonparent, negative)
+  exit 1 (rt1-nonparent, cascade-any)
+  exit 0 (rt1-successor, reviewed)
+  exit 0 (rt1-successor, repaired)
+  exit 0 (rt1-successor, negative)
+  exit 1 (rt1-successor-gap, reviewed)
+  exit 1 (rt1-successor-gap, repaired)
+  exit 1 (rt1-successor-gap, negative)
+  matrix exit 0
+
+--all output:
+
+== FR-1/base | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/base rules=reviewed: FAIL
+
+== FR-1/base | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver R (order: [R, A])
+  model turn R (native.timer): c:f2:F
+  deliver A (order: [A])
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/base rules=repaired: PASS
+
+== FR-1/base | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/base rules=negative: FAIL
+
+== FR-1/takeover-before-complete | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/takeover-before-complete rules=reviewed: FAIL
+
+== FR-1/takeover-before-complete | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  deliver R (order: [R, A])
+  model turn R (native.timer): c:f2:F
+  deliver A (order: [A])
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/takeover-before-complete rules=repaired: PASS
+
+== FR-1/takeover-before-complete | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  takeover after R was marked seen, before any model turn received it: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 2 = epoch 2): Complete clears the resolution
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/takeover-before-complete rules=negative: FAIL
+
+== FR-1/takeover-after-complete | rules=reviewed ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/takeover-after-complete rules=reviewed: FAIL
+
+== FR-1/takeover-after-complete | rules=repaired ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver R (order: [R, A])
+  model turn R (native.timer): c:f2:F
+  deliver A (order: [A])
+  model turn A (native.cancel): end Cancelled; recalled [T2]
+  model inputs: [R, A]
+  rows: R consumed by a model turn; T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    PASS F completions (records c:f2:F): 1 (expected 1)
+    PASS actual model transitions after Complete: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/takeover-after-complete rules=repaired: PASS
+
+== FR-1/takeover-after-complete | rules=negative ==
+invariant: the final released cohort reaches the model before a later-delivered arrival that ends it (F completes once)
+  model turn start (start): sent [R, T2]
+  start: real Native turn armed F (f2) with timer R = c9_0/subject_1#2.0000 due 1050 and F2 (f3) with timer T2 due 1100
+  park: R(seq 1100, native.timer, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R] with ReleasedBy (1,1); cursor -> R; gate row R; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, R]; R(seq 1100, native.timer, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, R])
+  C: no kept row past the cursor and gate row R taken up (seen 1 = epoch 1): Complete clears the resolution
+  takeover after Complete committed, before R reached a model turn: new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  deliver A (order: [A, R])
+  model turn A (native.cancel): end Cancelled; recalled [R, T2]
+  model inputs: [A]
+  rows: R recalled by A's turn (never reached the model); T2 recalled by A's turn (never reached the model); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1
+  assertions:
+    FAIL F completions (records c:f2:F): 0 (expected 1)
+    FAIL actual model transitions after Complete: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS F2 completions: 0 (expected 0)
+    PASS instance ended: Cancelled (expected Cancelled)
+    FAIL R's fate: recalled by A's turn (never reached the model) (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/takeover-after-complete rules=negative: FAIL
+
+== FR-1/held | rules=reviewed ==
+invariant: a row the model holds never blocks delivery; the held cohort row still receives the input it waits for
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; S = composite signal to H at seq 1100
+  park: S(seq 1100, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, S])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, S])
+  model turn A (native.resume): c:f2:go
+  deliver S (order: [S])
+  model turn S (native.composite-signal): c:f1:H; end Finished
+  model inputs: [A, S]
+  rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  S held by the model when A was delivered: no
+  assertions:
+    PASS A reached a model turn: True (expected True)
+    PASS H accepted the held signal (HeldGate.Accepts): 1 (expected 1)
+    PASS instance ended: Finished (expected Finished)
+    PASS S's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/held rules=reviewed: PASS
+
+== FR-1/held | rules=repaired ==
+invariant: a row the model holds never blocks delivery; the held cohort row still receives the input it waits for
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; S = composite signal to H at seq 1100
+  park: S(seq 1100, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, S])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver S (order: [S, A])
+  model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
+  deliver A (order: [A])
+  model turn A+S (native.resume): c:f2:go; signal-deferred:signal-1:f1; held [S]; sent [K2001]
+  deliver K2001 (order: [K2001])
+  model turn S+K2001 (native.continue): c:f1:H; end Finished
+  model inputs: [S, A, K2001]
+  rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); K2001 consumed by a model turn
+  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  S held by the model when A was delivered: yes
+  assertions:
+    PASS A reached a model turn: True (expected True)
+    PASS the schedule exercised a held cohort row (S held when A was due): True (expected True)
+    PASS H accepted the held signal (HeldGate.Accepts): 1 (expected 1)
+    PASS instance ended: Finished (expected Finished)
+    PASS S's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x4
+RESULT FR-1/held rules=repaired: PASS
+
+== FR-1/held | rules=negative ==
+invariant: a row the model holds never blocks delivery; the held cohort row still receives the input it waits for
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; S = composite signal to H at seq 1100
+  park: S(seq 1100, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, S])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, S])
+  model turn A (native.resume): c:f2:go
+  deliver S (order: [S])
+  model turn S (native.composite-signal): c:f1:H; end Finished
+  model inputs: [A, S]
+  rows: S consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Finished, resolution cleared, ResolutionGeneration 1
+  S held by the model when A was delivered: no
+  assertions:
+    PASS A reached a model turn: True (expected True)
+    PASS H accepted the held signal (HeldGate.Accepts): 1 (expected 1)
+    PASS instance ended: Finished (expected Finished)
+    PASS S's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-1/held rules=negative: PASS
+
+== FR-1/held | rules=held-blocks ==
+invariant: a row the model holds never blocks delivery; the held cohort row still receives the input it waits for
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; S = composite signal to H at seq 1100
+  park: S(seq 1100, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.resume, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [S] with ReleasedBy (1,1); cursor -> S; gate row S; sends C = kernel.drain seq 950
+  poll at epoch 1: [C, S]; S(seq 1100, native.composite-signal, released (1,1), seen 1, done False, kept -)
+  deliver C (order: [C, S])
+  C: no kept row past the cursor and gate row S taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver S (order: [S, A])
+  model turn S (native.composite-signal): signal-deferred:signal-1:f1; held [S]
+  model inputs: [S]
+  rows: S released; C0 consumed (drain turn); A pending; C consumed (drain turn)
+  instance: status Running, resolution cleared, ResolutionGeneration 1
+  S held by the model when A was delivered: A never delivered
+  assertions:
+    FAIL A reached a model turn: False (expected True)
+    PASS the schedule exercised a held cohort row (S held when A was due): True (expected True)
+    FAIL H accepted the held signal (HeldGate.Accepts): 0 (expected 1)
+    FAIL instance ended: Running (expected Finished)
+    FAIL S's fate: released (expected consumed by a model turn)
+    FAIL undone rows remaining: 2 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held rules=held-blocks: FAIL
+
+== RT-1/a | rules=reviewed ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A exists and its delete drain is open; delivery delayed past A's Complete
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation none
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: none
+  refusals: c3_0/p_1#5.0000: RetiredCreation; c3_1/a_1#7.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    FAIL G: Running (expected Cancelled)
+    FAIL G2: Running (expected Cancelled)
+    FAIL J cancelled: False (expected True)
+    FAIL live tree rows still listing children or jobs: 1 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal at the marker (CreationProtocol.TargetError): c3_0/p_1#5.0000: RetiredCreation (expected c3_0/p_1#5.0000: RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.TargetError x3, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/a rules=reviewed: FAIL
+
+== RT-1/a | rules=repaired ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A exists and its delete drain is open; delivery delayed past A's Complete
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+    the refusing commit at the marker sends terminate to [2/g/1 as c3_1/a_1#8.0000], cancels [c3_1/a_1!1_j]
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  deliver c3_1/a_1#8.0000 (terminate from 1/a) to 2/g: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [3/g2/1 as c3_2/g_1#4.0000], cancels []
+  deliver c3_2/g_1#4.0000 (terminate from 2/g) to 3/g2: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  deliver c3_2/g_1#4.end (child-finished) to 1/a: refused, RetiredCreation
+  deliver c4_3/g2_1#3.end (child-finished) to 2/g: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Cancelled, creation 1, revision 4, parent 1/a/1, children null, jobs null]; G2 [Cancelled, creation 1, revision 3, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs []
+  refusals: c3_0/p_1#5.0000: RetiredCreation; c3_1/a_1#7.end: UnknownChildCreation; c3_2/g_1#4.end: RetiredCreation; c4_3/g2_1#3.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    PASS G: Cancelled (expected Cancelled)
+    PASS G2: Cancelled (expected Cancelled)
+    PASS J cancelled: True (expected True)
+    PASS live tree rows still listing children or jobs: 0 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal at the marker (CreationProtocol.TargetError): c3_0/p_1#5.0000: RetiredCreation (expected c3_0/p_1#5.0000: RetiredCreation)
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x3
+RESULT RT-1/a rules=repaired: PASS
+
+== RT-1/a | rules=negative ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A exists and its delete drain is open; delivery delayed past A's Complete
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs [j]
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+    the refusing commit at the marker sends terminate to [], cancels [c3_1/a_1!1_j]
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs []
+  refusals: c3_0/p_1#5.0000: RetiredCreation; c3_1/a_1#7.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    FAIL G: Running (expected Cancelled)
+    FAIL G2: Running (expected Cancelled)
+    PASS J cancelled: True (expected True)
+    FAIL live tree rows still listing children or jobs: 1 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal at the marker (CreationProtocol.TargetError): c3_0/p_1#5.0000: RetiredCreation (expected c3_0/p_1#5.0000: RetiredCreation)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Origin x2, CreationProtocol.Retire x1, CreationProtocol.TargetError x3, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x1
+RESULT RT-1/a rules=negative: FAIL
+
+== RT-1/b | rules=reviewed ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T delivered before A's Complete, while the delete drain is open
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, resolution open (with cascade)
+    the refusing commit sends terminate to [2/g/1 as c3_1/a_1#8.0000], cancels [c3_1/a_1!1_j]
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#8.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 9, parent null, children null, jobs null]; obligation none
+  deliver c3_1/a_1#8.0000 (terminate from 1/a) to 2/g: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [3/g2/1 as c3_2/g_1#4.0000], cancels []
+  deliver c3_1/a_1#8.end (child-finished) to 0/p: refused, UnknownChildCreation
+  deliver c3_2/g_1#4.0000 (terminate from 2/g) to 3/g2: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  deliver c3_2/g_1#4.end (child-finished) to 1/a: refused, RetiredCreation
+  deliver c4_3/g2_1#3.end (child-finished) to 2/g: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Cancelled, creation 1, revision 4, parent 1/a/1, children null, jobs null]; G2 [Cancelled, creation 1, revision 3, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: none
+  refusals: c3_0/p_1#5.0000: resolution open (with cascade); c3_1/a_1#8.end: UnknownChildCreation; c3_2/g_1#4.end: RetiredCreation; c4_3/g2_1#3.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    PASS G: Cancelled (expected Cancelled)
+    PASS G2: Cancelled (expected Cancelled)
+    PASS J cancelled: True (expected True)
+    PASS live tree rows still listing children or jobs: 0 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal during the open drain: c3_0/p_1#5.0000: resolution open (with cascade) (expected c3_0/p_1#5.0000: resolution open (with cascade))
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x4, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x3
+RESULT RT-1/b rules=reviewed: PASS
+
+== RT-1/b | rules=repaired ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T delivered before A's Complete, while the delete drain is open
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, resolution open (with cascade)
+    the refusing commit sends terminate to [2/g/1 as c3_1/a_1#8.0000], cancels [c3_1/a_1!1_j]
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#8.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 9, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs []
+  deliver c3_1/a_1#8.0000 (terminate from 1/a) to 2/g: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [3/g2/1 as c3_2/g_1#4.0000], cancels []
+  deliver c3_1/a_1#8.end (child-finished) to 0/p: refused, UnknownChildCreation
+  deliver c3_2/g_1#4.0000 (terminate from 2/g) to 3/g2: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  deliver c3_2/g_1#4.end (child-finished) to 1/a: refused, RetiredCreation
+  deliver c4_3/g2_1#3.end (child-finished) to 2/g: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Cancelled, creation 1, revision 4, parent 1/a/1, children null, jobs null]; G2 [Cancelled, creation 1, revision 3, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs []
+  refusals: c3_0/p_1#5.0000: resolution open (with cascade); c3_1/a_1#8.end: UnknownChildCreation; c3_2/g_1#4.end: RetiredCreation; c4_3/g2_1#3.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    PASS G: Cancelled (expected Cancelled)
+    PASS G2: Cancelled (expected Cancelled)
+    PASS J cancelled: True (expected True)
+    PASS live tree rows still listing children or jobs: 0 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal during the open drain: c3_0/p_1#5.0000: resolution open (with cascade) (expected c3_0/p_1#5.0000: resolution open (with cascade))
+  real prototype calls: ChildRegistry.Read x7, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x3
+RESULT RT-1/b rules=repaired: PASS
+
+== RT-1/b | rules=negative ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T delivered before A's Complete, while the delete drain is open
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, resolution open (with cascade)
+    the refusing commit sends terminate to [2/g/1 as c3_1/a_1#8.0000], cancels [c3_1/a_1!1_j]
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#8.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 9, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs []
+  deliver c3_1/a_1#8.0000 (terminate from 1/a) to 2/g: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [3/g2/1 as c3_2/g_1#4.0000], cancels []
+  deliver c3_1/a_1#8.end (child-finished) to 0/p: refused, UnknownChildCreation
+  deliver c3_2/g_1#4.0000 (terminate from 2/g) to 3/g2: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  deliver c3_2/g_1#4.end (child-finished) to 1/a: refused, RetiredCreation
+  deliver c4_3/g2_1#3.end (child-finished) to 2/g: refused, UnknownChildCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 9, parent null, children null, jobs null]; G [Cancelled, creation 1, revision 4, parent 1/a/1, children null, jobs null]; G2 [Cancelled, creation 1, revision 3, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs []
+  refusals: c3_0/p_1#5.0000: resolution open (with cascade); c3_1/a_1#8.end: UnknownChildCreation; c3_2/g_1#4.end: RetiredCreation; c4_3/g2_1#3.end: UnknownChildCreation
+  assertions:
+    PASS P: Cancelled (expected Cancelled)
+    PASS G: Cancelled (expected Cancelled)
+    PASS G2: Cancelled (expected Cancelled)
+    PASS J cancelled: True (expected True)
+    PASS live tree rows still listing children or jobs: 0 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+    PASS T's refusal during the open drain: c3_0/p_1#5.0000: resolution open (with cascade) (expected c3_0/p_1#5.0000: resolution open (with cascade))
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x3, CreationProtocol.Origin x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x7, DurableKeyJson.ReadKeys x5, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x3
+RESULT RT-1/b rules=negative: PASS
+
+== RT-1/nonparent | rules=reviewed ==
+invariant: a terminate without authority over the retired creation is refused with no cascade; the obligation stays for the parent
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation none
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  X (not A's parent) sends terminate c3_4/x_1#5.0000 to A's creation 1
+  deliver c3_4/x_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: none
+  refusals: c3_4/x_1#5.0000: RetiredCreation
+  assertions:
+    PASS obligation after the non-parent's terminate: none (expected none)
+    PASS cascades from the marker: 0 (expected 0)
+    PASS G: Running (expected Running)
+    PASS G2: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x1, ChildRegistry.Write x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/nonparent rules=reviewed: PASS
+
+== RT-1/nonparent | rules=repaired ==
+invariant: a terminate without authority over the retired creation is refused with no cascade; the obligation stays for the parent
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  X (not A's parent) sends terminate c3_4/x_1#5.0000 to A's creation 1
+  deliver c3_4/x_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+    c3_4/x_1#5.0000: sender 4/x/1 is not the recorded parent 0/p/1: plain refusal, no cascade
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [2/g/1], jobs [j]
+  refusals: c3_4/x_1#5.0000: RetiredCreation
+  assertions:
+    PASS obligation after the non-parent's terminate: parent 0/p/1, children [2/g/1], jobs [j] (expected parent 0/p/1, children [2/g/1], jobs [j])
+    PASS cascades from the marker: 0 (expected 0)
+    PASS G: Running (expected Running)
+    PASS G2: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x2, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/nonparent rules=repaired: PASS
+
+== RT-1/nonparent | rules=negative ==
+invariant: a terminate without authority over the retired creation is refused with no cascade; the obligation stays for the parent
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs [j]
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  X (not A's parent) sends terminate c3_4/x_1#5.0000 to A's creation 1
+  deliver c3_4/x_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+    c3_4/x_1#5.0000: sender 4/x/1 is not the recorded parent 0/p/1: plain refusal, no cascade
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs [j]
+  refusals: c3_4/x_1#5.0000: RetiredCreation
+  assertions:
+    PASS obligation after the non-parent's terminate: parent 0/p/1, children [], jobs [j] (expected parent 0/p/1, children [], jobs [j])
+    PASS cascades from the marker: 0 (expected 0)
+    PASS G: Running (expected Running)
+    PASS G2: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x1, ChildRegistry.Write x4, CreationProtocol.Retire x1, CreationProtocol.TargetError x2, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/nonparent rules=negative: PASS
+
+== RT-1/nonparent | rules=cascade-any ==
+invariant: a terminate without authority over the retired creation is refused with no cascade; the obligation stays for the parent
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  X (not A's parent) sends terminate c3_4/x_1#5.0000 to A's creation 1
+  deliver c3_4/x_1#5.0000 (kernel.terminate) to 1/a: refused, RetiredCreation
+    the refusing commit at the marker sends terminate to [2/g/1 as c3_1/a_1#8.0000], cancels [c3_1/a_1!1_j]
+  deliver c3_1/a_1#8.0000 (terminate from 1/a) to 2/g: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [3/g2/1 as c3_2/g_1#4.0000], cancels []
+  deliver c3_2/g_1#4.0000 (terminate from 2/g) to 3/g2: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  deliver c3_2/g_1#4.end (child-finished) to 1/a: refused, RetiredCreation
+  deliver c4_3/g2_1#3.end (child-finished) to 2/g: refused, UnknownChildCreation
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [retired marker, creation 1, revision 8, parent null, children null, jobs null]; G [Cancelled, creation 1, revision 4, parent 1/a/1, children null, jobs null]; G2 [Cancelled, creation 1, revision 3, parent 2/g/1, children null, jobs null]
+  jobs: live [], cancelled [c3_1/a_1!1_j]
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs []
+  refusals: c3_4/x_1#5.0000: RetiredCreation; c3_2/g_1#4.end: RetiredCreation; c4_3/g2_1#3.end: UnknownChildCreation
+  assertions:
+    FAIL obligation after the non-parent's terminate: parent 0/p/1, children [], jobs [] (expected parent 0/p/1, children [2/g/1], jobs [j])
+    FAIL cascades from the marker: 1 (expected 0)
+    FAIL G: Cancelled (expected Running)
+    FAIL G2: Cancelled (expected Running)
+    FAIL J live: False (expected True)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x5, ChildRegistry.Write x4, CreationProtocol.Origin x3, CreationProtocol.Retire x1, CreationProtocol.TargetError x6, DurableKeyJson.ReadKeys x3, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x4, WorkflowInstance.Finished x3
+RESULT RT-1/nonparent rules=cascade-any: FAIL
+
+== RT-1/successor | rules=reviewed ==
+invariant: a terminate of a successor creation never reaches the old creation's obligation
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation none
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): none
+  deliver op-a2 (terminate from operator) to 1/a: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [Cancelled, creation 2, revision 10, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: none
+  refusals: none
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS obligation of creation 1 after the successor's terminate: none (expected none)
+    PASS terminates sent to G: 0 (expected 0)
+    PASS successor: Cancelled (expected Cancelled)
+    PASS G: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS cascades from the marker: 0 (expected 0)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x4, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x2, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor rules=reviewed: PASS
+
+== RT-1/successor | rules=repaired ==
+invariant: a terminate of a successor creation never reaches the old creation's obligation
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): parent 0/p/1, children [2/g/1], jobs [j]
+  deliver op-a2 (terminate from operator) to 1/a: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [Cancelled, creation 2, revision 10, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [2/g/1], jobs [j]
+  refusals: none
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS obligation of creation 1 after the successor's terminate: parent 0/p/1, children [2/g/1], jobs [j] (expected parent 0/p/1, children [2/g/1], jobs [j])
+    PASS terminates sent to G: 0 (expected 0)
+    PASS successor: Cancelled (expected Cancelled)
+    PASS G: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS cascades from the marker: 0 (expected 0)
+  real prototype calls: ChildRegistry.Read x3, ChildRegistry.Write x4, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x2, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor rules=repaired: PASS
+
+== RT-1/successor | rules=negative ==
+invariant: a terminate of a successor creation never reaches the old creation's obligation
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs [j]
+  deliver c3_1/a_1#7.end (ChildFinished 1/a Faulted) to 0/p: registry entry closed, handed to its model (not modelled)
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): parent 0/p/1, children [], jobs [j]
+  deliver op-a2 (terminate from operator) to 1/a: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [], cancels []
+  end: P [Running, creation 1, revision 5, parent null/0, children null, jobs null]; A [Cancelled, creation 2, revision 10, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs [j]
+  refusals: none
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS obligation of creation 1 after the successor's terminate: parent 0/p/1, children [], jobs [j] (expected parent 0/p/1, children [], jobs [j])
+    PASS terminates sent to G: 0 (expected 0)
+    PASS successor: Cancelled (expected Cancelled)
+    PASS G: Running (expected Running)
+    PASS J live: True (expected True)
+    PASS cascades from the marker: 0 (expected 0)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x4, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x2, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor rules=negative: PASS
+
+== RT-1/successor-gap | rules=reviewed ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A's creation 1 exists; delivery delayed past A's Complete and the successor's creation
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation none
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): none
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, WrongCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [Running, creation 2, revision 9, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: none
+  refusals: c3_1/a_1#7.end: UnknownChildCreation; c3_0/p_1#5.0000: WrongCreation
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS P: Cancelled (expected Cancelled)
+    FAIL G: Running (expected Cancelled)
+    FAIL G2: Running (expected Cancelled)
+    FAIL J cancelled: False (expected True)
+    FAIL live tree rows still listing children or jobs: 1 (expected 0)
+    PASS obligations outstanding on the marker: 0 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x3, DurableKeyJson.ReadKeys x1, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor-gap rules=reviewed: FAIL
+
+== RT-1/successor-gap | rules=repaired ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A's creation 1 exists; delivery delayed past A's Complete and the successor's creation
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): parent 0/p/1, children [2/g/1], jobs [j]
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, WrongCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [Running, creation 2, revision 9, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [2/g/1], jobs [j]
+  refusals: c3_1/a_1#7.end: UnknownChildCreation; c3_0/p_1#5.0000: WrongCreation
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS P: Cancelled (expected Cancelled)
+    FAIL G: Running (expected Cancelled)
+    FAIL G2: Running (expected Cancelled)
+    FAIL J cancelled: False (expected True)
+    FAIL live tree rows still listing children or jobs: 1 (expected 0)
+    FAIL obligations outstanding on the marker: 2 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x3, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x3, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor-gap rules=repaired: FAIL
+
+== RT-1/successor-gap | rules=negative ==
+invariant: invariant 17: after P's tree terminate no instance of P's tree runs, none still lists children or jobs, J is cancelled, and P hears exactly one notice from A
+  setup: P [Running, creation 1, revision 4, parent null/0, children [{"Id":"1/a","Creation":1}], jobs null]; A [Faulted, creation 1, revision 7, parent 0/p/1, children [{"Id":"2/g","Creation":1}], jobs ["j"]]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]; job J = ticket c3_1/a_1!1_j live
+  A: unprotected parked-delete drain open, 3 kept rows; Park left G, G2 and J alone
+  deliver op-p (terminate from operator) to 0/p: accepted; built terminate, Running -> Cancelled
+      its commit sends terminate to [1/a/1 as c3_0/p_1#5.0000], cancels []
+  T = c3_0/p_1#5.0000 (Sender 0/p/1, TargetCreation 1, issued)
+  T committed while A's creation 1 exists; delivery delayed past A's Complete and the successor's creation
+  A page: clears 3 kept rows (delete clears, restores none); cursor passes the last kept row
+  A Complete: notice c3_1/a_1#7.end (ChildFinished Faulted) to P; retirement marker [retired marker, creation 1, revision 8, parent null, children null, jobs null]; obligation parent 0/p/1, children [], jobs [j]
+  deliver c3_1/a_1#7.end (child-finished) to 0/p: refused, UnknownChildCreation
+  successor: A's id now holds creation 2 [Running, creation 2, revision 9, parent null/0, children null, jobs null]; the creation-1 obligation stays keyed by (1/a, 1): parent 0/p/1, children [], jobs [j]
+  deliver c3_0/p_1#5.0000 (kernel.terminate) to 1/a: refused, WrongCreation
+  end: P [Cancelled, creation 1, revision 5, parent null/0, children null, jobs null]; A [Running, creation 2, revision 9, parent null/0, children null, jobs null]; G [Running, creation 1, revision 3, parent 1/a/1, children [{"Id":"3/g2","Creation":1}], jobs null]; G2 [Running, creation 1, revision 2, parent 2/g/1, children null, jobs null]
+  jobs: live [c3_1/a_1!1_j], cancelled []
+  obligation on the creation-1 marker: parent 0/p/1, children [], jobs [j]
+  refusals: c3_1/a_1#7.end: UnknownChildCreation; c3_0/p_1#5.0000: WrongCreation
+  assertions:
+    PASS CreationProtocol.StartError for creation 2 over the marker: accepted (expected accepted)
+    PASS P: Cancelled (expected Cancelled)
+    FAIL G: Running (expected Cancelled)
+    FAIL G2: Running (expected Cancelled)
+    FAIL J cancelled: False (expected True)
+    FAIL live tree rows still listing children or jobs: 1 (expected 0)
+    FAIL obligations outstanding on the marker: 1 (expected 0)
+    PASS notices P received from A: 1 (expected 1)
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x3, CreationProtocol.Fingerprint x1, CreationProtocol.Origin x1, CreationProtocol.Retire x1, CreationProtocol.StartError x1, CreationProtocol.TargetError x3, DurableKeyJson.ReadKeys x2, DurableKeyJson.WriteKeys x1, InboxKey.Ticket x3, WorkflowInstance.Finished x1
+RESULT RT-1/successor-gap rules=negative: FAIL
+
+== summary ==
+fr1-base                           reviewed     actual FAIL  expected FAIL         as expected
+fr1-base                           repaired     actual PASS  expected PASS         as expected
+fr1-base                           negative     actual FAIL  expected FAIL         as expected
+fr1-takeover-before-complete       reviewed     actual FAIL  expected FAIL         as expected
+fr1-takeover-before-complete       repaired     actual PASS  expected PASS         as expected
+fr1-takeover-before-complete       negative     actual FAIL  expected FAIL         as expected
+fr1-takeover-after-complete        reviewed     actual FAIL  expected FAIL         as expected
+fr1-takeover-after-complete        repaired     actual PASS  expected PASS         as expected
+fr1-takeover-after-complete        negative     actual FAIL  expected FAIL         as expected
+fr1-held                           reviewed     actual PASS  expected PASS         as expected
+fr1-held                           repaired     actual PASS  expected PASS         as expected
+fr1-held                           negative     actual PASS  expected PASS         as expected
+fr1-held                           held-blocks  actual FAIL  expected FAIL         as expected
+rt1-a                              reviewed     actual FAIL  expected FAIL         as expected
+rt1-a                              repaired     actual PASS  expected PASS         as expected
+rt1-a                              negative     actual FAIL  expected FAIL         as expected
+rt1-b                              reviewed     actual PASS  expected PASS         as expected
+rt1-b                              repaired     actual PASS  expected PASS         as expected
+rt1-b                              negative     actual PASS  expected PASS         as expected
+rt1-nonparent                      reviewed     actual PASS  expected PASS         as expected
+rt1-nonparent                      repaired     actual PASS  expected PASS         as expected
+rt1-nonparent                      negative     actual PASS  expected PASS         as expected
+rt1-nonparent                      cascade-any  actual FAIL  expected FAIL         as expected
+rt1-successor                      reviewed     actual PASS  expected PASS         as expected
+rt1-successor                      repaired     actual PASS  expected PASS         as expected
+rt1-successor                      negative     actual PASS  expected PASS         as expected
+rt1-successor-gap                  reviewed     actual FAIL  expected FAIL (OPEN)  as expected
+rt1-successor-gap                  repaired     actual FAIL  expected FAIL (OPEN)  as expected
+rt1-successor-gap                  negative     actual FAIL  expected FAIL (OPEN)  as expected
+29/29 runs as expected
