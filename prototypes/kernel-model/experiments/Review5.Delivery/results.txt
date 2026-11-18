@@ -1,5 +1,5 @@
 Review5.Delivery results
-commit d5b42e6d6bfd1199f57562419f33fb16e3bbc87f (tree 94945f7c283513ad912a8fb5a5aa19daad989e4a, prototype tree 2a7665b1e54c6a3b2d9f822452ee24c970ef8209)
+commit 02097998db9562e44a6c7d4c533a5f57e859edc1 (tree ae14f12a92925d1b589df1e9c12389b0b5fe2acf, prototype tree ef30c8da1e24fd239db25876555dac6c9fb5fa38)
 branch base (merge-base with origin/main) 0a1bb5e0ce76f878b629a4598ae3da676bb74e77
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review5.Deliv
     dotnet build experiments/Review5.Delivery -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review5.Delivery/bin/Release/net10.0/Kernel.Review5.Delivery.dll --all, twice
-    -> exit 0 and 0, identical output (SHA-256 eab5d48ddf7120b5187cdfecc39dde02f47c652261089f3546648992475c7057), below
+    -> exit 0 and 0, identical output (SHA-256 7246ee04ceaf0a36f7b24c46d9d1d4ebdd151f0579ba361db0232c27168be125), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule):
   exit 1 (ev1-a, reviewed)
@@ -386,16 +386,17 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
     sweep at 101: the real SweepAsync
   sweep at 101: E1 (KeepUntil 100) is deleted; H = none
   the database clock steps back to 98
-    match step at 98: 0 deliveries added, then the ticket consumed
+    match step at 98: 1 deliveries added, then the ticket consumed
   E2 is published at 98 with KeepUntil 99, before the wait registers; it is live
     meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-2"], next ticket sent (P0 99)
     meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
   keeping wait registered at 99: the catch-up delivers ["payload-2"]
   assertions:
     FAIL deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 1 (expected 0)
+    PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
     FAIL the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): False (expected True)
-  real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x1
+  real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x8, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=reviewed: FAIL
 
 == EV-1/b-stepback | rules=repaired ==
@@ -404,15 +405,16 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
     sweep at 101: 1 event(s) and 0 done row(s) deleted; H 100
   sweep at 101: E1 (KeepUntil 100) is deleted; H = 100
   the database clock steps back to 98
-    match step at 98: one commit consumes the ticket and inserts 0 deliveries
+    match step at 98: one commit consumes the ticket and inserts 1 deliveries
   E2 is published at 98 with KeepUntil 99, before the wait registers; it is live
     meet step at 99: KeepUntil >= P0 101 -> page []
   keeping wait registered at 99, P0 = 101: the catch-up delivers []
   assertions:
     PASS deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 0 (expected 0)
+    PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
     PASS the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): True (expected True)
-  real prototype calls: CreationProtocol.Origin x3, InMemoryStore.CommitAsync x6, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.CommitAsync x7, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=repaired: PASS
 
 == EV-1/b-stepback | rules=no-horizon ==
@@ -421,16 +423,17 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
     sweep at 101: 1 event(s) and 0 done row(s) deleted; H 100
   sweep at 101: E1 (KeepUntil 100) is deleted; H = 100
   the database clock steps back to 98
-    match step at 98: one commit consumes the ticket and inserts 0 deliveries
+    match step at 98: one commit consumes the ticket and inserts 1 deliveries
   E2 is published at 98 with KeepUntil 99, before the wait registers; it is live
     meet step at 99: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
     meet step at 99: KeepUntil >= P0 99 -> page []
   keeping wait registered at 99, P0 = 99: the catch-up delivers ["payload-2"]
   assertions:
     FAIL deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 1 (expected 0)
+    PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
     FAIL the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): False (expected True)
-  real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
+  real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=no-horizon: FAIL
 
 == EV-1/b-suspended | rules=reviewed ==
@@ -1848,13 +1851,13 @@ RESULT FR-2/r4b1-held rules=seen-gate-no-precedence: FAIL
 
 == JR-1/crash-after | rules=reviewed ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
   crash takeover after the parked consumption kept the result (the reviewed design's first durable result): another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -1862,19 +1865,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after rules=reviewed: FAIL
 
 == JR-1/crash-after | rules=reviewed-kind ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
-  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6#g1 now holds kind job-finished and the result payload under the ticket's key
   crash takeover after the parked consumption kept the result (the reviewed design's first durable result): another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (job-finished): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -1882,20 +1885,20 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after rules=reviewed-kind: FAIL
 
 == JR-1/crash-after | rules=repaired ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
   crash takeover after the conversion commit, before the parked instance consumed the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it))
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (kernel-issued result row (the ticket's scope) of generation g1, the registry's g1 (the built DiscardedAt alone refuses it))
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
-  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  recover: the page restores c9_0/subject_1!2_w6#g1/result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1/result and gives it to the model (kernel-issued result row (the ticket's scope) of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
   assertions:
     PASS model results (c completed by a result turn): 1 (expected 1)
@@ -1908,12 +1911,12 @@ RESULT JR-1/crash-after rules=repaired: PASS
 
 == JR-1/crash-after | rules=negative ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1.result (scope 0, ordinary)
   crash takeover after the conversion commit, before the parked instance consumed the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the parked instance's owner refuses c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; it is consumed with no turn and not kept
+  the parked instance's owner refuses c9_0/subject_1!2_w6#g1.result: the real DiscardedAt classifies it as a supplied completion; it is consumed with no turn and not kept
   recover: S runs again (revision 3)
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
@@ -1927,13 +1930,13 @@ RESULT JR-1/crash-after rules=negative: FAIL
 
 == JR-1/crash-after-keep | rules=reviewed ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -1941,19 +1944,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after-keep rules=reviewed: FAIL
 
 == JR-1/crash-after-keep | rules=reviewed-kind ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
-  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6#g1 now holds kind job-finished and the result payload under the ticket's key
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (job-finished): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -1961,20 +1964,20 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after-keep rules=reviewed-kind: FAIL
 
 == JR-1/crash-after-keep | rules=repaired ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
-  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  recover: the page restores c9_0/subject_1!2_w6#g1/result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1/result and gives it to the model (kernel-issued result row (the ticket's scope) of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
   assertions:
     PASS model results (c completed by a result turn): 1 (expected 1)
@@ -1982,20 +1985,20 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     PASS S finished: Finished (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
 RESULT JR-1/crash-after-keep rules=repaired: PASS
 
 == JR-1/crash-after-keep | rules=negative ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
-  the parked instance consumes c9_0/subject_1!2_w6.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1.result (scope 0, ordinary)
+  the parked instance consumes c9_0/subject_1!2_w6#g1.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6.result (job-finished)
-  the owner polls c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  recover: the page restores c9_0/subject_1!2_w6#g1.result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2003,20 +2006,20 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after-keep rules=negative: FAIL
 
 == JR-1/obsolete | rules=reviewed ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
-  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6/result, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): the registry no longer holds w6
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6/result (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2024,21 +2027,21 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/obsolete rules=reviewed: FAIL
 
 == JR-1/obsolete | rules=reviewed-kind ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
-  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6/result, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
-  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6#g1 now holds kind job-finished and the result payload under the ticket's key
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): the registry no longer holds w6
-  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6/result (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (job-finished): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2046,22 +2049,22 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/obsolete rules=reviewed-kind: FAIL
 
 == JR-1/obsolete | rules=repaired ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
-  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6/result, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): generation g0 is not the registry's g1
-  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
-  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  recover: the page clears c9_0/subject_1!2_w6/result (job-finished): generation g0 is not the registry's g1
+  recover: the page restores c9_0/subject_1!2_w6#g1/result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1/result and gives it to the model (kernel-issued result row (the ticket's scope) of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
   assertions:
     PASS model results (c completed by a result turn): 1 (expected 1)
@@ -2069,22 +2072,22 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     PASS S finished: Finished (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
 RESULT JR-1/obsolete rules=repaired: PASS
 
 == JR-1/obsolete | rules=negative ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
-  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6/result, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
-  the parked instance consumes c9_0/subject_1!2_w6.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1.result (scope 0, ordinary)
+  the parked instance consumes c9_0/subject_1!2_w6#g1.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): generation g0 is not the registry's g1
-  recover: the page restores c9_0/subject_1!2_w6.result (job-finished)
-  the owner polls c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  recover: the page clears c9_0/subject_1!2_w6/result (job-finished): generation g0 is not the registry's g1
+  recover: the page restores c9_0/subject_1!2_w6#g1.result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2092,23 +2095,23 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/obsolete rules=negative: FAIL
 
 == JR-1/obsolete | rules=generation-blind ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
-  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6/result, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6!result!g0 (job-finished)
-  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
-  the owner polls c9_0/subject_1!2_w6!result!g0 and gives it to the model (reserved-scope result of generation g0, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with stale; S Finished
-  the owner polls c9_0/subject_1!2_w6!result!g1: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  recover: the page restores c9_0/subject_1!2_w6/result (job-finished)
+  recover: the page restores c9_0/subject_1!2_w6#g1/result (job-finished)
+  the owner polls c9_0/subject_1!2_w6/result and gives it to the model (kernel-issued result row (the ticket's scope) of generation g0, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with stale; S Finished
+  the owner polls c9_0/subject_1!2_w6#g1/result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
   physical invocations 1 (allowed 1); model results [stale]; S Finished
   assertions:
     PASS model results (c completed by a result turn): 1 (expected 1)
@@ -2121,13 +2124,13 @@ RESULT JR-1/obsolete rules=generation-blind: FAIL
 
 == JR-1/result-parked-consume | rules=reviewed ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the reviewed rule drops w6 from the registry
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the reviewed rule drops w6 from the registry
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6!result!g1 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1/result (job-finished): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2135,20 +2138,20 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/result-parked-consume rules=reviewed: FAIL
 
 == JR-1/result-parked-consume | rules=repaired ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
   the repaired rule keeps w6 in the registry: the consumed row is the current generation's result
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
-  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (this owner's in-memory completion (CompletedJob)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  recover: the page restores c9_0/subject_1!2_w6#g1/result (job-finished)
+  the owner polls c9_0/subject_1!2_w6#g1/result and gives it to the model (this owner's in-memory completion (CompletedJob)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
   assertions:
     PASS model results (c completed by a result turn): 1 (expected 1)
@@ -2156,18 +2159,18 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     PASS S finished: Finished (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
 RESULT JR-1/result-parked-consume rules=repaired: PASS
 
 == JR-1/result-parked-consume | rules=negative ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
-  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the reviewed rule drops w6 from the registry
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6#g1 (counted) and inserts result row c9_0/subject_1!2_w6#g1/result (scope 15, the ticket's own)
+  the parked instance consumes c9_0/subject_1!2_w6#g1/result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the reviewed rule drops w6 from the registry
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6!result!g1 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1/result (job-finished): the registry no longer holds w6
   physical invocations 1 (allowed 1); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2175,19 +2178,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/result-parked-consume rules=negative: FAIL
 
 == JR-1/crash-before | rules=reviewed ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
-  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  the new owner polls ticket c9_0/subject_1!2_w6#g1: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 2); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2195,19 +2198,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-before rules=reviewed: FAIL
 
 == JR-1/crash-before | rules=reviewed-kind ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
-  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  the new owner polls ticket c9_0/subject_1!2_w6#g1: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 2); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2215,21 +2218,21 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-before rules=reviewed-kind: FAIL
 
 == JR-1/crash-before | rules=repaired ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
+  the new owner polls ticket c9_0/subject_1!2_w6#g1: S is Faulted, so the built StartJob does not enter it
   the repaired rule keeps w6 in the registry: the consumed ticket is undone and of the current generation
-  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket)
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (kernel.job) as late input: kept Arrived (a ticket)
   recover: S runs again (revision 3)
-  recover: the Open restarts w6 from its JobSpec under g2 (c9_0/subject_1!2_w6@g2); the old ticket c9_0/subject_1!2_w6 is cleared, never restored
-  the owner polls c9_0/subject_1!2_w6@g2 (kernel.job): a ticket, which the built Hold and StartJob enter again
+  recover: the Open restarts w6 from its JobSpec under g2 (c9_0/subject_1!2_w6#g2); the old ticket c9_0/subject_1!2_w6#g1 is cleared, never restored
+  the owner polls c9_0/subject_1!2_w6#g2 (kernel.job): a ticket, which the built Hold and StartJob enter again
   J's body ran (physical invocation 2): alpha|c9_0/subject_1/c/-/0
   the completion reaches the running instance's next turn, as built: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 2 (allowed 2); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
@@ -2240,19 +2243,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS S finished: Finished (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
     PASS the g1 ticket never restored beside its g2 restart: g1 restored False, g2 written True (expected g1 restored False, g2 written True)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x2, NativeModel.TurnAsync x2
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x2, NativeModel.TurnAsync x2
 RESULT JR-1/crash-before rules=repaired: PASS
 
 == JR-1/crash-before | rules=negative ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
-  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
-  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  the new owner polls ticket c9_0/subject_1!2_w6#g1: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
   recover: S runs again (revision 4)
-  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6#g1 (kernel.job): the registry no longer holds w6
   physical invocations 1 (allowed 2); model results []; S Running
   assertions:
     FAIL model results (c completed by a result turn): 0 (expected 1)
@@ -2260,19 +2263,19 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-before rules=negative: FAIL
 
 == JR-1/crash-after | rules=reviewed-keeps-registry ==
 invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
-  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  the parked instance consumes c9_0/subject_1!2_w6#g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
   crash takeover after the parked consumption kept the result (the reviewed design's first durable result): another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
   recover: S runs again (revision 3)
-  recover: the page restores c9_0/subject_1!2_w6 (kernel.job)
-  the owner polls c9_0/subject_1!2_w6 (kernel.job): a ticket, which the built Hold and StartJob enter again
+  recover: the page restores c9_0/subject_1!2_w6#g1 (kernel.job)
+  the owner polls c9_0/subject_1!2_w6#g1 (kernel.job): a ticket, which the built Hold and StartJob enter again
   J's body ran (physical invocation 2): alpha|c9_0/subject_1/c/-/0
   the completion reaches the running instance's next turn, as built: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 2 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
@@ -2282,12 +2285,12 @@ invariant: a job result that completes while its instance is parked reaches the 
     FAIL physical invocations: 2 (at-least-once allowance: 1, no re-run after the result committed)
     PASS S finished: Finished (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x2, NativeModel.TurnAsync x2
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x2, NativeModel.TurnAsync x2
 RESULT JR-1/crash-after rules=reviewed-keeps-registry: FAIL
 
 == JR-1/running | rules=reviewed ==
 invariant: control: a job that completes while its instance runs reaches the model once, as built
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
@@ -2302,7 +2305,7 @@ RESULT JR-1/running rules=reviewed: PASS
 
 == JR-1/running | rules=reviewed-kind ==
 invariant: control: a job that completes while its instance runs reaches the model once, as built
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
@@ -2317,7 +2320,7 @@ RESULT JR-1/running rules=reviewed-kind: PASS
 
 == JR-1/running | rules=repaired ==
 invariant: control: a job that completes while its instance runs reaches the model once, as built
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
@@ -2332,7 +2335,7 @@ RESULT JR-1/running rules=repaired: PASS
 
 == JR-1/running | rules=negative ==
 invariant: control: a job that completes while its instance runs reaches the model once, as built
-  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6#g1 committed with the row; registry w6 -> g1
   J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
   the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
   physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
