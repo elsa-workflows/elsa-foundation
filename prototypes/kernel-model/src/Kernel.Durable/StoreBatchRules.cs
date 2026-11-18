@@ -51,7 +51,7 @@ public static class StoreBatchRules
         if (fences.Count>1 && !ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
     }
 
-    /// <summary>An owned set names each partition once: a set poll or release with a repeated partition is refused.</summary>
+    /// <summary>An owned set names each partition once: a set poll or renew with a repeated partition is refused (a repeated partition in a release is harmless).</summary>
     public static void RequireDistinct(IReadOnlyCollection<PartitionFence> owned)
     {
         if (owned.Select(f=>f.Partition).Distinct().Count()!=owned.Count)
