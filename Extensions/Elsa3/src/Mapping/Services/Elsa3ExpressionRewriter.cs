@@ -340,6 +340,16 @@ public sealed class Elsa3ExpressionRewriter
                 continue;
             }
 
+            // A lowered input or output becomes a bare root; one named `variables` would be the variables root instead.
+            if (memberSegment.Identifier == "variables")
+            {
+                issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"Liquid reads '{root.Identifier}.variables', which in Elsa 4 would be the workflow's variables root, not this value.",
+                    "Rename the input or output in the Elsa 3 workflow before import."));
+                continue;
+            }
+
             if (!TryAddParameter(parameters, memberSegment.Identifier, resolution.Binding!, out var collision))
             {
                 issues.Add(collision!);

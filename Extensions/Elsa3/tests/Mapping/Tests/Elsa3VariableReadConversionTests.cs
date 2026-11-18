@@ -213,6 +213,17 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_liquid_input_named_variables_is_refused()
+    {
+        var definition = ConversionServices.Definition(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("Liquid", "{{ Input.variables }}")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "variables", Type = "String" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    [Fact]
     public async Task A_run_javascript_body_keeps_reading_variables_through_args()
     {
         // FR-026a: the body has no variables root until T047, so its reads stay args.

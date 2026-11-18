@@ -58,7 +58,12 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
         // same surface JavaScript gets. A template that reads no variable gets none.
         var pinnedVariables = request.PinnedVariableValues();
         if (pinnedVariables.Count > 0 || request.VariableReader is not null)
+        {
+            // In Liquid the args parameters are roots too: one named `variables` cannot share the name.
+            if (request.ArgumentValues().ContainsKey("variables"))
+                throw new InvalidOperationException("A Liquid expression that reads workflow variables cannot also declare a parameter named 'variables'.");
             context.SetValue("variables", new LiquidVariablesValue(pinnedVariables, request.VariableReader));
+        }
 
         var rendered = await template.RenderAsync(context);
         request.CancellationToken.ThrowIfCancellationRequested();
