@@ -140,6 +140,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         public long Renewed, SafeUntil;     // per partition: a commit renews only the rows it fences
     }
     private readonly SortedDictionary<int, Held> _held = [];
+    private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
 
     public Worker(string node, int partition, IKernelStore store, IActorType type, WorkerOptions? options = null)
         : this(node, [partition], store, type, options) { }
@@ -472,12 +473,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (_taking) return;
         _taking = true;
+        lock (_turnSync) (_retaking, _retakeStoodDown) = (true, false);
         var (started, taken, now) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue);
         try
         {
             foreach (var fence in held)
                 try
                 {
+                    if (Volatile.Read(ref _retakeStoodDown)) break;
                     if (await _store.RetakeAsync(fence.Partition, Node, fence.Epoch, _options.Lease, cancellationToken) is not { } one) continue;
                     taken.Add(one.For(fence.Partition));
                     now = Math.Min(now, one.Now);
@@ -485,6 +488,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 catch (Exception) { /* not taken, or taken without knowing: dropped, and its host takes it as usual */ }
         }
         finally { _taking = false; }
+        bool stoodDown;
+        lock (_turnSync) (stoodDown, _retaking) = (_retakeStoodDown, false);
+        if (stoodDown)
+        {
+            // A stand-down came while the retake was in flight: install nothing, and give up what it took.
+            try
+            {
+                if (taken.Count == 1) await _store.ReleaseAsync(taken[0].Partition, taken[0].Epoch, cancellationToken);
+                else if (taken.Count > 1) await _store.ReleaseAsync(taken, cancellationToken);
+            }
+            catch (Exception) { /* then the leases run out instead */ }
+            return;
+        }
         if (taken.Count == 0) return;
         Install(new(taken, now), started);
         _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
@@ -512,6 +528,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         IReadOnlyList<PartitionFence> held;     // every change of the set resets, so the generation guards it
         lock (_turnSync)
         {
+            if (_retaking) { _retakeStoodDown = true; return; }     // the retake in flight gives up what it gets
             if (!Owns || _releasing) return;
             generation = _generation;
             held = Fences;
