@@ -151,9 +151,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (turn.Journal is not null && batch.PartitionOf(turn) is var journal && Journal.ContainsKey((journal, ++at[journal])))
                         Diverged($"journal position {at[journal]} of partition {journal} is written already");
                 }
-                // A mark records its message's own partition's epoch, so a mark outside the fenced set would be unbound.
+                // A mark records its message's own partition's epoch, so a mark outside the fenced set would be unbound, and a
+                // delete outside it would be a write no fence covers.
                 if (fences.Count > 1)
-                    foreach (var id in batch.Seen.Concat(batch.Trial))
+                    foreach (var id in batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(t => t.Consumed.Concat(t.Done))))
                         if (Messages.GetValueOrDefault(id) is { } marked && !epochs.ContainsKey(marked.Message.Target.Partition))
                             throw new StoreException(Failure.Definite, $"message {id} is outside the batch's fenced partitions");
                 if (batch.Window is { } window)
@@ -251,6 +252,22 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foreach (var fence in owned)
                 if (Partitions[fence.Partition].Epoch == fence.Epoch) Partitions[fence.Partition].Owner = null;
         return default;
+    }
+
+    /// <summary>The keeping reset's read: one transaction over the set; each row still held at its fence's epoch is renewed and returned.</summary>
+    public ValueTask<OwnedLease> RenewAsync(IReadOnlyCollection<PartitionFence> held, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var (now, kept) = (clock(), new List<PartitionFence>());
+            foreach (var fence in held.OrderBy(f => f.Partition))
+                if (Partitions[fence.Partition] is { Owner: not null } row && row.Epoch == fence.Epoch)
+                {
+                    row.LeaseUntil = now + (long)lease.TotalMilliseconds;
+                    kept.Add(new(fence.Partition, row.Epoch, row.Position));
+                }
+            return new(new OwnedLease(kept, now));
+        }
     }
 
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>

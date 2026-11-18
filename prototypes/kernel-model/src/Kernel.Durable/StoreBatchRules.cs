@@ -47,10 +47,13 @@ public static class StoreBatchRules
         if (fences.Count==1) return;
         if (!ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
         var fenced=fences.Select(f=>f.Partition).ToHashSet();
-        foreach (var turn in batch.Turns)
+        foreach (var turn in batch.Turns.Where(t => !TicketsOnly(t)))
             if (AddressPartition(turn.Instance) is not { } partition || !fenced.Contains(partition))
                 throw new StoreException(Failure.Definite,$"Turn {turn.Instance} is outside the batch's fenced partitions.");
     }
+
+    /// <summary>The owner's turn of no actor that only consumes tickets (meet and publish): the store checks each ticket's partition.</summary>
+    public static bool TicketsOnly(TurnCommit turn) => turn.Instance.Length == 0 && turn.Row is null && !turn.Delete && turn.Journal is null && turn.Sent.Count == 0;
 
     /// <summary>The partition an actor address embeds, or null when it embeds none.</summary>
     public static int? AddressPartition(string id)

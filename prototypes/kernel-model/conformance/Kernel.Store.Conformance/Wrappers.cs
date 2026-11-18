@@ -12,6 +12,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
     private readonly Random _random = new(seed);
     private long _before, _after;
     public bool Calm { get; set; }
@@ -73,6 +74,7 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
     public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 
     public ConcurrentQueue<Landed> Commits { get; } = new();
@@ -85,7 +87,11 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
         try
         {
             var result = await inner.CommitAsync(batch, cancellationToken);
-            if (result.Landed) Commits.Enqueue(new Landed(batch.Partition, batch.Epoch, batch.Position, batch.Positions, string.Join(" ", batch.Turns.Select(s => s.Instance))));
+            // One record per fenced partition, with the positions this batch moved there.
+            if (result.Landed)
+                foreach (var fence in batch.Fenced)
+                    Commits.Enqueue(new Landed(fence.Partition, fence.Epoch, fence.Position, batch.PositionsIn(fence.Partition),
+                        string.Join(" ", batch.Turns.Where(t => batch.PartitionOf(t) == fence.Partition).Select(s => s.Instance))));
             else Interlocked.Increment(ref _refused);
             return result;
         }

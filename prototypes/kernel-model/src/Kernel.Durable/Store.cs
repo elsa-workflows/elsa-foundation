@@ -231,6 +231,24 @@ public interface IKernelStore : IMembership
         foreach (var fence in owned.OrderBy(f => f.Partition)) await ReleaseAsync(fence.Partition, fence.Epoch, cancellationToken);
     }
 
+    /// <summary>
+    /// The read of a keeping reset, after a refused fence (which does not say which row was stale): renew, as a beat
+    /// does, each of these rows that is still held at its fence's epoch, and return those rows with the store's
+    /// position. A row that has moved (another epoch, or released) is left out. The default beats one row at a time.
+    /// </summary>
+    async ValueTask<OwnedLease> RenewAsync(IReadOnlyCollection<PartitionFence> held, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        var (kept, now) = (new List<PartitionFence>(), long.MaxValue);
+        foreach (var fence in held.OrderBy(f => f.Partition))
+        {
+            var beat = await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [], [], []), cancellationToken);
+            if (!beat.Landed) continue;
+            kept.Add(fence);
+            now = Math.Min(now, beat.Now);
+        }
+        return new(kept, kept.Count > 0 ? now : 0);
+    }
+
     /// <summary>One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most <paramref name="limit"/>.</summary>
     async ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {

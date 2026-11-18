@@ -7,6 +7,7 @@ public static class LeaseChecks
     {
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        await WorkerSetChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
         await StarterContextChecks.Run(Check, CaseInsensitive);
@@ -744,6 +745,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
     public bool DelayNext, DelayTake;
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public int PollCalls, LoadCalls, CommitCalls;
