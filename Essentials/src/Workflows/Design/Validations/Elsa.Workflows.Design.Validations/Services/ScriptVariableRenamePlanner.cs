@@ -12,8 +12,10 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// that resolves to the renamed variable is edited in place, keeping the readable name in the source. A reference the
 /// planner cannot safely update is surfaced for manual repair instead of being left or rewritten wrongly: a read whose
 /// language gives no source positions (Liquid), a member read whose new name is not a JavaScript identifier, a computed
-/// read that could reach the variable, and a read of the new name that the rename would capture. It plans for the draft
-/// only; a published version keeps its own pins (FR-025).
+/// read that could reach the variable, a read that a nearer declaration of the new name would retarget, a read of the new
+/// name that the rename would capture, and a read in an input only the node's structure holds (a Switch case condition),
+/// which an edit by input key cannot reach. Every input the node holds is planned, including one its structure consumes.
+/// It plans for the draft only; a published version keeps its own pins (FR-025).
 /// </summary>
 public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resolver, IActivityStructureService structures) : IScriptVariableRenamePlanner
 {
