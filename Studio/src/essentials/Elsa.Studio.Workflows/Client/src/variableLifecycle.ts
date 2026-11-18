@@ -124,7 +124,7 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
     case "captured":
       if (value.evidenceId) return { label: "Captured", detail: "Captured as value evidence of this step.", tone: "neutral" };
       return value.isOperational
-        ? { label: "Kept for recovery", detail: "Kept on the write history; open the run's Variables tab to show it.", tone: "neutral" }
+        ? { label: "Kept for recovery", detail: "Kept on the write history; the run's Variables tab shows it where the host can read it.", tone: "neutral" }
         : { label: "Captured", detail: "Kept on the durable record; Studio cannot show it yet.", tone: "neutral" };
     case "redacted":
       return { label: "Redacted", detail: "Not shown: the value is sensitive or withheld, or you may not view values in this run.", tone: "warning" };

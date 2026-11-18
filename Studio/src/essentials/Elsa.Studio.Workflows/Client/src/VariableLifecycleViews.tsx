@@ -115,11 +115,13 @@ export function VariableWriteHistoryTable({ entries, onShowValue }: {
               {entry.baseVersion == null ? "blind" : `base v${entry.baseVersion}`} · v{entry.currentVersion} → v{entry.newVersion}
               {!entry.isApplied ? <small className="wf-variable-note"> not applied</small> : null}
             </td>
-            <td className="wf-variable-values">
-              <VariableValueStateLabel value={entry.value} label={entry.refusedValue ? "Refused" : "Written"} onShowValue={value => onShowValue?.(entry, value)} />
-              {entry.overwrittenValue
-                ? <VariableValueStateLabel value={entry.overwrittenValue} label="Overwritten" onShowValue={value => onShowValue?.(entry, value)} />
-                : null}
+            <td>
+              <div className="wf-variable-values">
+                <VariableValueStateLabel value={entry.value} label={entry.refusedValue ? "Refused" : "Written"} onShowValue={value => onShowValue?.(entry, value)} />
+                {entry.overwrittenValue
+                  ? <VariableValueStateLabel value={entry.overwrittenValue} label="Overwritten" onShowValue={value => onShowValue?.(entry, value)} />
+                  : null}
+              </div>
             </td>
           </tr>
         ))}

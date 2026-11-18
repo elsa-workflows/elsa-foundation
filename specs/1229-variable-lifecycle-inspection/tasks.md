@@ -99,7 +99,17 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
   need the whole graph), so its cost grows with the instance. Recorded on the PR with the projection fallback (R-2)
   proposed. Instance details read time: one indexed column sum added.
 - [x] T023 Run [quickstart.md](quickstart.md) on the Workbench; access tests for SC-005.
-  Done on the composed host: the UX acceptance journey `variable lifecycle warnings and refusals` (Studio/tests/acceptance/variableLifecycleJourney.ts) seeds real runs on Workbench + Studio with disposable stores. It covers a real lost-update warning and a Fault refusal, the run badge, the write history filtered to lost updates (the concurrent overwrite named), the commit journal, and the comparison refused for different versions. CI runs it on every Studio PR and keeps the screenshots (`tools/ux-acceptance/run.py`, captures listed there). It replaces the manual quickstart steps; SC-005 access is covered by `VariableLifecycleInspectionServiceTests` and `VariableLifecycleEndpointTests`.
+  Done. Quickstart steps on the composed host (UX acceptance journey `variable lifecycle warnings and refusals`,
+  Studio/tests/acceptance/variableLifecycleJourney.ts, run by CI on every Studio PR with retained screenshots; captures
+  listed in `tools/ux-acceptance/run.py`): a real lost-update warning and a Fault refusal on Workbench + Studio with
+  disposable stores (steps 1–2); the run badge and the lost-update count (step 3); the write history filtered to lost
+  updates, naming the concurrent overwrite and the current value (step 4); the commit journal (step 6); the comparison
+  refused for different versions. Covered by tests instead: the `overwrites=true` filter and `concurrentOverwriteTotal`
+  (step 5, `VariableLifecycleInspectionServiceTests.Filters_on_overwrites_return_the_total...`); a comparison of two runs
+  of one version with a divergence (step 7, `...Two_runs_that_committed_in_a_different_order...`); redaction (step 8,
+  `...Without_the_sensitive_value_permission...`); sequential runs, joins and loops with no overwrite (step 9,
+  `InspectionDriveTests`, `LoopSchedulingCauseTests` and `VariableLifecycleInspectionTests`). SC-005 access:
+  `VariableLifecycleInspectionServiceTests`, `VariableLifecycleEndpointTests`.
 - [x] T024 Move the Studio items to Phase 9 (T025–T029); nothing is handed to another repository.
 
 ## Phase 9: Studio presentation (FR-017), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
