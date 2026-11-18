@@ -147,7 +147,7 @@ partition with new owners, and checks that the reloaded checkpoint matches (meas
 **Cancellation.** A cancel or terminate of the root uses the kernel's forced termination: each instance sends a
 terminate to the children it started that have not finished, and the terminate recurses. With credits, only
 outstanding children exist; sub-ranges past the cursor were never started and need nothing. A cancel of a
-100,000-item fan-out therefore sends at most C terminates per live combiner. Each cancelled child still sends its
+100,000-item fan-out therefore sends at most C terminates per live combiner. A child deleted while the terminate was on its way still ends its subtree: its retirement marker keeps its parent, child registry and job keys, and a parent-bound terminate refused there as `RetiredCreation` cascades from the marker (proposed, fourth review R4-B2; [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). Each cancelled child still sends its
 Cancelled notice (built: `Terminate` adds it). Its combiner has already ended: the kernel consumes the notice, through
 the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tracked combiner, without a model turn.
 
@@ -159,7 +159,9 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   refuses only job and event tickets today; the proposed reserved kinds leave `kernel.terminate` open). The send path
   stamps the sender and its creation from the committing actor, so
   a child accepts a terminate whose stamped sender and creation equal its recorded parent's, including when the child
-  is parked ([observability](observability.md#every-park-operation-names-its-park)). Proposed, not built.
+  is parked ([observability](observability.md#every-park-operation-names-its-park)), and a child deleted before the
+  terminate arrived refuses it at its retirement marker and still cascades under the same binding (fourth review R4-B2). Proposed,
+  not built.
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
   faults only when the faults pass a threshold, as Native `Parallel` faults when its threshold can no longer be met
   (built). The root's result carries the count and the sample.
