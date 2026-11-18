@@ -498,11 +498,11 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     at the marker's per-entry sizes, plus every other variable-length field of the row at its encoded size as the
     end path writes it, plus a fixed reserve of 16,384 bytes, must fit the envelope ([data
     lifecycle](data-lifecycle.md#proposed-the-qualified-delete), "The bound, and when it clears"). The variable
-    fields beside `State`, `Jobs` and `Children` are `CustomHandles` and the model entries of `CommitTimes`, each
-    counted once ([storage model](storage-model.md#physical-records), `CommitTimes` under "Optional commit-time
+    fields beside `State`, `Jobs` and `Children` are `CustomHandles`, the model entries of `CommitTimes`, `Model`
+    and `Definition`, each counted once ([storage model](storage-model.md#physical-records), `CommitTimes` under "Optional commit-time
     facts"). The fixed reserve covers only the bounded fields: identity, status, revision, `StateVersion`,
     `Suspended`, `History`, `Parent`, `Fault`, whose bound is checked under the sixth-round C2 condition (K3),
-    `Model` and `Definition` within their name limits, the creation header fields (`Creation`, `ParentCreation`,
+    the creation header fields (`Creation`, `ParentCreation`,
     `StartIntent` with its 67-byte digest, and `PendingStart`), the live row's `Cascade` header and control key,
     and the clock's kernel-written terminal entry. Existing
     prototype behaviour: a detached start leaves its creator handle in `CustomHandles` without a registry entry
@@ -3571,7 +3571,7 @@ evidence and are cited as such. No Worker, provider or simulation implements the
    refused and G's terminate is never stored.
 2. Revised: the envelope check of every commit of a live row counts the projected terminal row: the state plus
    `TerminalGrowth(state)`, the registries at the marker's sizes, every other variable-length field at its encoded
-   size as the end path writes it (`CustomHandles` and the model entries of `CommitTimes`, each once), and a fixed
+   size as the end path writes it (`CustomHandles`, the model entries of `CommitTimes`, `Model` and `Definition`, each once), and a fixed
    reserve of 16,384 bytes that now covers only the bounded fields ("The ending commit always fits" under [Every
    Park operation names its Park](#every-park-operation-names-its-park)).
 3. Replay: the growth turn's projection adds the 27,001-byte handle field to the sixth round's 16,457,728 bytes, so
