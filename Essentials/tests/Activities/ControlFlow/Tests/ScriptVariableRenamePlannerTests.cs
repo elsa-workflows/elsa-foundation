@@ -144,6 +144,18 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_switch_value_no_case_uses_still_follows_the_rename()
+    {
+        // Every case has a condition, so the structure consumes Value without projecting it; the draft still holds it.
+        var plan = await PlanAsync(State(Switch("variables.order.total > 10", value: "variables.order.total")), "order-key", "purchase");
+
+        var edit = Assert.Single(plan.Edits);
+        Assert.Equal("Value", edit.InputKey);
+        Assert.Equal("variables.purchase.total", edit.NewSource);
+        Assert.Equal(ScriptVariableRenameFlagReason.StructureInput, Assert.Single(plan.Flags).Reason);
+    }
+
+    [Fact]
     public async Task A_switch_case_condition_the_rename_would_capture_is_flagged()
     {
         // The condition reads the workflow's purchase; renaming the container's order to purchase would capture it.

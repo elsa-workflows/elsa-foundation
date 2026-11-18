@@ -51,18 +51,19 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
         {
             var scopes = visibility.GetVisibleScopes(node.NodeId);
             var scriptInput = scriptInputKeyOf is null ? null : await scriptInputKeyOf(node, cancellationToken);
-            // A structure input is read like any other input. One the node holds under its own key (a Switch's Value) is
-            // edited in place like any input; one that lives only in the node's structure (a Switch case condition)
-            // cannot be reached by an edit by input key, so a read it makes of the renamed variable is flagged instead.
+            // Every input the node holds is planned and edited in place, including one its structure consumes (a Switch's
+            // Value, even while no case uses it: the draft keeps it, so a stale read would stay behind). An input that
+            // lives only in the node's structure (a Switch case condition) cannot be reached by an edit by input key, so a
+            // read it makes of the renamed variable is flagged instead.
             var structureInputs = structures.ProjectInputs(node);
             var candidates = node.Inputs
-                .Where(input => !structureInputs.ConsumedInputKeys.Contains(input.ReferenceKey, StringComparer.Ordinal))
                 .Select(input => (Input: input, Editable: true, ScriptInput: scriptInput))
                 .Concat(structureInputs.Inputs
-                    .Where(owned => owned.State is not null)
+                    .Where(owned => owned.State is not null &&
+                                    !node.Inputs.Any(input => StringComparer.Ordinal.Equals(input.ReferenceKey, owned.ReferenceKey)))
                     .Select(owned => (
                         Input: owned.State! with { ReferenceKey = owned.ReferenceKey },
-                        Editable: node.Inputs.Any(input => StringComparer.Ordinal.Equals(input.ReferenceKey, owned.ReferenceKey)),
+                        Editable: false,
                         ScriptInput: (string?)null)));
 
             foreach (var (input, editable, inputScriptKey) in candidates)
