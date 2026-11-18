@@ -321,13 +321,13 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     (`WorkflowInstance.cs` 161–166, `CreationProtocol.Retire` at `Creation.cs` 119–120), and the worker refuses every
     later delivery to the marker as `RetiredCreation` before the actor type sees it (`Worker.cs` 1050–1055,
     `Creation.cs` 105). So the marker keeps the row's recorded `Parent` and `ParentCreation` and, as they were at
-    retirement, its children (each `InstanceRef` with its creation) and its job tickets at their current
-    `JobGeneration`, in the layer-2-neutral list the actor type hands the creation protocol when it retires the row.
+    retirement, its children (each `InstanceRef` with its creation) and its jobs (each job key with its current
+    `JobGeneration`), in the layer-2-neutral list the actor type hands the creation protocol when it retires the row.
     A parent-bound terminate that reaches the marker (issued origin, `TargetCreation` equal to the marker's creation,
     `Sender` and `SenderCreation` equal to the recorded `Parent` and `ParentCreation`) is still refused with
     `RetiredCreation`, and in the same commit the worker's refusal path composes the cascade from that list: a
-    terminate from the marker to every listed child and a cancel of every listed current-generation ticket, clearing
-    the list. Any other terminate gets the plain refusal, with
+    terminate from the marker to every listed child and a cancel of each listed job's current-generation ticket,
+    whose key it derives from the marker's id and creation, clearing the list. Any other terminate gets the plain refusal, with
     no cascade, and the marker sends the parent nothing in either case. The marker's shape, its bound and when the
     obligation clears are on the data lifecycle page ([the qualified
     delete](data-lifecycle.md#proposed-the-qualified-delete)).
@@ -557,7 +557,9 @@ Park decision.
     never offers a job, meet or publish ticket to the model (`Worker.cs` 830), so such a row has nothing to deliver
     and stays not `Done` for the job's whole runtime. The job's result arrives as a new, untagged row. So a terminate
     reaching the instance cancels the job as built (`WorkflowInstance.cs` 198), and a suspend applies, whatever the
-    job is doing (fourth review R4-B1, case E-11).
+    job is doing (fourth review R4-B1, case E-11). The exclusion covers the ticket kinds only, rows the owner runs as
+    work. A job result is input to the model: a kept `Arrived` job result, and any result a restore delivers without
+    running the job again, stays an ordinary cohort row, with its precedence and its place in the mark's read.
   - **The order.** A cohort row keeps delivery precedence over every non-control row of the instance, during the drain
     and after Complete, until it is consumed; consuming a row clears its precedence. While the recover drain is open,
     the owner offers control kinds first, then cohort rows in tuple order, and withholds every other row. After
