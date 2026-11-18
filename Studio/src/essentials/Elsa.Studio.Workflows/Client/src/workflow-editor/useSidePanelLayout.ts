@@ -21,6 +21,8 @@ import { clamp, readStoredBoolean, readStoredMaximizedSide, readStoredNumber, wr
 const sidePanelResizeHandleWidth = 10;
 const workflowCanvasMinimumWidth = 360;
 const compactCanvasMinimumWidth = 260;
+/** The widest measured workbench that is laid out for a phone. */
+export const phoneWorkbenchMaximumWidth = 600;
 
 export interface SidePanelLayoutStorageKeys {
   paletteWidth: string;
@@ -94,7 +96,7 @@ export function resolveAdaptiveSidePanelLayout({
   const wantsInspector = !inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
   const canFitBothPanels = !palettePresent || !measured || initialPanelSpace >= minPaletteWidth + minInspectorWidth;
   const autoCollapsePalette = measured && wantsPalette && wantsInspector && !canFitBothPanels;
-  const phoneLayout = measured && containerWidth <= 600 && !effectiveMaximizedSidePanel
+  const phoneLayout = measured && containerWidth <= phoneWorkbenchMaximumWidth && !effectiveMaximizedSidePanel
     && (autoCollapsePalette || (!palettePresent && wantsInspector && !paletteCollapsed));
   const forcePaletteOpen = autoCollapsePalette && responsiveExpandedSide === "palette";
   const effectivePaletteCollapsed = !wantsPalette || (autoCollapsePalette && !forcePaletteOpen);
@@ -150,6 +152,32 @@ export function resolveAdaptiveSidePanelLayout({
     inspectorCollapsed: effectiveInspectorCollapsed,
     autoCollapsePalette,
     phoneLayout
+  };
+}
+
+export interface PhonePanelPresentation {
+  /** The workbench is phone-width: panels dock beside the canvas rather than float over it. */
+  phoneWidth: boolean;
+  /**
+   * The open inspector takes the whole workbench as a sheet and the canvas is hidden until the
+   * user goes back to it. Side by side, both would be left too narrow to read or select (#4695).
+   */
+  inspectorSheet: boolean;
+}
+
+export function resolvePhonePanelPresentation({
+  containerWidth,
+  inspectorExpanded,
+  maximizedSidePanel
+}: {
+  containerWidth: number;
+  inspectorExpanded: boolean;
+  maximizedSidePanel: WorkflowSidePanel | null;
+}): PhonePanelPresentation {
+  const phoneWidth = Number.isFinite(containerWidth) && containerWidth > 0 && containerWidth <= phoneWorkbenchMaximumWidth;
+  return {
+    phoneWidth,
+    inspectorSheet: phoneWidth && inspectorExpanded && !maximizedSidePanel
   };
 }
 
@@ -249,7 +277,7 @@ export function useSidePanelLayout(
       const width = Number.isFinite(measuredWidth) ? Math.round(measuredWidth) : 0;
       if (width === lastMeasuredWidth.current) return;
       lastMeasuredWidth.current = width;
-      if (width > 0 && width <= 600) {
+      if (width > 0 && width <= phoneWorkbenchMaximumWidth) {
         // Keep an actively edited tool mounted when resizing into phone layout.
         const focused = document.activeElement;
         if (focused && !containerElement.classList.contains("inspector-collapsed") && containerElement.querySelector(".wf-inspector")?.contains(focused)) setResponsiveExpandedSide("inspector");
@@ -323,7 +351,7 @@ export function useSidePanelLayout(
         : adaptiveLayout.inspectorCollapsed;
       if (sideIsAutoCollapsed) {
         setResponsiveExpandedSide(side);
-      } else if (side === "palette" || containerWidth <= 600) {
+      } else if (side === "palette" || containerWidth <= phoneWorkbenchMaximumWidth) {
         setResponsiveExpandedSide(null);
       } else {
         setResponsiveExpandedSide(null);
@@ -333,7 +361,7 @@ export function useSidePanelLayout(
       return;
     }
 
-    setResponsiveExpandedSide(containerWidth > 0 && containerWidth <= 600 ? side : null);
+    setResponsiveExpandedSide(containerWidth > 0 && containerWidth <= phoneWorkbenchMaximumWidth ? side : null);
     setMaximizedSidePanel(current => current === side ? null : current);
     if (side === "palette") {
       setPaletteCollapsed(current => !current);
@@ -445,12 +473,15 @@ export function useSidePanelLayout(
   const effectiveMaximizedSidePanel = !palettePresent && maximizedSidePanel === "palette" ? null : maximizedSidePanel;
   const paletteExpanded = palettePresent && !adaptiveLayout.paletteCollapsed && effectiveMaximizedSidePanel !== "inspector";
   const inspectorExpanded = !adaptiveLayout.inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
+  const { phoneWidth, inspectorSheet } = resolvePhonePanelPresentation({ containerWidth, inspectorExpanded, maximizedSidePanel: effectiveMaximizedSidePanel });
   const editorBodyClassName = [
     "wf-editor-body",
     adaptiveLayout.paletteCollapsed ? "palette-collapsed" : "",
     adaptiveLayout.inspectorCollapsed ? "inspector-collapsed" : "",
     effectiveMaximizedSidePanel === "palette" ? "palette-maximized" : "",
-    effectiveMaximizedSidePanel === "inspector" ? "inspector-maximized" : ""
+    effectiveMaximizedSidePanel === "inspector" ? "inspector-maximized" : "",
+    phoneWidth ? "phone-layout" : "",
+    inspectorSheet ? "inspector-sheet" : ""
   ].filter(Boolean).join(" ");
   const editorBodyStyle: SidePanelEditorBodyStyle = {
     "--wf-palette-width": `${adaptiveLayout.paletteWidth}px`,
@@ -469,6 +500,8 @@ export function useSidePanelLayout(
     setInspectorCollapsed: setInspectorPanelCollapsed,
     paletteExpanded,
     inspectorExpanded,
+    phoneWidth,
+    inspectorSheet,
     editorBodyClassName,
     editorBodyStyle,
     toggleSidePanelCollapsed,

@@ -8,7 +8,7 @@ import {
   workflowPaletteCollapsedStorageKey,
   workflowPaletteWidthStorageKey
 } from "../workflow-editor/constants";
-import { resolveAdaptiveSidePanelLayout, useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
+import { resolveAdaptiveSidePanelLayout, resolvePhonePanelPresentation, useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 
 type Layout = ReturnType<typeof useSidePanelLayout>;
 
@@ -258,6 +258,44 @@ describe("adaptive workflow side-panel layout", () => {
     expect(layout.inspectorExpanded).toBe(true);
   });
 
+  it.each([
+    [360, true, null, { phoneWidth: true, inspectorSheet: true }],
+    [600, true, null, { phoneWidth: true, inspectorSheet: true }],
+    [360, false, null, { phoneWidth: true, inspectorSheet: false }],
+    [360, true, "inspector", { phoneWidth: true, inspectorSheet: false }],
+    [601, true, null, { phoneWidth: false, inspectorSheet: false }],
+    [0, true, null, { phoneWidth: false, inspectorSheet: false }]
+  ] as const)("presents a %spx workbench with the inspector expanded=%s and %s maximized as a phone sheet only when narrow", (containerWidth, inspectorExpanded, maximizedSidePanel, expected) => {
+    expect(resolvePhonePanelPresentation({ containerWidth, inspectorExpanded, maximizedSidePanel })).toEqual(expected);
+  });
+
+  it.each([true, false])("gives a phone inspector the whole workbench as a sheet and returns to the canvas (palette present: %s)", async palettePresent => {
+    renderLayout(palettePresent);
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(360));
+    expect(classes()).toContain("phone-layout");
+    expect(classes()).not.toContain("inspector-sheet");
+
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorSheet).toBe(true);
+    expect(classes()).toEqual(expect.arrayContaining(["phone-layout", "inspector-sheet"]));
+
+    flushSync(() => layout.toggleSidePanelMaximized("inspector"));
+    expect(classes()).toContain("inspector-maximized");
+    expect(classes()).not.toContain("inspector-sheet");
+    flushSync(() => layout.toggleSidePanelMaximized("inspector"));
+    expect(classes()).toContain("inspector-sheet");
+
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorSheet).toBe(false);
+    expect(classes()).not.toContain("inspector-sheet");
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
+
+    flushSync(() => resize?.(1280));
+    expect(classes()).not.toContain("phone-layout");
+    expect(classes()).not.toContain("inspector-sheet");
+  });
+
   it("keeps canvas priority without a palette and restores an explicitly opened inspector", async () => {
     renderLayout(false);
     await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
@@ -314,6 +352,10 @@ describe("adaptive workflow side-panel layout", () => {
     expect(tooNarrow.inspectorMinimumWidth).toBeLessThanOrEqual(tooNarrow.inspectorWidth);
   });
 });
+
+function classes() {
+  return layout.editorBodyClassName.split(" ");
+}
 
 function renderLayout(palettePresent = true) {
   flushSync(() => root.render(<LayoutHarness palettePresent={palettePresent} />));

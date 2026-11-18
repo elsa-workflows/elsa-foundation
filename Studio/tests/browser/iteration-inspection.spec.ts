@@ -8,6 +8,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     if (host === "editor") {
       await page.getByRole("button", { name: "Test Run", exact: true }).click();
       await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+      // A phone-width inspector is a sheet over the canvas (#4695): return to the canvas to pick a node.
+      if (width <= 600) await page.getByRole("button", { name: "Back to canvas", exact: true }).click();
     }
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
@@ -29,7 +31,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(page.getByText("Current: 2", { exact: true })).toBeVisible();
     await expect(chooser).toContainText("Execution 2 of 10");
     await expect(details.getByText(/Iteration \d/)).toHaveCount(0);
-    if (host === "instance" && width === 390) await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).click();
+    if (width === 390) await page.getByRole("button", { name: host === "instance" ? "Back to workflow run canvas" : "Back to canvas", exact: true }).click();
     await canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ }).click();
     await expect(details.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(details.locator(".wf-execution-navigator")).toHaveCount(0);
