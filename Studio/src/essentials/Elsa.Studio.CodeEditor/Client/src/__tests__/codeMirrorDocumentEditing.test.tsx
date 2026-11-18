@@ -64,6 +64,19 @@ it("histories real typing and an isolated source/payload/selection insertion tog
   expect(e.view().state.doc.toString()).toBe("ab+args.customer"); expect(e.payload()).toEqual(bound);
   expect(e.edits.map(edit => edit.origin)).toContain("insertion");
 });
+it("scrolls the inserted text and the cursor into view", () => {
+  const e = editor(); const scrolled: boolean[] = [];
+  const dispatch = e.view().dispatch.bind(e.view());
+  e.view().dispatch = ((...specs: Parameters<EditorView["dispatch"]>) => {
+    const transaction = specs[0] instanceof Transaction ? specs[0] : e.view().state.update(...(specs as never[]));
+    if (transaction.docChanged) scrolled.push(transaction.scrollIntoView);
+    dispatch(transaction);
+  }) as EditorView["dispatch"];
+  e.view().dispatch({ selection: { anchor: 1 } });
+  expect(e.controller().apply({ expected: e.controller().capture()!, insert: "+args.customer", historyValue: bound })).toBe(true);
+  expect(scrolled).toEqual([true]);
+  expect(e.view().state.selection.main.head).toBe("a+args.customer".length);
+});
 it("retains alias-reuse history across compact/expanded and back", () => {
   const e = editor(); e.replace(bound); e.view().dispatch({ selection: { anchor: 1 } });
   expect(e.controller().apply({ expected: e.controller().capture()!, insert: "+args.customer", historyValue: bound })).toBe(true);

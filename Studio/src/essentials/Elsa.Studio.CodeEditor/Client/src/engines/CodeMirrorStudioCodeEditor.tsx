@@ -341,7 +341,9 @@ function createEditingController(view: EditorView, entry: CodeMirrorSessionEntry
       const length = view.state.doc.length - (to - from) + edit.insert.length;
       const selection = edit.selection ?? { anchor: from + edit.insert.length, head: from + edit.insert.length };
       if (![selection.anchor, selection.head].every(position => Number.isInteger(position) && position >= 0 && position <= length)) return false;
-      view.dispatch({ changes: { from, to, insert: edit.insert }, selection,
+      // A compact editor is one scrolled line: without scrollIntoView the inserted text and the cursor stay
+      // past its visible end.
+      view.dispatch({ changes: { from, to, insert: edit.insert }, selection, scrollIntoView: true,
         effects: setOwnerHistoryValue.of(payload), annotations: [isolateHistory.of("full"), Transaction.userEvent.of("input.insert.data")] });
       capturedEdits.delete(edit.expected);
       view.focus();

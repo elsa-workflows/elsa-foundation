@@ -5768,6 +5768,27 @@ button.wf-reference-select {
   margin-inline-end: var(--wf-expression-chrome-width);
 }
 
+/* A compact editor with its own actions row (Insert data) carries the field controls on that row. They no
+   longer cover the source line, its focus ring or the end of its text, so the line keeps its full width. */
+.wf-expression-field:has(.studio-code-editor-compact > .studio-code-editor-actions) > .wf-syntax-picker.inline,
+.wf-expression-field:has(.studio-code-editor-compact > .studio-code-editor-actions) > .wf-expression-expand-button {
+  top: 0;
+  height: 1.75rem;
+}
+
+.wf-expression-field .studio-code-editor-compact > .studio-code-editor-actions {
+  min-block-size: 1.75rem;
+  padding-inline-end: var(--wf-expression-chrome-width);
+}
+
+.wf-expression-field .studio-code-editor-compact:has(> .studio-code-editor-actions) .studio-code-editor-preview {
+  padding-inline-end: 0.5rem;
+}
+
+.wf-expression-field .studio-code-editor-compact:has(> .studio-code-editor-actions) .cm-scroller {
+  margin-inline-end: 0;
+}
+
 .wf-dictionary-expression {
   display: grid;
   min-width: 0;
