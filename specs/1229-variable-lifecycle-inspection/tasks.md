@@ -87,9 +87,13 @@ first table, is merged into the initiative branch. Tests use xUnit only; risk-ba
 
 - [x] T021 [P] Inspection section in `docs/runtime-variable-lifecycle.md`: the views, the concurrent-overwrite rule, value
   states, and what Studio can build on.
-- [ ] T022 Measurement SC-004 (10,000 activity executions, first page; instance details unchanged); if it fails, record
+- [x] T022 Measurement SC-004 (10,000 activity executions, first page; instance details unchanged); if it fails, record
   it and propose the projection fallback (research R-2) on the PR.
-  Measured; see the PR. Each read loads the instance rows once (the overwrite marking and run-time paths need the whole graph).
+  Measured (in-memory store, 10,000 activity executions with one write each, Debug, loaded dev machine): activity-list
+  first page 2 ms; history first page 35 ms; journal first page 93 ms; lost-update sum for the details 4 ms (a column
+  sum on EF). SC-004 is not met: every read loads all of the instance's rows (the overwrite walk and the run-time paths
+  need the whole graph), so its cost grows with the instance. Recorded on the PR with the projection fallback (R-2)
+  proposed. Instance details read time: one indexed column sum added.
 - [ ] T023 Run [quickstart.md](quickstart.md) on the Workbench; access tests for SC-005.
 - [x] T024 Move the Studio items to Phase 9 (T025–T029); nothing is handed to another repository.
 

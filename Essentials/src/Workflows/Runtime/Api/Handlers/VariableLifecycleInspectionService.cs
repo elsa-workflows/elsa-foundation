@@ -25,7 +25,7 @@ internal sealed class VariableLifecycleInspectionService(
     IActivityExecutionValuePayloadAuditSink auditSink,
     TimeProvider timeProvider) : IVariableLifecycleInspectionService
 {
-    private const int RowBatch = 500;
+    private const int RowBatch = 2000;
     public const int DefaultTake = 100;
     public const int MaximumTake = 1000;
 

@@ -20,6 +20,8 @@ internal sealed class VariableLifecycleInspection
     private readonly Dictionary<string, ActivityExecutionState> _rows;
     private readonly Dictionary<string, List<ActivityExecutionState>> _children;
     private readonly Dictionary<string, string> _runTimePaths = new(StringComparer.Ordinal);
+    private Dictionary<string, int>? _occurrences;
+    private Dictionary<string, string>? _framePaths;
 
     private VariableLifecycleInspection(
         IReadOnlyList<ActivityExecutionState> rows,
@@ -236,17 +238,7 @@ internal sealed class VariableLifecycleInspection
         var id = row.Execution.ActivityExecutionId;
         if (_runTimePaths.TryGetValue(id, out var cached))
             return cached;
-        var siblings = row.ParentActivityExecutionId is { } parentId && _children.TryGetValue(parentId, out var children)
-            ? children
-            : _rows.Values.Where(candidate => candidate.ParentActivityExecutionId is null || !_rows.ContainsKey(candidate.ParentActivityExecutionId)).ToList();
-        var occurrence = siblings
-            .Where(sibling => StringComparer.Ordinal.Equals(sibling.Execution.ExecutableNodeId, row.Execution.ExecutableNodeId))
-            .OrderBy(sibling => ScheduledCommitOf(sibling) ?? long.MaxValue)
-            .ThenBy(sibling => sibling.ExecutionSequence)
-            .ThenBy(sibling => sibling.ScheduledAt)
-            .ThenBy(sibling => sibling.Execution.ActivityExecutionId, StringComparer.Ordinal)
-            .TakeWhile(sibling => !StringComparer.Ordinal.Equals(sibling.Execution.ActivityExecutionId, id))
-            .Count();
+        var occurrence = OccurrenceOf(row);
         var segment = string.Create(CultureInfo.InvariantCulture, $"{row.Execution.ExecutableNodeId}[{occurrence}]");
         var path = row.ParentActivityExecutionId is { } parent && _rows.TryGetValue(parent, out var parentRow) && !ReferenceEquals(parentRow, row)
             ? $"{RunTimePathOf(parentRow)}/{segment}"
@@ -255,24 +247,51 @@ internal sealed class VariableLifecycleInspection
         return path;
     }
 
+    // Occurrences are numbered once per sibling group: the rows of one node under one parent, in scheduling order.
+    private int OccurrenceOf(ActivityExecutionState row)
+    {
+        if (_occurrences is null)
+        {
+            _occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+            var groups = _rows.Values.GroupBy(candidate => (
+                Parent: candidate.ParentActivityExecutionId is { } parent && _rows.ContainsKey(parent) ? parent : string.Empty,
+                Node: candidate.Execution.ExecutableNodeId));
+            foreach (var group in groups)
+            {
+                var index = 0;
+                foreach (var sibling in group
+                             .OrderBy(sibling => ScheduledCommitOf(sibling) ?? long.MaxValue)
+                             .ThenBy(sibling => sibling.ExecutionSequence)
+                             .ThenBy(sibling => sibling.ScheduledAt)
+                             .ThenBy(sibling => sibling.Execution.ActivityExecutionId, StringComparer.Ordinal))
+                    _occurrences[sibling.Execution.ActivityExecutionId] = index++;
+            }
+        }
+
+        return _occurrences.GetValueOrDefault(row.Execution.ActivityExecutionId);
+    }
+
     /// <summary>The run-time path of the frame a variable instance lives in, so two instances' variables can be matched.</summary>
     public string FramePathOf(VariableWriteEntry entry)
     {
         var frameId = entry.Record.FrameId;
         if (frameId is null)
             return $"scope:{entry.Record.ScopeId}";
-        foreach (var row in _rows.Values)
+        if (_framePaths is null)
         {
-            if (row.VariableFrame?.FrameId == frameId)
-                return RunTimePathOf(row);
-            if (row.IterationVariableFrame?.FrameId == frameId)
-                return $"{RunTimePathOf(row)}#iteration";
-            if (StringComparer.Ordinal.Equals(Elsa.Workflows.Runtime.Services.Values.RuntimeClosedScope.FrameId(row.Execution.ActivityExecutionId), frameId))
-                return $"{RunTimePathOf(row)}#scope";
+            _framePaths = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var row in _rows.Values)
+            {
+                if (row.VariableFrame?.FrameId is { } container)
+                    _framePaths.TryAdd(container, RunTimePathOf(row));
+                if (row.IterationVariableFrame?.FrameId is { } iteration)
+                    _framePaths.TryAdd(iteration, $"{RunTimePathOf(row)}#iteration");
+                _framePaths.TryAdd(Elsa.Workflows.Runtime.Services.Values.RuntimeClosedScope.FrameId(row.Execution.ActivityExecutionId), $"{RunTimePathOf(row)}#scope");
+            }
         }
 
         // The root frame and frames of rows no longer stored are matched by scope.
-        return $"scope:{entry.Record.ScopeId}";
+        return _framePaths.TryGetValue(frameId, out var path) ? path : $"scope:{entry.Record.ScopeId}";
     }
 
     /// <summary>
