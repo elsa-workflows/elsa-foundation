@@ -228,7 +228,7 @@ export function ActivityPropertiesPanel({
   if (inputs.length === 0) {
     return (
       <>
-        <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} />
+        <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} />
         <p className="wf-muted">{emptyLabel}</p>
       </>
     );
@@ -305,7 +305,7 @@ export function ActivityPropertiesPanel({
         hasSnapshot={expressionDescriptors.length > 0}
         onRetry={onRetryDescriptors}
       />
-      <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} />
+      <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} />
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection

@@ -273,6 +273,36 @@ describe("variable-reference inputs", () => {
     expect(picker.getAttribute("aria-describedby")?.split(" ")).toContain(note.id);
   });
 
+  it("does not call a binding out of scope in the picker while the scope analysis is loading", () => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({
+          Target: { typeName: "Int32", expression: { type: "Variable", value: { referenceKey: "counter-key", declaringScopeId: "workflow", name: "Counter" } } }
+        }),
+        variables: [],
+        scopeStatus: "loading"
+      }
+    );
+
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.selectedOptions[0].textContent).toBe("Counter");
+  });
+
+  it("flags a may-write variable whose type no longer fits", () => {
+    const declare = (referenceKey: string, name: string, alias: string) =>
+      ({ referenceKey, name, type: { alias, collectionKind: "Single" as const }, storageDriverType: null, default: null });
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({ Target: bound("counter-key", "workflow") }),
+        workflowState: { variables: [declare("counter-key", "Counter", "String")], rootActivity: node() },
+        variables: [{ referenceKey: "counter-key", name: "Counter", scopeId: "workflow", isWorkflowScope: true }]
+      }
+    );
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Counter (type does not fit)");
+  });
+
   it("names a deleted bound variable by its stored name in the picker", () => {
     const container = renderPanel(
       { inputs: [referenceInput("Target", "ReadWrite")] },

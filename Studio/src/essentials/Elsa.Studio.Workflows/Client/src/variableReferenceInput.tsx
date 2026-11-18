@@ -36,7 +36,8 @@ export function readMayWriteSet(
   activity: ActivityNode,
   descriptor: StudioActivityDescriptor,
   visibleVariables: VisibleVariableView[],
-  scopeReady = true
+  scopeReady = true,
+  workflowState?: WorkflowDefinitionState
 ): string[] {
   const names: string[] = [];
   for (const input of descriptor.inputs) {
@@ -48,7 +49,11 @@ export function readMayWriteSet(
     // A binding to a variable that was deleted or moved out of scope keeps its stored name, flagged; publish refuses it.
     // Until the scope analysis is ready nothing is known to be out of scope, so the stored name shows unflagged.
     const stored = readStoredVariableName(activity, input) ?? bound.referenceKey;
-    const name = visible ? visible.name : scopeReady ? `${stored} (not visible from this scope)` : stored;
+    // A visible variable whose type no longer fits the input is refused by publish, so it is flagged too.
+    const fits = !visible || compatibleVariables([visible], workflowState, input).length === 1;
+    const name = visible
+      ? fits ? visible.name : `${visible.name} (type does not fit)`
+      : scopeReady ? `${stored} (not visible from this scope)` : stored;
     if (!names.includes(name)) names.push(name);
   }
   return names;
@@ -149,9 +154,13 @@ export function VariableReferenceInputRow({
     : undefined;
   const typeMismatch = !!boundVisible && !offered.some(variable => optionKey(variable.referenceKey, variable.scopeId) === selected);
   const boundType = typeMismatch && authoring ? declaredType(authoring.workflowState, boundVisible!) : null;
+  // Until the scope analysis is ready nothing is known to be out of scope: the stored name shows unflagged, as in the
+  // may-write summary.
+  const scopeReady = authoring?.status === "ready";
+  const storedName = bound ? readStoredVariableName(activity, input) ?? bound.referenceKey : undefined;
   const unlistedLabel = typeMismatch
     ? `${boundVisible!.name} (type does not fit)`
-    : bound ? `${readStoredVariableName(activity, input) ?? bound.referenceKey} (not visible from this scope)` : undefined;
+    : storedName ? scopeReady ? `${storedName} (not visible from this scope)` : storedName : undefined;
   const describedBy = [accessId, foreignSyntax ? noteId : null, typeMismatch ? typeNoteId : null].filter(Boolean).join(" ");
 
   return (
@@ -211,17 +220,19 @@ export function VariableWritesSummary({
   activity,
   descriptor,
   visibleVariables,
-  scopeReady = true
+  scopeReady = true,
+  workflowState
 }: {
   activity: ActivityNode;
   descriptor: StudioActivityDescriptor;
   visibleVariables: VisibleVariableView[];
   scopeReady?: boolean;
+  workflowState?: WorkflowDefinitionState;
 }) {
   if (descriptor.accessesUndeclaredVariables === true) {
     return <p className="wf-variable-writes" role="note">May write any visible variable</p>;
   }
-  const names = readMayWriteSet(activity, descriptor, visibleVariables, scopeReady);
+  const names = readMayWriteSet(activity, descriptor, visibleVariables, scopeReady, workflowState);
   if (names.length === 0) return null;
   return <p className="wf-variable-writes" role="note">May write: {names.join(", ")}</p>;
 }
