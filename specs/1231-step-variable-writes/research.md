@@ -142,9 +142,24 @@ which matches commit-with-step for inline steps. Elsa 3 created undeclared varia
 
 ## R-9 — Cost
 
-To be measured in implementation (FR-035): per written variable one serialization and one canonical digest (S-10's
-`VariableValueDigest`, ~17–19 ms/MiB measured in #4316); per session read one read-set entry (~no hashing in default
-mode). Reads serialize nothing (C1).
+Expected (FR-035): per written variable one serialization and one canonical digest (S-10's `VariableValueDigest`,
+~17–19 ms/MiB measured in #4316); per session read one read-set entry (no hashing in default mode). Reads serialize
+nothing (C1).
+
+**Measured (T042, 2026-11-18)** with `StepVariableWriteCostMeasurement` (`Essentials/tests/Activities/Runtime/Tests/
+VariableLifecycle/`, Release, `ELSA_MEASURE_VARIABLE_LIFECYCLE=1`, on a 22-core machine shared with other sessions'
+builds, so absolute numbers are high-side):
+
+| Value | Read copy | Write: serialize | Commit: digest + history record |
+|---|---|---|---|
+| 1 KiB | 0.04 ms | 0.04 ms | 0.10 ms |
+| 64 KiB | 0.41 ms | 0.86 ms | 2.3 ms |
+| 1 MiB | 6.5 ms | 10.0 ms | 47 ms |
+
+A hot loop of small session writes (serialize, commit, record) costs about 5 µs per write. The 1 MiB commit is two
+canonical digests: the new value's and, because the stored value was never written with a version, the stored one's
+once (S-10 `CurrentDigestOf`); once a variable has been written its stored digest is reused. A step that only reads
+pays the read copy and nothing else: no serialization, no digest, no record (SC-007).
 
 ## R-10 — Out of scope, recorded
 
