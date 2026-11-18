@@ -4,10 +4,11 @@ namespace Kernel.Review4;
 /// The rule sets of RT-1 (R4-B2). Three mutations of the repaired set:
 /// <c>CascadeAny</c> cascades for any terminate refused at a marker (DT-8);
 /// <c>SuccessorAdmitted</c> drops the ObligationOutstanding start refusal, so a successor replaces a marker that still
-/// retains an obligation (DT-9);
-/// <c>SuccessorInherits</c> gives a successor its predecessor's registry (DT-9).
+/// retains an obligation (DT-9(b));
+/// <c>SuccessorInherits</c> gives a successor its predecessor's registry (DT-9(c));
+/// <c>RootRetains</c> lets a root's marker keep its registry and jobs (RM-1).
 /// </summary>
-enum RtRules { Reviewed, Repaired, Negative, CascadeAny, SuccessorAdmitted, SuccessorInherits }
+enum RtRules { Reviewed, Repaired, Negative, CascadeAny, SuccessorAdmitted, SuccessorInherits, RootRetains }
 
 /// <summary>
 /// The proposed extension of the retirement marker: the recorded parent, the child registry and the job keys as they
@@ -32,7 +33,7 @@ sealed record Obligation(string? Parent, long ParentCreation, List<CreationAddre
 sealed class Rt1(string variant, RtRules rules)
 {
     private const string P = "0/p", A = "g1/child/0.1.1", G = "g2/child/1.1.1", G2 = "g3/child/2.1.1", X = "4/x", Operator = "operator";
-    private const string K = "5/t1:invoice", H = "g6/child/5.1.1", H2 = "g6/child/5.2.1";   // DT-9(b): a keyed root and its children
+    private const string K = "5/t1:invoice", H = "g6/child/5.1.1", H2 = "g6/child/5.2.1";   // DT-9(c): a keyed root and its children
     private const long PCreation = 2;
     private readonly Dictionary<string, InstanceRow> _rows = new(StringComparer.Ordinal);
     private readonly Dictionary<string, InstanceRow> _retiredFrom = new(StringComparer.Ordinal); // the row each marker replaced
@@ -156,6 +157,8 @@ sealed class Rt1(string variant, RtRules rules)
         else _report.Expect("T's refusal (CreationProtocol.TargetError)", Refusal(t.Id), "RetiredCreation");
         if (variant is "a" or "a-g-deleted" && rules != RtRules.Reviewed)
             _report.Expect("RM-1: the obligation recorded at A's Complete", _recordedAtComplete, $"parent {P}/{PCreation}, children [{(rules == RtRules.Negative ? "" : G + "/1")}], jobs [j]");
+        if (variant == "a-g-deleted") _report.Expect("G2's notice refused at G's marker", _noticeRefusals.GetValueOrDefault((G2, G)), "RetiredCreation");
+        else _report.Expect("G's notice refused at A's marker", _noticeRefusals.GetValueOrDefault((G, A)), "RetiredCreation");
         if (variant == "nonparent") _report.Expect("cascades from A's marker, all from T", _markerCascades.Count == 1 && _markerCascades[0] == t.Id, true);
         if (variant == "successor-gap" && rules is not (RtRules.Reviewed or RtRules.SuccessorAdmitted))
             _report.Expect("successor start", _successorStart, "ObligationOutstanding");
@@ -204,7 +207,7 @@ sealed class Rt1(string variant, RtRules rules)
     {
         var row = _rows[id];
         var marker = Real.Retire(row);
-        if (rules != RtRules.Reviewed && row.Parent is not null)
+        if (rules != RtRules.Reviewed && (row.Parent is not null || rules == RtRules.RootRetains))
         {
             var children = rules == RtRules.Negative ? [] : Real.ReadRegistry(row.Children);
             _obligations[(id, row.Creation)] = new Obligation(row.Parent, row.ParentCreation, children, Real.ReadJobs(row.Jobs));
@@ -260,7 +263,9 @@ sealed class Rt1(string variant, RtRules rules)
         }
         // Control: the creator scope that only StartChild, with a freshly issued id, and key admission mint.
         var creator = starts[0].M.WithInboxScope(long.MaxValue);
-        _report.Line($"control: the same start at the creator scope {creator.InboxScope}: Message.SuppliedCreator {Real.SuppliedCreator(creator)} (StartChild issues fresh child ids, never a retired one)");
+        var creatorSupplied = Real.SuppliedCreator(creator);
+        _report.Line($"control: the same start at the creator scope {creator.InboxScope}: Message.SuppliedCreator {creatorSupplied} (StartChild issues fresh child ids, never a retired one)");
+        _report.Expect("the creator-scope control is no supplied creator", creatorSupplied, false);
         _report.Expect("marker unchanged after the supplied starts", ReferenceEquals(_rows[A], marker), true);
         _report.Expect("obligation unchanged after the supplied starts", Ob(A, 1), obligation);
     }
@@ -272,7 +277,7 @@ sealed class Rt1(string variant, RtRules rules)
         Deliver(new Message(ticket.Id, new InstanceRef(A), Kinds.Job, Json.Write(new { Result = "late" }), A, TargetCreation: 1, SenderCreation: 1).WithInboxScope(ticket.Scope));
     }
 
-    /// <summary>DT-9(b): a keyed root R under caller key K with a live child H is deleted; B starts under K with creation 2.</summary>
+    /// <summary>DT-9(c): a keyed root R under caller key K with a live child H is deleted; B starts under K with creation 2.</summary>
     private Report KeyedRoot()
     {
         _rows[K] = new InstanceRow(K, "native", "k", InstanceStatus.Finished, "{}", 6, null, Children: Real.WriteRegistry([new(H, 1)]), Creation: 1, StartIntent: "v1:k");
@@ -281,7 +286,9 @@ sealed class Rt1(string variant, RtRules rules)
         Retire(K, "R's built delete (an ended root, no drain)");
         _report.Expect("RM-1: R's marker obligation (a root records no parent)", Ob(K, 1), "none");
         var spec = new StartSpec("native", "k", Creation: new CreationStart(2, 1, "successor-k"));
-        _report.Expect("B's start for creation 2", StartSuccessor(K, spec) ?? "accepted", "accepted");
+        var startRefusal = StartSuccessor(K, spec);
+        _report.Expect("B's start for creation 2", startRefusal ?? "accepted", "accepted");
+        if (startRefusal is not null) { _report.Line("B is not created, so the run stops here"); return _report; }
         _report.Expect("B inherits no registry", _rows[K].Children is null, true);
         _rows[H2] = new InstanceRow(H2, "native", "h2", InstanceStatus.Running, "{}", 2, K, Creation: 1, StartIntent: "v1:h2", ParentCreation: 2);
         var b = _rows[K];
@@ -324,9 +331,13 @@ sealed class Rt1(string variant, RtRules rules)
 
     private void Refuse(Message m, string reason) { _refusals.Add($"{m.Id}: {reason}"); _report.Line($"deliver {m.Id} ({m.Kind}) to {m.Target.Id}: refused, {reason}"); }
 
+    private readonly Dictionary<(string Sender, string Target), string> _noticeRefusals = [];
+
     private void Deliver(Message m)
     {
         if (m.Kind == WorkflowKinds.ChildFinished && m.Target.Id == P && m.Sender == A) _noticesToP++;
+        if (m.Kind == WorkflowKinds.ChildFinished && _rows.TryGetValue(m.Target.Id, out var target) && Real.TargetError(target, m) is { } refused)
+            _noticeRefusals[(m.Sender!, m.Target.Id)] = refused;
         if (!_rows.TryGetValue(m.Target.Id, out var row)) { _report.Line($"deliver {m.Id}: no target, dropped"); return; }
         var error = Real.TargetError(row, m);
         if (error is null && m.Target.Id == A && _aDrainOpen && m.Kind == Kinds.Terminate) { OpenDrainRefusal(m, row); return; }
@@ -377,6 +388,7 @@ sealed class Rt1(string variant, RtRules rules)
         _obligations[(marker.Id, marker.Creation)] = ob with { Children = [], Jobs = [] };
         _rows[marker.Id] = next;
         _report.Line($"  marker written at revision {next.Revision}, every other field unchanged; obligation {Ob(marker.Id, marker.Creation)}");
+        _report.Line($"  built CreationProtocol.Validate on that marker write: {Real.Validate(new TurnCommit(marker.Id, next, marker.Revision, [], [], [], [], [], null), marker)} (the release widens it for the obligation write)");
     }
 
     private void Cascade(string id, long creation, long revision, List<CreationAddress> children, List<string> jobs, string where)

@@ -55,6 +55,16 @@ static class Real
         return (bool)DiscardedAtMethod.Invoke(new Delivery(message, 0), [slot])!;
     }
 
+    private static readonly MethodInfo ValidateMethod = Find(typeof(CreationProtocol), "Validate");
+
+    /// <summary>Creation.cs, <c>CreationProtocol.Validate</c>: the commit's creation-header check. Returns its refusal, or "accepted".</summary>
+    public static string Validate(TurnCommit turn, InstanceRow? previous)
+    {
+        Count("CreationProtocol.Validate");
+        try { ValidateMethod.Invoke(null, [turn, previous]); return "accepted"; }
+        catch (TargetInvocationException e) when (e.InnerException is StoreException refused) { return "refused: " + refused.Message; }
+    }
+
     /// <summary>Creation.cs, <c>CreationProtocol.Retire</c>: the built delete's retirement marker.</summary>
     public static InstanceRow Retire(InstanceRow row) { Count("CreationProtocol.Retire"); return CreationProtocol.Retire(row); }
 

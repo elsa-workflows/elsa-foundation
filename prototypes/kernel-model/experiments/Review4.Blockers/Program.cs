@@ -9,12 +9,13 @@ return await Program.MainAsync(args);
 static partial class Program
 {
     public static string Name(FrRules rules) => rules switch
-    { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", FrRules.HeldBlocks => "held-blocks", _ => "memory-precedence" };
+    { FrRules.Reviewed => "reviewed", FrRules.Repaired => "repaired", FrRules.Negative => "negative", FrRules.HeldBlocks => "held-blocks", FrRules.MemoryPrecedence => "memory-precedence",
+      FrRules.TrialPlainSeq => "trial-plain-seq", _ => "no-cohort-mark" };
 
     public static string Name(RtRules rules) => rules switch
     {
         RtRules.Reviewed => "reviewed", RtRules.Repaired => "repaired", RtRules.Negative => "negative", RtRules.CascadeAny => "cascade-any",
-        RtRules.SuccessorAdmitted => "successor-admitted", _ => "successor-inherits",
+        RtRules.SuccessorAdmitted => "successor-admitted", RtRules.SuccessorInherits => "successor-inherits", _ => "root-retains",
     };
 
     // Case, rule set, expected result. Every case runs reviewed, repaired and negative; a mutation of the repaired set
@@ -24,13 +25,20 @@ static partial class Program
         .. from v in new[] { "base", "takeover-before-complete", "takeover-after-complete" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr1-{v}", r.Item1, r.Item2),
         ("fr1-takeover-before-complete", "memory-precedence", "FAIL"), ("fr1-takeover-after-complete", "memory-precedence", "FAIL"),
+        ("fr1-trial-takeover", "reviewed", "FAIL"), ("fr1-trial-takeover", "repaired", "PASS"), ("fr1-trial-takeover", "negative", "FAIL"),
+        ("fr1-trial-takeover", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover", "no-cohort-mark", "PASS"),
+        ("fr1-poll-limit", "reviewed", "FAIL"), ("fr1-poll-limit", "repaired", "PASS"), ("fr1-poll-limit", "negative", "FAIL"),
+        ("fr1-poll-limit", "trial-plain-seq", "FAIL"), ("fr1-poll-limit", "no-cohort-mark", "FAIL"),
+        ("fr1-trial-takeover-open", "reviewed", "FAIL"), ("fr1-trial-takeover-open", "repaired", "PASS"), ("fr1-trial-takeover-open", "negative", "PASS"),
+        ("fr1-trial-takeover-open", "trial-plain-seq", "FAIL"), ("fr1-trial-takeover-open", "no-cohort-mark", "PASS"),
         ("fr1-model-end", "reviewed", "PASS"), ("fr1-model-end", "repaired", "PASS"), ("fr1-model-end", "negative", "PASS"),
+        ("fr1-model-end-recall", "reviewed", "PASS"), ("fr1-model-end-recall", "repaired", "PASS"), ("fr1-model-end-recall", "negative", "PASS"),
         ("fr1-held", "reviewed", "PASS"), ("fr1-held", "repaired", "PASS"), ("fr1-held", "negative", "PASS"), ("fr1-held", "held-blocks", "FAIL"),
         .. from v in new[] { "a", "a-g-deleted" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"rt1-{v}", r.Item1, r.Item2),
         ("rt1-b", "reviewed", "PASS"), ("rt1-b", "repaired", "PASS"), ("rt1-b", "negative", "PASS"),
         ("rt1-nonparent", "reviewed", "FAIL"), ("rt1-nonparent", "repaired", "PASS"), ("rt1-nonparent", "negative", "FAIL"), ("rt1-nonparent", "cascade-any", "FAIL"),
-        ("rt1-successor", "reviewed", "PASS"), ("rt1-successor", "repaired", "PASS"), ("rt1-successor", "negative", "PASS"), ("rt1-successor", "successor-inherits", "FAIL"),
+        ("rt1-successor", "reviewed", "PASS"), ("rt1-successor", "repaired", "PASS"), ("rt1-successor", "negative", "PASS"), ("rt1-successor", "successor-inherits", "FAIL"), ("rt1-successor", "root-retains", "FAIL"),
         ("rt1-successor-unreachable", "reviewed", "FAIL"), ("rt1-successor-unreachable", "repaired", "PASS"), ("rt1-successor-unreachable", "negative", "FAIL"),
         ("rt1-successor-gap", "reviewed", "FAIL"), ("rt1-successor-gap", "repaired", "PASS"), ("rt1-successor-gap", "negative", "FAIL"), ("rt1-successor-gap", "successor-admitted", "FAIL"),
     ];
@@ -67,7 +75,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|cascade-any|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -78,7 +86,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence,
+                "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();
@@ -87,7 +95,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => RtRules.Reviewed, "repaired" => RtRules.Repaired, "negative" => RtRules.Negative, "cascade-any" => RtRules.CascadeAny, "successor-admitted" => RtRules.SuccessorAdmitted, "successor-inherits" => RtRules.SuccessorInherits,
+                "reviewed" => RtRules.Reviewed, "repaired" => RtRules.Repaired, "negative" => RtRules.Negative, "cascade-any" => RtRules.CascadeAny, "successor-admitted" => RtRules.SuccessorAdmitted, "successor-inherits" => RtRules.SuccessorInherits, "root-retains" => RtRules.RootRetains,
                 _ => throw new ArgumentException($"RT-1 has no rule set '{rules}'"),
             };
             return new Rt1(id[4..], set).Run();

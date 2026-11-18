@@ -8,8 +8,10 @@ stranding a live subtree. Each case runs one schedule under three rule sets:
 - `repaired`: the repair of the fourth fix round, as the transitions PR (#4780) states it;
 - `negative`: the repaired rules with the one repaired rule removed.
 
-Mutations of the repaired set run where they bite: `memory-precedence` and `held-blocks` (FR-1), and `cascade-any`,
-`successor-admitted` and `successor-inherits` (RT-1).
+Mutations of the repaired set run where they bite:
+
+- FR-1: `memory-precedence`, `held-blocks`, `trial-plain-seq` and `no-cohort-mark`;
+- RT-1: `cascade-any`, `successor-admitted`, `successor-inherits` and `root-retains`.
 
 ## Run
 
@@ -22,7 +24,7 @@ BIN=experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll
 dotnet $BIN --list                                   # every case, rule set and expected outcome
 dotnet $BIN --case fr1-base --rules repaired         # one run: exit 0 when every assertion holds, 1 otherwise
 dotnet $BIN --all                                    # every run, then a summary; exit 0 only if all match the expected matrix
-experiments/Review4.Blockers/run.sh                  # every run one by one, with its exit code
+experiments/Review4.Blockers/run.sh                  # every run one by one, then --all; exits with the matrix result
 ```
 
 [results.txt](results.txt) holds the output of `--all` and the commit it ran at.
@@ -32,17 +34,25 @@ experiments/Review4.Blockers/run.sh                  # every run one by one, wit
 | Run | Page case | Expected |
 |---|---|---|
 | `fr1-base` | E-7, as stated | reviewed FAIL, repaired PASS, negative FAIL |
-| `fr1-takeover-before-complete` | E-7, takeover after R's mark and before the model handoff | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
-| `fr1-takeover-after-complete` | E-7, the precedence after Complete survives a takeover | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
-| `fr1-model-end` | E-7, model-end variant | PASS under all three |
-| `fr1-held` | E-8, after Complete | PASS under all three, held-blocks FAIL |
+| `fr1-takeover-before-complete` | E-7, takeover after R's mark and before the model handoff (a retake by the same process) | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
+| `fr1-takeover-after-complete` | E-7, the precedence after Complete survives a takeover (a retake by the same process) | reviewed FAIL, repaired PASS, negative FAIL, memory-precedence FAIL |
+| `fr1-trial-takeover` | E-7 on the built recovery path: a crash takeover after Complete, with A and R as suspects | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, no-cohort-mark PASS |
+| `fr1-poll-limit` | E-7 on the built recovery path: as `fr1-trial-takeover`, with a poll limit of 1 | reviewed FAIL, repaired PASS, negative FAIL, trial-plain-seq FAIL, no-cohort-mark FAIL |
+| `fr1-trial-takeover-open` | The rule that a withheld suspect never shelves the cohort: a crash takeover before Complete | reviewed FAIL, repaired PASS, negative PASS, trial-plain-seq FAIL, no-cohort-mark PASS |
+| `fr1-model-end` | E-7, model-end variant: R dropped under the finished-instance rule | PASS under all three |
+| `fr1-model-end-recall` | Control for E-7's model-end variant: the ending turn recalls R | PASS under all three |
+| `fr1-held` | E-8, after Complete; the evidence is the repaired run and `held-blocks` | PASS under all three, held-blocks FAIL |
 | `rt1-a` | DT-7 order (a); RM-1, A's marker and P's terminate | reviewed FAIL, repaired PASS, negative FAIL |
 | `rt1-a-g-deleted` | DT-7 variant: G deleted while G2 lives | reviewed FAIL, repaired PASS, negative FAIL |
 | `rt1-b` | DT-7 order (b) | PASS under all three |
 | `rt1-nonparent` | DT-8; RM-1, the non-parent's terminate | reviewed FAIL, repaired PASS, negative FAIL, cascade-any FAIL |
-| `rt1-successor` | DT-9(b); RM-1, a root's marker keeps nothing | PASS under all three, successor-inherits FAIL |
 | `rt1-successor-unreachable` | DT-9(a) | reviewed FAIL, repaired PASS, negative FAIL |
-| `rt1-successor-gap` | The ObligationOutstanding start refusal (coordinator's defence-in-depth rule); DT-9's first mutation | reviewed FAIL, repaired PASS, negative FAIL, successor-admitted FAIL |
+| `rt1-successor-gap` | DT-9(b), the ObligationOutstanding start refusal; `successor-admitted` is its mutation | reviewed FAIL, repaired PASS, negative FAIL, successor-admitted FAIL |
+| `rt1-successor` | DT-9(c), a keyed root; RM-1, a root's marker keeps nothing | PASS under all three, successor-inherits FAIL, root-retains FAIL |
+
+`fr1-held` passes under `reviewed` and `negative` because A reaches the model before S is ever held, so those two
+runs never exercise a held cohort row and are not E-8 evidence. Only the `repaired` run, which asserts that S was held
+when A was delivered, and the `held-blocks` mutation are.
 
 ## FR-1 (R4-B1): release cohort precedence
 
@@ -50,31 +60,49 @@ The workflow is `Parallel(Delay F 50, Delay F2 100)` on the real `NativeModel`. 
 timers. R is F's timer at seq 1100. While the instance is parked, R arrives and is kept as `Arrived`. Recover opens
 generation 1, and the first page, C0, is the final page. It restores R with `ReleasedBy (1,1)` and sends the next
 drain control C at seq 950. A is an ordinary `native.cancel` (`NativeKinds.Cancel`) from sender `0/other` at seq 900.
-It is withheld during the drain. A poll at the current epoch marks C and R seen. C finds no kept row past the cursor,
-and its gate row R is taken up, so C completes the drain. The model then gets one input per turn, in the order the
-rule set gives:
+It is withheld during the drain. The owner's polls mark every polled row seen, and that includes the withheld A
+(Worker.cs 1397). C finds no kept row past the cursor, and its gate row R is taken up, so C completes the drain. The
+model then gets one input per turn, in the order the rule set gives:
 
-| Rule set | Order | Outcome |
-|---|---|---|
-| reviewed | plain tuple order throughout | A's real cancel turn ends the model and recalls R; F completes 0 times |
-| repaired | while a recover drain is open or a cohort row remains: control kinds, then the cohort (`ReleasedBy` = the creation's latest generation, not Done), then the rest; otherwise the built order, a control taken alone after the rows ahead of it (Worker.cs 868–874) | R's real timer turn completes F once, with F2 still waiting; then A cancels |
-| negative | control kinds first while the drain is open, then tuple order | as reviewed |
-| memory-precedence | repaired, with the cohort kept in the owner's memory only | in both takeover runs the new owner offers A first, as reviewed |
+| Rule set | Offer order | Suspect trials | Outcome |
+|---|---|---|---|
+| reviewed | plain tuple order | built NextTrial: seq order; a withheld suspect skips its whole target | A's real cancel turn ends the model and recalls R; F completes 0 times |
+| repaired | open drain: controls, then the cohort, then the rest. After Complete: the non-held cohort rows first, and nothing else of the instance while one remains; a control waits behind them | no non-cohort suspect ahead of a cohort row or grouped with one; a withheld suspect skips only itself | R's real timer turn completes F once, with F2 still waiting; then A cancels |
+| negative | controls first while the drain is open, then tuple order | seq order; a withheld suspect skips only itself | as reviewed, except in `fr1-trial-takeover-open` |
+| memory-precedence | repaired, with the cohort kept in the owner's memory only | as repaired | in both retake runs the new owner offers A first |
+| trial-plain-seq | repaired | built NextTrial | in the trial runs A is tried first (or the open drain stalls) |
+| no-cohort-mark | repaired, with no durable cohort mark: the owner knows only the cohort rows it has polled | as repaired, over polled rows | with a poll limit of 1 the owner holds A alone and tries it |
+
+Under `repaired`, the cohort is the set of rows whose `ReleasedBy` is the creation's latest generation and that are
+not Done. Complete sets a durable cohort mark (creation, generation) on the instance row whenever such a row may
+remain. While the mark is set and the owner holds no cohort row, it reads the instance's cohort rows. A read that finds
+none clears the mark. Held cohort rows are skipped by the mark's rule, as they are by the poll.
 
 The variants:
 
-- `takeover-before-complete`: the owner is lost after R is marked seen. The new owner, at the next epoch, keeps only
-  the durable rows, re-polls, and C's gate counts R only at the new epoch.
-- `takeover-after-complete`: the owner is lost after Complete commits and before R reaches a model turn. Precedence
-  comes from R's durable `ReleasedBy` tag and the row's `ResolutionGeneration`, so it survives.
-- `model-end`: an earlier kept `native.cancel` Q is released with R, and there is no late arrival. Q's real cancel
-  turn ends the model and recalls R, so R never reaches a model turn. The drain completes, and no `KeptBy` remains.
+- `takeover-before-complete` and `takeover-after-complete`: the same process retakes the partition, before Complete
+  and after it. Memory is lost, but its own earlier marks make no suspects (Worker.cs 577–578).
+- `trial-takeover`: another process takes over after Complete. A and R carry the lost owner's Seen, so both are
+  suspects. The trial path mirrors NextTrial (Worker.cs 734–760, with TrialGroup 1 from line 35) line by line for one
+  instance: seq order, the recovery boundary at the earliest pending control (796–820), a target skipped behind a
+  suspect it cannot be given, and one suspect per group.
+- `poll-limit`: as `trial-takeover`, but the new owner's PollLimit (Worker.cs 14, used at 516) is 1. Its first poll
+  returns A alone. Under `repaired`, the cohort mark makes it read R before it tries anything.
+- `trial-takeover-open`: another process takes over before Complete. A, a withheld suspect, sorts first.
+  - Under the built rule, A skips the target, so R is never tried, the gate never sees R, and the drain stalls until
+    the step bound.
+  - Under `repaired` and `negative`, A skips only itself. R is tried during the drain, and then C completes.
+  - This case backs the no-shelving rule, so the precedence plays no part and `negative` passes.
+- `model-end`: an earlier kept `native.cancel` Q is released with R, and there is no late arrival. R here is a
+  `native.resume go`, which the model never recalls. Q's real cancel turn ends the model, and R is dropped under the
+  built finished-instance rule.
+- `model-end-recall`: the control. R is F's timer, and Q's cancel recalls it before the drop rule is reached.
 - `held`: the model holds the cohort row, through a real Native hold path. `HeldGate` is a harness-authored composite
   activity, like Incarnation.Run's `HeldReceiver`. It defers composite signals until its child `Event go` completes.
   Native's `FinishSignals` then calls `ITurn.Hold`. S is a composite signal to H, released as the cohort. A is
   `native.resume go`, the input S waits for. Under `repaired`, the poll skips the held S, so A is delivered with S
   handed back, and S is accepted afterwards. The `held-blocks` mutation counts a held cohort row in the precedence,
-  and the instance stalls. No stub model is used.
+  and the instance stalls.
 
 FR-1 runs assert, as each case needs:
 
@@ -82,7 +110,7 @@ FR-1 runs assert, as each case needs:
 - the exact sequence of model transitions;
 - that F2 was still waiting when A arrived;
 - that the instance ended and the drain completed;
-- R's fate (consumed by a model turn, or recalled);
+- R's fate: consumed by a model turn, dropped, or recalled;
 - that no undone or kept rows remain.
 
 ## RT-1 (R4-B2): retirement keeps a bounded cancellation obligation
@@ -96,7 +124,12 @@ Complete sends the one Faulted notice through the real `WorkflowInstance.Finishe
 `CreationProtocol.Retire`. Under `repaired`, a marker whose row recorded a parent keeps that parent, the registry and
 the job keys. A root's marker keeps nothing. A parent-bound terminate that the real `TargetError` refuses with
 `RetiredCreation` sends terminate to the retained children and cancels the retained jobs. In the same commit it
-writes the marker at its next revision with the obligation cleared.
+writes the marker at its next revision (RM-1), with the obligation cleared and every other field unchanged.
+
+The real `Retire` and `Origin` put no constraint on that shape. The built `CreationProtocol.Validate` does: called on
+that write, it refuses it with "invalid lifecycle retirement", because it accepts a retired row only from a delete
+of a live row (Creation.cs, `Validate`). Each cascade report prints that refusal. The release must widen `Validate` for
+the obligation write.
 
 The cases:
 
@@ -116,27 +149,31 @@ The cases:
   - an operator's terminate.
 
   T then discharges the obligation. `cascade-any` terminates G at X's send.
-- `rt1-successor`: a keyed root R under key K (`5/t1:invoice`), with a live child H, is deleted. A keyed start carries
-  no parent (KeyAdmission.cs 31–32), so R's marker keeps nothing. The real `StartError` accepts B, creation 2, at the
-  same id. B inherits no registry, starts H2, and is terminated by an operator. Its terminate reaches H2 only. H runs
-  to its own end, and the real `TargetError` refuses H's notice to R's creation at B with `WrongCreation`.
-  `successor-inherits` gives B R's registry, so B sends H a terminate. H's parent binding refuses it, because H's
-  `ParentCreation` is R's.
-- `rt1-successor-unreachable`: a start for creation 2 addressed to A's retired generated id arrives twice, as an
-  outside add and as X's application send. The real `Message.SuppliedCreator` and the real `Delivery.DiscardedAt`
-  classify both as supplied creators to discard. `DiscardedAt` runs over a real `Slot` holding A's marker, reached by
-  reflection. The Worker's consumption of such a delivery, with no turn and no row change (Worker.cs 1030–1037), is
-  mirrored. The marker and the obligation are unchanged, no creation 2 appears, and T then discharges the obligation.
-  A control shows that the same start at the creator scope, which only `StartChild` (with a fresh id) and key
-  admission mint, is classified as no supplied creator.
-- `rt1-successor-gap`: a start for creation 2 reaches the start check directly. The real `StartError` accepts it.
-  The repaired rule then refuses it with `ObligationOutstanding`, because A's marker still holds an obligation. This
-  is the coordinator's defence-in-depth rule. In valid operation it never fires, as `rt1-successor-unreachable` and
-  `rt1-successor` show. The marker stays, and T discharges the obligation. `successor-admitted` drops the rule: the
-  successor replaces the marker, the real `TargetError` refuses T with `WrongCreation`, and G, G2 and J survive.
+- `rt1-successor-unreachable` (DT-9(a)): a start for creation 2 addressed to A's retired generated id arrives twice,
+  as an outside add and as X's application send. The real `Message.SuppliedCreator` and the real
+  `Delivery.DiscardedAt` classify both as supplied creators to discard. `DiscardedAt` runs over a real `Slot` holding
+  A's marker, reached by reflection. The Worker's consumption of such a delivery, with no turn and no row change
+  (Worker.cs 1030–1037), is mirrored. The marker and the obligation are unchanged, no creation 2 appears, and T then
+  discharges the obligation. A control asserts that the same start at the creator scope, which only `StartChild`
+  (with a fresh id) and key admission mint, is no supplied creator.
+- `rt1-successor-gap` (DT-9(b)): a start for creation 2 reaches the start check directly. The real `StartError`
+  accepts it. The repaired rule then refuses it with `ObligationOutstanding`, because A's marker still holds an
+  obligation. This is the coordinator's defence-in-depth rule. In valid operation it never fires, as
+  `rt1-successor-unreachable` and `rt1-successor` show. The marker stays, and T discharges the obligation.
+  `successor-admitted` drops the rule: the successor replaces the marker, the real `TargetError` refuses T with
+  `WrongCreation`, and G, G2 and J survive.
+- `rt1-successor` (DT-9(c)): a keyed root R under key K (`5/t1:invoice`), with a live child H, is deleted. A keyed
+  start carries no parent (KeyAdmission.cs 31–32), so R's marker keeps nothing. The real `StartError` accepts B,
+  creation 2, at the same id. B inherits no registry, starts H2, and is terminated by an operator. Its terminate
+  reaches H2 only. H runs to its own end, and the real `TargetError` refuses H's notice to R's creation at B with
+  `WrongCreation`. Two mutations fail:
+  - `successor-inherits` gives B R's registry, so B sends H a terminate. H's parent binding refuses it, because H's
+    `ParentCreation` is R's.
+  - `root-retains` lets R's marker keep its registry, so the obligation refuses B's start as `ObligationOutstanding`.
 
-In every run of P's tree, J's late result reaches A's id and the real `TargetError` refuses it with
-`RetiredCreation`. RT-1 runs assert, as each case needs:
+In every run of P's tree, the real `TargetError` refuses two late arrivals with `RetiredCreation`: J's late result at
+A's id, and G's notice at A's marker (G2's notice at G's marker in `rt1-a-g-deleted`). RT-1 runs assert, as each case
+needs:
 
 - which descendants end terminated;
 - whether J is cancelled;
@@ -151,8 +188,8 @@ In every run of P's tree, J's late result reaches A's id and the real `TargetErr
 
 **Executed here:**
 
-- the proposed drain and inbox transitions: page, the gate, Complete, the cohort precedence and poll order, held rows
-  skipped, and takeover by reloading durable rows only;
+- the proposed drain and inbox transitions: page, the gate, Complete and the cohort mark, the cohort precedence and
+  poll order, held rows skipped, and the suspect trial order;
 - the proposed retirement obligation, its cascade and the marker's next revision;
 - #4756's open-drain refusal;
 - the ObligationOutstanding start refusal.
@@ -160,7 +197,7 @@ In every run of P's tree, J's late result reaches A's id and the real `TargetErr
 They run against real prototype code:
 
 - `NativeModel.TurnAsync` with its real timer, cancel, event-resume and composite-signal hold handlers;
-- `CreationProtocol.TargetError`, `StartError`, `Retire`, `Origin` and `Fingerprint`;
+- `CreationProtocol.TargetError`, `StartError`, `Retire`, `Origin`, `Fingerprint` and `Validate`;
 - `Message.SuppliedCreator` and `Delivery.DiscardedAt`, over a real `Slot`;
 - `ChildRegistry.Read` and `Write`;
 - `WorkflowInstance.Finished`;
@@ -169,18 +206,25 @@ They run against real prototype code:
 Each report lists the real calls it made. The internal functions are called by reflection, so no prototype project
 changed.
 
-**Mirrored from the built code:**
+**Mirrored from the built code**, because each needs a real `Worker` (`Terminate` is private and takes a
+`TurnInput` that only the Worker builds, and `NextTrial` reads the Worker's private state):
 
+- the Worker's recovery path, for one instance:
+  - the store poll and its limit (InMemoryStore.PollAsync; Worker.cs 14, 516–537);
+  - the flush's marks (1397);
+  - the suspect test (577–578);
+  - NextTrial (734–760);
+  - the recovery boundary (796–820);
 - the built terminate of a live row (`WorkflowInstance.cs` 179–203);
 - the child-notice path (`WorkflowInstance.cs` 36–61);
 - the Worker's consumption of a discarded supplied creator (`Worker.cs` 1030–1037).
 
-Each of these needs a real `Worker`: `Terminate` is private and takes a `TurnInput` that only the Worker builds. The
-parent binding at a live child is the proposed rule of #4756.
+The parent binding at a live child is the proposed rule of #4756. The drain's per-row withholding is fed into
+NextTrial's "cannot be given" test, which the built Worker applies to a suspended instance.
 
 **Left for implementation qualification:**
 
-- the `Worker`: its poll, marks, trials and hold hand-back, commit batching and the fence;
+- the `Worker`: trial commits and their attempt counts, shelving, hold hand-back, commit batching and the fence;
 - store providers: seq allocation on SQL and MongoDB, counted updates, unknown commit outcomes;
 - real ownership: leases, takes and epochs;
 - cross-partition transport;
