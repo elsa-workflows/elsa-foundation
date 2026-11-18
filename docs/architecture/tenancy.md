@@ -216,8 +216,11 @@ under the pin could merge them. So a keyed request resolves its actor id before 
   lifecycle](data-lifecycle.md#proposed-the-qualified-delete)), which same-id addressing already needs: a key reused
   after its instance is deleted reads its binding and starts the same actor id under a higher creation, whichever
   equivalent spelling the new start uses.
-- **The key is a name; the operation is a token.** The caller key is compared under the pinned collation, through
-  the binding row. The operation id is an opaque token, compared exactly, by its UTF-16 code units, and stored only as
+- **The key is a name; the operation is a token.** This covers a keyed request's operation id. An operator command's
+  operation id is its outside message id, `Q(t, operation)` in ordinary scope zero (the table above), an ordinary `Id`
+  compared under the pinned collation, in which admission refuses an unpaired unit ("Where names enter" in
+  [observability](observability.md#resolving-a-park-a-bounded-drain)). The caller key is compared under the pinned collation, through
+  the binding row. A keyed request's operation id is an opaque token, compared exactly, by its UTF-16 code units, and stored only as
   its digest, as today's wire id already holds it only hashed and the receipt only base64-encoded (`KeyAdmission.cs`
   14–17). Admission accepts a NUL or an unpaired unit in an operation id ("Where names enter" in
   [observability](observability.md#resolving-a-park-a-bounded-drain), and S-6), which a `utf8mb4` column cannot store
