@@ -571,7 +571,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, WithSessionReads(state, stepSession), fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -639,7 +639,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
             // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
-            var faultedState = state with
+            var faultedState = WithSessionReads(state, stepSession) with
             {
                 Fault = backgroundResult?.Result?.Fault ?? returnedFault.ToNormalized()
             };
@@ -684,7 +684,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
             {
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                    invokePayload, state.WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
+                    invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
                     VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
                 return;
             }
@@ -692,7 +692,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (suspensionWrites.Failure is { } suspensionFailure)
             {
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                    invokePayload, state, suspensionFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
+                    invokePayload, WithSessionReads(state, stepSession), suspensionFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
                 return;
             }
 
@@ -747,7 +747,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
         {
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, state.WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
+                invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -755,14 +755,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         if (stepWrites.Failure is { } stepFailure)
         {
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, state, stepFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
+                invokePayload, WithSessionReads(state, stepSession), stepFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
             return;
         }
 
         completedState = stepWrites.Apply(completedState);
-        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
-            payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
-            stepWrites.Records, stepWrites.Written, occurredAt));
 
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame. Each capture is judged against
@@ -815,7 +812,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
 
         completedState = completedState.WithVariableWrites(captureCommit.Records);
-        // FR-025: each value written joins the write history as an inspection value, under the capture policy.
+        // FR-025: each value written joins the write history as an inspection value, under the capture policy: the step's
+        // session writes (spec 1231) and its captures, once nothing refused the completion.
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
+            stepWrites.Records, stepWrites.Written, occurredAt));
         valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
             payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
             captureCommit.Records, captureCommit.RecordedWrites, occurredAt));
@@ -839,6 +840,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             cancellationToken,
             stepWrites.Owners);
     }
+
+    // Spec 1231 FR-007: a faulted attempt keeps the session reads it made, for inspection.
+    private static ActivityExecutionState WithSessionReads(ActivityExecutionState state, StepVariableSession? session) =>
+        session is null ? state : state.WithSessionReads(session.Reads);
 
     /// <summary>The checkpoint change of a step's session writes to workflow variables when no capture also wrote one.</summary>
     private static RuntimeStateChange<WorkflowExecutionState>? StepWorkflowChange(StepVariableCommitResult writes, RuntimeSchedulerWorkItem workItem, string reason) =>

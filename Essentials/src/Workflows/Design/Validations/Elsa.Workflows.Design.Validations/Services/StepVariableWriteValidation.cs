@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// concurrent-write rule counts (FR-028):
 /// <list type="bullet">
 /// <item>A variable-reference input must be bound, by a <c>Variable</c> expression, to a variable declared in a scope
-/// visible to the node; a writable one must not be bound to a loop item or index (read-only).</item>
+/// visible to the node. A loop item or index is not a declared variable yet, so it cannot be bound.</item>
 /// <item>A node's may-write set is its writable bound references; an activity type marked
 /// <c>[AccessesUndeclaredVariables]</c> may write every visible variable.</item>
 /// <item>A may-write set that overlaps one of the node's own output captures is a warning: the capture applies last.</item>
@@ -82,11 +82,7 @@ internal static class StepVariableWriteValidation
                 {
                     case TargetKind.Undeclared:
                         errors.Add(new ValidationError(path, ReferenceRuleId,
-                            $"Input '{input.Name}' of node '{node.NodeId}' is bound to variable '{reference.ReferenceKey}' in scope '{scopeId}', which is not declared in a scope visible to the node. A step never creates a variable."));
-                        continue;
-                    case TargetKind.ReadOnly when writable:
-                        errors.Add(new ValidationError(path, ReferenceRuleId,
-                            $"Input '{input.Name}' of node '{node.NodeId}' can write the variable it names, but '{reference.ReferenceKey}' in scope '{scopeId}' is a loop item or index, which is read-only. Use a ReadOnlyVariableReference, or bind a declared variable."));
+                            $"Input '{input.Name}' of node '{node.NodeId}' is bound to variable '{reference.ReferenceKey}' in scope '{scopeId}', which is not declared in a scope visible to the node (a loop item or index is not a declared variable, and is read-only). A step never creates a variable."));
                         continue;
                 }
 
@@ -135,17 +131,16 @@ internal static class StepVariableWriteValidation
         var owner = ancestors.LastOrDefault(ancestor => StringComparer.Ordinal.Equals(ancestor.NodeId, scopeId));
         if (owner is null)
             return TargetKind.Undeclared;
-        // An enclosing scope's own declared variables are writable; any other value it exposes to its body is a loop
-        // iteration value (an item or an index), which is read-only (ADR 0028).
+        // Only an enclosing scope's own declared variables can be bound. Loop items and indexes are not declared variables
+        // yet (spec 1222 Q1 makes them so), so a binding to one is refused as undeclared, never as a writable target.
         return structures.ProjectScopedVariables(owner).Any(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey))
             ? TargetKind.Declared
-            : TargetKind.ReadOnly;
+            : TargetKind.Undeclared;
     }
 
     private enum TargetKind
     {
         Declared,
-        ReadOnly,
         Undeclared
     }
 }

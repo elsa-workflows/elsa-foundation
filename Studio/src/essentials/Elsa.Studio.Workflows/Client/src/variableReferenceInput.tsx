@@ -41,11 +41,24 @@ export function readMayWriteSet(
     const bound = readBoundVariable(activity, input);
     if (!bound) continue;
     const key = selectedOptionKey(bound);
-    const name = visibleVariables.find(variable => optionKey(variable.referenceKey, variable.scopeId) === key)?.name
-      ?? bound.referenceKey;
+    const visible = visibleVariables.find(variable => optionKey(variable.referenceKey, variable.scopeId) === key);
+    // A binding to a variable that was deleted or moved out of scope keeps its stored name, flagged; publish refuses it.
+    const name = visible
+      ? visible.name
+      : `${readStoredVariableName(activity, input) ?? bound.referenceKey} (not visible from this scope)`;
     if (!names.includes(name)) names.push(name);
   }
   return names;
+}
+
+/** The declared name a Variable binding stored with its reference, if any. */
+function readStoredVariableName(activity: ActivityNode, input: StudioActivityInputDescriptor): string | null {
+  const value = readWrappedInput(activity, input).expression.value;
+  if (value && typeof value === "object" && "name" in value) {
+    const name = (value as { name?: unknown }).name;
+    return typeof name === "string" && name.trim() !== "" ? name : null;
+  }
+  return null;
 }
 
 /** The display name of the other syntax a variable-reference input is stored with, or null when it is unbound or a Variable binding. */
@@ -76,6 +89,7 @@ export function VariableReferenceInputRow({
 }) {
   const labelId = useId();
   const accessId = useId();
+  const noteId = useId();
   const authoring = useWorkflowReferenceAuthoring();
   const label = input.displayName || input.name;
   const access = describeVariableAccess(input);
@@ -93,14 +107,14 @@ export function VariableReferenceInputRow({
       </div>
       {input.description ? <p>{input.description}</p> : null}
       {foreignSyntax ? (
-        <p className="wf-variable-picker-note" role="note">
+        <p id={noteId} className="wf-variable-picker-note" role="note">
           Bound with {foreignSyntax}; this input accepts only a declared variable. Pick one to replace it.
         </p>
       ) : null}
       {authoring ? (
         <VariableTargetSelect
           ariaLabelledBy={labelId}
-          ariaDescribedBy={accessId}
+          ariaDescribedBy={foreignSyntax ? `${accessId} ${noteId}` : accessId}
           visibleVariables={authoring.visibleVariables}
           status={authoring.status}
           retry={authoring.retry}

@@ -55,16 +55,33 @@ public sealed class StepVariableWriteValidationTests
     }
 
     [Fact]
-    public async Task A_writable_reference_bound_to_a_loop_item_is_refused_and_a_read_only_one_is_not()
+    public async Task A_reference_bound_to_a_key_its_container_does_not_declare_is_refused_in_either_direction()
     {
-        // The enclosing Sequence ("root") declares no "currentItem": its value is an iteration value, read-only.
+        // The enclosing Sequence ("root") declares no "currentItem" (a loop item is not a declared variable yet) nor "tpyo".
         var errors = await Validate(Sequence("root",
             Writer("writer", "currentItem", scopeId: "root"),
-            Reference("reader", ReaderVersion, "Amount", "currentItem", scopeId: "root")));
+            Reference("reader", ReaderVersion, "Amount", "tpyo", scopeId: "root")));
 
-        var error = Assert.Single(errors, item => item.Type == "ValueFlow/VariableReference");
-        Assert.Equal("writer/inputs/Balance", error.Path);
-        Assert.Contains("loop item or index, which is read-only", error.Message, StringComparison.Ordinal);
+        var refused = errors.Where(item => item.Type == "ValueFlow/VariableReference").OrderBy(item => item.Path, StringComparer.Ordinal).ToArray();
+        Assert.Equal(["reader/inputs/Amount", "writer/inputs/Balance"], refused.Select(item => item.Path));
+        Assert.All(refused, item => Assert.Contains("which is not declared in a scope visible to the node", item.Message, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Two_marked_activities_in_parallel_warn_on_a_container_variable_nobody_else_writes()
+    {
+        var inner = new VariableDefinition("inner", "inner", new TypeReference("Int32"), null, null);
+        var errors = await Validate(Structured("root", "elsa.sequence.structure", new
+        {
+            activities = new[]
+            {
+                Parallel(("left", new ActivityNode("generic-left", MarkedVersion, [], [])), ("right", new ActivityNode("generic-right", MarkedVersion, [], [])))
+            },
+            variables = new[] { inner }
+        }));
+
+        var warning = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite" && item.Path == "root/variables/inner");
+        Assert.Contains("'generic-left', 'generic-right'", warning.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -201,10 +201,14 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (variable.IsTransient)
         {
             EnsureTransientAllowed(variable);
-            if (_transient.TryGetValue(variable.Address, out var replaced))
-                return (T)replaced!;
-            var live = variable.Committed.TransientResource;
-            return live is null ? default! : (T)live;
+            var live = _transient.TryGetValue(variable.Address, out var replaced) ? replaced : variable.Committed.TransientResource;
+            return live switch
+            {
+                null => default!,
+                T typed => typed,
+                _ => throw Fault(new InvalidOperationException(
+                    $"Transient variable '{variable.Name}' holds a '{live.GetType().FullName}', which cannot be read as '{typeof(T).FullName}' on node '{_node.ExecutableNodeId}'."))
+            };
         }
 
         var envelope = Read(variable);

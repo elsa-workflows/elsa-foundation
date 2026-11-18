@@ -125,6 +125,19 @@ public sealed class WriteThenFaultActivity : Activity
     }
 }
 
+/// <summary>Writes <c>count</c>, then cancels: nothing it staged may be saved.</summary>
+public sealed class WriteThenCancelActivity : Activity
+{
+    [ActivityInput]
+    public VariableReference<int> Count { get; set; } = default!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        context.Variables.Set(Count, 5);
+        return ValueTask.FromResult(ActivityTransition.Cancel<ActivityUnit>("The body cancelled after its write."));
+    }
+}
+
 /// <summary>Writes the value <c>count</c> already holds (0): a no-op (C4).</summary>
 public sealed class WriteSameValueActivity : Activity
 {

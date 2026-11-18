@@ -190,7 +190,8 @@ run inline. Input bindings, structural evaluations and background workers have n
   its changes so far with the suspension; the resumed evaluation gets a fresh session. A withheld value, an undeclared
   free name or a value of the wrong type faults the step on the host side, even when the body catches the exception.
 - **Publish.** A variable-reference input must be bound, by a `Variable` expression, to a variable declared in a visible
-  scope, and a writable one cannot name a loop item or index. Draft validation reports each case as an error
+  scope; a loop item or index is not a declared variable yet, so it cannot be bound, and at run time it is read-only.
+  Draft validation reports each case as an error
   (`ValueFlow/VariableReference`), which blocks promoting the draft; the publication compiler itself refuses an unbound
   input or a binding that is not a `Variable` expression (`VF-VAR-001`). The node's
   may-write set (its writable references) is pinned as `runtime.mayWriteVariables`, and a marked type as

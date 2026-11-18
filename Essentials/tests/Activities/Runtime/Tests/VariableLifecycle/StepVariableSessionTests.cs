@@ -68,6 +68,19 @@ public sealed class StepVariableSessionTests
     }
 
     [Fact]
+    public async Task A_step_that_cancels_after_writing_saves_nothing()
+    {
+        await using var harness = VariableLifecycleTestGraph.NewHarness(Ids);
+
+        var run = await harness.RunAsync(StepVariableTestGraph.Single(StepVariableTestGraph.CountLeaf("node-root", typeof(WriteThenCancelActivity))));
+
+        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("node-root").Status);
+        Assert.Equal(0, VariableLifecycleTestGraph.ReadCount(run));
+        Assert.Equal(0, StepVariableTestGraph.Version(run, VariableLifecycleTestGraph.CountKey).Version);
+        Assert.Null(run.State("node-root").VariableWrites);
+    }
+
+    [Fact]
     public async Task A_read_after_a_write_in_the_same_step_returns_the_written_value()
     {
         await using var harness = VariableLifecycleTestGraph.NewHarness(Ids);

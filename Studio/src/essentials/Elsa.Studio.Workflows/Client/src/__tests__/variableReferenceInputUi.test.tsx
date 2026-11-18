@@ -163,7 +163,11 @@ describe("variable-reference inputs", () => {
 
     expect(container.querySelector('.wf-property-row [role="note"]')?.textContent)
       .toBe("Bound with JavaScript; this input accepts only a declared variable. Pick one to replace it.");
-    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.value).toBe("");
+    const picker = container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!;
+    expect(picker.value).toBe("");
+    // The note is part of the select's accessible description, so a screen reader hears it with the select.
+    const noteId = container.querySelector('.wf-property-row [role="note"]')!.id;
+    expect(picker.getAttribute("aria-describedby")?.split(" ")).toContain(noteId);
 
     select(container, "workflow::counter-key");
     expect(onChange.mock.calls[0][0].Target.expression.type).toBe("Variable");
@@ -268,6 +272,26 @@ describe("may-write set", () => {
     );
 
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Total");
+  });
+
+  it("flags a bound variable that is no longer visible, by its stored name", () => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({
+          Target: { typeName: "Int32", expression: { type: "Variable", value: { referenceKey: "gone-key", declaringScopeId: "workflow", name: "Gone" } } }
+        })
+      }
+    );
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: Gone (not visible from this scope)");
+  });
+
+  it("disables the select for an input that is itself read-only", () => {
+    const onChange = vi.fn();
+    const container = renderPanel({ inputs: [{ ...referenceInput("Target", "ReadWrite"), isReadOnly: true }] }, { onChange });
+
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.disabled).toBe(true);
   });
 
   it("shows nothing when no ReadWrite reference is bound", () => {

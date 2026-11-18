@@ -179,7 +179,7 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                     .Distinct()
                     .ToArray();
                 foreach (var node in everyVisible)
-                foreach (var (scopeId, referenceKey) in variables)
+                foreach (var (scopeId, referenceKey) in variables.Concat(ScopedVariablesAbove(node)).Distinct())
                 {
                     if (!IsVisibleTo(node, scopeId) ||
                         writes.Any(item => ReferenceEquals(item.Node, node) && item.Write.ScopeId == scopeId && item.Write.ReferenceKey == referenceKey))
@@ -224,6 +224,18 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
             }
 
             return new(findings, duplicates);
+        }
+
+        // The container variables declared by the node's ancestors: visible to it, written or not.
+        private IEnumerable<(string ScopeId, string ReferenceKey)> ScopedVariablesAbove(Node node)
+        {
+            for (var ancestor = node.Parent; ancestor is not null; ancestor = ancestor.Parent)
+            {
+                if (string.IsNullOrWhiteSpace(ancestor.Activity.NodeId))
+                    continue;
+                foreach (var variable in structures.ProjectScopedVariables(ancestor.Activity))
+                    yield return (ancestor.Activity.NodeId, variable.ReferenceKey);
+            }
         }
 
         // A workflow variable is visible everywhere; a container variable only below the container that declares it.
