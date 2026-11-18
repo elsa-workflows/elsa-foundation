@@ -1,6 +1,6 @@
 Review4.Blockers results
-commit 666990a71ea044c464f2c8f4da6f1616dd0f3396 (tree 1d52b8b2fc5e356aeea2494d1c5190d709859d08, prototype tree 01cc1d3260eec15344379820d02f5721333c1442)
-branch base (merge-base with origin/main) 4524c4b81e25b43ff4c884455323f26d3f9929d7
+commit c4e0d75c65e9673ea7a3bf168b0507d48c5831e4 (tree 8ad59464403eded8db8afb41fc04d0af3afcb266, prototype tree 39d4ee3404743b6008b80cc817ac78bf78ea094d)
+branch base (merge-base with origin/main) a8740953d98c0787fa6b148867adf4621dfd5597
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
 commands, from prototypes/kernel-model, after removing experiments/Review4.Blockers/bin and obj:
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review4.Block
     dotnet build experiments/Review4.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review4.Blockers/bin/Release/net10.0/Kernel.Review4.Blockers.dll --all, twice
-    -> exit 0 both times, byte-identical output (SHA-256 943ea886d377b432b93423221d9e3d2328eaac117d8d4aa47f39157baf539a0f), below
+    -> exit 0 both times, byte-identical output (SHA-256 123e77dd8c61b65809724f25a4ad7c1bd7ecb5e27d555a05d204d03350f5454d), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-base, reviewed)
@@ -52,6 +52,10 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (fr1-held-crash, negative)
   exit 1 (fr1-held-crash, clear-with-held)
   exit 0 (fr1-held-crash, one-row-read-counts-held)
+  exit 1 (fr1-held-suspend-crash, reviewed)
+  exit 0 (fr1-held-suspend-crash, repaired)
+  exit 1 (fr1-held-suspend-crash, negative)
+  exit 1 (fr1-held-suspend-crash, controls-wait-while-suspended)
   exit 1 (fr1-control-after-complete, reviewed)
   exit 0 (fr1-control-after-complete, repaired)
   exit 1 (fr1-control-after-complete, negative)
@@ -1810,6 +1814,148 @@ invariant: the mark stays while a held cohort row remains: after a crash, the ne
     PASS undone rows remaining: 0 (expected 0)
   real prototype calls: NativeModel.TurnAsync x4
 RESULT FR-1/held-crash rules=one-row-read-counts-held: PASS
+
+== FR-1/held-suspend-crash | rules=reviewed ==
+invariant: while the instance is suspended its cohort rows are withheld and count as nothing for the mark's read, so a resume applies; then R1 reaches the model again before A
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; R1 = composite signal to H at seq 1000
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1] with ReleasedBy (1,1); cursor -> R1; gate row R1; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1])
+  C: no kept row past the cursor and gate row R1 taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, R1])
+  model turn A (native.cancel): end Cancelled
+  deliver R1 (order: [R1])
+  R1: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: [A]
+  rows: R1 dropped (finished instance, Cancelled); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs: A (expected R1,R1,A)
+    FAIL controls applied:  (expected S1 suspend,S2 resume)
+    FAIL R1 reached the model again after the takeover, before A: False (expected True)
+    FAIL R1's fate (handed back with the ending input): dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS nothing stalled: False (expected False)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held-suspend-crash rules=reviewed: FAIL
+
+== FR-1/held-suspend-crash | rules=repaired ==
+invariant: while the instance is suspended its cohort rows are withheld and count as nothing for the mark's read, so a resume applies; then R1 reaches the model again before A
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; R1 = composite signal to H at seq 1000
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1] with ReleasedBy (1,1); cursor -> R1; gate row R1; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1])
+  C: no kept row past the cursor and gate row R1 taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver R1 (order: [R1])
+  model turn R1 (native.composite-signal): signal-deferred:signal-1:f1; held [R1]
+  arrival: S1(seq 850, kernel.suspend, released -, seen 0, done False, kept -) from operator, while the model holds R1
+  cohort read finds no non-held cohort row: offering resumes with [R1] handed back, and the mark stays while they remain
+  deliver S1 (order: [S1, A])
+  S1: built suspend (WorkflowInstance.cs Control, mirrored), applied; suspended True
+  the instance is suspended: its cohort rows are withheld and none is offerable, so control kinds take their built place; the mark stays
+  crash takeover by another process after the suspend applied, while R1 is still unconsumed (the new owner does not know it was held): new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  arrival: S2(seq 2001, kernel.resume, released -, seen 0, done False, kept -) from operator
+  poll at epoch 2 (limit 500): [A (suspect), R1 (suspect), S2]
+  A is shelved: the suspended instance withholds it, so it is passed over and the flush marks it seen at epoch 2
+  R1 is shelved: the suspended instance withholds it, so it is passed over and the flush marks it seen at epoch 2
+  recovery boundary at S2: rows past it are cut
+  deliver S2 (order: [S2])
+  S2: built resume (WorkflowInstance.cs Control, mirrored), applied; suspended False
+  trial of R1 alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn R1 (native.composite-signal): signal-deferred:signal-1:f1; held [R1]
+  cohort read finds no non-held cohort row: offering resumes with [R1] handed back, and the mark stays while they remain
+  trial of A alone (Worker.cs 734-760, TrialGroup 1); the trial commit marks it seen at epoch 2
+  model turn A+R1 (native.cancel): signal-rejected:signal-1:f1; end Cancelled
+  the model's end clears the cohort mark in the end's commit
+  model inputs: [R1, R1, A]
+  rows: R1 consumed by a model turn; C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn); S1 consumed (built control); S2 consumed (built control)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    PASS model inputs: R1,R1,A (expected R1,R1,A)
+    PASS controls applied: S1 suspend,S2 resume (expected S1 suspend,S2 resume)
+    PASS R1 reached the model again after the takeover, before A: True (expected True)
+    PASS R1's fate (handed back with the ending input): consumed by a model turn (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS nothing stalled: False (expected False)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x4
+RESULT FR-1/held-suspend-crash rules=repaired: PASS
+
+== FR-1/held-suspend-crash | rules=negative ==
+invariant: while the instance is suspended its cohort rows are withheld and count as nothing for the mark's read, so a resume applies; then R1 reaches the model again before A
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; R1 = composite signal to H at seq 1000
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1] with ReleasedBy (1,1); cursor -> R1; gate row R1; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1])
+  C: no kept row past the cursor and gate row R1 taken up (seen 1 = epoch 1): Complete clears the resolution
+  deliver A (order: [A, R1])
+  model turn A (native.cancel): end Cancelled
+  deliver R1 (order: [R1])
+  R1: the instance has ended; consumed and dropped without a model turn (built finished-instance rule)
+  model inputs: [A]
+  rows: R1 dropped (finished instance, Cancelled); C0 consumed (drain turn); A consumed by a model turn; C consumed (drain turn)
+  instance: status Cancelled, resolution cleared, ResolutionGeneration 1, cohort mark none
+  assertions:
+    FAIL model inputs: A (expected R1,R1,A)
+    FAIL controls applied:  (expected S1 suspend,S2 resume)
+    FAIL R1 reached the model again after the takeover, before A: False (expected True)
+    FAIL R1's fate (handed back with the ending input): dropped (finished instance, Cancelled) (expected consumed by a model turn)
+    PASS instance ended: Cancelled (expected Cancelled)
+    PASS nothing stalled: False (expected False)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held-suspend-crash rules=negative: FAIL
+
+== FR-1/held-suspend-crash | rules=controls-wait-while-suspended ==
+invariant: while the instance is suspended its cohort rows are withheld and count as nothing for the mark's read, so a resume applies; then R1 reaches the model again before A
+  model turn start (start): no records
+  start: real Native turn ran H (f1), a composite that defers signals until its child Event 'go' completes; R1 = composite signal to H at seq 1000
+  park: R1(seq 1000, native.composite-signal, released -, seen 0, done True, kept Arrived)
+  open: recover opens generation 1; ParkRecord.ResolutionGeneration = 1; C0 = kernel.drain seq 800
+  arrival: A(seq 900, native.cancel, released -, seen 0, done False, kept -) from sender 0/other, withheld while the recover drain is open
+  C0 page: restored [R1] with ReleasedBy (1,1); cursor -> R1; gate row R1; sends C = kernel.drain seq 950
+  marks at epoch 1: R1(seq 1000, native.composite-signal, released (1,1), seen 1, done False, kept -); A(seq 900, native.cancel, released -, seen 1, done False, kept -); C(seq 950, kernel.drain, released -, seen 1, done False, kept -)
+  deliver C (order: [C, R1])
+  C: no kept row past the cursor and gate row R1 taken up (seen 1 = epoch 1): Complete clears the resolution and sets the cohort mark (1,1)
+  deliver R1 (order: [R1])
+  model turn R1 (native.composite-signal): signal-deferred:signal-1:f1; held [R1]
+  arrival: S1(seq 850, kernel.suspend, released -, seen 0, done False, kept -) from operator, while the model holds R1
+  cohort read finds no non-held cohort row: offering resumes with [R1] handed back, and the mark stays while they remain
+  deliver S1 (order: [S1, A])
+  S1: built suspend (WorkflowInstance.cs Control, mirrored), applied; suspended True
+  crash takeover by another process after the suspend applied, while R1 is still unconsumed (the new owner does not know it was held): new owner at epoch 2 rebuilds from durable rows only (memory, holds and polled rows are lost)
+  arrival: S2(seq 2001, kernel.resume, released -, seen 0, done False, kept -) from operator
+  poll at epoch 2 (limit 500): [A (suspect), R1 (suspect), S2]
+  A is shelved: the suspended instance withholds it, so it is passed over and the flush marks it seen at epoch 2
+  R1 is shelved: the suspended instance withholds it, so it is passed over and the flush marks it seen at epoch 2
+  recovery boundary at S2: rows past it are cut
+  stalled: the step bound was reached with work still pending
+  model inputs: [R1]
+  rows: R1 released; C0 consumed (drain turn); A pending; C consumed (drain turn); S1 consumed (built control); S2 pending
+  instance: status Running, resolution cleared, ResolutionGeneration 1, cohort mark (1,1)
+  assertions:
+    FAIL model inputs: R1 (expected R1,R1,A)
+    FAIL controls applied: S1 suspend (expected S1 suspend,S2 resume)
+    FAIL R1 reached the model again after the takeover, before A: False (expected True)
+    FAIL R1's fate (handed back with the ending input): released (expected consumed by a model turn)
+    FAIL instance ended: Running (expected Cancelled)
+    FAIL nothing stalled: True (expected False)
+    FAIL undone rows remaining: 3 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-1/held-suspend-crash rules=controls-wait-while-suspended: FAIL
 
 == FR-1/control-after-complete | rules=reviewed ==
 invariant: a control polled while the cohort mark is set waits until the check finds no non-held cohort row, so R reaches the model before the terminate
@@ -4088,6 +4234,10 @@ fr1-held-crash                 repaired            actual PASS  expected PASS  a
 fr1-held-crash                 negative            actual FAIL  expected FAIL  as expected
 fr1-held-crash                 clear-with-held     actual FAIL  expected FAIL  as expected
 fr1-held-crash                 one-row-read-counts-held actual PASS  expected PASS  as expected
+fr1-held-suspend-crash         reviewed            actual FAIL  expected FAIL  as expected
+fr1-held-suspend-crash         repaired            actual PASS  expected PASS  as expected
+fr1-held-suspend-crash         negative            actual FAIL  expected FAIL  as expected
+fr1-held-suspend-crash         controls-wait-while-suspended actual FAIL  expected FAIL  as expected
 fr1-control-after-complete     reviewed            actual FAIL  expected FAIL  as expected
 fr1-control-after-complete     repaired            actual PASS  expected PASS  as expected
 fr1-control-after-complete     negative            actual FAIL  expected FAIL  as expected
@@ -4152,4 +4302,4 @@ rt1-successor-gap              reviewed            actual FAIL  expected FAIL  a
 rt1-successor-gap              repaired            actual PASS  expected PASS  as expected
 rt1-successor-gap              negative            actual FAIL  expected FAIL  as expected
 rt1-successor-gap              successor-admitted  actual FAIL  expected FAIL  as expected
-104/104 runs as expected
+108/108 runs as expected

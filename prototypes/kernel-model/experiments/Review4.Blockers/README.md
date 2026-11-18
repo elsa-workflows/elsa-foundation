@@ -11,7 +11,7 @@ stranding a live subtree. Each case runs one schedule under three rule sets:
 Mutations of the repaired set run where they bite:
 
 - FR-1: `memory-precedence`, `held-blocks`, `trial-plain-seq`, `skip-target`, `no-shelf`, `no-cohort-mark`,
-  `one-row-read-counts-held`, `clear-with-held`, `mark-ignores-controls`, `controls-wait-on-ticket`,
+  `one-row-read-counts-held`, `clear-with-held`, `controls-wait-while-suspended`, `mark-ignores-controls`, `controls-wait-on-ticket`,
   `boundary-holds-cohort` and `boundary-holds-cohort-nonsuspect`;
 - RT-1: `cascade-any`, `successor-admitted`, `successor-inherits` and `root-retains`.
 
@@ -43,6 +43,7 @@ experiments/Review4.Blockers/run.sh                  # every run one by one, the
 | `fr1-trial-takeover-open` | The rule that a withheld suspect skips only itself, never its target: a crash takeover before Complete | reviewed FAIL, repaired PASS, negative PASS, trial-plain-seq PASS, skip-target FAIL, no-cohort-mark PASS |
 | `fr1-trial-takeover-open-poll-limit` | The shelving of a drain-withheld suspect: as `fr1-trial-takeover-open`, with PollLimit 1 | reviewed FAIL, repaired PASS, negative PASS, no-shelf FAIL, skip-target FAIL |
 | `fr1-held-poll-limit` | E-8 run 2: R1 held, R2 beyond a bounded poll | reviewed FAIL, repaired PASS, negative FAIL, one-row-read-counts-held FAIL, clear-with-held PASS |
+| `fr1-held-suspend-crash` | The suspension rule under the mark: a suspended instance's cohort rows are withheld and none is offerable, so its controls take their built place (no page case id yet) | reviewed FAIL, repaired PASS, negative FAIL, controls-wait-while-suspended FAIL |
 | `fr1-held-crash` | The page's "Clearing the mark": the mark stays while a held cohort row remains, across a crash takeover (no page case id yet) | reviewed FAIL, repaired PASS, negative FAIL, clear-with-held FAIL, one-row-read-counts-held PASS |
 | `fr1-control-after-complete` | E-7's control run: a control polled while the cohort mark is set | reviewed FAIL, repaired PASS, negative FAIL, mark-ignores-controls FAIL |
 | `fr1-control-crash` | E-7's control run after a crash takeover: R is a suspect behind K's recovery boundary | reviewed FAIL, repaired PASS, negative FAIL, boundary-holds-cohort FAIL |
@@ -84,6 +85,7 @@ model then gets one input per turn, in the order the rule set gives:
 | no-shelf | repaired | a suspect the cohort rule passes over is not shelved | with a poll limit of 1, every poll returns A again, R is never polled, and the run stalls |
 | no-cohort-mark | repaired, with no durable cohort mark: the owner knows only the cohort rows it has polled | as repaired, over polled rows | with a poll limit of 1 the owner holds A alone and tries it |
 | one-row-read-counts-held | repaired, with a cohort read of one row that counts held keys | as repaired | the read returns the held R1, so the mark waits for nothing and A is offered before R2 |
+| controls-wait-while-suspended | repaired, except that a suspended instance's withheld cohort rows still count for the mark's read | as repaired | after a crash the suspended instance's resume waits for R1, R1 waits for the resume, and the run stalls |
 | clear-with-held | repaired, except that the read clears the mark as soon as it finds no non-held cohort row, while a held one remains | as repaired | after a crash the new owner has no mark, tries A first, and R1 is dropped |
 | mark-ignores-controls | repaired, except that a control polled while the mark is set runs ahead of the cohort read | as repaired | the parent's terminate overtakes R, and R is dropped |
 | controls-wait-on-ticket | repaired, with job tickets counted as cohort rows | as repaired | the controls wait on the hanging ticket J until the step bound |
@@ -101,6 +103,11 @@ outcomes, kept apart as on the page ("The durable cohort mark" and "Clearing the
   mark stays while any held cohort row remains.
 - Only a read that finds no cohort row at all, held or not, clears the mark, in that read's commit. A model end also
   clears it, in the end's commit.
+
+While the instance is suspended, its cohort rows are withheld as every non-control row is (built: a suspended instance
+gets control kinds only and no trials, Worker.cs 830–831 and 756), so none counts as offerable to the mark's read, and
+control kinds take their built place: a resume, a terminate, a further suspend. The mark stays set; once a resume
+applies, cohort rows again precede every non-control row while it is set.
 
 While a non-held cohort row remains, no other row of the instance is offered, control kinds included, and no
 non-cohort suspect is tried. While the drain is open or the mark is set, every cohort row is exempt from a control's
@@ -158,6 +165,19 @@ The variants:
   - Under `repaired`, the mark's check skips the held R1 and finds R2, so A waits. The poll reaches R2, R2's real turn
     completes X with R1 handed back, and then A cancels.
   - Under `one-row-read-counts-held`, the check returns the held R1, A is offered, and R2 is dropped.
+- `held-suspend-crash`: as `held-crash`, with a suspension. After Complete the model holds R1, and an operator's
+  `kernel.suspend` S1 arrives at seq 850, below A's (another sender's clock). The read finds only the held R1, so
+  offering resumes and S1, first in the built order, applies. Then another process takes over, and a `kernel.resume`
+  S2 arrives. The new owner does not know R1 was held, so R1 is a non-held cohort suspect, withheld and shelved
+  because the instance is suspended, as is A.
+  - Under `repaired`, the suspended instance's cohort rows count as nothing for the mark's read, so S2 applies. R1 is
+    then tried and reaches the model again before A, and A ends the model with R1 handed back.
+  - Under `controls-wait-while-suspended`, R1 still counts, so S2 waits for R1 and R1 waits for S2. The run stalls
+    until the step bound, with the resume never applied and neither R1 nor A delivered after the takeover.
+  - Under `reviewed` and `negative`, there is no mark, so A is offered before R1 is ever held, ends the model, and R1
+    is dropped. The suspend never arrives, because its trigger is R1 being held.
+  - A variant with the suspend during the open drain is not modelled: the harness's progress gate counts a row as
+    taken up by its mark and does not model the page's rule that the gate waits while the instance is suspended.
 - `held-crash`: the workflow is H, a `HeldGate` over `Event go`. The final page restores only R1, a composite signal to
   H at seq 1000, and A, a `native.cancel` at seq 900, is withheld. After Complete the owner delivers R1, and the model
   holds it through Native's real hold path. The next read finds no non-held cohort row, so offering would resume. At
