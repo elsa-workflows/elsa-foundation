@@ -47,6 +47,12 @@ run fr1-held-poll-limit                reviewed                         # expect
 run fr1-held-poll-limit                repaired                         # expected PASS
 run fr1-held-poll-limit                negative                         # expected FAIL
 run fr1-held-poll-limit                one-row-read-counts-held         # expected FAIL
+run fr1-held-poll-limit                clear-with-held                  # expected PASS
+run fr1-held-crash                     reviewed                         # expected FAIL
+run fr1-held-crash                     repaired                         # expected PASS
+run fr1-held-crash                     negative                         # expected FAIL
+run fr1-held-crash                     clear-with-held                  # expected FAIL
+run fr1-held-crash                     one-row-read-counts-held         # expected PASS
 run fr1-control-after-complete         reviewed                         # expected FAIL
 run fr1-control-after-complete         repaired                         # expected PASS
 run fr1-control-after-complete         negative                         # expected FAIL
