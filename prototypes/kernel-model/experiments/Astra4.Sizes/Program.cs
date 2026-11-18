@@ -66,10 +66,48 @@ Check(MatchDigest("t_high\uD800", "e") != MatchDigest("t_high�", "e"), "code u
 // Two waits of one instance on one key: one delivery id each; two keys on one wait: one Match each (B2-3's distinct handles).
 Check(DeliveryId("e", "1/i", 1, "w1") != DeliveryId("e", "1/i", 1, "w2") && MatchDigest("t_k1", "e") != MatchDigest("t_k2", "e"),
     "(Id, Match) separates two waits on one key and one wait on two keys");
-// The full components ride in the delivery's payload: measure the widest key, event and wait in today's key codec.
-var components = Json.Write(new EventMatch(Q(ctl), ctl, "", ctl, long.MaxValue));
-Console.WriteLine($"  the delivery's component envelope (key, event, wait, creation) at its widest: {Bytes(components)} bytes");
-Check(Bytes(components) <= 24 * 1024, "the component envelope fits the proposed reserve C = 24 KiB");
+// The components ride in the delivery's payload ahead of the event's payload: a length-prefixed header, no escaping.
+// Proposed layout (this probe only): "1|", then for the key, the event id and the wait: a decimal count of UTF-16
+// units, ':', and the units themselves; the event's payload follows unchanged.
+static string Header(params string[] parts) => "1|" + string.Concat(parts.Select(p => FormattableString.Invariant($"{p.Length}:{p}")));
+static (string[] Parts, string Payload) Strip(string payload)
+{
+    if (!payload.StartsWith("1|", StringComparison.Ordinal)) throw new FormatException("no header");
+    var at = 2; var parts = new string[3];
+    for (var i = 0; i < 3; i++)
+    {
+        var colon = payload.IndexOf(':', at);
+        var n = int.Parse(payload.AsSpan(at, colon - at), System.Globalization.CultureInfo.InvariantCulture);
+        parts[i] = payload.Substring(colon + 1, n); at = colon + 1 + n;
+    }
+    return (parts, payload[at..]);
+}
+foreach (var (label, name) in new[] { ("ASCII", Rep('k', N)), ("U+0001", ctl), ("'<'", lt) })
+{
+    var h = Header(Q(name), name, name);
+    Console.WriteLine($"  delivery header for key, event id and wait of {N} bytes of {label}: {Bytes(h)} bytes ({h.Length * 2} in UTF-16)");
+}
+var widest = Header(Q(ctl), ctl, ctl);
+Check(Bytes(widest) <= 40 * 1024 && widest.Length * 2 <= 40 * 1024, "the header fits the proposed reserve C = 40 KiB, in WTF-8 and in UTF-16");
+var published = "{\"v\":\"<\u0001>\\\\ \\\"q\\\" " + Rep('\u0001', 64) + "\"}";
+var (back, unchanged) = Strip(Header(Q("k"), "e1", "w1") + published);
+Check(unchanged == published && back.SequenceEqual(new[] { Q("k"), "e1", "w1" }), "stripping the header returns the published payload unchanged, escapable characters included");
+
+// ---- R4-M2: a subscription's MongoDB write at the name limits, with the real BSON encoder -----------------------
+Console.WriteLine("R4-M2 subscription write on MongoDB (MongoDB.Bson 3.9.0; shape of MongoStore.ToDocument, MongoStore.cs 648-654)");
+var sKey = Q(Rep('k', N)); var sInst = "1023/" + Q(Rep('i', N)); var sWait = Rep('w', N);
+MongoDB.Bson.BsonDocument SubId() => new() { { "k", sKey }, { "i", sInst }, { "w", sWait } };
+var subDoc = new MongoDB.Bson.BsonDocument { { "_id", SubId() }, { "key", sKey }, { "instance", sInst }, { "wait", sWait },
+    { "partition", 1023 }, { "start", MongoDB.Bson.BsonNull.Value }, { "tenant", tenant }, { "creation", long.MaxValue }, { "keep", true } };
+var docBytes = MongoDB.Bson.BsonExtensionMethods.ToBson(subDoc).Length;
+var insertOp = new MongoDB.Bson.BsonDocument { { "insert", 0 }, { "document", subDoc } };     // one bulkWrite insert entry
+var insertBytes = MongoDB.Bson.BsonExtensionMethods.ToBson(insertOp).Length;
+var upsertOp = new MongoDB.Bson.BsonDocument { { "update", 0 }, { "filter", new MongoDB.Bson.BsonDocument("_id", SubId()) }, { "updateMods", subDoc }, { "upsert", true } };
+var upsertBytes = MongoDB.Bson.BsonExtensionMethods.ToBson(upsertOp).Length;
+Console.WriteLine($"  stored document {docBytes} bytes; as a bulkWrite insert entry {insertBytes} bytes; as today's replace-upsert entry {upsertBytes} bytes");
+Check(insertBytes <= 7 * 1024, "the insert entry fits the proposed allowance of 7,168 bytes per subscription");
+Check(upsertBytes > 7 * 1024, "today's replace-upsert, which repeats _id in its filter, does not");
+Console.WriteLine($"  subscriptions in B_plan at 7,168 bytes each: {25165824 / 7168}");
 
 // ---- R4-M6: the placement hash over two spellings one collation calls equal -------------------------------------
 Console.WriteLine("R4-M6 placement (existing InstanceRef.Spread, Addresses.cs 22-27, over UTF-16 code units)");

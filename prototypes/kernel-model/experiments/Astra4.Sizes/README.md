@@ -7,7 +7,8 @@ the proposed transitions.
 
 | Section | What it runs | Finding |
 |---|---|---|
-| Event match | The real `EventMatch.Encode` (`src/Kernel.Durable/Store.cs`) for names at `N` = 1,024 WTF-8 bytes in the widest JSON escape, today's `evq:` delivery id, and, beside them, the proposed fixed digests (the canonical encoding written in this probe only) | R4-M1 |
+| Event match | The real `EventMatch.Encode` (`src/Kernel.Durable/Store.cs`) for names at `N` = 1,024 WTF-8 bytes in the widest JSON escape, today's `evq:` delivery id, and, beside them, the proposed fixed digests and the length-prefixed delivery header with its strip (both written in this probe only) | R4-M1 |
+| Subscription write | The prototype's MongoDB subscription document shape (`mongo/Kernel.Mongo/MongoStore.cs` 648–654) with the proposed tenant, creation and keep fields, at the name limits, encoded by MongoDB.Bson 3.9.0 (the version the prototype's driver locks): the document, a bulk-write insert entry and today's replace-upsert entry | R4-M2 |
 | Placement | The real `InstanceRef.Spread` (`src/Kernel.Runtime/Addresses.cs`) over spellings that the pinned SQL Server and MySQL collation calls equal | R4-M6 |
 | Native job arm | The real `NativeModel` through a `DispatchProxy` `ITurn` host: what `WaitEntry` and the ticket's `BackgroundArgs` hold after a background arm whose bound variable a sibling then changes, and what the real `ExecuteJobAsync` does with the arm-time arguments, fresh ones, none, and none without an effect key | R4-M3 |
 
@@ -32,7 +33,12 @@ R4-M1 event match (existing EventMatch.Encode = Json.Write with DurableKeyJson, 
   four names of 1023 WTF-8 bytes of U+754C: Match 8395 bytes; evq wire id 3174 bytes
   four names of 1024 WTF-8 bytes of U+1F310: Match 12499 bytes; evq wire id 3177 bytes
   proposed Match digest: 64 bytes; proposed delivery id: 67 bytes, whatever the inputs
-  the delivery's component envelope (key, event, wait, creation) at its widest: 18573 bytes
+  delivery header for key, event id and wait of 1024 bytes of ASCII: 3154 bytes (6308 in UTF-16)
+  delivery header for key, event id and wait of 1024 bytes of U+0001: 3154 bytes (6308 in UTF-16)
+  delivery header for key, event id and wait of 1024 bytes of '<': 3154 bytes (6308 in UTF-16)
+R4-M2 subscription write on MongoDB (MongoDB.Bson 3.9.0; shape of MongoStore.ToDocument, MongoStore.cs 648-654)
+  stored document 6613 bytes; as a bulkWrite insert entry 6640 bytes; as today's replace-upsert entry 9905 bytes
+  subscriptions in B_plan at 7,168 bytes each: 3510
 R4-M6 placement (existing InstanceRef.Spread, Addresses.cs 22-27, over UTF-16 code units)
   Spread('a_Invoice', 1024) = 460, Spread('a_invoice', 1024) = 300
   Spread('a_café', 1024) = 1000, Spread('a_cafe', 1024) = 796
@@ -46,7 +52,7 @@ R4-M3 Native background job (existing NativeModel.cs 129, 185-195, 347-355)
 ALL CHECKS PASSED
 ```
 
-(The `[ok]` check lines are omitted above; the run prints 16 of them.)
+(The `[ok]` check lines are omitted above; the run prints 19 of them.)
 
 ## What it does not show
 
