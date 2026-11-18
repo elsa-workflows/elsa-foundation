@@ -471,9 +471,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private async Task RetakeAsync(IReadOnlyList<PartitionFence> held, CancellationToken cancellationToken)
     {
-        if (_taking) return;
+        if (_taking)
+        {
+            lock (_turnSync) _retaking = false;     // a take in flight replaces the retake
+            return;
+        }
         _taking = true;
-        lock (_turnSync) (_retaking, _retakeStoodDown) = (true, false);
         var (started, taken, now) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue);
         try
         {
@@ -489,7 +492,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         finally { _taking = false; }
         bool stoodDown;
-        lock (_turnSync) (stoodDown, _retaking) = (_retakeStoodDown, false);
+        // One critical section, for the same stand-down: it sees _retaking, or the installed set, never neither.
+        lock (_turnSync)
+        {
+            (stoodDown, _retaking) = (_retakeStoodDown, false);
+            if (!stoodDown && taken.Count > 0)
+            {
+                Install(new(taken, now), started);
+                _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
+            }
+        }
         if (stoodDown)
         {
             // A stand-down came while the retake was in flight: install nothing, and give up what it took.
@@ -499,11 +511,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 else if (taken.Count > 1) await _store.ReleaseAsync(taken, cancellationToken);
             }
             catch (Exception) { /* then the leases run out instead */ }
-            return;
         }
-        if (taken.Count == 0) return;
-        Install(new(taken, now), started);
-        _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
     }
 
     private void Install(OwnedLease lease, long started)
@@ -1756,9 +1764,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private async Task FailAsync(List<TurnOutcome> units, CancellationToken cancellationToken)
     {
-        var (held, releasing) = (Fences, _releasing);
-        Fail(units);
-        if (held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit)) await RetakeAsync(held, cancellationToken);
+        IReadOnlyList<PartitionFence> held;
+        bool retake;
+        // One critical section: a stand-down on another thread (the host's DeactivateAsync, DisposeAsync) takes the same
+        // lock in ReleaseAsync, so it sees this worker owning, or retaking, never neither; otherwise the retake would install
+        // ownership on fresh leases after the stand-down had returned.
+        lock (_turnSync)
+        {
+            (held, var releasing) = (Fences, _releasing);
+            Fail(units);
+            retake = held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit);
+            if (retake) (_retaking, _retakeStoodDown) = (true, false);
+        }
+        if (retake) await RetakeAsync(held, cancellationToken);
     }
 
     private void Fail(List<TurnOutcome> units)
