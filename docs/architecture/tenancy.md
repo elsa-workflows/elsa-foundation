@@ -1,8 +1,10 @@
 # Tenancy in the kernel
 
-> **Proposed.** The kernel design awaits owner approval. This page answers finding M2 of the gate 2 architecture
-> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)); it
-> does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers finding M2 of the gate 2 architecture
+> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)).
 
 Several tenants share one Cluster database, its 1,024 virtual partitions and its owners. This page defines how the
 kernel learns a tenant, how every name a caller can choose is kept apart per tenant, and what each ingress, match, read

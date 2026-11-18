@@ -1,8 +1,10 @@
 # Large fan-out and fan-in
 
-> **Proposed.** The kernel design awaits owner approval. This page answers design-now question 4 of the
-> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions); it does not authorize product
-> implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 4 of the
+> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions).
 
 A ForEach over 100,000 items, or an ETL job split into 100,000 partitions of work, starts many pieces of work and
 collects their results. On the kernel every piece that runs as a child instance reports to its parent with a message.
