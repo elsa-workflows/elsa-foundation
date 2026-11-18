@@ -20,7 +20,7 @@ sealed class Nt2(string variant, Rules rules)
 
     /// <summary>The instance envelope before <c>ParkRecord</c>: 16 MiB less 312 KiB (observability "The envelope bound and its headroom").</summary>
     public const long Cap = 16_457_728;
-    /// <summary>The fixed reserve. Repaired: it covers only the bounded fixed fields. Reviewed: every non-state field.</summary>
+    /// <summary>The fixed reserve. Repaired: it covers only the bounded fixed fields; <c>Model</c>, <c>Definition</c> and <c>CustomHandles</c> are counted at their encoded size. Reviewed: every non-state field.</summary>
     public const long Reserve = 16_384;
     /// <summary>The marker's per-entry sizes, SQL Server's UTF-16 (data lifecycle, "The bound, and when it clears").</summary>
     public const long ChildEntry = 384, JobEntry = 12_416;
@@ -71,21 +71,28 @@ sealed class Nt2(string variant, Rules rules)
     private static long Bound(NativeState state) => state.Inboxes?.Values.Where(i => i.Closed is null)
         .Sum(i => PerInbox + (long)ReceiptGross * i.Receipts.Values.Count(r => r.Status is "Queued" or "Evaluating" or "Selected")) ?? 0;
 
-    private sealed record Projection(long State, long Growth, long Registries, long Handles, long Total)
+    private sealed record Projection(long State, long Growth, long Registries, long Handles, long Names, long Total)
     {
         public bool Fits => Total <= Cap;
         public override string ToString() =>
-            $"state {State:N0} + TerminalGrowth {Growth:N0} + registries {Registries:N0} + CustomHandles {Handles:N0} + reserve {Reserve:N0} = {Total:N0} {(Fits ? "<=" : ">")} {Cap:N0} (margin {Cap - Total:N0})";
+            $"state {State:N0} + TerminalGrowth {Growth:N0} + registries {Registries:N0} + CustomHandles {Handles:N0} + Model and Definition {Names:N0} + reserve {Reserve:N0} = {Total:N0} {(Fits ? "<=" : ">")} {Cap:N0} (margin {Cap - Total:N0})";
     }
 
-    /// <summary>The projected terminal row of a live row: reviewed counts the handles as 0, repaired at their encoded size.</summary>
-    private static Projection ProjectionOf(InstanceRow row, long children, long jobs, bool countHandles)
+    /// <summary>A string field's encoded size, as <see cref="Measured"/> counts it inside the other fields: its JSON string in UTF-8.</summary>
+    private static long Encoded(string value) => Bytes(Json.Write(value));
+
+    /// <summary>
+    /// The projected terminal row of a live row. Reviewed counts the handles, <c>Model</c> and <c>Definition</c> as 0;
+    /// repaired counts each at its encoded size, since no rule bounds them.
+    /// </summary>
+    private static Projection ProjectionOf(InstanceRow row, long children, long jobs, bool countHandles, bool countNames)
     {
         var state = Bytes(row.State);
         var growth = row.Model == NativeModel.ModelKey && row.State != "null" ? Bound(Json.Read<NativeState>(row.State)) : 0;
         var registries = ChildEntry * children + JobEntry * jobs;
         var handles = countHandles ? Bytes(row.CustomHandles) : 0;
-        return new(state, growth, registries, handles, state + growth + registries + handles + Reserve);
+        var names = countNames ? Encoded(row.Model) + Encoded(row.Definition) : 0;
+        return new(state, growth, registries, handles, names, state + growth + registries + handles + names + Reserve);
     }
 
     private static long Count(string? json) => json is null ? 0 : Json.Read<JsonArray>(json).Count;
@@ -104,7 +111,7 @@ sealed class Nt2(string variant, Rules rules)
         var row = commit.Row!;
         if (row.Status == InstanceStatus.Running)
         {
-            var projection = ProjectionOf(row, Count(row.Children), Count(row.Jobs), rules.CountHandles);
+            var projection = ProjectionOf(row, Count(row.Children), Count(row.Jobs), rules.CountHandles, rules.CountNames);
             _r.Line($"{what}: admission check of a live row (proposed, {(rules.CountHandles ? "the full projection" : "the sixth round's formula")}): {projection}");
             if (!projection.Fits)
             {
@@ -227,8 +234,10 @@ sealed class Nt2(string variant, Rules rules)
         {
             var growth = Bound(Witness(0, receipt));
             var counted = rules.CountHandles ? handles : 0;
-            target = Cap - Reserve - ChildEntry - growth - counted;
-            how = $"the largest state this rule set's check admits: cap - reserve - one child - {growth:N0} TerminalGrowth - {counted:N0} CustomHandles counted";
+            var p = _k.Store.Instances[P];
+            var names = rules.CountNames ? Encoded(p.Model) + Encoded(p.Definition) : 0;
+            target = Cap - Reserve - ChildEntry - growth - counted - names;
+            how = $"the largest state this rule set's check admits: cap - reserve - one child - {growth:N0} TerminalGrowth - {counted:N0} CustomHandles - {names:N0} Model and Definition counted";
         }
         var state = Witness(target, receipt);
         _r.Line($"the grown state: {Bytes(Json.Write(state)):N0} bytes ({how}); {state.Inboxes?.Count ?? 0:N0} open inboxes, {state.Variables.Count:N0} variables");
@@ -268,7 +277,7 @@ sealed class Nt2(string variant, Rules rules)
                 throw new InvalidOperationException("fixture failure: NativeModel.ProtectsDeletion returned false for the protected ThenDelete fixture, so no commit was attempted");
             _r.Line("  ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write");
         }
-        var projected = ProjectionOf(end, Count(row.Children), Count(row.Jobs), countHandles: true);
+        var projected = ProjectionOf(end, Count(row.Children), Count(row.Jobs), countHandles: true, countNames: true);
         _r.Line($"  for reference, the ending row against the full projection, its registries counted as the previous row's: {projected}");
         var landed = Checked("P's ending commit", Kernel.ToTurnCommit(outcome), row, seq, term);
         _ending = (landed, Measured(end), projected.Total);

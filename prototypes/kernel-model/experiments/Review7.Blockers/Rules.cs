@@ -2,9 +2,10 @@ namespace Kernel.Review7;
 
 /// <summary>
 /// One rule set. <c>reviewed</c> is the design at cfce7a2c1; <c>repaired</c> is the seventh fix round's design brief;
-/// <c>negative</c> is the repaired set with the one rule of the case's finding put back as reviewed; the mutation
-/// <c>refusal-without-prefix</c> removes the other half of R7-M1's rule. Every flag below is one rule, named as the
-/// brief names it, and every one is proposed and held by the harness.
+/// <c>negative</c> is the repaired set with the one rule of the case's finding put back as reviewed (for NT-2, no
+/// variable field beyond the state and the registries is counted); the mutation <c>refusal-without-prefix</c> removes
+/// the other half of R7-M1's rule. Every flag below is one rule, named as the brief names it, and every one is proposed
+/// and held by the harness.
 /// </summary>
 sealed record Rules(string Name)
 {
@@ -15,6 +16,8 @@ sealed record Rules(string Name)
     /// formula, which counts the state, <c>TerminalGrowth(state)</c>, the registries and the fixed 16,384 bytes only.
     /// </summary>
     public bool CountHandles { get; init; }
+    /// <summary>R7-B1, repaired (proposed): the projection also counts <c>Model</c> and <c>Definition</c> at their encoded size, since no rule bounds them; they leave the fixed reserve.</summary>
+    public bool CountNames { get; init; }
 
     // ---- R7-M1 (MX-1) ----
     /// <summary>R7-M1, repaired (proposed, owner decision of 18 November): a turn's event id is stored and returned with the reserved first code unit <c>~</c>.</summary>
@@ -23,7 +26,7 @@ sealed record Rules(string Name)
     public bool Refusal { get; init; }
 
     public static Rules Reviewed => new("reviewed");
-    public static Rules Repaired => new("repaired") { CountHandles = true, Prefix = true, Refusal = true };
+    public static Rules Repaired => new("repaired") { CountHandles = true, CountNames = true, Prefix = true, Refusal = true };
 
     /// <summary>The rule set by name, for a case family: <c>negative</c> removes the family's repaired rule.</summary>
     public static Rules For(string name, string family) => name switch
@@ -32,7 +35,7 @@ sealed record Rules(string Name)
         "repaired" => Repaired,
         "negative" => family switch
         {
-            "nt2" => Repaired with { Name = name, CountHandles = false },
+            "nt2" => Repaired with { Name = name, CountHandles = false, CountNames = false },
             "mx1" => Repaired with { Name = name, Refusal = false },
             _ => throw new ArgumentException(family),
         },

@@ -13,8 +13,9 @@ Each case runs one schedule under three rule sets:
 - `reviewed`: the design at `cfce7a2c1`;
 - `repaired`: the seventh fix round's repair rules, as the coordinator's design brief states them;
 - `negative`: the repaired rules with the case's one repaired rule removed:
-  - NT-2: `CustomHandles` is not counted in the projection, which is the sixth round's formula, so `negative` equals
-    `reviewed` here;
+  - NT-2: no variable field beyond the state and the registries is counted in the projection (neither
+    `CustomHandles` nor `Model` and `Definition`), which is the sixth round's formula, so `negative` equals `reviewed`
+    here;
   - MX-1: the prefix without the refusal.
 
 MX-1 also runs the mutation `refusal-without-prefix`, the other half of R7-M1's rule removed.
@@ -118,16 +119,20 @@ check admits.
 
 - **The admission projection.** Every commit of a live row (one that is `Running` after the commit) is checked first:
 
-  > state + `TerminalGrowth(state)` + registries at the marker's per-entry sizes + `CustomHandles` + 16,384 ≤ 16,457,728
+  > state + `TerminalGrowth(state)` + registries at the marker's per-entry sizes + `CustomHandles` + `Model` +
+  > `Definition` + 16,384 ≤ 16,457,728
 
   - **State** is the UTF-8 byte count of the row's `State`.
   - **`TerminalGrowth(state)`** is the sixth round's Native bound, 7 bytes per open inbox and 23 per non-final receipt,
     measured by Review6.Blockers `nt1-growth`. It is counted in every rule set.
   - **The registries** count 384 bytes per child and 12,416 per job.
-  - **`CustomHandles`** is counted at its encoded size, the UTF-8 byte count of its JSON text, under `repaired`, and as
-    0 under `reviewed` and `negative`. It is the one variable-length field of the `Instances` row
-    (`storage-model.md` 44 and 124) beyond the state and the registries.
-  - **The reserve** is 16,384 bytes. The fixed fields measure 366 bytes in every run, 398 with a Park's `Fault`.
+  - **Every other variable-length field** of the `Instances` row (`storage-model.md` 44 and 124) is counted at its
+    encoded size under `repaired`, and as 0 under `reviewed` and `negative`:
+    - `CustomHandles`, as the UTF-8 byte count of its JSON text;
+    - `Model` and `Definition`, as the UTF-8 byte count of each as a JSON string, the way the row measure counts them
+      among the other fields. No rule bounds either name, so both leave the fixed reserve. Here they take 11 bytes.
+  - **The reserve** is 16,384 bytes and covers only the bounded fixed fields. The row's other fields, `Model` and
+    `Definition` among them, measure 366 bytes in every run, 398 with a Park's `Fault`.
 
   A turn over the projection fails and parks through the real `Park`, as an over-envelope turn does.
 - **The row cap.** Every commit, in every rule set, meets the row cap: the store refuses as a definite error a row
@@ -165,20 +170,21 @@ Each assertion has an id, shown in brackets in the output.
 | Run | Growth commit | Ending row, measured | Outcome |
 |---|---|---|---|
 | `nt2-handles`, `reviewed` and `negative` | projected 16,457,728, lands (row 16,443,865) | 16,468,327, refused by the row cap (10,599 over) | P parks Faulted with its inboxes open; no terminate to G; G Running |
-| `nt2-handles`, `repaired` | projected 16,484,729, refused; P parks with its 140-byte state | 27,539 (the parked row's terminate), lands | the terminate to G is stored; G Cancelled |
+| `nt2-handles`, `repaired` | projected 16,484,740, refused; P parks with its 140-byte state | 27,539 (the parked row's terminate), lands | the terminate to G is stored; G Cancelled |
 | `nt2-at-bound`, `reviewed` and `negative` | as `nt2-handles` | as `nt2-handles` | as `nt2-handles` |
-| `nt2-at-bound`, `repaired` | state 16,389,459, projected exactly 16,457,728, lands | 16,441,326, lands (margin 16,402) | P Cancelled, every inbox closed; G Cancelled |
+| `nt2-at-bound`, `repaired` | state 16,389,448, projected exactly 16,457,728, lands | 16,441,315, lands (margin 16,413) | P Cancelled, every inbox closed; G Cancelled |
 | `nt2-thendelete-protected`, `reviewed` and `negative` | state 16,416,437, projected 16,457,728, lands | 16,468,279, refused (10,551 over) | P parks Faulted; G Running |
-| `nt2-thendelete-protected`, `repaired` | state 16,389,436, projected 16,457,728, lands | 16,441,278, lands; its projection has a margin of 48 | P Cancelled and kept; G Cancelled |
-| `nt2-no-handles`, every rule set | state 16,416,460, projected 16,457,728, lands | 16,441,326, lands | P Cancelled; G Cancelled |
+| `nt2-thendelete-protected`, `repaired` | state 16,389,425, projected 16,457,728, lands | 16,441,267, lands; its projection has a margin of 48 | P Cancelled and kept; G Cancelled |
+| `nt2-no-handles`, `reviewed` and `negative` | state 16,416,460, projected 16,457,728, lands | 16,441,326, lands | P Cancelled; G Cancelled |
+| `nt2-no-handles`, `repaired` | state 16,416,449, projected 16,457,728, lands | 16,441,315, lands | P Cancelled; G Cancelled |
 
 - **`reviewed`.** The growth commit fits both the sixth round's formula and the row cap. The terminate's ending row
   then holds the 24,500-byte terminal growth and the 27,001 bytes of handles, and the row cap refuses it. P parks
   through the real `Park`, which keeps the handles and stores the Faulted notice to Q, and no terminate to G is
   stored on this schedule.
-- **`repaired`.** In `nt2-handles` the projection counts the handles and refuses the growth turn, which parks with
+- **`repaired`.** In `nt2-handles` the projection counts the handles and the two names and refuses the growth turn, which parks with
   P's previous state. The operator's terminate then reaches the parked row, and the built terminate of an ended row
-  (`WorkflowInstance.cs` 63–64) sends G its terminate. In `nt2-at-bound` the projection admits a state 27,001 bytes
+  (`WorkflowInstance.cs` 63–64) sends G its terminate. In `nt2-at-bound` the projection admits a state 27,012 bytes
   smaller, and the live terminate's ending commit lands.
 - **The control.** With no handles the sixth round's formula is sufficient: every rule set lands the ending commit.
 
@@ -257,7 +263,7 @@ property name. The harness records this; the choice of the reserved code unit is
 |---|---|
 | NT-2: `Turn.Start`, `DurableTurn.StartChild` and `Seal` with the handles, Native terminate, `TerminateMetadata`, `ProtectsDeletion`, `Park`, the commits | executed in this repair, real prototype code |
 | NT-2: the spawn turns' model | harness model (`Spawner`) standing for an authored model's detached starts |
-| NT-2: the projection with `CustomHandles`, the row cap and its measure, Native's `TerminalGrowth` bound | proposed, held by the harness |
+| NT-2: the projection with `CustomHandles`, `Model` and `Definition`, the row cap and its measure, Native's `TerminalGrowth` bound | proposed, held by the harness |
 | NT-2: the growth turn's state | synthesized (no authored workflow drives it), written by a harness-composed commit |
 | NT-2: `ThenDelete`'s protected-row decision | proposed semantics, the real `ProtectsDeletion` |
 | MX-1: `DurableTurn.Publish` and `Seal`, the commits, `Events.PublishAsync` with the store's insert, match read and delivery insert, `Worker.TakeAsync` | executed in this repair, real prototype code |
@@ -276,7 +282,7 @@ Existing prototype behaviour that the cases rest on:
 
 - **NT-2.** Retained creator handles make a parent's ending row larger than the sixth round's formula projects, so a
   growth commit that formula admits leaves an ending commit over the row cap, and the first child terminate is not
-  sent on this schedule. Counting `CustomHandles` at its encoded size in the projection of every live commit keeps
+  sent on this schedule. Counting `CustomHandles`, `Model` and `Definition` at their encoded size in the projection of every live commit keeps
   every landed row terminable, at the exact boundary, for a plain terminate and a protected `ThenDelete`.
   - **Not covered.** It does not measure a provider's stored encoding: BSON, UTF-16, revision and clock growth and
     upgrades are qualified at K4 (C1). It does not drive the handles or the state through authored workflow turns
