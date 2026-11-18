@@ -8,6 +8,7 @@ import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
+import { variableLifecycleJourney } from "./variableLifecycleJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -535,4 +536,8 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("variable lifecycle warnings, refusals and node settings", async ({ page }, info) => {
+  await variableLifecycleJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
