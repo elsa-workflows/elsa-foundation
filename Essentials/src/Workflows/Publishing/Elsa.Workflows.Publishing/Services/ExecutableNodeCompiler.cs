@@ -235,7 +235,7 @@ public sealed class ExecutableNodeCompiler(
             {
                 EnsureResolvable(nodeId, key, bodyPlan);
                 if (bodyPlan.Pinned.Count > 0 || bodyPlan.NeedsFallback)
-                    bodyReadPlan = new ScriptBodyReadPlan("JavaScript", bodyPlan.PinnedParameters(), bodyPlan.Fallback());
+                    bodyReadPlan = new ScriptBodyReadPlan(key, "JavaScript", bodyPlan.PinnedParameters(), bodyPlan.Fallback());
                 pinned[key] = binding;
                 continue;
             }

@@ -125,6 +125,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var root = executable.RootActivity;
         Assert.Equal(RuntimeInputBindingSource.Literal, root.InputBindings["script"].Source);
         var plan = ScriptBodyReadPlan.Of(root)!;
+        Assert.Equal("script", plan.InputKey);
         Assert.Equal(["variables.greeting"], plan.Parameters.Keys);
         Assert.Equal("greeting-key", plan.Parameters["variables.greeting"].VariableKey);
         Assert.Equal("greeting", Assert.Single(plan.VariableReadFallback!.Candidates).Name);

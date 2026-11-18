@@ -13,6 +13,7 @@ public sealed record ScriptVariableRenameEdit(string NodeId, string InputKey, st
 /// <summary>A reference the rename cannot safely update, surfaced for manual repair.</summary>
 public sealed record ScriptVariableRenameFlag(string NodeId, string InputKey, ScriptVariableRenameFlagReason Reason, string Message);
 
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ScriptVariableRenameFlagReason>))]
 public enum ScriptVariableRenameFlagReason
 {
     /// <summary>The language gives no source positions (Liquid).</summary>

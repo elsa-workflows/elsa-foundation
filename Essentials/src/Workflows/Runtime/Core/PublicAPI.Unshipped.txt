@@ -10708,7 +10708,6 @@ Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.<Clone>$() -> Elsa.Workflo
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.Equals(Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.Language.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!>!
-Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.ScriptBodyReadPlan(string! language, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!>! parameters, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.Serialize() -> string!
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.VariableReadFallback.get -> Elsa.Expressions.Core.Models.VariableReadFallback?
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ScriptBodyReadPlan = "runtime.scriptBodyReadPlan" -> string!
@@ -10718,3 +10717,5 @@ override Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.ToString() -> str
 static Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.Of(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node) -> Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan?
 static Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.operator !=(Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? left, Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.operator ==(Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? left, Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.InputKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.ScriptBodyReadPlan(string! inputKey, string! language, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!>! parameters, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void

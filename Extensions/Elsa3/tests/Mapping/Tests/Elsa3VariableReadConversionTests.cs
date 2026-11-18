@@ -123,6 +123,33 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_workflow_variable_named_like_an_enclosing_loops_value_is_refused()
+    {
+        // Elsa 4 would read the For's own index, nearest scope first.
+        var index = new Elsa3Variable { Id = "index-id", Name = "index", TypeName = "Int32" };
+        var loop = Activity("loop", "Elsa.For", ("start", Literal("0", "Int32")), ("end", Literal("1", "Int32")));
+        loop.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable('index')"))));
+
+        var result = await ConvertAsync(Sequence("root", loop), index);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ResolutionDiffers);
+    }
+
+    [Fact]
+    public async Task An_outer_loops_value_read_inside_a_nested_loop_of_the_same_kind_is_refused()
+    {
+        // Elsa 4 would read the inner ForEach's currentItem, nearest scope first.
+        var inner = Activity("inner", "Elsa.ForEach", ("items", Literal("[1]", "Object")));
+        inner.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable('item')"))));
+        var outer = Activity("outer", "Elsa.ForEach", ("items", Literal("[1]", "Object")), ("currentValue", Captured("item")));
+        outer.AdditionalProperties["body"] = Port(inner);
+
+        var result = await ConvertAsync(Sequence("root", outer), new Elsa3Variable { Id = "item", Name = "item", TypeName = "Object" });
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ResolutionDiffers);
+    }
+
+    [Fact]
     public async Task A_computed_read_with_a_shadowed_candidate_converts_with_a_warning()
     {
         var container = Sequence("container", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['Ord', 'er'].join(''))"))));

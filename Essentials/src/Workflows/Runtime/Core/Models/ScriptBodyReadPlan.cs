@@ -18,21 +18,27 @@ public sealed record ScriptBodyReadPlan
 
     [JsonConstructor]
     public ScriptBodyReadPlan(
+        string inputKey,
         string language,
         IReadOnlyDictionary<string, VariableExpressionParameterBinding> parameters,
         VariableReadFallback? variableReadFallback = null)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentNullException.ThrowIfNull(parameters);
         ExpressionParameterSurfaces.Validate(
             parameters.ToDictionary(item => item.Key, item => (ExpressionParameterBinding)item.Value, StringComparer.Ordinal),
             nameof(parameters));
+        InputKey = inputKey;
         Language = language;
         Parameters = parameters
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         VariableReadFallback = variableReadFallback;
     }
+
+    /// <summary>The script input the plan was read from.</summary>
+    public string InputKey { get; }
 
     public string Language { get; }
 

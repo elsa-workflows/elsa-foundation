@@ -51,6 +51,8 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/rename-plan`.
 
 
+## Implementable contributor interfaces
+
 ### `IActivityDataSelectionDocumentProjector` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 
 - **Signature:** `ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(ActivityProviderManifest manifest, ActivityContract contract, string resourceId, string contractRevision, CancellationToken cancellationToken = default)`; the contract argument is the Activities Design Core public contract.

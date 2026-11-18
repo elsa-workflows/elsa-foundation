@@ -114,6 +114,8 @@ internal static class IsolatedJintEngine
         ValidateInput(pinned, configured);
 
         var values = new Dictionary<string, JsValue>(StringComparer.Ordinal);
+        // Every value the script has been handed, pinned or looked up: the input limits apply to them together.
+        var loaded = new Dictionary<string, JsonElement>(pinned, StringComparer.Ordinal);
         foreach (var (name, element) in pinned.OrderBy(item => item.Key, StringComparer.Ordinal))
             values[name] = CreateValue(engine, element);
 
@@ -128,7 +130,8 @@ internal static class IsolatedJintEngine
             switch (read.Outcome)
             {
                 case ExpressionVariableReadOutcome.Present:
-                    ValidateInput(new Dictionary<string, JsonElement>(StringComparer.Ordinal) { [name] = read.Value }, configured);
+                    loaded[name] = read.Value;
+                    ValidateInput(loaded, configured);
                     var value = CreateValue(engine, read.Value);
                     values[name] = value;
                     return value;

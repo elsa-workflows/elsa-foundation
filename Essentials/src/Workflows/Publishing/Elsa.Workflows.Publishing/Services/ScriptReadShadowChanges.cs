@@ -35,7 +35,7 @@ internal static class ScriptReadShadowChanges
             if (ScriptBodyReadPlan.Of(previous) is { } previousPlan && ScriptBodyReadPlan.Of(node) is { } plan)
                 Compare(
                     nodeId,
-                    "script",
+                    plan.InputKey,
                     previousPlan.Parameters.ToDictionary(item => item.Key, item => (ExpressionParameterBinding)item.Value, StringComparer.Ordinal),
                     plan.Parameters.ToDictionary(item => item.Key, item => (ExpressionParameterBinding)item.Value, StringComparer.Ordinal),
                     warnings);

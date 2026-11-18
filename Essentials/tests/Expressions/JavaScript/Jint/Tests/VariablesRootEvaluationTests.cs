@@ -133,6 +133,24 @@ public sealed class VariablesRootEvaluationTests
     }
 
     [Fact]
+    public async Task Values_read_through_the_lookup_count_together_against_the_input_limit()
+    {
+        // Each value fits on its own; together they exceed the aggregate byte limit.
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        services.Configure<Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions>(options => options.MaxInputBytes = 40);
+        await using var provider = services.BuildServiceProvider();
+        var reader = new Reader { ["a"] = Json(new string('x', 15)), ["b"] = Json(new string('y', 15)) };
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => provider.GetRequiredService<IPortableExpressionEvaluator>()
+            .EvaluateAsync(new ExpressionEvaluationRequest(Definition("variables.a + variables.b", new Dictionary<string, ExpressionParameterBinding>()), new Dictionary<string, JsonElement>(), reader, CancellationToken.None)).AsTask());
+
+        Assert.Contains("aggregate limit of 40 bytes", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_engines_own_probes_are_not_recorded_as_reads()
     {
         // JSON.stringify asks the root for toJSON, string conversion for toString and valueOf: no script read those.

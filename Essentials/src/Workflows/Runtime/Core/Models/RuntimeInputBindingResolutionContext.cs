@@ -72,10 +72,6 @@ public sealed class RuntimeInputBindingResolutionContext
             (values ?? new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>()).ToDictionary());
 }
 
-/// <summary>
-/// Stable address of a variable value inside its declaring lexical scope. This is a resolution key,
-/// not a general-purpose mutable value address.
-/// </summary>
 /// <summary>One visible variable a script's computed read can reach: its author-facing name, declaring scope, key and committed envelope.</summary>
 public sealed record RuntimeVisibleVariable
 {
@@ -97,6 +93,10 @@ public sealed record RuntimeVisibleVariable
     public ValueEnvelope Envelope { get; }
 }
 
+/// <summary>
+/// Stable address of a variable value inside its declaring lexical scope. This is a resolution key,
+/// not a general-purpose mutable value address.
+/// </summary>
 public readonly record struct RuntimeVariableValueAddress
 {
     public RuntimeVariableValueAddress(string declaringScopeId, string variableKey)
