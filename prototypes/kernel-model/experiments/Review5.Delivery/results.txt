@@ -1,0 +1,2512 @@
+Review5.Delivery results
+commit 03729fdc4b686b0760a57b97b11aea0a276b62f8 (tree e4ddc1d871e570127038205c418a645b9eb32996, prototype tree 00f6c2d89433c5a0773ef2833f094b3caa755f46)
+branch base (merge-base with origin/main) 0a1bb5e0ce76f878b629a4598ae3da676bb74e77
+dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
+
+commands, from prototypes/kernel-model, after removing experiments/Review5.Delivery/bin and obj:
+  experiments/Review5.Delivery/run.sh -> exit 0, which runs:
+    dotnet restore experiments/Review5.Delivery --locked-mode          -> exit 0
+    dotnet build experiments/Review5.Delivery -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
+    each case and rule set, then --all                                 -> exit codes below
+  dotnet experiments/Review5.Delivery/bin/Release/net10.0/Kernel.Review5.Delivery.dll --all, twice
+    -> exit 0 and 0, identical output (SHA-256 4354095d557ab46e9d59026a1f689c5e553d2295e95b6e8cf35f37be563c3f97), below
+
+run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule):
+  exit 1 (ev1-a, reviewed)
+  exit 0 (ev1-a, repaired)
+  exit 0 (ev1-a-after, reviewed)
+  exit 0 (ev1-a-after, repaired)
+  exit 1 (ev1-b, reviewed)
+  exit 0 (ev1-b, repaired)
+  exit 1 (ev1-b, negative)
+  exit 1 (ev1-b, match-at-now)
+  exit 1 (ev1-b-paged, reviewed)
+  exit 0 (ev1-b-paged, repaired)
+  exit 1 (ev1-b-paged, negative)
+  exit 1 (ev1-b-paged, p0-at-page-commit)
+  exit 1 (ev1-b-stepback, reviewed)
+  exit 3 (ev1-b-stepback, repaired)
+  exit 1 (ev1-b-stepback, no-horizon)
+  exit 0 (ev1-b-suspended, reviewed)
+  exit 0 (ev1-b-suspended, repaired)
+  exit 1 (ev1-b-suspended, meet-waits-while-suspended)
+  exit 1 (ev1-replay, reviewed)
+  exit 0 (ev1-replay, repaired)
+  exit 1 (ev1-replay, negative)
+  exit 1 (ev1-replay-atomic, reviewed)
+  exit 0 (ev1-replay-atomic, repaired)
+  exit 1 (ev1-replay-atomic, negative)
+  exit 1 (ev1-replay-consumed, reviewed)
+  exit 3 (ev1-replay-consumed, repaired)
+  exit 1 (ev1-replay-consumed, negative)
+  exit 1 (fr2-base, reviewed)
+  exit 0 (fr2-base, repaired)
+  exit 1 (fr2-base, negative)
+  exit 1 (fr2-hold, reviewed)
+  exit 0 (fr2-hold, repaired)
+  exit 1 (fr2-hold, negative)
+  exit 1 (fr2-suspend, reviewed)
+  exit 0 (fr2-suspend, repaired)
+  exit 1 (fr2-suspend, negative)
+  exit 1 (fr2-takeover, reviewed)
+  exit 0 (fr2-takeover, repaired)
+  exit 1 (fr2-takeover, negative)
+  exit 1 (fr2-hold-takeover, reviewed)
+  exit 0 (fr2-hold-takeover, repaired)
+  exit 1 (fr2-hold-takeover, negative)
+  exit 1 (fr2-bytes, reviewed)
+  exit 0 (fr2-bytes, repaired)
+  exit 1 (fr2-bytes, negative)
+  exit 1 (fr2-zero-cut, reviewed)
+  exit 0 (fr2-zero-cut, repaired)
+  exit 1 (fr2-zero-cut, negative)
+  exit 0 (fr2-base, seen-gate)
+  exit 0 (fr2-hold, seen-gate)
+  exit 0 (fr2-suspend, seen-gate)
+  exit 0 (fr2-takeover, seen-gate)
+  exit 0 (fr2-hold-takeover, seen-gate)
+  exit 0 (fr2-bytes, seen-gate)
+  exit 0 (fr2-zero-cut, seen-gate)
+  exit 1 (fr2-bytes, credit-metadata-only)
+  exit 1 (fr2-hold-takeover, p-page-whatever-u)
+  exit 1 (fr2-zero-cut, zero-cut-completes)
+  exit 1 (fr2-suspend, pages-while-suspended)
+  exit 1 (fr2-hold, held-gate-waits)
+  exit 0 (fr2-r4b1-base, reviewed)
+  exit 0 (fr2-r4b1-base, repaired)
+  exit 0 (fr2-r4b1-base, negative)
+  exit 1 (fr2-r4b1-base, seen-gate-no-precedence)
+  exit 0 (fr2-r4b1-held, reviewed)
+  exit 0 (fr2-r4b1-held, repaired)
+  exit 1 (fr2-r4b1-held, negative)
+  exit 1 (fr2-r4b1-held, seen-gate-no-precedence)
+  exit 1 (jr1-crash-after, reviewed)
+  exit 1 (jr1-crash-after, reviewed-kind)
+  exit 0 (jr1-crash-after, repaired)
+  exit 1 (jr1-crash-after, negative)
+  exit 1 (jr1-crash-after-keep, reviewed)
+  exit 1 (jr1-crash-after-keep, reviewed-kind)
+  exit 0 (jr1-crash-after-keep, repaired)
+  exit 1 (jr1-crash-after-keep, negative)
+  exit 1 (jr1-obsolete, reviewed)
+  exit 1 (jr1-obsolete, reviewed-kind)
+  exit 0 (jr1-obsolete, repaired)
+  exit 1 (jr1-obsolete, negative)
+  exit 1 (jr1-obsolete, generation-blind)
+  exit 1 (jr1-crash-before, reviewed)
+  exit 1 (jr1-crash-before, reviewed-kind)
+  exit 3 (jr1-crash-before, repaired)
+  exit 1 (jr1-crash-before, negative)
+  exit 0 (jr1-running, reviewed)
+  exit 0 (jr1-running, reviewed-kind)
+  exit 0 (jr1-running, repaired)
+  exit 0 (jr1-running, negative)
+  exit 1 (po1-cohort, reviewed)
+  exit 0 (po1-cohort, repaired)
+  exit 1 (po1-cohort, negative)
+  exit 1 (po1-open, reviewed)
+  exit 0 (po1-open, repaired)
+  exit 1 (po1-open, negative)
+  exit 0 (po1-ordinary, reviewed)
+  exit 0 (po1-ordinary, repaired)
+  exit 0 (po1-ordinary, negative)
+
+run.sh matrix: 98/98 runs as expected, matrix exit 0
+
+--all output:
+
+== EV-1/a | rules=reviewed ==
+invariant: a non-keeping wait receives an event accepted while it was absent exactly when the event's match step reads its committed row (the reviewed oracle: never)
+    match step at 10: 0 deliveries added, then the ticket consumed
+  match step before the restore: deliveries to S 0
+    match step at 21: 1 deliveries added, then the ticket consumed
+  publisher paused before its match step, restore, match step: deliveries to S 1
+    match step at 10: 0 deliveries added, then the ticket consumed
+  match step, a 30 s pause, restore: deliveries to S 0
+  oracle (reviewed, observability.md 1187-1189): a wait that did not ask for kept events misses the events published while it was parked: 0, 0, 0
+  assertions:
+    FAIL deliveries in the three orders: 0,1,0 (expected 0,0,0)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x9, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x3, InMemoryStore.TakeAsync x3
+RESULT EV-1/a rules=reviewed: FAIL
+
+== EV-1/a | rules=repaired ==
+invariant: a non-keeping wait receives an event accepted while it was absent exactly when the event's match step reads its committed row (the reviewed oracle: never)
+    match step at 10: one commit consumes the ticket and inserts 0 deliveries
+  match step before the restore: deliveries to S 0
+    match step at 21: one commit consumes the ticket and inserts 1 deliveries
+  publisher paused before its match step, restore, match step: deliveries to S 1
+    match step at 10: one commit consumes the ticket and inserts 0 deliveries
+  match step, a 30 s pause, restore: deliveries to S 0
+  oracle (repaired): the wait gets E exactly when E's match step reads its committed row: 0, 1 (once), 0
+  assertions:
+    PASS deliveries in the three orders: 0,1,0 (expected 0,1,0)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.CommitAsync x9, InMemoryStore.PublishAsync x3, InMemoryStore.PublishedMatchesAsync x3, InMemoryStore.TakeAsync x3
+RESULT EV-1/a rules=repaired: PASS
+
+== EV-1/a-after | rules=reviewed ==
+invariant: an event accepted after a non-keeping wait committed is delivered once, however long the publisher pauses (invariant 13)
+    match step at 20: 1 deliveries added, then the ticket consumed
+  match step at once: deliveries to S 1
+    match step at 30020: 1 deliveries added, then the ticket consumed
+  match step 30 s after the publish: deliveries to S 1
+  assertions:
+    PASS deliveries, match step at once and after 30 s: 1,1 (expected 1,1)
+  real prototype calls: CreationProtocol.Origin x2, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x6, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/a-after rules=reviewed: PASS
+
+== EV-1/a-after | rules=repaired ==
+invariant: an event accepted after a non-keeping wait committed is delivered once, however long the publisher pauses (invariant 13)
+    match step at 20: one commit consumes the ticket and inserts 1 deliveries
+  match step at once: deliveries to S 1
+    match step at 30020: one commit consumes the ticket and inserts 1 deliveries
+  match step 30 s after the publish: deliveries to S 1
+  assertions:
+    PASS deliveries, match step at once and after 30 s: 1,1 (expected 1,1)
+  real prototype calls: CreationProtocol.Origin x2, EventRoute.Delivery x2, InMemoryStore.CommitAsync x6, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/a-after rules=repaired: PASS
+
+== EV-1/b | rules=reviewed ==
+invariant: a keeping wait restored within an event's keep window receives it once, whenever its catch-up runs
+    match step at 1: 0 deliveries added, then the ticket consumed
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: the real SweepAsync
+  catch-up at 99: deliveries to S 1; at 102 the events are swept
+    match step at 1: 0 deliveries added, then the ticket consumed
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: the real SweepAsync
+    meet step at 101: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: the real SweepAsync
+  catch-up at 101 after a sweep: deliveries to S 0; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, catch-up at 99 / at 101: 1 swept / 0 swept (expected 1 swept / 1 swept)
+  real prototype calls: CreationProtocol.Origin x5, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x9, InMemoryStore.KeptMatchesAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x3, InMemoryStore.TakeAsync x2
+RESULT EV-1/b rules=reviewed: FAIL
+
+== EV-1/b | rules=repaired ==
+invariant: a keeping wait restored within an event's keep window receives it once, whenever its catch-up runs
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 99: deliveries to S 1; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H none
+    meet step at 101: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 101: KeepUntil >= P0 99 -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 101 after a sweep: deliveries to S 1; at 102 the events are swept
+  assertions:
+    PASS deliveries and the events' fate, catch-up at 99 / at 101: 1 swept / 1 swept (expected 1 swept / 1 swept)
+  real prototype calls: CreationProtocol.Origin x6, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x10, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/b rules=repaired: PASS
+
+== EV-1/b | rules=negative ==
+invariant: a keeping wait restored within an event's keep window receives it once, whenever its catch-up runs
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 99: deliveries to S 1; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 1 event(s) and 0 done row(s) deleted; H 100
+    meet step at 101: KeepUntil >= P0 99 -> page []
+    sweep at 102: 0 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 101 after a sweep: deliveries to S 0; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, catch-up at 99 / at 101: 1 swept / 0 swept (expected 1 swept / 1 swept)
+  real prototype calls: CreationProtocol.Origin x5, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x9, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/b rules=negative: FAIL
+
+== EV-1/b | rules=match-at-now ==
+invariant: a keeping wait restored within an event's keep window receives it once, whenever its catch-up runs
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 99: deliveries to S 1; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H none
+    meet step at 101: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  catch-up at 101 after a sweep: deliveries to S 0; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, catch-up at 99 / at 101: 1 swept / 0 swept (expected 1 swept / 1 swept)
+  real prototype calls: CreationProtocol.Origin x5, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x9, InMemoryStore.KeptMatchesAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/b rules=match-at-now: FAIL
+
+== EV-1/b-paged | rules=reviewed ==
+invariant: a catch-up paged across sweeps delivers every event its entitlement point covers
+    match step at 1: 0 deliveries added, then the ticket consumed
+    match step at 2: 0 deliveries added, then the ticket consumed
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-2"], next ticket sent (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: the real SweepAsync
+  both pages at 99: deliveries to S 2; at 102 the events are swept
+    match step at 1: 0 deliveries added, then the ticket consumed
+    match step at 2: 0 deliveries added, then the ticket consumed
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: the real SweepAsync
+    meet step at 101: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 101: the real SweepAsync
+    sweep at 102: the real SweepAsync
+  sweep, page 1, sweep, page 2, at 101: deliveries to S 0; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, both pages at 99 / pages at 101 between sweeps: 2 swept / 0 swept (expected 2 swept / 2 swept)
+  real prototype calls: CreationProtocol.Origin x8, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x14, InMemoryStore.KeptMatchesAsync x4, InMemoryStore.PublishAsync x4, InMemoryStore.PublishedMatchesAsync x4, InMemoryStore.SweepAsync x4, InMemoryStore.TakeAsync x2
+RESULT EV-1/b-paged rules=reviewed: FAIL
+
+== EV-1/b-paged | rules=repaired ==
+invariant: a catch-up paged across sweeps delivers every event its entitlement point covers
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 2 event(s) and 0 done row(s) deleted; H 100
+  both pages at 99: deliveries to S 2; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H none
+    meet step at 101: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H none
+    meet step at 101: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
+    meet step at 101: KeepUntil >= P0 99 -> page []
+    sweep at 102: 2 event(s) and 0 done row(s) deleted; H 100
+  sweep, page 1, sweep, page 2, at 101: deliveries to S 2; at 102 the events are swept
+  assertions:
+    PASS deliveries and the events' fate, both pages at 99 / pages at 101 between sweeps: 2 swept / 2 swept (expected 2 swept / 2 swept)
+  real prototype calls: CreationProtocol.Origin x10, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x16, InMemoryStore.PublishAsync x4, InMemoryStore.PublishedMatchesAsync x4, InMemoryStore.TakeAsync x2
+RESULT EV-1/b-paged rules=repaired: PASS
+
+== EV-1/b-paged | rules=negative ==
+invariant: a catch-up paged across sweeps delivers every event its entitlement point covers
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 2 event(s) and 0 done row(s) deleted; H 100
+  both pages at 99: deliveries to S 2; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 2 event(s) and 0 done row(s) deleted; H 100
+    meet step at 101: KeepUntil >= P0 99 -> page []
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H 100
+    sweep at 102: 0 event(s) and 0 done row(s) deleted; H 100
+  sweep, page 1, sweep, page 2, at 101: deliveries to S 0; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, both pages at 99 / pages at 101 between sweeps: 2 swept / 0 swept (expected 2 swept / 2 swept)
+  real prototype calls: CreationProtocol.Origin x8, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x14, InMemoryStore.PublishAsync x4, InMemoryStore.PublishedMatchesAsync x4, InMemoryStore.TakeAsync x2
+RESULT EV-1/b-paged rules=negative: FAIL
+
+== EV-1/b-paged | rules=p0-at-page-commit ==
+invariant: a catch-up paged across sweeps delivers every event its entitlement point covers
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 2 event(s) and 0 done row(s) deleted; H 100
+  both pages at 99: deliveries to S 2; at 102 the events are swept
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    match step at 2: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100, "payload-2" KeepUntil 100; keeping wait restored at 99 (P0 99)
+    sweep at 101: 0 event(s) and 0 done row(s) deleted; H none
+    meet step at 101: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 101)
+    sweep at 101: 2 event(s) and 0 done row(s) deleted; H 100
+    meet step at 101: KeepUntil >= P0 101 -> page []
+    sweep at 102: 0 event(s) and 0 done row(s) deleted; H 100
+  sweep, page 1, sweep, page 2, at 101: deliveries to S 1; at 102 the events are swept
+  assertions:
+    FAIL deliveries and the events' fate, both pages at 99 / pages at 101 between sweeps: 2 swept / 1 swept (expected 2 swept / 2 swept)
+  real prototype calls: CreationProtocol.Origin x9, EventRoute.Delivery x3, InMemoryStore.AddEventAsync x3, InMemoryStore.CommitAsync x15, InMemoryStore.PublishAsync x4, InMemoryStore.PublishedMatchesAsync x4, InMemoryStore.TakeAsync x2
+RESULT EV-1/b-paged rules=p0-at-page-commit: FAIL
+
+== EV-1/b-stepback | rules=reviewed ==
+invariant: after the clock steps back below a swept event's KeepUntil, a new keeping wait is not entitled to the swept event
+    match step at 1: 0 deliveries added, then the ticket consumed
+    sweep at 101: the real SweepAsync
+  sweep at 101: E1 (KeepUntil 100) is deleted; H = none
+  the database clock steps back to 99
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
+  keeping wait registered at 99: reviewed entitlement: within the keep window, KeepUntil 100 >= registration 99 is True
+  assertions:
+    PASS deliveries to S: 0 (expected 0)
+    PASS E1 re-created: False (expected False)
+    FAIL the wait is entitled to the swept E1 (a claim no delivery can meet): True (expected False)
+  real prototype calls: CreationProtocol.Origin x2, InMemoryStore.CommitAsync x4, InMemoryStore.KeptMatchesAsync x1, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-stepback rules=reviewed: FAIL
+
+== EV-1/b-stepback | rules=repaired ==
+invariant: after the clock steps back below a swept event's KeepUntil, a new keeping wait is not entitled to the swept event
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    sweep at 101: 1 event(s) and 0 done row(s) deleted; H 100
+  sweep at 101: E1 (KeepUntil 100) is deleted; H = 100
+  the database clock steps back to 99
+    meet step at 99: KeepUntil >= P0 100 -> page []
+  keeping wait registered at 99: P0 = max(RegisteredAt 99, H) = 100; entitlement KeepUntil >= P0: 100 >= 100 is True
+  assertions:
+    PASS deliveries to S: 0 (expected 0)
+    PASS E1 re-created: False (expected False)
+    FAIL the wait is entitled to the swept E1 (a claim no delivery can meet): True (expected False)
+  STOPPED: the stated rule and its stated outcome disagree: with H the greatest KeepUntil deleted (100), P0 = max(99, 100) = 100, and the entitlement KeepUntil >= P0 holds for the swept E1 (100 >= 100), so the wait is entitled to an event that no longer exists. Recommendation in the README: H one past the greatest KeepUntil deleted (or entitlement KeepUntil > H).
+  real prototype calls: CreationProtocol.Origin x2, InMemoryStore.CommitAsync x4, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-stepback rules=repaired: STOPPED
+
+== EV-1/b-stepback | rules=no-horizon ==
+invariant: after the clock steps back below a swept event's KeepUntil, a new keeping wait is not entitled to the swept event
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+    sweep at 101: 1 event(s) and 0 done row(s) deleted; H 100
+  sweep at 101: E1 (KeepUntil 100) is deleted; H = 100
+  the database clock steps back to 99
+    meet step at 99: KeepUntil >= P0 99 -> page []
+  keeping wait registered at 99: P0 = max(RegisteredAt 99, H) = 99; entitlement KeepUntil >= P0: 100 >= 99 is True
+  assertions:
+    PASS deliveries to S: 0 (expected 0)
+    PASS E1 re-created: False (expected False)
+    FAIL the wait is entitled to the swept E1 (a claim no delivery can meet): True (expected False)
+  real prototype calls: CreationProtocol.Origin x2, InMemoryStore.CommitAsync x4, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-stepback rules=no-horizon: FAIL
+
+== EV-1/b-suspended | rules=reviewed ==
+invariant: a suspended instance's meet ticket completes its catch-up, so its hold on the event ends
+    match step at 1: 0 deliveries added, then the ticket consumed
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 while S is suspended (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 102: the real SweepAsync
+  at 102, with S still suspended, E is swept
+  S resumes at 20,000
+  assertions:
+    PASS deliveries to S: 1 (expected 1)
+    PASS E swept at 102 while S is still suspended (the hold is bounded by the catch-up): True (expected True)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-suspended rules=reviewed: PASS
+
+== EV-1/b-suspended | rules=repaired ==
+invariant: a suspended instance's meet ticket completes its catch-up, so its hold on the event ends
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 while S is suspended (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 99: KeepUntil >= P0 99 -> page []
+    sweep at 102: 1 event(s) and 0 done row(s) deleted; H 100
+  at 102, with S still suspended, E is swept
+  S resumes at 20,000
+  assertions:
+    PASS deliveries to S: 1 (expected 1)
+    PASS E swept at 102 while S is still suspended (the hold is bounded by the catch-up): True (expected True)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-suspended rules=repaired: PASS
+
+== EV-1/b-suspended | rules=meet-waits-while-suspended ==
+invariant: a suspended instance's meet ticket completes its catch-up, so its hold on the event ends
+    match step at 1: one commit consumes the ticket and inserts 0 deliveries
+  published during Park: "payload-1" KeepUntil 100; keeping wait restored at 99 while S is suspended (P0 99)
+    the meet ticket waits while S is suspended (mutation)
+    sweep at 102: 0 event(s) and 0 done row(s) deleted; H none
+  at 102, with S still suspended, E is kept
+  S resumes at 20,000
+    meet step at 20000: KeepUntil >= P0 99 -> page ["payload-1"], next ticket sent (P0 99)
+    meet step at 20000: KeepUntil >= P0 99 -> page []
+  assertions:
+    PASS deliveries to S: 1 (expected 1)
+    FAIL E swept at 102 while S is still suspended (the hold is bounded by the catch-up): False (expected True)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.TakeAsync x1
+RESULT EV-1/b-suspended rules=meet-waits-while-suspended: FAIL
+
+== EV-1/replay | rules=reviewed ==
+invariant: a replayed publish ticket adds no second delivery, and its event is not swept while the ticket is outstanding
+    match step at 10: 1 deliveries added; the owner dies before the commit that consumes the ticket
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 20001: the real SweepAsync
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
+    match step at 20002: 0 deliveries added, then the ticket consumed
+  assertions:
+    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
+    PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
+    PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x6, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay rules=reviewed: FAIL
+
+== EV-1/replay | rules=repaired ==
+invariant: a replayed publish ticket adds no second delivery, and its event is not swept while the ticket is outstanding
+    match step at 10: the owner dies before its commit; nothing lands
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: KeepUntil >= P0 10020 -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: KeepUntil >= P0 10020 -> page []
+    sweep at 20001: 0 event(s) and 0 done row(s) deleted; H none
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
+    match step at 20002: one commit consumes the ticket and inserts 1 deliveries
+  assertions:
+    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
+    PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
+    PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay rules=repaired: PASS
+
+== EV-1/replay | rules=negative ==
+invariant: a replayed publish ticket adds no second delivery, and its event is not swept while the ticket is outstanding
+    match step at 10: the owner dies before its commit; nothing lands
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: KeepUntil >= P0 10020 -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: KeepUntil >= P0 10020 -> page []
+    sweep at 20001: 1 event(s) and 0 done row(s) deleted; H 20000
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
+    match step at 20002: one commit consumes the ticket and inserts 1 deliveries
+  assertions:
+    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
+    PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
+    PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay rules=negative: FAIL
+
+== EV-1/replay-atomic | rules=reviewed ==
+invariant: a match step whose commit did not land inserted nothing, so its replay delivers once after the sweep
+    match step at 10: 1 deliveries added; the owner dies before the commit that consumes the ticket
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    sweep at 10020: the real SweepAsync
+    match step at 10021: 1 deliveries added, then the ticket consumed
+  assertions:
+    FAIL deliveries to S1: 2 (expected 1)
+  real prototype calls: CreationProtocol.Origin x1, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-atomic rules=reviewed: FAIL
+
+== EV-1/replay-atomic | rules=repaired ==
+invariant: a match step whose commit did not land inserted nothing, so its replay delivers once after the sweep
+    match step at 10: the owner dies before its commit; nothing lands
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    sweep at 10020: 0 event(s) and 0 done row(s) deleted; H none
+    match step at 10021: one commit consumes the ticket and inserts 1 deliveries
+  assertions:
+    PASS deliveries to S1: 1 (expected 1)
+  real prototype calls: CreationProtocol.Origin x1, EventRoute.Delivery x2, InMemoryStore.CommitAsync x3, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-atomic rules=repaired: PASS
+
+== EV-1/replay-atomic | rules=negative ==
+invariant: a match step whose commit did not land inserted nothing, so its replay delivers once after the sweep
+    match step at 10: 1 deliveries added; the owner dies before the commit that consumes the ticket
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    sweep at 10020: 0 event(s) and 1 done row(s) deleted; H none
+    match step at 10021: 1 deliveries added, then the ticket consumed
+  assertions:
+    FAIL deliveries to S1: 2 (expected 1)
+  real prototype calls: CreationProtocol.Origin x1, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-atomic rules=negative: FAIL
+
+== EV-1/replay-consumed | rules=reviewed ==
+invariant: a replayed publish ticket adds no second delivery after the waits consumed theirs and the sweep ran
+    match step at 10: 1 deliveries added; the owner dies before the commit that consumes the ticket
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: real KeptMatchesAsync (KeepUntil >= now) -> page []
+    sweep at 20001: the real SweepAsync
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
+    match step at 20002: 2 deliveries added, then the ticket consumed
+  assertions:
+    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
+    FAIL deliveries to S1 (non-keeping, registered before E): 2 (expected 1)
+    FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x8, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-consumed rules=reviewed: FAIL
+
+== EV-1/replay-consumed | rules=repaired ==
+invariant: a replayed publish ticket adds no second delivery after the waits consumed theirs and the sweep ran
+    match step at 10: the owner dies before its commit; nothing lands
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: KeepUntil >= P0 10020 -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: KeepUntil >= P0 10020 -> page []
+    sweep at 20001: 0 event(s) and 1 done row(s) deleted; H none
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
+    match step at 20002: one commit consumes the ticket and inserts 2 deliveries
+  assertions:
+    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
+    PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
+    FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
+  STOPPED: the repaired match step keeps W1 to one delivery, but W2 is owed E twice over: by its catch-up (KeepUntil >= P0) and by the replayed match step, which reads W2's committed row ('plus everything matched after registration'). S2 consumed the catch-up's delivery, and the sweep deleted its Done row once E's KeepUntil passed (InMemoryStore.cs 353); the outstanding publish ticket holds E itself, not that row, so the replay finds no duplicate and inserts it again. Recommendation in the README.
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-consumed rules=repaired: STOPPED
+
+== EV-1/replay-consumed | rules=negative ==
+invariant: a replayed publish ticket adds no second delivery after the waits consumed theirs and the sweep ran
+    match step at 10: 1 deliveries added; the owner dies before the commit that consumes the ticket
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: KeepUntil >= P0 10020 -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: KeepUntil >= P0 10020 -> page []
+    sweep at 20001: 0 event(s) and 2 done row(s) deleted; H none
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
+    match step at 20002: 2 deliveries added, then the ticket consumed
+  assertions:
+    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
+    FAIL deliveries to S1 (non-keeping, registered before E): 2 (expected 1)
+    FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-consumed rules=negative: FAIL
+
+== FR-2/base | rules=reviewed ==
+invariant: pending non-held restored rows never exceed P_page or B_credit, whatever the control priority
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 4 control; the neighbour 5 in 5 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x8
+RESULT FR-2/base rules=reviewed: FAIL
+
+== FR-2/base | rules=repaired ==
+invariant: pending non-held restored rows never exceed P_page or B_credit, whatever the control priority
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row R169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..R169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R339 not handed off); retry due 2008
+  model turn at 2006: 170 input(s) [R170..R339]
+  C3' at 2008: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2009: the page waits (gate row R509 not handed off); retry due 2012
+  model turn at 2010: 170 input(s) [R340..R509]
+  C4' at 2012: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 7 control; the neighbour 13 in 13 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x18
+RESULT FR-2/base rules=repaired: PASS
+
+== FR-2/base | rules=negative ==
+invariant: pending non-held restored rows never exceed P_page or B_credit, whatever the control priority
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 4 control; the neighbour 5 in 5 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x8
+RESULT FR-2/base rules=negative: FAIL
+
+== FR-2/hold | rules=reviewed ==
+invariant: with a held gate row, the pages advance on handoff and pending non-held restored rows stay within one page
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (201910 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (408290 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509], held [S20, S60, S100, S140, S169]
+  model turn at 2005: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2006: 6 input(s) [S20..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (408290 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (614670 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 614670 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/hold rules=reviewed: FAIL
+
+== FR-2/hold | rules=repaired ==
+invariant: with a held gate row, the pages advance on handoff and pending non-held restored rows stay within one page
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R339 not handed off); retry due 2008
+  model turn at 2006: 175 input(s) [S20..R339], held [S20, S60, S100, S140, S169]
+  C3' at 2008: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2009: the page waits (gate row R509 not handed off); retry due 2012
+  model turn at 2010: 175 input(s) [S20..R509], held [S20, S60, S100, S140, S169]
+  C4' at 2012: no kept row past the cursor and the gate passes: Complete
+  model turn at 2013: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2014: 6 input(s) [S20..M3022]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 5 model (trials 0) and 7 control; the neighbour 15 in 15 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x22
+RESULT FR-2/hold rules=repaired: PASS
+
+== FR-2/hold | rules=negative ==
+invariant: with a held gate row, the pages advance on handoff and pending non-held restored rows stay within one page
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (201910 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (408290 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509], held [S20, S60, S100, S140, S169]
+  model turn at 2005: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2006: 6 input(s) [S20..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (408290 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (614670 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 614670 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/hold rules=negative: FAIL
+
+== FR-2/suspend | rules=reviewed ==
+invariant: a suspension stops the pages, and after resume the next page waits for the handoff
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  pass 1: an operator's suspend arrives after page 1
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  S-op: built suspend (WorkflowInstance.cs Control, mirrored); suspended True
+  C3 at 2003: the page waits (S is suspended); retry due 2006
+  pass 8: the operator's resume arrives
+  R-op: built resume (WorkflowInstance.cs Control, mirrored); suspended False
+  C3'' at 2009: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  C4 at 2010: no kept row past the cursor and the gate passes: Complete
+  model turn at 2011: 510 input(s) [R0..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 9: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 8 control; the neighbour 12 in 12 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS model turns of S while suspended: 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x15
+RESULT FR-2/suspend rules=reviewed: FAIL
+
+== FR-2/suspend | rules=repaired ==
+invariant: a suspension stops the pages, and after resume the next page waits for the handoff
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  pass 1: an operator's suspend arrives after page 1
+  C2 at 2001: the page waits (gate row R169 not handed off); retry due 2004
+  S-op: built suspend (WorkflowInstance.cs Control, mirrored); suspended True
+  C2' at 2004: the page waits (S is suspended); retry due 2007
+  pass 8: the operator's resume arrives
+  R-op: built resume (WorkflowInstance.cs Control, mirrored); suspended False
+  model turn at 2009: 170 input(s) [R0..R169]
+  C2''' at 2010: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2011: the page waits (gate row R339 not handed off); retry due 2014
+  model turn at 2012: 170 input(s) [R170..R339]
+  C3' at 2014: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2015: the page waits (gate row R509 not handed off); retry due 2018
+  model turn at 2016: 170 input(s) [R340..R509]
+  C4' at 2018: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 10: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 11 control; the neighbour 19 in 19 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS model turns of S while suspended: 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x24
+RESULT FR-2/suspend rules=repaired: PASS
+
+== FR-2/suspend | rules=negative ==
+invariant: a suspension stops the pages, and after resume the next page waits for the handoff
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  pass 1: an operator's suspend arrives after page 1
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  S-op: built suspend (WorkflowInstance.cs Control, mirrored); suspended True
+  C3 at 2003: the page waits (S is suspended); retry due 2006
+  pass 8: the operator's resume arrives
+  R-op: built resume (WorkflowInstance.cs Control, mirrored); suspended False
+  C3'' at 2009: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  C4 at 2010: no kept row past the cursor and the gate passes: Complete
+  model turn at 2011: 510 input(s) [R0..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 9: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 8 control; the neighbour 12 in 12 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS model turns of S while suspended: 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x15
+RESULT FR-2/suspend rules=negative: FAIL
+
+== FR-2/takeover | rules=reviewed ==
+invariant: after a takeover between pages, the new owner hands off the durable restored rows (by trial) before the next page
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  pass 3: crash takeover after page 2's rows were marked seen, before any reached the model: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C4 at 2004: no kept row past the cursor and the gate passes: Complete
+  model turn at 2343: 170 input(s) [R340..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 341 model (trials 340) and 4 control; the neighbour 343 in 344 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x686
+RESULT FR-2/takeover rules=reviewed: FAIL
+
+== FR-2/takeover | rules=repaired ==
+invariant: after a takeover between pages, the new owner hands off the durable restored rows (by trial) before the next page
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row R169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..R169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R339 not handed off); retry due 2008
+  pass 6: crash takeover after page 2's rows were marked seen, before any reached the model: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3''''''''''''''''''''''''''''''''''''''''''''''''''''''''' at 2176: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2177: the page waits (gate row R509 not handed off); retry due 2180
+  model turn at 2178: 170 input(s) [R340..R509]
+  C4' at 2180: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 172 model (trials 170) and 63 control; the neighbour 181 in 181 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x355
+RESULT FR-2/takeover rules=repaired: PASS
+
+== FR-2/takeover | rules=negative ==
+invariant: after a takeover between pages, the new owner hands off the durable restored rows (by trial) before the next page
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (206270 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (412650 bytes) not handed off; sends C4
+  pass 3: crash takeover after page 2's rows were marked seen, before any reached the model: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C4 at 2004: no kept row past the cursor and the gate passes: Complete
+  model turn at 2343: 170 input(s) [R340..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 341 model (trials 340) and 4 control; the neighbour 343 in 344 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x686
+RESULT FR-2/takeover rules=negative: FAIL
+
+== FR-2/hold-takeover | rules=reviewed ==
+invariant: after a takeover that loses the model's holds, the next page restores at most P_page - u rows
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (201910 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (408290 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509], held [S20, S60, S100, S140, S169]
+  model turn at 2005: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2006: 6 input(s) [S20..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (408290 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (614670 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 614670 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/hold-takeover rules=reviewed: FAIL
+
+== FR-2/hold-takeover | rules=repaired ==
+invariant: after a takeover that loses the model's holds, the next page restores at most P_page - u rows
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R339 not handed off); retry due 2008
+  model turn at 2006: 175 input(s) [S20..R339], held [S20, S60, S100, S140, S169]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S20, S60, S100, S140, S169]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: page 3 restores 165 rows [R340..R504], 200310 bytes, with u = 5 (1708 bytes) not handed off; sends C4
+  model turn at 2008: 1 input(s) [S20..S20], held [S20]
+  C4 at 2009: the page waits (gate row R504 not handed off); retry due 2012
+  model turn at 2009: 2 input(s) [S20..S60], held [S20, S60]
+  model turn at 2010: 3 input(s) [S20..S100], held [S20, S60, S100]
+  model turn at 2011: 4 input(s) [S20..S140], held [S20, S60, S100, S140]
+  model turn at 2012: 5 input(s) [S20..S169], held [S20, S60, S100, S140, S169]
+  model turn at 2013: 170 input(s) [S20..R504], held [S20, S60, S100, S140, S169]
+  C4'' at 2015: page 4 restores 5 rows [R505..R509], 6070 bytes, with u = 0 (0 bytes) not handed off; sends C5
+  C5 at 2016: the page waits (gate row R509 not handed off); retry due 2019
+  model turn at 2017: 10 input(s) [S20..R509], held [S20, S60, S100, S140, S169]
+  C5' at 2019: no kept row past the cursor and the gate passes: Complete
+  model turn at 2019: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2020: 6 input(s) [S20..M3031]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
+  pages restored 4 [170, 170, 165, 5]; drain completed; rows still kept 0
+  turns: S 11 model (trials 6) and 10 control; the neighbour 21 in 21 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x34
+RESULT FR-2/hold-takeover rules=repaired: PASS
+
+== FR-2/hold-takeover | rules=negative ==
+invariant: after a takeover that loses the model's holds, the next page restores at most P_page - u rows
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (201910 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 340 (408290 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 510 input(s) [R0..R509], held [S20, S60, S100, S140, S169]
+  model turn at 2005: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2006: 6 input(s) [S20..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (408290 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 510 (614670 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 614670 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/hold-takeover rules=negative: FAIL
+
+== FR-2/bytes | rules=reviewed ==
+invariant: 1 MiB rows restore at most three at a time, and a 16 MiB row is restored alone
+  park: 11 kept rows at seq 1000-1010: ten no-op rows of 1048824 stored bytes, then one of 16775481
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 11 rows [R0..R10], 27263721 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: no kept row past the cursor and the gate passes: Complete
+  model turn at 2002: 11 input(s) [R0..R10]
+  gauge at pass 0: pending non-held restored rows 11 (27263721 bytes), held 0
+  pages restored 1 [11]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 2 control; the neighbour 3 in 3 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 11
+  assertions:
+    PASS peak pending non-held restored rows: 11 (bound P_page = 170)
+    FAIL peak pending non-held restored bytes: 27263721 (bound: B_credit 4194304, or one larger row alone, 16775481)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 11 (expected 11)
+    PASS rows still kept (never restored): 0 (expected 0)
+    FAIL most 1 MiB rows pending at once: 10 (expected 3)
+    FAIL the 16 MiB row restored alone, with no other restored row pending: False (expected True)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x6
+RESULT FR-2/bytes rules=reviewed: FAIL
+
+== FR-2/bytes | rules=repaired ==
+invariant: 1 MiB rows restore at most three at a time, and a 16 MiB row is restored alone
+  park: 11 kept rows at seq 1000-1010: ten no-op rows of 1048824 stored bytes, then one of 16775481
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 3 rows [R0..R2], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row R2 not handed off); retry due 2004
+  model turn at 2002: 3 input(s) [R0..R2]
+  C2' at 2004: page 2 restores 3 rows [R3..R5], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R5 not handed off); retry due 2008
+  model turn at 2006: 3 input(s) [R3..R5]
+  C3' at 2008: page 3 restores 3 rows [R6..R8], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2009: the page waits (gate row R8 not handed off); retry due 2012
+  model turn at 2010: 3 input(s) [R6..R8]
+  C4' at 2012: page 4 restores 1 rows [R9..R9], 1048824 bytes, with u = 0 (0 bytes) not handed off; sends C5
+  C5 at 2013: the page waits (gate row R9 not handed off); retry due 2016
+  C5' at 2016: page 5 restores 1 rows [R10..R10], 16775481 bytes, with u = 0 (0 bytes) not handed off; sends C6
+  C6 at 2017: the page waits (gate row R10 not handed off); retry due 2020
+  C6' at 2020: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 3 (3146472 bytes), held 0
+  gauge at pass 16: pending non-held restored rows 1 (16775481 bytes), held 0
+  pages restored 5 [3, 3, 3, 1, 1]; drain completed; rows still kept 0
+  turns: S 5 model (trials 0) and 11 control; the neighbour 21 in 21 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 3
+  assertions:
+    PASS peak pending non-held restored rows: 3 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 16775481 (bound: B_credit 4194304, or one larger row alone, 16775481)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 11 (expected 11)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS most 1 MiB rows pending at once: 3 (expected 3)
+    PASS the 16 MiB row restored alone, with no other restored row pending: True (expected True)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x28
+RESULT FR-2/bytes rules=repaired: PASS
+
+== FR-2/bytes | rules=negative ==
+invariant: 1 MiB rows restore at most three at a time, and a 16 MiB row is restored alone
+  park: 11 kept rows at seq 1000-1010: ten no-op rows of 1048824 stored bytes, then one of 16775481
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 11 rows [R0..R10], 27263721 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: no kept row past the cursor and the gate passes: Complete
+  model turn at 2002: 11 input(s) [R0..R10]
+  gauge at pass 0: pending non-held restored rows 11 (27263721 bytes), held 0
+  pages restored 1 [11]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 2 control; the neighbour 3 in 3 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 11
+  assertions:
+    PASS peak pending non-held restored rows: 11 (bound P_page = 170)
+    FAIL peak pending non-held restored bytes: 27263721 (bound: B_credit 4194304, or one larger row alone, 16775481)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 11 (expected 11)
+    PASS rows still kept (never restored): 0 (expected 0)
+    FAIL most 1 MiB rows pending at once: 10 (expected 3)
+    FAIL the 16 MiB row restored alone, with no other restored row pending: False (expected True)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x6
+RESULT FR-2/bytes rules=negative: FAIL
+
+== FR-2/zero-cut | rules=reviewed ==
+invariant: a page the byte credit cuts to zero waits and never completes the drain
+  park: 341 kept rows at seq 1000-1340: S0, a composite signal to H of 4193618 stored bytes, then 340 no-op rows of 1212
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [S0..R169], 4398676 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (4398676 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 1 rows [R340..R340], 1214 bytes, with u = 340 (4605056 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 341 input(s) [S0..R340], held [S0]
+  model turn at 2005: 2 input(s) [S0..A], held [S0]
+  model turn at 2006: 2 input(s) [S0..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (4398676 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (4605056 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 341 (4606270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 1
+  pages restored 3 [170, 170, 1]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 341
+  assertions:
+    FAIL peak pending non-held restored rows: 341 (bound P_page = 170)
+    FAIL peak pending non-held restored bytes: 4606270 (bound: B_credit 4194304, or one larger row alone, 4193618)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 1 (expected 1)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 341 (expected 341)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/zero-cut rules=reviewed: FAIL
+
+== FR-2/zero-cut | rules=repaired ==
+invariant: a page the byte credit cuts to zero waits and never completes the drain
+  park: 341 kept rows at seq 1000-1340: S0, a composite signal to H of 4193618 stored bytes, then 340 no-op rows of 1212
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 1 rows [S0..S0], 4193618 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S0 not handed off); retry due 2004
+  model turn at 2002: 1 input(s) [S0..S0], held [S0]
+  C2' at 2004: page 2 restores 170 rows [R1..R170], 206272 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R170 not handed off); retry due 2008
+  model turn at 2006: 171 input(s) [S0..R170], held [S0]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S0]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: the page waits (the credit cuts the page to zero: u = 1 rows of 4193618 bytes, and the next row has 1214); retry due 2011
+  model turn at 2008: 1 input(s) [S0..S0], held [S0]
+  C3'' at 2011: page 3 restores 170 rows [R171..R340], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2012: the page waits (gate row R340 not handed off); retry due 2015
+  model turn at 2013: 171 input(s) [S0..R340], held [S0]
+  C4' at 2015: no kept row past the cursor and the gate passes: Complete
+  model turn at 2015: 2 input(s) [S0..A], held [S0]
+  model turn at 2016: 2 input(s) [S0..M3025]
+  gauge at pass 0: pending non-held restored rows 1 (4193618 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 1
+  gauge at pass 4: pending non-held restored rows 170 (206272 bytes), held 1
+  pages restored 3 [1, 170, 170]; drain completed; rows still kept 0
+  turns: S 6 model (trials 2) and 8 control; the neighbour 17 in 17 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 1
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 4193618 (bound: B_credit 4194304, or one larger row alone, 4193618)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 1 (expected 1)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 341 (expected 341)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x25
+RESULT FR-2/zero-cut rules=repaired: PASS
+
+== FR-2/zero-cut | rules=negative ==
+invariant: a page the byte credit cuts to zero waits and never completes the drain
+  park: 341 kept rows at seq 1000-1340: S0, a composite signal to H of 4193618 stored bytes, then 340 no-op rows of 1212
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [S0..R169], 4398676 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 170 (4398676 bytes) not handed off; sends C3
+  C3 at 2002: page 3 restores 1 rows [R340..R340], 1214 bytes, with u = 340 (4605056 bytes) not handed off; sends C4
+  C4 at 2003: no kept row past the cursor and the gate passes: Complete
+  model turn at 2004: 341 input(s) [S0..R340], held [S0]
+  model turn at 2005: 2 input(s) [S0..A], held [S0]
+  model turn at 2006: 2 input(s) [S0..M3011]
+  gauge at pass 0: pending non-held restored rows 170 (4398676 bytes), held 0
+  gauge at pass 1: pending non-held restored rows 340 (4605056 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 341 (4606270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 0 (0 bytes), held 1
+  pages restored 3 [170, 170, 1]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 4 control; the neighbour 7 in 7 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 341
+  assertions:
+    FAIL peak pending non-held restored rows: 341 (bound P_page = 170)
+    FAIL peak pending non-held restored bytes: 4606270 (bound: B_credit 4194304, or one larger row alone, 4193618)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 1 (expected 1)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 341 (expected 341)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x12
+RESULT FR-2/zero-cut rules=negative: FAIL
+
+== FR-2/base | rules=seen-gate ==
+invariant: pending non-held restored rows never exceed P_page or B_credit, whatever the control priority
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 170 rows of 206270 bytes, and the next row has 1214); retry due 2004
+  model turn at 2002: 170 input(s) [R0..R169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (the credit cuts the page to zero: u = 170 rows of 206380 bytes, and the next row has 1214); retry due 2008
+  model turn at 2006: 170 input(s) [R170..R339]
+  C3' at 2008: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2009: no kept row past the cursor and the gate passes: Complete
+  model turn at 2010: 170 input(s) [R340..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 6 control; the neighbour 11 in 11 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x16
+RESULT FR-2/base rules=seen-gate: PASS
+
+== FR-2/hold | rules=seen-gate ==
+invariant: with a held gate row, the pages advance on handoff and pending non-held restored rows stay within one page
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 170 rows of 201910 bytes, and the next row has 1214); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (the credit cuts the page to zero: u = 170 rows of 206380 bytes, and the next row has 1214); retry due 2008
+  model turn at 2006: 175 input(s) [S20..R339], held [S20, S60, S100, S140, S169]
+  C3' at 2008: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2009: no kept row past the cursor and the gate passes: Complete
+  model turn at 2010: 175 input(s) [S20..R509], held [S20, S60, S100, S140, S169]
+  model turn at 2011: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2012: 6 input(s) [S20..M3019]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 5 model (trials 0) and 6 control; the neighbour 13 in 13 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x20
+RESULT FR-2/hold rules=seen-gate: PASS
+
+== FR-2/suspend | rules=seen-gate ==
+invariant: a suspension stops the pages, and after resume the next page waits for the handoff
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  pass 1: an operator's suspend arrives after page 1
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 170 rows of 206270 bytes, and the next row has 1214); retry due 2004
+  S-op: built suspend (WorkflowInstance.cs Control, mirrored); suspended True
+  C2' at 2004: the page waits (S is suspended); retry due 2007
+  pass 8: the operator's resume arrives
+  R-op: built resume (WorkflowInstance.cs Control, mirrored); suspended False
+  model turn at 2009: 170 input(s) [R0..R169]
+  C2''' at 2010: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2011: the page waits (the credit cuts the page to zero: u = 170 rows of 206380 bytes, and the next row has 1214); retry due 2014
+  model turn at 2012: 170 input(s) [R170..R339]
+  C3' at 2014: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2015: no kept row past the cursor and the gate passes: Complete
+  model turn at 2016: 170 input(s) [R340..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 10: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 3 model (trials 0) and 10 control; the neighbour 17 in 17 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS model turns of S while suspended: 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x22
+RESULT FR-2/suspend rules=seen-gate: PASS
+
+== FR-2/takeover | rules=seen-gate ==
+invariant: after a takeover between pages, the new owner hands off the durable restored rows (by trial) before the next page
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 170 rows of 206270 bytes, and the next row has 1214); retry due 2004
+  model turn at 2002: 170 input(s) [R0..R169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (the credit cuts the page to zero: u = 170 rows of 206380 bytes, and the next row has 1214); retry due 2008
+  pass 6: crash takeover after page 2's rows were marked seen, before any reached the model: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: the page waits (gate row R339 not taken up (seen 1, epoch 2)); retry due 2011
+  C3''''''''''''''''''''''''''''''''''''''''''''''''''''''''' at 2176: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2177: no kept row past the cursor and the gate passes: Complete
+  model turn at 2178: 170 input(s) [R340..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 172 model (trials 170) and 62 control; the neighbour 179 in 179 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x353
+RESULT FR-2/takeover rules=seen-gate: PASS
+
+== FR-2/hold-takeover | rules=seen-gate ==
+invariant: after a takeover that loses the model's holds, the next page restores at most P_page - u rows
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 170 rows of 201910 bytes, and the next row has 1214); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (the credit cuts the page to zero: u = 170 rows of 206380 bytes, and the next row has 1214); retry due 2008
+  model turn at 2006: 175 input(s) [S20..R339], held [S20, S60, S100, S140, S169]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S20, S60, S100, S140, S169]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: page 3 restores 165 rows [R340..R504], 200310 bytes, with u = 5 (1708 bytes) not handed off; sends C4
+  model turn at 2008: 1 input(s) [S20..S20], held [S20]
+  C4 at 2009: page 4 restores 1 rows [R505..R505], 1214 bytes, with u = 169 (201677 bytes) not handed off; sends C5
+  model turn at 2009: 2 input(s) [S20..S60], held [S20, S60]
+  C5 at 2010: page 5 restores 1 rows [R506..R506], 1214 bytes, with u = 169 (202550 bytes) not handed off; sends C6
+  model turn at 2010: 3 input(s) [S20..S100], held [S20, S60, S100]
+  C6 at 2011: page 6 restores 1 rows [R507..R507], 1214 bytes, with u = 169 (203422 bytes) not handed off; sends C7
+  model turn at 2011: 4 input(s) [S20..S140], held [S20, S60, S100, S140]
+  C7 at 2012: page 7 restores 1 rows [R508..R508], 1214 bytes, with u = 169 (204294 bytes) not handed off; sends C8
+  model turn at 2012: 5 input(s) [S20..S169], held [S20, S60, S100, S140, S169]
+  C8 at 2013: page 8 restores 1 rows [R509..R509], 1214 bytes, with u = 169 (205166 bytes) not handed off; sends C9
+  C9 at 2014: no kept row past the cursor and the gate passes: Complete
+  model turn at 2014: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2015: 175 input(s) [S20..R509]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
+  pages restored 8 [170, 170, 165, 1, 1, 1, 1, 1]; drain completed; rows still kept 0
+  turns: S 9 model (trials 6) and 11 control; the neighbour 16 in 16 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 206380 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x27
+RESULT FR-2/hold-takeover rules=seen-gate: PASS
+
+== FR-2/bytes | rules=seen-gate ==
+invariant: 1 MiB rows restore at most three at a time, and a 16 MiB row is restored alone
+  park: 11 kept rows at seq 1000-1010: ten no-op rows of 1048824 stored bytes, then one of 16775481
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 3 rows [R0..R2], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 3 rows of 3146472 bytes, and the next row has 1048824); retry due 2004
+  model turn at 2002: 3 input(s) [R0..R2]
+  C2' at 2004: page 2 restores 3 rows [R3..R5], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  model turn at 2006: 3 input(s) [R3..R5]
+  C3' at 2008: page 3 restores 3 rows [R6..R8], 3146472 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  model turn at 2010: 3 input(s) [R6..R8]
+  C4' at 2012: page 4 restores 1 rows [R9..R9], 1048824 bytes, with u = 0 (0 bytes) not handed off; sends C5
+  C5 at 2013: the page waits (the credit cuts the page to zero: u = 1 rows of 1048824 bytes, and the next row has 16775481); retry due 2016
+  C5' at 2016: page 5 restores 1 rows [R10..R10], 16775481 bytes, with u = 0 (0 bytes) not handed off; sends C6
+  C6 at 2017: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 3 (3146472 bytes), held 0
+  gauge at pass 16: pending non-held restored rows 1 (16775481 bytes), held 0
+  pages restored 5 [3, 3, 3, 1, 1]; drain completed; rows still kept 0
+  turns: S 5 model (trials 0) and 10 control; the neighbour 19 in 19 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 3
+  assertions:
+    PASS peak pending non-held restored rows: 3 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 16775481 (bound: B_credit 4194304, or one larger row alone, 16775481)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 11 (expected 11)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS most 1 MiB rows pending at once: 3 (expected 3)
+    PASS the 16 MiB row restored alone, with no other restored row pending: True (expected True)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x26
+RESULT FR-2/bytes rules=seen-gate: PASS
+
+== FR-2/zero-cut | rules=seen-gate ==
+invariant: a page the byte credit cuts to zero waits and never completes the drain
+  park: 341 kept rows at seq 1000-1340: S0, a composite signal to H of 4193618 stored bytes, then 340 no-op rows of 1212
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 1 rows [S0..S0], 4193618 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (the credit cuts the page to zero: u = 1 rows of 4193618 bytes, and the next row has 1212); retry due 2004
+  model turn at 2002: 1 input(s) [S0..S0], held [S0]
+  C2' at 2004: page 2 restores 170 rows [R1..R170], 206272 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (the credit cuts the page to zero: u = 170 rows of 206272 bytes, and the next row has 1214); retry due 2008
+  model turn at 2006: 171 input(s) [S0..R170], held [S0]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S0]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: the page waits (the credit cuts the page to zero: u = 1 rows of 4193618 bytes, and the next row has 1214); retry due 2011
+  model turn at 2008: 1 input(s) [S0..S0], held [S0]
+  C3'' at 2011: page 3 restores 170 rows [R171..R340], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2012: no kept row past the cursor and the gate passes: Complete
+  model turn at 2012: 2 input(s) [S0..A], held [S0]
+  model turn at 2013: 171 input(s) [S0..R340]
+  gauge at pass 0: pending non-held restored rows 1 (4193618 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 1
+  gauge at pass 4: pending non-held restored rows 170 (206272 bytes), held 1
+  pages restored 3 [1, 170, 170]; drain completed; rows still kept 0
+  turns: S 5 model (trials 2) and 7 control; the neighbour 14 in 14 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 1
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 4193618 (bound: B_credit 4194304, or one larger row alone, 4193618)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 1 (expected 1)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 341 (expected 341)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x21
+RESULT FR-2/zero-cut rules=seen-gate: PASS
+
+== FR-2/bytes | rules=credit-metadata-only ==
+invariant: 1 MiB rows restore at most three at a time, and a 16 MiB row is restored alone
+  park: 11 kept rows at seq 1000-1010: ten no-op rows of 1048824 stored bytes, then one of 16775481
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 11 rows [R0..R10], 27263721 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row R10 not handed off); retry due 2004
+  model turn at 2002: 11 input(s) [R0..R10]
+  C2' at 2004: no kept row past the cursor and the gate passes: Complete
+  gauge at pass 0: pending non-held restored rows 11 (27263721 bytes), held 0
+  pages restored 1 [11]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 3 control; the neighbour 5 in 5 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 11
+  assertions:
+    PASS peak pending non-held restored rows: 11 (bound P_page = 170)
+    FAIL peak pending non-held restored bytes: 27263721 (bound: B_credit 4194304, or one larger row alone, 16775481)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 11 (expected 11)
+    PASS rows still kept (never restored): 0 (expected 0)
+    FAIL most 1 MiB rows pending at once: 10 (expected 3)
+    FAIL the 16 MiB row restored alone, with no other restored row pending: False (expected True)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x8
+RESULT FR-2/bytes rules=credit-metadata-only: FAIL
+
+== FR-2/hold-takeover | rules=p-page-whatever-u ==
+invariant: after a takeover that loses the model's holds, the next page restores at most P_page - u rows
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R339 not handed off); retry due 2008
+  model turn at 2006: 175 input(s) [S20..R339], held [S20, S60, S100, S140, S169]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S20, S60, S100, S140, S169]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 5 (1708 bytes) not handed off; sends C4
+  model turn at 2008: 1 input(s) [S20..S20], held [S20]
+  C4 at 2009: the page waits (gate row R509 not handed off); retry due 2012
+  model turn at 2009: 2 input(s) [S20..S60], held [S20, S60]
+  model turn at 2010: 3 input(s) [S20..S100], held [S20, S60, S100]
+  model turn at 2011: 4 input(s) [S20..S140], held [S20, S60, S100, S140]
+  model turn at 2012: 5 input(s) [S20..S169], held [S20, S60, S100, S140, S169]
+  model turn at 2013: 175 input(s) [S20..R509], held [S20, S60, S100, S140, S169]
+  C4'' at 2015: no kept row past the cursor and the gate passes: Complete
+  model turn at 2015: 6 input(s) [S20..A], held [S20, S60, S100, S140, S169]
+  model turn at 2016: 6 input(s) [S20..M3025]
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
+  gauge at pass 8: pending non-held restored rows 174 (207747 bytes), held 1
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 10 model (trials 6) and 8 control; the neighbour 17 in 17 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    FAIL peak pending non-held restored rows: 174 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 207747 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x29
+RESULT FR-2/hold-takeover rules=p-page-whatever-u: FAIL
+
+== FR-2/zero-cut | rules=zero-cut-completes ==
+invariant: a page the byte credit cuts to zero waits and never completes the drain
+  park: 341 kept rows at seq 1000-1340: S0, a composite signal to H of 4193618 stored bytes, then 340 no-op rows of 1212
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 1 rows [S0..S0], 4193618 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S0 not handed off); retry due 2004
+  model turn at 2002: 1 input(s) [S0..S0], held [S0]
+  C2' at 2004: page 2 restores 170 rows [R1..R170], 206272 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: the page waits (gate row R170 not handed off); retry due 2008
+  model turn at 2006: 171 input(s) [S0..R170], held [S0]
+  pass 8: crash takeover after page 2 was consumed and as the next page's control comes due, while the model holds [S0]: another process owns epoch 2; the credit resets to durable state (memory and holds are lost)
+  C3' at 2008: a page cut to zero completes the drain, with 170 rows still kept (zero-cut-completes)
+  model turn at 2008: 1 input(s) [S0..S0], held [S0]
+  model turn at 2009: 2 input(s) [S0..A], held [S0]
+  model turn at 2010: 2 input(s) [S0..M3016]
+  gauge at pass 0: pending non-held restored rows 1 (4193618 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 1
+  gauge at pass 4: pending non-held restored rows 170 (206272 bytes), held 1
+  pages restored 2 [1, 170]; drain completed; rows still kept 170
+  turns: S 5 model (trials 2) and 5 control; the neighbour 11 in 11 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 1
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 4193618 (bound: B_credit 4194304, or one larger row alone, 4193618)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 1 (expected 1)
+    PASS drain completed and nothing stalled: True (expected True)
+    FAIL restored rows consumed by model turns: 171 (expected 341)
+    FAIL rows still kept (never restored): 170 (expected 0)
+    PASS H accepted a held signal once A completed its child (HeldGate.Accepts): 1 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x18
+RESULT FR-2/zero-cut rules=zero-cut-completes: FAIL
+
+== FR-2/suspend | rules=pages-while-suspended ==
+invariant: a suspension stops the pages, and after resume the next page waits for the handoff
+  park: 510 kept rows at seq 1000-1509: no-op native.resume rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  C1 at 2000: page 1 restores 170 rows [R0..R169], 206270 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  pass 1: an operator's suspend arrives after page 1
+  C2 at 2001: the page waits (gate row R169 not handed off); retry due 2004
+  S-op: built suspend (WorkflowInstance.cs Control, mirrored); suspended True
+  C2' at 2004: page 2 restores 170 rows [R170..R339], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C3
+  C3 at 2005: page 3 restores 170 rows [R340..R509], 206380 bytes, with u = 0 (0 bytes) not handed off; sends C4
+  C4 at 2006: no kept row past the cursor and the gate passes: Complete
+  pass 8: the operator's resume arrives
+  R-op: built resume (WorkflowInstance.cs Control, mirrored); suspended False
+  model turn at 2009: 510 input(s) [R0..R509]
+  gauge at pass 0: pending non-held restored rows 170 (206270 bytes), held 0
+  gauge at pass 4: pending non-held restored rows 340 (412650 bytes), held 0
+  gauge at pass 5: pending non-held restored rows 510 (619030 bytes), held 0
+  pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
+  turns: S 1 model (trials 0) and 7 control; the neighbour 10 in 10 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 510
+  assertions:
+    FAIL peak pending non-held restored rows: 510 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 619030 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 0 (expected 0)
+    PASS drain completed and nothing stalled: True (expected True)
+    PASS restored rows consumed by model turns: 510 (expected 510)
+    PASS rows still kept (never restored): 0 (expected 0)
+    PASS model turns of S while suspended: 0 (expected 0)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x13
+RESULT FR-2/suspend rules=pages-while-suspended: FAIL
+
+== FR-2/hold | rules=held-gate-waits ==
+invariant: with a held gate row, the pages advance on handoff and pending non-held restored rows stay within one page
+  park: 510 kept rows at seq 1000-1509: five composite signals to H (one of them page 1's last row) and no-op rows of 1212 stored bytes
+  open: recover opens generation 1 and sends C1 = kernel.drain
+  arrival: A = native.resume go from 0/other, withheld while the recover drain is open
+  C1 at 2000: page 1 restores 170 rows [R0..S169], 201910 bytes, with u = 0 (0 bytes) not handed off; sends C2
+  C2 at 2001: the page waits (gate row S169 not handed off); retry due 2004
+  model turn at 2002: 170 input(s) [R0..S169], held [S20, S60, S100, S140, S169]
+  C2' at 2004: the page waits (gate row S169 not handed off (held, counted as not handed off)); retry due 2007
+  stalled: the step bound was reached with work still pending
+  gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
+  gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
+  pages restored 1 [170]; drain open; rows still kept 340
+  turns: S 1 model (trials 0) and 134 control; the neighbour 400 in 401 passes (one turn per instance per pass)
+  pending non-held restored rows when the model first received one: 170
+  assertions:
+    PASS peak pending non-held restored rows: 170 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 201910 (bound: B_credit 4194304, or one larger row alone, 1214)
+    PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
+    FAIL drain completed and nothing stalled: False (expected True)
+    FAIL restored rows consumed by model turns: 165 (expected 510)
+    FAIL rows still kept (never restored): 340 (expected 0)
+    FAIL H accepted a held signal once A completed its child (HeldGate.Accepts): 0 (expected 1)
+    PASS S still running (its Event 'never' waits): True (expected True)
+  real prototype calls: NativeModel.TurnAsync x403
+RESULT FR-2/hold rules=held-gate-waits: FAIL
+
+== FR-2/r4b1-base | rules=reviewed ==
+invariant: the final released row R reaches the model (F completes once) before the later-delivered A ends it
+  start: real Native turn armed F (f2) with timer R due 1050 at seq 1100, and F2 much later
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R taken up: Complete sets the cohort mark (1,1)
+  model turn R at 1061: c:f2:F
+  model turn A at 1062: end Cancelled
+  model inputs [R, A]; S Cancelled; drain completed
+  assertions:
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F completions: 1 (expected 1)
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-2/r4b1-base rules=reviewed: PASS
+
+== FR-2/r4b1-base | rules=repaired ==
+invariant: the final released row R reaches the model (F completes once) before the later-delivered A ends it
+  start: real Native turn armed F (f2) with timer R due 1050 at seq 1100, and F2 much later
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R not handed off; retry due 1063
+  model turn R at 1061: c:f2:F
+  C' at 1063: gate row R handed off: Complete
+  model turn A at 1064: end Cancelled
+  model inputs [R, A]; S Cancelled; drain completed
+  assertions:
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F completions: 1 (expected 1)
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS R reached a committed model turn before Complete (the handoff gate): True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-2/r4b1-base rules=repaired: PASS
+
+== FR-2/r4b1-base | rules=negative ==
+invariant: the final released row R reaches the model (F completes once) before the later-delivered A ends it
+  start: real Native turn armed F (f2) with timer R due 1050 at seq 1100, and F2 much later
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R not handed off; retry due 1063
+  model turn R at 1061: c:f2:F
+  C' at 1063: gate row R handed off: Complete
+  model turn A at 1064: end Cancelled
+  model inputs [R, A]; S Cancelled; drain completed
+  assertions:
+    PASS actual model transitions after the start: [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    PASS F completions: 1 (expected 1)
+    PASS F2 still waiting when A reached the model: True (expected True)
+    PASS R reached a committed model turn before Complete (the handoff gate): True (expected True)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-2/r4b1-base rules=negative: PASS
+
+== FR-2/r4b1-base | rules=seen-gate-no-precedence ==
+invariant: the final released row R reaches the model (F completes once) before the later-delivered A ends it
+  start: real Native turn armed F (f2) with timer R due 1050 at seq 1100, and F2 much later
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R taken up: Complete
+  model turn A at 1061: end Cancelled
+  R: dropped under the finished-instance rule
+  model inputs [A]; S Cancelled; drain completed
+  assertions:
+    FAIL actual model transitions after the start: [A native.cancel -> end Cancelled] (expected [R native.timer -> c:f2:F ; A native.cancel -> end Cancelled])
+    FAIL F completions: 0 (expected 1)
+    PASS F2 still waiting when A reached the model: True (expected True)
+    FAIL R's fate: dropped (finished instance) (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-2/r4b1-base rules=seen-gate-no-precedence: FAIL
+
+== FR-2/r4b1-held | rules=reviewed ==
+invariant: R, held by the model at Complete, reaches the model again after a takeover before A ends it
+  start: real Native turn ran H (f1), a composite that holds signals until its child Event 'go' completes; R = composite signal to H at seq 1000
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R taken up: Complete sets the cohort mark (1,1)
+  model turn R at 1061: held [R]
+  crash takeover after Complete, while the model holds R: another process owns epoch 2; memory and holds are lost
+  trial of R alone at epoch 2
+  model turn R at 1062: held [R]
+  trial of A alone at epoch 2
+  model turn A+R at 1063: end Cancelled
+  model inputs [R, R, A]; S Cancelled; drain completed
+  assertions:
+    PASS model inputs: R,R,A (expected R,R,A)
+    PASS R reached the model again after the takeover, before A: True (expected True)
+    PASS H's deferred-signal records (signal-deferred:signal-1): 2 (expected 2)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x4
+RESULT FR-2/r4b1-held rules=reviewed: PASS
+
+== FR-2/r4b1-held | rules=repaired ==
+invariant: R, held by the model at Complete, reaches the model again after a takeover before A ends it
+  start: real Native turn ran H (f1), a composite that holds signals until its child Event 'go' completes; R = composite signal to H at seq 1000
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R not handed off; retry due 1063
+  model turn R at 1061: held [R]
+  C' at 1063: gate row R handed off: Complete sets the cohort mark (1,1)
+  crash takeover after Complete, while the model holds R: another process owns epoch 2; memory and holds are lost
+  trial of R alone at epoch 2
+  model turn R at 1064: held [R]
+  trial of A alone at epoch 2
+  model turn A+R at 1065: end Cancelled
+  model inputs [R, R, A]; S Cancelled; drain completed
+  assertions:
+    PASS model inputs: R,R,A (expected R,R,A)
+    PASS R reached the model again after the takeover, before A: True (expected True)
+    PASS H's deferred-signal records (signal-deferred:signal-1): 2 (expected 2)
+    PASS R's fate: consumed by a model turn (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x4
+RESULT FR-2/r4b1-held rules=repaired: PASS
+
+== FR-2/r4b1-held | rules=negative ==
+invariant: R, held by the model at Complete, reaches the model again after a takeover before A ends it
+  start: real Native turn ran H (f1), a composite that holds signals until its child Event 'go' completes; R = composite signal to H at seq 1000
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R not handed off; retry due 1063
+  model turn R at 1061: held [R]
+  C' at 1063: gate row R handed off: Complete
+  crash takeover after Complete, while the model holds R: another process owns epoch 2; memory and holds are lost
+  trial of A alone at epoch 2
+  model turn A at 1064: end Cancelled
+  R: dropped under the finished-instance rule
+  model inputs [R, A]; S Cancelled; drain completed
+  assertions:
+    FAIL model inputs: R,A (expected R,R,A)
+    FAIL R reached the model again after the takeover, before A: False (expected True)
+    FAIL H's deferred-signal records (signal-deferred:signal-1): 1 (expected 2)
+    FAIL R's fate: dropped (finished instance) (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x3
+RESULT FR-2/r4b1-held rules=negative: FAIL
+
+== FR-2/r4b1-held | rules=seen-gate-no-precedence ==
+invariant: R, held by the model at Complete, reaches the model again after a takeover before A ends it
+  start: real Native turn ran H (f1), a composite that holds signals until its child Event 'go' completes; R = composite signal to H at seq 1000
+  park kept R; recover's final page restored R with ReleasedBy (1,1) and sent C = kernel.drain at seq 950; A = native.cancel at 900 from 0/other, withheld during the drain
+  C at 1060: gate row R taken up: Complete
+  model turn A at 1061: end Cancelled
+  R: dropped under the finished-instance rule
+  model inputs [A]; S Cancelled; drain completed
+  assertions:
+    FAIL model inputs: A (expected R,R,A)
+    FAIL R reached the model again after the takeover, before A: False (expected True)
+    FAIL H's deferred-signal records (signal-deferred:signal-1): 0 (expected 2)
+    FAIL R's fate: dropped (finished instance) (expected consumed by a model turn)
+    PASS S ended: Cancelled (expected Cancelled)
+    PASS drain completed: True (expected True)
+    PASS undone rows remaining: 0 (expected 0)
+  real prototype calls: NativeModel.TurnAsync x2
+RESULT FR-2/r4b1-held rules=seen-gate-no-precedence: FAIL
+
+== JR-1/crash-after | rules=reviewed ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  crash takeover after the parked consumption kept the result (the reviewed design's first durable result): another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after rules=reviewed: FAIL
+
+== JR-1/crash-after | rules=reviewed-kind ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  crash takeover after the parked consumption kept the result (the reviewed design's first durable result): another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after rules=reviewed-kind: FAIL
+
+== JR-1/crash-after | rules=repaired ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  crash takeover after the conversion commit, before the parked instance consumed the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it))
+  recover: S runs again (revision 3)
+  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
+  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x2, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/crash-after rules=repaired: PASS
+
+== JR-1/crash-after | rules=negative ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
+  crash takeover after the conversion commit, before the parked instance consumed the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the parked instance's owner refuses c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; it is consumed with no turn and not kept
+  recover: S runs again (revision 3)
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after rules=negative: FAIL
+
+== JR-1/crash-after-keep | rules=reviewed ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after-keep rules=reviewed: FAIL
+
+== JR-1/crash-after-keep | rules=reviewed-kind ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after-keep rules=reviewed-kind: FAIL
+
+== JR-1/crash-after-keep | rules=repaired ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 3)
+  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
+  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/crash-after-keep rules=repaired: PASS
+
+== JR-1/crash-after-keep | rules=negative ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
+  the parked instance consumes c9_0/subject_1!2_w6.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 3)
+  recover: the page restores c9_0/subject_1!2_w6.result (job-finished)
+  the owner polls c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-after-keep rules=negative: FAIL
+
+== JR-1/obsolete | rules=reviewed ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/obsolete rules=reviewed: FAIL
+
+== JR-1/obsolete | rules=reviewed-kind ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the parked instance consumes c9_0/subject_1!2_w6 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob)); the built RemainingJobs drops w6 from the registry
+  the kept row c9_0/subject_1!2_w6 now holds kind job-finished and the result payload under the ticket's key
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): the registry no longer holds w6
+  recover: the page clears c9_0/subject_1!2_w6 (job-finished): the registry no longer holds w6
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/obsolete rules=reviewed-kind: FAIL
+
+== JR-1/obsolete | rules=repaired ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 3)
+  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): generation g0 is not the registry's g1
+  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
+  the owner polls c9_0/subject_1!2_w6!result!g1 and gives it to the model (reserved-scope result of generation g1, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/obsolete rules=repaired: PASS
+
+== JR-1/obsolete | rules=negative ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6.result (scope 0, ordinary)
+  the parked instance consumes c9_0/subject_1!2_w6.result (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 3)
+  recover: the page clears c9_0/subject_1!2_w6!result!g0 (job-finished): generation g0 is not the registry's g1
+  recover: the page restores c9_0/subject_1!2_w6.result (job-finished)
+  the owner polls c9_0/subject_1!2_w6.result: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  physical invocations 1 (allowed 1); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/obsolete rules=negative: FAIL
+
+== JR-1/obsolete | rules=generation-blind ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  a result row of J's obsolete generation g0 (c9_0/subject_1!2_w6!result!g0, value 'stale') is kept Arrived from an earlier Park; the registry holds w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  conversion: one fenced commit consumes ticket c9_0/subject_1!2_w6 (counted) and inserts result row c9_0/subject_1!2_w6!result!g1 (scope 2^62, reserved)
+  the parked instance consumes c9_0/subject_1!2_w6!result!g1 (job-finished) as late input: kept Arrived (this owner's in-memory completion (CompletedJob))
+  crash takeover after the parked consumption kept the result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  recover: S runs again (revision 3)
+  recover: the page restores c9_0/subject_1!2_w6!result!g0 (job-finished)
+  recover: the page restores c9_0/subject_1!2_w6!result!g1 (job-finished)
+  the owner polls c9_0/subject_1!2_w6!result!g0 and gives it to the model (reserved-scope result of generation g0, the registry's g1 (the built DiscardedAt alone refuses it)): real Native turn resumes c with stale; S Finished
+  the owner polls c9_0/subject_1!2_w6!result!g1: the real DiscardedAt classifies it as a supplied completion; consumed with no turn (Worker.cs 1030–1037): the result is lost
+  physical invocations 1 (allowed 1); model results [stale]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key): stale (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: Delivery.DiscardedAt x2, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x9, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x3, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/obsolete rules=generation-blind: FAIL
+
+== JR-1/crash-before | rules=reviewed ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 2); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-before rules=reviewed: FAIL
+
+== JR-1/crash-before | rules=reviewed-kind ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 2); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-before rules=reviewed-kind: FAIL
+
+== JR-1/crash-before | rules=repaired ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 2); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  STOPPED: the brief's 'before the conversion commits: at-least-once, so a crash re-runs the job' does not hold for a parked instance: the new owner does not enter the ticket of a parked row (Worker.cs 1169-1177), dispatch hands it to the parked instance as late input, the built RemainingJobs drops J's key from the registry when that consumption takes the durable ticket (WorkflowInstance.cs 78-90, 135-144), and the recover Open then clears a kept job row whose key the registry no longer holds (observability.md 1336-1343). J never runs again and its result never reaches the model. Recommendation in the README.
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-before rules=repaired: STOPPED
+
+== JR-1/crash-before | rules=negative ==
+invariant: a job result that completes while its instance is parked reaches the model once after takeover and recover, with its original value, and the job runs again only if the crash preceded the conversion commit
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  park: an authored fault in another branch parks S while J runs; S Faulted at revision 2, fault-input kept Consumed, registry still w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  crash takeover after J's body returned and before any commit recorded its result: another process takes epoch 2 at 120; the in-memory completion and its provenance are lost
+  the new owner polls ticket c9_0/subject_1!2_w6: S is Faulted, so the built StartJob does not enter it
+  the parked instance consumes c9_0/subject_1!2_w6 (kernel.job) as late input: kept Arrived (a ticket); the built RemainingJobs drops w6 from the registry
+  recover: S runs again (revision 4)
+  recover: the page clears c9_0/subject_1!2_w6 (kernel.job): the registry no longer holds w6
+  physical invocations 1 (allowed 2); model results []; S Running
+  assertions:
+    FAIL model results (c completed by a result turn): 0 (expected 1)
+    FAIL the result value (the arm-time input and the original effect key):  (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 2, one re-run since the crash preceded the conversion commit)
+    FAIL S finished: Running (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x4, InMemoryStore.PollAsync x2, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+RESULT JR-1/crash-before rules=negative: FAIL
+
+== JR-1/running | rules=reviewed ==
+invariant: control: a job that completes while its instance runs reaches the model once, as built
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/running rules=reviewed: PASS
+
+== JR-1/running | rules=reviewed-kind ==
+invariant: control: a job that completes while its instance runs reaches the model once, as built
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/running rules=reviewed-kind: PASS
+
+== JR-1/running | rules=repaired ==
+invariant: control: a job that completes while its instance runs reaches the model once, as built
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/running rules=repaired: PASS
+
+== JR-1/running | rules=negative ==
+invariant: control: a job that completes while its instance runs reaches the model once, as built
+  start: real Native turn armed c as job w6 with Service = alpha and effect key c9_0/subject_1/c/-/0; ticket c9_0/subject_1!2_w6 committed with the row; registry w6 -> g1
+  J's body ran (physical invocation 1): alpha|c9_0/subject_1/c/-/0
+  the running instance's next turn takes the in-memory completion; its commit consumes the ticket: real Native turn resumes c with alpha|c9_0/subject_1/c/-/0; S Finished
+  physical invocations 1 (allowed 1); model results [alpha|c9_0/subject_1/c/-/0]; S Finished
+  assertions:
+    PASS model results (c completed by a result turn): 1 (expected 1)
+    PASS the result value (the arm-time input and the original effect key): alpha|c9_0/subject_1/c/-/0 (expected alpha|c9_0/subject_1/c/-/0)
+    PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
+    PASS S finished: Finished (expected Finished)
+    PASS rows of S left in the store: 0 (expected 0)
+  real prototype calls: InMemoryStore.CommitAsync x2, InMemoryStore.TakeAsync x1, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x2
+RESULT JR-1/running rules=negative: PASS
+
+== PO-1/cohort | rules=reviewed ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R and Complete set the cohort mark (1,1); J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  nothing can move: J is withheld; R waits for a trial
+  stalled: the step bound was reached with work still pending
+  assertions:
+    FAIL transitions: [] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    FAIL F completions: 0 (expected 1)
+    FAIL nothing stalled: True (expected False)
+    FAIL S parked, its fault naming J: False (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x7, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x1
+RESULT PO-1/cohort rules=reviewed: FAIL
+
+== PO-1/cohort | rules=repaired ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R and Complete set the cohort mark (1,1); J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  trial of R alone (the trial commit marks it at epoch 5)
+  model turn R (native.timer): c:f2:F
+  the mark's read finds no cohort row: its commit clears the mark
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  assertions:
+    PASS transitions: [R native.timer -> c:f2:F ; J -> park (MaxAttempts)] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    PASS F completions: 1 (expected 1)
+    PASS nothing stalled: False (expected False)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x9, InMemoryStore.PollAsync x3, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x2
+RESULT PO-1/cohort rules=repaired: PASS
+
+== PO-1/cohort | rules=negative ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R and Complete set the cohort mark (1,1); J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  nothing can move: J is withheld; R waits for a trial
+  stalled: the step bound was reached with work still pending
+  assertions:
+    FAIL transitions: [] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    FAIL F completions: 0 (expected 1)
+    FAIL nothing stalled: True (expected False)
+    FAIL S parked, its fault naming J: False (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x7, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x1
+RESULT PO-1/cohort rules=negative: FAIL
+
+== PO-1/open | rules=reviewed ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R (gate row R) and sent C = kernel.drain at seq 950; the drain is open; J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: C
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  C: gate row R not taken up (an untried suspect); C sends a retry due 3 ms later
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  the re-park interrupts the open drain: its Resolution is cleared in the parking commit (observability.md, Interruption)
+  trial of R alone (the trial commit marks it at epoch 5)
+  R: consumed as late input by the parked instance
+  C: no open resolution (the re-park interrupted the drain); consumed
+  assertions:
+    FAIL transitions: [J -> park (MaxAttempts) ; R -> late input to the parked instance] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    FAIL F completions: 0 (expected 1)
+    PASS nothing stalled: False (expected False)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x13, InMemoryStore.PollAsync x5, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x1
+RESULT PO-1/open rules=reviewed: FAIL
+
+== PO-1/open | rules=repaired ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R (gate row R) and sent C = kernel.drain at seq 950; the drain is open; J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: C
+  poll: R is a suspect
+  trial of R alone (the trial commit marks it at epoch 5)
+  model turn R (native.timer): c:f2:F
+  C: gate row R taken up: Complete; no released row remains, so no mark
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  assertions:
+    PASS transitions: [R native.timer -> c:f2:F ; J -> park (MaxAttempts)] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    PASS F completions: 1 (expected 1)
+    PASS nothing stalled: False (expected False)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x11, InMemoryStore.PollAsync x4, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x2
+RESULT PO-1/open rules=repaired: PASS
+
+== PO-1/open | rules=negative ==
+invariant: a cohort suspect gets its trial before an exhausted non-cohort ticket is poisoned, and the poison then parks the instance
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; the final page released R (gate row R) and sent C = kernel.drain at seq 950; the drain is open; J was released by an early page
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3, released (1,1)); R (seq 1100, native.timer, seen 4, trial 0, attempts 0, released (1,1))
+  cold takeover before J or R is dispatched: a new process, no memory: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: C
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  C: gate row R not taken up (an untried suspect); C sends a retry due 3 ms later
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  the re-park interrupts the open drain: its Resolution is cleared in the parking commit (observability.md, Interruption)
+  trial of R alone (the trial commit marks it at epoch 5)
+  R: consumed as late input by the parked instance
+  C: no open resolution (the re-park interrupted the drain); consumed
+  assertions:
+    FAIL transitions: [J -> park (MaxAttempts) ; R -> late input to the parked instance] (expected [R native.timer -> c:f2:F ; J -> park (MaxAttempts)])
+    FAIL F completions: 0 (expected 1)
+    PASS nothing stalled: False (expected False)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x13, InMemoryStore.PollAsync x5, InMemoryStore.TakeAsync x5, InboxKey.Ticket x1, NativeModel.TurnAsync x1
+RESULT PO-1/open rules=negative: FAIL
+
+== PO-1/ordinary | rules=reviewed ==
+invariant: outside a drain and without a mark the built comparison holds: the earlier exhausted ticket parks the instance before the later suspect's trial
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; no recover drain and no mark: R is an ordinary timer
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3); R (seq 1100, native.timer, seen 4, trial 0, attempts 0)
+  real Worker at epoch 5: S Faulted, fault 'message c9_0/subject_1!4_hang was on trial when 3 owners were lost'
+  the mirrored owner takes over from the lost owner 4: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  trial of R alone (the trial commit marks it at epoch 5)
+  R: consumed as late input by the parked instance
+  real Worker outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  mirrored owner outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  assertions:
+    PASS the mirrored owner agrees with the real Worker: S Faulted, fault names J True, F completed False, rows of S undone 0 (expected S Faulted, fault names J True, F completed False, rows of S undone 0)
+    PASS transitions: [J -> park (MaxAttempts) ; R -> late input to the parked instance] (expected [J -> park (MaxAttempts) ; R -> late input to the parked instance])
+    PASS F completions: 0 (expected 0)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x14, InMemoryStore.PollAsync x3, InMemoryStore.TakeAsync x9, InboxKey.Ticket x2, NativeModel.TurnAsync x2, Worker (real) x1
+RESULT PO-1/ordinary rules=reviewed: PASS
+
+== PO-1/ordinary | rules=repaired ==
+invariant: outside a drain and without a mark the built comparison holds: the earlier exhausted ticket parks the instance before the later suspect's trial
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; no recover drain and no mark: R is an ordinary timer
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3); R (seq 1100, native.timer, seen 4, trial 0, attempts 0)
+  real Worker at epoch 5: S Faulted, fault 'message c9_0/subject_1!4_hang was on trial when 3 owners were lost'
+  the mirrored owner takes over from the lost owner 4: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  trial of R alone (the trial commit marks it at epoch 5)
+  R: consumed as late input by the parked instance
+  real Worker outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  mirrored owner outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  assertions:
+    PASS the mirrored owner agrees with the real Worker: S Faulted, fault names J True, F completed False, rows of S undone 0 (expected S Faulted, fault names J True, F completed False, rows of S undone 0)
+    PASS transitions: [J -> park (MaxAttempts) ; R -> late input to the parked instance] (expected [J -> park (MaxAttempts) ; R -> late input to the parked instance])
+    PASS F completions: 0 (expected 0)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x14, InMemoryStore.PollAsync x3, InMemoryStore.TakeAsync x9, InboxKey.Ticket x2, NativeModel.TurnAsync x2, Worker (real) x1
+RESULT PO-1/ordinary rules=repaired: PASS
+
+== PO-1/ordinary | rules=negative ==
+invariant: outside a drain and without a mark the built comparison holds: the earlier exhausted ticket parks the instance before the later suspect's trial
+  owner 1 put J on trial at epoch 1 and died; the real TakeAsync gives J attempt 1
+  owner 2 put J on trial at epoch 2 and died; the real TakeAsync gives J attempt 2
+  owner 3 put J on trial at epoch 3 and died; the real TakeAsync gives J attempt 3 (MaxAttempts: owner 3 was the last failed owner)
+  owner 4 (epoch 4) marks J and R seen; no recover drain and no mark: R is an ordinary timer
+  rows: J (seq 900, kernel.job, seen 4, trial 3, attempts 3); R (seq 1100, native.timer, seen 4, trial 0, attempts 0)
+  real Worker at epoch 5: S Faulted, fault 'message c9_0/subject_1!4_hang was on trial when 3 owners were lost'
+  the mirrored owner takes over from the lost owner 4: epoch 5
+  poll: J is a poison input (exhausted, no longer a ticket)
+  poll: R is a suspect
+  R is not tried: the poison comparison puts J first
+  J: on trial when 3 owners were lost: S parks (message c9_0/subject_1!4_hang was on trial when 3 owners were lost)
+  trial of R alone (the trial commit marks it at epoch 5)
+  R: consumed as late input by the parked instance
+  real Worker outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  mirrored owner outcome: S Faulted, fault names J True, F completed False, rows of S undone 0
+  assertions:
+    PASS the mirrored owner agrees with the real Worker: S Faulted, fault names J True, F completed False, rows of S undone 0 (expected S Faulted, fault names J True, F completed False, rows of S undone 0)
+    PASS transitions: [J -> park (MaxAttempts) ; R -> late input to the parked instance] (expected [J -> park (MaxAttempts) ; R -> late input to the parked instance])
+    PASS F completions: 0 (expected 0)
+    PASS S parked, its fault naming J: True (expected True)
+  real prototype calls: InMemoryStore.CommitAsync x14, InMemoryStore.PollAsync x3, InMemoryStore.TakeAsync x9, InboxKey.Ticket x2, NativeModel.TurnAsync x2, Worker (real) x1
+RESULT PO-1/ordinary rules=negative: PASS
+
+== summary ==
+ev1-a                          reviewed                   actual FAIL     expected FAIL     as expected
+ev1-a                          repaired                   actual PASS     expected PASS     as expected
+ev1-a-after                    reviewed                   actual PASS     expected PASS     as expected
+ev1-a-after                    repaired                   actual PASS     expected PASS     as expected
+ev1-b                          reviewed                   actual FAIL     expected FAIL     as expected
+ev1-b                          repaired                   actual PASS     expected PASS     as expected
+ev1-b                          negative                   actual FAIL     expected FAIL     as expected
+ev1-b                          match-at-now               actual FAIL     expected FAIL     as expected
+ev1-b-paged                    reviewed                   actual FAIL     expected FAIL     as expected
+ev1-b-paged                    repaired                   actual PASS     expected PASS     as expected
+ev1-b-paged                    negative                   actual FAIL     expected FAIL     as expected
+ev1-b-paged                    p0-at-page-commit          actual FAIL     expected FAIL     as expected
+ev1-b-stepback                 reviewed                   actual FAIL     expected FAIL     as expected
+ev1-b-stepback                 repaired                   actual STOPPED  expected STOPPED  as expected
+ev1-b-stepback                 no-horizon                 actual FAIL     expected FAIL     as expected
+ev1-b-suspended                reviewed                   actual PASS     expected PASS     as expected
+ev1-b-suspended                repaired                   actual PASS     expected PASS     as expected
+ev1-b-suspended                meet-waits-while-suspended actual FAIL     expected FAIL     as expected
+ev1-replay                     reviewed                   actual FAIL     expected FAIL     as expected
+ev1-replay                     repaired                   actual PASS     expected PASS     as expected
+ev1-replay                     negative                   actual FAIL     expected FAIL     as expected
+ev1-replay-atomic              reviewed                   actual FAIL     expected FAIL     as expected
+ev1-replay-atomic              repaired                   actual PASS     expected PASS     as expected
+ev1-replay-atomic              negative                   actual FAIL     expected FAIL     as expected
+ev1-replay-consumed            reviewed                   actual FAIL     expected FAIL     as expected
+ev1-replay-consumed            repaired                   actual STOPPED  expected STOPPED  as expected
+ev1-replay-consumed            negative                   actual FAIL     expected FAIL     as expected
+fr2-base                       reviewed                   actual FAIL     expected FAIL     as expected
+fr2-base                       repaired                   actual PASS     expected PASS     as expected
+fr2-base                       negative                   actual FAIL     expected FAIL     as expected
+fr2-hold                       reviewed                   actual FAIL     expected FAIL     as expected
+fr2-hold                       repaired                   actual PASS     expected PASS     as expected
+fr2-hold                       negative                   actual FAIL     expected FAIL     as expected
+fr2-suspend                    reviewed                   actual FAIL     expected FAIL     as expected
+fr2-suspend                    repaired                   actual PASS     expected PASS     as expected
+fr2-suspend                    negative                   actual FAIL     expected FAIL     as expected
+fr2-takeover                   reviewed                   actual FAIL     expected FAIL     as expected
+fr2-takeover                   repaired                   actual PASS     expected PASS     as expected
+fr2-takeover                   negative                   actual FAIL     expected FAIL     as expected
+fr2-hold-takeover              reviewed                   actual FAIL     expected FAIL     as expected
+fr2-hold-takeover              repaired                   actual PASS     expected PASS     as expected
+fr2-hold-takeover              negative                   actual FAIL     expected FAIL     as expected
+fr2-bytes                      reviewed                   actual FAIL     expected FAIL     as expected
+fr2-bytes                      repaired                   actual PASS     expected PASS     as expected
+fr2-bytes                      negative                   actual FAIL     expected FAIL     as expected
+fr2-zero-cut                   reviewed                   actual FAIL     expected FAIL     as expected
+fr2-zero-cut                   repaired                   actual PASS     expected PASS     as expected
+fr2-zero-cut                   negative                   actual FAIL     expected FAIL     as expected
+fr2-base                       seen-gate                  actual PASS     expected PASS     as expected
+fr2-hold                       seen-gate                  actual PASS     expected PASS     as expected
+fr2-suspend                    seen-gate                  actual PASS     expected PASS     as expected
+fr2-takeover                   seen-gate                  actual PASS     expected PASS     as expected
+fr2-hold-takeover              seen-gate                  actual PASS     expected PASS     as expected
+fr2-bytes                      seen-gate                  actual PASS     expected PASS     as expected
+fr2-zero-cut                   seen-gate                  actual PASS     expected PASS     as expected
+fr2-bytes                      credit-metadata-only       actual FAIL     expected FAIL     as expected
+fr2-hold-takeover              p-page-whatever-u          actual FAIL     expected FAIL     as expected
+fr2-zero-cut                   zero-cut-completes         actual FAIL     expected FAIL     as expected
+fr2-suspend                    pages-while-suspended      actual FAIL     expected FAIL     as expected
+fr2-hold                       held-gate-waits            actual FAIL     expected FAIL     as expected
+fr2-r4b1-base                  reviewed                   actual PASS     expected PASS     as expected
+fr2-r4b1-base                  repaired                   actual PASS     expected PASS     as expected
+fr2-r4b1-base                  negative                   actual PASS     expected PASS     as expected
+fr2-r4b1-base                  seen-gate-no-precedence    actual FAIL     expected FAIL     as expected
+fr2-r4b1-held                  reviewed                   actual PASS     expected PASS     as expected
+fr2-r4b1-held                  repaired                   actual PASS     expected PASS     as expected
+fr2-r4b1-held                  negative                   actual FAIL     expected FAIL     as expected
+fr2-r4b1-held                  seen-gate-no-precedence    actual FAIL     expected FAIL     as expected
+jr1-crash-after                reviewed                   actual FAIL     expected FAIL     as expected
+jr1-crash-after                reviewed-kind              actual FAIL     expected FAIL     as expected
+jr1-crash-after                repaired                   actual PASS     expected PASS     as expected
+jr1-crash-after                negative                   actual FAIL     expected FAIL     as expected
+jr1-crash-after-keep           reviewed                   actual FAIL     expected FAIL     as expected
+jr1-crash-after-keep           reviewed-kind              actual FAIL     expected FAIL     as expected
+jr1-crash-after-keep           repaired                   actual PASS     expected PASS     as expected
+jr1-crash-after-keep           negative                   actual FAIL     expected FAIL     as expected
+jr1-obsolete                   reviewed                   actual FAIL     expected FAIL     as expected
+jr1-obsolete                   reviewed-kind              actual FAIL     expected FAIL     as expected
+jr1-obsolete                   repaired                   actual PASS     expected PASS     as expected
+jr1-obsolete                   negative                   actual FAIL     expected FAIL     as expected
+jr1-obsolete                   generation-blind           actual FAIL     expected FAIL     as expected
+jr1-crash-before               reviewed                   actual FAIL     expected FAIL     as expected
+jr1-crash-before               reviewed-kind              actual FAIL     expected FAIL     as expected
+jr1-crash-before               repaired                   actual STOPPED  expected STOPPED  as expected
+jr1-crash-before               negative                   actual FAIL     expected FAIL     as expected
+jr1-running                    reviewed                   actual PASS     expected PASS     as expected
+jr1-running                    reviewed-kind              actual PASS     expected PASS     as expected
+jr1-running                    repaired                   actual PASS     expected PASS     as expected
+jr1-running                    negative                   actual PASS     expected PASS     as expected
+po1-cohort                     reviewed                   actual FAIL     expected FAIL     as expected
+po1-cohort                     repaired                   actual PASS     expected PASS     as expected
+po1-cohort                     negative                   actual FAIL     expected FAIL     as expected
+po1-open                       reviewed                   actual FAIL     expected FAIL     as expected
+po1-open                       repaired                   actual PASS     expected PASS     as expected
+po1-open                       negative                   actual FAIL     expected FAIL     as expected
+po1-ordinary                   reviewed                   actual PASS     expected PASS     as expected
+po1-ordinary                   repaired                   actual PASS     expected PASS     as expected
+po1-ordinary                   negative                   actual PASS     expected PASS     as expected
+98/98 runs as expected
