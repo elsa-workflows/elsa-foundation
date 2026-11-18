@@ -126,6 +126,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var binding = ActivityDataReadBinding.Parameter(query.ParameterSource);
             // Owner decision (17 Nov, #4522): with member reads off, expression insertion offers no member navigation.
             // A member path is refused as a native member read is; the whole value of the same source stays offered.
+            // Like Resolve, the member-reads check comes before the source checks, so it is the one finding reported.
             if (!query.MemberPath.IsDefaultOrEmpty && !options.Value.MemberReads)
                 findings.Add(new(Path(consumer, target.InputKey), "ActivityData/UnsupportedMemberBinding",
                     "Member reads are off on this server, so expression insertion cannot select a member of this source. Insert the whole value and write the member access in the expression."));

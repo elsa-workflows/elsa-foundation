@@ -36,6 +36,13 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Contains(native.Findings, finding => finding.Type == "ValueFlow/EarlierProducerRun");
         Assert.DoesNotContain(native.Sources, source => source.Binding is not null);
         Assert.Contains(shapes.Paths, path => path.SequenceEqual(new[] { "a.b", "" }));
+
+        // With member reads off (the default) the portable whole value is still the only offer for this producer.
+        using var off = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new ParameterShape()));
+        var offListed = await Analyzer(off).AnalyzeAsync(document, new("consumer", "CustomerId"), new() { ExpressionType = "JavaScript" });
+        Assert.False(offListed.MemberReadsEnabled);
+        var offRoot = Assert.Single(offListed.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Null(offRoot.Binding); Assert.Equal(parameter, offRoot.ParameterSource); Assert.Empty(offRoot.ParameterPath!.Value);
     }
 
     /// <summary>

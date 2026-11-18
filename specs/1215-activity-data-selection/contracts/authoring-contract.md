@@ -203,8 +203,8 @@ an alternative save path for reusable graphs.
 ## Expression insertion and editor continuity
 
 Selection in a supported text editor uses the installed syntax adapter's insertion operation. For a
-nested member, bind the existing whole-source role/projection as a portable parameter and let the adapter
-insert escaped member access; this does not require new portable-parameter wire fields. The basic
+nested member (while member reads are on), bind the existing whole-source role/projection as a portable
+parameter and let the adapter insert escaped member access; this does not require new portable-parameter wire fields. The basic
 language-neutral member binding and explicit expression lowering remain separate contracts.
 
 For portable insertion the metadata query supplies the installed `expressionType` and, when focused,
