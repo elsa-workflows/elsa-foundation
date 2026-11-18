@@ -167,13 +167,13 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   await expect(history).not.toContainText("Applied");
   await capture(page, info, "write-history-lost-updates");
 
-  // The journal lists the run's commits in order; a write is in the commit that completed its step.
+  // The journal lists the run's commits in order, with the writes and transitions of each commit.
   const lifecycle = inspector().getByRole("region", { name: "Variable lifecycle", exact: true });
   await lifecycle.getByRole("tab", { name: "Journal", exact: true }).click();
   const journal = lifecycle.getByRole("list", { name: "Commit journal" });
   await expect(journal).toContainText("write", { timeout: 30_000 });
   const commits = journal.locator(":scope > li");
-  // A write and the completion that applied it share one commit.
+  // Writes are listed with transitions in their commits (a commit holds a write and a completion).
   await expect(commits.filter({ hasText: "write" }).filter({ hasText: "completed" }).first()).toBeVisible();
   // Commit numbers ("Commit token.ordinal") grow down the list.
   const numbers = (await commits.locator("header strong").allTextContents())
