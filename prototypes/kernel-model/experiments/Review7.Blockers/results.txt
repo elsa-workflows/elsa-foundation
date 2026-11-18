@@ -1,5 +1,5 @@
 Review7.Blockers results
-commit 1274bb4e425688b8f43a7f91ed6ad7ce6672ff45 (tree e409f1388e0cae0a4e491a954bd926a97aa0255d, prototype tree a44c098cbb28cc204f96cda77284aa3bf0d4edcc)
+commit ed95a27c1f358a71f5b6ae06a3d1d463f71ad225 (tree 14740e6cc207b7f5276fa337280c9babaf442dfc, prototype tree 584f0d53e456dc25c827304f823d41cd2de58dc0)
 branch base (merge-base with origin/main) cfce7a2c101df16e3ff005169e2fb5fc8de8bdbb
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review7.Block
     dotnet build experiments/Review7.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                -> exit codes below; 28/28 runs as expected (failed assertion ids compared)
   dotnet experiments/Review7.Blockers/bin/Release/net10.0/Kernel.Review7.Blockers.dll --all, twice
-    -> exit 0 and 0, byte-identical output (SHA-256 aede014c5355628cf73d315fa610697f9f22874fddb860f445c24025c1b0c225), below
+    -> exit 0 and 0, byte-identical output (SHA-256 463c9bd8d967e87076bf77889ce4509173f098cebdd2d8bbbb8a3dcd9ef7da35), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
   exit 1 (nt2-handles, reviewed)
@@ -46,20 +46,20 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
   the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,740 > 16,457,728 (margin -27,012)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -82,20 +82,20 @@ RESULT NT-2/handles rules=reviewed: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + Model and Definition 11 + reserve 16,384 = 25,920 <= 16,457,728 (margin 16,431,808)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + Model and Definition 11 + reserve 16,384 = 34,920 <= 16,457,728 (margin 16,422,808)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 43,920 <= 16,457,728 (margin 16,413,808)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
   the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,740 > 16,457,728 (margin -27,012)
     refused before the store as a definite error (over the envelope); the turn fails and parks (WorkflowInstance.Park)
     Park: P Running -> Faulted, state kept (140 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#5.end to 0/q]; the row measures 27,577: landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Faulted -> Faulted, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1]; 1,500 creator handles kept (27,001 bytes)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 43,920 <= 16,457,728 (margin 16,413,808)
   P's ending commit: the row ends Faulted, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 27,539 bytes (140 state, 27,001 CustomHandles, 0 registries, 398 other fields) <= 16,457,728 (margin 16,430,189): landed
   deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
@@ -117,20 +117,20 @@ RESULT NT-2/handles rules=repaired: PASS
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
   the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,740 > 16,457,728 (margin -27,012)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -153,20 +153,20 @@ RESULT NT-2/handles rules=negative: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,740 > 16,457,728 (margin -27,012)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -188,30 +188,30 @@ RESULT NT-2/at-bound rules=reviewed: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + Model and Definition 11 + reserve 16,384 = 25,920 <= 16,457,728 (margin 16,431,808)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + Model and Definition 11 + reserve 16,384 = 34,920 <= 16,457,728 (margin 16,422,808)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 43,920 <= 16,457,728 (margin 16,413,808)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,389,459 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 27,001 CustomHandles counted); 3,500 open inboxes, 30,435 variables
-  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,459 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
-    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,389,459 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  the grown state: 16,389,448 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 27,001 CustomHandles - 11 Model and Definition counted); 3,500 open inboxes, 30,435 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,448 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,853 bytes (16,389,448 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,875): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
-    TerminateMetadata grew P's state by 24,500 bytes (16,389,459 -> 16,413,959)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,959 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    TerminateMetadata grew P's state by 24,500 bytes (16,389,448 -> 16,413,948)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,948 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
-    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,413,959 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,315 bytes (16,413,948 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,413): landed
   deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
-  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 5 (Running, state 16,389,459 bytes, 1,500 handles)
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,315 bytes, for P at revision 5 (Running, state 16,389,448 bytes, 1,500 handles)
   counted terminates to G stored by a landed commit: [c3_1/p_1#6.0000 (seq 1506)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
     PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
-    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
-    PASS [at-cap] the growth commit was admitted with a projected total of exactly 16,457,728 ([16,457,728]), the ending row projects to 16,457,728, and the ending commit landed with a measured row of 16,441,326 (margin 16,402)
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,315 <= 16,457,728: True
+    PASS [at-cap] the growth commit was admitted with a projected total of exactly 16,457,728 ([16,457,728]), the ending row projects to 16,457,728, and the ending commit landed with a measured row of 16,441,315 (margin 16,413)
     PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
     PASS [one-notice] notices from P to Q stored: 1 (expected 1)
     PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
@@ -223,20 +223,20 @@ RESULT NT-2/at-bound rules=repaired: PASS
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,740 > 16,457,728 (margin -27,012)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -258,21 +258,21 @@ RESULT NT-2/at-bound rules=negative: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,842 bytes (16,416,437 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,886): landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,475 bytes (16,416,437 -> 16,440,912)
     ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,681 > 16,457,728 (margin -26,953)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,692 > 16,457,728 (margin -26,964)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,279 bytes (16,440,912 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,551): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -294,30 +294,30 @@ RESULT NT-2/thendelete-protected rules=reviewed: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + Model and Definition 11 + reserve 16,384 = 25,920 <= 16,457,728 (margin 16,431,808)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + Model and Definition 11 + reserve 16,384 = 34,920 <= 16,457,728 (margin 16,422,808)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 43,920 <= 16,457,728 (margin 16,413,808)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,389,436 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 27,001 CustomHandles counted); 3,500 open inboxes, 30,435 variables
-  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,436 + TerminalGrowth 24,523 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
-    the store's row cap (proposed, the Refuses hook): the row measures 16,416,841 bytes (16,389,436 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,887): landed
+  the grown state: 16,389,425 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 27,001 CustomHandles - 11 Model and Definition counted); 3,500 open inboxes, 30,435 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,425 + TerminalGrowth 24,523 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,830 bytes (16,389,425 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,898): landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
-    TerminateMetadata grew P's state by 24,475 bytes (16,389,436 -> 16,413,911)
+    TerminateMetadata grew P's state by 24,475 bytes (16,389,425 -> 16,413,900)
     ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,911 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,680 <= 16,457,728 (margin 48)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,900 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,457,680 <= 16,457,728 (margin 48)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
-    the store's row cap (proposed, the Refuses hook): the row measures 16,441,278 bytes (16,413,911 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,450): landed
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,267 bytes (16,413,900 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,461): landed
   deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
-  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,278 bytes, for P at revision 5 (Running, state 16,389,436 bytes, 1,500 handles)
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,267 bytes, for P at revision 5 (Running, state 16,389,425 bytes, 1,500 handles)
   counted terminates to G stored by a landed commit: [c3_1/p_1#6.0000 (seq 1506)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
     PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
-    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,278 <= 16,457,728: True
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,267 <= 16,457,728: True
     PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
     PASS [one-notice] notices from P to Q stored: 1 (expected 1)
     PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
@@ -329,21 +329,21 @@ RESULT NT-2/thendelete-protected rules=repaired: PASS
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
   P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
   P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
-  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
     the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
-  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,443,842 bytes (16,416,437 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,886): landed
   deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
     TerminateMetadata grew P's state by 24,475 bytes (16,416,437 -> 16,440,912)
     ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,681 > 16,457,728 (margin -26,953)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + Model and Definition 11 + reserve 16,384 = 16,484,692 > 16,457,728 (margin -26,964)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,468,279 bytes (16,440,912 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,551): not landed: StoreException (Definite): the row of 1/p was refused
     the definite refusal fails the turn, which parks (WorkflowInstance.Park)
@@ -365,12 +365,12 @@ RESULT NT-2/thendelete-protected rules=negative: FAIL
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   no spawn turn: P makes no detached start
-  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 11 + reserve 16,384 = 16,457,739 > 16,457,728 (margin -11)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
   deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
@@ -391,21 +391,21 @@ RESULT NT-2/no-handles rules=reviewed: PASS
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   no spawn turn: P makes no detached start
-  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
-    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  the grown state: 16,416,449 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles - 11 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,449 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 11 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,853 bytes (16,416,449 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,875): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
-    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,449 -> 16,440,949)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,949 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 11 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
-    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,315 bytes (16,440,949 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,413): landed
   deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
-  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 2 (Running, state 16,416,460 bytes, 0 handles)
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,315 bytes, for P at revision 2 (Running, state 16,416,449 bytes, 0 handles)
   counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
     P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
   assertions:
     PASS [handles-accumulated] P's stored row after the spawn commits holds 0 creator handles (0 bytes; expected 0) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
-    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,315 <= 16,457,728: True
     PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
     PASS [one-notice] notices from P to Q stored: 1 (expected 1)
     PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
@@ -417,12 +417,12 @@ RESULT NT-2/no-handles rules=repaired: PASS
 invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
   setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
   no spawn turn: P makes no detached start
-  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
-  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles - 0 Model and Definition counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + Model and Definition 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
     the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
   deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
     TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
-    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + Model and Definition 11 + reserve 16,384 = 16,457,739 > 16,457,728 (margin -11)
   P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
     the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
   deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
