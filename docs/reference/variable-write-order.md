@@ -49,7 +49,7 @@ to, and an activity type marked `[AccessesUndeclaredVariables]` counts as writin
 the warning says. A step that writes a variable in its body and also captures an output into it gets
 `ValueFlow/StepWriteOverlapsCapture`: both commit with the step, the capture last, so the capture wins. A reusable
 (graph) activity's body is not checked for step writers yet: its warning counts captures only, and a session write to
-a body variable faults the step at run time, since a step session cannot write a closed scope's variables yet.
+a body variable faults the step at run time, since a step session cannot write a closed scope's variables yet (#4805).
 
 ## Which writes count as unordered
 
