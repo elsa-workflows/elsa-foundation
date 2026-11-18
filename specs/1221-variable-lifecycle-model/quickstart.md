@@ -31,9 +31,9 @@ the first two drives are the proof that ADR 0092 works in code.
 ## Policies
 
 - Default: last write wins with a lost-update warning (light tracking, versions only).
-- Opt in to `Fault` on an activity type or per node for strict read-modify-write (a counter, a balance): a real lost
-  update faults through the incident path; `0 → 1 → 0` applies and is recorded. Spec 266's unordered-writer warning
-  points here.
+- Opt in to `Fault` on an activity type (attribute) or per node (design API; the workflow designer does not offer it)
+  for strict read-modify-write (a counter, a balance): a real lost update faults through the incident path;
+  `0 → 1 → 0` applies and is recorded. Spec 266's unordered-writer warning does not point here (FR-012a).
 
 ## Background and suspension
 

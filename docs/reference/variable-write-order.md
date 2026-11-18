@@ -19,10 +19,9 @@ end with different values. Merge and Reduce overwrite like Set; there is no comb
 
 A step that reads a variable and writes it back (a read-modify-write) can meet a value another branch changed in the
 meantime. That is a separate policy, [ADR 0092](../adr/0092-variable-reads-and-writes-share-one-versioned-lifecycle.md):
-by default the write applies and a lost-update warning is recorded. If an update must never be lost (a counter, a
-balance), set the node's lost-update mode to `Fault` (node setting `LostUpdateMode`, or
-`[ActivityLostUpdateMode(LostUpdateMode.Fault)]` on the activity type): a write on a stale base then faults instead. See
-`docs/runtime-variable-lifecycle.md` (spec 1221).
+by default the write applies and a lost-update warning is recorded. Where an update must never be lost (a counter, a
+balance), an engineer can opt in to a strict mode: on the activity type with an attribute, or on one node through the
+design API. The workflow designer does not offer it. See `docs/runtime-variable-lifecycle.md` (spec 1221).
 
 ## The warning
 

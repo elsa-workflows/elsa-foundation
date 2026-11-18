@@ -1584,7 +1584,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
       expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
-      executionNavigation={navigation} childExecutions={children} prepared={prepared} />}
+      executionNavigation={navigation} childExecutions={children} prepared={prepared} nodeLabelOf={labelOfNode} />}
   /></Suspense> : undefined;
 
   useEffect(() => {
