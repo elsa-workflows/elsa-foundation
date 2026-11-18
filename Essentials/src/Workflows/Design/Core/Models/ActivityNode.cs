@@ -56,7 +56,8 @@ public sealed record ActivityNode(
     /// Turns off the background admission refresh for this node (spec 1221 FR-019): when a variable its inputs read
     /// changed between Start and admission, the worker runs on the inputs Start read, and the stale base meets the
     /// commit rule (a warning by default, a fault under <c>Fault</c>). Applies to background placement only; the default
-    /// (refresh on) is omitted to preserve existing authored JSON.
+    /// (refresh on) is omitted to preserve existing authored JSON. Set by engineers through the design API; the workflow
+    /// designer does not offer it to authors (ADR 0092 decisions 6 and 9).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool DisableBackgroundInputRefresh { get; init; }

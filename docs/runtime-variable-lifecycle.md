@@ -84,9 +84,8 @@ changed again. The refresh covers only the gap between Start and admission: two 
 value still meet the commit rule when their results arrive. Code: `BackgroundActivityCoordinator.RefreshInputsAsync`.
 
 A node can turn the refresh off (`DisableBackgroundInputRefresh`, set through the design API like `LostUpdateMode`,
-pinned as `runtime.backgroundInputRefresh=off`). The
-worker then runs on the inputs Start read, and a stale base meets the commit rule: a warning by default, a fault under
-`Fault`.
+pinned as `runtime.backgroundInputRefresh=off`). The worker then runs on the inputs Start read, and a stale base meets
+the commit rule: a warning by default, a fault under `Fault`.
 
 ## Suspension
 

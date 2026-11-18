@@ -1,8 +1,8 @@
 namespace Elsa.Primitives.Models;
 
 /// <summary>
-/// How a step's write on a stale base is handled (spec 1221, ADR 0092 decision 6). An activity type declares it, or the
-/// author sets it per node; the publish compiler pins it in the executable.
+/// How a step's write on a stale base is handled (spec 1221, ADR 0092 decision 6). An activity type declares it, or an
+/// engineer sets it per node through the design API; the publish compiler pins it in the executable.
 /// </summary>
 public enum LostUpdateMode
 {
