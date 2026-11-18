@@ -89,7 +89,7 @@ import {
 import { ActivityDataBindingChangeProvider, ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
 import { activityDataMemberDescriptors } from "./activityDataPickerModel";
 import { ActivityOutputIcon } from "./activityOutputIcon";
-// Imported directly: a lazy section suspended on its first mount, and React held the reveal back, so a reopened
+// Imported directly. As a lazy component it was missing from the row's first commits on a fresh page, so a reopened
 // expression showed no bindings (#4743). The module is already in this graph through ExpressionEditorWithDataInsertion.
 import { WorkflowInputArgumentBindings } from "./workflowInputArgumentBindings";
 
