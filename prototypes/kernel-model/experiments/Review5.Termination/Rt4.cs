@@ -65,7 +65,7 @@ sealed class Rt4(string variant, Rules rules)
         _h.Settle();
 
         var toH = _h.Sent.Where(m => m.Target.Id == H && m.Kind == Kinds.Terminate).Select(m => m.Id).ToList();
-        _h.Line($"end: A {_h.Status(A)}; G {_h.Status(G)}; H {_h.Status(H)}; HK {_h.Status(HK)}; terminates to H [{string.Join(", ", toH)}]; refusals: {string.Join("; ", _h.Refusals)}");
+        _h.Line($"end: A {_h.Status(A)}; G {_h.Status(G)}; H {_h.Status(H)}; HK {_h.Status(HK)}; terminates to H [{string.Join(", ", toH)}]; refusals: {(_h.Refusals.Count == 0 ? "none" : string.Join("; ", _h.Refusals))}");
         _report.Expect("G", _h.Status(G), "Cancelled");
         _report.Expect("obligations still open", _h.OpenObligations, 0);
         _report.Expect("notices P received from A", _h.SentTo(P, WorkflowKinds.ChildFinished, A), 1);

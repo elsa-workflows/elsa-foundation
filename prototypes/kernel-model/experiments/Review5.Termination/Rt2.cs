@@ -166,7 +166,7 @@ sealed class Rt2(string variant, Rules rules)
     {
         _h.Line($"end: P {Show(P)}; A {Show(A)}; G {Show(G)}; G2 {Show(G2)}");
         _h.Line($"obligations: {string.Join("; ", _h.Obligations.Where(o => o.Value.Entries > 0).Select(o => $"{_h.Name(o.Key)} {o.Value}"))}");
-        _h.Line($"refusals: {string.Join("; ", _h.Refusals)}");
+        _h.Line($"refusals: {(_h.Refusals.Count == 0 ? "none" : string.Join("; ", _h.Refusals))}");
         var cascades = _h.CascadeCommits.Where(c => c.Actor == A && c.Page == 1).ToList();
         _report.Expect("T consumed (no longer pending)", _h.Pending(t.InboxKey), false);
         _report.Expect("terminates to G stored", _h.SentTo(G, Kinds.Terminate), 1);

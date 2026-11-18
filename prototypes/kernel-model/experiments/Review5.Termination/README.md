@@ -197,8 +197,8 @@ real `ChildRegistry.Write`; at 10,001 children it is 398,936 UTF-8 bytes, the re
 **Under `repaired`,** the commit that ends A (A's terminate, the refusing commit of the open drain, or the marker's
 refusing commit) sends the first page. A page holds at most `P_cascade` entries, job cancels first and then child
 terminates; it is 1,000 here, set with `--p-cascade`. The ids are those the built terminate composes
-(`{origin}#{revision}.{ordinal}`, `WorkflowInstance.cs` 196–197). Every run checks that the harness's ids equal the
-real `Terminate`'s for every entry of the first page.
+(`{origin}#{revision}.{ordinal}`, `WorkflowInstance.cs` 196–197). For every terminate and open-drain refusal, the run
+checks that the first page's ids equal those the real `Terminate` composed.
 
 When entries remain, the commit records the obligation as Discharging with the cursor at the page's end, and sends
 the private control `kernel.cascade` to A. The control uses scope 2^62, and its sender is A. Each control's page then:
@@ -318,13 +318,16 @@ P, and that no obligation stays open.
 - the retirement check of job pairs;
 - the parent binding at running and ended recipients.
 
-**Left for implementation qualification:**
+**Left for qualification at the milestones** (the design brief places R5-B1 at K3, K4 and K6, R5-B2 at K3, K4, K6
+and K12, and R5-M5 at K3 and K6):
 
-- the `Worker`: poll, Seen marks, trials, batching, and a real reset;
-- `kernel.cascade` as a reserved control in the Worker (never a suspect, exempt from the poison check), which no run
-  exercises;
-- the marker's revision fence against a concurrent writer;
-- `KeptBy` and the cursor as store columns on SQL and MongoDB, and the row budget of a page there;
-- the per-page notice and control on top of `P_cascade` entries, against a provider's transaction limits;
-- a parked recipient with no drain open, which RT-4 does not reach;
-- real ownership (leases and takes across processes) and cross-partition transport.
+- the `Worker`'s own presence decision, cancel, paging and parent binding, with its poll, Seen marks, trials,
+  batching and reset (K3, K6);
+- `kernel.cascade` as a reserved control in the Worker: never a suspect, exempt from the poison check. No run
+  exercises that (K3);
+- the obligation, its cursor and `KeptBy` as store columns on SQL and MongoDB, the widened `Validate`, and the
+  marker's revision fence against a concurrent writer (K3, K4);
+- a page's row budget and the per-page notice and control on top of `P_cascade` entries, against a provider's
+  transaction limits, and cascade throughput under load (K4, K12);
+- a parked recipient with no drain open, which RT-4 does not reach (K3, K6);
+- real ownership (leases and takes across processes) and cross-partition transport (K4).
