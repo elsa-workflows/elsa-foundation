@@ -72,7 +72,7 @@ and no ADR amendment; if one turns out to be needed, it goes in its own small PR
 
 A platform engineer adds or changes a background criterion once, and publication and the worker both apply it. A
 workflow that publishes with a background node is never refused at run time for a criterion publication also checks,
-unless the activity type changed between the two, or a template placement could not see the CLR type and left the
+unless the activity type changed between the two, the host lacks the activity type, or a template placement could not see the CLR type and left the
 type-only checks to admission (FR-012).
 
 **Why this priority**: The drift between the two lists is the root problem ADR 0093 names. Every other story builds on
