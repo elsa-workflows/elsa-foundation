@@ -51,7 +51,9 @@ in the sections below is **proposed and unverified** unless it cites a run.
    virtual partitions those waits live in, whatever their depth. Admission does not cover that fan-out; the number of
    matching waits bounds it. Proposed (fifth review R5-M2): the publish is first one kernel-issued publish ticket in
    the virtual partition its digest places ([observability](observability.md#recover)), which the partition
-   high-water rule covers like a keyed command.
+   high-water rule covers like a keyed command. The fan-out itself is a paged match step, at most `P_page` waits per
+   step, each step a bounded commit under its own deadline, so a broadcast to any number of waits is never refused
+   and never one long step.
 4. **The poll window.** A virtual partition's due rows are read in `seq` order. A message behind 10,000 rows of another
    tenant waits for 20 polls of 500.
 5. **The node loop.** Passes run one after another. A scope with 5,000 ready instances holds the loop for 5,000 turns.
