@@ -170,11 +170,10 @@ public sealed class StepVariableWriteValidationTests
                     JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true }))
             ]);
         using var services = ActivityDataSelectionTestSupport.Provider(catalog);
-        var validator = new ValueFlowValidator(
-            services.GetRequiredService<IActivityStructureService>(),
-            services.GetRequiredService<IActivityDataSelectionAnalyzer>(),
-            writeOrderAnalyzer: null,
-            services.GetRequiredService<IActivityDefinitionLookup>());
+        // Resolved as the feature registers it, so these tests also prove that DI hands the validator the activity
+        // catalog: without it every step-write check is skipped (FR-024, FR-028).
+        using var scope = services.CreateScope();
+        var validator = scope.ServiceProvider.GetServices<IDraftValidator>().OfType<ValueFlowValidator>().Single();
         var variables = new[]
         {
             new VariableDefinition("balance", "balance", new TypeReference("Decimal"), null, null),
