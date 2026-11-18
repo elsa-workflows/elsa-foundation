@@ -281,28 +281,13 @@ describe("activity Inspector tabs", () => {
     expect(variablesPanel.querySelector(".wf-intrinsic-variable")).toBeNull();
   });
 
-  it("offers the variable-lifecycle node settings in Details for any activity, every catalog activity having a definition id, but not for an intrinsic", () => {
-    const onChange = vi.fn();
-    const container = render(<Harness reusableDefinitionId="send-http-definition" onChange={onChange} />);
+  it("keeps the runtime's lost-update settings out of the designer: Details offers no lost-update mode or refresh switch", () => {
+    const container = render(<Harness reusableDefinitionId="send-http-definition" />);
 
     click(tabs(container).find(tab => tab.textContent === "Details")!);
     const details = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
-    const settings = details.querySelector<HTMLElement>(".wf-node-lifecycle-settings");
-    expect(settings).not.toBeNull();
-    const mode = settings!.querySelector("select")!;
-    flushSync(() => {
-      mode.value = "Fault";
-      mode.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "send-http-1", lostUpdateMode: 1 }));
-
-    flushSync(() => active!.root.unmount());
-    active!.container.remove();
-    active = null;
-    const intrinsic = render(<Harness selectedNode={setVariableNode} activityDescriptor={setVariableDescriptor}
-      catalog={[setVariableActivity]} knownCatalog={[setVariableActivity]} />);
-    click(tabs(intrinsic).find(tab => tab.textContent === "Details")!);
-    expect(intrinsic.querySelector(".wf-node-lifecycle-settings")).toBeNull();
+    expect(details.textContent).not.toMatch(/lost-update|Variable writes|inputs read at start/i);
+    expect(details.querySelector("select")).toBeNull();
   });
 
   it("keeps reusable identity and source actions in Version", () => {

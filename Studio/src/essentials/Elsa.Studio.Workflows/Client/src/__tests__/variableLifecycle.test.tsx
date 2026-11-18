@@ -13,23 +13,16 @@ import {
   countLostUpdates,
   inputRefreshReason,
   lostUpdateBadgeLabel,
-  isBackgroundPlacement,
   presentValueState,
-  readDisableBackgroundInputRefresh,
-  readLostUpdateMode,
   variableWriteDiagnostics,
-  writeDisableBackgroundInputRefresh,
-  writeLostUpdateMode,
   writerLabel
 } from "../variableLifecycle";
 import { InputRefreshHistory, LostUpdateBadge, VariableWriteDiagnosticsSection } from "../workflow-editor/VariableLifecycleEvidence";
-import { VariableLifecycleNodeSettings } from "../workflow-editor/VariableLifecycleNodeSettings";
 import { useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
 import type {
   ActivityExecutionInspection,
   ActivityExecutionStateSummary,
   ActivityInputRefreshView,
-  ActivityNode,
   IncidentStateSummary,
   RecordedCompletionView,
   VariableWriteRecordView,
@@ -99,25 +92,6 @@ function inspection(overrides: Partial<ActivityExecutionInspection> = {}) {
 }
 
 describe("variable lifecycle model", () => {
-  it("reads and writes the two node settings as the design API carries them, omitting defaults", () => {
-    const node = { nodeId: "n", activityVersionId: "v", inputs: [], outputs: [] } as ActivityNode;
-
-    expect(readLostUpdateMode(node)).toBe("Default");
-    const fault = writeLostUpdateMode(node, "Fault");
-    expect(fault.lostUpdateMode).toBe(1);
-    expect(readLostUpdateMode(fault)).toBe("Fault");
-    expect(readLostUpdateMode({ ...node, lostUpdateMode: "Fault" })).toBe("Fault");
-    expect("lostUpdateMode" in writeLostUpdateMode(fault, "Default")).toBe(false);
-
-    const disabled = writeDisableBackgroundInputRefresh(node, true);
-    expect(readDisableBackgroundInputRefresh(disabled)).toBe(true);
-    expect("disableBackgroundInputRefresh" in writeDisableBackgroundInputRefresh(disabled, false)).toBe(false);
-
-    expect(isBackgroundPlacement({ ...node, executionPlacement: 1 })).toBe(true);
-    expect(isBackgroundPlacement({ ...node, executionPlacement: "Background" })).toBe(true);
-    expect(isBackgroundPlacement(node)).toBe(false);
-  });
-
   it("counts lost updates and keeps only the records that need attention", () => {
     const applied = { ...lostUpdateWarning(), outcome: "Current" };
     const accepted = { ...lostUpdateWarning(), outcome: "AcceptedOverride" };
@@ -294,49 +268,6 @@ describe("run view", () => {
     expect(badge.textContent).toContain("3 lost updates");
     badge.click();
     expect(onSelect).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("designer node settings", () => {
-  const base = { nodeId: "n", activityVersionId: "v", inputs: [], outputs: [] } as ActivityNode;
-
-  it("edits the lost-update mode", () => {
-    const onChange = vi.fn();
-    flushSync(() => root.render(<VariableLifecycleNodeSettings node={base} onChange={onChange} />));
-
-    const select = container.querySelector("select")!;
-    expect(select.value).toBe("Default");
-    // Each label holds its name only; the help is a description, not part of the name.
-    const selectLabel = container.querySelector(`label[for="${select.id}"]`)!;
-    expect(selectLabel.textContent).toBe("Lost-update mode");
-    expect(selectLabel.contains(select)).toBe(false);
-    expect(document.getElementById(select.getAttribute("aria-describedby")!)!.textContent).toContain("reads and writes");
-    const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
-    expect(container.querySelector(`label[for="${checkbox.id}"]`)!.textContent).toBe("Run on the inputs read at start");
-    flushSync(() => {
-      select.value = "Fault";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ lostUpdateMode: 1 }));
-  });
-
-  it("offers the background refresh switch only for background placement", () => {
-    const onChange = vi.fn();
-    flushSync(() => root.render(<VariableLifecycleNodeSettings node={base} onChange={onChange} />));
-    expect(container.querySelector<HTMLInputElement>("input[type=checkbox]")!.disabled).toBe(true);
-    expect(container.textContent).toContain("Applies to background placement only");
-
-    flushSync(() => root.render(<VariableLifecycleNodeSettings node={{ ...base, executionPlacement: 1 }} onChange={onChange} />));
-    const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
-    expect(checkbox.disabled).toBe(false);
-    flushSync(() => checkbox.click());
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ disableBackgroundInputRefresh: true }));
-  });
-
-  it("is read-only when the draft is", () => {
-    flushSync(() => root.render(<VariableLifecycleNodeSettings node={{ ...base, executionPlacement: 1 }} readOnly onChange={vi.fn()} />));
-    expect(container.querySelector("select")!.disabled).toBe(true);
-    expect(container.querySelector<HTMLInputElement>("input[type=checkbox]")!.disabled).toBe(true);
   });
 });
 

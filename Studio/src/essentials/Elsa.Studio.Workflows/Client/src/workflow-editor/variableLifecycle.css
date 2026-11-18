@@ -120,26 +120,9 @@
   padding-left: 18px;
 }
 
-.wf-node-lifecycle-settings {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
 
-.wf-node-lifecycle-field {
-  display: grid;
-  gap: 4px;
-}
 
-.wf-node-lifecycle-settings .wf-node-lifecycle-checkbox {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
 
-.wf-node-lifecycle-checkbox input:disabled + .wf-node-lifecycle-field label {
-  color: var(--studio-text-muted);
-}
 
 .wf-variable-writes > .wf-variable-write-hint + .wf-variable-write-list {
   margin-top: 8px;

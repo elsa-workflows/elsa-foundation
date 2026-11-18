@@ -538,6 +538,6 @@ test("compact runtime Inputs retain exact captured values and accessible technic
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
-test("variable lifecycle warnings, refusals and node settings", async ({ page }, info) => {
+test("variable lifecycle warnings and refusals", async ({ page }, info) => {
   await variableLifecycleJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

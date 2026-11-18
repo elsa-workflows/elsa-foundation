@@ -9,8 +9,9 @@ const cleanupRequestTimeout = 15_000;
 /**
  * The variable lifecycle in Studio (#4735, spec 1221) on the real composed host, with no fixture responses. A step
  * reads `count`, waits on an event while another branch writes `count`, and on resume writes `count` on its stale
- * base: a real lost-update warning (Default) and a real refusal (Fault). The journey inspects both in the run view,
- * the opt-in Variable writes diagnostics subject, and edits the lost-update mode in the designer, checking the draft.
+ * base: a real lost-update warning (Default) and a real refusal (Fault). The journey inspects both in the run view and
+ * the opt-in Variable writes diagnostics subject. The lost-update mode is not authored in the designer: the Fault run
+ * sets it on the node through the design API, as an engineer would.
  * Accept recorded completion and background input refreshes need a background-eligible or a normal-invoke refusal,
  * which this host cannot produce; vitest covers them.
  */
@@ -152,29 +153,4 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   await expect(row).toContainText("Runtime applies: Off", { timeout: 30_000 });
   await row.scrollIntoViewIfNeeded();
   await capture(page, info, "diagnostics-variable-writes");
-
-  // The lost-update mode is a node setting in the designer, stored on the draft.
-  await page.goto(`/workflows/definitions?definition=${warning.definitionId}`);
-  const node = page.locator('.react-flow__node[data-id="wait-for-total"]').first();
-  await expect(node).toBeAttached({ timeout: 45_000 });
-  // Selecting by keyboard works at every width, including when the narrow canvas is mostly covered.
-  await node.press("Enter");
-  await expect(page.locator(".wf-inspector-context h3")).toHaveText("Event");
-  await page.getByRole("tab", { name: "Details", exact: true }).click();
-  const settings = page.getByRole("region", { name: "Variable writes" }).or(page.locator(".wf-node-lifecycle-settings")).first();
-  await expect(settings).toBeVisible();
-  const mode = settings.locator("select");
-  await expect(mode).toHaveValue("Default");
-  // The refresh switch applies to background placement only; this step runs inline.
-  await expect(settings.locator("input[type=checkbox]")).toBeDisabled();
-  await settings.scrollIntoViewIfNeeded();
-  await capture(page, info, "node-settings");
-  await mode.selectOption("Fault");
-  await expect(settings).toContainText("the write is refused and the step faults");
-  await expect.poll(async () => {
-    const draft = await api<{ draft?: { state?: { rootActivity?: Node } } }>(`/design/workflows/definitions/${warning.definitionId}`);
-    const children = ((draft.draft?.state?.rootActivity?.structure as { payload?: { activities?: Node[] } } | undefined)?.payload?.activities ?? []);
-    return children.find(child => child.nodeId === "wait-for-total")?.lostUpdateMode;
-  }, { timeout: 30_000, message: "Autosave stores the node's lost-update mode on the draft" }).toBe(1);
-  await capture(page, info, "node-settings-fault");
 }

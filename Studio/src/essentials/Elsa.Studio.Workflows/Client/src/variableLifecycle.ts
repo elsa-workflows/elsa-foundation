@@ -156,39 +156,3 @@ export function describeInputRefreshReason(refresh: Pick<ActivityInputRefreshVie
     .map(change => `"${change.variableKey}" changed from version ${change.readVersion} to version ${change.currentVersion}`)
     .join(", ");
 }
-
-/** The two node settings of spec 1221 (FR-012, FR-019), as the authored node carries them. */
-export const lostUpdateModeProperty = "lostUpdateMode";
-export const disableBackgroundInputRefreshProperty = "disableBackgroundInputRefresh";
-
-/** The authored node's lost-update mode. The design API writes the enum as a number (`1` is Fault); a string reads too. */
-export function readLostUpdateMode(node: Record<string, unknown>): "Default" | "Fault" {
-  const value = node[lostUpdateModeProperty];
-  return value === 1 || (typeof value === "string" && value.toLowerCase() === "fault") ? "Fault" : "Default";
-}
-
-/** Writes the lost-update mode; Default is omitted, as the design API omits it. */
-export function writeLostUpdateMode<T extends Record<string, unknown>>(node: T, mode: "Default" | "Fault"): T {
-  const next: Record<string, unknown> = { ...node };
-  if (mode === "Fault") next[lostUpdateModeProperty] = 1;
-  else delete next[lostUpdateModeProperty];
-  return next as T;
-}
-
-export function readDisableBackgroundInputRefresh(node: Record<string, unknown>) {
-  return node[disableBackgroundInputRefreshProperty] === true;
-}
-
-/** Writes the refresh switch; the default (refresh on) is omitted. */
-export function writeDisableBackgroundInputRefresh<T extends Record<string, unknown>>(node: T, disabled: boolean): T {
-  const next: Record<string, unknown> = { ...node };
-  if (disabled) next[disableBackgroundInputRefreshProperty] = true;
-  else delete next[disableBackgroundInputRefreshProperty];
-  return next as T;
-}
-
-/** Whether the authored node runs on a background worker (`executionPlacement` 1 or "Background"). */
-export function isBackgroundPlacement(node: Record<string, unknown>) {
-  const value = node.executionPlacement;
-  return value === 1 || (typeof value === "string" && value.toLowerCase() === "background");
-}
