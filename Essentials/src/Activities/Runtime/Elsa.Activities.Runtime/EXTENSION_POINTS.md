@@ -62,7 +62,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ### `ActivityLostUpdateModeAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
-- **Signature:** `[ActivityLostUpdateMode(LostUpdateMode.Fault)]` on an activity class (inherited). `LostUpdateMode` lives in `Elsa.Primitives.Models`. The author's per-node setting is `ActivityNode.LostUpdateMode` in `Elsa.Workflows.Design.Core`.
+- **Signature:** `[ActivityLostUpdateMode(LostUpdateMode.Fault)]` on an activity class (inherited). `LostUpdateMode` lives in `Elsa.Primitives.Models`. The per-node setting is `ActivityNode.LostUpdateMode` in `Elsa.Workflows.Design.Core`, set through the design API (the workflow designer does not offer it).
 - **Usage:** opts the activity in to strict read-modify-write (spec 1221). By default, a variable write built on a stale base applies with a lost-update warning in the write history. With `Fault`, a write whose value really changed since the read faults the step through the incident path (sub-status `VariableLostUpdate`). Publication pins `runtime.lostUpdateMode = fault` on the executable node when the type declares it or the node sets it. A node setting never downgrades a type's declaration. See [variable lifecycle](../../../../../docs/runtime-variable-lifecycle.md).
 - **Related runtime seam:** `LostUpdateModes.Of(ExecutableNode)` and `VariableFrameState.Commit` in `Elsa.Workflows.Runtime.Core`.
 

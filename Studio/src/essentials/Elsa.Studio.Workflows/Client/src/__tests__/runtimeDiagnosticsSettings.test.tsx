@@ -56,6 +56,21 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     expect(Array.from(container.querySelectorAll("option")).some(option => option.value === "Payload")).toBe(false);
   });
 
+  it("offers Variable writes as an opt-in subject that stays Off without its own level (spec 1221 FR-025)", async () => {
+    const container = render(<RuntimeDiagnosticsSettingsPage context={stubContext(defaultSettingsView({ canManage: true }))} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Runtime applies:"));
+
+    const row = Array.from(container.querySelectorAll<HTMLLabelElement>(".runtime-diagnostics-subject"))
+      .find(candidate => candidate.textContent?.includes("Variable writes"))!;
+    // The default level is Diagnostic snapshots, but the write history's values do not inherit it.
+    expect(row.textContent).toContain("Runtime applies: Off");
+    const select = row.querySelector("select")!;
+    expect(select.value).toBe("inherit");
+    expect(select.options[0].textContent).toBe("Off (does not inherit the default)");
+    expect(Array.from(select.options).map(option => option.value)).toContain("DiagnosticSnapshot");
+  });
+
   it("keeps view-only settings readable while preventing edits and writes", async () => {
     const putJson = vi.fn(async () => defaultSettingsView());
     const container = render(<RuntimeDiagnosticsSettingsPage context={stubContext(defaultSettingsView(), putJson)} />);

@@ -59,14 +59,14 @@ both writers, keeping the overwritten value so it can be restored. Tracking is l
 read set, so `0 → 1 → 0` also warns. A node or an activity type may opt in to `Fault`: its read sets carry stored
 digests, the exact check compares them on a version mismatch (`0 → 1 → 0` applies and is recorded), and a real lost
 update faults through the existing incident strategy, which records the rejected completion. Spec 266's unordered-writer
-warning points to the opt-in. **Condition**: the default holds only if R-7 proves the no-inline-gap guarantee for
-`External` and `ReplaySafe`; otherwise the finding reopens the default on #3411. **Rationale**: ADR 0092 at `a356aa9cf`
-(decision 6): guardrails and diagnostics, not restrictions; unordered branches are the author's design, and the
-engine's default job is to make an overwrite visible and repairable; strict read-modify-write stays available where it
-has real value (a counter, a balance), and the opt-in costs the default nothing. **Alternatives** (from the ADR):
-`Fault` by default with a `LastWins` override (the earlier draft of this spec; not chosen: it turns unordered designs
-into run-time failures, contradicts D-8, and needs the exact check everywhere); last write wins with a warning and no
-opt-in (not chosen: drops a strict mode with real value).
+warning pointed to the opt-in; superseded: FR-012a as amended gives authors structural remedies only. **Condition**: the
+default holds only if R-7 proves the no-inline-gap guarantee for `External` and `ReplaySafe`; otherwise the finding
+reopens the default on #3411. **Rationale**: ADR 0092 at `a356aa9cf` (decision 6): guardrails and diagnostics, not
+restrictions; unordered branches are the author's design, and the engine's default job is to make an overwrite visible
+and repairable; strict read-modify-write stays available where it has real value (a counter, a balance), and the opt-in
+costs the default nothing. **Alternatives** (from the ADR): `Fault` by default with a `LastWins` override (the earlier
+draft of this spec; not chosen: it turns unordered designs into run-time failures, contradicts D-8, and needs the exact
+check everywhere); last write wins with a warning and no opt-in (not chosen: drops a strict mode with real value).
 
 ## R-7 — No-inline-gap for `External` leaves (Open question A)
 

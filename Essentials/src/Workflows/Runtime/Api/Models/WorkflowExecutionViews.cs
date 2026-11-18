@@ -188,6 +188,37 @@ public sealed record ActivityExecutionInspectionView(
             ActivityExecutionAttemptView.From(attemptNavigation, projection.Attempt ?? projection.Provenance.Attempt),
             ActivityExecutionBoundaryView.From(boundary),
             ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues));
+
+    /// <summary>
+    /// The write-history records of this execution (spec 1221 FR-024): applied writes, lost-update warnings and
+    /// <c>Fault</c> refusals, each value as a state only. Absent when the execution wrote no variable.
+    /// </summary>
+    public IReadOnlyCollection<VariableWriteRecordView>? VariableWrites { get; init; }
+
+    /// <summary>The completion a <c>Fault</c> lost update refused, which <c>AcceptRecordedCompletion/1</c> applies (spec 1221 FR-017).</summary>
+    public RecordedCompletionView? RecordedCompletion { get; init; }
+
+    /// <summary>The input evaluations a background admission refresh superseded (spec 1221 FR-018, FR-020).</summary>
+    public IReadOnlyCollection<ActivityInputRefreshView>? InputRefreshes { get; init; }
+
+    /// <summary>
+    /// Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view. Record i is
+    /// the state's <c>VariableWrites[i]</c>, so a later per-entry read (spec 1229) can address it by that index.
+    /// </summary>
+    /// <param name="canDiscloseDigest">Whether the caller may see value digests: only one who may both inspect sensitive values and resolve their payloads.</param>
+    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state, bool canDiscloseDigest) =>
+        state is null
+            ? this
+            : this with
+            {
+                VariableWrites = state.VariableWrites is { Count: > 0 } writes
+                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots, canDiscloseDigest)).ToArray()
+                    : null,
+                RecordedCompletion = RecordedCompletionView.From(state.RecordedCompletion),
+                InputRefreshes = state.InputRefreshes is { Count: > 0 } refreshes
+                    ? refreshes.Select(ActivityInputRefreshView.From).ToArray()
+                    : null
+            };
 }
 
 public sealed record ActivityExecutionAttemptView(

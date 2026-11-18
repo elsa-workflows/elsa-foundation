@@ -52,7 +52,7 @@ reachability is computed once per structure node and cached for the pass
 | §2.22 docs | ACTION | FR-004, FR-014: the authoring reference states the rule, last-commit-wins, the limits and the inspection gap (T021). |
 | §2.23.1–§2.23.2 tests | PASS | One test per acceptance scenario, plus the declaration of every built-in structure and the SC-005 evidence test. |
 | ADR 0048 §4/§5 | PASS | Already amended by #3286 (FR-013 done). |
-| ADR 0092 dec. 5–6 | PASS | Publish-time only; the message points to the `Fault` opt-in. |
+| ADR 0092 dec. 5–6 | PASS | Publish-time only; the message gives structural remedies only (decision 6 as amended). |
 | ADR 0045 §6 (2026-11-16) | PASS | No multi-outcome flag; every node may select several outcomes, so port-distinct paths are unordered (research R-2, finding F-1). |
 
 ## Decisions
@@ -64,7 +64,7 @@ reachability is computed once per structure node and cached for the pass
 | P-3 | Workflow validator | `ValueFlowValidator` replaces its concurrency code with P-2; writes are captures plus Set/Merge/Reduce (and legacy `elsa.intrinsic.set@1`); severity `Warning`. The hard-coded kinds stay only for Parallel branch identities, which are not ordering (FR-009). |
 | P-4 | Graph provider | `ValidateAsync` and `CompileAsync` run the analyzer (P-2, required by `GraphActivitiesDesignFeature`) over the body with captures as writes and add warnings, alongside any errors ([contract](contracts/unordered-write-warning.md)). |
 | P-5 | Built-in declarations | Sequence: index order. If, Switch: exclusive. Loops: one child, never overlapping. Parallel: unordered; completes after children unless threshold < branches. Flowchart: reachability with waiting joins, `merge` exceptions, trigger-entry exclusivity, every node with several successors a fork whatever the ports (R-2, R-4, R-5; D-2a as amended); completes after children unless a `firstWins` node exists. BPMN: element-graph analysis (R-6), multi-instance self-overlap, completes after children. CompensationScope: step before its handlers; handlers per its replay order, otherwise `Unordered`; completes after children. |
-| P-6 | Message | One finding per variable, all writers, last-commit-wins, the three fixes, the ADR 0092 `Fault` pointer, and the undeclared-structure sentence when D-2b applied. |
+| P-6 | Message | One finding per variable, all writers, last-commit-wins, the three fixes, and the undeclared-structure sentence when D-2b applied. |
 | P-7 | Docs | `docs/reference/variable-write-order.md` (new) holds FR-004/FR-014 text; `activity-definition-authoring-composition.md` links it instead of saying the check is not built. |
 
 ## Project Structure

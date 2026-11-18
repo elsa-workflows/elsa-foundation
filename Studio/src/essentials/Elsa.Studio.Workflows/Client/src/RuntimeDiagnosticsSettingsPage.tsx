@@ -13,7 +13,7 @@ import type {
 const levels: RuntimeDiagnosticsEvidenceLevel[] = ["Off", "Metadata", "DiagnosticSnapshot", "Payload"];
 const levelRank = new Map(levels.map((level, index) => [level, index]));
 
-const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: string }> = [
+const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: string; inheritLabel?: string }> = [
   { id: "workflowInputs", label: "Workflow inputs", detail: "Start arguments and workflow-level input values." },
   { id: "workflowOutputs", label: "Workflow outputs", detail: "Values emitted as workflow outputs." },
   { id: "activityInputs", label: "Activity inputs", detail: "Materialized values passed to activities." },
@@ -21,8 +21,18 @@ const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: st
   { id: "containerVariables", label: "Container variables", detail: "Runtime values scoped to containers." },
   { id: "durableValues", label: "Durable values", detail: "Persisted wait/resume payload evidence." },
   { id: "incidents", label: "Incidents", detail: "Fault and incident diagnostic material." },
-  { id: "diagnostics", label: "Diagnostics", detail: "Internal runtime diagnostic payloads." }
+  { id: "diagnostics", label: "Diagnostics", detail: "Internal runtime diagnostic payloads." },
+  // Spec 1221 FR-025: write-history values are opt-in. Without their own level they stay off, whatever the default.
+  {
+    id: "variableWrites",
+    label: "Variable writes",
+    detail: "The value each variable write wrote, kept in the write history. Off unless given its own level.",
+    inheritLabel: "Off (does not inherit the default)"
+  }
 ];
+
+/** Subjects that never inherit the default level: without their own override the runtime applies Off. */
+const optInSubjects: ReadonlySet<RuntimeDiagnosticsSubject> = new Set(["variableWrites"]);
 
 interface RuntimeDiagnosticsDraft {
   defaultLevel: RuntimeDiagnosticsEvidenceLevel;
@@ -139,7 +149,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                       disabled={loading || saving || !canManage}
                       onChange={event => updateSubjectLevel(subject.id, event.target.value)}
                     >
-                      <option value="inherit">Inherit default</option>
+                      <option value="inherit">{subject.inheritLabel ?? "Inherit default"}</option>
                       {allowedLevels.map(level => <option value={level} key={level}>{formatLevel(level)}</option>)}
                     </select>
                   </span>
@@ -184,7 +194,7 @@ function isLevelSelectable(level: RuntimeDiagnosticsEvidenceLevel, settings: Run
 }
 
 function effectiveSubjectLevel(settings: RuntimeDiagnosticsSettingsView, subject: RuntimeDiagnosticsSubject): RuntimeDiagnosticsEvidenceLevel {
-  return settings.effective.subjectOverrides?.[subject] ?? settings.effective.defaultLevel;
+  return settings.effective.subjectOverrides?.[subject] ?? (optInSubjects.has(subject) ? "Off" : settings.effective.defaultLevel);
 }
 
 function formatLevel(level: RuntimeDiagnosticsEvidenceLevel): string {

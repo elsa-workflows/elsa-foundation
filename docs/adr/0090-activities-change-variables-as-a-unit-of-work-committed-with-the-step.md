@@ -345,7 +345,8 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   - its base is the variable version the step read, recorded in ADR 0092's read set;
   - a write on a stale base is a lost update: by default it applies (last write wins) with a lost-update warning;
   - `[VariableConflictPolicy]` becomes ADR 0092's per-node mode, with `Fault` as the opt-in for strict
-    read-modify-write;
+    read-modify-write, declared by an activity type or set per node by an engineer through the design API (ADR 0092
+    decision 6);
   - the digest, which lets 0 → 1 → 0 count as unchanged, compares meaning in ADR 0091's canonical form and is used
     only under `Fault`;
   - the rule is the same for inline and background steps.

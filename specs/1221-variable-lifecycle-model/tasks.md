@@ -46,7 +46,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   `BackgroundRefreshTests`: refresh on change, no refresh when unchanged, opt-out warns by default and faults under
   `Fault`, and two background branches (T010a) total `1` with a warning on the second commit.
 - **T024a: delivered by S-5** (coordinator, 2026-11-17): spec 266's unordered-writer warning is S-5's (#4669), so
-  the pointer to the `Fault` opt-in goes into that warning there; S-10 does not wait for it.
+  the pointer to the `Fault` opt-in went into that warning there; S-10 does not wait for it. FR-012a was amended
+  afterwards: the warning gives authors structural remedies only and no longer points to `Fault`.
 - **T028:** the PoC result (feasible: inline `External` and `ReplaySafe` leaves fuse) is posted on #3411. **T042:**
   checked against the merged ADR text.
 - **T003:** versions and digests are on frames and on closed-scope variable rows (row metadata
@@ -144,7 +145,7 @@ default of FR-011 depends on it (FR-013a).
 - [x] T022 [US3] Add the `Fault` opt-in: `LostUpdateMode` per activity type (attribute) and per node (setting) in the runtime policy resolution, pinned in the executable; `Fault` nodes record stored digests in their read sets and use the exact check.
 - [x] T023 [US3] Route a `Fault` lost update through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
 - [x] T024 [P] [US3] Behaviour tests: default warns and applies (incl. `0 → 1 → 0`); `Fault` (type and node) applies `0 → 1 → 0` with a recorded mismatch and faults a real lost update through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
-- [x] T024a [P] [US3] **Delivered by S-5 (#4669).** Point spec 266's unordered-writer publish warning to the `Fault` opt-in (FR-012a); coordinate with S-5 (#3286).
+- [x] T024a [P] [US3] **Delivered by S-5 (#4669).** Point spec 266's unordered-writer publish warning to the `Fault` opt-in (FR-012a); coordinate with S-5 (#3286). Superseded by the FR-012a amendment: the warning no longer points to `Fault`.
 
 ---
 
