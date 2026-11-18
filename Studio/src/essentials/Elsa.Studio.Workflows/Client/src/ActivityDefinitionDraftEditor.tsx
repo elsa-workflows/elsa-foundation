@@ -544,9 +544,11 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
           const conflicts = draft.contract.outputs.filter(output => mappings?.some(mapping => mapping.outputReferenceKey === output.referenceKey) && setters.some(setter => setter.outputName === output.name));
           if (conflicts.length === 1) key = conflicts[0].referenceKey;
         }
+        const editor = await waitForSettingTarget(() => contractEditorRef.current, () => request === diagnosticFocusRequestRef.current);
+        if (!editor || request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
         if (key) contractEditorHandle.current?.revealMember("output", key);
         const target = await waitForSettingTarget(
-          () => key ? contractEditorRef.current?.querySelector<HTMLElement>(`.ad-output-value-source[data-output-reference-key="${CSS.escape(key)}"]`) ?? null : contractEditorRef.current,
+          () => key ? [...editor.querySelectorAll<HTMLElement>(".ad-output-value-source")].find(element => element.dataset.outputReferenceKey === key) ?? null : editor,
           () => request === diagnosticFocusRequestRef.current
         );
         if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
