@@ -43,6 +43,14 @@ clients get it from workflow draft validation (`ValueFlow/ConcurrentWrite`) befo
 Two outputs of one node that capture into the same variable get a separate warning, `ValueFlow/DuplicateCaptureTarget`
 (graph: `activity.graph.duplicate-capture-target`). Their order is fixed, but only the last one is kept.
 
+A step that writes variables in its body ([spec 1231](../../specs/1231-step-variable-writes/spec.md)) is a writer too,
+in workflow draft validation: an activity with a `VariableReference<T>` input writes the variable that input is bound
+to, and an activity type marked `[AccessesUndeclaredVariables]` counts as writing every variable visible to it, which
+the warning says. A step that writes a variable in its body and also captures an output into it gets
+`ValueFlow/StepWriteOverlapsCapture`: both commit with the step, the capture last, so the capture wins. A reusable
+(graph) activity's body is not checked for step writers yet: its warning counts captures only, and a session write to
+a body variable faults the step at run time, since a step session cannot write a closed scope's variables yet (#4805).
+
 ## Which writes count as unordered
 
 Each structure declares how its children relate in time; the warning has no list of structure kinds of its own.

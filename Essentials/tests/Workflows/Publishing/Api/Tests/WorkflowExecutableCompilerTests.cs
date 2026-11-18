@@ -2379,6 +2379,98 @@ public sealed class WorkflowExecutableCompilerTests
     [ActivityLostUpdateMode(LostUpdateMode.Fault)]
     private sealed class StrictLostUpdateProbe : IActivityResult<ActivityUnit>;
 
+    // Spec 1231 FR-022, FR-024, FR-026 (T017, T019, T020): a VariableReference<T> input pins the variable it names, never a
+    // value; the node's may-write set and the free-name marker are pinned on the published node and its contract.
+    [Fact]
+    public async Task A_bound_variable_reference_pins_its_target_and_the_may_write_set()
+    {
+        var compiler = VariableReferenceCompiler(typeof(VariableWriterProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var node = executable.RootActivity;
+        var binding = node.InputBindings["Balance"];
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(VariableReferenceTypes.Alias, binding.TargetType.Alias);
+        Assert.Equal("workflow", binding.LiteralValue!.Value.GetProperty("scopeId").GetString());
+        Assert.Equal("balance", binding.LiteralValue.Value.GetProperty("variableKey").GetString());
+        var input = node.ActivityContract!.Inputs["Balance"];
+        Assert.Equal(ActivityVariableAccess.ReadWrite, input.VariableReference!.Access);
+        Assert.Equal("Decimal", input.VariableReference.ValueType.Alias);
+        Assert.Contains("\"variableKey\":\"balance\"", node.Metadata[RuntimeMetadataKeys.MayWriteVariables], StringComparison.Ordinal);
+        Assert.False(node.Metadata.ContainsKey(RuntimeMetadataKeys.MayWriteEveryVisibleVariable));
+        Assert.False(node.ActivityContract.AccessesUndeclaredVariables);
+    }
+
+    [Fact]
+    public async Task An_unbound_variable_reference_is_refused_at_publish()
+    {
+        var compiler = VariableReferenceCompiler(typeof(VariableWriterProbe), bound: false);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-VAR-001", failure.ToString(), StringComparison.Ordinal);
+        Assert.Contains("'Balance'", failure.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_marked_activity_pins_the_marker_on_its_contract_and_node()
+    {
+        var compiler = VariableReferenceCompiler(typeof(MarkedVariableWriterProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    private Elsa.Workflows.Publishing.Services.WorkflowExecutableCompiler VariableReferenceCompiler(Type activityType, bool bound)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        activityVersion.Inputs =
+        [
+            new InputDefinition("Balance", "Balance", new TypeReference("Decimal"), null, "Balance", null, IsNullable: false,
+                IsRequired: true, UiHint: InputVariableAccess.UiHint, DefaultSyntax: InputVariableAccess.ExpressionType,
+                VariableAccess: InputVariableAccess.ReadWrite)
+        ];
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        ArgumentState[] inputs = bound
+            ?
+            [
+                new ArgumentState("Balance",
+                    new Elsa.Expressions.Core.Models.ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "balance", declaringScopeId = "workflow" }), "Variable"),
+                    null, null, null, null)
+            ]
+            : [];
+        return TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("node", activityVersion.Id, inputs, []),
+                variables: [new Elsa.Expressions.Core.Models.VariableDefinition("balance", "balance", new TypeReference("Decimal"), null, null)])),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+    }
+
+    private sealed class VariableWriterProbe : IActivityResult<ActivityUnit>;
+
+    [AccessesUndeclaredVariables]
+    private sealed class MarkedVariableWriterProbe : IActivityResult<ActivityUnit>;
+
+    // An engine script activity resolves names itself, so it is pinned exactly as the marker is.
+    [Fact]
+    public async Task An_engine_consumer_activity_is_pinned_as_writing_every_visible_variable()
+    {
+        var compiler = VariableReferenceCompiler(typeof(EngineConsumerProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    private sealed class EngineConsumerProbe : IActivityResult<ActivityUnit>, Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer;
+
     [Theory]
     [InlineData(typeof(ChildControlProbe), true)]
     [InlineData(typeof(ChildFaultHandlingProbe), false)]

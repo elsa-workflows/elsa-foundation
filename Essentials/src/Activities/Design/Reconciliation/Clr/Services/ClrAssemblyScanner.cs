@@ -166,10 +166,22 @@ public sealed class ClrAssemblyScanner(
                 defaultSyntax ??= "Connection";
             }
 
+            // Spec 1231 FR-022: a VariableReference<T> or ReadOnlyVariableReference<T> input binds a declared variable. Its
+            // catalog type is T, the value type the activity reads; its direction is recorded beside it.
+            var inputType = property.PropertyType;
+            string? variableAccess = null;
+            if (VariableReferenceTypes.TryGet(property.PropertyType, out var access, out var valueType))
+            {
+                inputType = valueType;
+                variableAccess = access == ActivityVariableAccess.ReadWrite ? InputVariableAccess.ReadWrite : InputVariableAccess.Read;
+                uiHint ??= InputVariableAccess.UiHint;
+                defaultSyntax ??= InputVariableAccess.ExpressionType;
+            }
+
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
-                Type: ToTypeReference(property.PropertyType),
+                Type: ToTypeReference(inputType),
                 StorageDriverType: null,
                 DisplayName: metadata.DisplayName ?? property.Name.Humanize(),
                 Category: metadata.Category,
@@ -178,7 +190,7 @@ public sealed class ClrAssemblyScanner(
                 Order: metadata.Order,
                 UiHint: uiHint,
                 UISpecifications: metadata.UiSpecifications,
-                IsRequired: HasRequired(property),
+                IsRequired: variableAccess is not null || HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
                 DefaultSyntax: defaultSyntax,
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
@@ -187,7 +199,8 @@ public sealed class ClrAssemblyScanner(
                 // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
                 // is refreshed in place by reconciliation instead of raising a hash mismatch.
                 Tier: metadata.Tier,
-                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType));
+                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType,
+                VariableAccess: variableAccess));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -284,6 +297,16 @@ public sealed class ClrAssemblyScanner(
         var outcomesFacet = BuildOutcomesFacet(type);
         if (outcomesFacet is not null)
             facets.Add(outcomesFacet);
+
+        // Spec 1231 FR-026: the free-name marker is part of the descriptor.
+        // The marker (inherited) or an engine script activity: the same fact the runtime contract pins.
+        if (VariableReferenceTypes.AccessesUndeclaredVariables(type))
+        {
+            facets.Add(new ActivityDesignFacet(
+                VariableAccessDesignFacet.Kind,
+                VariableAccessDesignFacet.SchemaVersion,
+                JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true })));
+        }
 
         var iconFacet = BuildIconFacet(type);
         if (iconFacet is not null)

@@ -75,6 +75,16 @@ public static class RuntimeMetadataKeys
     public const string LostUpdateMode = "runtime.lostUpdateMode";
     public const string LostUpdateModeFault = "fault";
     /// <summary>
+    /// A node's may-write set (spec 1231 FR-019, FR-024), pinned by the publish compiler: the variables its step body can
+    /// change, as a JSON array of <c>{ "scopeId", "variableKey", "name" }</c>. Absent when the body writes no variable.
+    /// </summary>
+    public const string MayWriteVariables = "runtime.mayWriteVariables";
+    /// <summary>
+    /// <c>true</c> when a node may write every visible variable (spec 1231 FR-020a, FR-028): its activity type is marked
+    /// <c>[AccessesUndeclaredVariables]</c>, or its script writes by a computed or opaque name. Absent otherwise.
+    /// </summary>
+    public const string MayWriteEveryVisibleVariable = "runtime.mayWriteEveryVisibleVariable";
+    /// <summary>
     /// Whether a background node's inputs are refreshed at admission when a variable they read changed since Start
     /// (spec 1221 FR-018, FR-019), pinned by the publish compiler from the node's setting: <see cref="BackgroundInputRefreshOff"/>
     /// turns the refresh off, so a stale base meets the commit rule instead. Absent means on.

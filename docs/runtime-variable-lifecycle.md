@@ -159,6 +159,50 @@ faulted row keeps the refused write, so the conflict stays in the history. A com
 outputs, a workflow dispatch, a published stimulus or a parent or ancestor notification is not recorded, because an alteration cannot replay those
 effects, and accepting it is refused (`NoRecordedCompletion`).
 
+## Step writes: an activity changes variables in its body
+
+A step body can read and change variables while it runs, through its variable session, `context.Variables`
+([ADR 0090](adr/0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md),
+[spec 1231](../specs/1231-step-variable-writes/spec.md)). Only a step body has one: a leaf activity's execute or resume
+run inline. Input bindings, structural evaluations and background workers have none, and every call on their
+`Variables` throws.
+
+| Surface | What it does |
+|---|---|
+| `VariableReference<T>` input | The workflow author binds it to a declared variable, like a capture target. `context.Variables.Get(reference)` reads it; `context.Variables.Set(reference, value)` writes it. |
+| `ReadOnlyVariableReference<T>` input | Bound the same way; `Get` only. `Set` throws and the step faults. |
+| `[AccessesUndeclaredVariables]` on the activity type | Enables `Get<T>("name")` and `Set("name", value)`. The name resolves to the nearest visible declaration when the step runs; an undeclared name faults the step. On an unmarked type these calls throw. |
+
+- **A read** returns the committed value at the moment of the read plus the step's own pending write (read-your-writes),
+  as a copy: changing it writes nothing. `Get<T>` on an `Any` variable reads as a JSON node, so no member is lost. Each
+  first read of a variable is a *session read* of the attempt: its version, its protection policy, and the stored digest
+  on a `Fault` node. Session reads are kept on the invocation (`SessionReads`) for inspection and are never carried to
+  a new attempt or across a suspension.
+- **A write** is an intent: the whole value, and the base it was built on (the session read of that variable, else the
+  invocation's own advanced base or its input read, else none: a blind write).
+- **The commit.** Intents apply in the step's checkpoint commit, first, and the step's captures last, so a capture wins.
+  Each intent meets the commit rule above with the node's lost-update mode and leaves a write-history record with
+  source `SessionChange`. A value equal to the stored one writes nothing and keeps the version. A write of a value read
+  as a narrower type records the members that type dropped (`DroppedMembers`).
+- **Own writes advance the base.** When a step's own write applies, its base for that variable moves to the version the
+  write produced, persisted with the invocation (`OwnVariableBases`), so a session write when it suspends and a capture
+  when it completes do not conflict.
+- **Fault, cancel, suspend.** A step that faults or is cancelled saves nothing it staged. A step that suspends commits
+  its changes so far with the suspension; the resumed evaluation gets a fresh session. A withheld value, an undeclared
+  free name or a value of the wrong type faults the step on the host side, even when the body catches the exception.
+- **Background.** A background worker has no session. A marked type, an engine script activity and any
+  variable-reference input are refused a background placement under ADR 0093 C9 (`VF-BG-001 (C9)`), at publication,
+  template placement, admission and on the worker.
+- **Publish.** A variable-reference input must be bound, by a `Variable` expression, to a variable declared in a visible
+  scope; a loop item or index is not a declared variable yet, so it cannot be bound, and at run time it is read-only.
+  Draft validation reports each case as an error
+  (`ValueFlow/VariableReference`), which blocks promoting the draft; the publication compiler itself refuses an unbound
+  input or a binding that is not a `Variable` expression (`VF-VAR-001`). The node's
+  may-write set (its writable references) is pinned as `runtime.mayWriteVariables`, and a marked type as
+  `runtime.mayWriteEveryVisibleVariable`. Step writers count in the concurrent-write warning, a marked node as a writer
+  of every visible variable, and a step write that overlaps the node's own capture is warned about
+  (`ValueFlow/StepWriteOverlapsCapture`).
+
 ## Inspecting the lifecycle
 
 Spec 1229 (S-6) reads the write history back. No projection or history table is added: the read model is derived
@@ -219,7 +263,12 @@ lost updates. Values appear only through their states and the payload read.
   ambient variables an expression references. An expression with computed access (`variables[x]`, `getVariable(x)`)
   is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
   warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
-- An intrinsic cannot write a closed scope's variables yet; only captures write rows.
+- An intrinsic cannot write a closed scope's variables yet; only captures write rows. A step session cannot either: a
+  session write to a reusable activity's body variable faults the step.
+- A step session cannot read or write a variable that requires encryption or is stored externally yet; it faults the
+  step and names the variable.
+- `RunJavaScript` script writes (`variables.x = v`, `setVariable`) and the Elsa 3 converter's rewrite of `setVariable`
+  and generated setters are not built yet (spec 1231 Phases 5 and 8).
 - A value snapshot is kept for captures of a leaf (on completion and on resume, including background results) and
   for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
   composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration
