@@ -2485,7 +2485,7 @@ function WorkflowInstanceInspector({
       <div className="wf-panel-title wf-instance-panel-title">
         <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={shownTab} onSelect={tabId => {
           // Opening Variables from its tab shows the whole history; only the badge opens it filtered.
-          if (tabId === "variables") setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 }));
+          if (tabId === "variables" && shownTab !== "variables") setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 }));
           onActiveTabChange(tabId as InstanceInspectorTab);
         }} />
         <span className="wf-panel-actions">

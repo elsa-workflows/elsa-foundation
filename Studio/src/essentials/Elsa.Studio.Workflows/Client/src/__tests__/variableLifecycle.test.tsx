@@ -114,7 +114,7 @@ describe("variable lifecycle model", () => {
 
   it("keeps value states distinct and never treats an operational value as readable here", () => {
     expect(presentValueState({ state: "captured", isOperational: true }).label).toBe("Kept for recovery");
-    expect(presentValueState({ state: "captured", isOperational: true }).detail).toContain("Studio cannot show it yet");
+    expect(presentValueState({ state: "captured", isOperational: true }).detail).toContain("Variables tab");
     expect(presentValueState({ state: "captured", evidenceId: "ev-1" }).label).toBe("Captured");
     expect(presentValueState({ state: "omitted" }).label).toBe("Not available");
     expect(presentValueState({ state: "omitted" }).detail).toContain("retention removed it");
