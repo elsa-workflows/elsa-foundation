@@ -302,6 +302,7 @@ export function WorkflowEditor({
   // scoped-variable analysis) from the raw draft/frames/selection and the loaded catalog + descriptors.
   const {
     catalogByVersion,
+    describeActivity,
     availabilityLookup,
     scopeOwner,
     isUnsupportedDesigner,
@@ -1146,19 +1147,41 @@ export function WorkflowEditor({
   const inspectorRenameScope = useMemo(
     () => documentAdapter || !inspectedNode ? null : { scopeId: inspectedNode.nodeId, onVariableRenamed: variableRename.onVariableRenamed },
     [documentAdapter, inspectedNode, variableRename.onVariableRenamed]);
-  const variableRenameLabel = useCallback((nodeId: string) => {
+  const variableRenameLabel = useCallback((nodeId: string, inputKey: string) => {
     const node = findActivityNode(draft?.state.rootActivity, nodeId, catalogByVersion);
-    if (!node) return nodeId;
+    if (!node) return { activity: nodeId, input: inputKey };
     const item = catalogByVersion.get(node.activityVersionId);
-    return resolveActivityLabel(
-      draft?.activityPresentation?.find(record => record.nodeId === nodeId),
-      item,
-      item?.activityTypeKey ?? node.activityVersionId);
-  }, [draft?.state.rootActivity, draft?.activityPresentation, catalogByVersion]);
-  const goToRenamedReference = useCallback((nodeId: string) => {
+    const input = describeActivity(node)?.inputs.find(candidate => candidate.name.toLowerCase() === inputKey.toLowerCase());
+    return {
+      activity: resolveActivityLabel(
+        draft?.activityPresentation?.find(record => record.nodeId === nodeId),
+        item,
+        item?.activityTypeKey ?? node.activityVersionId),
+      input: input ? input.displayName || input.name : inputKey
+    };
+  }, [draft?.state.rootActivity, draft?.activityPresentation, catalogByVersion, describeActivity]);
+  // Selects the activity and moves focus into the flagged input's editor once the inspector shows it. An input the
+  // inspector does not list (a structure-owned one, such as a Switch case condition) leaves focus on the activity.
+  const goToRenamedReference = useCallback((nodeId: string, inputKey: string) => {
     setCanvasView("designer");
     repairVariableReference(nodeId);
-  }, [repairVariableReference]);
+    const label = variableRenameLabel(nodeId, inputKey).input;
+    let attempts = 0;
+    const focusInput = () => {
+      const row = [...(editorRootRef.current?.querySelectorAll<HTMLElement>(".wf-property-row") ?? [])]
+        .find(candidate => candidate.querySelector(".wf-property-row-header > label")?.textContent?.trim() === label);
+      const target = row && [...row.querySelectorAll<HTMLElement>("button, input, textarea, select, [contenteditable='true']")]
+        .find(element => !element.closest(".wf-property-row-header") && !element.matches(":disabled"));
+      if (target) target.focus();
+      else if (++attempts < 30) requestAnimationFrame(focusInput);
+    };
+    requestAnimationFrame(focusInput);
+  }, [repairVariableReference, variableRenameLabel]);
+  // Dismissing removes the focused button; focus returns to the editor view tabs rather than the page.
+  const dismissVariableRename = useCallback(() => {
+    variableRename.dismiss();
+    editorRootRef.current?.querySelector<HTMLElement>("[role='tablist'][aria-label='Editor view tabs'] [role='tab'][aria-selected='true']")?.focus();
+  }, [variableRename]);
 
   // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
   // contracts and are not offered it here.
@@ -1664,8 +1687,8 @@ export function WorkflowEditor({
           <VariableRenameNotice
             outcome={variableRename.outcome}
             labelFor={variableRenameLabel}
-            onSelectNode={goToRenamedReference}
-            onDismiss={variableRename.dismiss}
+            onSelectReference={goToRenamedReference}
+            onDismiss={dismissVariableRename}
           />
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />

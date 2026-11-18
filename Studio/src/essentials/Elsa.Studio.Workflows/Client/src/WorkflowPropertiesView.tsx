@@ -377,8 +377,21 @@ function ArgumentsEditor({
   onNameCommitted?(referenceKey: string, oldName: string, newName: string): void;
   onChange(next: unknown[]): void;
 }) {
-  // The name each row had when its name field took focus: a rename is reported once, when the edit ends.
+  // The name each row had when its name field took focus: a rename is reported once, when the edit ends — on blur, or
+  // when the editor unmounts while a name field still has focus (a view switch), so no rename goes unreported.
   const namesAtFocus = useRef(new Map<number, string>());
+  const latestRows = useRef({ items, nameKeys, onNameCommitted });
+  latestRows.current = { items, nameKeys, onNameCommitted };
+  useEffect(() => () => {
+    const { items: rows, nameKeys: keys, onNameCommitted: report } = latestRows.current;
+    for (const [index, before] of namesAtFocus.current) {
+      const row = rows[index];
+      const after = row ? readStringField(row, keys) : "";
+      const key = row ? readStringField(row, referenceKeyKeys) : "";
+      if (report && key && before && after.trim() && before !== after) report(key, before, after);
+    }
+    namesAtFocus.current.clear();
+  }, []);
   const { add, update, remove } = buildCollectionOps<Record<string, unknown>>(items, onChange, {
     namePrefix,
     nameKeys,
@@ -496,7 +509,7 @@ export function VariablesEditor({ items, typeOptions, storageOptions, storageOpt
   onChange(next: unknown[]): void;
 }) {
   // A committed rename is reported to the nearest workflow editor, which updates the scripts that read the variable
-  // (spec 1222 FR-021); outside one, a rename changes the declaration alone.
+  // (spec 1222 FR-022); outside one, a rename changes the declaration alone.
   const renameScope = useVariableRenameScope();
   return (
     <ArgumentsEditor

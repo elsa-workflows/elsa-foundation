@@ -7,6 +7,7 @@ import { VariableRenameContext } from "../variableRenameContext";
 import { applyVariableRenameEdits, withVariableName, workflowVariableScopeId } from "../variableRename";
 import { VariableRenameNotice, useVariableRename } from "../workflow-editor/VariableRenameNotice";
 import { clearApiCapabilityCache } from "../api/capabilities";
+import { setNotifications } from "../workflow-editor/notifications";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -66,6 +67,12 @@ describe("variable rename edits", () => {
     expect(scoped.variables?.[0].name).toBe("order");
   });
 
+  it("restores the old name of a variable keyed with the legacy ReferenceKey spelling", () => {
+    const legacy = { ReferenceKey: "order-key", name: "purchase", type: order.type } as never;
+
+    expect(withVariableName(state(writeLine("a", "x"), [legacy]), workflowVariableScopeId, "order-key", "order").variables?.[0].name).toBe("order");
+  });
+
   it("edits authored inputs and wire entries whose source still matches, and skips the rest", () => {
     const wire: ActivityNode = {
       nodeId: "wire", activityVersionId: "write-line-v1", outputs: [], structure: null,
@@ -111,6 +118,20 @@ describe("variable editor rename reporting", () => {
     expect(onVariableRenamed).toHaveBeenCalledWith("box", "order-key", "order", "purchase");
   });
 
+  it("reports a rename still being typed when the editor unmounts", () => {
+    const onVariableRenamed = vi.fn();
+    const view = editor(onVariableRenamed);
+    const host = render(view([order]));
+    const input = host.querySelector<HTMLInputElement>("input[aria-label='Variable name']")!;
+
+    flushSync(() => input.focus());
+    flushSync(() => active!.root.render(view([{ ...order, name: "purchase" }])));
+    flushSync(() => active!.root.render(<p>Another view</p>));
+
+    expect(onVariableRenamed).toHaveBeenCalledTimes(1);
+    expect(onVariableRenamed).toHaveBeenCalledWith("box", "order-key", "order", "purchase");
+  });
+
   it("reports nothing when the name is unchanged or emptied", () => {
     const onVariableRenamed = vi.fn();
     const view = editor(onVariableRenamed);
@@ -140,12 +161,23 @@ describe("rename follow-up", () => {
     return { context: { baseUrl: `test://rename-${Math.random()}`, http: { getJson, postJson } } as never, postJson };
   }
 
-  function Harness({ context, draft, updateState }: { context: never; draft: WorkflowDefinitionState; updateState: ReturnType<typeof vi.fn> }) {
+  function Harness({ context, draft, updateState, onSelectReference = vi.fn() }: {
+    context: never;
+    draft: WorkflowDefinitionState;
+    updateState: ReturnType<typeof vi.fn>;
+    onSelectReference?: ReturnType<typeof vi.fn>;
+  }) {
     const rename = useVariableRename({ context, state: draft, updateState });
     return (
       <>
         <button type="button" onClick={() => rename.onVariableRenamed(workflowVariableScopeId, "order-key", "order", "purchase")}>rename</button>
-        <VariableRenameNotice outcome={rename.outcome} labelFor={nodeId => `Node ${nodeId}`} onSelectNode={vi.fn()} onDismiss={rename.dismiss} />
+        <button type="button" onClick={() => rename.onVariableRenamed(workflowVariableScopeId, "order-key", "purchase", "basket")}>rename again</button>
+        <VariableRenameNotice
+          outcome={rename.outcome}
+          labelFor={(nodeId, inputKey) => ({ activity: `Node ${nodeId}`, input: `Input ${inputKey}` })}
+          onSelectReference={onSelectReference}
+          onDismiss={rename.dismiss}
+        />
       </>
     );
   }
@@ -159,7 +191,8 @@ describe("rename follow-up", () => {
       flags: [{ nodeId: "switch", inputKey: "Case:big:Condition", reason: "StructureInput", message: "Change it by hand." }]
     });
     const updateState = vi.fn();
-    const host = render(<Harness context={context} draft={renamed} updateState={updateState} />);
+    const onSelectReference = vi.fn();
+    const host = render(<Harness context={context} draft={renamed} updateState={updateState} onSelectReference={onSelectReference} />);
 
     flushSync(() => host.querySelector("button")!.click());
     await waitFor(() => expect(host.querySelector("[aria-label='Variable rename']")).not.toBeNull());
@@ -172,8 +205,74 @@ describe("rename follow-up", () => {
     expect((applied.rootActivity!.Text as { expression: { value: string } }).expression.value).toBe("variables.purchase.total");
     const notice = host.querySelector("[aria-label='Variable rename']")!.textContent!;
     expect(notice).toContain("1 script read was updated");
-    expect(notice).toContain("Node switch · Case:big:Condition");
+    expect(notice).toContain("Node switch · Input Case:big:Condition");
     expect(notice).toContain("Change it by hand.");
+    // The summary is announced through a live region that stays mounted; the list itself is not live.
+    expect(host.querySelector("[role='status']")!.textContent).toContain("1 reference needs your attention.");
+    expect(host.querySelector("[aria-label='Variable rename']")!.getAttribute("role")).toBeNull();
+    const goTo = host.querySelector<HTMLButtonElement>("[aria-label='Go to Node switch, input Input Case:big:Condition']")!;
+    flushSync(() => goTo.click());
+    expect(onSelectReference).toHaveBeenCalledWith("switch", "Case:big:Condition");
+  });
+
+  it("reports a rename whose reads all followed as a notification, without an inline notice", async () => {
+    const notify = vi.fn();
+    setNotifications({ notify, track: (work: Promise<unknown>) => work } as never);
+    try {
+      const renamed = state(writeLine("a", "variables.order.total"), [{ ...order, name: "purchase" }]);
+      const { context } = api({
+        oldName: "order",
+        newName: "purchase",
+        edits: [{ nodeId: "a", inputKey: "Text", oldSource: "variables.order.total", newSource: "variables.purchase.total" }],
+        flags: []
+      });
+      const updateState = vi.fn();
+      const host = render(<Harness context={context} draft={renamed} updateState={updateState} />);
+
+      flushSync(() => host.querySelector("button")!.click());
+      await waitFor(() => expect(notify).toHaveBeenCalled());
+
+      expect(notify).toHaveBeenCalledWith({ level: "success", title: "Renamed 'order' to 'purchase'", message: "1 script read was updated." });
+      expect(updateState).toHaveBeenCalledTimes(1);
+      expect(host.querySelector("[aria-label='Variable rename']")).toBeNull();
+    } finally {
+      setNotifications(undefined);
+    }
+  });
+
+  it("plans a second rename after the first, from the scripts the first one updated", async () => {
+    const draft = state(writeLine("a", "variables.order.total"), [{ ...order, name: "basket" }]);
+    let releaseFirst!: () => void;
+    const firstHeld = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const getJson = vi.fn().mockResolvedValue({ capabilities: [{ id: "elsa.api.workflow-design", contractVersion: "1",
+      links: [{ rel: "scoped-variable-rename-plan", href: "design/workflows/scoped-variables/rename-plan" }] }] });
+    const postJson = vi.fn(async (_path: string, body: { newName: string; state: WorkflowDefinitionState }) => {
+      if (body.newName === "purchase") {
+        await firstHeld;
+        return { oldName: "order", newName: "purchase", flags: [],
+          edits: [{ nodeId: "a", inputKey: "Text", oldSource: "variables.order.total", newSource: "variables.purchase.total" }] };
+      }
+      const source = (body.state.rootActivity!.inputs[0] as { value: { value: string } }).value.value;
+      return { oldName: "purchase", newName: "basket", flags: [],
+        edits: [{ nodeId: "a", inputKey: "Text", oldSource: source, newSource: source.replace("purchase", "basket") }] };
+    });
+    const context = { baseUrl: `test://rename-${Math.random()}`, http: { getJson, postJson } } as never;
+    const updateState = vi.fn();
+    const host = render(<Harness context={context} draft={draft} updateState={updateState} />);
+    const [first, second] = host.querySelectorAll("button");
+
+    flushSync(() => first.click());
+    flushSync(() => second.click());
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(postJson).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    await waitFor(() => expect(updateState).toHaveBeenCalledTimes(2));
+
+    const secondBody = postJson.mock.calls[1][1];
+    expect(secondBody.state.variables![0].name).toBe("purchase");
+    expect((secondBody.state.rootActivity!.inputs[0] as { value: { value: string } }).value.value).toBe("variables.purchase.total");
+    const final = updateState.mock.calls.reduce((current: WorkflowDefinitionState, [producer]) => producer(current), draft) as WorkflowDefinitionState;
+    expect((final.rootActivity!.Text as { expression: { value: string } }).expression.value).toBe("variables.basket.total");
   });
 
   it("reports an edit whose script changed meanwhile instead of applying it", async () => {

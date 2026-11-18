@@ -42,7 +42,7 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
         var links = new List<ApiCapabilityLink>();
         if (scopedVariables is not null)
             links.Add(new("scoped-variable-analysis", "design/workflows/scoped-variables/analyze"));
-        // Spec 1222 FR-021: Studio plans a variable rename through this link and hides the rename follow-up without it.
+        // Spec 1222 FR-022: Studio plans a variable rename through this link and hides the rename follow-up without it.
         if (renamePlanner is not null)
             links.Add(new("scoped-variable-rename-plan", "design/workflows/scoped-variables/rename-plan"));
         if (inputOptionsProviders?.Any() == true)

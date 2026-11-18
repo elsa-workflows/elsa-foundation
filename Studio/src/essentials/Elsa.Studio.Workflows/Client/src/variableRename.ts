@@ -5,7 +5,7 @@ import { readContainerVariables, writeContainerVariables } from "./scopedVariabl
 /** The workflow-scope sentinel a variable rename plan is keyed by (Elsa.Expressions.Core.Models.VariableReference). */
 export const workflowVariableScopeId = "workflow";
 
-/** One script edit that keeps a read on the renamed variable (backend ScriptVariableRenameEdit, spec 1222 FR-021). */
+/** One script edit that keeps a read on the renamed variable (backend ScriptVariableRenameEdit, spec 1222 FR-021, FR-022). */
 export interface VariableRenameEdit {
   nodeId: string;
   inputKey: string;
@@ -39,8 +39,9 @@ export function withVariableName(
   name: string,
   catalog?: ActivityCatalogLookup
 ): WorkflowDefinitionState {
+  // The variable editors accept the legacy `ReferenceKey` spelling too (WorkflowPropertiesView referenceKeyKeys).
   const rename = (variables: VariableDefinition[]) =>
-    variables.map(variable => (variable.referenceKey === referenceKey ? { ...variable, name } : variable));
+    variables.map(variable => ((variable.referenceKey ?? variable.ReferenceKey) === referenceKey ? { ...variable, name } : variable));
   if (scopeId === workflowVariableScopeId)
     return { ...state, variables: rename((state.variables ?? []) as VariableDefinition[]) };
   if (!state.rootActivity) return state;

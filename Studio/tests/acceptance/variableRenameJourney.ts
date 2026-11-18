@@ -57,16 +57,18 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await name.fill("purchase");
   await name.press("Tab");
   expect((await planned).ok()).toBe(true);
-  const notice = page.getByRole("status", { name: "Variable rename", exact: true });
+  const notice = page.getByRole("region", { name: "Variable rename", exact: true });
   await expect(notice).toContainText("Renamed 'order' to 'purchase'. 1 script read was updated; 1 reference needs your attention.");
   await expect(notice).toContainText("reads variables by a computed name and could read 'order'");
   await capture(page, info, "rename-notice");
 
-  await notice.getByRole("button", { name: /· text$/ }).click();
+  await notice.getByRole("button", { name: "Go to Write Line, input Text", exact: true }).click();
   await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Copy Node ID", exact: true })).toBeVisible();
   const text = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
   await expect(text).toContainText("variables.purchase.total");
   await expect(text).toContainText("variables['ord' + 'er']");
+  // Go to moves focus into the flagged input's editor.
+  await expect(text.locator(":focus")).toHaveCount(1);
   await capture(page, info, "flagged-reference");
 }
