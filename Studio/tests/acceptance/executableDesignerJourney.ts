@@ -119,11 +119,13 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     const last = editor.locator('.wf-sequence-step[data-id="frame-15"]');
     await last.scrollIntoViewIfNeeded();
     expect(await scroller.evaluate(node => node.scrollTop), "The inner canvas actually scrolled").toBeGreaterThan(0);
-    await expect(last).toBeInViewport({ ratio: 1 });
+    await expect(last).toBeInViewport();
     expect(await last.evaluate(node => {
       const rect = node.getBoundingClientRect();
       const canvas = node.closest(".wf-sequence-designer")!.getBoundingClientRect();
-      return rect.top >= canvas.top && rect.bottom <= canvas.bottom &&
+      // Chromium rounds scroll offsets to CSS pixels while element bounds can be fractional.
+      return rect.left >= Math.max(0, canvas.left) - 1 && rect.right <= Math.min(innerWidth, canvas.right) + 1 &&
+        rect.top >= Math.max(0, canvas.top) - 1 && rect.bottom <= Math.min(innerHeight, canvas.bottom) + 1 &&
         node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
     }), "The final real activity remains inside the scrollable canvas and unobscured").toBe(true);
     expect(await page.locator(".content").evaluate(node => node.scrollTop)).toBe(geometry.content.scrollTop);

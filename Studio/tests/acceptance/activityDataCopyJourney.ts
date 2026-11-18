@@ -346,7 +346,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       await expect(page.locator(".wf-editor-save-status")).toContainText("Copied 1 activity.");
       await publishRun(created, copiedConsumer.nodeId, "producer", "00:00:01");
       const publishedStores = JSON.parse(execFileSync("python3", [resolve("../e2e-tests/activity-data-selection/publication_snapshot.py"),
-        process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId, "--require-published"], { encoding: "utf8" }));
+        process.env.UX_WORKBENCH_DIRECTORY!, created.definition.id, root.nodeId, "--require-published"], { encoding: "utf8" }));
       boundaries.push({ kind: "published-store-positive-control", definitionId: created.definition.id, rootNodeId: root.nodeId, stores: publishedStores });
       const destination = await s.seed("resource-local same IDs", s.root([echo(), s.line()]));
       await s.settleContext(); await s.open(destination); const before = (await s.saved(destination)).state;
@@ -359,7 +359,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     } else {
       await expect(page.locator(".wf-data-reference-problem")).toContainText("Replace it or clear it");
       const snapshot = () => JSON.parse(execFileSync("python3", [resolve("../e2e-tests/activity-data-selection/publication_snapshot.py"),
-        process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId], { encoding: "utf8" }));
+        process.env.UX_WORKBENCH_DIRECTORY!, created.definition.id, root.nodeId], { encoding: "utf8" }));
       const before = snapshot();
       await page.getByRole("button", { name: "Review & publish", exact: true }).click();
       await expect(page.getByRole("alert").filter({ hasText: "Could not prepare a trustworthy publication review" }))

@@ -1020,6 +1020,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                                ELSA_WORKBENCH_URL=combined['backendUrl'], UX_BACKEND_URL=combined['backendUrl'],
                                UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
                                UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data),
+                               UX_WORKBENCH_DIRECTORY=str(combined['backend']),
                                UX_WORKFLOW_ASSET_MANIFEST=str(asset_manifest))
             for item in hosts[1:]:
                 variable = item['name'].split('-')[0].upper()
