@@ -13391,16 +13391,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Expressions.JavaScript",
-          "path": "essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Expressions.JavaScript.Jint",
-          "path": "essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
         },
@@ -13418,11 +13408,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Jint",
-          "version": "4.9.1"
         },
         {
           "type": "external",
