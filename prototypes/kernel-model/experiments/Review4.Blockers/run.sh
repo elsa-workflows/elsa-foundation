@@ -53,6 +53,10 @@ run fr1-held-crash                     repaired                         # expect
 run fr1-held-crash                     negative                         # expected FAIL
 run fr1-held-crash                     clear-with-held                  # expected FAIL
 run fr1-held-crash                     one-row-read-counts-held         # expected PASS
+run fr1-held-suspend-crash             reviewed                         # expected FAIL
+run fr1-held-suspend-crash             repaired                         # expected PASS
+run fr1-held-suspend-crash             negative                         # expected FAIL
+run fr1-held-suspend-crash             controls-wait-while-suspended    # expected FAIL
 run fr1-control-after-complete         reviewed                         # expected FAIL
 run fr1-control-after-complete         repaired                         # expected PASS
 run fr1-control-after-complete         negative                         # expected FAIL
