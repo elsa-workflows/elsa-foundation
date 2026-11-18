@@ -204,13 +204,14 @@ public sealed record ActivityExecutionInspectionView(
     /// Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view. Record i is
     /// the state's <c>VariableWrites[i]</c>, so a later per-entry read (spec 1229) can address it by that index.
     /// </summary>
-    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state, bool canInspectSensitiveValues) =>
+    /// <param name="canDiscloseDigest">Whether the caller may see value digests: only one who may both inspect sensitive values and resolve their payloads.</param>
+    public ActivityExecutionInspectionView WithVariableLifecycle(ActivityExecutionState? state, bool canDiscloseDigest) =>
         state is null
             ? this
             : this with
             {
                 VariableWrites = state.VariableWrites is { Count: > 0 } writes
-                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots, canInspectSensitiveValues)).ToArray()
+                    ? writes.Select(record => VariableWriteRecordView.From(record, ValueSnapshots, canDiscloseDigest)).ToArray()
                     : null,
                 RecordedCompletion = RecordedCompletionView.From(state.RecordedCompletion),
                 InputRefreshes = state.InputRefreshes is { Count: > 0 } refreshes

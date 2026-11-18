@@ -35,12 +35,12 @@ public sealed record VariableLifecycleValueStateView(
 
     /// <summary>
     /// The state of a value the payload capture policy recorded as activity value evidence. The digest is an unsalted
-    /// hash of the value, so a small value could be recovered from it: it is shown only to a caller who may inspect
-    /// sensitive values, and never beside a redacted value.
+    /// hash of the value, so a small value could be recovered from it: it is shown only to a caller who may both inspect
+    /// sensitive values and resolve their payloads, and never beside a redacted value.
     /// </summary>
-    public static VariableLifecycleValueStateView FromEvidence(ActivityExecutionInspectionValueSnapshotView? evidence, string? digest, bool canInspectSensitiveValues)
+    public static VariableLifecycleValueStateView FromEvidence(ActivityExecutionInspectionValueSnapshotView? evidence, string? digest, bool canDiscloseDigest)
     {
-        if (!canInspectSensitiveValues)
+        if (!canDiscloseDigest)
             digest = null;
         if (evidence is null)
             return new(Omitted, digest);
@@ -87,7 +87,7 @@ public sealed record VariableWriteRecordView(
     public static VariableWriteRecordView From(
         VariableWriteRecord record,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshotView> evidence,
-        bool canInspectSensitiveValues)
+        bool canDiscloseDigest)
     {
         // A lost-update warning and an accepted override both keep the value they replaced, so it can be restored.
         var keepsOverwrittenValue = record.Outcome is VariableCommitOutcome.LostUpdateWarning or VariableCommitOutcome.AcceptedOverride;
@@ -104,7 +104,7 @@ public sealed record VariableWriteRecordView(
             record.CommitSequence is >= 0 ? record.CommitSequence : null,
             record.OccurredAt,
             VariableWriterView.From(record.OverwrittenWriter),
-            record.Outcome == VariableCommitOutcome.LostUpdateFault ? null : VariableLifecycleValueStateView.FromEvidence(WrittenEvidence(record, evidence), record.Digest, canInspectSensitiveValues),
+            record.Outcome == VariableCommitOutcome.LostUpdateFault ? null : VariableLifecycleValueStateView.FromEvidence(WrittenEvidence(record, evidence), record.Digest, canDiscloseDigest),
             keepsOverwrittenValue && record.OverwrittenValue is not null ? VariableLifecycleValueStateView.FromEnvelope(record.OverwrittenValue, isOperational: true) : null,
             record.Outcome == VariableCommitOutcome.LostUpdateFault ? VariableLifecycleValueStateView.FromEnvelope(record.RejectedValue, isOperational: true) : null);
     }

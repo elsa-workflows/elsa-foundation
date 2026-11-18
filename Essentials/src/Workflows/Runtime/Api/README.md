@@ -94,8 +94,8 @@ resolve value payloads can read it through the value-payload read.
   evaluation that replaced it and the changed variables with the version read and the current one). Values are never
   inline: each written, overwritten, refused, recorded or superseded value is a value state (`captured`, `omitted`,
   `redacted`; `expired` is reserved for spec 1229's history read), so a captured `null` never reads as a missing value.
-  A value's `digest` (an unsalted hash of the value) is shown only to a caller who may inspect sensitive values, and
-  never beside a `redacted` value. A written value links its `VariableWrite` value evidence by `evidenceId` for the
+  A value's `digest` (an unsalted hash of the value) is shown only to a caller who may both inspect sensitive values
+  and resolve their payloads, and never beside a `redacted` value. A written value links its `VariableWrite` value evidence by `evidenceId` for the
   value-payload read above; the
   overwritten and refused values are operational (`isOperational: true`) and become readable through spec 1229's
   write-history payload read.

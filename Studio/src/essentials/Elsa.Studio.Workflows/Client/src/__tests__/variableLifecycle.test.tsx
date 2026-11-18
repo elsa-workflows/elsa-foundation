@@ -90,7 +90,7 @@ function refresh(): ActivityInputRefreshView {
     supersededEvaluation: 1, replacedByEvaluation: 2,
     supersededMaterializedAt: "2026-11-18T09:59:00Z", refreshedAt: "2026-11-18T10:00:00Z",
     changes: [{ scopeId: "root", variableKey: "count", readVersion: 0, currentVersion: 1 }],
-    supersededInputs: [{ inputKey: "Amount", value: { state: "redacted" } }]
+    supersededInputs: [{ inputKey: "Amount", value: { state: "redacted" } }, { inputKey: "Note", value: { state: "omitted" } }]
   };
 }
 
@@ -279,6 +279,8 @@ describe("run view", () => {
     expect(text).toContain('because "count" changed from version 0 to version 1');
     expect(container.querySelector("section[aria-label='Superseded input evaluations']")).not.toBeNull();
     expect(text).toContain("Amount (evaluation 1)Redacted");
+    expect(text).toContain("Note (evaluation 1)Not set");
+    expect(text).not.toContain("Variable writes capture was off");
   });
 
   it("keeps the lost-update badge reusable: it reports, or opens a view when given one", () => {

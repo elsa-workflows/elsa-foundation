@@ -210,7 +210,14 @@ export function InputRefreshHistory({ refreshes }: { refreshes: readonly Activit
             {refresh.supersededInputs.length > 0 ? (
               <dl className="wf-variable-write-facts">
                 {refresh.supersededInputs.map(input => (
-                  <VariableValueState key={input.inputKey} label={`${input.inputKey} (evaluation ${refresh.supersededEvaluation})`} value={input.value} />
+                  <VariableValueState
+                    key={input.inputKey}
+                    label={`${input.inputKey} (evaluation ${refresh.supersededEvaluation})`}
+                    value={input.value}
+                    // An input snapshot is kept on the step's durable state whatever the capture settings; a missing
+                    // value there is an input this evaluation gave no value.
+                    {...(input.value.state === "omitted" ? { stateLabel: "Not set", note: "This evaluation gave the input no value." } : {})}
+                  />
                 ))}
               </dl>
             ) : null}
