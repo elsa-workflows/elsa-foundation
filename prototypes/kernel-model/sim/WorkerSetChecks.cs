@@ -2,7 +2,8 @@ namespace Kernel.Sim;
 
 /// <summary>
 /// K1 slice 2a: one worker owns two virtual partitions on the in-memory store. Turns in both flush as one owned batch,
-/// and after a takeover of one of them a refused flush rolls back whole and the worker keeps the other.
+/// and after a takeover of one of them a refused flush rolls back whole and the worker keeps the other. Slice 2b: suspects,
+/// trials and child ids per virtual-partition epoch.
 /// </summary>
 internal static class WorkerSetChecks
 {
@@ -70,6 +71,8 @@ internal static class WorkerSetChecks
 
         await LostAnswer(check);
         await WithoutOwnedSets(check);
+        await SuspectsAndTrials(check);
+        await ChildIds(check);
     }
 
     /// <summary>The partitions the store shows live under this worker's node at an epoch the worker does not hold.</summary>
@@ -125,5 +128,95 @@ internal static class WorkerSetChecks
         var refused = false;
         try { await new DurableHost([several]).ActivateAsync(0); } catch (NotSupportedException) { refused = true; }
         check(refused && !several.Owns && store.Partitions[1].Owner is null, "a worker of several partitions does not take on a store without owned sets");
+    }
+
+    // Epochs count per partition, so the same number can be this worker's in one partition and another owner's in the
+    // next: the suspect test compares a row only with the epochs this process held in the row's own partition.
+    private static async Task SuspectsAndTrials(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(2, () => time);
+        store.Partitions[0].Epoch = 1;      // "a" takes 0 at epoch 2
+        (store.Partitions[1].Owner, store.Partitions[1].Epoch, store.Partitions[1].LeaseUntil) = ("b", 2, 0);    // "b" held 1 at epoch 2 and was lost
+        var (x, z) = (InstanceRef.In(0, "x"), InstanceRef.In(1, "z"));
+        await store.AddAsync(new("m", z, "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        store.Messages["m"].Seen = 2;       // what "b" marked before it was lost
+        await store.AddAsync(new("n", x, "add", Json.Write(new Add("n")), Start: Counter.Spec));
+        var worker = new Worker("a", [0, 1], store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2 });
+        await new DurableHost([worker]).ActivateAsync(0);
+        var (e0, e1) = (worker.EpochOf(0), worker.EpochOf(1));
+        await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
+        check(e0 == 2 && e1 == 3 && worker.Trial.SequenceEqual(["m"]) && store.Messages["m"].Trial == e1 && store.Messages["n"] is { Seen: 2, Trial: 0 },
+            $"a row another owner marked at epoch 2 of partition 1 is a suspect while this worker holds partition 0 at epoch 2: on trial [{string.Join(", ", worker.Trial)}]");
+        check(worker.Ready.SequenceEqual([z.Id]),
+            $"a trial in partition 1 holds back partition 0 of the same worker, as it would any partition of its process: ready [{string.Join(", ", worker.Ready)}]");
+
+        // Partition 1 moves while its trial is in flight. The beat's fence is refused and the keeping reset keeps 0.
+        store.Partitions[1].LeaseUntil = 0;
+        var moved = await store.TakeAsync(1, "c", Defaults.Lease);
+        await worker.BeatAsync();
+        check(moved is not null && !worker.Trial.Any() && worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual([(0, e0)]),
+            $"the keeping reset drops partition 1 and its trial: held [{string.Join(", ", worker.Fences)}], on trial [{string.Join(", ", worker.Trial)}]");
+        await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
+        var ready = worker.Ready.ToList();
+        foreach (var id in ready) worker.RunTurn(id);
+        await worker.FlushAsync();
+        check(ready.SequenceEqual([x.Id]) && !worker.Trial.Any() && store.Instances.GetValueOrDefault(x.Id)?.Revision == 1 && !store.Messages.ContainsKey("n"),
+            $"the trial in the dropped partition gates nothing kept, and what this worker marked in 0 at its epoch is no suspect: ready [{string.Join(", ", ready)}]");
+    }
+
+    // A child id names the (partition, epoch) of its parent's fenced commit. Each held partition has its own issuer, a
+    // keeping reset keeps the epoch and the issuer's sequence with it, and a retake starts a new epoch.
+    private static async Task ChildIds(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(2, () => time);
+        var wire = new DelayedCommit(store);
+        await store.ReleaseAsync(1, (await store.TakeAsync(1, "earlier", Defaults.Lease))!.Epoch);    // so that the two epochs differ
+        var worker = new Worker("a", [0, 1], wire, new WorkflowInstance([new Parent(), new Child()]), new() { Monotonic = () => time, Partitions = 2 });
+        await new DurableHost([worker]).ActivateAsync(0);
+        var (e0, e1) = (worker.EpochOf(0), worker.EpochOf(1));
+        var (children, starts) = (new List<string>(), new HashSet<InboxKey>());
+
+        async Task Start(params string[] parents)
+        {
+            foreach (var parent in parents)
+                await store.AddAsync(new($"start-{parent}", new InstanceRef(parent), Kinds.Start, Start: new StartSpec("parent", "p", Json.Write(new ParentInput(1, -1)))));
+            await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
+            foreach (var parent in parents) worker.RunTurn(parent);
+        }
+        void Collect()      // every child start, once per message: two starts to one id would show it twice
+        {
+            foreach (var row in store.Messages.Values.Where(m => m.Message.Target.ChildAddress).OrderBy(m => m.Seq))
+                if (starts.Add(row.Message.InboxKey)) children.Add(row.Message.Target.Id);
+        }
+
+        await Start("0/p", "1/q");
+        await worker.FlushAsync();
+        Collect();
+        check(children.SequenceEqual([$"g0/child/0.{e0}.1", $"g1/child/1.{e1}.1"]),
+            $"each partition issues its children's ids at its own epoch: [{string.Join(", ", children)}]");
+
+        // The answer of a flush with a child in it is lost after it landed: the retake starts new epochs and new issuers.
+        await Start("0/s");
+        wire.LoseNext = true;
+        await worker.FlushAsync();
+        Collect();
+        await Start("0/t");
+        await worker.FlushAsync();
+        Collect();
+        var retaken = worker.EpochOf(0);
+
+        // Partition 1 moves; the beat is refused and the keeping reset keeps partition 0 at its epoch, and its issuer.
+        store.Partitions[1].LeaseUntil = 0;
+        await store.TakeAsync(1, "b", Defaults.Lease);
+        await worker.BeatAsync();
+        var kept = worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual([(0, retaken)]);
+        await Start("0/r");
+        await worker.FlushAsync();
+        Collect();
+        check(retaken == e0 + 1 && kept && children.Distinct().Count() == children.Count
+              && children.SequenceEqual([$"g0/child/0.{e0}.1", $"g1/child/1.{e1}.1", $"g0/child/0.{e0}.2", $"g0/child/0.{retaken}.1", $"g0/child/0.{retaken}.2"]),
+            $"child ids stay unique across a retake and a keeping reset: [{string.Join(", ", children)}]");
     }
 }

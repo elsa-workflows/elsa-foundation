@@ -130,7 +130,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private IReadOnlyList<Delivery> TrialItems => _gate.Selected(this);
     private bool _jobsWaitingForTrial;
     private long _trialObserved; // last first-observation ordinal when the trial mark was sent
-    private readonly HashSet<long> _mine = [];      // the epochs this process has held: what it marked then did not kill it
+    // The (partition, epoch) pairs this process has held: what it marked then did not kill it. Epochs count per partition,
+    // so a row is compared only with its own partition's epochs (D4).
+    private readonly HashSet<(int Partition, long Epoch)> _mine = [];
+    // One child id issuer per held partition, at the epoch it is held. A keeping reset keeps the epoch and so the issuer,
+    // with its sequence; a take bumps the epoch and starts a new one.
+    private readonly Dictionary<int, ChildIssuer> _issuers = [];
 
     /// <summary>One virtual partition while this worker holds its fence: its own epoch, position and journal.</summary>
     private sealed class Held(long epoch, long position)
@@ -180,7 +185,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The partitions held now, in ascending id, each at its epoch and the position this worker believes.</summary>
     public IReadOnlyList<PartitionFence> Fences => [.. _held.Select(h => new PartitionFence(h.Key, h.Value.Epoch, h.Value.Position))];
     private bool Holds(int partition) => _held.ContainsKey(partition);
-    internal ChildIssuer ChildIds { get; private set; } = null!;
+    /// <summary>
+    /// The child id issuer of the partition an instance is in, at the epoch this worker holds it: the parent's commit is
+    /// fenced at that (partition, epoch), so only this issuer's ids are ever published under it.
+    /// </summary>
+    internal ChildIssuer ChildIdsFor(string instance)
+    {
+        var partition = StoreBatchRules.AddressPartition(instance) is { } p && Holds(p) ? p : _held.Keys.First();
+        var epoch = _held[partition].Epoch;
+        if (!_issuers.TryGetValue(partition, out var issuer) || issuer.Epoch != epoch) _issuers[partition] = issuer = new(partition, epoch);
+        return issuer;
+    }
     public bool Owns => _held.Count != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
@@ -467,9 +482,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var taken in lease.Taken)
         {
             _held[taken.Partition] = new(taken.Epoch, taken.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
-            _mine.Add(taken.Epoch);
+            _mine.Add((taken.Partition, taken.Epoch));
         }
-        ChildIds = new(lease.Taken[0].Partition, lease.Taken[0].Epoch);
         Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
     }
@@ -634,7 +648,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
     private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
-        && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains(row.Seen) && (row.Message.Due is not { } due || due <= now)));
+        && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains((row.Message.Target.Partition, row.Seen)) && (row.Message.Due is not { } due || due <= now)));
 
     private bool OnTrial(string instance) => TrialItems.Any(t => Canonical(t.Message.Target.Id) == instance);
 
@@ -1961,7 +1975,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 }
 
-/// <summary>One per process. At most one of its workers has a trial in flight, and then the others start nothing.</summary>
+/// <summary>
+/// One per process. At most one of its workers has a trial in flight, and then the others start nothing. A death kills
+/// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too
+/// (<see cref="Flaw.TrialPerPartition"/> is the mutation). A reset releases the gate, so a trial in a partition the
+/// worker dropped gates nothing it kept.
+/// </summary>
 public sealed class TrialGate
 {
     // Each selection owns its ordered array. Published arrays are never modified.
