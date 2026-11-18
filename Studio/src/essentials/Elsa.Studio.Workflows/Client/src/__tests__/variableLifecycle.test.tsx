@@ -146,6 +146,7 @@ describe("variable lifecycle model", () => {
     expect(presentValueState({ state: "omitted" }).detail).toContain("retention removed it");
     expect(presentValueState({ state: "omitted", isOperational: true }).label).toBe("Not kept");
     expect(presentValueState({ state: "redacted" }).label).toBe("Redacted");
+    expect(presentValueState({ state: "redacted" }).detail).toContain("you may not view values in this run");
     expect(presentValueState({ state: "expired" }).label).toBe("Expired");
   });
 
@@ -197,7 +198,7 @@ describe("run view", () => {
     expect(text).toContain("Read version 0 · was version 1 · now version 2");
     expect(text).toContain('without seeing the value "Add bonus" wrote');
     expect(text).toContain('the step that wrote it ("Add bonus") shows the value');
-    expect(text).toContain("in runs captured with the Variable writes diagnostics level on");
+    expect(text).toContain("in runs captured with Variable writes set to Diagnostic snapshots or Full payloads under Runtime evidence settings");
     expect(text).not.toContain("spec 1229");
     expect(text).toContain('Writer"Increment"');
     expect(text).toContain('Overwritten writer"Add bonus"');

@@ -127,7 +127,7 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
         ? { label: "Kept for recovery", detail: "Kept on the write history; Studio cannot show it yet.", tone: "neutral" }
         : { label: "Captured", detail: "Kept on the durable record; Studio cannot show it yet.", tone: "neutral" };
     case "redacted":
-      return { label: "Redacted", detail: "The value is sensitive or withheld and is not shown.", tone: "warning" };
+      return { label: "Redacted", detail: "Not shown: the value is sensitive or withheld, or you may not view values in this run.", tone: "warning" };
     case "expired":
       return { label: "Expired", detail: "The value passed its retention and was removed.", tone: "muted" };
     case "omitted":
