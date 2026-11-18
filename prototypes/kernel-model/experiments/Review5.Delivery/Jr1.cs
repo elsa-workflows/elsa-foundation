@@ -5,9 +5,10 @@ namespace Kernel.Review5;
 /// <c>Reviewed</c>: Park keeps the consumed delivery by adding Done and KeptBy, so the kept row is the ticket itself;
 /// <c>ReviewedKind</c>: the kept row also persists the changed kind, JobFinished under the ticket's own key;
 /// <c>Repaired</c>: a fenced conversion consumes the ticket and inserts a result row under a reserved-scope identity;
-/// <c>Negative</c>: the conversion with that identity removed, an ordinary-scope result row.
+/// <c>Negative</c>: the conversion with that identity removed, an ordinary-scope result row;
+/// <c>GenerationBlind</c>: the repaired set with the generation check removed from the authentication and the Open.
 /// </summary>
-enum JrRules { Reviewed, ReviewedKind, Repaired, Negative }
+enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind }
 
 /// <summary>
 /// JR-1: an in-process job J completes while its instance S is parked; Park, takeover, recover. The model is the real
@@ -26,7 +27,8 @@ sealed class Jr1(string variant, JrRules rules)
     private static readonly InstanceRef Self = new("0/subject");
     private const long Generation = 1;                 // proposed JobGeneration of J's ticket
 
-    public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running"];
+    public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running", "obsolete"];
+    private bool Converts => rules is JrRules.Repaired or JrRules.Negative or JrRules.GenerationBlind;
 
     private long _now = 100;
     private InMemoryStore _store = null!;
@@ -82,6 +84,7 @@ sealed class Jr1(string variant, JrRules rules)
         if (!running)
         {
             await Park("an authored fault in another branch parks S while J runs");
+            if (variant == "obsolete") await StaleResult();
         }
 
         // 3. J's body finishes: the real background activity returns its result (Worker.cs 1238–1252 publishes it).
@@ -92,22 +95,23 @@ sealed class Jr1(string variant, JrRules rules)
             // The built path: the completion replaces the ticket in memory (Worker.cs 1297–1306), and the next model turn
             // consumes the ticket's key with the result. Repaired: the conversion rides in that turn's commit.
             await ResultTurn(completion, consumed: _ticket, "the running instance's next turn takes the in-memory completion; its commit consumes the ticket");
-            return Finish(allowed: 1);
+            Finish(allowed: 1);
+            return _report;
         }
 
         var crashBefore = variant == "crash-before";
         Message? result = null;
         if (!crashBefore)
         {
-            if (rules is JrRules.Repaired or JrRules.Negative)
+            if (Converts)
             {
                 // 4a. The conversion: a standalone fenced write consumes the ticket and inserts the result row (proposed).
-                result = rules == JrRules.Repaired
+                result = rules != JrRules.Negative
                     ? new Message(ResultId(_ticket, Generation), Self, Kinds.JobFinished, completion.Payload, Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(ResultScope)
                     : new Message(_ticket.Id + ".result", Self, Kinds.JobFinished, completion.Payload, Self.Id, TargetCreation: 1, SenderCreation: 1);
                 await Commit(new TurnCommit(Self.Id, null, null, [_ticket], [], [result], [], [], null));
                 _authenticInMemory.Add(result.InboxKey);
-                _report.Line($"conversion: one fenced commit consumes ticket {_ticket.Id} (counted) and inserts result row {result.Id} (scope {(rules == JrRules.Repaired ? "2^62, reserved" : "0, ordinary")})");
+                _report.Line($"conversion: one fenced commit consumes ticket {_ticket.Id} (counted) and inserts result row {result.Id} (scope {(rules != JrRules.Negative ? "2^62, reserved" : "0, ordinary")})");
                 if (variant == "crash-after") await Takeover("after the conversion commit, before the parked instance consumed the result");
                 await ParkedConsume(result);
             }
@@ -124,7 +128,7 @@ sealed class Jr1(string variant, JrRules rules)
                 }
                 if (variant == "crash-after") await Takeover("after the parked consumption kept the result (the reviewed design's first durable result)");
             }
-            if (variant == "crash-after-keep") await Takeover("after the parked consumption kept the result");
+            if (variant is "crash-after-keep" or "obsolete") await Takeover("after the parked consumption kept the result");
         }
         else
         {
@@ -141,7 +145,38 @@ sealed class Jr1(string variant, JrRules rules)
         await Recover();
         // 6. The owner polls the restored rows and acts on them.
         await AfterRecover();
-        return Finish(allowed: crashBefore ? 2 : 1);
+        Finish(allowed: crashBefore ? 2 : 1);
+        if (crashBefore && rules == JrRules.Repaired && _resultTurns == 0)
+            _report.Stop("the brief's 'before the conversion commits: at-least-once, so a crash re-runs the job' does not hold for a parked instance: the new " +
+                "owner does not enter the ticket of a parked row (Worker.cs 1169-1177), dispatch hands it to the parked instance as late input, the built " +
+                "RemainingJobs drops J's key from the registry when that consumption takes the durable ticket (WorkflowInstance.cs 78-90, 135-144), and the " +
+                "recover Open then clears a kept job row whose key the registry no longer holds (observability.md 1336-1343). J never runs again and its " +
+                "result never reaches the model. Recommendation in the README.");
+        return _report;
+    }
+
+    /// <summary>
+    /// The obsolete-generation variant: a reserved-scope result row of J's generation 0, left kept Arrived by an earlier Park
+    /// with another value (fixture setup: inserted by a commit, then kept), sits beside the current generation's.
+    /// </summary>
+    private async Task StaleResult()
+    {
+        var stale = new Message(ResultId(_ticket, 0), Self, Kinds.JobFinished,
+            Json.Write(new JobFinished(_jobKey, Json.Write(new BackgroundResult(TransitionKind.Complete, System.Text.Json.Nodes.JsonValue.Create("stale"), "Done", null)), null)),
+            Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(ResultScope);
+        await Commit(new TurnCommit(Self.Id, null, null, [], [], [stale], [], [], null));
+        await Commit(new TurnCommit(Self.Id, null, null, [], [stale.InboxKey], [], [], [], null));
+        _keptBy[stale.InboxKey] = "Arrived";
+        _report.Line($"a result row of J's obsolete generation g0 ({stale.Id}, value 'stale') is kept Arrived from an earlier Park; the registry holds {_jobKey} -> g{Generation}");
+    }
+
+    /// <summary>A kept or restored job row's key and generation: a ticket is of the current ticket's generation; a result row's is in its id.</summary>
+    private (string Key, long Generation) JobOf(Message m)
+    {
+        if (m.Kind == Kinds.Job) return (m.Read<JobTicketPayload>().Key, Generation);
+        var key = m.Read<JobFinished>().Key;
+        var at = m.Id.LastIndexOf("!result!g", StringComparison.Ordinal);
+        return (key, at >= 0 && m.InboxScope == ResultScope ? long.Parse(m.Id[(at + 9)..], System.Globalization.CultureInfo.InvariantCulture) : Generation);
     }
 
     private static string ResultId(InboxKey ticket, long generation) => FormattableString.Invariant($"{ticket.Id}!result!g{generation}");
@@ -149,7 +184,7 @@ sealed class Jr1(string variant, JrRules rules)
     /// <summary>Proposed authentication of a result row: the reserved scope, the id derived from S's ticket, a current generation.</summary>
     private bool AuthenticResult(Message m) =>
         m.Kind == Kinds.JobFinished && m.InboxScope == ResultScope && m.Read<JobFinished>() is { } finished &&
-        _registry.TryGetValue(finished.Key, out var g) && m.Id == ResultId(Real.Ticket(m.Target.Id, finished.Key, m.TargetCreation ?? 0), g);
+        _registry.TryGetValue(finished.Key, out var g) && m.Id == ResultId(Real.Ticket(m.Target.Id, finished.Key, m.TargetCreation ?? 0), rules == JrRules.GenerationBlind ? JobOf(m).Generation : g);
 
     private async Task<Message> RunJob(Message ticket)
     {
@@ -187,9 +222,15 @@ sealed class Jr1(string variant, JrRules rules)
             _report.Line($"the parked instance's owner refuses {m.Id}: {why}; it is consumed with no turn and not kept");
             return;
         }
-        await Commit(new TurnCommit(Self.Id, null, null, [], [m.InboxKey], [], [], [], null));
+        // RemainingJobs (WorkflowInstance.cs 135-144, called at 82): a consumed durable ticket, or this worker's completion, whose
+        // full key is J's ticket key takes J's key out of the row's registry.
+        var (key, _) = JobOf(m);
+        var drops = (m.Kind == Kinds.Job && m.InboxScope > 0 || _authenticInMemory.Contains(m.InboxKey)) && m.InboxKey == Real.Ticket(Self.Id, key, 1) && _registry.ContainsKey(key);
+        var next = drops ? _row with { Revision = _row.Revision + 1, Jobs = null } : null;
+        await Commit(new TurnCommit(Self.Id, next, next is null ? null : _row.Revision, [], [m.InboxKey], [], [], [], null));
+        if (next is not null) { _row = next; _registry.Remove(key); }
         _keptBy[m.InboxKey] = "Arrived";
-        _report.Line($"the parked instance consumes {m.Id} ({m.Kind}) as late input: kept Arrived ({why})");
+        _report.Line($"the parked instance consumes {m.Id} ({m.Kind}) as late input: kept Arrived ({why}){(drops ? $"; the built RemainingJobs drops {key} from the registry" : "")}");
     }
 
     /// <summary>Whether the owner may give this delivery to the instance, and why.</summary>
@@ -198,8 +239,8 @@ sealed class Jr1(string variant, JrRules rules)
         if (m.Kind != Kinds.JobFinished) { why = "a ticket"; return true; }
         if (_authenticInMemory.Contains(m.InboxKey)) { why = "this owner's in-memory completion (CompletedJob)"; return true; }
         var builtRefuses = Real.DiscardedAt(m, _row);
-        if (rules == JrRules.Repaired && AuthenticResult(m))
-        { why = $"reserved-scope result of the current generation g{_registry[_jobKey]} (the built DiscardedAt alone {(builtRefuses ? "refuses it" : "admits it")})"; return true; }
+        if (rules is JrRules.Repaired or JrRules.GenerationBlind && AuthenticResult(m))
+        { why = $"reserved-scope result of generation g{JobOf(m).Generation}, the registry's g{_registry[_jobKey]} (the built DiscardedAt alone {(builtRefuses ? "refuses it" : "admits it")})"; return true; }
         why = builtRefuses ? "the real DiscardedAt classifies it as a supplied completion" : "admitted";
         return !builtRefuses;
     }
@@ -223,12 +264,23 @@ sealed class Jr1(string variant, JrRules rules)
         var next = _row with { Status = InstanceStatus.Running, Fault = null, Revision = _row.Revision + 1 };
         await Commit(new TurnCommit(Self.Id, next, _row.Revision, [], [], [], [], [], null));
         _row = next;
+        _report.Line($"recover: S runs again (revision {_row.Revision})");
         foreach (var (key, reason) in _keptBy.ToList())
         {
             if (reason != "Arrived" || !_store.Messages.TryGetValue(key, out var row)) { _keptBy.Remove(key); continue; }
-            row.Done = false; row.Seen = 0; row.Attempts = 0; row.Trial = 0;
             _keptBy.Remove(key);
-            _report.Line($"recover: S runs again (revision {_row.Revision}); the page restores {key.Id} ({row.Message.Kind})");
+            if (row.Message.Kind is Kinds.Job or Kinds.JobFinished)
+            {
+                var (job, generation) = JobOf(row.Message);
+                var current = _registry.TryGetValue(job, out var g) ? g : (long?)null;
+                if (current is null || generation != current && rules != JrRules.GenerationBlind)
+                {
+                    _report.Line($"recover: the page clears {key.Id} ({row.Message.Kind}): {(current is null ? $"the registry no longer holds {job}" : $"generation g{generation} is not the registry's g{current}")}");
+                    continue;
+                }
+            }
+            row.Done = false; row.Seen = 0; row.Attempts = 0; row.Trial = 0;
+            _report.Line($"recover: the page restores {key.Id} ({row.Message.Kind})");
         }
     }
 
@@ -273,7 +325,7 @@ sealed class Jr1(string variant, JrRules rules)
         _report.Line($"{why}: real Native turn resumes c with {_results[^1]}; S {_row.Status}");
     }
 
-    private Report Finish(int allowed)
+    private void Finish(int allowed)
     {
         _report.Line($"physical invocations {EffectEcho.Invocations} (allowed {allowed}); model results [{string.Join(", ", _results)}]; S {_row.Status}");
         _report.Expect("model results (c completed by a result turn)", _resultTurns, 1);
@@ -282,7 +334,6 @@ sealed class Jr1(string variant, JrRules rules)
             $"physical invocations: {EffectEcho.Invocations} (at-least-once allowance: {allowed}{(allowed == 2 ? ", one re-run since the crash preceded the conversion commit" : ", no re-run after the result committed")})");
         _report.Expect("S finished", _row.Status, InstanceStatus.Finished);
         _report.Expect("rows of S left in the store", _store.Messages.Values.Count(m => m.Message.Target == Self && !m.Done), 0);
-        return _report;
     }
 
     private async Task Commit(TurnCommit turn)

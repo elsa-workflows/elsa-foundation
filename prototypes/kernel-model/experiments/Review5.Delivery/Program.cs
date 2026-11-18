@@ -10,35 +10,50 @@ return await Program.MainAsync(args);
 static partial class Program
 {
     public static string Name(EvRules rules) => rules switch
-    { EvRules.Reviewed => "reviewed", EvRules.Repaired => "repaired", EvRules.Negative => "negative", EvRules.MatchAtNow => "match-at-now", EvRules.FreshEventId => "fresh-event-id", _ => "owed-from-at-commit" };
+    {
+        EvRules.Reviewed => "reviewed", EvRules.Repaired => "repaired", EvRules.Negative => "negative", EvRules.MatchAtNow => "match-at-now",
+        EvRules.P0AtPageCommit => "p0-at-page-commit", EvRules.NoHorizon => "no-horizon", _ => "meet-waits-while-suspended",
+    };
 
     public static string Name(Fr2Rules rules) => rules switch
-    { Fr2Rules.Reviewed => "reviewed", Fr2Rules.Repaired => "repaired", Fr2Rules.Negative => "negative", Fr2Rules.PagesWhileSuspended => "pages-while-suspended", _ => "held-gate-waits" };
+    {
+        Fr2Rules.Reviewed => "reviewed", Fr2Rules.Repaired => "repaired", Fr2Rules.Negative => "negative", Fr2Rules.SeenGate => "seen-gate",
+        Fr2Rules.CreditMetadataOnly => "credit-metadata-only", Fr2Rules.PPageWhateverU => "p-page-whatever-u", Fr2Rules.ZeroCutCompletes => "zero-cut-completes",
+        Fr2Rules.PagesWhileSuspended => "pages-while-suspended", _ => "held-gate-waits",
+    };
 
     public static string Name(JrRules rules) => rules switch
-    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", _ => "negative" };
+    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", JrRules.Negative => "negative", _ => "generation-blind" };
 
     public static string Name(PoRules rules) => rules switch { PoRules.Reviewed => "reviewed", PoRules.Repaired => "repaired", _ => "negative" };
+
+    public static string Name(BaseRules rules) => rules switch
+    { BaseRules.Reviewed => "reviewed", BaseRules.Repaired => "repaired", BaseRules.Negative => "negative", _ => "seen-gate-no-precedence" };
 
     // Case, rule set, expected result. The page case each run backs is in the README.
     private static readonly (string Case, string Rules, string Expected)[] Matrix =
     [
-        ("ev1-a", "reviewed", "FAIL"), ("ev1-a", "repaired", "PASS"), ("ev1-a", "negative", "FAIL"),
-        .. from v in new[] { "a-band", "a-after" }
-           from r in new[] { "reviewed", "repaired", "negative" } select ($"ev1-{v}", r, "PASS"),
+        ("ev1-a", "reviewed", "FAIL"), ("ev1-a", "repaired", "PASS"),
+        ("ev1-a-after", "reviewed", "PASS"), ("ev1-a-after", "repaired", "PASS"),
         ("ev1-b", "reviewed", "FAIL"), ("ev1-b", "repaired", "PASS"), ("ev1-b", "negative", "FAIL"), ("ev1-b", "match-at-now", "FAIL"),
-        ("ev1-b-paged", "reviewed", "FAIL"), ("ev1-b-paged", "repaired", "PASS"), ("ev1-b-paged", "negative", "FAIL"), ("ev1-b-paged", "match-at-now", "FAIL"),
-        ("ev1-b-paged", "owed-from-at-commit", "FAIL"),
-        ("ev1-b-band", "reviewed", "FAIL"), ("ev1-b-band", "repaired", "STOPPED"), ("ev1-b-band", "negative", "FAIL"),
-        ("ev1-replay", "reviewed", "FAIL"), ("ev1-replay", "repaired", "PASS"), ("ev1-replay", "negative", "FAIL"), ("ev1-replay", "fresh-event-id", "FAIL"),
+        ("ev1-b-paged", "reviewed", "FAIL"), ("ev1-b-paged", "repaired", "PASS"), ("ev1-b-paged", "negative", "FAIL"), ("ev1-b-paged", "p0-at-page-commit", "FAIL"),
+        ("ev1-b-stepback", "reviewed", "FAIL"), ("ev1-b-stepback", "repaired", "STOPPED"), ("ev1-b-stepback", "no-horizon", "FAIL"),
+        ("ev1-b-suspended", "reviewed", "PASS"), ("ev1-b-suspended", "repaired", "PASS"), ("ev1-b-suspended", "meet-waits-while-suspended", "FAIL"),
+        .. from v in new[] { "replay", "replay-atomic" }
+           from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"ev1-{v}", r.Item1, r.Item2),
         ("ev1-replay-consumed", "reviewed", "FAIL"), ("ev1-replay-consumed", "repaired", "STOPPED"), ("ev1-replay-consumed", "negative", "FAIL"),
-        .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover" }
+        .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover", "bytes", "zero-cut" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr2-{v}", r.Item1, r.Item2),
+        .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover", "bytes", "zero-cut" } select ($"fr2-{v}", "seen-gate", "PASS"),
+        ("fr2-bytes", "credit-metadata-only", "FAIL"), ("fr2-hold-takeover", "p-page-whatever-u", "FAIL"), ("fr2-zero-cut", "zero-cut-completes", "FAIL"),
         ("fr2-suspend", "pages-while-suspended", "FAIL"), ("fr2-hold", "held-gate-waits", "FAIL"),
-        .. from v in new[] { "crash-after", "crash-after-keep" }
+        ("fr2-r4b1-base", "reviewed", "PASS"), ("fr2-r4b1-base", "repaired", "PASS"), ("fr2-r4b1-base", "negative", "PASS"), ("fr2-r4b1-base", "seen-gate-no-precedence", "FAIL"),
+        ("fr2-r4b1-held", "reviewed", "PASS"), ("fr2-r4b1-held", "repaired", "PASS"), ("fr2-r4b1-held", "negative", "FAIL"), ("fr2-r4b1-held", "seen-gate-no-precedence", "FAIL"),
+        .. from v in new[] { "crash-after", "crash-after-keep", "obsolete" }
            from r in new[] { ("reviewed", "FAIL"), ("reviewed-kind", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"jr1-{v}", r.Item1, r.Item2),
-        .. from v in new[] { "crash-before", "running" }
-           from r in new[] { "reviewed", "reviewed-kind", "repaired", "negative" } select ($"jr1-{v}", r, "PASS"),
+        ("jr1-obsolete", "generation-blind", "FAIL"),
+        ("jr1-crash-before", "reviewed", "FAIL"), ("jr1-crash-before", "reviewed-kind", "FAIL"), ("jr1-crash-before", "repaired", "STOPPED"), ("jr1-crash-before", "negative", "FAIL"),
+        .. from r in new[] { "reviewed", "reviewed-kind", "repaired", "negative" } select ("jr1-running", r, "PASS"),
         .. from v in new[] { "cohort", "open" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"po1-{v}", r.Item1, r.Item2),
         ("po1-ordinary", "reviewed", "PASS"), ("po1-ordinary", "repaired", "PASS"), ("po1-ordinary", "negative", "PASS"),
@@ -86,16 +101,27 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "fresh-event-id" => EvRules.FreshEventId, "owed-from-at-commit" => EvRules.OwedFromAtCommit,
+                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "p0-at-page-commit" => EvRules.P0AtPageCommit, "no-horizon" => EvRules.NoHorizon, "meet-waits-while-suspended" => EvRules.MeetWaitsWhileSuspended,
                 _ => throw new ArgumentException($"EV-1 has no rule set '{rules}'"),
             };
             return await new Ev1(id[4..], set).RunAsync();
+        }
+        if (id.StartsWith("fr2-", StringComparison.Ordinal) && Fr2Base.Variants.Contains(id[4..]))
+        {
+            var set = rules switch
+            {
+                "reviewed" => BaseRules.Reviewed, "repaired" => BaseRules.Repaired, "negative" => BaseRules.Negative, "seen-gate-no-precedence" => BaseRules.SeenGateNoPrecedence,
+                _ => throw new ArgumentException($"FR-2's R4-B1 traces have no rule set '{rules}'"),
+            };
+            return await new Fr2Base(id[4..], set).RunAsync();
         }
         if (id.StartsWith("fr2-", StringComparison.Ordinal) && Fr2.Variants.Contains(id[4..]))
         {
             var set = rules switch
             {
-                "reviewed" => Fr2Rules.Reviewed, "repaired" => Fr2Rules.Repaired, "negative" => Fr2Rules.Negative, "pages-while-suspended" => Fr2Rules.PagesWhileSuspended, "held-gate-waits" => Fr2Rules.HeldGateWaits,
+                "reviewed" => Fr2Rules.Reviewed, "repaired" => Fr2Rules.Repaired, "negative" => Fr2Rules.Negative, "seen-gate" => Fr2Rules.SeenGate,
+                "credit-metadata-only" => Fr2Rules.CreditMetadataOnly, "p-page-whatever-u" => Fr2Rules.PPageWhateverU, "zero-cut-completes" => Fr2Rules.ZeroCutCompletes,
+                "pages-while-suspended" => Fr2Rules.PagesWhileSuspended, "held-gate-waits" => Fr2Rules.HeldGateWaits,
                 _ => throw new ArgumentException($"FR-2 has no rule set '{rules}'"),
             };
             return await new Fr2(id[4..], set).RunAsync();
@@ -104,7 +130,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative,
+                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative, "generation-blind" => JrRules.GenerationBlind,
                 _ => throw new ArgumentException($"JR-1 has no rule set '{rules}'"),
             };
             return await new Jr1(id[4..], set).RunAsync();
