@@ -13,6 +13,7 @@ import {
   type VariableWriterView
 } from "./api/variableLifecycle";
 import { RuntimeCapturedValue } from "./workflow-editor/RuntimeValueEvidence";
+import { formatDate } from "./workflowFormatting";
 import "./VariableLifecycle.css";
 
 // Spec 1229 FR-017: the write history, the commit-ordered journal and the comparison of two instances. Values appear
@@ -95,7 +96,7 @@ export function VariableWriteHistoryTable({ entries, onShowValue }: {
             <td><code>{entry.variableKey}</code>{entry.frameId ? <small className="wf-variable-note"> {entry.frameId}</small> : null}</td>
             <td>
               <span>{describeWriter(entry.writer)}</span>
-              <small className="wf-variable-note"> {entry.source}</small>
+              <small className="wf-variable-note"> {sourceLabels[entry.source] ?? entry.source}</small>
             </td>
             <td>
               <span className="wf-variable-outcome" data-outcome={entry.outcome}>{outcomeLabels[entry.outcome] ?? entry.outcome}</span>
@@ -139,7 +140,7 @@ export function InstanceJournalList({ commits }: { commits: JournalCommit[] }) {
         <li key={commit.commitSequence ?? `approximate-${index}`} data-approximate={commit.orderApproximate || undefined}>
           <header>
             <strong>{commit.commitSequence == null ? "Before commit order was recorded" : `Commit ${formatCommit(commit.commitSequence)}`}</strong>
-            {commit.occurredAt ? <time>{commit.occurredAt}</time> : null}
+            {commit.occurredAt ? <time dateTime={commit.occurredAt}>{formatDate(commit.occurredAt)}</time> : null}
           </header>
           <ul>
             {commit.transitions.map(transition => (
@@ -231,7 +232,7 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
   const [journal, setJournal] = useState<Loaded<JournalCommit>>({ status: "idle" });
   const [otherId, setOtherId] = useState("");
   const [comparison, setComparison] = useState<{ status: "idle" | "loading" } | { status: "ready"; value: InstanceComparison } | { status: "failed"; error: string }>({ status: "idle" });
-  const [shownValues, setShownValues] = useState<Record<string, { status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }>>({});
+  const [shownValues, setShownValues] = useState<Record<string, ShownValue>>({});
 
   const idBase = useId();
   const tabButtons = useRef<Partial<Record<LifecycleTab, HTMLButtonElement | null>>>({});
@@ -301,14 +302,16 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
   const showValue = useCallback(async (entry: VariableWriteEntry, value: VariableValueStateView) => {
     if (!value.payloadRef) return;
     const key = `${entry.entryId}:${value.payloadRef.value}`;
-    setShownValues(current => ({ ...current, [key]: { status: "loading" } }));
+    // Names the variable, which value and the commit, so several shown values stay apart.
+    const label = `${entry.variableKey}, ${value.payloadRef.value}${entry.commitSequence == null ? "" : ` at commit ${formatCommit(entry.commitSequence)}`}`;
+    setShownValues(current => ({ ...current, [key]: { status: "loading", label } }));
     try {
       const read = await getVariableWritePayload(context, workflowExecutionId, value.payloadRef);
       if (instance.current !== workflowExecutionId) return;
-      setShownValues(current => ({ ...current, [key]: { status: "ready", payload: read.payload, captureMode: read.captureMode } }));
+      setShownValues(current => ({ ...current, [key]: { status: "ready", payload: read.payload, captureMode: read.captureMode, label } }));
     } catch (error) {
       if (instance.current !== workflowExecutionId) return;
-      setShownValues(current => ({ ...current, [key]: { status: "failed", error: errorMessage(error) } }));
+      setShownValues(current => ({ ...current, [key]: { status: "failed", error: errorMessage(error), label } }));
     }
   }, [context, workflowExecutionId]);
 
@@ -416,14 +419,16 @@ function PagedContent<T>({ loaded, onMore, children }: {
   );
 }
 
-function ShownValues({ values }: { values: Record<string, { status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }> }) {
+type ShownValue = ({ status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }) & { label: string };
+
+function ShownValues({ values }: { values: Record<string, ShownValue> }) {
   const entries = Object.entries(values);
   if (entries.length === 0) return null;
   return (
     <dl className="wf-variable-shown-values">
       {entries.map(([key, value]) => (
         <div key={key}>
-          <dt>{key.split(":").at(-1)}</dt>
+          <dt>{value.label}</dt>
           <dd>
             {value.status === "loading" ? "Resolving…" : value.status === "failed" ? <span role="alert">{value.error}</span> : <RuntimeCapturedValue value={value.payload} captureMode={value.captureMode} />}
           </dd>
