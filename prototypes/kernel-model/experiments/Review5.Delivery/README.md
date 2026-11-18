@@ -342,8 +342,16 @@ handoff gate.
     runs once.
 - `reviewed-keeps-registry` (`jr1-crash-after`): a third reading of the reviewed design. The registry keeps J's key, so
   the kept ticket is restored and the built `Hold` and `StartJob` enter J a second time after its result had committed.
-- `negative`: the same conversion with an ordinary-scope result row. The real `DiscardedAt` refuses it after the
-  takeover. In `jr1-crash-before` the negative removes the registry rule instead, and the result is lost.
+- `negative`: the repaired set minus the minted identity. The conversion writes an ordinary-scope result row
+  `…#g1.result`, so the Open's probe for `…#g1/result` finds nothing. With the ticket consumed by the conversion, pass 0
+  writes Restarted(g2) and J runs twice.
+  - `jr1-crash-after`: before the Open, the new owner's real `DiscardedAt` refuses the ordinary-scope row as a supplied
+    completion.
+  - `jr1-crash-after-keep` and `jr1-obsolete`: the same owner kept the row before the takeover, so `DiscardedAt` is not
+    called. The page then clears the `…#g1.result` row as obsolete (g1 is not the registry's g2).
+  - These three runs failed before this PR because the result was lost after the refusal. They still fail; the
+    mechanism changed with the full lookup table.
+  - In `jr1-crash-before` the negative removes the registry rule instead, and the result is lost.
 - `generation-blind` (`jr1-obsolete`): the Open restores the g0 result row (`c9_0/subject_1!2_w6/result`), and the
   model receives `stale`.
 
@@ -375,10 +383,11 @@ handoff gate.
     `…!2_w6#g1/result`. S consumes it while parked (kept), or it is still pending at the Open. A crash takeover precedes
     recover.
   - Reviewed and `ticket-only-lookup` apply the stated table without the result probe. The ticket is absent, so the
-    Open writes Restarted(g2), and the g1 result is cleared as obsolete or refused for its generation: V is lost. J runs
-    twice, and the model's result comes from the g2 ticket.
+    Open writes Restarted(g2). The g1 result is discarded: cleared as obsolete when kept, refused for its generation
+    when pending. J runs again, and the model's value comes from the g2 re-run.
   - Repaired: no Restarted(g2). One model result comes from the g1 result row, with V, after one invocation.
-  - The other JR-1 runs keep their outcomes under the full table.
+  - The other JR-1 runs keep their outcomes under the full table. Three negative runs fail by a different mechanism
+    (see `negative` above).
 - `jr1-crash-before`: the owner dies after J's body returned and before any commit recorded the result.
   - The new owner does not enter a parked row's ticket (`Worker.cs` 1169–1177), so the parked instance consumes it as
     late input.

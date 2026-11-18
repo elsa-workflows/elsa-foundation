@@ -46,7 +46,7 @@ sealed class Jr1(string variant, JrRules rules)
     /// </summary>
     private bool LookupCase => variant is "result-kept-lookup" or "result-pending-lookup";
     /// <summary>The Open's lookup also probes the minted result row (the coordinator's rule after the integration review).</summary>
-    private bool ProbesResult => rules is JrRules.Repaired or JrRules.GenerationBlind;
+    private bool ProbesResult => rules is JrRules.Repaired or JrRules.GenerationBlind or JrRules.Negative;   // the negative is repaired minus the minted identity
     private string? _resultSource;
     /// <summary>
     /// <c>result-parked-consume</c> isolates the registry rule for a converted result: every rule set converts with the
