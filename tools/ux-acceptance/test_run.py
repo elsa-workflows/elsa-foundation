@@ -800,6 +800,8 @@ class OrchestrationTests(unittest.TestCase):
             assets = workflow_module / 'wwwroot/studio/modules/workflows'
             assets.mkdir(parents=True)
             (assets / 'copy-current.js').write_bytes(b'synthetic compiled copy module')
+            for index in range(1500):
+                (assets / f'synthetic-workflow-module-{index:04d}.js').touch()
 
             @contextmanager
             def fake_host(directory, dll, url, ready, log, env):
@@ -838,6 +840,10 @@ class OrchestrationTests(unittest.TestCase):
                     return
                 if args[:2] == ['pnpm', 'exec']:
                     events.append(('browser', {key: env.get(key) for key in env if key.startswith(('UX_', 'ELSA_'))}))
+                    manifest = Path(env['UX_WORKFLOW_ASSET_MANIFEST'])
+                    self.assertEqual(Path(env['UX_ACCEPTANCE_OWNED_ROOT']), manifest.parent)
+                    self.assertGreater(manifest.stat().st_size, 128 * 1024)
+                    events.append(('asset-manifest', json.loads(manifest.read_text(encoding='utf-8'))))
                     (output / 'playwright.json').write_text('{}')
 
             def fake_prepare(project, destination):
@@ -877,8 +883,12 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
-        self.assertEqual(report['workflowSourceAssets'], json.loads(browser['UX_WORKFLOW_ASSET_SHA256S']))
-        self.assertEqual(report['copyImplementationAssets'], json.loads(browser['UX_COPY_IMPLEMENTATION_ASSETS']))
+        self.assertNotIn('UX_WORKFLOW_ASSET_SHA256S', browser)
+        self.assertNotIn('UX_COPY_IMPLEMENTATION_ASSETS', browser)
+        self.assertFalse(Path(browser['UX_WORKFLOW_ASSET_MANIFEST']).exists())
+        manifest = next(event[1] for event in events if event[0] == 'asset-manifest')
+        self.assertEqual(report['workflowSourceAssets'], manifest['workflowSourceAssets'])
+        self.assertEqual(report['copyImplementationAssets'], manifest['copyImplementationAssets'])
         self.assertEqual({acceptance.COPY_ASSET_PREFIX + 'copy-current.js'}, set(report['copyImplementationAssets']))
         self.assertEqual(sorted(acceptance.COPY_SOURCE_PATHS), next(iter(report['copyImplementationAssets'].values()))['sources'])
         self.assertEqual((acceptance.RESTRICTED_USER, 'reader-id'), (browser['UX_RESTRICTED_USER'], browser['UX_RESTRICTED_SUBJECT']))
