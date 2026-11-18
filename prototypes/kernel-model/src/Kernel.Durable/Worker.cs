@@ -180,21 +180,27 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The epoch and position of <see cref="Partition"/>, or 0 while it is not held.</summary>
     public long Epoch => EpochOf(Partition);
     public long Position => PositionOf(Partition);
-    public long EpochOf(int partition) => _held.TryGetValue(partition, out var held) ? held.Epoch : 0;
-    public long PositionOf(int partition) => _held.TryGetValue(partition, out var held) ? held.Position : 0;
-    /// <summary>The partitions held now, in ascending id, each at its epoch and the position this worker believes.</summary>
-    public IReadOnlyList<PartitionFence> Fences => [.. _held.Select(h => new PartitionFence(h.Key, h.Value.Epoch, h.Value.Position))];
-    private bool Holds(int partition) => _held.ContainsKey(partition);
+    // _held is written only under _turnSync (Reset, Install, a landed commit), and a stand-down on another thread
+    // (DeactivateAsync, DisposeAsync) clears it there. Every read takes the lock or works on a detached copy; Owns reads
+    // one count, which cannot tear.
+    public long EpochOf(int partition) { lock (_turnSync) return _held.TryGetValue(partition, out var held) ? held.Epoch : 0; }
+    public long PositionOf(int partition) { lock (_turnSync) return _held.TryGetValue(partition, out var held) ? held.Position : 0; }
+    /// <summary>The partitions held now, in ascending id, each at its epoch and the position this worker believes: a detached copy.</summary>
+    public IReadOnlyList<PartitionFence> Fences { get { lock (_turnSync) return [.. _held.Select(h => new PartitionFence(h.Key, h.Value.Epoch, h.Value.Position))]; } }
+    private bool Holds(int partition) { lock (_turnSync) return _held.ContainsKey(partition); }
     /// <summary>
     /// The child id issuer of the partition an instance is in, at the epoch this worker holds it: the parent's commit is
     /// fenced at that (partition, epoch), so only this issuer's ids are ever published under it.
     /// </summary>
     internal ChildIssuer ChildIdsFor(string instance)
     {
-        var partition = StoreBatchRules.AddressPartition(instance) is { } p && Holds(p) ? p : _held.Keys.First();
-        var epoch = _held[partition].Epoch;
-        if (!_issuers.TryGetValue(partition, out var issuer) || issuer.Epoch != epoch) _issuers[partition] = issuer = new(partition, epoch);
-        return issuer;
+        lock (_turnSync)
+        {
+            var partition = StoreBatchRules.AddressPartition(instance) is { } p && _held.ContainsKey(p) ? p : _held.Keys.First();
+            var epoch = _held[partition].Epoch;
+            if (!_issuers.TryGetValue(partition, out var issuer) || issuer.Epoch != epoch) _issuers[partition] = issuer = new(partition, epoch);
+            return issuer;
+        }
     }
     public bool Owns => _held.Count != 0;
     public long Evicted { get; private set; }
@@ -486,16 +492,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private async Task RetakeAsync(IReadOnlyList<PartitionFence> held, CancellationToken cancellationToken)
     {
-        if (_taking) return;
+        if (_taking)
+        {
+            lock (_turnSync) _retaking = false;     // a take in flight replaces the retake
+            return;
+        }
         _taking = true;
-        lock (_turnSync) (_retaking, _retakeStoodDown) = (true, false);
-        var (started, taken, now) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue);
+        var (started, taken, now, reached) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue, 0);
         try
         {
             foreach (var fence in held)
                 try
                 {
                     if (Volatile.Read(ref _retakeStoodDown)) break;
+                    reached++;
                     if (await _store.RetakeAsync(fence.Partition, Node, fence.Epoch, _options.Lease, cancellationToken) is not { } one) continue;
                     taken.Add(one.For(fence.Partition));
                     now = Math.Min(now, one.Now);
@@ -504,34 +514,44 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         finally { _taking = false; }
         bool stoodDown;
-        lock (_turnSync) (stoodDown, _retaking) = (_retakeStoodDown, false);
+        // One critical section, for the same stand-down: it sees _retaking, or the installed set, never neither.
+        lock (_turnSync)
+        {
+            (stoodDown, _retaking) = (_retakeStoodDown, false);
+            if (!stoodDown && taken.Count > 0)
+            {
+                Install(new(taken, now), started);
+                _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
+            }
+        }
         if (stoodDown)
         {
-            // A stand-down came while the retake was in flight: install nothing, and give up what it took.
+            // A stand-down came while the retake was in flight: install nothing, and give up what it took at the new epochs
+            // and what it had not reached yet at the captured ones (the epoch guard leaves a moved partition alone).
+            List<PartitionFence> release = [.. taken, .. held.Skip(reached)];
             try
             {
-                if (taken.Count == 1) await _store.ReleaseAsync(taken[0].Partition, taken[0].Epoch, cancellationToken);
-                else if (taken.Count > 1) await _store.ReleaseAsync(taken, cancellationToken);
+                if (release.Count == 1) await _store.ReleaseAsync(release[0].Partition, release[0].Epoch, cancellationToken);
+                else if (release.Count > 1) await _store.ReleaseAsync(release, cancellationToken);
             }
             catch (Exception) { /* then the leases run out instead */ }
-            return;
         }
-        if (taken.Count == 0) return;
-        Install(new(taken, now), started);
-        _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
     }
 
     private void Install(OwnedLease lease, long started)
     {
-        Reset();    // a take starts from empty memory
-        Observe(lease.Now);
-        _renewed = lease.Now;
-        foreach (var taken in lease.Taken)
+        lock (_turnSync)
         {
-            _held[taken.Partition] = new(taken.Epoch, taken.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
-            _mine.Add((taken.Partition, taken.Epoch));
+            Reset();    // a take starts from empty memory
+            Observe(lease.Now);
+            _renewed = lease.Now;
+            foreach (var taken in lease.Taken)
+            {
+                _held[taken.Partition] = new(taken.Epoch, taken.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
+                _mine.Add((taken.Partition, taken.Epoch));
+            }
+            Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         }
-        Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
     }
 
@@ -570,7 +590,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             while (generation == _generation && _queue.Count > 0 && LeaseUsable())
                 await FlushAsync(cancellationToken);
-            if (generation != _generation || !Owns) return;
+            if (generation != _generation || !Owns)
+            {
+                // The drain's own flush was refused or lost, and that reset this worker without a retake. Over several
+                // partitions the ones still leased to it are given up at the captured epochs. The store's epoch guard
+                // makes this a no-op for a partition that moved or was taken again since, and nothing here resets.
+                if (held.Count > 1)
+                    try { await _store.ReleaseAsync(held, cancellationToken); }
+                    catch (Exception) { /* then the leases run out instead */ }
+                return;
+            }
         }
         lock (_turnSync)
         {
@@ -692,7 +721,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
     private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
-        && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains((row.Message.Target.Partition, row.Seen)) && (row.Message.Due is not { } due || due <= now)));
+        && (row.Trial > 0 || (row.Seen > 0 && !Mine(row.Message.Target.Partition, row.Seen) && (row.Message.Due is not { } due || due <= now)));
+
+    private bool Mine(int partition, long epoch) { lock (_turnSync) return _mine.Contains((partition, epoch)); }
 
     private bool OnTrial(string instance) => TrialItems.Any(t => Canonical(t.Message.Target.Id) == instance);
 
@@ -1574,13 +1605,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // partitions cannot take on it). With owned sets, one partition held is that same batch, and several are one
         // owned batch over the partitions it touches.
         CommitBatch batch;
-        if (!_store.OwnedSetsAvailable || _held.Count == 1)
+        lock (_turnSync)
         {
-            if (_held.Count != 1) throw new InvalidOperationException("A store without owned sets serves one partition per worker.");
-            var (only, held) = _held.First();
-            batch = new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried);
+            if (generation != _generation) return Outcome.Lost;     // a stand-down reset this memory meanwhile
+            if (!_store.OwnedSetsAvailable || _held.Count == 1)
+            {
+                if (_held.Count != 1) throw new InvalidOperationException("A store without owned sets serves one partition per worker.");
+                var (only, held) = _held.First();
+                batch = new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried);
+            }
+            else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial), handOver, beat), _options.Lease, handOver, turns, seen, tried);
         }
-        else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial), handOver, beat), _options.Lease, handOver, turns, seen, tried);
         foreach (var unit in units)
             if (unit.Window is { } window)
                 batch = batch with { Window = batch.Window?.Intersect(window) ?? window };
@@ -1635,24 +1670,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             catch (Exception)
             {
-                if (generation == _generation) await FailAsync(units, cancellationToken);     // unknown outcome
+                await FailAsync(units, generation, cancellationToken);     // unknown outcome
                 return Outcome.Lost;
             }
             if (generation != _generation) return Outcome.Lost; // reset while the commit was in flight: its result is nobody's
             if (!result.Landed)
             {
-                await FailAsync(units, cancellationToken);      // the fence matched nothing
+                await FailAsync(units, generation, cancellationToken);      // the fence matched nothing
                 return Outcome.Lost;
             }
-            foreach (var fence in batch.Fenced)
+            lock (_turnSync)
             {
-                var moved = _held[fence.Partition];
-                moved.Position += batch.PositionsIn(fence.Partition);
-                moved.Renewed = Math.Max(moved.Renewed, sending);      // a commit that lands renews the lease of the rows it fences
-                moved.SafeUntil = Math.Max(moved.SafeUntil, started + (long)_options.Lease.TotalMilliseconds);
+                // A stand-down on another thread may have reset since the check above: the landed result is then nobody's.
+                if (generation != _generation) return Outcome.Lost;
+                foreach (var fence in batch.Fenced)
+                {
+                    var moved = _held[fence.Partition];
+                    moved.Position += batch.PositionsIn(fence.Partition);
+                    moved.Renewed = Math.Max(moved.Renewed, sending);      // a commit that lands renews the lease of the rows it fences
+                    moved.SafeUntil = Math.Max(moved.SafeUntil, started + (long)_options.Lease.TotalMilliseconds);
+                }
+                Observe(result.Now);
+                Renewed();
             }
-            Observe(result.Now);
-            Renewed();
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
@@ -1768,11 +1808,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// its own (<see cref="RetakeAsync"/>), unless it is standing down. A refused fence does not say which row was
     /// stale, and a new epoch also fences out a commit whose answer was lost and that lands later.
     /// </summary>
-    private async Task FailAsync(List<TurnOutcome> units, CancellationToken cancellationToken)
+    private async Task FailAsync(List<TurnOutcome> units, long generation, CancellationToken cancellationToken)
     {
-        var (held, releasing) = (Fences, _releasing);
-        Fail(units);
-        if (held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit)) await RetakeAsync(held, cancellationToken);
+        IReadOnlyList<PartitionFence> held;
+        bool retake;
+        // One critical section: a stand-down on another thread (the host's DeactivateAsync, DisposeAsync) takes the same
+        // lock in ReleaseAsync, so it sees this worker owning, or retaking, never neither; otherwise the retake would install
+        // ownership on fresh leases after the stand-down had returned.
+        lock (_turnSync)
+        {
+            if (generation != _generation) return;      // a stand-down or a take reset this memory meanwhile
+            (held, var releasing) = (Fences, _releasing);
+            Fail(units);
+            retake = held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit);
+            if (retake) (_retaking, _retakeStoodDown) = (true, false);
+        }
+        if (retake) await RetakeAsync(held, cancellationToken);
     }
 
     private void Fail(List<TurnOutcome> units)
