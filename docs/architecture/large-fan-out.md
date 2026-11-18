@@ -147,7 +147,17 @@ partition with new owners, and checks that the reloaded checkpoint matches (meas
 **Cancellation.** A cancel or terminate of the root uses the kernel's forced termination: each instance sends a
 terminate to the children it started that have not finished, and the terminate recurses. With credits, only
 outstanding children exist; sub-ranges past the cursor were never started and need nothing. A cancel of a
-100,000-item fan-out therefore sends at most C terminates per live combiner. A child deleted while the terminate was
+100,000-item fan-out therefore sends at most C terminates per live combiner. An instance outside the pattern can
+still hold many children that it started over many turns, one per turn being enough, up to the marker-space bound
+on its registries: 384 × children + 12,416 × jobs ≤ 16,441,344 bytes, so at most 42,816 children with no jobs
+(derived, measured at K4; [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). A child start or a job
+arm past that bound fails its turn, and the instance parks. Its terminate does not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
+the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
+children end in 11 commits; the send cap binds every turn unchanged, and each page is a kernel commit of at most
+`P_cascade` entries and one `kernel.cascade` (proposed, fifth review R5-B2;
+[observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
+idempotent"). Each job cancel in a cascade is idempotent: a ticket already consumed or `Done` is never counted as
+consumed, so one settled ticket cannot roll back the children's terminates (fifth review R5-B1). A child deleted while the terminate was
 on its way still ends its subtree: its retirement marker keeps its parent, child registry and job keys, and a
 parent-bound terminate refused there as `RetiredCreation` cascades from the marker (proposed, fourth review R4-B2;
 [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). Each cancelled child still sends its
@@ -162,7 +172,12 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   refuses only job and event tickets today; the proposed reserved kinds leave `kernel.terminate` open). The send path
   stamps the sender and its creation from the committing actor, so
   a child accepts a terminate whose stamped sender and creation equal its recorded parent's, including when the child
-  is parked ([observability](observability.md#every-park-operation-names-its-park)). While a discard, expiry,
+  is parked ([observability](observability.md#every-park-operation-names-its-park)). FailFast is an application send
+  and carries no cascade origin mark, so a running child accepts it as built; the terminates a child's own cascade
+  then sends to its children carry the mark and are parent-bound in every state (fifth review R5-M5). FailFast is a
+  model turn, so the send cap
+  applies to it unchanged; its at most C terminates stay within the cap whenever C does, and each child's own
+  terminate then pages that child's subtree as kernel work. While a discard, expiry,
   terminate or delete drain is open on the child, the terminate is refused as "resolution open", and the refusing
   commit still cascades to the child's children and jobs when the terminate has authority over it (the same section).
   A child deleted before the terminate arrived refuses it at its retirement marker and still cascades under the same
@@ -173,8 +188,11 @@ the creation protocol's refusal (`CreationProtocol.Refuse`) for a generation-tra
   consuming it never reaches that child or its live descendants, which have left the parent's tree, as the
   descendants of any ended child have. Invariant 17 holds over the tree the registries define. The deleted child's
   retirement marker then keeps an obligation no parent-bound terminate will discharge; it stays bounded on the
-  marker, which release 1 never compacts, and it is harmless, since `ObligationOutstanding` only blocks a successor
-  that no producer can create ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)).
+  marker, which release 1 never compacts, and it is harmless, since `ObligationOutstanding` for that `Held`
+  obligation only blocks a successor that no producer can create ([data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)).
+  The one valid case it refuses is a successor start at a keyed root's id while that root's own cascade is still
+  `Discharging`, a retryable refusal bounded by ⌈n / `P_cascade`⌉ pages that key admission answers before writing a
+  receipt (fifth review R5-B2).
 - **Collect:** the combiner counts the fault, keeps it in `FirstFaults` while there are fewer than K, and continues. It
   faults only when the faults pass a threshold, as Native `Parallel` faults when its threshold can no longer be met
   (built). The root's result carries the count and the sample.
