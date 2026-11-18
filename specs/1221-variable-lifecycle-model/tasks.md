@@ -117,8 +117,8 @@ default of FR-011 depends on it (FR-013a).
 - [x] T012 [US1] Capture the input read set during materialization in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`; commit it with the input snapshot.
 - [x] T013 [US1] Apply the commit rule and base at the capture site in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjection.cs`.
 - [x] T014 [P] [US1] Apply the commit rule at the intrinsic site (Set/Merge/Reduce) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`.
-- [x] T015 [US1] **Moved to S-7, not built here.** Record session reads per attempt in the variable session read path; implement base selection (immutable input bases; oldest-in-use tie-break) per data-model.md and R-4.
-- [x] T016 [US1] **Moved to S-7, not built here.** Self-write handling: an invocation's applied write advances its own base for X (session change on suspend + capture on complete, ADR 0090 §6 order); test no self-conflict.
+- [x] T015 [US1] **Moved to S-7, not built here.** *Built in S-7 (spec 1231 Phase 2, PR #4761).* Record session reads per attempt in the variable session read path; implement base selection (immutable input bases; oldest-in-use tie-break) per data-model.md and R-4.
+- [x] T016 [US1] **Moved to S-7, not built here.** *Built in S-7 (spec 1231 Phase 2, PR #4761).* Self-write handling: an invocation's applied write advances its own base for X (session change on suspend + capture on complete, ADR 0090 §6 order); test no self-conflict.
 
 **Checkpoint**: US1 reproduction passes; lost updates are never silent across `External`; blind writes unaffected.
 

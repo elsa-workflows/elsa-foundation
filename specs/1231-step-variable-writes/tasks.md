@@ -48,6 +48,8 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 5: User Story 1 — script writes (P1)
 
+> **Split (coordinator decision, 2026-11-18, option A):** Phase 5 lands in a second S-7 PR, after S-4 (spec 1222) builds its Phase 8 body read surface on this PR's session API. That PR sets the spec's `Status: Implemented`.
+
 - [ ] T024 [US1] Extend S-4's body analyzer with write forms (contract table): pin targets, compute may-write set and body touch set; refuse undeclared, transient and read-only literal writes with diagnostics naming position and target (FR-018–FR-020); mark a node with a computed or opaque write as possibly writing every visible variable (FR-020a).
 - [ ] T025 [US1] Jint write surface in the body: `variables` assignable, `setVariable('x', v)`, no `set<Name>()`; whole assignments go to the session (P-8) (FR-005, FR-021).
 - [ ] T026 [US1] Hand S-8's reported member changes to the session as `MemberChange` intents (C3), once S-8's bridge (spec 1228 T026) is on the branch; until then member changes stay unsupported and the test is skipped with a reason.
@@ -72,6 +74,8 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 
 ## Phase 8: User Story 6 — Elsa 3 conversion (P2)
 
+> **Split (coordinator decision, 2026-11-18, option A):** Phase 8 lands with Phase 5 in the second S-7 PR.
+
 - [ ] T038 [US6] In `Elsa3ExpressionRewriter` script mode: rewrite `setVariable('<lit>', v)` and `set<Name>(v)` to `variables.<Name> = v` (bracket form for non-identifiers), and `getVariable('<lit>').m = v` to `variables.<Name>.m = v` (FR-032, Q6).
 - [ ] T039 [US6] New stable refusals with guidance: computed setter name, setter of an undeclared variable, setter of a variable that converts to a transient one; expression mode keeps today's refusal with guidance naming a Run JavaScript activity; `setOutput`, `setInput`, `setResult`, `setCorrelationId`, `setWorkflowInstanceName` stay refused (FR-033, FR-034).
 - [ ] T040 [P] [US6] **(test-first)** Converter tests for acceptance 1–6 of User Story 6, plus a publish-and-run test of the converted script.
@@ -82,7 +86,7 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 - [x] T042 Measure write cost for a 1 MiB value and a hot loop; record in research.md R-9 (FR-035, SC-007). *Measured; numbers in research.md R-9.*
 - [ ] T043 [P] Docs: activity authoring (step writes, references, the marker, `[ActivityLostUpdateMode]`), script docs (write forms; copy explicitly with `{...variables.o}`), `EXTENSION_POINTS.md`, Elsa 3 conversion guide, release notes (§E2.6.1 note).
 - [ ] T044 Map every ADR 0090 *Required evidence* item in scope to its test in the PR body (SC-001); list the host-interop items as out of scope (#4103).
-- [ ] T045 Set the spec's `Status: Implemented` in the finishing PR; update spec 1221's tasks.md notes for T015/T016 to point at this PR, and spec 1222 T047/T050 and spec 1228 T026/T028 if they can now proceed.
+- [ ] T045 Set the spec's `Status: Implemented` in the finishing PR; update spec 1221's tasks.md notes for T015/T016 to point at this PR, and spec 1222 T047/T050 and spec 1228 T026/T028 if they can now proceed. *The finishing PR is the second S-7 PR (Phases 5 and 8); the first PR (#4761) keeps `Status: Approved`.*
 
 ## Phase 10: Studio presentation (FR-036), in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`
 
