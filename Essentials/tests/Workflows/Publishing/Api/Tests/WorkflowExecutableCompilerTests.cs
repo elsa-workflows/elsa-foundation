@@ -2334,8 +2334,9 @@ public sealed class WorkflowExecutableCompilerTests
         { typeof(StrictLostUpdateProbe), LostUpdateMode.Fault, RuntimeMetadataKeys.LostUpdateModeFault }
     };
 
-    // Spec 1221 FR-012 (T022): strict read-modify-write is pinned when the activity type declares it or the author sets it
-    // on the node; a node setting never downgrades a type's declaration, and the default mode leaves no key.
+    // Spec 1221 FR-012 (T022): strict read-modify-write is pinned when the activity type declares it or the node's setting
+    // (set through the design API) asks for it; a node setting never downgrades a type's declaration, and the default
+    // mode leaves no key.
     [Theory]
     [MemberData(nameof(LostUpdateModeCases))]
     public async Task The_node_pins_the_Fault_lost_update_mode_from_its_type_or_its_own_setting(Type activityType, LostUpdateMode nodeMode, string? expected)
@@ -2354,8 +2355,8 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.LostUpdateMode));
     }
 
-    // Spec 1221 FR-019 (T030): the author's opt-out of the background admission refresh is pinned on the node; refresh
-    // on (the default) leaves no key.
+    // Spec 1221 FR-019 (T030): the node's opt-out of the background admission refresh is pinned on the node; refresh on
+    // (the default) leaves no key.
     [Theory]
     [InlineData(false, null)]
     [InlineData(true, RuntimeMetadataKeys.BackgroundInputRefreshOff)]

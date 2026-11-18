@@ -43,7 +43,7 @@ changes, they are rechecked.
   lost-update **warning** is raised as an instance diagnostic in Studio and an entry in the write history, naming the
   variable, the base and current versions and both writers, and keeping the overwritten value so it can be restored.
   Opt-in: `Fault`, declared by an activity type or set per node by an engineer through the design API, for strict
-  read-modify-write. The workflow designer does not offer it to authors (coordinator decision 2026-11-18).
+  read-modify-write. The workflow designer does not offer it to authors (ADR 0092 decision 6).
   This replaces the earlier draft's `Fault` default with a `LastWins` override.
 - **Tracking (decision 5).** Light tracking by default: the base version and the current version decide alone, and a
   value that moved and came back (`0 → 1 → 0`) also warns. The exact check (stored digests compared on a version
@@ -192,7 +192,7 @@ kept; a third that accepts a recorded completion without re-running the body.
 
 An engineer building a counter or a balance knows that an update must never be lost. They set `Fault` on the node
 through the design API, or the activity type declares it, and a real lost update stops the step before the wrong value
-spreads. The workflow designer does not show the setting to authors (coordinator decision 2026-11-18).
+spreads. The workflow designer does not show the setting to authors (ADR 0092 decision 6).
 
 **Why this priority**: the default keeps unordered designs running with a visible record; the opt-in keeps a strict
 mode available where it has real value. It depends on US1's commit machinery.
@@ -385,13 +385,13 @@ expired values from `null`.
   that wrote on the stale base), and MUST keep the overwritten value so that it can be restored (FR-026).
 - **FR-012**: A node or an activity type MUST be able to opt in to `Fault` for strict read-modify-write: an activity
   type declares it, and an engineer may set it per node through the design API (the workflow designer does not offer it
-  to workflow authors; coordinator decision 2026-11-18). Only `Fault` nodes record digests in their read sets and use
+  to workflow authors; ADR 0092 decision 6). Only `Fault` nodes record digests in their read sets and use
   the exact check. On a lost update whose digests differ, the step MUST fault with a diagnostic naming the variable, the
   base version, the current version and the writers; the faulted step's pending workflow changes MUST NOT apply (D-3).
   No other modes exist in this baseline, and no merge policy.
 - **FR-012a**: Spec 266's publish-time warning for unordered writers MUST NOT direct workflow authors to the `Fault`
   mode; it offers structural remedies only (order the branches, capture into separate variables, or combine them with
-  one write after the join). Amended by coordinator decision 2026-11-18.
+  one write after the join).
 - **FR-013**: A lost-update fault MUST go through the existing incident path and strategy; no new recovery mechanism is
   introduced. The incident MUST record the rejected completion under the existing protection rules.
 - **FR-013a**: The default of FR-011 is conditional on FR-021 being proven for `External` and `ReplaySafe` activities
