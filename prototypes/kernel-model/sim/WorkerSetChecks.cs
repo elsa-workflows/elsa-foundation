@@ -72,15 +72,16 @@ internal static class WorkerSetChecks
         await StandDownMeetsRefusedFlush(check);
     }
 
-    // A stand-down while a retake is in flight: the retake installs nothing and gives up what it took.
+    // A stand-down while a retake is in flight: the retake installs nothing, gives up what it took, and gives up what it
+    // had not reached yet (partition 2) at the epoch it held.
     private static async Task StandDownDuringRetake(Action<bool, string> check)
     {
         const long time = 100;
-        var store = new InMemoryStore(2, () => time);
+        var store = new InMemoryStore(3, () => time);
         var wire = new DelayedCommit(store);
-        var worker = new Worker("a", [0, 1], wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2 });
+        var worker = new Worker("a", [0, 1, 2], wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 3 });
         await new DurableHost([worker]).ActivateAsync(0);
-        var e0 = worker.EpochOf(0);
+        var (e0, e2) = (worker.EpochOf(0), worker.EpochOf(2));
         await store.AddAsync(Add(InstanceRef.In(1, "y"), "two"));
         await Step(worker);
         store.Partitions[1].LeaseUntil = 0;
@@ -93,6 +94,8 @@ internal static class WorkerSetChecks
         await flush.WaitAsync(TimeSpan.FromSeconds(5));
         check(!worker.Owns && store.Partitions[0].Epoch == e0 + 1 && store.Partitions[0].Owner is null,
             $"a stand-down during a retake installs nothing and releases what the retake took: owns {worker.Owns}, partition 0 owner {store.Partitions[0].Owner ?? "none"} at {store.Partitions[0].Epoch}");
+        check(store.Partitions[2].Epoch == e2 && store.Partitions[2].Owner is null && store.Partitions[1].Owner == "b",
+            $"and it releases the partition the retake had not reached, at its epoch: partition 2 owner {store.Partitions[2].Owner ?? "none"} at {store.Partitions[2].Epoch}");
     }
 
     // A stand-down whose own flush (writing what it holds in memory only) is refused takes nothing back.
