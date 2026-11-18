@@ -197,7 +197,7 @@ describe("run view", () => {
     expect(text).toContain("Lost update");
     expect(text).toContain("Read version 0 · was version 1 · now version 2");
     expect(text).toContain('without seeing the value "Add bonus" wrote');
-    expect(text).toContain('the step that wrote it ("Add bonus") shows the value');
+    expect(text).toContain('the step that wrote it ("Add bonus") can show the value it wrote, where the runtime captured one');
     expect(text).toContain("in runs captured with Variable writes set to Diagnostic snapshots or Full payloads under Runtime evidence settings");
     expect(text).not.toContain("spec 1229");
     expect(text).toContain('Writer"Increment"');

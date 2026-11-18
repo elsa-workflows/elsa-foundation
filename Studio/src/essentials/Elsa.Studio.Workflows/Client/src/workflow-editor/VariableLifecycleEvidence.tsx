@@ -120,7 +120,7 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
           To restore the overwritten value, set it again with the runtime API's ModifyVariable alteration. Studio cannot
           show the kept value yet
           {keepsValueEvidence(record.overwrittenWriter)
-            ? `; in runs captured with Variable writes set to Diagnostic snapshots or Full payloads under Runtime evidence settings, the step that wrote it (${writerLabel(record.overwrittenWriter, labelOf)}) shows the value it wrote.`
+            ? `; in runs captured with Variable writes set to Diagnostic snapshots or Full payloads under Runtime evidence settings, the step that wrote it (${writerLabel(record.overwrittenWriter, labelOf)}) can show the value it wrote, where the runtime captured one.`
             : "."}
         </p>
       ) : null}
