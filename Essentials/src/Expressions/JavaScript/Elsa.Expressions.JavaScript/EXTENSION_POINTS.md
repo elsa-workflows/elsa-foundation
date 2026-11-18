@@ -55,6 +55,19 @@ with portable expression evaluation.
 - **Override when:** a host uses another JavaScript parser or dialect for script activities. Register one analyzer; a
   later registration replaces the default, as for `IJavaScriptScriptEvaluator`.
 
+### IScriptVariableReadAnalyzer *(Core — Elsa.Expressions.Core)*
+
+- **Contract:** `Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer` (spec 1222 FR-014) —
+  `Analyze(source, scriptBody)` parses a script (never evaluates it) and returns a `ScriptVariableReadAnalysis`, or
+  `null` when it does not parse: `LiteralNames` read as `variables.X`, `variables['X']` or `getVariable('X')`, and
+  `HasComputedRead` when it also reads variables it does not name (`variables[expr]`, `getVariable(expr)`, `variables`
+  or `getVariable` used as a value or declared by the script).
+- **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by
+  `JavaScriptFeature`. One analyzer per language; the Liquid feature registers its own.
+- **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Core`, used by the publish compiler to pin
+  literal reads and set the fallback marker, and by `ScriptVariableReadValidator` for the draft diagnostics.
+- **Override when:** a host uses another JavaScript parser or dialect. Register one analyzer per language.
+
 ## Cross-references
 
 - JS type declarations for the design surface: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).

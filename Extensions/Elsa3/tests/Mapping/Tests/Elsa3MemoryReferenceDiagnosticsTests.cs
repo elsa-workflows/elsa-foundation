@@ -189,7 +189,8 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
     private static InvalidImportCase DynamicScriptCase() => Case(
         Workflow("dynamic-script", Activity("root", "Elsa.Consumer", new Dictionary<string, JsonElement>
         {
-            ["Value"] = Argument("JavaScript", "getVariable(variableName)"),
+            // A computed variable name converts (spec 1222 FR-027); a computed input name is still refused.
+            ["Value"] = Argument("JavaScript", "getInput(inputName)"),
         })),
         Consumer());
 

@@ -62,7 +62,7 @@ using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExec
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class WorkflowExecutableCompilerTests
+public sealed partial class WorkflowExecutableCompilerTests
 {
     [Fact]
     public async Task Source_authority_revision_changes_with_the_actual_transient_candidate_under_the_same_source_ids()

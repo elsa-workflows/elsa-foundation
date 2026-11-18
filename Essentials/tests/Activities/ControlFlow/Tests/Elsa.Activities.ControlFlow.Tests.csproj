@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
     <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />

@@ -22,12 +22,22 @@ public interface IScriptVariableReadAnalyzer
 /// <summary>The variable reads a script's source shows.</summary>
 public sealed record ScriptVariableReadAnalysis
 {
-    public ScriptVariableReadAnalysis(IReadOnlyList<string> literalNames, bool hasComputedRead)
+    public ScriptVariableReadAnalysis(
+        IReadOnlyList<string> literalNames,
+        bool hasComputedRead,
+        IReadOnlyList<ScriptVariableLiteralRead>? literalReads = null)
     {
         ArgumentNullException.ThrowIfNull(literalNames);
         LiteralNames = literalNames.Distinct(StringComparer.Ordinal).ToArray();
         HasComputedRead = hasComputedRead;
+        LiteralReads = literalReads?.ToArray() ?? [];
     }
+
+    /// <summary>
+    /// Where each literal read names its variable in the source, when the parser gives positions (spec 1222 FR-022): a
+    /// rename edits exactly these. Empty when the language's parser gives none; a rename then flags the reads instead.
+    /// </summary>
+    public IReadOnlyList<ScriptVariableLiteralRead> LiteralReads { get; }
 
     /// <summary>The names read literally (<c>variables.X</c>, <c>variables['X']</c>, <c>getVariable('X')</c>), in first-read order, each once.</summary>
     public IReadOnlyList<string> LiteralNames { get; }
@@ -40,3 +50,11 @@ public sealed record ScriptVariableReadAnalysis
 
     public static ScriptVariableReadAnalysis None { get; } = new([], false);
 }
+
+/// <summary>
+/// One literal variable read in the source: the name, and the zero-based range [<paramref name="Start"/>,
+/// <paramref name="End"/>) of the token that spells it: the member name of <c>variables.X</c>
+/// (<paramref name="IsMemberName"/>), or the string literal, quotes included, of <c>variables['X']</c> and
+/// <c>getVariable('X')</c>.
+/// </summary>
+public sealed record ScriptVariableLiteralRead(string Name, int Start, int End, bool IsMemberName);

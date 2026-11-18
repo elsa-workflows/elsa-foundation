@@ -18,6 +18,10 @@ public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAn
     /// <summary>Whether a script in <paramref name="language"/> can read variables by name.</summary>
     public bool Supports(string? language) => language is not null && _analyzers.ContainsKey(language);
 
+    /// <summary>Parses <paramref name="source"/>, or returns <see langword="null"/> when the language has no analyzer or the source does not parse.</summary>
+    public ScriptVariableReadAnalysis? Analyze(string language, string source, bool scriptBody = false) =>
+        _analyzers.TryGetValue(language, out var analyzer) ? analyzer.Analyze(source, scriptBody) : null;
+
     /// <summary>
     /// Resolves the reads of <paramref name="source"/> against <paramref name="visibleScopes"/> (nearest first, as
     /// <see cref="ScopedVariableVisibility.GetVisibleScopes"/> returns them with iteration scopes included). Returns

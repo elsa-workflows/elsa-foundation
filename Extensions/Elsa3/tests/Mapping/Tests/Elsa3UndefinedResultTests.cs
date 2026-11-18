@@ -53,7 +53,7 @@ public sealed class Elsa3UndefinedResultTests
         var result = await ConvertTextAsync("getVariable('o').x");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(args.o.x) ?? null", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("(variables.o.x) ?? null", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]

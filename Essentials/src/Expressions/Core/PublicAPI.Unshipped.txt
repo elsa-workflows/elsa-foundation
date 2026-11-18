@@ -746,10 +746,29 @@ Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Equals(Elsa.Expressio
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedRead.get -> bool
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.LiteralNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ReadsVariables.get -> bool
-Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ScriptVariableReadAnalysis(System.Collections.Generic.IReadOnlyList<string!>! literalNames, bool hasComputedRead) -> void
 override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.GetHashCode() -> int
 override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ToString() -> string!
 static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.None.get -> Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis!
 static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.operator !=(Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? left, Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? right) -> bool
 static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.operator ==(Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? left, Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? right) -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.<Clone>$() -> Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Deconstruct(out string! Name, out int Start, out int End, out bool IsMemberName) -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.End.get -> int
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.End.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Equals(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? other) -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.IsMemberName.get -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.IsMemberName.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Name.get -> string!
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Name.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.ScriptVariableLiteralRead(string! Name, int Start, int End, bool IsMemberName) -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Start.get -> int
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Start.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.LiteralReads.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!>!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ScriptVariableReadAnalysis(System.Collections.Generic.IReadOnlyList<string!>! literalNames, bool hasComputedRead, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!>? literalReads = null) -> void
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.GetHashCode() -> int
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.ToString() -> string!
+static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator !=(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool
+static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator ==(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool

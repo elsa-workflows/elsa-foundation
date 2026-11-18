@@ -8,6 +8,11 @@ There is no rendering event, ambient workflow context, configuration access, ser
 registration, or mutable template-manager seam for canonical bindings. Time-dependent filters and
 undeclared roots are rejected by the `binding-pure-v1` capability profile.
 
+A template that reads workflow variables gets a `variables` root (spec 1222 FR-005) over the parameters publish
+pinned for it and, for a computed read, the host's recorded lookup. `LiquidVariableReadAnalyzer` implements
+`IScriptVariableReadAnalyzer` for Liquid (Fluid's syntax tree), so publish pins Liquid reads the same way as
+JavaScript reads.
+
 ## Cross-references
 
 - Base expression descriptor registration: [`Elsa.Expressions/EXTENSION_POINTS.md`](../Elsa.Expressions/EXTENSION_POINTS.md).

@@ -374,10 +374,12 @@ public sealed class GraphActivity(
                 parameterBindings,
                 JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
                 ExpressionCapabilityProfiles.BindingPureV1);
+            // The graph's own variables are read by name through the variables root (spec 1222): a graph expression is
+            // evaluated in-process from the graph scope, so the values are already here and every name is looked up.
             var request = new ExpressionEvaluationRequest(
                 definition,
                 parameterValues,
-                ambientVariables.Count == 0 ? null : ambientVariables,
+                ambientVariables.Count == 0 ? null : new GraphVariableReader(ambientVariables),
                 cancellationToken);
             var result = await portableEvaluator.EvaluateAsync(request);
             return CoerceExpressionResult(result, expectedType);
@@ -499,4 +501,13 @@ public sealed class GraphActivity(
         context as IRuntimeActivityExecutionContext
         ?? throw new InvalidOperationException("GraphActivity requires an Elsa runtime activity execution context.");
 
+}
+
+/// <summary>Serves a graph expression's variable reads from the graph scope's values, by name; a missing name reads undefined.</summary>
+internal sealed class GraphVariableReader(IReadOnlyDictionary<string, JsonElement> values) : IExpressionVariableReader
+{
+    public IReadOnlyList<string> CandidateNames { get; } = values.Keys.Order(StringComparer.Ordinal).ToArray();
+
+    public ExpressionVariableRead Read(string name) =>
+        values.TryGetValue(name, out var value) ? ExpressionVariableRead.Present(value) : ExpressionVariableRead.Missing;
 }
