@@ -111,7 +111,10 @@ public sealed record CommitBatch(
     int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<TurnCommit> Turns,
     IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial)
 {
-    /// <summary>How far the position moves: one per journal row.</summary>
+    /// <summary>
+    /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
+    /// fenced partition's; in the owned-set form each partition moves by <see cref="PositionsIn"/>.
+    /// </summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
 
     /// <summary>Optional closed-open authority interval required by this transaction's guarded turns.</summary>
@@ -129,10 +132,10 @@ public sealed record CommitBatch(
     public IReadOnlyList<PartitionFence> Fenced => Fences is { } fences ? [.. fences.OrderBy(f => f.Partition)] : [new(Partition, Epoch, Position)];
 
     /// <summary>
-    /// The partition whose journal and position a turn moves: the one partition of a one-partition batch (as today), and
-    /// in a batch over several the virtual partition the turn's address embeds; -1 when it embeds none.
+    /// The partition whose journal and position a turn moves: in the one-partition form the batch's partition (as today),
+    /// and in the owned-set form, one fence or several, the virtual partition the turn's address embeds; -1 when it embeds none.
     /// </summary>
-    public int PartitionOf(TurnCommit turn) => Fences is not { Count: > 1 } ? Partition : StoreBatchRules.AddressPartition(turn.Instance) ?? -1;
+    public int PartitionOf(TurnCommit turn) => Fences is null ? Partition : StoreBatchRules.AddressPartition(turn.Instance) ?? -1;
 
     /// <summary>How far this batch moves one partition's position.</summary>
     public int PositionsIn(int partition) => Turns.Count(t => t.Journal is not null && PartitionOf(t) == partition);
@@ -203,7 +206,8 @@ public interface IKernelStore : IMembership
     /// The fenced commit. Throws <see cref="StoreException"/>; anything else thrown counts as an unknown outcome. A batch
     /// over several virtual partitions (<see cref="CommitBatch.Fences"/>) needs <see cref="OwnedSetsAvailable"/>: it
     /// locks the fence rows in ascending partition id, and lands only if every fence matches. Its Seen and Trial marks
-    /// record the epoch of each message's own virtual partition. A store without it refuses such a batch as definite.
+    /// record the epoch of each message's own virtual partition, which must be fenced. A store that fences one partition
+    /// (it calls <see cref="StoreBatchRules.Validate"/> without <c>ownedSets</c>) refuses such a batch as definite.
     /// </summary>
     ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default);
 
@@ -215,7 +219,9 @@ public interface IKernelStore : IMembership
 
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
-    /// with its own epoch and its own death count; the set need not be contiguous. The default takes one at a time.
+    /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is 0 when nothing was taken.
+    /// The default takes one at a time, k round trips: if one of them fails, the partitions before it are taken already,
+    /// so a failure is an unknown outcome and the caller treats the whole set as it treats a failed take.
     /// </summary>
     async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
@@ -227,8 +233,7 @@ public interface IKernelStore : IMembership
             taken.Add(one.For(partition));
             now = Math.Min(now, one.Now);
         }
-        if (taken.Count > 0 || partitions.Count == 0) return new(taken, taken.Count > 0 ? now : 0);
-        return new(taken, (await PollAsync(partitions.Min(), 0, TimeSpan.Zero, 1, cancellationToken)).Now);
+        return new(taken, taken.Count > 0 ? now : 0);
     }
 
     /// <summary>Give up each of these partitions that is still at its epoch; positions are not compared. The rest of the set is untouched.</summary>
@@ -246,6 +251,7 @@ public interface IKernelStore : IMembership
     /// </summary>
     async ValueTask<RenewedSet> RenewAsync(IReadOnlyCollection<PartitionFence> held, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        StoreBatchRules.RequireDistinct(held);
         var (rows, now) = (new List<FenceRead>(), long.MaxValue);
         foreach (var fence in held.OrderBy(f => f.Partition))
         {
@@ -259,6 +265,7 @@ public interface IKernelStore : IMembership
     /// <summary>One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most <paramref name="limit"/>.</summary>
     async ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
+        StoreBatchRules.RequireDistinct(owned);
         var (rows, now) = (new List<Stored>(), long.MaxValue);
         foreach (var fence in owned.OrderBy(f => f.Partition))
         {

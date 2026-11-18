@@ -25,8 +25,8 @@ internal static class OwnedSetChecks
         if (!c.S.OwnedSetsAvailable) throw new SkipException("the store fences one partition per commit");
     }
 
-    private static CommitBatch Flush(IEnumerable<PartitionFence> fences, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null) =>
-        CommitBatch.Owned([.. fences], Context.Long, false, turns, seen ?? [], trial ?? []);
+    private static CommitBatch Flush(IEnumerable<PartitionFence> fences, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null, bool handOver = false) =>
+        CommitBatch.Owned([.. fences], Context.Long, handOver, turns, seen ?? [], trial ?? []);
 
     private static IReadOnlyList<int> Ids(OwnedLease lease) => [.. lease.Taken.Select(f => f.Partition)];
 
@@ -46,6 +46,16 @@ internal static class OwnedSetChecks
         Context.Equal(fence.Epoch, (await c.Row(0, "m"))!.Seen, "seen mark of the one-element owned flush");
         await c.Lands(() => c.Commit(0, fence.Epoch, 2, [Make.New("0/k")]), "a one-partition commit after it");
         Context.Equal("1 2 3", string.Join(" ", (await c.S.ReadJournalAsync(0, 0, 10)).Select(j => j.Position)), "journal positions");
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([fence with { Position = 3 }], [Make.New("1/x")])).AsTask(), "a one-element flush with a turn outside its partition"),
+            "outcome of a one-element flush with a turn outside its partition");
+        if (c.S.OwnedSetsAvailable)
+        {
+            // An owned store binds a mark to its message's own partition, so one outside even a one-element set is refused.
+            await c.S.AddAsync(Make.M("o1", 1));
+            Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([fence with { Position = 3 }], [], seen: ["o1"])).AsTask(), "a one-element flush marking a message of another partition"),
+                "outcome of a one-element flush marking a message of another partition");
+            Context.Equal(0L, (await c.Row(1, "o1"))!.Seen, "seen mark of a message outside the one-element set");
+        }
         var misnamed = Flush([fence with { Position = 3 }], [Make.New("0/l")]) with { Position = 2 };
         Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(misnamed).AsTask(), "an owned batch that misnames its lowest fence"), "outcome of a misnamed owned batch");
         if (!c.S.OwnedSetsAvailable)
@@ -132,7 +142,10 @@ internal static class OwnedSetChecks
     private static async Task ScatteredTake(Context c)
     {
         Require(c);
-        await c.S.TakeAsync([1], "a", Context.Long);      // so that partition 1's epoch differs from 4's and 6's
+        // Partition 1 is taken once before, so that its epoch differs from 4's and 6's, and p1 is seen at that first epoch.
+        var first = await c.Take(1, "a");
+        await c.S.AddAsync(Make.M("p1", 1));
+        await c.Lands(() => c.Commit(first, 1, [], seen: ["p1"]), "a commit in partition 1 at its first epoch");
         var a = await c.S.TakeAsync([6, 1, 4], "a", Context.Long);
         Context.Equal("1 4 6", string.Join(" ", Ids(a)), "a scattered take, in ascending partition id");
         Context.That(a.Taken.All(f => f.Epoch > 0 && f.Position == 0), "a take's epochs and positions");
@@ -144,21 +157,44 @@ internal static class OwnedSetChecks
 
         foreach (var (id, p) in new[] { ("m6", 6), ("m2", 2), ("m1", 1), ("m4", 4), ("n1", 1) }) await c.S.AddAsync(Make.M(id, p));
         var polled = await c.S.PollAsync(a.Taken, TimeSpan.Zero, 100);
-        Context.Equal("m6 m1 m4 n1", string.Join(" ", polled.Messages.Select(m => m.Message.Id)), "one poll over a's set, in seq order");
-        Context.Equal("m6 m1", string.Join(" ", (await c.S.PollAsync(a.Taken, TimeSpan.Zero, 2)).Messages.Select(m => m.Message.Id)), "the poll's limit over the set");
+        // Each row is compared with its own partition's epoch: p1, seen at 1's earlier epoch, is due again.
+        Context.Equal("p1 m6 m1 m4 n1", string.Join(" ", polled.Messages.Select(m => m.Message.Id)), "one poll over a's set, in seq order");
+        Context.Equal("p1 m6", string.Join(" ", (await c.S.PollAsync(a.Taken, TimeSpan.Zero, 2)).Messages.Select(m => m.Message.Id)), "the poll's limit over the set");
+        PartitionFence At(int partition, long position) => new(partition, epoch[partition], position);
 
         // A flush may touch part of the set: only those partitions move, and each mark takes its own partition's epoch.
-        var touched = a.Taken.Where(f => f.Partition != 4).ToList();
-        await c.Lands(() => c.S.CommitAsync(Flush(touched, [Make.New("6/x"), Make.New("1/x"), Make.New("1/y")], seen: ["m1", "m6"])).AsTask(), "a flush over 1 and 6");
+        await c.Lands(() => c.S.CommitAsync(Flush([At(1, 0), At(6, 0)], [Make.New("6/x"), Make.New("1/x"), Make.New("1/y")], seen: ["m1", "p1"], trial: ["m6"])).AsTask(), "a flush over 1 and 6");
         Context.Equal(2L, (await c.S.ProjectedAsync(1)).Written, "position of partition 1");
         Context.Equal(0L, (await c.S.ProjectedAsync(4)).Written, "position of partition 4, not in the flush");
         Context.Equal(1L, (await c.S.ProjectedAsync(6)).Written, "position of partition 6");
         Context.Equal(epoch[1], (await c.Row(1, "m1"))!.Seen, "seen mark in partition 1");
-        Context.Equal(epoch[6], (await c.Row(6, "m6"))!.Seen, "seen mark in partition 6, at its own epoch");
+        var m6 = (await c.Row(6, "m6"))!;
+        Context.That(m6.Seen == epoch[6] && m6.Trial == epoch[6], $"trial mark in partition 6 at seen {m6.Seen}, trial {m6.Trial}, not at its own epoch {epoch[6]}");
         Context.Equal("m4 n1", string.Join(" ", (await c.S.PollAsync(a.Taken, TimeSpan.Zero, 100)).Messages.Select(m => m.Message.Id)), "poll after the marks");
-        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush(touched, [Make.New("1/z"), Make.New("2/z")])).AsTask(), "a turn outside the fenced set"),
+
+        // A handover writes a message to a fenced partition as seen at that partition's epoch, and one to another unseen.
+        await c.Lands(() => c.S.CommitAsync(Flush([At(1, 2), At(6, 1)], [Make.Turn("1/x", Make.Row("1/x", 2), expected: 1, sent: [Make.M("h6", 6), Make.M("h4", 4)])], handOver: true)).AsTask(), "a handover flush over 1 and 6");
+        Context.Equal(epoch[6], (await c.Row(6, "h6"))!.Seen, "handover seen mark of a message to partition 6");
+        Context.Equal(0L, (await c.Row(4, "h4"))!.Seen, "handover seen mark of a message to partition 4, outside the flush");
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [], seen: ["m4"])).AsTask(), "a flush over 1 and 6 marking a message of 4"),
+            "outcome of a flush marking a message outside its fenced set");
+        Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 0)], [], seen: ["n1"])).AsTask(), "a flush whose higher fence alone is stale"),
+            "outcome of a flush whose higher fence alone is stale");
+        Context.Equal(0L, (await c.Row(1, "n1"))!.Seen, "seen mark written by the refused flush");
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [Make.New("1/z"), Make.New("2/z")])).AsTask(), "a turn outside the fenced set"),
             "outcome of a flush with a turn outside its fenced set");
         Context.Equal(0, (await c.S.LoadAsync(["1/z", "2/z"])).Count, "rows written by the refused flush");
+
+        // Journal rows a delete removes are counted in their own partition (observable on the in-memory store).
+        await c.Lands(() => c.S.CommitAsync(Flush([At(1, 3), At(6, 1)], [Make.Delete("6/x", 1)])).AsTask(), "a delete in partition 6 fenced with partition 1");
+        Context.Equal("2", string.Join(" ", (await c.S.ReadJournalAsync(6, 0, 10)).Select(j => j.Position)), "journal positions of partition 6 after the delete");
+        if (c.S is InMemoryStore store) Context.That(store.Deleted[6] == 1 && store.Deleted[1] == 0, "journal rows removed by the delete are not counted in their own partition");
+
+        // A landed flush renews the lease of every fenced row.
+        var brief = await c.S.TakeAsync([3, 5], "a", Short);
+        await c.Lands(() => c.S.CommitAsync(Flush(brief.Taken, [])).AsTask(), "a flush over 3 and 5 under a long lease");
+        await Task.Delay(PastShort);
+        Context.Equal("", string.Join(" ", Ids(await c.S.TakeAsync([3, 5], "b", Context.Long))), "partitions b took after a's flush renewed their leases");
     }
 
     private static async Task LockOrder(Context c)
@@ -172,7 +208,8 @@ internal static class OwnedSetChecks
         await c.Lands(() => c.S.CommitAsync(Flush(scrambled, [Make.New("7/x"), Make.New("0/x"), Make.New("5/x")])).AsTask(), "the scrambled flush");
         Context.Equal("0 2 5 7", string.Join(" ", locked), "fence rows locked by the landed flush");
         locked.Clear();
-        await c.Refused(() => c.S.CommitAsync(Flush(scrambled, [Make.New("2/y")])).AsTask(), "the same flush again");
-        Context.Equal("0 2 5 7", string.Join(" ", locked), "fence rows locked by the refused flush");
+        Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(Flush(scrambled, [Make.New("2/y")])).AsTask(), "the same flush again"), "outcome of the same flush again");
+        // A store may stop at the first stale fence; whatever it locks is an ascending prefix.
+        Context.That(locked.Count > 0 && locked.SequenceEqual(new[] { 0, 2, 5, 7 }.Take(locked.Count)), $"fence rows locked by the refused flush: {string.Join(" ", locked)}");
     }
 }

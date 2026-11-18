@@ -153,7 +153,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 // A mark records its message's own partition's epoch, so a mark outside the fenced set would be unbound, and a
                 // delete outside it would be a write no fence covers.
-                if (fences.Count > 1)
+                if (batch.Fences is not null)
                     foreach (var id in batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(t => t.Consumed.Concat(t.Done))))
                         if (Messages.GetValueOrDefault(id) is { } marked && !epochs.ContainsKey(marked.Message.Target.Partition))
                             throw new StoreException(Failure.Definite, $"message {id} is outside the batch's fenced partitions");
@@ -249,7 +249,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
     {
         lock (_gate)
-            foreach (var fence in owned)
+            foreach (var fence in owned.OrderBy(f => f.Partition))
                 if (Partitions[fence.Partition].Epoch == fence.Epoch) Partitions[fence.Partition].Owner = null;
         return default;
     }
@@ -259,6 +259,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         lock (_gate)
         {
+            StoreBatchRules.RequireDistinct(held);
             var (now, rows) = (clock(), new List<FenceRead>());
             foreach (var fence in held.OrderBy(f => f.Partition))
             {
@@ -276,6 +277,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     /// <summary>One query over an owned set: each row is compared with the epoch of its own partition.</summary>
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
+        StoreBatchRules.RequireDistinct(owned);
         lock (_gate)
         {
             var now = clock();

@@ -35,8 +35,8 @@ public static class StoreBatchRules
     }
 
     /// <summary>
-    /// An owned-set batch fences each partition once and names its lowest one positionally. Over several partitions it
-    /// needs a store that fences k rows, and each turn's address must embed one of the fenced partitions.
+    /// An owned-set batch, one fence or several, fences each partition once, names its lowest one positionally, and
+    /// each turn's address embeds one of the fenced partitions. Over several partitions it needs a store that fences k rows.
     /// </summary>
     private static void ValidateFences(CommitBatch batch,IReadOnlyList<PartitionFence> fences,bool ownedSets)
     {
@@ -44,12 +44,18 @@ public static class StoreBatchRules
         if (lowest is null || fences.Select(f=>f.Partition).Distinct().Count()!=fences.Count ||
             lowest!=new PartitionFence(batch.Partition,batch.Epoch,batch.Position))
             throw new StoreException(Failure.Definite,"An owned batch fences each of its partitions once and names the lowest.");
-        if (fences.Count==1) return;
-        if (!ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
         var fenced=fences.Select(f=>f.Partition).ToHashSet();
         foreach (var turn in batch.Turns.Where(t => !TicketsOnly(t)))
             if (AddressPartition(turn.Instance) is not { } partition || !fenced.Contains(partition))
                 throw new StoreException(Failure.Definite,$"Turn {turn.Instance} is outside the batch's fenced partitions.");
+        if (fences.Count>1 && !ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
+    }
+
+    /// <summary>An owned set names each partition once: a set poll or release with a repeated partition is refused.</summary>
+    public static void RequireDistinct(IReadOnlyCollection<PartitionFence> owned)
+    {
+        if (owned.Select(f=>f.Partition).Distinct().Count()!=owned.Count)
+            throw new StoreException(Failure.Definite,"An owned set names each of its partitions once.");
     }
 
     /// <summary>The owner's turn of no actor that only consumes tickets (meet and publish): the store checks each ticket's partition.</summary>
