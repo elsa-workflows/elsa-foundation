@@ -33,12 +33,13 @@ run ev1-b-stepback              no-horizon                  # expected FAIL
 run ev1-b-suspended             reviewed                    # expected PASS
 run ev1-b-suspended             repaired                    # expected PASS
 run ev1-b-suspended             meet-waits-while-suspended  # expected FAIL
-run ev1-replay                  reviewed                    # expected FAIL
+run ev1-replay                  reviewed                    # expected PASS
 run ev1-replay                  repaired                    # expected PASS
-run ev1-replay                  negative                    # expected FAIL
+run ev1-replay                  negative                    # expected PASS
 run ev1-replay-consumed         reviewed                    # expected FAIL
 run ev1-replay-consumed         repaired                    # expected PASS
 run ev1-replay-consumed         negative                    # expected FAIL
+run ev1-replay-consumed         no-publish-coverage         # expected FAIL
 run ev1-replay-atomic           reviewed                    # expected FAIL
 run ev1-replay-atomic           repaired                    # expected PASS
 run ev1-replay-atomic           negative                    # expected PASS

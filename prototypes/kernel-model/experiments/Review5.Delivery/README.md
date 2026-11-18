@@ -58,9 +58,9 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 | `ev1-b-paged` | SB-2's swept later page: two events, a page of one, sweeps before and between pages | reviewed FAIL, repaired PASS, negative FAIL, p0-at-page-commit FAIL |
 | `ev1-b-stepback` | The clock steps back below a swept event's KeepUntil, a live E2 is published, then a keeping wait registers | reviewed FAIL, repaired PASS, no-horizon FAIL |
 | `ev1-b-suspended` | A suspended publisher's publish ticket and a suspended instance's meet ticket complete their steps, so their holds on E end | reviewed PASS, repaired PASS, meet-waits-while-suspended FAIL |
-| `ev1-replay` | SB-2's replayed publish ticket: no duplicate, E not swept while the ticket is outstanding | reviewed FAIL, repaired PASS, negative FAIL |
+| `ev1-replay` | SB-2's replayed publish ticket, deliveries not yet consumed: no duplicate under every rule set (no observable difference) | reviewed PASS, repaired PASS, negative PASS |
 | `ev1-replay-atomic` | The match step's atomicity: a step that died inserted nothing, so the replay after the sweep delivers once | reviewed FAIL, repaired PASS, negative PASS, split-no-row-hold FAIL |
-| `ev1-replay-consumed` | As `ev1-replay`, with both waits' deliveries consumed before the sweep | reviewed FAIL, repaired PASS, negative FAIL |
+| `ev1-replay-consumed` | As `ev1-replay`, with both waits' deliveries consumed before the sweep | reviewed FAIL, repaired PASS, negative FAIL, no-publish-coverage FAIL |
 | `fr2-base` | R5-M3: three full pages, the drain's controls winning priority before any model handoff | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS |
 | `fr2-hold` | With a Hold: five restored rows held by the model, one of them page 1's gate row | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS, held-gate-waits FAIL |
 | `fr2-suspend` | A suspension after page 1 and a resume six passes later | reviewed FAIL, repaired PASS, negative FAIL, seen-gate PASS, pages-while-suspended FAIL |
@@ -80,8 +80,9 @@ experiments/Review5.Delivery/run.sh                  # every run one by one, the
 | `po1-open` | As above with the drain still open and its last control pending | reviewed FAIL, repaired PASS, negative FAIL |
 | `po1-ordinary` | The ordinary earlier-poison case with no drain and no mark; the same rows also run on a real `Worker` | PASS under all three |
 
-In FR-2 and PO-1 the negative rule set coincides with the reviewed one. In each, the repair changes one rule, and the
-negative restores it. The mutations separate the repaired set's other parts.
+In FR-2 and PO-1 the negative rule set coincides with the reviewed one. PO-1's repair changes one rule, and the negative
+restores it. FR-2's repair changes the gate and adds the credit, and the negative removes both. The mutations separate
+the repaired sets' parts.
 
 ## EV-1 (R5-M2): event eligibility by the match step
 
@@ -149,12 +150,14 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
 - `ev1-b-stepback`: E1 (KeepUntil 100) is swept at 101 with no ticket covering it, so H = 100. The clock steps back to
   98, and E2 is published with KeepUntil 99, before the wait registers. A keeping wait then registers at 99:
   P0 = max(99, 100 + 1) = 101.
-  - Repaired: the wait is not entitled to the swept E1 (100 < 101), and its catch-up delivers nothing. E2, live with
-    KeepUntil 99 ≤ H, is excluded from the new wait's catch-up as expired. It still reaches W0, a non-keeping wait
-    registered before E2's match step, through the publisher side (asserted). This is the events page's statement
-    (observability.md, event eligibility, the coordinator's decision of 18 November).
-  - `no-horizon` (P0 = 99) delivers E2 and is entitled to the swept E1. Reviewed (`KeptMatchesAsync` at 99) also
-    delivers E2.
+  - The run asserts an observable contract: every event the wait's entitlement promises reaches S. It also asserts that
+    E2 reaches W0, a non-keeping wait registered before E2's match step, through the publisher side.
+  - Repaired: the entitlement (KeepUntil ≥ 101) promises nothing, and nothing is missing. E2, live with KeepUntil
+    99 ≤ H, is excluded from the new wait's catch-up as expired. The run reports this as the events page's stated
+    consequence of a step-back (observability.md, event eligibility, the coordinator's decision of 18 November); it is not
+    what fails the other rule sets.
+  - `no-horizon` (P0 = 99) and reviewed (KeepUntil ≥ registration 99) promise the swept E1, which can no longer be
+    delivered: both fail on the contract.
 - `ev1-b-suspended`: the publisher is suspended with its publish ticket for E (kept through 100) outstanding, and S is
   suspended when its keeping wait is restored at 99.
   - The match step and the meet step consult the suspension. Under the rule they pass it, as built (`Worker.cs` 640–645
@@ -168,8 +171,10 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
     and left the ticket undone.
   - Owner 2 takes over after the lease, restores W2 and runs its catch-up. It pauses past E's keep window with the
     ticket outstanding, sweeps at 20,001 and replays the ticket.
-  - Reviewed: the real sweep deletes E. Repaired: the outstanding publish ticket keeps it.
-  - Both waits get one delivery each.
+  - Reviewed: the real sweep deletes E, and the replay re-inserts it from the ticket. Repaired: the outstanding publish
+    ticket keeps it. The run reports which.
+  - Both waits get one delivery each under every rule set, because both delivery rows are still present. The case shows
+    no observable difference; `ev1-replay-consumed` is where the publish-ticket coverage bites.
 - `ev1-replay-atomic`: W1 alone. Owner 1 dies in the match step and S1 consumes what it was given; owner 2 takes over,
   sweeps and replays the ticket.
   - Reviewed (the split step and the built sweep): the sweep deletes S1's consumed done row, and the replay delivers E a
@@ -181,7 +186,8 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
 - `ev1-replay-consumed`: as `ev1-replay`, with S1 and S2 consuming their deliveries before the sweep. W2 is owed E twice
   over, by its catch-up and by the replayed match step. Repaired: the delivery-row hold keeps S2's done row, so the
   replay finds the duplicate and each wait has one delivery. `negative` (the sweep without the hold) deletes the row,
-  and S2 gets E twice.
+  and S2 gets E twice. `no-publish-coverage` (the sweep may delete E while its publish ticket is outstanding) deletes E
+  and with it the hold on S2's row, and S2 again gets E twice.
 
 **Mutations.**
 
@@ -189,6 +195,7 @@ Every commit is the real `CommitAsync`, and every clock value is the one its `Co
 - `p0-at-page-commit`: P0 is recomputed at page 2's commit (101), so the sweep between pages deletes E2.
 - `no-horizon`: P0 = RegisteredAt, which entitles the stepped-back wait to the swept event.
 - `split-no-row-hold`: the split match step and the built deletion of done rows; the replay duplicates.
+- `no-publish-coverage`: the sweep deletes an event whose publish ticket is outstanding.
 - `meet-waits-while-suspended`: the publish and meet tickets wait for the resume, so E is still held at 102.
 - `match-at-acceptance`: the match step reads the subscriptions committed at the event's acceptance.
 

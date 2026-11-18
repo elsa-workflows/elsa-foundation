@@ -269,7 +269,7 @@ sealed class Jr1(string variant, JrRules rules)
         if (m.Kind != Kinds.JobFinished) { why = "a ticket"; return true; }
         if (_authenticInMemory.Contains(m.InboxKey)) { why = "this owner's in-memory completion (CompletedJob)"; return true; }
         var builtRefuses = Real.DiscardedAt(m, _row);
-        if ((rules is JrRules.Repaired or JrRules.GenerationBlind || ResultCase) && AuthenticResult(m))
+        if (Converts && AuthenticResult(m))
         { why = $"kernel-issued result row (the ticket's scope) of generation g{JobOf(m).Generation}, the registry's g{_registry[_jobKey]} (the built DiscardedAt alone {(builtRefuses ? "refuses it" : "admits it")})"; return true; }
         why = builtRefuses ? "the real DiscardedAt classifies it as a supplied completion" : "admitted";
         return !builtRefuses;

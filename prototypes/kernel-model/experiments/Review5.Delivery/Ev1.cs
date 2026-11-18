@@ -2,15 +2,16 @@ namespace Kernel.Review5;
 
 /// <summary>
 /// The rule sets of EV-1 (R5-M2). <c>Negative</c> removes the one repaired rule the variant tests: the sweep's meet-ticket
-/// coverage (<c>b</c>, <c>b-paged</c>), its publish-ticket coverage (<c>replay</c>), or the atomic match step
-/// (<c>replay-atomic</c>, <c>replay-consumed</c>). Mutations of the repaired set: <c>MatchAtNow</c> runs the catch-up
-/// through the real <c>KeptMatchesAsync</c> at the step's clock; <c>P0AtPageCommit</c> recomputes the entitlement point at
-/// each later page's commit; <c>NoHorizon</c> takes P0 = RegisteredAt, ignoring the sweep horizon H;
-/// <c>MeetWaitsWhileSuspended</c> holds a suspended instance's meet ticket until resume; <c>SplitNoRowHold</c> takes both the
-/// atomic match step and the delivery-row hold away; <c>MatchAtAcceptance</c> lets the match step read the subscriptions
-/// committed at the event's acceptance in place of those committed at its own commit. In <c>replay-consumed</c> the negative removes the delivery-row hold.
+/// coverage (<c>b</c>, <c>b-paged</c>), its publish-ticket coverage (<c>replay</c>), the atomic match step
+/// (<c>replay-atomic</c>), or the delivery-row hold (<c>replay-consumed</c>). Mutations of the repaired set:
+/// <c>MatchAtNow</c> runs the catch-up through the real <c>KeptMatchesAsync</c> at the step's clock; <c>P0AtPageCommit</c>
+/// recomputes the entitlement point at each later page's commit; <c>NoHorizon</c> takes P0 = RegisteredAt, ignoring the
+/// sweep horizon H; <c>MeetWaitsWhileSuspended</c> holds a suspended instance's publish and meet tickets until resume;
+/// <c>SplitNoRowHold</c> takes both the atomic match step and the delivery-row hold away; <c>MatchAtAcceptance</c> lets the
+/// match step read the subscriptions committed at the event's acceptance in place of those committed at its own commit;
+/// <c>NoPublishCoverage</c> lets the sweep delete an event whose publish ticket is outstanding.
 /// </summary>
-enum EvRules { Reviewed, Repaired, Negative, MatchAtNow, P0AtPageCommit, NoHorizon, MeetWaitsWhileSuspended, SplitNoRowHold, MatchAtAcceptance }
+enum EvRules { Reviewed, Repaired, Negative, MatchAtNow, P0AtPageCommit, NoHorizon, MeetWaitsWhileSuspended, SplitNoRowHold, MatchAtAcceptance, NoPublishCoverage }
 
 /// <summary>
 /// EV-1: event eligibility across a recovery Open, on the real in-memory publisher path. The publisher's side is
@@ -44,7 +45,7 @@ sealed class Ev1(string variant, EvRules rules)
     /// <summary>The repaired sweep keeps an event's Done delivery rows while the event row exists (coordinator's decision, option (a)).</summary>
     private bool RowHold => Repairedish && rules != EvRules.SplitNoRowHold && !(rules == EvRules.Negative && variant == "replay-consumed");
     private bool MeetCoverage => Repairedish && !(rules == EvRules.Negative && variant is "b" or "b-paged");
-    private bool PublishCoverage => Repairedish && !(rules == EvRules.Negative && variant == "replay");
+    private bool PublishCoverage => Repairedish && rules != EvRules.NoPublishCoverage && !(rules == EvRules.Negative && variant == "replay");
     private bool CatchUpByP0 => Repairedish && rules != EvRules.MatchAtNow;
 
     /// <summary>One schedule's durable world: the real store, the owner's lease, and the proposed facts beside it.</summary>
@@ -190,9 +191,10 @@ sealed class Ev1(string variant, EvRules rules)
     }
 
     /// <summary>
-    /// Clock step-back: E1 (KeepUntil 100) is published, swept at 101 with no ticket covering it (H = 100); the database
-    /// clock steps back to 99, and a keeping wait registers at 99. The coordinator's statement: P0 = H = 100, so the wait is
-    /// not entitled to the swept event, and no claim is left on it.
+    /// Clock step-back: E1 (KeepUntil 100) is published and swept at 101 with no ticket covering it (H = 100); the database
+    /// clock steps back to 98; W0 (non-keeping) commits and E2 (KeepUntil 99) is published; a keeping wait registers at 99
+    /// with P0 = max(99, H + 1) = 101. The observable contract: every event the entitlement promises is delivered. E2's
+    /// exclusion from the new wait's catch-up is the events page's stated consequence, reported as such.
     /// </summary>
     private async Task StepBack()
     {
@@ -218,12 +220,17 @@ sealed class Ev1(string variant, EvRules rules)
         await Drain(w, meet);
         var delivered = w.Store.Messages.Values.Where(m => m.Message.Kind == Kinds.Event && m.Message.Target.Id == s.Id).Select(m => m.Message.Payload).ToList();
         _report.Line($"keeping wait registered at 99{(Repairedish ? $", P0 = {p0}" : "")}: the catch-up delivers [{string.Join(", ", delivered)}]");
-        // The repaired rule: P0 = max(99, H + 1) = 101 excludes the swept E1, and the live E2 (KeepUntil 99 <= H) from the new
-        // wait's catch-up as expired (the events page, the coordinator's statement of 18 November); E2 still reaches W0.
-        _report.Expect("deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101)", Delivered(w, s), 0);
+        // The observable contract: every event the entitlement promises reaches S. Repaired: P0 = max(99, H + 1) = 101 promises
+        // neither E1 nor E2. no-horizon (P0 99) and reviewed (KeepUntil >= registration 99) promise the swept E1.
+        var from = Repairedish ? p0 : w.RegisteredAt[(wait.Key, wait.Instance, wait.Wait)];
+        var promised = new[] { e1, e2 }.Where(e => e.KeepUntil >= from).ToList();
+        var missing = promised.Where(e => !delivered.Contains(e.Payload)).Select(e => e.Payload).ToList();
+        _report.Line($"the entitlement (KeepUntil >= {from}) promises [{string.Join(", ", promised.Select(e => e.Payload))}]");
+        if (Repairedish && !promised.Contains(e2))
+            _report.Line("E2, live with KeepUntil 99 <= H, is excluded from the new wait's catch-up as expired: the events page's stated consequence of a step-back");
+        _report.Expect("promised events not delivered to S", string.Join(", ", missing), "");
         _report.Expect("deliveries of E2 to W0, registered before E2's match step (the publisher side)", Delivered(w, s0), 1);
         _report.Expect("E1 re-created", w.Store.EventRows.ContainsKey((e1.Key, e1.Id)), false);
-        _report.Expect("the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0)", e1.KeepUntil < (Repairedish ? p0 : w.RegisteredAt[(wait.Key, wait.Instance, wait.Wait)]), true);
     }
 
     /// <summary>
@@ -292,7 +299,6 @@ sealed class Ev1(string variant, EvRules rules)
         var again = replayed.Read<EventRow>();
         await Persist(w, again);
         await MatchStep(w, again, replayed);
-        _report.Expect("E kept by the sweep while its publish ticket was outstanding", kept, true);
         _report.Expect("deliveries to S1 (non-keeping, registered before E)", Delivered(w, s1), 1);
         _report.Expect("deliveries to S2 (keeping, registered within the window)", Delivered(w, s2), 1);
     }
@@ -431,7 +437,7 @@ sealed class Ev1(string variant, EvRules rules)
 
     /// <summary>
     /// The restore's Open writes the wait (and, for a keeping wait, one meet ticket) in its commit. Proposed: P0 =
-    /// max(RegisteredAt, H), read at the restore and recorded on the meet ticket; RegisteredAt is the commit's clock.
+    /// max(RegisteredAt, H + 1 ms), read at the restore and recorded on the meet ticket; RegisteredAt is the commit's clock.
     /// </summary>
     private async Task<Message?> Restore(World w, SubscriptionRow wait, bool keep)
     {

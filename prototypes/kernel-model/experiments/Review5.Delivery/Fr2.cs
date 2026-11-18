@@ -261,7 +261,7 @@ sealed class Fr2(string variant, Fr2Rules rules)
         {
             _controlTurns++;
             head.Done = true; head.Fate = "consumed (control turn)";
-            if (head.Kind == DrainKind) Page(head);
+            if (head.Kind == DrainKind) { Page(head); Sample((int)(_now - 2000)); }   // the gauge right after the page commit too
             else if (head.Kind is Kinds.Suspend or Kinds.Resume)
             {
                 _suspended = head.Kind == Kinds.Suspend;

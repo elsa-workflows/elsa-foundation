@@ -12,7 +12,7 @@ static partial class Program
     public static string Name(EvRules rules) => rules switch
     {
         EvRules.Reviewed => "reviewed", EvRules.Repaired => "repaired", EvRules.Negative => "negative", EvRules.MatchAtNow => "match-at-now",
-        EvRules.P0AtPageCommit => "p0-at-page-commit", EvRules.NoHorizon => "no-horizon", EvRules.MeetWaitsWhileSuspended => "meet-waits-while-suspended", EvRules.SplitNoRowHold => "split-no-row-hold", _ => "match-at-acceptance",
+        EvRules.P0AtPageCommit => "p0-at-page-commit", EvRules.NoHorizon => "no-horizon", EvRules.MeetWaitsWhileSuspended => "meet-waits-while-suspended", EvRules.SplitNoRowHold => "split-no-row-hold", EvRules.MatchAtAcceptance => "match-at-acceptance", _ => "no-publish-coverage",
     };
 
     public static string Name(Fr2Rules rules) => rules switch
@@ -39,8 +39,8 @@ static partial class Program
         ("ev1-b-paged", "reviewed", "FAIL"), ("ev1-b-paged", "repaired", "PASS"), ("ev1-b-paged", "negative", "FAIL"), ("ev1-b-paged", "p0-at-page-commit", "FAIL"),
         ("ev1-b-stepback", "reviewed", "FAIL"), ("ev1-b-stepback", "repaired", "PASS"), ("ev1-b-stepback", "no-horizon", "FAIL"),
         ("ev1-b-suspended", "reviewed", "PASS"), ("ev1-b-suspended", "repaired", "PASS"), ("ev1-b-suspended", "meet-waits-while-suspended", "FAIL"),
-        .. from v in new[] { "replay", "replay-consumed" }
-           from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"ev1-{v}", r.Item1, r.Item2),
+        ("ev1-replay", "reviewed", "PASS"), ("ev1-replay", "repaired", "PASS"), ("ev1-replay", "negative", "PASS"),
+        ("ev1-replay-consumed", "reviewed", "FAIL"), ("ev1-replay-consumed", "repaired", "PASS"), ("ev1-replay-consumed", "negative", "FAIL"), ("ev1-replay-consumed", "no-publish-coverage", "FAIL"),
         ("ev1-replay-atomic", "reviewed", "FAIL"), ("ev1-replay-atomic", "repaired", "PASS"), ("ev1-replay-atomic", "negative", "PASS"), ("ev1-replay-atomic", "split-no-row-hold", "FAIL"),
         .. from v in new[] { "base", "hold", "suspend", "takeover", "hold-takeover", "bytes", "zero-cut" }
            from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"fr2-{v}", r.Item1, r.Item2),
@@ -103,7 +103,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "p0-at-page-commit" => EvRules.P0AtPageCommit, "no-horizon" => EvRules.NoHorizon, "meet-waits-while-suspended" => EvRules.MeetWaitsWhileSuspended, "split-no-row-hold" => EvRules.SplitNoRowHold, "match-at-acceptance" => EvRules.MatchAtAcceptance,
+                "reviewed" => EvRules.Reviewed, "repaired" => EvRules.Repaired, "negative" => EvRules.Negative, "match-at-now" => EvRules.MatchAtNow, "p0-at-page-commit" => EvRules.P0AtPageCommit, "no-horizon" => EvRules.NoHorizon, "meet-waits-while-suspended" => EvRules.MeetWaitsWhileSuspended, "split-no-row-hold" => EvRules.SplitNoRowHold, "match-at-acceptance" => EvRules.MatchAtAcceptance, "no-publish-coverage" => EvRules.NoPublishCoverage,
                 _ => throw new ArgumentException($"EV-1 has no rule set '{rules}'"),
             };
             return await new Ev1(id[4..], set).RunAsync();
