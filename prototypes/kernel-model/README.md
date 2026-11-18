@@ -38,6 +38,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
+| `experiments/Astra4.Sizes` | The fourth gate 2 review's size and identity probe: the real event-match encoding, placement hash and Native background arm, measured beside the proposed compact forms; see its [README](experiments/Astra4.Sizes/README.md) |
 
 ## Build
 
