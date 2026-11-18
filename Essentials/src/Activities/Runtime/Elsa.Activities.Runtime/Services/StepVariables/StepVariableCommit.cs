@@ -32,7 +32,7 @@ internal static class StepVariableCommit
         {
             return await ApplyAsync(session, workflowExecutionStateStore, activityExecutionStateStore, workflowExecutionId, node, invocation, occurredAt, cancellationToken);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or KeyNotFoundException)
+        catch (StepVariableCommitRefusedException exception)
         {
             return StepVariableCommitResult.None with { Failure = exception };
         }
@@ -73,27 +73,30 @@ internal static class StepVariableCommit
             if (intent.OwnerInvocationId is null)
             {
                 workflow ??= await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
-                             ?? throw new InvalidOperationException(
+                             ?? throw new StepVariableCommitRefusedException(
                                  $"Node '{node.ExecutableNodeId}' writes workflow variable '{intent.Name}', but workflow execution '{workflowExecutionId}' has no durable state.");
                 frame = workflow.RootVariableFrame
-                        ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has no canonical root variable frame.");
+                        ?? throw new StepVariableCommitRefusedException($"Workflow execution '{workflowExecutionId}' has no canonical root variable frame.");
             }
             else
             {
                 if (!owners.TryGetValue(intent.OwnerInvocationId, out var owner))
                 {
                     owner = await activityExecutionStateStore.FindAsync(workflowExecutionId, intent.OwnerInvocationId, cancellationToken)
-                            ?? throw new InvalidOperationException(
+                            ?? throw new StepVariableCommitRefusedException(
                                 $"Node '{node.ExecutableNodeId}' writes variable '{intent.Name}' of scope '{intent.ScopeId}', whose owner '{intent.OwnerInvocationId}' no longer exists.");
                     owners[owner.InvocationId] = owner;
                 }
 
                 frame = owner.VariableFrame is { Status: VariableFrameStatus.Active } active && StringComparer.Ordinal.Equals(active.ScopeId, intent.ScopeId)
                     ? active
-                    : throw new InvalidOperationException(
+                    : throw new StepVariableCommitRefusedException(
                         $"Node '{node.ExecutableNodeId}' writes variable '{intent.Name}' of scope '{intent.ScopeId}', which is no longer active.");
             }
 
+            if (!frame.Values.ContainsKey(intent.VariableKey))
+                throw new StepVariableCommitRefusedException(
+                    $"Node '{node.ExecutableNodeId}' writes variable '{intent.Name}', which scope '{intent.ScopeId}' no longer declares.");
             var write = frame.Commit(intent.VariableKey, intent.Value, frame.Revision, intent.Base, mode, writer);
             if (VariableWriteRecord.IsRecorded(write.Decision))
             {
@@ -153,3 +156,9 @@ internal sealed record StepVariableCommitResult(
     /// <summary>The invocation to commit: <see cref="Invocation"/> when the session changed it, else <paramref name="fallback"/>.</summary>
     public ActivityExecutionState Apply(ActivityExecutionState fallback) => Invocation ?? fallback;
 }
+
+/// <summary>
+/// A step's session writes that its state no longer allows (no root frame, a gone owner, a closed container frame): the
+/// step faults with it. Store and infrastructure failures are not this, so they keep their own retry handling.
+/// </summary>
+internal sealed class StepVariableCommitRefusedException(string message) : InvalidOperationException(message);

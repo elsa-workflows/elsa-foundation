@@ -124,10 +124,10 @@ internal static class StepVariableTestGraph
             [VariableLifecycleTestGraph.CountDeclaration(), OtherDeclaration()]);
 
     /// <summary>A Parallel that declares a container variable <c>inner</c> (key <c>var-inner</c>) around two leaves.</summary>
-    public static WorkflowExecutable ParallelWithContainerVariable(ExecutableNode left, ExecutableNode right, int initial = 0)
+    public static WorkflowExecutable ParallelWithContainerVariable(ExecutableNode left, ExecutableNode right, int initial = 0, string name = "inner")
     {
         var parallel = VariableLifecycleTestGraph.Parallel(left, right);
-        var declaration = Declaration(InnerKey, "inner", VariableLifecycleTestGraph.Int32Type, initial);
+        var declaration = Declaration(InnerKey, name, VariableLifecycleTestGraph.Int32Type, initial);
         var structure = new ExecutableActivityStructure(
             ParallelActivity.StructureKind,
             ParallelActivity.StructureSchemaVersion,

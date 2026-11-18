@@ -158,8 +158,20 @@ builds, so absolute numbers are high-side):
 
 A hot loop of small session writes (serialize, commit, record) costs about 5 µs per write. The 1 MiB commit is two
 canonical digests: the new value's and, because the stored value was never written with a version, the stored one's
-once (S-10 `CurrentDigestOf`); once a variable has been written its stored digest is reused. A step that only reads
-pays the read copy and nothing else: no serialization, no digest, no record (SC-007).
+once (S-10 `CurrentDigestOf`); once a variable has been written its stored digest is reused.
+
+A step that only reads pays the read copy and one session-read record per variable, and adds no serialization and no
+write-history record (SC-007). On a `Fault` node the first read of a variable whose stored version has no digest yet
+computes that digest once (about the commit's cost for the same size); in the default mode a read never hashes. A typed
+`Get<T>` deserializes into `T`; members it drops are found only if the value is written back. The measurement also
+times a read (both modes) and a staged write through a real `StepVariableSession`. A second run, at lower load:
+
+| Value | Session read, default | Session read, `Fault` (first read digests) | Session write (stage) | Commit |
+|---|---|---|---|---|
+| 1 KiB | 0.13 ms | 0.07 ms | 0.06 ms | 0.07 ms |
+| 1 MiB | 5.8 ms | 21 ms | 15 ms | 25 ms |
+
+Small session writes in a hot loop: about 1.8 µs each at this load.
 
 ## R-10 — Out of scope, recorded
 

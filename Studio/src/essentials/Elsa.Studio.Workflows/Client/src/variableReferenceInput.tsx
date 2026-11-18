@@ -3,8 +3,10 @@ import type { StudioActivityDescriptor, StudioActivityInputDescriptor, StudioExp
 import { formatTypeName, readWrappedInput, withExpression, writeInputValue } from "./activityProperties";
 import { makeVariableReference, readVariableReference } from "./scopedVariables";
 import { optionKey, selectedOptionKey, VariableTargetSelect } from "./variableTargetPicker";
-import { useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
-import type { ActivityNode, VariableReference, VisibleVariableView } from "./workflowTypes";
+import { indexVariableDeclarations, variableOptionKey } from "./variableReferenceContribution";
+import { readArgumentType } from "./workflowProperties";
+import { isArgumentTypeCompatible, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
+import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
  * Variable-reference inputs (spec 1231 FR-022, FR-036): an activity input of CLR type `VariableReference<T>` or
@@ -62,6 +64,24 @@ function readStoredVariableName(activity: ActivityNode, input: StudioActivityInp
   return null;
 }
 
+/**
+ * The visible variables a reference input can be bound to: those whose declared type fits the input's value type, by the
+ * same rule as the Variable editor (`isArgumentTypeCompatible`). A variable whose declaration is not known here is kept,
+ * since its type cannot be judged.
+ */
+export function compatibleVariables(
+  visibleVariables: VisibleVariableView[],
+  workflowState: WorkflowDefinitionState | undefined,
+  input: StudioActivityInputDescriptor
+): VisibleVariableView[] {
+  if (!workflowState) return visibleVariables;
+  const declarations = indexVariableDeclarations(workflowState);
+  return visibleVariables.filter(variable => {
+    const declaration = declarations.get(variableOptionKey(variable.referenceKey, variable.scopeId));
+    return !declaration || isArgumentTypeCompatible(readArgumentType(declaration), input.typeName, input.collectionKind);
+  });
+}
+
 /** The display name of the other syntax a variable-reference input is stored with, or null when it is unbound or a Variable binding. */
 export function readForeignBindingSyntax(
   activity: ActivityNode,
@@ -116,7 +136,7 @@ export function VariableReferenceInputRow({
         <VariableTargetSelect
           ariaLabelledBy={labelId}
           ariaDescribedBy={foreignSyntax ? `${accessId} ${noteId}` : accessId}
-          visibleVariables={authoring.visibleVariables}
+          visibleVariables={compatibleVariables(authoring.visibleVariables, authoring.workflowState, input)}
           status={authoring.status}
           retry={authoring.retry}
           disabled={readOnly || input.isReadOnly === true}

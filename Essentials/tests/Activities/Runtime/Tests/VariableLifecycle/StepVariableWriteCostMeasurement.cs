@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -60,6 +61,32 @@ public sealed class StepVariableWriteCostMeasurement(ITestOutputHelper output)
             Report($"{size / 1024,5} KiB: read copy {Ms(read, runs)} ms, write serialize {Ms(write, runs)} ms, commit (digest + record) {Ms(commit, runs)} ms per step");
         }
 
+        // Through a real session: a read (the JSON copy and its session-read record) in the default mode and under Fault, where
+        // the first read of a never-written value computes its stored digest once; and a typed write (serialize, type check).
+        foreach (var size in new[] { 1_024, 1_024 * 1_024 })
+        {
+            var stored = Payload(size);
+            var runs = Enabled ? Math.Max(5, 20_000_000 / size) : 2;
+            foreach (var mode in new[] { LostUpdateMode.Default, LostUpdateMode.Fault })
+            {
+                var watch = Stopwatch.StartNew();
+                for (var i = 0; i < runs; i++)
+                    _ = NewSession(stored, mode).ReadJson(new Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget("workflow", Key, "order"));
+                watch.Stop();
+                Report($"{size / 1024,5} KiB session read ({mode}): {Ms(watch, runs)} ms per step, with its session-read record");
+            }
+
+            var write = Stopwatch.StartNew();
+            for (var i = 0; i < runs; i++)
+            {
+                var session = NewSession(stored, LostUpdateMode.Default);
+                session.WriteJson(new Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget("workflow", Key, "order"), JsonNode.Parse(stored.InlineValue!.Value.GetRawText()));
+                Assert.Single(session.Intents);
+            }
+            write.Stop();
+            Report($"{size / 1024,5} KiB session write (stage the intent): {Ms(write, runs)} ms per step");
+        }
+
         // Hot loop: a counter written N times through the session write path (serialize, commit, record, advance base).
         var iterations = Enabled ? 5_000 : 20;
         var counter = Frame(ValueEnvelope.Inline(new ValueTypeDescriptor("Int32"), JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline));
@@ -75,6 +102,20 @@ public sealed class StepVariableWriteCostMeasurement(ITestOutputHelper output)
         loop.Stop();
         Assert.Equal(iterations, counter.VersionOf(Key).Version);
         Report($"hot loop ({iterations} small session writes): {loop.Elapsed.TotalMicroseconds / iterations:F2} µs per write");
+    }
+
+    private static Elsa.Activities.Runtime.Services.StepVariables.StepVariableSession NewSession(ValueEnvelope stored, LostUpdateMode mode)
+    {
+        var node = StepVariableTestGraph.CountLeaf("node-root", typeof(SessionIncrementActivity), mode: mode);
+        var executable = Elsa.Activities.Testing.WorkflowExecutionHarness.NewExecutable(node,
+            StepVariableTestGraph.Declaration(Key, "order", AnyType, new { total = 0 }));
+        var invocation = new ActivityExecutionState(
+            new ActivityExecution("actexec-root", "workflow-run", "node-root", "authored-node-root", node.ActivityType, "1.0.0"),
+            ActivityExecutionStatus.Running, null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null, null, null, null, null, null,
+            [], [], 0, 0, new Dictionary<string, string>());
+        return new Elsa.Activities.Runtime.Services.StepVariables.StepVariableSession(
+            new Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariableFrames([Frame(stored)]), executable, invocation, node,
+            validator: null, attemptId: "attempt-1", engineConsumer: true);
     }
 
     private static string Ms(Stopwatch watch, int runs) => (watch.Elapsed.TotalMilliseconds / runs).ToString("F3", System.Globalization.CultureInfo.InvariantCulture);

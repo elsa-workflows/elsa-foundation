@@ -192,6 +192,30 @@ describe("variable-reference inputs", () => {
     expect(document.getElementById(describedBy!)?.textContent).toBe("reads and writes");
   });
 
+  it("offers only variables whose type fits the input's value type", () => {
+    const declare = (referenceKey: string, name: string, alias: string) =>
+      ({ referenceKey, name, type: { alias, collectionKind: "Single" as const }, storageDriverType: null, default: null });
+    const workflowState: WorkflowDefinitionState = {
+      variables: [declare("counter-key", "Counter", "Int32"), declare("label-key", "Label", "String")],
+      rootActivity: node()
+    };
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        workflowState,
+        variables: [
+          { referenceKey: "counter-key", name: "Counter", scopeId: "workflow", isWorkflowScope: true },
+          { referenceKey: "label-key", name: "Label", scopeId: "workflow", isWorkflowScope: true }
+        ]
+      }
+    );
+
+    const offered = [...container.querySelectorAll<HTMLOptionElement>(".wf-variable-picker select option")]
+      .map(option => option.value)
+      .filter(value => value !== "");
+    expect(offered).toEqual(["workflow::counter-key"]);
+  });
+
   it("offers only the variables the scope analysis reports visible, not ones declared in a sibling scope", () => {
     const declare = (referenceKey: string, name: string) =>
       ({ referenceKey, name, type: { alias: "Int32", collectionKind: "Single" as const }, storageDriverType: null, default: null });

@@ -253,6 +253,23 @@ public sealed class StepVariableSessionTests
         Assert.Null(run.State("node-root").VariableWrites);
     }
 
+    // FR-025, User Story 4 scenario 1: a free name resolves to the nearest visible declaration. The Parallel declares its
+    // own "other", which shadows the workflow's "other": the write lands on the container frame, the root keeps its value.
+    [Fact]
+    public async Task A_free_name_resolves_to_the_nearest_visible_declaration()
+    {
+        await using var harness = VariableLifecycleTestGraph.NewHarness(ParallelIds);
+        static ExecutableNode FreeNameLeaf(string nodeId) =>
+            StepVariableTestGraph.Leaf(nodeId, typeof(FreeNameSetActivity), new Dictionary<string, RuntimeInputBinding>());
+
+        var run = await harness.RunAsync(StepVariableTestGraph.ParallelWithContainerVariable(FreeNameLeaf("node-left"), FreeNameLeaf("node-right"), name: "other"));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(5, run.State("node-parallel").VariableFrame!.Values[StepVariableTestGraph.InnerKey].InlineValue!.Value.GetInt32());
+        Assert.Equal(0, StepVariableTestGraph.ReadInt(run, StepVariableTestGraph.OtherKey));
+        Assert.Equal("node-parallel", Assert.Single(run.State("node-left").VariableWrites!).ScopeId);
+    }
+
     private static ExecutableNode OrderLeaf(Type activityType) =>
         StepVariableTestGraph.Leaf("node-root", activityType, new Dictionary<string, RuntimeInputBinding>
         {
