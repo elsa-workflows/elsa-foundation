@@ -216,6 +216,40 @@ describe("variable-reference inputs", () => {
     expect(offered).toEqual(["workflow::counter-key"]);
   });
 
+  it("names a bound variable whose type no longer fits, instead of calling it out of scope", () => {
+    const declare = (referenceKey: string, name: string, alias: string) =>
+      ({ referenceKey, name, type: { alias, collectionKind: "Single" as const }, storageDriverType: null, default: null });
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({ Target: bound("counter-key", "workflow") }),
+        workflowState: { variables: [declare("counter-key", "Counter", "String")], rootActivity: node() },
+        variables: [{ referenceKey: "counter-key", name: "Counter", scopeId: "workflow", isWorkflowScope: true }]
+      }
+    );
+
+    const picker = container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!;
+    expect(picker.selectedOptions[0].textContent).toBe("Counter (type does not fit)");
+    const note = [...container.querySelectorAll('.wf-property-row [role="note"]')].find(item => item.textContent?.includes("does not fit"))!;
+    expect(note.textContent).toContain("Counter");
+    expect(note.textContent).toContain("Pick a compatible variable.");
+    expect(picker.getAttribute("aria-describedby")?.split(" ")).toContain(note.id);
+  });
+
+  it("names a deleted bound variable by its stored name in the picker", () => {
+    const container = renderPanel(
+      { inputs: [referenceInput("Target", "ReadWrite")] },
+      {
+        activity: node({
+          Target: { typeName: "Int32", expression: { type: "Variable", value: { referenceKey: "gone-key", declaringScopeId: "workflow", name: "Gone" } } }
+        })
+      }
+    );
+
+    expect(container.querySelector<HTMLSelectElement>(".wf-variable-picker select")!.selectedOptions[0].textContent)
+      .toBe("Gone (not visible from this scope)");
+  });
+
   it("offers only the variables the scope analysis reports visible, not ones declared in a sibling scope", () => {
     const declare = (referenceKey: string, name: string) =>
       ({ referenceKey, name, type: { alias: "Int32", collectionKind: "Single" as const }, storageDriverType: null, default: null });

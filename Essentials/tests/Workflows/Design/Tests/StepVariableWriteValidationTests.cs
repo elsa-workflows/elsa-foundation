@@ -85,6 +85,14 @@ public sealed class StepVariableWriteValidationTests
     }
 
     [Fact]
+    public async Task A_reference_bound_to_a_variable_of_another_type_is_refused()
+    {
+        // "total" is an Int32; the writer reads and writes a Decimal.
+        var error = Assert.Single(await Validate(Sequence("root", Writer("writer", "total"))), item => item.Type == "ValueFlow/VariableReference");
+        Assert.Contains("reads and writes a Decimal, but variable 'total' is a Int32", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Bound_references_to_declared_variables_are_accepted()
     {
         var errors = await Validate(Sequence("root", Writer("writer", "balance"), Reference("reader", ReaderVersion, "Amount", "balance")));

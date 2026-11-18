@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -78,12 +79,21 @@ internal static class StepVariableWriteValidation
                 }
 
                 var scopeId = UnorderedVariableWriteAnalyzer.NormalizeScopeId(reference.DeclaringScopeId);
-                switch (Classify(scopeId, reference.ReferenceKey, ancestors, workflowKeys, structures))
+                var declared = Find(scopeId, reference.ReferenceKey, ancestors, workflowVariables, structures);
+                if (declared is null)
                 {
-                    case TargetKind.Undeclared:
-                        errors.Add(new ValidationError(path, ReferenceRuleId,
-                            $"Input '{input.Name}' of node '{node.NodeId}' is bound to variable '{reference.ReferenceKey}' in scope '{scopeId}', which is not declared in a scope visible to the node (a loop item or index is not a declared variable, and is read-only). A step never creates a variable."));
-                        continue;
+                    errors.Add(new ValidationError(path, ReferenceRuleId,
+                        $"Input '{input.Name}' of node '{node.NodeId}' is bound to variable '{reference.ReferenceKey}' in scope '{scopeId}', which is not declared in a scope visible to the node (a loop item or index is not a declared variable, and is read-only). A step never creates a variable."));
+                    continue;
+                }
+
+                // The activity reads and writes the variable as the input's value type; a variable of another type would fault
+                // the step when it runs, so publication refuses it here.
+                if (!TypeFits(declared.Type, input.Type))
+                {
+                    errors.Add(new ValidationError(path, ReferenceRuleId,
+                        $"Input '{input.Name}' of node '{node.NodeId}' reads and writes a {Describe(input.Type)}, but variable '{declared.Name}' is a {Describe(declared.Type)}. Bind a variable of a fitting type."));
+                    continue;
                 }
 
                 if (writable && !targets.Any(target => target.ScopeId == scopeId && target.ReferenceKey == reference.ReferenceKey))
@@ -118,29 +128,40 @@ internal static class StepVariableWriteValidation
         }
     }
 
-    private static TargetKind Classify(
+    // The variable a binding names, when a scope visible to the node declares it. Only an enclosing scope's own declared
+    // variables can be bound: loop items and indexes are not declared variables yet (spec 1222 Q1 makes them so).
+    private static VariableDefinition? Find(
         string scopeId,
         string referenceKey,
         IReadOnlyList<ActivityNode> ancestors,
-        IReadOnlySet<string> workflowKeys,
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
         IActivityStructureService structures)
     {
         if (StringComparer.Ordinal.Equals(scopeId, VariableReference.WorkflowScopeId))
-            return workflowKeys.Contains(referenceKey) ? TargetKind.Declared : TargetKind.Undeclared;
+            return workflowVariables.FirstOrDefault(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey));
 
         var owner = ancestors.LastOrDefault(ancestor => StringComparer.Ordinal.Equals(ancestor.NodeId, scopeId));
-        if (owner is null)
-            return TargetKind.Undeclared;
-        // Only an enclosing scope's own declared variables can be bound. Loop items and indexes are not declared variables
-        // yet (spec 1222 Q1 makes them so), so a binding to one is refused as undeclared, never as a writable target.
-        return structures.ProjectScopedVariables(owner).Any(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey))
-            ? TargetKind.Declared
-            : TargetKind.Undeclared;
+        return owner is null
+            ? null
+            : structures.ProjectScopedVariables(owner).FirstOrDefault(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, referenceKey));
     }
 
-    private enum TargetKind
+    // A variable fits when it has the input's value type and collection shape. An Any or Object variable, and an input
+    // that reads the value as JSON or Object, take any value.
+    private static bool TypeFits(TypeReference variable, TypeReference input)
     {
-        Declared,
-        Undeclared
+        if (IsOpen(variable.Alias) || IsOpen(input.Alias))
+            return true;
+        return string.Equals(Normalize(variable.Alias), Normalize(input.Alias), StringComparison.OrdinalIgnoreCase) &&
+               variable.CollectionKind == input.CollectionKind;
     }
+
+    private static bool IsOpen(string? alias) =>
+        Normalize(alias) is "elsa.any" or "object" or "system.object" or "jsonnode" or "system.text.json.nodes.jsonnode" or "jsonelement" or "system.text.json.jsonelement";
+
+    private static string Normalize(string? alias) => (alias ?? string.Empty).Trim().ToLowerInvariant();
+
+    private static string Describe(TypeReference type) =>
+        type.CollectionKind == CollectionKind.Single ? type.Alias : $"{type.CollectionKind} of {type.Alias}";
+
 }

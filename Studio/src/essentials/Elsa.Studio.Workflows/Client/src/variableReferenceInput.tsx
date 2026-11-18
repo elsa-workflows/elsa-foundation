@@ -5,7 +5,7 @@ import { makeVariableReference, readVariableReference } from "./scopedVariables"
 import { optionKey, selectedOptionKey, VariableTargetSelect } from "./variableTargetPicker";
 import { indexVariableDeclarations, variableOptionKey } from "./variableReferenceContribution";
 import { readArgumentType } from "./workflowProperties";
-import { isArgumentTypeCompatible, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
+import { formatArgumentType, isArgumentTypeCompatible, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
 import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
@@ -82,6 +82,12 @@ export function compatibleVariables(
   });
 }
 
+function declaredType(workflowState: WorkflowDefinitionState | undefined, variable: VisibleVariableView): string | null {
+  if (!workflowState) return null;
+  const declaration = indexVariableDeclarations(workflowState).get(variableOptionKey(variable.referenceKey, variable.scopeId));
+  return declaration ? formatArgumentType(readArgumentType(declaration)) : null;
+}
+
 /** The display name of the other syntax a variable-reference input is stored with, or null when it is unbound or a Variable binding. */
 export function readForeignBindingSyntax(
   activity: ActivityNode,
@@ -111,11 +117,25 @@ export function VariableReferenceInputRow({
   const labelId = useId();
   const accessId = useId();
   const noteId = useId();
+  const typeNoteId = useId();
   const authoring = useWorkflowReferenceAuthoring();
   const label = input.displayName || input.name;
   const access = describeVariableAccess(input);
   // Validation/recovery state: a stored binding of another syntax is kept until the author picks a variable.
   const foreignSyntax = readForeignBindingSyntax(activity, input, expressionDescriptors);
+  const bound = readBoundVariable(activity, input);
+  const selected = selectedOptionKey(bound);
+  const offered = authoring ? compatibleVariables(authoring.visibleVariables, authoring.workflowState, input) : [];
+  // A bound variable that is in scope but whose type no longer fits, or one that is no longer visible: say which, by name.
+  const boundVisible = authoring && bound
+    ? authoring.visibleVariables.find(variable => optionKey(variable.referenceKey, variable.scopeId) === selected)
+    : undefined;
+  const typeMismatch = !!boundVisible && !offered.some(variable => optionKey(variable.referenceKey, variable.scopeId) === selected);
+  const boundType = typeMismatch && authoring ? declaredType(authoring.workflowState, boundVisible!) : null;
+  const unlistedLabel = typeMismatch
+    ? `${boundVisible!.name} (type does not fit)`
+    : bound ? `${readStoredVariableName(activity, input) ?? bound.referenceKey} (not visible from this scope)` : undefined;
+  const describedBy = [accessId, foreignSyntax ? noteId : null, typeMismatch ? typeNoteId : null].filter(Boolean).join(" ");
 
   return (
     <div className="wf-property-row">
@@ -132,15 +152,21 @@ export function VariableReferenceInputRow({
           Bound with {foreignSyntax}; this input accepts only a declared variable. Pick one to replace it.
         </p>
       ) : null}
+      {typeMismatch ? (
+        <p id={typeNoteId} className="wf-variable-picker-note" role="note">
+          {boundVisible!.name}{boundType ? ` (${boundType})` : ""} does not fit {formatTypeName(input.typeName)}. Pick a compatible variable.
+        </p>
+      ) : null}
       {authoring ? (
         <VariableTargetSelect
           ariaLabelledBy={labelId}
-          ariaDescribedBy={foreignSyntax ? `${accessId} ${noteId}` : accessId}
-          visibleVariables={compatibleVariables(authoring.visibleVariables, authoring.workflowState, input)}
+          ariaDescribedBy={describedBy}
+          visibleVariables={offered}
+          unlistedLabel={unlistedLabel}
           status={authoring.status}
           retry={authoring.retry}
           disabled={readOnly || input.isReadOnly === true}
-          selected={selectedOptionKey(readBoundVariable(activity, input))}
+          selected={selected}
           onSelect={selection => {
             // Publish reads the declared name alongside the key (RuntimeInputBindingCompiler.ReadVariableName).
             const name = selection

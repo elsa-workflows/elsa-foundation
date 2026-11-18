@@ -128,8 +128,9 @@ public sealed class OperatorActionsTests
         run.AssertWorkflowCompleted();
         var successor = Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
         Assert.Equal(6, VariableLifecycleTestGraph.ReadCount(run));
-        // The new attempt read the committed value again; the faulted attempt's read stays as history, never as a base.
-        var read = Assert.Single(successor.SessionReads!, read => read.AttemptId == successor.Attempts!.Last().AttemptId);
+        // The new attempt read the committed value again; the source row's reads stay on the source row.
+        var read = Assert.Single(successor.SessionReads!);
+        Assert.Equal(successor.Attempts!.Last().AttemptId, read.AttemptId);
         Assert.Equal(0, read.Entry.Version);
         Assert.Equal(VariableWriteSource.SessionChange, Assert.Single(successor.VariableWrites!).Writer.Source);
     }

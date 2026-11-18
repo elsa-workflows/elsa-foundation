@@ -166,8 +166,8 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                     }));
             }
 
-            // Spec 1231 FR-028: a node that may write every visible variable counts as a writer of each variable visible to it
-            // that the definition writes or declares at the workflow root.
+            // Spec 1231 FR-028: a node that may write every visible variable counts as a writer of each variable visible to it:
+            // those the definition writes, the workflow variables, and the variables its enclosing containers declare.
             var everyVisible = _nodes
                 .Where(node => !string.IsNullOrWhiteSpace(node.Activity.NodeId) &&
                                stepWrites.ByNodeId.TryGetValue(node.Activity.NodeId, out var writers) && writers.MayWriteEveryVisibleVariable)

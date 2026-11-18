@@ -24,7 +24,8 @@ export function VariableTargetSelect({
   selected,
   onSelect,
   workflowScopeOnly = false,
-  disabled = false
+  disabled = false,
+  unlistedLabel
 }: {
   ariaLabelledBy?: string;
   ariaLabel?: string;
@@ -37,6 +38,8 @@ export function VariableTargetSelect({
   // v1 output captures only offer workflow-scope targets; the intrinsic picker offers every scope.
   workflowScopeOnly?: boolean;
   disabled?: boolean;
+  // The text of a selection that is not among the options; defaults to its key, "not visible from this scope".
+  unlistedLabel?: string;
 }) {
   const options = workflowScopeOnly ? visibleVariables.filter(variable => variable.isWorkflowScope) : visibleVariables;
   const optionsUnavailable = status !== "ready";
@@ -54,7 +57,7 @@ export function VariableTargetSelect({
       >
         <option value="">Select a variable…</option>
         {selected !== "" && !selectedIsVisible ? (
-          <option value={selected} disabled>{parseOptionKey(selected)?.referenceKey ?? selected} (not visible from this scope)</option>
+          <option value={selected} disabled>{unlistedLabel ?? `${parseOptionKey(selected)?.referenceKey ?? selected} (not visible from this scope)`}</option>
         ) : null}
         {options.map(variable => (
           <option key={optionKey(variable.referenceKey, variable.scopeId)} value={optionKey(variable.referenceKey, variable.scopeId)}>
