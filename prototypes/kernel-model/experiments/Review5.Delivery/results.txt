@@ -1,5 +1,5 @@
 Review5.Delivery results
-commit 02097998db9562e44a6c7d4c533a5f57e859edc1 (tree ae14f12a92925d1b589df1e9c12389b0b5fe2acf, prototype tree ef30c8da1e24fd239db25876555dac6c9fb5fa38)
+commit 1f958106f8f8ce3cff3c375840f6ed3a457e9358 (tree ec7ddd8ac83431c39ef7495f5313c08514dc5695, prototype tree 16cef2ca625fdfac0311262f94b05692705d8c76)
 branch base (merge-base with origin/main) 0a1bb5e0ce76f878b629a4598ae3da676bb74e77
 dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
 
@@ -9,7 +9,7 @@ commands, from prototypes/kernel-model, after removing experiments/Review5.Deliv
     dotnet build experiments/Review5.Delivery -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
     each case and rule set, then --all                                 -> exit codes below
   dotnet experiments/Review5.Delivery/bin/Release/net10.0/Kernel.Review5.Delivery.dll --all, twice
-    -> exit 0 and 0, identical output (SHA-256 7246ee04ceaf0a36f7b24c46d9d1d4ebdd151f0579ba361db0232c27168be125), below
+    -> exit 0 and 0, identical output (SHA-256 c627c5c43984a8ee84f6b9e52e3964ac20d55dafacfe6f5e368e7906e5c17f4e), below
 
 run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the run stopped on an unstated rule):
   exit 1 (ev1-a, reviewed)
@@ -32,12 +32,13 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the ru
   exit 0 (ev1-b-suspended, reviewed)
   exit 0 (ev1-b-suspended, repaired)
   exit 1 (ev1-b-suspended, meet-waits-while-suspended)
-  exit 1 (ev1-replay, reviewed)
+  exit 0 (ev1-replay, reviewed)
   exit 0 (ev1-replay, repaired)
-  exit 1 (ev1-replay, negative)
+  exit 0 (ev1-replay, negative)
   exit 1 (ev1-replay-consumed, reviewed)
   exit 0 (ev1-replay-consumed, repaired)
   exit 1 (ev1-replay-consumed, negative)
+  exit 1 (ev1-replay-consumed, no-publish-coverage)
   exit 1 (ev1-replay-atomic, reviewed)
   exit 0 (ev1-replay-atomic, repaired)
   exit 0 (ev1-replay-atomic, negative)
@@ -118,7 +119,7 @@ run.sh exit codes (0 = every assertion held, 1 = an assertion failed, 3 = the ru
   exit 0 (po1-ordinary, repaired)
   exit 0 (po1-ordinary, negative)
 
-run.sh matrix: 105/105 runs as expected, matrix exit 0
+run.sh matrix: 106/106 runs as expected, matrix exit 0
 
 --all output:
 
@@ -391,11 +392,11 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
     meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page ["payload-2"], next ticket sent (P0 99)
     meet step at 99: real KeptMatchesAsync (KeepUntil >= now) -> page []
   keeping wait registered at 99: the catch-up delivers ["payload-2"]
+  the entitlement (KeepUntil >= 99) promises ["payload-1", "payload-2"]
   assertions:
-    FAIL deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 1 (expected 0)
+    FAIL promised events not delivered to S: "payload-1" (expected )
     PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
-    FAIL the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): False (expected True)
   real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x8, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=reviewed: FAIL
 
@@ -409,11 +410,12 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
   E2 is published at 98 with KeepUntil 99, before the wait registers; it is live
     meet step at 99: KeepUntil >= P0 101 -> page []
   keeping wait registered at 99, P0 = 101: the catch-up delivers []
+  the entitlement (KeepUntil >= 101) promises []
+  E2, live with KeepUntil 99 <= H, is excluded from the new wait's catch-up as expired: the events page's stated consequence of a step-back
   assertions:
-    PASS deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 0 (expected 0)
+    PASS promised events not delivered to S:  (expected )
     PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
-    PASS the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): True (expected True)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x1, InMemoryStore.CommitAsync x7, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=repaired: PASS
 
@@ -428,11 +430,11 @@ invariant: after the clock steps back below a swept event's KeepUntil, a new kee
     meet step at 99: KeepUntil >= P0 99 -> page ["payload-2"], next ticket sent (P0 99)
     meet step at 99: KeepUntil >= P0 99 -> page []
   keeping wait registered at 99, P0 = 99: the catch-up delivers ["payload-2"]
+  the entitlement (KeepUntil >= 99) promises ["payload-1", "payload-2"]
   assertions:
-    FAIL deliveries to S (the swept E1 never; E2's KeepUntil 99 is below P0 101): 1 (expected 0)
+    FAIL promised events not delivered to S: "payload-1" (expected )
     PASS deliveries of E2 to W0, registered before E2's match step (the publisher side): 1 (expected 1)
     PASS E1 re-created: False (expected False)
-    FAIL the wait's entitlement point excludes the swept E1 (E1.KeepUntil < P0): False (expected True)
   real prototype calls: CreationProtocol.Origin x4, EventRoute.Delivery x2, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x1
 RESULT EV-1/b-stepback rules=no-horizon: FAIL
 
@@ -496,11 +498,10 @@ invariant: a replayed publish ticket adds no second delivery, and its event is n
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
     match step at 20002: 0 deliveries added, then the ticket consumed
   assertions:
-    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
     PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
     PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x6, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x2
-RESULT EV-1/replay rules=reviewed: FAIL
+RESULT EV-1/replay rules=reviewed: PASS
 
 == EV-1/replay | rules=repaired ==
 invariant: a replayed publish ticket adds no second delivery, and its event is not swept while the ticket is outstanding
@@ -512,7 +513,6 @@ invariant: a replayed publish ticket adds no second delivery, and its event is n
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
     match step at 20002: one commit consumes the ticket and inserts 1 deliveries
   assertions:
-    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
     PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
     PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
@@ -528,11 +528,10 @@ invariant: a replayed publish ticket adds no second delivery, and its event is n
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
     match step at 20002: one commit consumes the ticket and inserts 1 deliveries
   assertions:
-    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
     PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
     PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
-RESULT EV-1/replay rules=negative: FAIL
+RESULT EV-1/replay rules=negative: PASS
 
 == EV-1/replay-consumed | rules=reviewed ==
 invariant: a replayed publish ticket adds no second delivery after the waits consumed theirs and the sweep ran
@@ -544,7 +543,6 @@ invariant: a replayed publish ticket adds no second delivery after the waits con
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
     match step at 20002: 2 deliveries added, then the ticket consumed
   assertions:
-    FAIL E kept by the sweep while its publish ticket was outstanding: False (expected True)
     FAIL deliveries to S1 (non-keeping, registered before E): 2 (expected 1)
     FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x4, InMemoryStore.CommitAsync x8, InMemoryStore.KeptMatchesAsync x2, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SweepAsync x1, InMemoryStore.TakeAsync x2
@@ -560,7 +558,6 @@ invariant: a replayed publish ticket adds no second delivery after the waits con
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
     match step at 20002: one commit consumes the ticket and inserts 1 deliveries
   assertions:
-    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
     PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
     PASS deliveries to S2 (keeping, registered within the window): 1 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
@@ -576,11 +573,25 @@ invariant: a replayed publish ticket adds no second delivery after the waits con
   owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is kept
     match step at 20002: one commit consumes the ticket and inserts 2 deliveries
   assertions:
-    PASS E kept by the sweep while its publish ticket was outstanding: True (expected True)
     PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
     FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
   real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
 RESULT EV-1/replay-consumed rules=negative: FAIL
+
+== EV-1/replay-consumed | rules=no-publish-coverage ==
+invariant: a replayed publish ticket adds no second delivery after the waits consumed theirs and the sweep ran
+    match step at 10: the owner dies before its commit; nothing lands
+  owner 2 takes over at 10020 (epoch 2); its poll returns the publish ticket, still undone
+    meet step at 10021: KeepUntil >= P0 10020 -> page ["payload"], next ticket sent (P0 10020)
+    meet step at 10021: KeepUntil >= P0 10020 -> page []
+    sweep at 20001: 1 event(s) and 1 done row(s) deleted; H 20000
+  owner 2 pauses until 20001, past E's keep window, with the ticket outstanding; after the sweep E is deleted
+    match step at 20002: one commit consumes the ticket and inserts 2 deliveries
+  assertions:
+    PASS deliveries to S1 (non-keeping, registered before E): 1 (expected 1)
+    FAIL deliveries to S2 (keeping, registered within the window): 2 (expected 1)
+  real prototype calls: CreationProtocol.Origin x3, EventRoute.Delivery x4, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x7, InMemoryStore.PollAsync x1, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.TakeAsync x2
+RESULT EV-1/replay-consumed rules=no-publish-coverage: FAIL
 
 == EV-1/replay-atomic | rules=reviewed ==
 invariant: a match step whose commit did not land inserted nothing, so its replay delivers once after the sweep
@@ -1571,13 +1582,13 @@ invariant: after a takeover that loses the model's holds, the next page restores
   gauge at pass 0: pending non-held restored rows 170 (201910 bytes), held 0
   gauge at pass 2: pending non-held restored rows 0 (0 bytes), held 5
   gauge at pass 4: pending non-held restored rows 170 (206380 bytes), held 5
-  gauge at pass 8: pending non-held restored rows 174 (207747 bytes), held 1
+  gauge at pass 8: pending non-held restored rows 175 (208088 bytes), held 0
   pages restored 3 [170, 170, 170]; drain completed; rows still kept 0
   turns: S 10 model (trials 6) and 8 control; the neighbour 17 in 17 passes (one turn per instance per pass)
   pending non-held restored rows when the model first received one: 170
   assertions:
-    FAIL peak pending non-held restored rows: 174 (bound P_page = 170)
-    PASS peak pending non-held restored bytes: 207747 (bound: B_credit 4194304, or one larger row alone, 1214)
+    FAIL peak pending non-held restored rows: 175 (bound P_page = 170)
+    PASS peak pending non-held restored bytes: 208088 (bound: B_credit 4194304, or one larger row alone, 1214)
     PASS held-row gauge peak (elsa.kernel.drain.held): 5 (expected 5)
     PASS drain completed and nothing stalled: True (expected True)
     PASS restored rows consumed by model turns: 510 (expected 510)
@@ -1925,7 +1936,7 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x5, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after rules=negative: FAIL
 
 == JR-1/crash-after-keep | rules=reviewed ==
@@ -2006,7 +2017,7 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x6, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/crash-after-keep rules=negative: FAIL
 
 == JR-1/obsolete | rules=reviewed ==
@@ -2095,7 +2106,7 @@ invariant: a job result that completes while its instance is parked reaches the 
     PASS physical invocations: 1 (at-least-once allowance: 1, no re-run after the result committed)
     FAIL S finished: Running (expected Finished)
     PASS rows of S left in the store: 0 (expected 0)
-  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x1, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
+  real prototype calls: Delivery.DiscardedAt x1, InMemoryStore.AddAsync x1, InMemoryStore.CommitAsync x8, InMemoryStore.PollAsync x1, InMemoryStore.TakeAsync x2, InboxKey.Ticket x2, NativeModel.ExecuteJobAsync x1, NativeModel.TurnAsync x1
 RESULT JR-1/obsolete rules=negative: FAIL
 
 == JR-1/obsolete | rules=generation-blind ==
@@ -2583,12 +2594,13 @@ ev1-b-stepback                 no-horizon                 actual FAIL     expect
 ev1-b-suspended                reviewed                   actual PASS     expected PASS     as expected
 ev1-b-suspended                repaired                   actual PASS     expected PASS     as expected
 ev1-b-suspended                meet-waits-while-suspended actual FAIL     expected FAIL     as expected
-ev1-replay                     reviewed                   actual FAIL     expected FAIL     as expected
+ev1-replay                     reviewed                   actual PASS     expected PASS     as expected
 ev1-replay                     repaired                   actual PASS     expected PASS     as expected
-ev1-replay                     negative                   actual FAIL     expected FAIL     as expected
+ev1-replay                     negative                   actual PASS     expected PASS     as expected
 ev1-replay-consumed            reviewed                   actual FAIL     expected FAIL     as expected
 ev1-replay-consumed            repaired                   actual PASS     expected PASS     as expected
 ev1-replay-consumed            negative                   actual FAIL     expected FAIL     as expected
+ev1-replay-consumed            no-publish-coverage        actual FAIL     expected FAIL     as expected
 ev1-replay-atomic              reviewed                   actual FAIL     expected FAIL     as expected
 ev1-replay-atomic              repaired                   actual PASS     expected PASS     as expected
 ev1-replay-atomic              negative                   actual PASS     expected PASS     as expected
@@ -2668,4 +2680,4 @@ po1-open                       negative                   actual FAIL     expect
 po1-ordinary                   reviewed                   actual PASS     expected PASS     as expected
 po1-ordinary                   repaired                   actual PASS     expected PASS     as expected
 po1-ordinary                   negative                   actual PASS     expected PASS     as expected
-105/105 runs as expected
+106/106 runs as expected
