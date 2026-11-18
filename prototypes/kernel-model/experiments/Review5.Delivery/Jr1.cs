@@ -12,7 +12,8 @@ namespace Kernel.Review5;
 /// ticket that a parked instance consumes, and recover restarts it from its JobSpec under the next generation (the
 /// coordinator's decision of 18 November); in <c>crash-before</c> the negative removes that rule.
 /// </summary>
-enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind, ReviewedKeepsRegistry }
+/// <c>TicketOnlyLookup</c>: the repaired set with the Open's disposition lookup probing the ticket only, never its result row.
+enum JrRules { Reviewed, ReviewedKind, Repaired, Negative, GenerationBlind, ReviewedKeepsRegistry, TicketOnlyLookup }
 
 /// <summary>
 /// JR-1: an in-process job J completes while its instance S is parked; Park, takeover, recover. The model is the real
@@ -37,15 +38,24 @@ sealed class Jr1(string variant, JrRules rules)
     private static readonly InstanceRef Self = new("0/subject");
     private const long Generation = 1;                 // proposed JobGeneration of J's ticket
 
-    public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running", "obsolete", "result-parked-consume"];
+    public static readonly string[] Variants = ["crash-before", "crash-after", "crash-after-keep", "running", "obsolete", "result-parked-consume", "result-kept-lookup", "result-pending-lookup"];
+    /// <summary>
+    /// The lookup variants (the integration review's trace): every rule set converts under the kernel-issued identity and
+    /// keeps J's registry entry, so they isolate the Open's disposition lookup. Reviewed applies the stated table without the
+    /// result probe; repaired probes <c>{ticket id}/result</c>.
+    /// </summary>
+    private bool LookupCase => variant is "result-kept-lookup" or "result-pending-lookup";
+    /// <summary>The Open's lookup also probes the minted result row (the coordinator's rule after the integration review).</summary>
+    private bool ProbesResult => rules is JrRules.Repaired or JrRules.GenerationBlind or JrRules.Negative;   // the negative is repaired minus the minted identity
+    private string? _resultSource;
     /// <summary>
     /// <c>result-parked-consume</c> isolates the registry rule for a converted result: every rule set converts with the
     /// kernel-issued identity; reviewed and negative clear J's entry when the parked instance consumes its result row (the
     /// transitions page's rule before the coordinator's fix), repaired keeps it.
     /// </summary>
     private bool ResultCase => variant == "result-parked-consume";
-    private bool Converts => rules is JrRules.Repaired or JrRules.Negative or JrRules.GenerationBlind || ResultCase;
-    private bool ReservedIdentity => rules != JrRules.Negative || ResultCase;
+    private bool Converts => rules is JrRules.Repaired or JrRules.Negative or JrRules.GenerationBlind || ResultCase || LookupCase;
+    private bool ReservedIdentity => rules != JrRules.Negative || ResultCase || LookupCase;
     private readonly HashSet<InboxKey> _restored = [];
     private string? _restartedId;
     private bool KeepsUndoneTicket => rules is JrRules.Repaired or JrRules.GenerationBlind || rules == JrRules.Negative && variant != "crash-before";
@@ -134,7 +144,8 @@ sealed class Jr1(string variant, JrRules rules)
                 _authenticInMemory.Add(result.InboxKey);
                 _report.Line($"conversion: one fenced commit consumes ticket {_ticket.Id} (counted) and inserts result row {result.Id} (scope {(ReservedIdentity ? $"{_ticket.Scope}, the ticket's own" : "0, ordinary")})");
                 if (variant == "crash-after") await Takeover("after the conversion commit, before the parked instance consumed the result");
-                await ParkedConsume(result);
+                if (variant == "result-pending-lookup") await Takeover("after the conversion commit; the result row is still pending at the Open");
+                else await ParkedConsume(result);
             }
             else
             {
@@ -149,7 +160,7 @@ sealed class Jr1(string variant, JrRules rules)
                 }
                 if (variant == "crash-after") await Takeover("after the parked consumption kept the result (the reviewed design's first durable result)");
             }
-            if (variant is "crash-after-keep" or "obsolete") await Takeover("after the parked consumption kept the result");
+            if (variant is "crash-after-keep" or "obsolete" or "result-kept-lookup") await Takeover("after the parked consumption kept the result");
         }
         else
         {
@@ -167,6 +178,11 @@ sealed class Jr1(string variant, JrRules rules)
         // 6. The owner polls the restored rows and acts on them.
         await AfterRecover();
         Finish(allowed: crashBefore ? 2 : 1);
+        if (LookupCase)
+        {
+            _report.Expect("Restarted(g2) written by the Open", _restartedId ?? "none", "none");
+            _report.Expect("the row whose result reached the model", _resultSource ?? "none", ResultId(Generation));
+        }
         if (crashBefore && KeepsUndoneTicket)
             _report.Expect("the g1 ticket never restored beside its g2 restart", $"g1 restored {_restored.Contains(_ticket)}, g2 written {_restartedId is not null}", "g1 restored False, g2 written True");
         return _report;
@@ -295,6 +311,25 @@ sealed class Jr1(string variant, JrRules rules)
         await Commit(new TurnCommit(Self.Id, next, _row.Revision, [], [], [], [], [], null));
         _row = next;
         _report.Line($"recover: S runs again (revision {_row.Revision})");
+        // Pass 0: the Open's disposition lookup for each job the restored waits name (observability.md, the lookup table):
+        // a pending ticket runs; a kept Arrived ticket restarts (pass 1); a done or absent ticket with no KeptBy restarts,
+        // unless (repaired) the minted {ticket id}/result row is pending (it stays) or kept Arrived (its page restores it).
+        foreach (var (job, current) in _registry.ToList())
+        {
+            var ticketRow = _store.Messages.GetValueOrDefault(TicketKey(current));
+            if (ticketRow is { Done: false }) { _report.Line($"recover: lookup {job}: ticket {TicketKey(current).Id} pending; it runs"); continue; }
+            if (ticketRow is not null && _keptBy.GetValueOrDefault(ticketRow.Message.InboxKey) == "Arrived") continue;   // pass 1
+            var resultKey = new InboxKey(ResultId(current), _ticket.Scope);
+            var resultRow = _store.Messages.GetValueOrDefault(resultKey);
+            if (ProbesResult && resultRow is { Done: false }) { _report.Line($"recover: lookup {job}: ticket done or absent, result row {resultKey.Id} pending; it stays, no restart"); continue; }
+            if (ProbesResult && resultRow is not null && _keptBy.GetValueOrDefault(resultKey) == "Arrived") { _report.Line($"recover: lookup {job}: ticket done or absent, result row {resultKey.Id} kept Arrived; its page restores it, no restart"); continue; }
+            var restartedRow = new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
+                Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
+            await Commit(new TurnCommit(Self.Id, null, null, [], [], [restartedRow], [], [], null));
+            _registry[job] = current + 1;
+            _restartedId = restartedRow.Id;
+            _report.Line($"recover: lookup {job}: ticket done or absent{(ProbesResult ? ", no result row" : " (the result row is not probed)")}: Restarted(g{current + 1}) from its JobSpec ({restartedRow.Id})");
+        }
         // Pass 1: the Open's restart decisions are in force before any page decides what is obsolete (R4-M3): a kept Arrived
         // current-generation ticket restarts from its JobSpec under the next generation, and the old ticket is cleared.
         foreach (var (key, reason) in _keptBy.ToList())
@@ -363,6 +398,7 @@ sealed class Jr1(string variant, JrRules rules)
         var host = new NativeHost(_info, _now, _row.Revision + 1) { Inbox = [result], State = Json.Read<NativeState>(_row.State) };
         await _model.TurnAsync(host, CancellationToken.None); Real.CountModelTurn();
         var finished = result.Read<JobFinished>();
+        _resultSource ??= consumed.Id;
         _results.Add(Json.Read<BackgroundResult>(finished.Result!).Result?.ToString() ?? "null");
         _resultTurns += host.Records.Count(r => r.StartsWith("c:", StringComparison.Ordinal) && r.EndsWith(":c", StringComparison.Ordinal));
         _registry.Remove(finished.Key);

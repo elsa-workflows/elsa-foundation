@@ -23,7 +23,7 @@ static partial class Program
     };
 
     public static string Name(JrRules rules) => rules switch
-    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", JrRules.Negative => "negative", JrRules.GenerationBlind => "generation-blind", _ => "reviewed-keeps-registry" };
+    { JrRules.Reviewed => "reviewed", JrRules.ReviewedKind => "reviewed-kind", JrRules.Repaired => "repaired", JrRules.Negative => "negative", JrRules.GenerationBlind => "generation-blind", JrRules.ReviewedKeepsRegistry => "reviewed-keeps-registry", _ => "ticket-only-lookup" };
 
     public static string Name(PoRules rules) => rules switch { PoRules.Reviewed => "reviewed", PoRules.Repaired => "repaired", _ => "negative" };
 
@@ -52,6 +52,8 @@ static partial class Program
         .. from v in new[] { "crash-after", "crash-after-keep", "obsolete" }
            from r in new[] { ("reviewed", "FAIL"), ("reviewed-kind", "FAIL"), ("repaired", "PASS"), ("negative", "FAIL") } select ($"jr1-{v}", r.Item1, r.Item2),
         ("jr1-obsolete", "generation-blind", "FAIL"),
+        .. from v in new[] { "result-kept-lookup", "result-pending-lookup" }
+           from r in new[] { ("reviewed", "FAIL"), ("repaired", "PASS"), ("ticket-only-lookup", "FAIL") } select ($"jr1-{v}", r.Item1, r.Item2),
         ("jr1-result-parked-consume", "reviewed", "FAIL"), ("jr1-result-parked-consume", "repaired", "PASS"), ("jr1-result-parked-consume", "negative", "FAIL"),
         ("jr1-crash-before", "reviewed", "FAIL"), ("jr1-crash-before", "reviewed-kind", "FAIL"), ("jr1-crash-before", "repaired", "PASS"), ("jr1-crash-before", "negative", "FAIL"),
         ("jr1-crash-after", "reviewed-keeps-registry", "FAIL"),
@@ -132,7 +134,7 @@ static partial class Program
         {
             var set = rules switch
             {
-                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative, "generation-blind" => JrRules.GenerationBlind, "reviewed-keeps-registry" => JrRules.ReviewedKeepsRegistry,
+                "reviewed" => JrRules.Reviewed, "reviewed-kind" => JrRules.ReviewedKind, "repaired" => JrRules.Repaired, "negative" => JrRules.Negative, "generation-blind" => JrRules.GenerationBlind, "reviewed-keeps-registry" => JrRules.ReviewedKeepsRegistry, "ticket-only-lookup" => JrRules.TicketOnlyLookup,
                 _ => throw new ArgumentException($"JR-1 has no rule set '{rules}'"),
             };
             return await new Jr1(id[4..], set).RunAsync();
