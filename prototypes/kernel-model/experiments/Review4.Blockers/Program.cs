@@ -14,7 +14,7 @@ static partial class Program
       FrRules.OneRowReadCountsHeld => "one-row-read-counts-held", FrRules.MarkIgnoresControls => "mark-ignores-controls",
       FrRules.SkipTarget => "skip-target", FrRules.NoShelf => "no-shelf", FrRules.ControlsWaitOnTicket => "controls-wait-on-ticket",
       FrRules.BoundaryHoldsCohort => "boundary-holds-cohort", FrRules.BoundaryHoldsCohortNonsuspect => "boundary-holds-cohort-nonsuspect",
-      _ => "clear-with-held" };
+      FrRules.ClearWithHeld => "clear-with-held", _ => "controls-wait-while-suspended" };
 
     public static string Name(RtRules rules) => rules switch
     {
@@ -40,6 +40,8 @@ static partial class Program
         ("fr1-held-poll-limit", "one-row-read-counts-held", "FAIL"), ("fr1-held-poll-limit", "clear-with-held", "PASS"),
         ("fr1-held-crash", "reviewed", "FAIL"), ("fr1-held-crash", "repaired", "PASS"), ("fr1-held-crash", "negative", "FAIL"),
         ("fr1-held-crash", "clear-with-held", "FAIL"), ("fr1-held-crash", "one-row-read-counts-held", "PASS"),
+        ("fr1-held-suspend-crash", "reviewed", "FAIL"), ("fr1-held-suspend-crash", "repaired", "PASS"), ("fr1-held-suspend-crash", "negative", "FAIL"),
+        ("fr1-held-suspend-crash", "controls-wait-while-suspended", "FAIL"),
         ("fr1-control-after-complete", "reviewed", "FAIL"), ("fr1-control-after-complete", "repaired", "PASS"), ("fr1-control-after-complete", "negative", "FAIL"),
         ("fr1-control-after-complete", "mark-ignores-controls", "FAIL"),
         ("fr1-control-crash", "reviewed", "FAIL"), ("fr1-control-crash", "repaired", "PASS"), ("fr1-control-crash", "negative", "FAIL"),
@@ -95,7 +97,7 @@ static partial class Program
             Console.Write(report.Render());
             return report.Passed ? 0 : 1;
         }
-        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-cohort-nonsuspect|clear-with-held|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
+        Console.Error.WriteLine("usage: --case <id> --rules <reviewed|repaired|negative|held-blocks|memory-precedence|trial-plain-seq|no-cohort-mark|one-row-read-counts-held|mark-ignores-controls|skip-target|no-shelf|controls-wait-on-ticket|boundary-holds-cohort|boundary-holds-cohort-nonsuspect|clear-with-held|controls-wait-while-suspended|cascade-any|root-retains|successor-admitted|successor-inherits> | --all | --list");
         return 2;
     }
 
@@ -107,7 +109,7 @@ static partial class Program
             var set = rules switch
             {
                 "reviewed" => FrRules.Reviewed, "repaired" => FrRules.Repaired, "negative" => FrRules.Negative, "held-blocks" => FrRules.HeldBlocks, "memory-precedence" => FrRules.MemoryPrecedence, "trial-plain-seq" => FrRules.TrialPlainSeq, "no-cohort-mark" => FrRules.NoCohortMark, "one-row-read-counts-held" => FrRules.OneRowReadCountsHeld, "mark-ignores-controls" => FrRules.MarkIgnoresControls, "skip-target" => FrRules.SkipTarget, "no-shelf" => FrRules.NoShelf,
-                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-cohort-nonsuspect" => FrRules.BoundaryHoldsCohortNonsuspect, "clear-with-held" => FrRules.ClearWithHeld,
+                "controls-wait-on-ticket" => FrRules.ControlsWaitOnTicket, "boundary-holds-cohort" => FrRules.BoundaryHoldsCohort, "boundary-holds-cohort-nonsuspect" => FrRules.BoundaryHoldsCohortNonsuspect, "clear-with-held" => FrRules.ClearWithHeld, "controls-wait-while-suspended" => FrRules.ControlsWaitWhileSuspended,
                 _ => throw new ArgumentException($"FR-1 has no rule set '{rules}'"),
             };
             return await new Fr1(id[4..], set).RunAsync();
